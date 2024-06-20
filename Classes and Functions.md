@@ -73,6 +73,8 @@ This code defines a simple neural network simulation with neurons that can be co
   brain.update_connections(reward)
   ```
 
+  ------
+
 ### Detailed Explanation
 
 1. **Initialization and Loading:**
@@ -90,5 +92,18 @@ This code defines a simple neural network simulation with neurons that can be co
 
 5. **Learning Mechanism:**
     - The `update_connections` method adjusts the connection weights based on a reward signal, simulating a form of learning. The learning rate is fixed at 0.1, and the adjustments are randomized to introduce variability in learning.
+  
+--------
+
+### Neurons 
+Initially, six neurons are defined in the create_initial_brain method. The names of these neurons are:
+
+"hunger"
+"sleepiness"
+"happiness"
+"eat"
+"sleep"
+"play"
+These neurons are created when the create_initial_brain method is called during the initialization of the Brain class if the brain_folder does not already exist.
 
 This simulation can serve as a simple model for understanding neural networks, activation functions, signal propagation, and basic reinforcement learning principles.
