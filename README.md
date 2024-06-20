@@ -1,5 +1,5 @@
 # Dosidicus
-A digital squid with a simple neural network. In the style of a Tamgotchi digital pet. 
+A digital squid with a simple neural network. In the style of a Tamagotchi digital pet.
 
 the `brain` folder contains neurons represented by json files.
 
