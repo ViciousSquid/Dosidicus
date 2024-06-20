@@ -1,5 +1,5 @@
 # Dosidicus
-API Library for an AI Tamagotchi-style digital creature
+A digital squid with a simple neural network. In the style of a Tamgotchi digital pet. Work in progress.
 
 * The **Humboldt squid** (*Dosidicus gigas*) is a large, predatory squid living in the eastern Pacific Ocean. 
 
