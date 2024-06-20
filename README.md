@@ -1,7 +1,7 @@
 # Dosidicus
 A digital squid with a simple neural network. In the style of a Tamagotchi digital pet.
 
-the `brain` folder contains neurons represented by json files.
+the `brain` folder contains neurons represented by json files which can be examined and manipulated.
 
 * The **Humboldt squid** (*Dosidicus gigas*) is a large, predatory squid living in the eastern Pacific Ocean. 
 
