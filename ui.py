@@ -1,9 +1,11 @@
 import os
 from PyQt5 import QtCore, QtGui, QtWidgets
+from brain_debug_tool import BrainDebugTool  # Import the BrainDebugTool class
 
 class Ui:
-    def __init__(self, window):
+    def __init__(self, window, brain):
         self.window = window
+        self.brain = brain
         self.window.setWindowTitle("Dosidicus")
 
         self.window_width = 1280
@@ -74,6 +76,10 @@ class Ui:
         self.debug_action.setCheckable(True)
         options_menu.addAction(self.debug_action)
 
+        self.brain_debug_action = QtWidgets.QAction('Show Brain Debug Tool', self.window)
+        self.brain_debug_action.triggered.connect(self.show_brain_debug_tool)
+        options_menu.addAction(self.brain_debug_action)
+
     def handle_window_resize(self, event):
         self.window_width = event.size().width()
         self.window_height = event.size().height()
@@ -91,3 +97,7 @@ class Ui:
         self.feeding_message.show()
         self.feeding_message_animation.setDirection(QtCore.QAbstractAnimation.ForwardDirection)
         self.feeding_message_animation.start()
+
+    def show_brain_debug_tool(self):
+        self.brain_debug_tool = BrainDebugTool(self.brain)  # Create an instance of BrainDebugTool
+        self.brain_debug_tool.show()  # Show the BrainDebugTool window

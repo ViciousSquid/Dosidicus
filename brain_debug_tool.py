@@ -26,7 +26,7 @@ class BrainDebugTool(QWidget):
         # Create a table to display the neuron data
         self.table = QTableWidget(10, 2)
         self.table.setHorizontalHeaderLabels(["Name", "Value"])
-        self.table.setFixedWidth(400)
+        self.table.setFixedWidth(300)
 
         # Add the table to the layout
         layout.addWidget(self.table)

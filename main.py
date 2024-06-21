@@ -11,14 +11,14 @@ def main():
     app = QtWidgets.QApplication(sys.argv)
 
     window = QtWidgets.QMainWindow()
-    ui = Ui(window)
+    brain = Brain()  # Create an instance of the Brain class
+    ui = Ui(window, brain)  # Pass the brain object as an argument to the Ui class constructor
     tamagotchi_logic = TamagotchiLogic(ui, None)  # Pass None for now
     squid = Squid(ui, tamagotchi_logic)  # Create the Squid instance
     tamagotchi_logic.squid = squid  # Set the squid instance in TamagotchiLogic
 
     window.show()
 
-    brain = Brain()
     debug_tool = BrainDebugTool(brain)
     debug_tool.show()
 
