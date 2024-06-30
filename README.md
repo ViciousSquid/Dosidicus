@@ -8,7 +8,8 @@ the `neurons` folder contains neurons represented by json files which can be exa
 
 ![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/623141f5-3090-40c2-89fa-38a52a381a49)
 
-![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/427c8340-2289-466d-bbe4-57dbed44db8f)
+![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/b8feba0e-b6a1-4aef-bbb1-a9d05ed72bd8)
+
 
 
 # WORK IN PROGRESS
