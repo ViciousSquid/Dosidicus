@@ -1,7 +1,7 @@
 # Dosidicus
 A digital squid (Dosidicus electronicae) with a simple neural network. In the style of a Tamagotchi digital pet.
 
-* requires **PyQt5** and **matlib**
+* requires **PyQt5** and **matlib**/**matplotlib**
 
 the `neurons` folder contains neurons represented by json files which can be examined and manipulated.
 
