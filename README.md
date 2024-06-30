@@ -1,16 +1,19 @@
 # Dosidicus
 A digital squid (Dosidicus electronicae) with a simple neural network. In the style of a Tamagotchi digital pet.
+* requires **PyQt5** and **matlib**/**matplotlib**
+
+![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/623141f5-3090-40c2-89fa-38a52a381a49)
 
 The squid has attributes such as hunger, sleepiness, and happiness, and it makes decisions based on these attributes using a neural network implemented in the `Brain` class. 
 
-* requires **PyQt5** and **matlib**/**matplotlib**
+![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/f2b468c8-e6a7-46bd-8948-8098cb23aa3a)
+
+
 
 the `neurons` folder contains neurons represented by json files which can be examined and manipulated.
 
 
-![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/623141f5-3090-40c2-89fa-38a52a381a49)
-
-![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/b8feba0e-b6a1-4aef-bbb1-a9d05ed72bd8)
+![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/d2e9e512-85b1-414a-a41a-eeb88f25f85b)
 
 
 
