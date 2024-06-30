@@ -25,6 +25,10 @@ class Squid:
             "left2": QtGui.QPixmap(os.path.join("images", "left2.png")),
             "right1": QtGui.QPixmap(os.path.join("images", "right1.png")),
             "right2": QtGui.QPixmap(os.path.join("images", "right2.png")),
+            "up1": QtGui.QPixmap(os.path.join("images", "up1.png")),  # New image for moving up
+            "up2": QtGui.QPixmap(os.path.join("images", "up2.png")),  # New image for moving up
+            "sleep1": QtGui.QPixmap(os.path.join("images", "sleep1.png")),
+            "sleep2": QtGui.QPixmap(os.path.join("images", "sleep2.png")),
         }
         self.squid_width = self.images["left1"].width()
         self.squid_height = self.images["left1"].height()
@@ -89,10 +93,6 @@ class Squid:
         if not self.tamagotchi_logic.debug_mode:
             return
 
-        # Calculate color based on happiness (0-100)
-        # 0 (unhappy) = red (255, 0, 0)
-        # 50 (neutral) = yellow (255, 255, 0)
-        # 100 (happy) = green (0, 255, 0)
         if self.happiness <= 50:
             red = 255
             green = int((self.happiness / 50) * 255)
@@ -121,15 +121,27 @@ class Squid:
         self.update_squid_image()
 
     def update_squid_image(self):
-        for key in self.images:
-            colored_image = self.images[key].copy()
-            painter = QtGui.QPainter(colored_image)
-            painter.setCompositionMode(QtGui.QPainter.CompositionMode_SourceAtop)
-            painter.fillRect(colored_image.rect(), self.color)
-            painter.end()
-            self.images[key] = colored_image
+    #    for key in self.images:                                #Todo: Have the squid change color according to his mood
+    #        image = self.images[key]
+    #        colored_image = QtGui.QPixmap(image.size())
+    #        if colored_image.isNull():
+    #            print(f"Failed to create colored_image for {key}")
+    #            continue
+    #        colored_image.fill(QtCore.Qt.transparent)
+    #        painter = QtGui.QPainter(colored_image)
+    #        if not painter.isActive():
+    #            print(f"Failed to activate painter for {key}")
+    #            continue
+    #        painter.drawPixmap(0, 0, image)
+    #        painter.setCompositionMode(QtGui.QPainter.CompositionMode_SourceOver)
+    #        painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 255, 0, 76)))  # Set the brush color to 30% transparent green
+    #        painter.setPen(QtCore.Qt.NoPen)
+    #        painter.drawRect(colored_image.rect())
+    #        painter.end()
+    #        self.images[key] = colored_image
 
-        self.squid_item.setPixmap(self.current_image())
+    #    self.squid_item.setPixmap(self.current_image())
+            pass
 
     def make_decision(self):
         inputs = {
@@ -137,15 +149,19 @@ class Squid:
             "sleepiness": self.sleepiness / 100,
             "happiness": self.happiness / 100
         }
-        outputs = self.brain.think(inputs)
+        outputs, move_direction = self.brain.think(inputs)
 
-        action = max(outputs, key=outputs.get)
-        if action == "eat" and outputs["eat"] > 0.5:
-            self.find_food()
-        elif action == "sleep" and outputs["sleep"] > 0.5:
-            self.go_to_sleep()
-        elif action == "play" and outputs["play"] > 0.5:
-            self.play()
+        if outputs:
+            action = max(outputs, key=outputs.get)
+            if action == "eat" and outputs["eat"] > 0.5:
+                self.find_food()
+            elif action == "sleep" and outputs["sleep"] > 0.5:
+                self.go_to_sleep()
+            elif action == "play" and outputs["play"] > 0.5:
+                self.play()
+        else:
+            # Handle the case where the neural network did not produce any output values
+            pass
 
     def find_food(self):
         self.squid_direction = "left" if self.squid_x > self.center_x else "right"
@@ -163,7 +179,7 @@ class Squid:
     def go_to_sleep(self):
         if not self.is_sleeping:
             self.is_sleeping = True
-            self.squid_direction = "none"
+            self.squid_direction = "down"
             self.tamagotchi_logic.show_message("Squid is sleeping...")
             reward = 0.1  # Small positive reward for going to sleep when tired
             self.brain.update_connections(reward)
@@ -183,6 +199,13 @@ class Squid:
 
     def move_squid(self):
         if self.is_sleeping:
+            if self.squid_y < self.ui.window_height - 120 - self.squid_height:
+                self.squid_y += self.vertical_speed
+                self.squid_item.setPos(self.squid_x, self.squid_y)
+            else:
+                self.squid_direction = "none"  # Stop moving once the squid reaches the sleeping location
+            self.current_frame = (self.current_frame + 1) % 2
+            self.squid_item.setPixmap(self.current_image())
             return
 
         squid_x_new = self.squid_x
@@ -214,7 +237,7 @@ class Squid:
         self.squid_x = squid_x_new
         self.squid_y = squid_y_new
 
-        if self.squid_direction in ["left", "right"]:
+        if self.squid_direction in ["left", "right", "up"]:
             self.current_frame = (self.current_frame + 1) % 2
             self.squid_item.setPixmap(self.current_image())
         else:
@@ -251,7 +274,11 @@ class Squid:
 
     def current_image(self):
         if self.is_sleeping:
-            return self.images["left1"]  # Use left1 as sleeping image
-        if self.squid_direction in ["left", "right"]:
-            return self.images[f"{self.squid_direction}{self.current_frame + 1}"]
+            return self.images[f"sleep{self.current_frame + 1}"]
+        if self.squid_direction == "left":
+            return self.images[f"left{self.current_frame + 1}"]
+        elif self.squid_direction == "right":
+            return self.images[f"right{self.current_frame + 1}"]
+        elif self.squid_direction == "up":
+            return self.images[f"up{self.current_frame + 1}"]  # New image for moving up
         return self.images["left1"]

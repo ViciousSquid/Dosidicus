@@ -19,10 +19,10 @@ class Ui:
 
         self.setup_menu_bar()
 
-        self.label = QtWidgets.QLabel("Squiddy")
+        self.label = QtWidgets.QLabel("Dosidicus Electronicae")
         self.label.setStyleSheet("font-size: 20px; font-weight: bold; color: white; background-color: black;")
         self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop)
-        self.label.setGeometry(10, 10, 100, 30)
+        self.label.setGeometry(10, 10, 250, 30)
         self.scene.addWidget(self.label)
 
         self.feeding_message = QtWidgets.QLabel("Squid requires feeding")
@@ -70,7 +70,7 @@ class Ui:
 
     def setup_menu_bar(self):
         menu_bar = self.window.menuBar()
-        options_menu = menu_bar.addMenu('Options')
+        options_menu = menu_bar.addMenu('Debug Options')
 
         self.debug_action = QtWidgets.QAction('Toggle Debug Mode', self.window)
         self.debug_action.setCheckable(True)
@@ -79,6 +79,12 @@ class Ui:
         self.brain_debug_action = QtWidgets.QAction('Show Brain Debug Tool', self.window)
         self.brain_debug_action.triggered.connect(self.show_brain_debug_tool)
         options_menu.addAction(self.brain_debug_action)
+
+        help_menu = menu_bar.addMenu('Help')
+
+        about_action = QtWidgets.QAction('About', self.window)
+        about_action.triggered.connect(self.show_about_dialog)
+        help_menu.addAction(about_action)
 
     def handle_window_resize(self, event):
         self.window_width = event.size().width()
@@ -101,3 +107,10 @@ class Ui:
     def show_brain_debug_tool(self):
         self.brain_debug_tool = BrainDebugTool(self.brain)  # Create an instance of BrainDebugTool
         self.brain_debug_tool.show()  # Show the BrainDebugTool window
+
+    def show_about_dialog(self):
+        about_message = ("<h2>Dosidicus Electronicae</h2>"
+                         "<p>Research project</p>"
+                         "<p>Version 1.0</p>"
+                         "<p>https://github.com/ViciousSquid/Dosidicus")
+        QtWidgets.QMessageBox.about(self.window, "About", about_message)
