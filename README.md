@@ -1,5 +1,7 @@
 # Dosidicus electronicae
-A digital squid (Dosidicus electronicae) with a simple neural network. In the style of a Tamagotchi digital pet.
+A digital squid with a simple neural network. In the style of a Tamagotchi digital pet.
+
+RESEARCH PROJECT
 * requires **PyQt5** and **matlib**/**matplotlib**
 
 ![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/623141f5-3090-40c2-89fa-38a52a381a49)
