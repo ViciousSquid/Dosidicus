@@ -17,6 +17,26 @@ the `neurons` folder contains neurons represented by json files which can be exa
 
 ![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/d2e9e512-85b1-414a-a41a-eeb88f25f85b)
 
+**Input Layer**
+* food_angle
+* food_distance
+* hunger
+* happiness
+* tiredness
+
+**Hidden Layer**
+* h1
+* h2
+* h3
+* h4
+
+**Output Layer**
+* move_angle
+* move_speed
+* eat
+* play
+* sleep
+
 
 
 
