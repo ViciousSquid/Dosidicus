@@ -31,9 +31,9 @@ class Ui:
         self.scene.addWidget(self.feeding_message)
 
         self.feeding_message_animation = QtCore.QPropertyAnimation(self.feeding_message, b"opacity")
-        self.feeding_message_animation.setDuration(1000)
-        self.feeding_message_animation.setStartValue(0)
-        self.feeding_message_animation.setEndValue(1)
+        self.feeding_message_animation.setStartValue(0.0)
+        self.feeding_message_animation.setEndValue(1.0)
+        self.feeding_message_animation.setDuration(1000)  # 1 second duration
 
         self.scene.setSceneRect(0, 0, self.window_width, self.window_height)
 
@@ -51,17 +51,17 @@ class Ui:
 
         self.button_style = "font-size: 16px; font-weight: bold; color: white; background-color: black;"
 
-        self.button_a = QtWidgets.QPushButton("")
+        self.button_a = QtWidgets.QPushButton("")       # Todo: A button
         self.button_a.setStyleSheet(self.button_style)
         self.button_a.setGeometry(50, 0, 100, 40)
         self.button_strip_layout.addWidget(self.button_a)
 
-        self.button_b = QtWidgets.QPushButton("")
+        self.button_b = QtWidgets.QPushButton("")       # Todo: B button
         self.button_b.setStyleSheet(self.button_style)
         self.button_b.setGeometry(self.window_width // 2 - 50, 0, 100, 40)
         self.button_strip_layout.addWidget(self.button_b)
 
-        self.button_c = QtWidgets.QPushButton("")
+        self.button_c = QtWidgets.QPushButton("")       # Todo: C button
         self.button_c.setStyleSheet(self.button_style)
         self.button_c.setGeometry(self.window_width - 150, 0, 100, 40)
         self.button_strip_layout.addWidget(self.button_c)
@@ -74,15 +74,18 @@ class Ui:
         self.feed_action = QtWidgets.QAction('Feed', self.window)
         actions_menu.addAction(self.feed_action)
 
+        self.clean_action = QtWidgets.QAction('Clean', self.window)
+        actions_menu.addAction(self.clean_action)
+
         options_menu = menu_bar.addMenu('Debug Options')
 
         self.debug_action = QtWidgets.QAction('Toggle Debug Mode', self.window)
         self.debug_action.setCheckable(True)
         options_menu.addAction(self.debug_action)
 
-        self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
-        self.view_cone_action.setCheckable(True)
-        options_menu.addAction(self.view_cone_action)
+        # self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
+        # self.view_cone_action.setCheckable(True)
+        # options_menu.addAction(self.view_cone_action)
 
         help_menu = menu_bar.addMenu('Help')
 
@@ -103,8 +106,13 @@ class Ui:
     def show_message(self, message):
         self.feeding_message.setText(message)
         self.feeding_message.show()
-        self.feeding_message_animation.setDirection(QtCore.QAbstractAnimation.ForwardDirection)
-        self.feeding_message_animation.start()
+    
+        # Set a timer to hide the message after 3 seconds
+        QtCore.QTimer.singleShot(3000, self.feeding_message.hide)
+    
+        # Force update
+        self.feeding_message.update()
+        self.scene.update()
 
     def show_about_dialog(self):
         about_message = ("<h2>Dosidicus Electronicae</h2>"

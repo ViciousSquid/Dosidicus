@@ -1,6 +1,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 import random
 import os
+import time
 
 class TamagotchiLogic:
     def __init__(self, user_interface, squid):
@@ -25,11 +26,15 @@ class TamagotchiLogic:
         self.food_height = 64
 
         self.user_interface.feed_action.triggered.connect(self.spawn_food)
+        self.user_interface.clean_action.triggered.connect(self.clean_environment)
 
         self.poop_items = []
         self.poop_animation_timer = QtCore.QTimer()
         self.poop_animation_timer.timeout.connect(self.animate_poops)
         self.poop_animation_timer.start(1000)  # Change poop frame every second
+
+        self.last_clean_time = 0
+        self.clean_cooldown = 60  # 60 seconds cooldown
 
     def handle_window_resize(self, event):
         self.user_interface.window_width = event.size().width()
@@ -55,13 +60,7 @@ class TamagotchiLogic:
             self.show_message("Lights off!")
 
     def show_message(self, message):
-        self.user_interface.feeding_message.setText(message)
-        self.user_interface.feeding_message.show()
-        if hasattr(QtCore.QAbstractAnimation, 'ForwardDirection'):
-            self.user_interface.feeding_message_animation.setDirection(QtCore.QAbstractAnimation.ForwardDirection)
-        else:
-            self.user_interface.feeding_message_animation.setDirection(QtCore.QAbstractAnimation.Forward)
-        self.user_interface.feeding_message_animation.start()
+        self.user_interface.show_message(message)
 
     def toggle_debug_mode(self):
         self.debug_mode = not self.debug_mode
@@ -80,6 +79,7 @@ class TamagotchiLogic:
             "hunger": QtWidgets.QLabel(),
             "sleepiness": QtWidgets.QLabel(),
             "happiness": QtWidgets.QLabel(),
+            "cleanliness": QtWidgets.QLabel(),
             "is_sleeping": QtWidgets.QLabel(),
             "direction": QtWidgets.QLabel(),
             "position": QtWidgets.QLabel(),
@@ -114,6 +114,7 @@ class TamagotchiLogic:
         self.debug_labels["hunger"].setText(f"Hunger: {self.squid.hunger}")
         self.debug_labels["sleepiness"].setText(f"Sleepiness: {self.squid.sleepiness}")
         self.debug_labels["happiness"].setText(f"Happiness: {self.squid.happiness}")
+        self.debug_labels["cleanliness"].setText(f"Cleanliness: {self.squid.cleanliness}")
         self.debug_labels["is_sleeping"].setText(f"Sleeping: {self.squid.is_sleeping}")
         self.debug_labels["direction"].setText(f"Direction: {self.squid.squid_direction}")
         self.debug_labels["position"].setText(f"Position: ({self.squid.squid_x}, {self.squid.squid_y})")
@@ -153,7 +154,8 @@ class TamagotchiLogic:
         if self.food_item:
             self.user_interface.scene.removeItem(self.food_item)
             self.food_item = None
-            self.food_timer.stop()
+            if hasattr(self, 'food_timer') and self.food_timer is not None:
+                self.food_timer.stop()
 
     def spawn_poop(self, x, y):
         poop_item = QtWidgets.QGraphicsPixmapItem(self.squid.poop_images[0])
@@ -182,3 +184,75 @@ class TamagotchiLogic:
         for poop_item in self.poop_items:
             current_frame = self.poop_items.index(poop_item) % 2
             poop_item.setPixmap(self.squid.poop_images[current_frame])
+
+    def clean_environment(self):
+        print("Clean environment method called")  # Debug print
+        current_time = time.time()
+        if current_time - self.last_clean_time < self.clean_cooldown:
+            remaining_cooldown = int(self.clean_cooldown - (current_time - self.last_clean_time))
+            print(f"Cleaning on cooldown. {remaining_cooldown} seconds left")  # Debug print
+            self.show_message(f"Cleaning is on cooldown. Please wait {remaining_cooldown} seconds.")
+            return
+
+        print("Starting cleaning process")  # Debug print
+        self.last_clean_time = current_time
+
+        # Create a cleaning line
+        self.cleaning_line = QtWidgets.QGraphicsLineItem(self.user_interface.window_width, 0, 
+                                                         self.user_interface.window_width, self.user_interface.window_height - 120)
+        self.cleaning_line.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 10))  # Thick black line
+        self.user_interface.scene.addItem(self.cleaning_line)
+
+        # Show a message that cleaning has started
+        self.show_message("Cleaning in progress...")
+
+        # Set up animation parameters
+        self.cleaning_progress = 0
+        self.cleaning_timer = QtCore.QTimer()
+        self.cleaning_timer.timeout.connect(self.update_cleaning)
+        self.cleaning_timer.start(30)  # Update every 30 ms
+
+        print("Cleaning animation started")  # Debug print
+
+    def update_cleaning(self):
+        self.cleaning_progress += 1
+        if self.cleaning_progress >= 100:
+            self.cleaning_timer.stop()
+            self.finish_cleaning()
+            return
+
+        progress = self.cleaning_progress / 100.0
+        new_x = self.user_interface.window_width * (1 - progress)
+        self.cleaning_line.setLine(new_x, 0, new_x, self.user_interface.window_height - 120)
+        
+        # Remove poops and food that the line has passed
+        for poop_item in self.poop_items[:]:
+            if poop_item.pos().x() > new_x:
+                self.user_interface.scene.removeItem(poop_item)
+                self.poop_items.remove(poop_item)
+        
+        if self.food_item and self.food_item.pos().x() > new_x:
+            self.remove_food()
+
+        # Force an update of the scene
+        self.user_interface.scene.update()
+
+    def finish_cleaning(self):
+        # Remove the cleaning line
+        self.user_interface.scene.removeItem(self.cleaning_line)
+
+        # Update squid stats
+        self.squid.cleanliness = 100
+        self.squid.happiness = min(100, self.squid.happiness + 20)
+
+        # Show a message
+        self.show_message("Environment cleaned! Squid is happier!")
+
+        # Force an update of the scene
+        self.user_interface.scene.update()
+
+        # Update debug info if debug mode is on
+        if self.debug_mode:
+            self.update_debug_info()
+
+        print("Cleaning process completed")  # Debug print
