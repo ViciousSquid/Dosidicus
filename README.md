@@ -9,7 +9,8 @@ A virtual squid in the style of a Tamagotchi digital pet
 
 
 
-The squid has attributes such as hunger, sleepiness, and happiness.  Feeding it cheese will increase happiness and decrease hunger.
+The squid has attributes such as hunger, sleepiness, and happiness.  
+Feeding it cheese will increase happiness and decrease hunger.
 
 ![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/f2b468c8-e6a7-46bd-8948-8098cb23aa3a)
 
