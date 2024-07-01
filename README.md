@@ -1,6 +1,8 @@
 # Dosidicus electronicae
 A virtual squid in the style of a Tamagotchi digital pet
 
+[ WORK IN PROGRESS ]
+
 * requires **PyQt5**
 
 ![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/61ffc2e5-b69c-40d4-8a2f-e27c275dfc61)
