@@ -24,7 +24,7 @@ class Squid:
 
         self.poop_timer = None
 
-    def load_images(self):
+    def load_images(self):              # Animation Frames
         self.images = {
             "left1": QtGui.QPixmap(os.path.join("images", "left1.png")),
             "left2": QtGui.QPixmap(os.path.join("images", "left2.png")),
@@ -57,8 +57,8 @@ class Squid:
         self.current_frame = 0
         self.update_preferred_vertical_range()
 
-        self.hunger = 0
-        self.sleepiness = 0
+        self.hunger = 25
+        self.sleepiness = 30
         self.happiness = 100
         self.is_sleeping = False
 
@@ -97,10 +97,12 @@ class Squid:
 
         self.make_decision()
 
-    def make_decision(self):
-        if self.hunger > 70:
+    def make_decision(self):        # Make an actionable decision depending on stats
+        if self.hunger > 50:
+            print ("Squid is hungry and searching for food")
             self.search_for_food()
         elif self.sleepiness > 70:
+            print ("Squid is tired")
             self.go_to_sleep()
         else:
             self.move_randomly()
@@ -118,7 +120,7 @@ class Squid:
             self.move_randomly()
 
     def move_randomly(self):
-        if random.random() < 0.1:  # 10% chance to change direction
+        if random.random() < 0.15:  # 15% chance to change direction
             self.change_direction()
 
     def get_food_position(self):
@@ -132,11 +134,13 @@ class Squid:
             self.hunger = max(0, self.hunger - 20)
             self.happiness = min(100, self.happiness + 10)
             self.tamagotchi_logic.remove_food()
-            self.show_eating_effect()
+            print ("The squid ate the cheese")
+            self.show_eating_effect()               # Highlight the area where the eating happened
             self.start_poop_timer()
 
     def start_poop_timer(self):
-        poop_delay = random.randint(15000, 40000)  # 15 to 40 seconds
+        poop_delay = random.randint(10000, 30000)  # 10 to 30 seconds
+        print ("Poop timer started")
         self.poop_timer = QtCore.QTimer()
         self.poop_timer.setSingleShot(True)
         self.poop_timer.timeout.connect(self.create_poop)
@@ -144,6 +148,7 @@ class Squid:
 
     def create_poop(self):
         self.tamagotchi_logic.spawn_poop(self.squid_x + self.squid_width // 2, self.squid_y + self.squid_height)
+        print ("Poop created at squid location")
 
     def show_eating_effect(self):
         if not self.is_debug_mode():
