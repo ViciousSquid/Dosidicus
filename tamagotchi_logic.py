@@ -26,6 +26,11 @@ class TamagotchiLogic:
 
         self.ui.feed_action.triggered.connect(self.spawn_food)
 
+        self.poop_items = []
+        self.poop_animation_timer = QtCore.QTimer()
+        self.poop_animation_timer.timeout.connect(self.animate_poops)
+        self.poop_animation_timer.start(1000)  # Change poop frame every second
+
     def handle_window_resize(self, event):
         self.ui.window_width = event.size().width()
         self.ui.window_height = event.size().height()
@@ -149,3 +154,29 @@ class TamagotchiLogic:
             self.ui.scene.removeItem(self.food_item)
             self.food_item = None
             self.food_timer.stop()
+
+    def spawn_poop(self, x, y):
+        poop_item = QtWidgets.QGraphicsPixmapItem(self.squid.poop_images[0])
+        poop_item.setPos(x - self.squid.poop_width // 2, y)
+        self.ui.scene.addItem(poop_item)
+        self.poop_items.append(poop_item)
+
+        poop_timer = QtCore.QTimer()
+        poop_timer.timeout.connect(lambda: self.move_poop(poop_item))
+        poop_timer.start(50)
+
+    def move_poop(self, poop_item):
+        poop_x = poop_item.pos().x()
+        poop_y = poop_item.pos().y() + self.food_speed
+
+        if poop_y > self.ui.window_height - 120 - self.squid.poop_height:
+            poop_y = self.ui.window_height - 120 - self.squid.poop_height
+            return  # Stop moving when it reaches the bottom
+
+        poop_item.setPos(poop_x, poop_y)
+
+    def animate_poops(self):
+        for poop_item in self.poop_items:
+            current_frame = 0 if poop_item.pixmap() == self.squid.poop_images[0] else 1
+            next_frame = 1 - current_frame
+            poop_item.setPixmap(self.squid.poop_images[next_frame])

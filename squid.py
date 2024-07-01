@@ -9,6 +9,7 @@ class Squid:
         self.tamagotchi_logic = tamagotchi_logic
 
         self.load_images()
+        self.load_poop_images()
         self.initialize_attributes()
         self.setup_timers()
 
@@ -20,6 +21,8 @@ class Squid:
 
         self.view_cone_item = None
         self.view_cone_visible = False
+
+        self.poop_timer = None
 
     def load_images(self):
         self.images = {
@@ -34,6 +37,14 @@ class Squid:
         }
         self.squid_width = self.images["left1"].width()
         self.squid_height = self.images["left1"].height()
+
+    def load_poop_images(self):
+        self.poop_images = [
+            QtGui.QPixmap(os.path.join("images", "poop1.png")),
+            QtGui.QPixmap(os.path.join("images", "poop2.png"))
+        ]
+        self.poop_width = self.poop_images[0].width()
+        self.poop_height = self.poop_images[0].height()
 
     def initialize_attributes(self):
         self.squid_speed = int(self.squid_width * 0.8)
@@ -122,6 +133,17 @@ class Squid:
             self.happiness = min(100, self.happiness + 10)
             self.tamagotchi_logic.remove_food()
             self.show_eating_effect()
+            self.start_poop_timer()
+
+    def start_poop_timer(self):
+        poop_delay = random.randint(15000, 40000)  # 15 to 40 seconds
+        self.poop_timer = QtCore.QTimer()
+        self.poop_timer.setSingleShot(True)
+        self.poop_timer.timeout.connect(self.create_poop)
+        self.poop_timer.start(poop_delay)
+
+    def create_poop(self):
+        self.tamagotchi_logic.spawn_poop(self.squid_x + self.squid_width // 2, self.squid_y + self.squid_height)
 
     def show_eating_effect(self):
         if not self.is_debug_mode():
@@ -247,7 +269,7 @@ class Squid:
                 self.ui.scene.addItem(self.view_cone_item)
 
             direction_angle = self.get_direction_angle()
-            cone_angle = math.pi / 2.5  # 80-degree view cone
+            cone_angle = math.pi / 2.5                                          # angle of the view cone   2.5 = 80 degrees
             cone_length = max(self.ui.window_width, self.ui.window_height)
 
             squid_center_x = self.squid_x + self.squid_width // 2
