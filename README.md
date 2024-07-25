@@ -1,7 +1,7 @@
 # Dosidicus electronicae
 A virtual squid in the style of a Tamagotchi digital pet
 
-Implementation of a (nearly) full Tamagotchi logic - look after the pet's needs or it will get sick and die :-(
+Implementation of a (nearly) full Tamagotchi logic - look after the pets needs or it will get sick and die :-(
 
 [ A research project ]
 
