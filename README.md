@@ -1,25 +1,28 @@
 # Dosidicus electronicae
 A virtual squid in the style of a Tamagotchi digital pet
 
+* Implementation of a (nearly) full Tamagotchi logic - look after the pet's needs or it will get sick and die :-(
+
 [ WORK IN PROGRESS ]
 
 * requires **PyQt5**
 
-![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/61ffc2e5-b69c-40d4-8a2f-e27c275dfc61)
+![image](https://github.com/user-attachments/assets/57b87c23-994a-4f11-9953-0c38c8f58e0f)
+
+
 
 
 
 The squid has attributes such as hunger, sleepiness, and happiness.  
-Feeding it cheese will increase happiness and decrease hunger.
+Feeding it cheese via the `Actions` menu will increase happiness and decrease hunger.
 
-![image](https://github.com/ViciousSquid/Dosidicus/assets/161540961/f2b468c8-e6a7-46bd-8948-8098cb23aa3a)
-
-
-To-do:
+### Features:
 
 * Scoreboard (depending on how well the squid is cared for)
 
-* Implement a Load/Save system
+* Squid has a view cone that it moves around to locate food (toggle visualisation using the `Debug menu`)
+
+  ### To do:
 
 * Feeding Time Prediction: The squid remembers when it's usually fed and adjusts its behavior to be more active around those times.
 
