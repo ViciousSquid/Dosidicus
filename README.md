@@ -7,7 +7,8 @@ A virtual squid in the style of a Tamagotchi digital pet
 
 * requires **PyQt5**
 
-![image](https://github.com/user-attachments/assets/57b87c23-994a-4f11-9953-0c38c8f58e0f)
+![image](https://github.com/user-attachments/assets/8a4349b8-413f-4c32-baa7-c2f0a1422dc6)
+
 
 
 
