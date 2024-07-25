@@ -11,7 +11,6 @@ class Squid:
         self.load_images()
         self.load_poop_images()
         self.initialize_attributes()
-        self.setup_timers()
 
         self.squid_item = QtWidgets.QGraphicsPixmapItem(self.current_image())
         self.squid_item.setPos(self.squid_x, self.squid_y)
@@ -23,6 +22,12 @@ class Squid:
         self.view_cone_visible = False
 
         self.poop_timer = None
+
+        self.animation_speed = 1
+        self.base_move_interval = 1000  # 1 second
+
+    def set_animation_speed(self, speed):
+        self.animation_speed = speed
 
     def load_images(self):
         self.images = {
@@ -47,8 +52,8 @@ class Squid:
         self.poop_height = self.poop_images[0].height()
 
     def initialize_attributes(self):
-        self.squid_speed = int(self.squid_width * 0.8)
-        self.vertical_speed = self.squid_speed // 2
+        self.base_squid_speed = 90  # pixels per update at 1x speed
+        self.base_vertical_speed = self.base_squid_speed // 2
         self.center_x = self.ui.window_width // 2
         self.center_y = self.ui.window_height // 2
         self.squid_x = self.center_x
@@ -62,15 +67,6 @@ class Squid:
         self.happiness = 100
         self.cleanliness = 100
         self.is_sleeping = False
-
-    def setup_timers(self):
-        self.move_timer = QtCore.QTimer()
-        self.move_timer.timeout.connect(self.move_squid)
-        self.move_timer.start(1000)
-
-        self.need_timer = QtCore.QTimer()
-        self.need_timer.timeout.connect(self.update_needs)
-        self.need_timer.start(5000)
 
     def update_preferred_vertical_range(self):
         self.preferred_vertical_range = (self.ui.window_height // 4, self.ui.window_height // 4 * 3)
@@ -87,24 +83,8 @@ class Squid:
         self.update_view_cone()
 
     def update_needs(self):
-        if not self.is_sleeping:
-            self.hunger += 1
-            self.sleepiness += 1
-            self.happiness = max(0, self.happiness - 1)
-            
-            # Update cleanliness based on poop count
-            poop_count = len(self.tamagotchi_logic.poop_items)
-            self.cleanliness = max(0, self.cleanliness - poop_count)
-            
-            # Update happiness based on cleanliness
-            if self.cleanliness < 50:
-                self.happiness = max(0, self.happiness - 1)
-        else:
-            self.sleepiness = max(0, self.sleepiness - 2)
-            if self.sleepiness == 0:
-                self.wake_up()
-
-        self.make_decision()
+        # This method is no longer needed as needs are updated in TamagotchiLogic
+        pass
 
     def make_decision(self):
         if self.hunger > 50:
@@ -129,23 +109,30 @@ class Squid:
             self.move_randomly()
 
     def move_randomly(self):
-        if random.random() < 0.15:  # 15% chance to change direction
+        if random.random() < 0.20:  # 20% chance to change direction
             self.change_direction()
 
     def get_food_position(self):
-        if self.tamagotchi_logic.food_item:
-            return self.tamagotchi_logic.food_item.pos().x(), self.tamagotchi_logic.food_item.pos().y()
+        if self.tamagotchi_logic.food_items:
+            closest_food = min(self.tamagotchi_logic.food_items,
+                               key=lambda food: self.distance_to(food.pos().x(), food.pos().y()))
+            return closest_food.pos().x(), closest_food.pos().y()
         else:
             return -1, -1
 
+    def distance_to(self, x, y):
+        return math.sqrt((self.squid_x - x)**2 + (self.squid_y - y)**2)
+
     def eat(self):
-        if self.tamagotchi_logic.food_item and self.squid_item.collidesWithItem(self.tamagotchi_logic.food_item):
-            self.hunger = max(0, self.hunger - 20)
-            self.happiness = min(100, self.happiness + 10)
-            self.tamagotchi_logic.remove_food()
-            print("The squid ate the cheese")
-            self.show_eating_effect()
-            self.start_poop_timer()
+        for food_item in self.tamagotchi_logic.food_items:
+            if self.squid_item.collidesWithItem(food_item):
+                self.hunger = max(0, self.hunger - 20)
+                self.happiness = min(100, self.happiness + 10)
+                self.tamagotchi_logic.remove_food(food_item)
+                print("The squid ate the food")
+                self.show_eating_effect()
+                self.start_poop_timer()
+                break
 
     def start_poop_timer(self):
         poop_delay = random.randint(10000, 30000)  # 10 to 30 seconds
@@ -168,19 +155,22 @@ class Squid:
         effect_item.setPen(QtGui.QPen(QtCore.Qt.NoPen))
         self.ui.scene.addItem(effect_item)
 
-        animation = QtCore.QTimeLine(500)  # 500 ms duration
-        animation.setFrameRange(0, 100)
+        # Create a QGraphicsOpacityEffect
+        opacity_effect = QtWidgets.QGraphicsOpacityEffect()
+        effect_item.setGraphicsEffect(opacity_effect)
 
-        def update_item(frame):
-            progress = frame / 100.0
-            scale = 1 + progress
-            opacity = 1 - progress
-            effect_item.setScale(scale)
-            effect_item.setOpacity(opacity)
+        # Create a QPropertyAnimation for the opacity effect
+        self.eating_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
+        self.eating_animation.setDuration(5000)  # 5 seconds duration
+        self.eating_animation.setStartValue(1.0)
+        self.eating_animation.setEndValue(0.0)
+        self.eating_animation.setEasingCurve(QtCore.QEasingCurve.InQuad)
 
-        animation.frameChanged.connect(update_item)
-        animation.finished.connect(lambda: self.ui.scene.removeItem(effect_item))
-        animation.start()
+        # Connect the finished signal to remove the item
+        self.eating_animation.finished.connect(lambda: self.ui.scene.removeItem(effect_item))
+
+        # Start the animation
+        self.eating_animation.start()
 
     def is_debug_mode(self):
         return self.tamagotchi_logic.debug_mode
@@ -202,9 +192,12 @@ class Squid:
         self.tamagotchi_logic.show_message("Squid is playing!")
 
     def move_squid(self):
+        if self.animation_speed == 0:
+            return
+
         if self.is_sleeping:
             if self.squid_y < self.ui.window_height - 120 - self.squid_height:
-                self.squid_y += self.vertical_speed
+                self.squid_y += self.base_vertical_speed * self.animation_speed
                 self.squid_item.setPos(self.squid_x, self.squid_y)
             else:
                 self.squid_direction = "none"
@@ -216,13 +209,13 @@ class Squid:
         squid_y_new = self.squid_y
 
         if self.squid_direction == "left":
-            squid_x_new -= self.squid_speed
+            squid_x_new -= self.base_squid_speed * self.animation_speed
         elif self.squid_direction == "right":
-            squid_x_new += self.squid_speed
+            squid_x_new += self.base_squid_speed * self.animation_speed
         elif self.squid_direction == "up":
-            squid_y_new -= self.vertical_speed
+            squid_y_new -= self.base_vertical_speed * self.animation_speed
         elif self.squid_direction == "down":
-            squid_y_new += self.vertical_speed
+            squid_y_new += self.base_vertical_speed * self.animation_speed
 
         # Check if the squid hits the screen edge
         if squid_x_new < 50:

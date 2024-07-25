@@ -14,12 +14,14 @@ def main():
     # Create and set up the main UI
     ui = Ui(main_window)
     
-    # Create the Tamagotchi logic and Squid instances
-    tamagotchi_logic = TamagotchiLogic(ui, None)
-    squid = Squid(ui, tamagotchi_logic)
+    # Create the Squid instance
+    squid = Squid(ui, None)
     
-    # Set the squid in the TamagotchiLogic
-    tamagotchi_logic.squid = squid
+    # Create the Tamagotchi logic instance and pass the squid object
+    tamagotchi_logic = TamagotchiLogic(ui, squid)
+    
+    # Set the tamagotchi_logic in the Squid instance
+    squid.tamagotchi_logic = tamagotchi_logic
 
     # Show the main window
     main_window.show()

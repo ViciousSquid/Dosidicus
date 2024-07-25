@@ -42,34 +42,15 @@ class Ui:
         self.rect_item.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 2))
         self.scene.addItem(self.rect_item)
 
-        self.button_strip = QtWidgets.QWidget()
-        self.button_strip.setGeometry(0, self.window_height - 70, self.window_width, 70)
-        self.scene.addWidget(self.button_strip)
-
-        self.button_strip_layout = QtWidgets.QHBoxLayout()
-        self.button_strip.setLayout(self.button_strip_layout)
-
-        self.button_style = "font-size: 16px; font-weight: bold; color: white; background-color: black;"
-
-        self.button_a = QtWidgets.QPushButton("")       # Todo: A button
-        self.button_a.setStyleSheet(self.button_style)
-        self.button_a.setGeometry(50, 0, 100, 40)
-        self.button_strip_layout.addWidget(self.button_a)
-
-        self.button_b = QtWidgets.QPushButton("")       # Todo: B button
-        self.button_b.setStyleSheet(self.button_style)
-        self.button_b.setGeometry(self.window_width // 2 - 50, 0, 100, 40)
-        self.button_strip_layout.addWidget(self.button_b)
-
-        self.button_c = QtWidgets.QPushButton("")       # Todo: C button
-        self.button_c.setStyleSheet(self.button_style)
-        self.button_c.setGeometry(self.window_width - 150, 0, 100, 40)
-        self.button_strip_layout.addWidget(self.button_c)
+        self.cleanliness_overlay = QtWidgets.QGraphicsRectItem(50, 50, self.window_width - 100, self.window_height - 100)
+        self.cleanliness_overlay.setBrush(QtGui.QBrush(QtGui.QColor(139, 69, 19, 0)))  # Light brown, initially transparent
+        self.cleanliness_overlay.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+        self.scene.addItem(self.cleanliness_overlay)
 
     def setup_menu_bar(self):
-        menu_bar = self.window.menuBar()
+        self.menu_bar = self.window.menuBar()
 
-        actions_menu = menu_bar.addMenu('ACTIONS')
+        actions_menu = self.menu_bar.addMenu('Actions')
 
         self.feed_action = QtWidgets.QAction('Feed', self.window)
         actions_menu.addAction(self.feed_action)
@@ -77,17 +58,17 @@ class Ui:
         self.clean_action = QtWidgets.QAction('Clean', self.window)
         actions_menu.addAction(self.clean_action)
 
-        options_menu = menu_bar.addMenu('Debug Options')
+        options_menu = self.menu_bar.addMenu('Debug')
 
         self.debug_action = QtWidgets.QAction('Toggle Debug Mode', self.window)
         self.debug_action.setCheckable(True)
         options_menu.addAction(self.debug_action)
 
-        # self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
-        # self.view_cone_action.setCheckable(True)
-        # options_menu.addAction(self.view_cone_action)
+        self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
+        self.view_cone_action.setCheckable(True)
+        options_menu.addAction(self.view_cone_action)
 
-        help_menu = menu_bar.addMenu('Help')
+        help_menu = self.menu_bar.addMenu('Help')
 
         about_action = QtWidgets.QAction('About', self.window)
         about_action.triggered.connect(self.show_about_dialog)
@@ -97,9 +78,9 @@ class Ui:
         self.window_width = event.size().width()
         self.window_height = event.size().height()
         self.scene.setSceneRect(0, 0, self.window_width, self.window_height)
-        self.button_strip.setGeometry(0, self.window_height - 70, self.window_width, 70)
 
         self.rect_item.setRect(50, 50, self.window_width - 100, self.window_height - 100)
+        self.cleanliness_overlay.setRect(50, 50, self.window_width - 100, self.window_height - 100)
 
         self.feeding_message.setGeometry(0, self.window_height - 30, self.window_width, 30)
 
@@ -114,9 +95,12 @@ class Ui:
         self.feeding_message.update()
         self.scene.update()
 
+    def connect_view_cone_action(self, toggle_function):
+        self.view_cone_action.triggered.connect(toggle_function)
+
     def show_about_dialog(self):
         about_message = ("<h2>Dosidicus Electronicae</h2>"
                          "<p>Research project</p>"
-                         "<p>Version 1.0</p>"
+                         "<p>Version 1.0.2</p>"
                          "<p>https://github.com/ViciousSquid/Dosidicus")
         QtWidgets.QMessageBox.about(self.window, "About", about_message)
