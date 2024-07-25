@@ -1,3 +1,8 @@
+
+# Implementation of a (nearly) full Tamagotchi logic - look after the pet's needs or it will get sick and die :-(
+# by Rufus Pearce (ViciousSquid)  |  July 2024  |  MIT License
+# https://github.com/ViciousSquid/Dosidicus
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 import random
 import os
@@ -50,6 +55,9 @@ class TamagotchiLogic:
         self.save_manager = SaveManager("save_data.json")
 
         self.points = 0
+        self.score_update_timer = QtCore.QTimer()
+        self.score_update_timer.timeout.connect(self.update_score)
+        self.score_update_timer.start(5000)  # Update score every 5 seconds
 
         self.load_game()
 
@@ -442,3 +450,12 @@ class TamagotchiLogic:
             self.cleanliness_threshold_time = tamagotchi_logic_data["cleanliness_threshold_time"]
             self.hunger_threshold_time = tamagotchi_logic_data["hunger_threshold_time"]
             self.last_clean_time = tamagotchi_logic_data["last_clean_time"]
+
+    def update_score(self):
+        if self.squid is not None:
+            if not self.squid.is_sick and self.squid.happiness >= 80 and self.squid.cleanliness >= 80:
+                self.points += 1
+            elif self.squid.is_sick or self.squid.hunger >= 80 or self.squid.happiness <= 20:
+                self.points -= 1
+
+            self.user_interface.update_points(self.points)

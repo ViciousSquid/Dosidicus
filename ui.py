@@ -7,21 +7,33 @@ class Ui:
         self.window.setWindowTitle("Dosidicus")
 
         self.window_width = 1280
-        self.window_height = 800
+        self.window_height = 820
 
         self.window.resize(self.window_width, self.window_height)
 
         self.scene = QtWidgets.QGraphicsScene()
         self.view = QtWidgets.QGraphicsView(self.scene)
+        self.view.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.view.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.view.setViewportUpdateMode(QtWidgets.QGraphicsView.FullViewportUpdate)
         self.window.setCentralWidget(self.view)
 
         self.setup_menu_bar()
 
-        self.label = QtWidgets.QLabel("Dosidicus Electronicae")
+        self.title_text = "Dosidicus Electronicae"
+        self.label = QtWidgets.QLabel(self.title_text)
         self.label.setStyleSheet("font-size: 20px; font-weight: bold; color: white; background-color: black;")
         self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop)
         self.label.setGeometry(10, 10, 250, 30)
+        self.label.mouseDoubleClickEvent = self.start_rename
         self.scene.addWidget(self.label)
+
+        self.title_input = QtWidgets.QLineEdit()
+        self.title_input.setStyleSheet("font-size: 20px; font-weight: bold; color: white; background-color: black;")
+        self.title_input.setGeometry(10, 10, 250, 30)
+        self.title_input.hide()
+        self.title_input.editingFinished.connect(self.finish_rename)
+        self.scene.addWidget(self.title_input)
 
         self.feeding_message = QtWidgets.QLabel("Squid requires feeding")
         self.feeding_message.setStyleSheet("font-size: 16px; font-weight: bold; color: white; background-color: black;")
@@ -61,6 +73,12 @@ class Ui:
 
     def setup_menu_bar(self):
         self.menu_bar = self.window.menuBar()
+
+        file_menu = self.menu_bar.addMenu('File')
+        self.load_action = QtWidgets.QAction('Load', self.window)
+        self.save_action = QtWidgets.QAction('Save', self.window)
+        file_menu.addAction(self.load_action)
+        file_menu.addAction(self.save_action)
 
         actions_menu = self.menu_bar.addMenu('Actions')
 
@@ -125,3 +143,18 @@ class Ui:
 
     def update_points(self, points):
         self.points_value_label.setText(str(points))
+
+    def start_rename(self, event):
+        self.title_input.setText(self.title_text)
+        self.title_input.show()
+        self.label.hide()
+        self.title_input.setFocus()
+        self.title_input.selectAll()
+
+    def finish_rename(self):
+        new_title = self.title_input.text().strip()
+        if new_title:
+            self.title_text = new_title
+            self.label.setText(self.title_text)
+        self.label.show()
+        self.title_input.hide()

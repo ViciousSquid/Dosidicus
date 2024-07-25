@@ -59,11 +59,11 @@ class StatisticsWindow(QtWidgets.QWidget):
     def update_statistics(self):
         if self.squid is not None:
             for key, input_field in self.statistic_inputs.items():
-                input_field.setText(str(getattr(self.squid, key)))
+                input_field.setText(str(int(getattr(self.squid, key))))
 
             self.statistic_labels["is_sleeping"].setText(f"Sleeping: {self.squid.is_sleeping}")
             self.statistic_labels["direction"].setText(f"Direction: {self.squid.squid_direction}")
-            self.statistic_labels["position"].setText(f"Position: ({self.squid.squid_x}, {self.squid.squid_y})")
+            self.statistic_labels["position"].setText(f"Position: ({int(self.squid.squid_x)}, {int(self.squid.squid_y)})")
 
     def closeEvent(self, event):
         # Hide the window instead of closing it
