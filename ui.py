@@ -47,6 +47,18 @@ class Ui:
         self.cleanliness_overlay.setPen(QtGui.QPen(QtCore.Qt.NoPen))
         self.scene.addItem(self.cleanliness_overlay)
 
+        self.points_label = QtWidgets.QLabel("Points: ")
+        self.points_label.setStyleSheet("font-size: 22px; color: white; background-color: black;")
+        self.points_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignTop)
+        self.points_label.setGeometry(self.window_width - 150, 10, 140, 30)
+        self.scene.addWidget(self.points_label)
+
+        self.points_value_label = QtWidgets.QLabel("0")
+        self.points_value_label.setStyleSheet("font-size: 22px; font-weight: bold; color: white; background-color: black;")
+        self.points_value_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop)
+        self.points_value_label.setGeometry(self.window_width - 90, 10, 80, 30)
+        self.scene.addWidget(self.points_value_label)
+
     def setup_menu_bar(self):
         self.menu_bar = self.window.menuBar()
 
@@ -57,6 +69,9 @@ class Ui:
 
         self.clean_action = QtWidgets.QAction('Clean', self.window)
         actions_menu.addAction(self.clean_action)
+
+        self.medicine_action = QtWidgets.QAction('Give Medicine', self.window)
+        actions_menu.addAction(self.medicine_action)
 
         options_menu = self.menu_bar.addMenu('Debug')
 
@@ -84,13 +99,16 @@ class Ui:
 
         self.feeding_message.setGeometry(0, self.window_height - 30, self.window_width, 30)
 
+        self.points_label.setGeometry(self.window_width - 150, 10, 140, 30)
+        self.points_value_label.setGeometry(self.window_width - 90, 10, 80, 30)
+
     def show_message(self, message):
         self.feeding_message.setText(message)
         self.feeding_message.show()
-    
+
         # Set a timer to hide the message after 3 seconds
         QtCore.QTimer.singleShot(3000, self.feeding_message.hide)
-    
+
         # Force update
         self.feeding_message.update()
         self.scene.update()
@@ -104,3 +122,6 @@ class Ui:
                          "<p>Version 1.0.2</p>"
                          "<p>https://github.com/ViciousSquid/Dosidicus")
         QtWidgets.QMessageBox.about(self.window, "About", about_message)
+
+    def update_points(self, points):
+        self.points_value_label.setText(str(points))

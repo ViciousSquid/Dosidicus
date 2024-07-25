@@ -26,6 +26,12 @@ class Squid:
         self.animation_speed = 1
         self.base_move_interval = 1000  # 1 second
 
+        self.health = 100
+        self.is_sick = False
+
+        self.sick_icon_item = None
+        self.sick_icon_offset = QtCore.QPointF(0, -100)  # Offset the sick icon above the squid
+
     def set_animation_speed(self, speed):
         self.animation_speed = speed
 
@@ -68,6 +74,9 @@ class Squid:
         self.cleanliness = 100
         self.is_sleeping = False
 
+        self.health = 100
+        self.is_sick = False
+
     def update_preferred_vertical_range(self):
         self.preferred_vertical_range = (self.ui.window_height // 4, self.ui.window_height // 4 * 3)
 
@@ -87,7 +96,9 @@ class Squid:
         pass
 
     def make_decision(self):
-        if self.hunger > 50:
+        if self.is_sick:
+            self.stay_at_bottom()
+        elif self.hunger > 50:
             print("Squid is hungry and searching for food")
             self.search_for_food()
         elif self.sleepiness > 70:
@@ -124,15 +135,16 @@ class Squid:
         return math.sqrt((self.squid_x - x)**2 + (self.squid_y - y)**2)
 
     def eat(self):
-        for food_item in self.tamagotchi_logic.food_items:
-            if self.squid_item.collidesWithItem(food_item):
-                self.hunger = max(0, self.hunger - 20)
-                self.happiness = min(100, self.happiness + 10)
-                self.tamagotchi_logic.remove_food(food_item)
-                print("The squid ate the food")
-                self.show_eating_effect()
-                self.start_poop_timer()
-                break
+        if not self.is_sick:
+            for food_item in self.tamagotchi_logic.food_items:
+                if self.squid_item.collidesWithItem(food_item):
+                    self.hunger = max(0, self.hunger - 20)
+                    self.happiness = min(100, self.happiness + 10)
+                    self.tamagotchi_logic.remove_food(food_item)
+                    print("The squid ate the food")
+                    self.show_eating_effect()
+                    self.start_poop_timer()
+                    break
 
     def start_poop_timer(self):
         poop_delay = random.randint(10000, 30000)  # 10 to 30 seconds
@@ -191,6 +203,12 @@ class Squid:
         self.happiness = min(100, self.happiness + 10)
         self.tamagotchi_logic.show_message("Squid is playing!")
 
+    def stay_at_bottom(self):
+        if self.squid_y < self.ui.window_height - 120 - self.squid_height:
+            self.squid_y += self.base_vertical_speed
+            self.squid_item.setPos(self.squid_x, self.squid_y)
+        self.squid_direction = "none"
+
     def move_squid(self):
         if self.animation_speed == 0:
             return
@@ -241,6 +259,7 @@ class Squid:
 
         self.squid_item.setPos(self.squid_x, self.squid_y)
         self.update_view_cone()
+        self.update_sick_icon_position()  # Update the sick icon position when the squid moves
 
     def change_direction(self):
         directions = ["left", "right", "up", "down"]
@@ -267,7 +286,7 @@ class Squid:
         else:
             self.remove_view_cone()
 
-    def update_view_cone(self):
+    def update_view_cone(self):     #squid has a view cone which it uses to search for food
         if self.view_cone_visible:
             if self.view_cone_item is None:
                 self.view_cone_item = QtWidgets.QGraphicsPolygonItem()
@@ -311,3 +330,20 @@ class Squid:
             return -math.pi / 2
         else:
             return 0
+
+    def show_sick_icon(self):
+        if self.sick_icon_item is None:
+            sick_icon_pixmap = QtGui.QPixmap(os.path.join("images", "sick.png"))
+            self.sick_icon_item = QtWidgets.QGraphicsPixmapItem(sick_icon_pixmap)
+            self.ui.scene.addItem(self.sick_icon_item)
+        self.update_sick_icon_position()
+
+    def hide_sick_icon(self):
+        if self.sick_icon_item is not None:
+            self.ui.scene.removeItem(self.sick_icon_item)
+            self.sick_icon_item = None
+
+    def update_sick_icon_position(self):
+        if self.sick_icon_item is not None:
+            self.sick_icon_item.setPos(self.squid_x + self.squid_width // 2 - self.sick_icon_item.pixmap().width() // 2 + self.sick_icon_offset.x(),
+                                       self.squid_y + self.sick_icon_offset.y())

@@ -3,6 +3,7 @@ import random
 import os
 import time
 from statistics_window import StatisticsWindow
+from save_manager import SaveManager
 
 class TamagotchiLogic:
     def __init__(self, user_interface, squid):
@@ -13,7 +14,7 @@ class TamagotchiLogic:
         self.user_interface.feed_action.triggered.connect(self.feed_squid)
         self.user_interface.clean_action.triggered.connect(self.clean_environment)
         self.user_interface.connect_view_cone_action(self.squid.toggle_view_cone)
-
+        self.user_interface.medicine_action.triggered.connect(self.give_medicine)
         self.user_interface.debug_action.triggered.connect(self.toggle_debug_mode)
 
         self.user_interface.window.resizeEvent = self.handle_window_resize
@@ -40,6 +41,17 @@ class TamagotchiLogic:
 
         self.base_interval = 1000  # 1000 milliseconds (1 second)
         self.setup_timers()
+
+        self.cleanliness_threshold_time = 0
+        self.hunger_threshold_time = 0
+
+        self.needle_item = None
+
+        self.save_manager = SaveManager("save_data.json")
+
+        self.points = 0
+
+        self.load_game()
 
     def setup_speed_menu(self):
         speed_menu = self.user_interface.menu_bar.addMenu('Speed')
@@ -86,6 +98,54 @@ class TamagotchiLogic:
         self.move_foods()
         self.move_poops()
 
+    def give_medicine(self):
+        if self.squid is not None and self.squid.is_sick:
+            self.squid.is_sick = False
+            self.squid.happiness = max(0, self.squid.happiness - 30)
+            self.squid.sleepiness = min(100, self.squid.sleepiness + 50)
+            self.show_message("Medicine given. Squid is no longer sick but feels drowsy.")
+
+            # Hide the sick icon immediately
+            self.squid.hide_sick_icon()
+
+            # Put the squid to sleep
+            self.squid.go_to_sleep()
+
+            # Display the needle image
+            self.display_needle_image()
+        else:
+            self.show_message("Squid is not sick. Medicine not needed.")
+
+    def display_needle_image(self):
+        needle_pixmap = QtGui.QPixmap(os.path.join("images", "needle.jpg"))
+        self.needle_item = QtWidgets.QGraphicsPixmapItem(needle_pixmap)
+        self.needle_item.setPos(self.user_interface.window_width // 2 - needle_pixmap.width() // 2,
+                                self.user_interface.window_height // 2 - needle_pixmap.height() // 2)
+        self.needle_item.setZValue(10)  # Ensure the needle image is displayed on top of everything
+        self.user_interface.scene.addItem(self.needle_item)
+
+        # Create a QGraphicsOpacityEffect
+        opacity_effect = QtWidgets.QGraphicsOpacityEffect()
+        self.needle_item.setGraphicsEffect(opacity_effect)
+
+        # Create a QPropertyAnimation for the opacity effect
+        self.needle_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
+        self.needle_animation.setDuration(1000)  # 1 second duration
+        self.needle_animation.setStartValue(1.0)
+        self.needle_animation.setEndValue(0.0)
+        self.needle_animation.setEasingCurve(QtCore.QEasingCurve.InQuad)
+
+        # Connect the finished signal to remove the item
+        self.needle_animation.finished.connect(self.remove_needle_image)
+
+        # Start the animation
+        self.needle_animation.start()
+
+    def remove_needle_image(self):
+        if self.needle_item is not None:
+            self.user_interface.scene.removeItem(self.needle_item)
+            self.needle_item = None
+
     def move_foods(self):
         for food_item in self.food_items[:]:
             food_x = food_item.pos().x()
@@ -125,6 +185,36 @@ class TamagotchiLogic:
                 self.squid.hunger = min(100, self.squid.hunger + (0.1 * self.simulation_speed))
                 self.squid.sleepiness = min(100, self.squid.sleepiness + (0.1 * self.simulation_speed))
                 self.squid.happiness = max(0, self.squid.happiness - (0.1 * self.simulation_speed))
+                self.squid.cleanliness = max(0, self.squid.cleanliness - (0.1 * self.simulation_speed))
+
+                # Check if cleanliness has been too low for too long
+                if self.squid.cleanliness < 20:
+                    self.cleanliness_threshold_time += 1
+                else:
+                    self.cleanliness_threshold_time = 0
+
+                # Check if hunger has been too high for too long
+                if self.squid.hunger > 80:
+                    self.hunger_threshold_time += 1
+                else:
+                    self.hunger_threshold_time = 0
+
+                # Check if squid becomes sick (80% chance)
+                if (self.cleanliness_threshold_time >= 10 * self.simulation_speed and self.cleanliness_threshold_time <= 60 * self.simulation_speed) or \
+                   (self.hunger_threshold_time >= 10 * self.simulation_speed and self.hunger_threshold_time <= 50 * self.simulation_speed):
+                    if random.random() < 0.8:
+                        self.squid.is_sick = True
+                else:
+                    self.squid.is_sick = False
+
+                if self.squid.is_sick:
+                    self.squid.health = max(0, self.squid.health - (0.1 * self.simulation_speed))
+                    self.squid.show_sick_icon()
+                    if self.squid.health == 0:
+                        self.game_over()
+                else:
+                    self.squid.health = min(100, self.squid.health + (0.1 * self.simulation_speed))
+                    self.squid.hide_sick_icon()
 
                 # Check if squid should go to sleep
                 if self.squid.sleepiness >= 100:
@@ -134,6 +224,14 @@ class TamagotchiLogic:
                 self.squid.sleepiness = max(0, self.squid.sleepiness - (0.2 * self.simulation_speed))
                 if self.squid.sleepiness == 0:
                     self.squid.wake_up()
+
+            # Update points based on squid's status
+            if not self.squid.is_sick and self.squid.happiness >= 80 and self.squid.cleanliness >= 80:
+                self.points += 1
+            elif self.squid.is_sick or self.squid.hunger >= 80 or self.squid.happiness <= 20:
+                self.points = max(0, self.points - 1)
+
+            self.user_interface.update_points(self.points)
 
     def handle_window_resize(self, event):
         self.user_interface.window_width = event.size().width()
@@ -269,3 +367,78 @@ class TamagotchiLogic:
             for poop_item in self.poop_items:
                 current_frame = self.poop_items.index(poop_item) % 2
                 poop_item.setPixmap(self.squid.poop_images[current_frame])
+
+    def game_over(self):
+        game_over_dialog = QtWidgets.QMessageBox()
+        game_over_dialog.setIcon(QtWidgets.QMessageBox.Critical)
+        game_over_dialog.setText("Game Over")
+        game_over_dialog.setInformativeText("Your squid has died due to poor health.")
+        game_over_dialog.setWindowTitle("Game Over")
+        game_over_dialog.exec_()
+        self.user_interface.window.close()
+
+        # Add any additional game over logic or cleanup here
+        print("Game Over - Squid died due to poor health")
+
+        # Save the game state before resetting
+        self.save_manager.save_game(self.squid, self)
+
+        # Reset the game state
+        self.reset_game()
+
+    def reset_game(self):
+        # Reset squid attributes
+        self.squid.hunger = 25
+        self.squid.sleepiness = 30
+        self.squid.happiness = 100
+        self.squid.cleanliness = 100
+        self.squid.is_sleeping = False
+        self.squid.health = 100
+        self.squid.is_sick = False
+
+        # Reset game variables
+        self.cleanliness_threshold_time = 0
+        self.hunger_threshold_time = 0
+        self.last_clean_time = 0
+
+        # Clear food and poop items
+        for food_item in self.food_items:
+            self.user_interface.scene.removeItem(food_item)
+        self.food_items.clear()
+
+        for poop_item in self.poop_items:
+            self.user_interface.scene.removeItem(poop_item)
+        self.poop_items.clear()
+
+        # Reset squid position
+        self.squid.squid_x = self.squid.center_x
+        self.squid.squid_y = self.squid.center_y
+        self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
+
+        # Show a message
+        self.show_message("Game reset. Take better care of your squid!")
+
+        # Force an update of the scene
+        self.user_interface.scene.update()
+
+        # Save the game state after resetting
+        self.save_manager.save_game(self.squid, self)
+
+    def load_game(self):
+        save_data = self.save_manager.load_game()
+        if save_data is not None:
+            squid_data = save_data["squid"]
+            self.squid.hunger = squid_data["hunger"]
+            self.squid.sleepiness = squid_data["sleepiness"]
+            self.squid.happiness = squid_data["happiness"]
+            self.squid.cleanliness = squid_data["cleanliness"]
+            self.squid.health = squid_data["health"]
+            self.squid.is_sick = squid_data["is_sick"]
+            self.squid.squid_x = squid_data["squid_x"]
+            self.squid.squid_y = squid_data["squid_y"]
+            self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
+
+            tamagotchi_logic_data = save_data["tamagotchi_logic"]
+            self.cleanliness_threshold_time = tamagotchi_logic_data["cleanliness_threshold_time"]
+            self.hunger_threshold_time = tamagotchi_logic_data["hunger_threshold_time"]
+            self.last_clean_time = tamagotchi_logic_data["last_clean_time"]
