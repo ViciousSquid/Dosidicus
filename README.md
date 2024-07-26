@@ -1,7 +1,7 @@
 # Dosidicus electronicae
 A virtual squid in the style of a Tamagotchi digital pet -  look after the pets needs or it will get sick and die :-(
 
-* requires **PyQt5** and (optional) matplotlib
+* requires **PyQt5**
 
 ![image](https://github.com/user-attachments/assets/126380af-4079-4a05-9212-be85be586ae7)
 
