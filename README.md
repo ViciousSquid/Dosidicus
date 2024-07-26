@@ -14,25 +14,46 @@ Implementation of a (nearly) full Tamagotchi logic - look after the pets needs o
 
 
 
-The squid has attributes such as hunger, sleepiness, and happiness.  
-Feeding it cheese via the `Actions` menu will increase happiness and decrease hunger.
+### Autonomous Pet Behavior:
 
-### Features:
-
-* Scoreboard (depending on how well the squid is cared for)
-
-* Squid has a view cone that it moves around to locate food (toggle visualisation using the `Debug menu`)
-
-  ### To do:
-
-* Feeding Time Prediction: The squid remembers when it's usually fed and adjusts its behavior to be more active around those times.
-
-* Location Preferences: The squid learns which areas of the environment are more beneficial (perhaps they're cleaner, safer, or have more food) and prefers to spend time in those areas.
-
-* Adaptive Behavior: By combining these learned preferences with its current needs, the squid can make more intelligent decisions about when to search for food and where to spend its time.
+The squid moves autonomously, making decisions based on its current state (hunger, sleepiness, etc.).
+Implements a vision cone for food detection, allowing for more realistic foraging behavior.
 
 
+### Need Management System:
 
-# WORK IN PROGRESS
+Tracks various needs like hunger, sleepiness, happiness, and cleanliness.
+These needs change over time and affect the pet's health and behavior.
+
+
+### Health and Sickness Mechanics:
+
+The squid can become sick if its needs are neglected.
+Includes a medicine system to treat sickness.
+
+
+
+### Debug and Development Tools:
+
+Includes a statistics window for monitoring the squid's internal state.
+Debug mode for adjusting pet attributes during runtime.
+
+------
+
+### Usefulness as a Base for Other Digital Pet Projects
+
+* Customizable Pet Behavior:
+  The autonomous behavior system can be adapted for different types of pets or creatures.
+* Flexible Need System:
+   The need management system can be easily expanded to include additional pet requirements.
+* Scalable Difficulty:
+  The health and sickness mechanics provide a foundation for creating challenging gameplay.
+
+------
+
+------
+
+------
+
 
 * The **Humboldt squid** (*Dosidicus gigas*) is a large, predatory squid living in the eastern Pacific Ocean.
