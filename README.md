@@ -7,11 +7,7 @@ Implementation of a (nearly) full Tamagotchi logic - look after the pets needs o
 
 * requires **PyQt5** and (optional) matplotlib
 
-![image](https://github.com/user-attachments/assets/8a4349b8-413f-4c32-baa7-c2f0a1422dc6)
-
-
-
-
+![image](https://github.com/user-attachments/assets/126380af-4079-4a05-9212-be85be586ae7)
 
 
 ### Autonomous Pet Behavior:
