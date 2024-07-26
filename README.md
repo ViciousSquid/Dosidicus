@@ -17,7 +17,7 @@ Implementation of a (nearly) full Tamagotchi logic - look after the pets needs o
 ### Autonomous Pet Behavior:
 
 The squid moves autonomously, making decisions based on its current state (hunger, sleepiness, etc.).
-Implements a vision cone for food detection, allowing for more realistic foraging behavior.
+Implements a vision cone for food detection, simulating realistic foraging behavior.
 
 
 ### Need Management System:
