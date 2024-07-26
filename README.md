@@ -31,6 +31,8 @@ These needs change over time and affect the pet's health and behavior.
 The squid can become sick if its needs are neglected.
 Includes a medicine system to treat sickness.
 
+Be aware the squid hates taking mecicine and will become depressed and sleepy if forced to do so.
+
 
 
 ### Debug and Development Tools:
