@@ -5,7 +5,7 @@ Implementation of a (nearly) full Tamagotchi logic - look after the pets needs o
 
 [ A research project ]
 
-* requires **PyQt5**
+* requires **PyQt5** and (optional) matplotlib
 
 ![image](https://github.com/user-attachments/assets/8a4349b8-413f-4c32-baa7-c2f0a1422dc6)
 
