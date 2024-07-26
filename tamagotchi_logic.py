@@ -58,6 +58,10 @@ class TamagotchiLogic:
         self.score_update_timer.timeout.connect(self.update_score)
         self.score_update_timer.start(5000)  # Update score every 5 seconds
 
+        self.brain_update_timer = QtCore.QTimer()
+        self.brain_update_timer.timeout.connect(self.update_squid_brain)
+        self.brain_update_timer.start(1000)  # Update every second
+
         self.load_game()
 
     def setup_speed_menu(self):
@@ -332,7 +336,7 @@ class TamagotchiLogic:
     def show_message(self, message):
         self.user_interface.show_message(message)
 
-    def toggle_debug_mode(self):        # If debug mode is not enabled, don't show the 'apply' button in statistics window
+    def toggle_debug_mode(self):
         self.debug_mode = not self.debug_mode
         self.statistics_window.set_debug_mode(self.debug_mode)
         print(f"Debug mode {'enabled' if self.debug_mode else 'disabled'}")
@@ -458,3 +462,17 @@ class TamagotchiLogic:
                 self.points -= 1
 
             self.user_interface.update_points(self.points)
+
+    def update_squid_brain(self):
+        if self.squid and self.user_interface.squid_brain_window.isVisible():
+            brain_state = {
+                "hunger": self.squid.hunger,
+                "happiness": self.squid.happiness,
+                "cleanliness": self.squid.cleanliness,
+                "sleepiness": self.squid.sleepiness,
+                "is_sick": self.squid.is_sick,
+                "is_eating": self.squid.status == "eating",
+                "is_sleeping": self.squid.is_sleeping,
+                "pursuing_food": self.squid.pursuing_food
+            }
+            self.user_interface.squid_brain_window.update_brain(brain_state)

@@ -1,5 +1,6 @@
 import os
 from PyQt5 import QtCore, QtGui, QtWidgets
+from squid_brain_window import SquidBrainWindow
 
 class Ui:
     def __init__(self, window):
@@ -19,6 +20,9 @@ class Ui:
         self.window.setCentralWidget(self.view)
 
         self.setup_menu_bar()
+
+        # Initialize SquidBrainWindow
+        self.squid_brain_window = SquidBrainWindow()
 
         self.title_text = "Dosidicus Electronicae"
         self.label = QtWidgets.QLabel(self.title_text)
@@ -59,16 +63,16 @@ class Ui:
         self.cleanliness_overlay.setPen(QtGui.QPen(QtCore.Qt.NoPen))
         self.scene.addItem(self.cleanliness_overlay)
 
-        self.points_label = QtWidgets.QLabel("Points: ")
+        self.points_label = QtWidgets.QLabel("Points:")
         self.points_label.setStyleSheet("font-size: 22px; color: white; background-color: black;")
-        self.points_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignTop)
-        self.points_label.setGeometry(self.window_width - 150, 10, 140, 30)
+        self.points_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.points_label.setGeometry(self.window_width - 200, 10, 100, 30)
         self.scene.addWidget(self.points_label)
 
         self.points_value_label = QtWidgets.QLabel("0")
         self.points_value_label.setStyleSheet("font-size: 22px; font-weight: bold; color: white; background-color: black;")
-        self.points_value_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop)
-        self.points_value_label.setGeometry(self.window_width - 90, 10, 80, 30)
+        self.points_value_label.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        self.points_value_label.setGeometry(self.window_width - 95, 10, 80, 30)
         self.scene.addWidget(self.points_value_label)
 
     def setup_menu_bar(self):
@@ -91,21 +95,32 @@ class Ui:
         self.medicine_action = QtWidgets.QAction('Give Medicine', self.window)
         actions_menu.addAction(self.medicine_action)
 
-        options_menu = self.menu_bar.addMenu('Debug')
+        debug_menu = self.menu_bar.addMenu('Debug')
+
+        self.brain_action = QtWidgets.QAction('Toggle Brain View', self.window)
+        self.brain_action.setCheckable(True)
+        self.brain_action.triggered.connect(self.toggle_brain_window)
+        debug_menu.addAction(self.brain_action)
 
         self.debug_action = QtWidgets.QAction('Toggle Debug Mode', self.window)
         self.debug_action.setCheckable(True)
-        options_menu.addAction(self.debug_action)
+        debug_menu.addAction(self.debug_action)
 
         self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
         self.view_cone_action.setCheckable(True)
-        options_menu.addAction(self.view_cone_action)
+        debug_menu.addAction(self.view_cone_action)
 
         help_menu = self.menu_bar.addMenu('Help')
 
         about_action = QtWidgets.QAction('About', self.window)
         about_action.triggered.connect(self.show_about_dialog)
         help_menu.addAction(about_action)
+
+    def toggle_brain_window(self, checked):
+        if checked:
+            self.squid_brain_window.show()
+        else:
+            self.squid_brain_window.hide()
 
     def handle_window_resize(self, event):
         self.window_width = event.size().width()
@@ -117,8 +132,8 @@ class Ui:
 
         self.feeding_message.setGeometry(0, self.window_height - 30, self.window_width, 30)
 
-        self.points_label.setGeometry(self.window_width - 150, 10, 140, 30)
-        self.points_value_label.setGeometry(self.window_width - 90, 10, 80, 30)
+        self.points_label.setGeometry(self.window_width - 200, 10, 100, 30)
+        self.points_value_label.setGeometry(self.window_width - 95, 10, 80, 30)
 
     def show_message(self, message):
         self.feeding_message.setText(message)
