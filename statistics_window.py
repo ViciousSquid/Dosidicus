@@ -13,7 +13,7 @@ class StatisticsWindow(QtWidgets.QWidget):
 
         # Create a label for the health value
         self.health_label = QtWidgets.QLabel()
-        self.health_label.setFont(QtGui.QFont("Arial", 11, QtGui.QFont.Bold))
+        self.health_label.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
         self.layout.addWidget(self.health_label)
 
         self.statistic_inputs = {
@@ -35,11 +35,11 @@ class StatisticsWindow(QtWidgets.QWidget):
             self.layout.addWidget(input_field)
 
         self.statistic_labels = {
-            "is_sleeping": QtWidgets.QLabel(),
-            "direction": QtWidgets.QLabel(),
-            "position": QtWidgets.QLabel(),
+            # "is_sleeping": QtWidgets.QLabel(),
+            # "direction": QtWidgets.QLabel(),
+            # "position": QtWidgets.QLabel(),
             "status": QtWidgets.QLabel(),
-            "is_sick": QtWidgets.QLabel(),
+            # "is_sick": QtWidgets.QLabel(),
         }
 
         for label in self.statistic_labels.values():
@@ -72,11 +72,11 @@ class StatisticsWindow(QtWidgets.QWidget):
             for key, input_field in self.statistic_inputs.items():
                 input_field.setText(str(int(getattr(self.squid, key))))
 
-            self.statistic_labels["is_sleeping"].setText(f"Sleeping: {self.squid.is_sleeping}")
-            self.statistic_labels["direction"].setText(f"Direction: {self.squid.squid_direction}")
-            self.statistic_labels["position"].setText(f"Position: ({int(self.squid.squid_x)}, {int(self.squid.squid_y)})")
+            # self.statistic_labels["is_sleeping"].setText(f"Sleeping: {self.squid.is_sleeping}")
+            # self.statistic_labels["direction"].setText(f"Direction: {self.squid.squid_direction}")
+            # self.statistic_labels["position"].setText(f"Position: ({int(self.squid.squid_x)}, {int(self.squid.squid_y)})")
             self.statistic_labels["status"].setText(f"Status: {self.squid.status}")
-            self.statistic_labels["is_sick"].setText(f"Sick: {self.squid.is_sick}")
+            # self.statistic_labels["is_sick"].setText(f"Sick: {self.squid.is_sick}")
 
     def set_debug_mode(self, enabled):
         for input_field in self.statistic_inputs.values():

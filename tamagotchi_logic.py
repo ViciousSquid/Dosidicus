@@ -262,7 +262,8 @@ class TamagotchiLogic:
             self.user_interface.cleanliness_overlay.setRect(50, 50, self.user_interface.window_width - 100, self.user_interface.window_height - 100)
 
         if hasattr(self.user_interface, 'feeding_message'):
-            self.user_interface.feeding_message.setGeometry(0, self.user_interface.window_height - 30, self.user_interface.window_width, 30)
+            self.user_interface.feeding_message.setPos(0, self.user_interface.window_height - 30)
+            self.user_interface.feeding_message.setTextWidth(self.user_interface.window_width)
 
         if self.squid:
             self.squid.update_preferred_vertical_range()
@@ -392,7 +393,7 @@ class TamagotchiLogic:
         print("Game Over - Squid died due to poor health")
 
         # Save the game state before resetting
-        self.save_manager.save_game(self.squid, self)
+        self.save_game()
 
         # Reset the game state
         self.reset_game()
@@ -433,7 +434,7 @@ class TamagotchiLogic:
         self.user_interface.scene.update()
 
         # Save the game state after resetting
-        self.save_manager.save_game(self.squid, self)
+        self.save_game()
 
     def load_game(self):
         save_data = self.save_manager.load_game()
@@ -453,6 +454,9 @@ class TamagotchiLogic:
             self.cleanliness_threshold_time = tamagotchi_logic_data["cleanliness_threshold_time"]
             self.hunger_threshold_time = tamagotchi_logic_data["hunger_threshold_time"]
             self.last_clean_time = tamagotchi_logic_data["last_clean_time"]
+
+            decorations_data = save_data.get('decorations', [])
+            self.user_interface.load_decorations_data(decorations_data)
 
     def update_score(self):
         if self.squid is not None:
@@ -476,3 +480,31 @@ class TamagotchiLogic:
                 "pursuing_food": self.squid.pursuing_food
             }
             self.user_interface.squid_brain_window.update_brain(brain_state)
+
+    def save_game(self):
+        squid_data = {
+            "hunger": self.squid.hunger,
+            "sleepiness": self.squid.sleepiness,
+            "happiness": self.squid.happiness,
+            "cleanliness": self.squid.cleanliness,
+            "health": self.squid.health,
+            "is_sick": self.squid.is_sick,
+            "squid_x": self.squid.squid_x,
+            "squid_y": self.squid.squid_y
+        }
+
+        tamagotchi_logic_data = {
+            "cleanliness_threshold_time": self.cleanliness_threshold_time,
+            "hunger_threshold_time": self.hunger_threshold_time,
+            "last_clean_time": self.last_clean_time
+        }
+
+        decorations_data = self.user_interface.get_decorations_data()
+
+        save_data = {
+            'squid': squid_data,
+            'tamagotchi_logic': tamagotchi_logic_data,
+            'decorations': decorations_data
+        }
+
+        self.save_manager.save_game(save_data)

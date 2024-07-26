@@ -12,14 +12,15 @@ class BrainWidget(QtWidgets.QWidget):
             "is_sick": False,
             "is_eating": False,
             "is_sleeping": False,
-            "pursuing_food": False
+            "pursuing_food": False,
+            "direction": "up",
+            "position": (0, 0)
         }
         self.neuron_positions = {
             "hunger": (300, 125),
             "happiness": (600, 125),
             "cleanliness": (900, 125),
-            "sleepiness": (450, 250),
-            "health": (750, 250)
+            "sleepiness": (450, 250)
         }
         self.connections = self.initialize_connections()
         self.weights = self.initialize_weights()
@@ -120,7 +121,7 @@ class BrainWidget(QtWidgets.QWidget):
 
             # Adjust the font size based on the scale with a maximum font size
             max_font_size = 12
-            font_size = max(6, min(max_font_size, int(8 * scale)))
+            font_size = max(8, min(max_font_size, int(8 * scale)))
             font = painter.font()
             font.setPointSize(font_size)
             painter.setFont(font)
@@ -129,17 +130,10 @@ class BrainWidget(QtWidgets.QWidget):
 
     def draw_neurons(self, painter, scale):
         for name, pos in self.neuron_positions.items():
-            if name == "health":
-                value = 100 if self.state["is_sick"] else 0
-                self.draw_neuron(painter, pos[0], pos[1], value, name, binary=True, scale=scale)
-            else:
-                self.draw_neuron(painter, pos[0], pos[1], self.state[name], name, scale=scale)
+            self.draw_neuron(painter, pos[0], pos[1], self.state[name], name, scale=scale)
 
     def draw_neuron(self, painter, x, y, value, label, binary=False, scale=1.0):
-        if binary:
-            color = QtGui.QColor(255, 0, 0) if value > 50 else QtGui.QColor(0, 255, 0)
-        else:
-            color = QtGui.QColor(int(255 * (1 - value / 100)), int(255 * (value / 100)), 0)
+        color = QtGui.QColor(int(255 * (1 - value / 100)), int(255 * (value / 100)), 0)
 
         painter.setBrush(QtGui.QBrush(color))
         painter.drawEllipse(x - 25, y - 25, 50, 50)
@@ -161,6 +155,13 @@ class BrainWidget(QtWidgets.QWidget):
         painter.setFont(font)
         painter.drawText(x - 75, y + 10, 150, 20, QtCore.Qt.AlignCenter, label)
 
+    def draw_text(self, painter, x, y, text, scale=1.0):
+        painter.setPen(QtGui.QColor(0, 0, 0))
+        font = painter.font()
+        font.setPointSize(8)
+        painter.setFont(font)
+        painter.drawText(x - 75, y + 10, 150, 20, QtCore.Qt.AlignCenter, text)
+
     def toggle_links(self, state):
         self.show_links = state
         self.update()
@@ -176,11 +177,16 @@ class StimulateDialog(QtWidgets.QDialog):
         self.layout.addLayout(self.form_layout)
 
         self.neuron_inputs = {}
-        neurons = ["hunger", "happiness", "cleanliness", "sleepiness", "is_sick", "is_eating", "is_sleeping", "pursuing_food"]
+        neurons = ["hunger", "happiness", "cleanliness", "sleepiness", "is_sick", "is_eating", "is_sleeping", "pursuing_food", "direction", "position"]
         for neuron in neurons:
             if neuron.startswith("is_"):
                 input_widget = QtWidgets.QComboBox()
                 input_widget.addItems(["False", "True"])
+            elif neuron == "direction":
+                input_widget = QtWidgets.QComboBox()
+                input_widget.addItems(["up", "down", "left", "right"])
+            elif neuron == "position":
+                input_widget = QtWidgets.QLineEdit()
             else:
                 input_widget = QtWidgets.QSpinBox()
                 input_widget.setRange(0, 100)
@@ -198,14 +204,25 @@ class StimulateDialog(QtWidgets.QDialog):
             if isinstance(input_widget, QtWidgets.QSpinBox):
                 stimulation_values[neuron] = input_widget.value()
             elif isinstance(input_widget, QtWidgets.QComboBox):
-                stimulation_values[neuron] = input_widget.currentText() == "True"
+                stimulation_values[neuron] = input_widget.currentText()
+            elif isinstance(input_widget, QtWidgets.QLineEdit):
+                position_text = input_widget.text()
+                if position_text:
+                    try:
+                        stimulation_values[neuron] = tuple(map(int, position_text.split(',')))
+                    except ValueError:
+                        QtWidgets.QMessageBox.warning(self, "Invalid Input", f"Invalid format for {neuron}. Expected format: x,y")
+                        return None
+                else:
+                    QtWidgets.QMessageBox.warning(self, "Invalid Input", f"{neuron} cannot be empty.")
+                    return None
         return stimulation_values
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Brain")
-        self.resize(640, 512)  # Set initial window size
+        self.resize(900, 600)  # Set initial window size
 
         screen = QtWidgets.QDesktopWidget().screenNumber(QtWidgets.QDesktopWidget().cursor().pos())
         screen_geometry = QtWidgets.QDesktopWidget().screenGeometry(screen)
@@ -227,23 +244,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.button_layout = QtWidgets.QHBoxLayout()
         self.layout.addLayout(self.button_layout)
 
-        self.matplotlib_available = False
-        try:
-            import matplotlib.pyplot as plt
-            from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-            self.matplotlib_available = True
-        except ImportError:
-            pass
-
         self.stimulate_button = self.create_button("Stimulate Brain", self.stimulate_brain, "#D8BFD8")  # Thistle
-        self.plot_button = self.create_button("Plot Brain History", self.plot_brain_history, "#FFDEE9")  # Blush
-
-        if not self.matplotlib_available:
-            self.plot_button.setEnabled(False)
-            self.plot_button.setToolTip("Matplotlib is not available. Please install it to use the plotting functionality.")
 
         self.button_layout.addWidget(self.stimulate_button)
-        self.button_layout.addWidget(self.plot_button)
 
         self.button_layout.addStretch(1)  # Add stretch to push buttons to the left
 
@@ -271,38 +274,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         dialog = StimulateDialog(self)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             stimulation_values = dialog.get_stimulation_values()
-            self.brain_widget.stimulate_brain(stimulation_values)
-
-    def plot_brain_history(self):
-        if not self.matplotlib_available:
-            QtWidgets.QMessageBox.warning(self, "Missing Library", "Matplotlib is not available. Please install it to use the plotting functionality.")
-            return
-
-        if not self.brain_widget.history:
-            QtWidgets.QMessageBox.warning(self, "No Data", "No brain history data available to plot.")
-            return
-
-        import matplotlib.pyplot as plt
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-
-        fig, ax = plt.subplots()
-        for key in self.brain_widget.state.keys():
-            if key not in ["is_sick", "is_eating", "is_sleeping", "pursuing_food"]:
-                values = [state[key] for state in self.brain_widget.history]
-                ax.plot(values, label=key)
-
-        ax.legend()
-        ax.set_xlabel("Time")
-        ax.set_ylabel("Value")
-        ax.set_title("Brain History")
-
-        canvas = FigureCanvas(fig)
-        plot_window = QtWidgets.QDialog(self)
-        plot_window.setWindowTitle("Brain History Plot")
-        plot_window.setLayout(QtWidgets.QVBoxLayout())
-        plot_window.layout().addWidget(canvas)
-        plot_window.resize(800, 600)
-        plot_window.exec_()
+            if stimulation_values is not None:
+                self.brain_widget.stimulate_brain(stimulation_values)
 
 if __name__ == "__main__":
     import sys
