@@ -36,6 +36,8 @@ class Squid:
         self.sick_icon_item = None
         self.sick_icon_offset = QtCore.QPointF(0, -100)  # Offset the sick icon above the squid
 
+        self.status = "roaming"  # Initialize status
+
     def set_animation_speed(self, speed):
         self.animation_speed = speed
 
@@ -96,27 +98,31 @@ class Squid:
         self.update_view_cone()
 
     def update_needs(self):
-        # This method is no longer needed as needs are updated in TamagotchiLogic
+        # This method was moved to TamagotchiLogic 26/07/2024
         pass
 
-    def make_decision(self):
+    def make_decision(self):        # Make decisions and report about them
         if self.is_sick:
             self.stay_at_bottom()
-        elif self.hunger > 50:
-            print("Squid is hungry and searching for food")
+            self.status = "sick and lethargic"
+        elif self.hunger > 30:      # Search for food if this hungry
+            self.status = "searching for food"
             self.search_for_food()
-        elif self.sleepiness > 70:
-            print("Squid is tired")
+        elif self.sleepiness > 70:  # try to go to sleep if this tired
+            self.status = "tired"
             self.go_to_sleep()
         else:
+            self.status = "roaming" # Default status
             self.move_randomly()
 
-    def search_for_food(self):
+    def search_for_food(self):  # Search for food within the view cone and move towards it
         visible_food = self.get_visible_food()
         if visible_food:
             closest_food = min(visible_food, key=lambda f: self.distance_to(f[0], f[1]))
+            self.status = "moving to food"
             self.move_towards(closest_food[0], closest_food[1])
         else:
+            self.status = "searching for food"
             self.move_randomly()
 
     def get_visible_food(self):
@@ -185,6 +191,7 @@ class Squid:
         if not self.is_sick:
             for food_item in self.tamagotchi_logic.food_items:
                 if self.squid_item.collidesWithItem(food_item):
+                    self.status = "Ate some cheese"
                     self.hunger = max(0, self.hunger - 20)
                     self.happiness = min(100, self.happiness + 10)
                     self.tamagotchi_logic.remove_food(food_item)
@@ -194,7 +201,7 @@ class Squid:
                     break
 
     def start_poop_timer(self):
-        poop_delay = random.randint(10000, 30000)  # 10 to 30 seconds
+        poop_delay = random.randint(11000, 30000)  # 11 to 30 seconds until poop is created (to simulate digestion)
         print("Poop timer started")
         self.poop_timer = QtCore.QTimer()
         self.poop_timer.setSingleShot(True)
@@ -238,23 +245,31 @@ class Squid:
         if not self.is_sleeping:
             self.is_sleeping = True
             self.squid_direction = "down"
+            self.status = "sleeping"
             self.tamagotchi_logic.show_message("Squid is sleeping...")
 
     def wake_up(self):
         self.is_sleeping = False
         self.sleepiness = 0
         self.happiness = min(100, self.happiness + 20)
+        self.status = "roaming"
+        self.squid_direction = "left"  # Set a default direction when waking up
+        self.update_squid_image()  # Update the squid's image to reflect the new state
         self.tamagotchi_logic.show_message("Squid woke up!")
 
-    def play(self):
-        self.happiness = min(100, self.happiness + 10)
-        self.tamagotchi_logic.show_message("Squid is playing!")
+    def update_squid_image(self):
+        self.squid_item.setPixmap(self.current_image())
 
-    def stay_at_bottom(self):
-        if self.squid_y < self.ui.window_height - 120 - self.squid_height:
-            self.squid_y += self.base_vertical_speed
-            self.squid_item.setPos(self.squid_x, self.squid_y)
-        self.squid_direction = "none"
+    def current_image(self):
+        if self.is_sleeping:
+            return self.images[f"sleep{self.current_frame + 1}"]
+        if self.squid_direction == "left":
+            return self.images[f"left{self.current_frame + 1}"]
+        elif self.squid_direction == "right":
+            return self.images[f"right{self.current_frame + 1}"]
+        elif self.squid_direction == "up":
+            return self.images[f"up{self.current_frame + 1}"]
+        return self.images["left1"]  # Default to left-facing image if direction is unknown
 
     def move_squid(self):
         if self.animation_speed == 0:
@@ -264,10 +279,8 @@ class Squid:
             if self.squid_y < self.ui.window_height - 120 - self.squid_height:
                 self.squid_y += self.base_vertical_speed * self.animation_speed
                 self.squid_item.setPos(self.squid_x, self.squid_y)
-            else:
-                self.squid_direction = "none"
             self.current_frame = (self.current_frame + 1) % 2
-            self.squid_item.setPixmap(self.current_image())
+            self.update_squid_image()
             return
 
         squid_x_new = self.squid_x
@@ -279,7 +292,7 @@ class Squid:
             squid_x_new += self.base_squid_speed * self.animation_speed
         elif self.squid_direction == "up":
             squid_y_new -= self.base_vertical_speed * self.animation_speed
-        elif self.squid_direction == "down":
+        else:  # Treat any other direction as downward movement
             squid_y_new += self.base_vertical_speed * self.animation_speed
 
         # Check if the squid hits the screen edge
@@ -300,13 +313,13 @@ class Squid:
         self.squid_x = squid_x_new
         self.squid_y = squid_y_new
 
-        if self.squid_direction in ["left", "right", "up", "down"]:
+        if self.squid_direction in ["left", "right", "up"]:
             self.current_frame = (self.current_frame + 1) % 2
-            self.squid_item.setPixmap(self.current_image())
+            self.update_squid_image()
 
         self.squid_item.setPos(self.squid_x, self.squid_y)
         self.update_view_cone()
-        self.update_sick_icon_position()  # Update the sick icon position when the squid moves
+        self.update_sick_icon_position()
 
     def change_direction(self):
         directions = ["left", "right", "up", "down"]
@@ -315,17 +328,6 @@ class Squid:
             new_direction = random.choice(directions)
         self.squid_direction = new_direction
 
-    def current_image(self):
-        if self.is_sleeping:
-            return self.images[f"sleep{self.current_frame + 1}"]
-        if self.squid_direction == "left":
-            return self.images[f"left{self.current_frame + 1}"]
-        elif self.squid_direction == "right":
-            return self.images[f"right{self.current_frame + 1}"]
-        elif self.squid_direction == "up":
-            return self.images[f"up{self.current_frame + 1}"]
-        return self.images["left1"]
-
     def toggle_view_cone(self):
         self.view_cone_visible = not self.view_cone_visible
         if self.view_cone_visible:
@@ -333,7 +335,7 @@ class Squid:
         else:
             self.remove_view_cone()
 
-    def update_view_cone(self):     #squid has a view cone which it uses to search for food
+    def update_view_cone(self):
         if self.view_cone_visible:
             if self.view_cone_item is None:
                 self.view_cone_item = QtWidgets.QGraphicsPolygonItem()

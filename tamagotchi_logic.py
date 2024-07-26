@@ -332,16 +332,10 @@ class TamagotchiLogic:
     def show_message(self, message):
         self.user_interface.show_message(message)
 
-    def toggle_debug_mode(self):
+    def toggle_debug_mode(self):        # If debug mode is not enabled, don't show the 'apply' button in statistics window
         self.debug_mode = not self.debug_mode
-        if self.debug_mode:
-            for input_field in self.statistics_window.statistic_inputs.values():
-                input_field.setReadOnly(False)  # Enable editing
-            self.statistics_window.apply_button.setEnabled(True)  # Enable the apply button
-        else:
-            for input_field in self.statistics_window.statistic_inputs.values():
-                input_field.setReadOnly(True)  # Disable editing
-            self.statistics_window.apply_button.setEnabled(False)  # Disable the apply button
+        self.statistics_window.set_debug_mode(self.debug_mode)
+        print(f"Debug mode {'enabled' if self.debug_mode else 'disabled'}")
 
     def update_cleanliness_overlay(self):
         if self.squid is not None:
