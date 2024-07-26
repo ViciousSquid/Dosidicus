@@ -1,4 +1,3 @@
-
 # Implementation of a (nearly) full Tamagotchi logic - look after the pet's needs or it will get sick and die :-(
 # by Rufus Pearce (ViciousSquid)  |  July 2024  |  MIT License
 # https://github.com/ViciousSquid/Dosidicus
@@ -215,8 +214,14 @@ class TamagotchiLogic:
                 else:
                     self.squid.is_sick = False
 
+                # New logic for health decrease based on happiness and cleanliness
+                if self.squid.happiness < 20 and self.squid.cleanliness < 20:
+                    health_decrease = 0.2 * self.simulation_speed  # Rapid decrease
+                else:
+                    health_decrease = 0.1 * self.simulation_speed  # Normal decrease when sick
+
                 if self.squid.is_sick:
-                    self.squid.health = max(0, self.squid.health - (0.1 * self.simulation_speed))
+                    self.squid.health = max(0, self.squid.health - health_decrease)
                     self.squid.show_sick_icon()
                     if self.squid.health == 0:
                         self.game_over()

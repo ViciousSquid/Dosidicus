@@ -6,10 +6,17 @@ class StatisticsWindow(QtWidgets.QWidget):
         self.squid = squid
 
         self.setWindowTitle("Statistics")
-        self.setGeometry(100, 100, 300, 350)
+        self.setGeometry(100, 100, 300, 400)  # Increase the window height
         self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
 
         layout = QtWidgets.QVBoxLayout()
+
+        # Create a label for the health value
+        self.health_label = QtWidgets.QLabel()
+        self.health_label.setFont(QtGui.QFont("Arial", 14, QtGui.QFont.Bold))
+        self.health_label.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(self.health_label)
+
         self.statistic_inputs = {
             "hunger": QtWidgets.QLineEdit(),
             "sleepiness": QtWidgets.QLineEdit(),
@@ -58,6 +65,9 @@ class StatisticsWindow(QtWidgets.QWidget):
 
     def update_statistics(self):
         if self.squid is not None:
+            # Update the health label
+            self.health_label.setText(f"Health: {int(self.squid.health)}")
+
             for key, input_field in self.statistic_inputs.items():
                 input_field.setText(str(int(getattr(self.squid, key))))
 

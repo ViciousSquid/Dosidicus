@@ -1,3 +1,7 @@
+# A cute squid with a view cone that he uses to locate food
+# by Rufus Pearce (ViciousSquid)  |  July 2024  |  MIT License
+# https://github.com/ViciousSquid/Dosidicus
+
 import os
 import random
 import math
@@ -108,16 +112,59 @@ class Squid:
             self.move_randomly()
 
     def search_for_food(self):
-        food_x, food_y = self.get_food_position()
-        if food_x != -1 and food_y != -1:
-            dx = food_x - self.squid_x
-            dy = food_y - self.squid_y
-            if abs(dx) > abs(dy):
-                self.squid_direction = "right" if dx > 0 else "left"
-            else:
-                self.squid_direction = "down" if dy > 0 else "up"
+        visible_food = self.get_visible_food()
+        if visible_food:
+            closest_food = min(visible_food, key=lambda f: self.distance_to(f[0], f[1]))
+            self.move_towards(closest_food[0], closest_food[1])
         else:
             self.move_randomly()
+
+    def get_visible_food(self):
+        visible_food = []
+        for food_item in self.tamagotchi_logic.food_items:
+            food_x, food_y = food_item.pos().x(), food_item.pos().y()
+            if self.is_in_vision_cone(food_x, food_y):
+                visible_food.append((food_x, food_y))
+        return visible_food
+
+    def is_in_vision_cone(self, x, y):
+        dx = x - (self.squid_x + self.squid_width // 2)
+        dy = y - (self.squid_y + self.squid_height // 2)
+        distance = math.sqrt(dx**2 + dy**2)
+
+        # Define vision cone parameters
+        cone_length = max(self.ui.window_width, self.ui.window_height)
+        cone_angle = math.pi / 2.5  # 80 degrees, as in the original code
+
+        if distance > cone_length:
+            return False
+
+        angle_to_food = math.atan2(dy, dx)
+        direction_angle = self.get_direction_angle()
+        angle_diff = abs(angle_to_food - direction_angle)
+
+        return angle_diff <= cone_angle / 2 or angle_diff >= 2 * math.pi - cone_angle / 2
+
+    def move_towards(self, x, y):
+        dx = x - (self.squid_x + self.squid_width // 2)
+        dy = y - (self.squid_y + self.squid_height // 2)
+
+        if abs(dx) > abs(dy):
+            self.squid_direction = "right" if dx > 0 else "left"
+        else:
+            self.squid_direction = "down" if dy > 0 else "up"
+
+    def get_direction_angle(self):
+        if self.squid_direction == "right":
+            return 0
+        elif self.squid_direction == "up":
+            return math.pi / 2
+        elif self.squid_direction == "left":
+            return math.pi
+        elif self.squid_direction == "down":
+            return 3 * math.pi / 2
+        else:
+            return 0
 
     def move_randomly(self):
         if random.random() < 0.20:  # 20% chance to change direction
@@ -318,18 +365,6 @@ class Squid:
         if self.view_cone_item is not None:
             self.ui.scene.removeItem(self.view_cone_item)
             self.view_cone_item = None
-
-    def get_direction_angle(self):
-        if self.squid_direction == "left":
-            return math.pi
-        elif self.squid_direction == "right":
-            return 0
-        elif self.squid_direction == "up":
-            return math.pi / 2
-        elif self.squid_direction == "down":
-            return -math.pi / 2
-        else:
-            return 0
 
     def show_sick_icon(self):
         if self.sick_icon_item is None:
