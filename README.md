@@ -1,7 +1,5 @@
 # Dosidicus electronicae
-A virtual squid in the style of a Tamagotchi digital pet - a neural network with 5 neurons
-
-Implementation of a (nearly) full Tamagotchi logic - look after the pets needs or it will get sick and die :-(
+A virtual squid in the style of a Tamagotchi digital pet -  look after the pets needs or it will get sick and die :-(
 
 [ A research project ]
 
