@@ -16,7 +16,7 @@ Implementation of a (nearly) full Tamagotchi logic - look after the pets needs o
 
 ### Autonomous Pet Behavior:
 
-The squid moves autonomously, making decisions based on its current state (hunger, sleepiness, etc.).
+The squid moves autonomously, making decisions based on his current state (hunger, sleepiness, etc.).
 Implements a vision cone for food detection, simulating realistic foraging behavior.
 
 
@@ -28,10 +28,10 @@ These needs change over time and affect the pet's health and behavior.
 
 ### Health and Sickness Mechanics:
 
-The squid can become sick if its needs are neglected.
+The squid can become sick if his needs are neglected.
 Includes a medicine system to treat sickness.
 
-Be aware the squid hates taking mecicine and will become depressed and sleepy if forced to do so.
+Be aware the squid hates taking mecicine and will become depressed and need sleep if made to do so.
 
 
 
