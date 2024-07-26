@@ -38,6 +38,13 @@ class Squid:
 
         self.status = "roaming"  # Initialize status
 
+        self.view_cone_angle = math.pi / 2.5  # 80 degrees, as before
+        self.current_view_angle = random.uniform(0, 2 * math.pi)
+        self.view_cone_change_interval = 3000  # milliseconds
+        self.last_view_cone_change = 0
+        self.pursuing_food = False
+        self.target_food = None
+
     def set_animation_speed(self, speed):
         self.animation_speed = speed
 
@@ -101,18 +108,18 @@ class Squid:
         # This method was moved to TamagotchiLogic 26/07/2024
         pass
 
-    def make_decision(self):        # Make decisions and report about them
+    def make_decision(self):
         if self.is_sick:
             self.stay_at_bottom()
             self.status = "sick and lethargic"
-        elif self.hunger > 30:      # Search for food if this hungry
+        elif self.hunger > 30:  # Search for food if this hungry
             self.status = "searching for food"
             self.search_for_food()
         elif self.sleepiness > 70:  # try to go to sleep if this tired
             self.status = "tired"
             self.go_to_sleep()
         else:
-            self.status = "roaming" # Default status
+            self.status = "roaming"  # Default status
             self.move_randomly()
 
     def search_for_food(self):  # Search for food within the view cone and move towards it
@@ -140,16 +147,90 @@ class Squid:
 
         # Define vision cone parameters
         cone_length = max(self.ui.window_width, self.ui.window_height)
-        cone_angle = math.pi / 2.5  # 80 degrees, as in the original code
 
         if distance > cone_length:
             return False
 
         angle_to_food = math.atan2(dy, dx)
-        direction_angle = self.get_direction_angle()
-        angle_diff = abs(angle_to_food - direction_angle)
+        angle_diff = abs(angle_to_food - self.current_view_angle)
 
-        return angle_diff <= cone_angle / 2 or angle_diff >= 2 * math.pi - cone_angle / 2
+        return angle_diff <= self.view_cone_angle / 2 or angle_diff >= 2 * math.pi - self.view_cone_angle / 2
+
+    def move_squid(self):
+        if self.animation_speed == 0:
+            return
+
+        if self.is_sleeping:
+            if self.squid_y < self.ui.window_height - 120 - self.squid_height:
+                self.squid_y += self.base_vertical_speed * self.animation_speed
+                self.squid_item.setPos(self.squid_x, self.squid_y)
+            self.current_frame = (self.current_frame + 1) % 2
+            self.update_squid_image()
+            return
+
+        current_time = QtCore.QTime.currentTime().msecsSinceStartOfDay()
+
+        # Check for visible food
+        visible_food = self.get_visible_food()
+
+        if visible_food:
+            closest_food = min(visible_food, key=lambda f: self.distance_to(f[0], f[1]))
+            self.pursuing_food = True
+            self.target_food = closest_food
+            self.move_towards(closest_food[0], closest_food[1])
+        elif self.pursuing_food:
+            # If was pursuing food but it's no longer visible, stop pursuing
+            self.pursuing_food = False
+            self.target_food = None
+            self.move_randomly()
+        else:
+            # If not pursuing food, change view cone direction at intervals
+            if current_time - self.last_view_cone_change > self.view_cone_change_interval:
+                self.change_view_cone_direction()
+                self.last_view_cone_change = current_time
+            self.move_randomly()
+
+        # Update squid position
+        squid_x_new = self.squid_x
+        squid_y_new = self.squid_y
+
+        if self.squid_direction == "left":
+            squid_x_new -= self.base_squid_speed * self.animation_speed
+        elif self.squid_direction == "right":
+            squid_x_new += self.base_squid_speed * self.animation_speed
+        elif self.squid_direction == "up":
+            squid_y_new -= self.base_vertical_speed * self.animation_speed
+        elif self.squid_direction == "down":
+            squid_y_new += self.base_vertical_speed * self.animation_speed
+
+        # Check if the squid hits the screen edge
+        if squid_x_new < 50:
+            squid_x_new = 50
+            self.change_direction()
+        elif squid_x_new > self.ui.window_width - 50 - self.squid_width:
+            squid_x_new = self.ui.window_width - 50 - self.squid_width
+            self.change_direction()
+
+        if squid_y_new < 50:
+            squid_y_new = 50
+            self.change_direction()
+        elif squid_y_new > self.ui.window_height - 120 - self.squid_height:
+            squid_y_new = self.ui.window_height - 120 - self.squid_height
+            self.change_direction()
+
+        self.squid_x = squid_x_new
+        self.squid_y = squid_y_new
+
+        if self.squid_direction in ["left", "right", "up", "down"]:
+            self.current_frame = (self.current_frame + 1) % 2
+            self.squid_item.setPixmap(self.current_image())
+
+        self.squid_item.setPos(self.squid_x, self.squid_y)
+        self.update_view_cone()
+        self.update_sick_icon_position()
+
+    def change_view_cone_direction(self):
+        self.current_view_angle = random.uniform(0, 2 * math.pi)
 
     def move_towards(self, x, y):
         dx = x - (self.squid_x + self.squid_width // 2)
@@ -160,49 +241,24 @@ class Squid:
         else:
             self.squid_direction = "down" if dy > 0 else "up"
 
-    def get_direction_angle(self):
-        if self.squid_direction == "right":
-            return 0
-        elif self.squid_direction == "up":
-            return math.pi / 2
-        elif self.squid_direction == "left":
-            return math.pi
-        elif self.squid_direction == "down":
-            return 3 * math.pi / 2
-        else:
-            return 0
-
-    def move_randomly(self):
-        if random.random() < 0.20:  # 20% chance to change direction
-            self.change_direction()
-
-    def get_food_position(self):
-        if self.tamagotchi_logic.food_items:
-            closest_food = min(self.tamagotchi_logic.food_items,
-                               key=lambda food: self.distance_to(food.pos().x(), food.pos().y()))
-            return closest_food.pos().x(), closest_food.pos().y()
-        else:
-            return -1, -1
-
-    def distance_to(self, x, y):
-        return math.sqrt((self.squid_x - x)**2 + (self.squid_y - y)**2)
-
     def eat(self):
         if not self.is_sick:
             for food_item in self.tamagotchi_logic.food_items:
                 if self.squid_item.collidesWithItem(food_item):
-                    self.status = "Ate some cheese"
+                    self.status = "Ate food"
                     self.hunger = max(0, self.hunger - 20)
                     self.happiness = min(100, self.happiness + 10)
                     self.tamagotchi_logic.remove_food(food_item)
                     print("The squid ate the food")
                     self.show_eating_effect()
                     self.start_poop_timer()
+                    self.pursuing_food = False
+                    self.target_food = None
                     break
 
     def start_poop_timer(self):
         poop_delay = random.randint(11000, 30000)  # 11 to 30 seconds until poop is created (to simulate digestion)
-        print("Poop timer started")
+        print("Poop random timer started")
         self.poop_timer = QtCore.QTimer()
         self.poop_timer.setSingleShot(True)
         self.poop_timer.timeout.connect(self.create_poop)
@@ -271,55 +327,20 @@ class Squid:
             return self.images[f"up{self.current_frame + 1}"]
         return self.images["left1"]  # Default to left-facing image if direction is unknown
 
-    def move_squid(self):
-        if self.animation_speed == 0:
-            return
-
-        if self.is_sleeping:
-            if self.squid_y < self.ui.window_height - 120 - self.squid_height:
-                self.squid_y += self.base_vertical_speed * self.animation_speed
-                self.squid_item.setPos(self.squid_x, self.squid_y)
-            self.current_frame = (self.current_frame + 1) % 2
-            self.update_squid_image()
-            return
-
-        squid_x_new = self.squid_x
-        squid_y_new = self.squid_y
-
-        if self.squid_direction == "left":
-            squid_x_new -= self.base_squid_speed * self.animation_speed
-        elif self.squid_direction == "right":
-            squid_x_new += self.base_squid_speed * self.animation_speed
-        elif self.squid_direction == "up":
-            squid_y_new -= self.base_vertical_speed * self.animation_speed
-        else:  # Treat any other direction as downward movement
-            squid_y_new += self.base_vertical_speed * self.animation_speed
-
-        # Check if the squid hits the screen edge
-        if squid_x_new < 50:
-            squid_x_new = 50
-            self.change_direction()
-        elif squid_x_new > self.ui.window_width - 50 - self.squid_width:
-            squid_x_new = self.ui.window_width - 50 - self.squid_width
+    def move_randomly(self):
+        if random.random() < 0.20:  # 20% chance to change direction
             self.change_direction()
 
-        if squid_y_new < 50:
-            squid_y_new = 50
-            self.change_direction()
-        elif squid_y_new > self.ui.window_height - 120 - self.squid_height:
-            squid_y_new = self.ui.window_height - 120 - self.squid_height
-            self.change_direction()
+    def get_food_position(self):
+        if self.tamagotchi_logic.food_items:
+            closest_food = min(self.tamagotchi_logic.food_items,
+                               key=lambda food: self.distance_to(food.pos().x(), food.pos().y()))
+            return closest_food.pos().x(), closest_food.pos().y()
+        else:
+            return -1, -1
 
-        self.squid_x = squid_x_new
-        self.squid_y = squid_y_new
-
-        if self.squid_direction in ["left", "right", "up"]:
-            self.current_frame = (self.current_frame + 1) % 2
-            self.update_squid_image()
-
-        self.squid_item.setPos(self.squid_x, self.squid_y)
-        self.update_view_cone()
-        self.update_sick_icon_position()
+    def distance_to(self, x, y):
+        return math.sqrt((self.squid_x - x)**2 + (self.squid_y - y)**2)
 
     def change_direction(self):
         directions = ["left", "right", "up", "down"]
@@ -343,19 +364,23 @@ class Squid:
                 self.view_cone_item.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 0, 50)))
                 self.ui.scene.addItem(self.view_cone_item)
 
-            direction_angle = self.get_direction_angle()
-            cone_angle = math.pi / 2.5  # angle of the view cone   2.5 = 80 degrees
-            cone_length = max(self.ui.window_width, self.ui.window_height)
-
             squid_center_x = self.squid_x + self.squid_width // 2
             squid_center_y = self.squid_y + self.squid_height // 2
 
+            if self.pursuing_food and self.target_food:
+                # Point the view cone towards the food
+                dx = self.target_food[0] - squid_center_x
+                dy = self.target_food[1] - squid_center_y
+                self.current_view_angle = math.atan2(dy, dx)
+
+            cone_length = max(self.ui.window_width, self.ui.window_height)
+
             cone_points = [
                 QtCore.QPointF(squid_center_x, squid_center_y),
-                QtCore.QPointF(squid_center_x + math.cos(direction_angle - cone_angle/2) * cone_length,
-                               squid_center_y + math.sin(direction_angle - cone_angle/2) * cone_length),
-                QtCore.QPointF(squid_center_x + math.cos(direction_angle + cone_angle/2) * cone_length,
-                               squid_center_y + math.sin(direction_angle + cone_angle/2) * cone_length)
+                QtCore.QPointF(squid_center_x + math.cos(self.current_view_angle - self.view_cone_angle/2) * cone_length,
+                               squid_center_y + math.sin(self.current_view_angle - self.view_cone_angle/2) * cone_length),
+                QtCore.QPointF(squid_center_x + math.cos(self.current_view_angle + self.view_cone_angle/2) * cone_length,
+                               squid_center_y + math.sin(self.current_view_angle + self.view_cone_angle/2) * cone_length)
             ]
 
             cone_polygon = QtGui.QPolygonF(cone_points)
