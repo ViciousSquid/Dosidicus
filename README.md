@@ -1,5 +1,5 @@
 # Dosidicus electronicae
-A Tamagotchi digital pet with a simple neural network
+### A Tamagotchi digital pet with a simple neural network
 * Includes detailed tools for visualising and understanding how neural networks and Hebbian learning work
 
 * requires **PyQt5** and **pyqtgraph**
@@ -23,7 +23,9 @@ A Tamagotchi digital pet with a simple neural network
 * The squid can become sick if his needs are neglected.
 
 
-Be aware the squid hates taking mecicine and will become depressed and need sleep if made to do so.
+Be aware the squid hates taking medicine and will become depressed and need sleep if made to do so.
+
+NEW IN VERSION 1.3: Decorate the squid's environment with plants and rocks that affect the squid's behaviour. Additional decorations coming soon.
 
 
 
