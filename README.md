@@ -1,5 +1,5 @@
 # Dosidicus electronicae
-### A Tamagotchi digital pet with a simple neural network
+### A Tamagotchi-style digital pet with a simple neural network
 * Includes detailed tools for visualising and understanding how neural networks and Hebbian learning work
 
 * requires **PyQt5** and **pyqtgraph**
