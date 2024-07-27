@@ -1,5 +1,6 @@
 # Dosidicus electronicae
 A virtual squid in the style of a Tamagotchi digital pet -  look after the pets needs or it will get sick and die :-(
+* Includes detailed tools for visualising and understanding how neural networks and Hebbian learning work
 
 * requires **PyQt5** and **pyqtgraph**
 
