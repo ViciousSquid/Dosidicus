@@ -4,7 +4,8 @@ A virtual squid in the style of a Tamagotchi digital pet -  look after the pets 
 
 * requires **PyQt5** and **pyqtgraph**
 
-![image](https://github.com/user-attachments/assets/d1338421-050f-4061-8f6c-a93d05afb274)
+![image](https://github.com/user-attachments/assets/78ff4252-6d7a-4bbd-bf91-261e25ac5ef4)
+
 
 
 
