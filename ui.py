@@ -1,6 +1,7 @@
 import os
 import json
 import math
+import random
 from PyQt5 import QtCore, QtGui, QtWidgets
 from squid_brain_window import SquidBrainWindow
 from statistics_window import StatisticsWindow
@@ -13,6 +14,8 @@ class DecorationItem(QtWidgets.QLabel):
         self.setFixedSize(138, 138)  # Increased to accommodate larger thumbnails
         self.setAlignment(QtCore.Qt.AlignCenter)
         self.setToolTip(filename)
+
+        self.decoration_items = []
 
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton:
@@ -96,6 +99,10 @@ class DecorationWindow(QtWidgets.QWidget):
         self.setWindowTitle("Decorations")
         self.setFixedWidth(550)  # Increased width
 
+        # Create a list to store the decoration items
+        self.decoration_items = []
+        
+
         layout = QtWidgets.QVBoxLayout(self)
         scroll_area = QtWidgets.QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -107,6 +114,9 @@ class DecorationWindow(QtWidgets.QWidget):
         scroll_area.setWidget(content_widget)
 
         self.load_decorations()
+
+    def add_decoration_item(self, item):
+        self.decoration_items.append(item)
 
     def load_decorations(self):
         decoration_path = "images/decoration"
@@ -256,10 +266,14 @@ class Ui:
             url = event.mimeData().urls()[0]
             pixmap = QtGui.QPixmap(url.toLocalFile())
             if not pixmap.isNull():
+                # Generate a random scale factor between 0.5 and 2
+                scale_factor = random.uniform(0.5, 2)
                 item = ResizablePixmapItem(pixmap, url.toLocalFile())
+                item.setScale(scale_factor)
                 pos = self.view.mapToScene(event.pos())
                 item.setPos(pos)
                 self.scene.addItem(item)
+                self.decoration_window.add_decoration_item(item)  # Add the item to the DecorationWindow
                 event.accept()
             else:
                 event.ignore()
@@ -285,6 +299,15 @@ class Ui:
         file_menu.addAction(self.load_action)
         file_menu.addAction(self.save_action)
 
+        view_menu = self.menu_bar.addMenu('View')
+        self.stats_window_action = QtWidgets.QAction('Statistics', self.window)
+        self.stats_window_action.triggered.connect(self.toggle_statistics_window)
+        view_menu.addAction(self.stats_window_action)
+
+        self.decorations_action = QtWidgets.QAction('Decorations', self.window)
+        self.decorations_action.triggered.connect(self.toggle_decoration_window)
+        view_menu.addAction(self.decorations_action)
+
         actions_menu = self.menu_bar.addMenu('Actions')
 
         debug_menu = self.menu_bar.addMenu('Debug')
@@ -298,7 +321,6 @@ class Ui:
         self.debug_action.setCheckable(True)
         debug_menu.addAction(self.debug_action)
 
-        # Add this line to create the view_cone_action
         self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
         self.view_cone_action.setCheckable(True)
         debug_menu.addAction(self.view_cone_action)

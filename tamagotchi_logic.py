@@ -68,8 +68,20 @@ class TamagotchiLogic:
 
         # Initialize new neurons
         self.squid.satisfaction = 50
-        self.squid.anxiety = 50
-        self.squid.curiosity = 50
+        self.squid.anxiety = 10
+        self.squid.curiosity = 60
+
+    def check_for_decoration_attraction(self):
+        # Check if there are any decorations in the scene
+        if self.ui.decoration_window.decoration_items:
+            # Randomly determine if the squid is attracted to a decoration
+            if random.random() < 0.1:  # 10% chance of attraction
+                # Choose a random decoration item
+                decoration_item = random.choice(self.ui.decoration_window.decoration_items)
+                # Swim towards the decoration
+                self.squid.move_towards_position(decoration_item.pos())
+                # Play an animation or sound to indicate the squid's attraction
+                self.ui.show_message("Squid is investigating a decoration")
 
     def setup_speed_menu(self):
         speed_menu = self.user_interface.menu_bar.addMenu('Speed')
