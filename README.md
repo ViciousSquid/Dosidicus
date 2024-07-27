@@ -29,3 +29,4 @@ Be aware the squid hates taking mecicine and will become depressed and need slee
 
 * View and edit the squid's internal state. 
 * Behaviour can be influenced by editing neurons and weights
+* Ability to record brain state and apply Hebbian learning
