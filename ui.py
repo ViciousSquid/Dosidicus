@@ -296,6 +296,10 @@ class Ui:
         self.medicine_action = QtWidgets.QAction('Medicine', self.window)
         actions_menu.addAction(self.medicine_action)
 
+        self.rps_game_action = QtWidgets.QAction('Play Rock, Paper, Scissors', self.window)
+        actions_menu.addAction(self.rps_game_action)
+        self.rps_game_action.triggered.connect(self.start_rps_game)
+
         debug_menu = self.menu_bar.addMenu('Debug')
 
         self.brain_action = QtWidgets.QAction('Toggle Brain View', self.window)
@@ -312,7 +316,7 @@ class Ui:
         debug_menu.addAction(self.view_cone_action)
 
         view_menu = self.menu_bar.addMenu('View')
-        self.stats_window_action = QtWidgets.QAction('Statistics Window', self.window)
+        self.stats_window_action = QtWidgets.QAction('Statistics', self.window)
         self.stats_window_action.triggered.connect(self.toggle_statistics_window)
         view_menu.addAction(self.stats_window_action)
 
@@ -370,3 +374,10 @@ class Ui:
             item.setPos(pos)
             item.setScale(scale)
             self.scene.addItem(item)
+
+    # Add this method to start the RPS game
+    def start_rps_game(self):
+        if hasattr(self, 'tamagotchi_logic'):
+            self.tamagotchi_logic.start_rps_game()
+        else:
+            print("TamagotchiLogic not initialized")

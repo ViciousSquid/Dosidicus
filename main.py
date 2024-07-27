@@ -1,3 +1,7 @@
+#  ENTRY POINT for Dosidicus
+# by Rufus Pearce (ViciousSquid)  |  July 2024  |  MIT License
+# https://github.com/ViciousSquid/Dosidicus
+
 import sys
 from PyQt5 import QtWidgets
 

@@ -8,6 +8,7 @@ import os
 import time
 from statistics_window import StatisticsWindow
 from save_manager import SaveManager
+from rps_game import RPSGame
 
 class TamagotchiLogic:
     def __init__(self, user_interface, squid):
@@ -131,6 +132,10 @@ class TamagotchiLogic:
             self.display_needle_image()
         else:
             self.show_message("Squid is not sick. Medicine not needed.")
+
+    def start_rps_game(self):       ## Entry point for Rock Paper Scissors game
+        rps_game = RPSGame(self)
+        rps_game.start_game()
 
     def display_needle_image(self):
         needle_pixmap = QtGui.QPixmap(os.path.join("images", "needle.jpg"))
