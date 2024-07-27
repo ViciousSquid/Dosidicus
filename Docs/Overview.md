@@ -2,12 +2,10 @@
 
 ## 1. Brain Structure and State
 
-The squid's brain is represented by a set of interconnected neurons, each corresponding to a specific attribute or state. The main components are:
+The squid's brain is represented by a set of neurons, each corresponding to a specific attribute or state. The main components are:
 
-- Basic needs: hunger, happiness, cleanliness, sleepiness, health
-- Advanced states: satisfaction, anxiety, curiosity
-- Binary states: is_sick, is_eating, is_sleeping, pursuing_food
-- Spatial awareness: direction, position
+- Basic needs: `hunger`, `happiness`, `cleanliness`, `sleepiness`
+- Advanced states: `satisfaction`, `anxiety`, `curiosity`
 
 These neurons are interconnected, and their states influence each other based on weighted connections.
 
@@ -15,8 +13,8 @@ These neurons are interconnected, and their states influence each other based on
 
 The brain is implemented as a simple neural network:
 
-- Neurons are represented as nodes with activation values (0-100 for most states).
-- Connections between neurons have weights (-1 to 1) that determine how much one neuron's state influences another.
+- Neurons are represented as nodes with activation values (`0-100` for most states).
+- Connections between neurons have weights (`-1 to 1`) that determine how much one neuron's state influences another.
 - The network is updated periodically (every second in game time) to recalculate neuron states based on internal and external factors.
 
 ## 3. Autonomy and Decision Making
@@ -34,9 +32,9 @@ However, the squid cannot autonomously feed itself or clean its environment, req
 
 The squid's brain state is updated regularly:
 
-- Basic needs (hunger, sleepiness, happiness, cleanliness) change over time.
+- Basic needs (`hunger`, `sleepiness`, `happiness`, `cleanliness`) change over time.
 - Health decreases if the squid is sick or if happiness and cleanliness are very low.
-- Advanced states (satisfaction, anxiety, curiosity) are calculated based on the basic needs and environmental factors.
+- Advanced states (`satisfaction`, `anxiety`, `curiosity`) are calculated based on the basic needs and environmental factors.
 - Binary states are updated based on specific conditions or player actions.
 
 ## 5. Player Interaction and Care
@@ -52,9 +50,8 @@ The player needs to care for the squid in several ways:
 
 The squid's brain also responds to environmental factors:
 
-- Presence of food items influences the 'pursuing_food' state.
-- Cleanliness of the environment affects the squid's cleanliness state.
-- Time of day (if implemented) might affect sleep cycles.
+- Presence of food items influences the `pursuing_food` state.
+- Cleanliness of the environment affects the squid's `cleanliness` state.
 
 ## 7. Learning and Adaptation
 
