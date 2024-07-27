@@ -46,7 +46,6 @@ The player needs to care for the squid in several ways:
 1. Feeding: Player must spawn food items for the squid to eat, managing its hunger.
 2. Cleaning: Player must clean the environment to maintain cleanliness and prevent sickness.
 3. Medicine: If the squid becomes sick, the player must administer medicine.
-4. Entertainment: While not directly implemented, maintaining high happiness likely involves player interaction.
 
 ## 6. Environmental Factors
 
@@ -54,7 +53,6 @@ The squid's brain also responds to environmental factors:
 
 - Presence of food items influences the 'pursuing_food' state.
 - Cleanliness of the environment affects the squid's cleanliness state.
-- Time of day (if implemented) might affect sleep cycles.
 
 ## 7. Learning and Adaptation
 
@@ -76,15 +74,3 @@ The game includes a brain visualization window:
 The brain state can be saved and loaded:
 
 - All neuron states and connection weights are stored.
-- This allows for persistence of the squid's "personality" across game sessions.
-
-## 10. Future Expansion Possibilities
-
-The current brain implementation allows for potential expansions:
-
-- More complex decision-making algorithms.
-- Introduction of memory or long-term learning.
-- More sophisticated environmental interactions.
-- Implementation of mood or personality traits that influence behavior.
-
-In conclusion, the squid's brain provides a balance between autonomy and the need for player care. It simulates a simple but effective AI that responds to both its internal state and external stimuli, creating a dynamic and engaging pet care experience.
