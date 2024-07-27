@@ -23,6 +23,9 @@ def main():
     # Set the tamagotchi_logic in the Squid instance
     squid.tamagotchi_logic = tamagotchi_logic
 
+    # Set the tamagotchi_logic in the UI instance
+    ui.tamagotchi_logic = tamagotchi_logic
+
     # Connect Load and Save actions
     ui.load_action.triggered.connect(tamagotchi_logic.load_game)
     ui.save_action.triggered.connect(lambda: tamagotchi_logic.save_manager.save_game(squid, tamagotchi_logic))

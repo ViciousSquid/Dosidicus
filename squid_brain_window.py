@@ -1,5 +1,8 @@
+import sys
 from PyQt5 import QtCore, QtGui, QtWidgets
 import random
+import numpy as np
+import pyqtgraph as pg
 
 class BrainWidget(QtWidgets.QWidget):
     def __init__(self):
@@ -9,6 +12,9 @@ class BrainWidget(QtWidgets.QWidget):
             "happiness": 50,
             "cleanliness": 50,
             "sleepiness": 50,
+            "satisfaction": 50,
+            "anxiety": 50,
+            "curiosity": 50,
             "is_sick": False,
             "is_eating": False,
             "is_sleeping": False,
@@ -17,16 +23,23 @@ class BrainWidget(QtWidgets.QWidget):
             "position": (0, 0)
         }
         self.neuron_positions = {
-            "hunger": (300, 125),
-            "happiness": (600, 125),
-            "cleanliness": (900, 125),
-            "sleepiness": (450, 250)
+            "hunger": (150, 150),
+            "happiness": (450, 150),
+            "cleanliness": (750, 150),
+            "sleepiness": (150, 350),
+            "satisfaction": (450, 350),
+            "anxiety": (750, 350),
+            "curiosity": (450, 550)
         }
         self.connections = self.initialize_connections()
         self.weights = self.initialize_weights()
         self.show_links = False
         self.frozen_weights = None
         self.history = []
+        self.training_data = []
+        self.associations = np.zeros((len(self.neuron_positions), len(self.neuron_positions)))
+        self.learning_rate = 0.1
+        self.capture_training_data_enabled = False
 
     def initialize_connections(self):
         connections = []
@@ -40,9 +53,14 @@ class BrainWidget(QtWidgets.QWidget):
         return {conn: random.uniform(-1, 1) for conn in self.connections}
 
     def update_state(self, new_state):
-        self.state.update(new_state)
+        # Update only the keys that exist in self.state
+        for key in self.state.keys():
+            if key in new_state:
+                self.state[key] = new_state[key]
         self.update_weights()
         self.update()
+        if self.capture_training_data_enabled:
+            self.capture_training_data(new_state)
 
     def update_weights(self):
         if self.frozen_weights is not None:
@@ -75,6 +93,29 @@ class BrainWidget(QtWidgets.QWidget):
     def record_history(self):
         self.history.append(self.state.copy())
 
+    def capture_training_data(self, state):
+        training_sample = [state[neuron] for neuron in self.neuron_positions.keys()]
+        self.training_data.append(training_sample)
+        print("Captured training data:", training_sample)
+
+    def train_hebbian(self):
+        print("Starting Hebbian training...")
+        print("Training data:", self.training_data)
+
+        for sample in self.training_data:
+            for i in range(len(sample)):
+                for j in range(i+1, len(sample)):
+                    self.associations[i][j] += self.learning_rate * sample[i] * sample[j]
+                    self.associations[j][i] = self.associations[i][j]
+
+        print("Association strengths after training:", self.associations)
+        self.training_data = []
+
+    def get_association_strength(self, neuron1, neuron2):
+        idx1 = list(self.neuron_positions.keys()).index(neuron1)
+        idx2 = list(self.neuron_positions.keys()).index(neuron2)
+        return self.associations[idx1][idx2]
+
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
@@ -93,11 +134,6 @@ class BrainWidget(QtWidgets.QWidget):
         font.setPointSize(12)
         painter.setFont(font)
         painter.drawText(QtCore.QRectF(0, 20, 1200, 30), QtCore.Qt.AlignCenter, "Neurons")
-        painter.drawText(QtCore.QRectF(0, 360, 1200, 30), QtCore.Qt.AlignCenter, "State Indicators")
-
-        self.draw_indicator(painter, 200, 420, self.state["is_eating"], "Eating", scale)
-        self.draw_indicator(painter, 600, 420, self.state["is_sleeping"], "Sleeping", scale)
-        self.draw_indicator(painter, 1000, 420, self.state["pursuing_food"], "Pursuing Food", scale)
 
         if self.show_links:
             self.draw_connections(painter, scale)
@@ -144,17 +180,6 @@ class BrainWidget(QtWidgets.QWidget):
         painter.setFont(font)
         painter.drawText(x - 50, y + 30, 100, 20, QtCore.Qt.AlignCenter, label)
 
-    def draw_indicator(self, painter, x, y, state, label, scale=1.0):
-        color = QtGui.QColor(0, 255, 0) if state else QtGui.QColor(200, 200, 200)
-        painter.setBrush(QtGui.QBrush(color))
-        painter.drawRect(x - 75, y - 5, 150, 10)
-
-        painter.setPen(QtGui.QColor(0, 0, 0))
-        font = painter.font()
-        font.setPointSize(8)
-        painter.setFont(font)
-        painter.drawText(x - 75, y + 10, 150, 20, QtCore.Qt.AlignCenter, label)
-
     def draw_text(self, painter, x, y, text, scale=1.0):
         painter.setPen(QtGui.QColor(0, 0, 0))
         font = painter.font()
@@ -165,6 +190,9 @@ class BrainWidget(QtWidgets.QWidget):
     def toggle_links(self, state):
         self.show_links = state
         self.update()
+
+    def toggle_capture_training_data(self, state):
+        self.capture_training_data_enabled = state
 
 class StimulateDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
@@ -177,7 +205,7 @@ class StimulateDialog(QtWidgets.QDialog):
         self.layout.addLayout(self.form_layout)
 
         self.neuron_inputs = {}
-        neurons = ["hunger", "happiness", "cleanliness", "sleepiness", "is_sick", "is_eating", "is_sleeping", "pursuing_food", "direction", "position"]
+        neurons = ["hunger", "happiness", "cleanliness", "sleepiness", "satisfaction", "anxiety", "curiosity", "is_sick", "is_eating", "is_sleeping", "pursuing_food", "direction", "position"]
         for neuron in neurons:
             if neuron.startswith("is_"):
                 input_widget = QtWidgets.QComboBox()
@@ -234,21 +262,163 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.layout = QtWidgets.QVBoxLayout()
         self.central_widget.setLayout(self.layout)
 
+        self.init_tabs()
+
+    def init_tabs(self):
+        self.tabs = QtWidgets.QTabWidget()
+        self.layout.addWidget(self.tabs)
+
+        self.main_tab = QtWidgets.QWidget()
+        self.main_tab_layout = QtWidgets.QVBoxLayout()
+        self.main_tab.setLayout(self.main_tab_layout)
+        self.tabs.addTab(self.main_tab, "Main")
+
         self.brain_widget = BrainWidget()
-        self.layout.addWidget(self.brain_widget)
+        self.main_tab_layout.addWidget(self.brain_widget)
 
-        self.checkbox = QtWidgets.QCheckBox("Show neuron links and weights")
-        self.checkbox.stateChanged.connect(self.brain_widget.toggle_links)
-        self.layout.addWidget(self.checkbox)
+        self.checkbox_links = QtWidgets.QCheckBox("Show neuron links and weights")
+        self.checkbox_links.stateChanged.connect(self.brain_widget.toggle_links)
+        self.main_tab_layout.addWidget(self.checkbox_links)
 
-        self.button_layout = QtWidgets.QHBoxLayout()
-        self.layout.addLayout(self.button_layout)
+        self.checkbox_capture_training_data = QtWidgets.QCheckBox("Capture training data")
+        self.checkbox_capture_training_data.stateChanged.connect(self.brain_widget.toggle_capture_training_data)
+        self.main_tab_layout.addWidget(self.checkbox_capture_training_data)
 
-        self.stimulate_button = self.create_button("Stimulate Brain", self.stimulate_brain, "#D8BFD8")  # Thistle
+        self.stimulate_button = self.create_button("Stimulate Brain", self.stimulate_brain, "#D8BFD8")
+        self.main_tab_layout.addWidget(self.stimulate_button)
 
-        self.button_layout.addWidget(self.stimulate_button)
+        self.train_button = self.create_button("Train Hebbian", self.train_hebbian, "#ADD8E6")
+        self.train_button.setVisible(False)  # Initially hide the train button
+        self.main_tab_layout.addWidget(self.train_button)
 
-        self.button_layout.addStretch(1)  # Add stretch to push buttons to the left
+        self.graphs_tab = QtWidgets.QWidget()
+        self.graphs_tab_layout = QtWidgets.QVBoxLayout()
+        self.graphs_tab.setLayout(self.graphs_tab_layout)
+        self.tabs.addTab(self.graphs_tab, "Graphs")
+
+        self.init_graphs()
+
+        self.data_tab = QtWidgets.QWidget()
+        self.data_tab_layout = QtWidgets.QVBoxLayout()
+        self.data_tab.setLayout(self.data_tab_layout)
+        self.tabs.addTab(self.data_tab, "Data")
+
+        self.init_data_table()
+
+        self.training_data_tab = QtWidgets.QWidget()
+        self.training_data_tab_layout = QtWidgets.QVBoxLayout()
+        self.training_data_tab.setLayout(self.training_data_tab_layout)
+        self.tabs.addTab(self.training_data_tab, "Training Data")
+
+        self.init_training_data_table()
+
+        self.console_tab = QtWidgets.QWidget()
+        self.console_tab_layout = QtWidgets.QVBoxLayout()
+        self.console_tab.setLayout(self.console_tab_layout)
+        self.tabs.addTab(self.console_tab, "Console")
+
+        self.init_console()
+
+    def init_graphs(self):
+        self.graph_widget = pg.PlotWidget()
+        self.graphs_tab_layout.addWidget(self.graph_widget)
+
+        self.plot_data = {}
+        for neuron in self.brain_widget.neuron_positions.keys():
+            self.plot_data[neuron] = []
+
+        self.graph_timer = QtCore.QTimer()
+        self.graph_timer.timeout.connect(self.update_graphs)
+        self.graph_timer.start(1000)  # Update every second
+
+        self.graph_type_combo = QtWidgets.QComboBox()
+        self.graph_type_combo.addItems(["Line", "Scatter"])
+        self.graphs_tab_layout.addWidget(self.graph_type_combo)
+
+        self.data_type_combo = QtWidgets.QComboBox()
+        self.data_type_combo.addItems(["Raw", "Smoothed"])
+        self.graphs_tab_layout.addWidget(self.data_type_combo)
+
+    def update_graphs(self):
+        self.graph_widget.clear()
+        for neuron, data in self.plot_data.items():
+            if self.graph_type_combo.currentText() == "Line":
+                self.graph_widget.plot(data, name=neuron, pen=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+            elif self.graph_type_combo.currentText() == "Scatter":
+                self.graph_widget.plot(data, name=neuron, symbol='o', pen=None, symbolPen=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)), symbolBrush=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+            if len(data) > 100:
+                self.plot_data[neuron] = data[-100:]
+
+        # Add labels to the graph
+        self.graph_widget.setLabel('left', 'Value')
+        self.graph_widget.setLabel('bottom', 'Time')
+        self.graph_widget.setTitle('Neuron Values Over Time')
+
+    def init_data_table(self):
+        self.data_table = QtWidgets.QTableWidget()
+        self.data_tab_layout.addWidget(self.data_table)
+
+        self.data_table.setColumnCount(len(self.brain_widget.neuron_positions))
+        self.data_table.setHorizontalHeaderLabels(list(self.brain_widget.neuron_positions.keys()))
+
+        self.data_timer = QtCore.QTimer()
+        self.data_timer.timeout.connect(self.update_data_table)
+        self.data_timer.start(1000)  # Update every second
+
+    def update_data_table(self):
+        self.data_table.insertRow(0)
+        for col, neuron in enumerate(self.brain_widget.neuron_positions.keys()):
+            value = self.brain_widget.state[neuron]
+            self.data_table.setItem(0, col, QtWidgets.QTableWidgetItem(str(value)))
+
+        if self.data_table.rowCount() > 100:
+            self.data_table.removeRow(100)
+
+    def init_training_data_table(self):
+        self.training_data_table = QtWidgets.QTableWidget()
+        self.training_data_tab_layout.addWidget(self.training_data_table)
+
+        self.training_data_table.setColumnCount(len(self.brain_widget.neuron_positions))
+        self.training_data_table.setHorizontalHeaderLabels(list(self.brain_widget.neuron_positions.keys()))
+
+        self.training_data_timer = QtCore.QTimer()
+        self.training_data_timer.timeout.connect(self.update_training_data_table)
+        self.training_data_timer.start(1000)  # Update every second
+
+    def update_training_data_table(self):
+        self.training_data_table.setRowCount(len(self.brain_widget.training_data))
+        for row, sample in enumerate(self.brain_widget.training_data):
+            for col, value in enumerate(sample):
+                self.training_data_table.setItem(row, col, QtWidgets.QTableWidgetItem(str(value)))
+
+        if len(self.brain_widget.training_data) > 0:
+            self.train_button.setVisible(True)
+
+    def init_console(self):
+        self.console_output = QtWidgets.QTextEdit()
+        self.console_output.setReadOnly(True)
+        self.console_tab_layout.addWidget(self.console_output)
+
+        sys.stdout = self.ConsoleOutput(self.console_output)
+
+    def update_brain(self, state):
+        # Update the brain_widget state with the provided state
+        # If a key is missing, use a default value of 0
+        updated_state = {
+            neuron: state.get(neuron, 0)
+            for neuron in self.brain_widget.neuron_positions.keys()
+        }
+        self.brain_widget.update_state(updated_state)
+
+        # Update the plot data with the provided state values
+        for neuron, value in state.items():
+            if neuron in self.plot_data:
+                self.plot_data[neuron].append(value)
+
+    def train_hebbian(self):
+        self.brain_widget.train_hebbian()
+        self.update_data_table()
+        self.update_training_data_table()
 
     def create_button(self, text, callback, color):
         button = QtWidgets.QPushButton(text)
@@ -257,19 +427,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         button.setFixedSize(200, 50)
         return button
 
-    def update_brain(self, state):
-        self.brain_widget.update_state(state)
-
-    def save_weights(self):
-        filename, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Weights", "", "Text Files (*.txt)")
-        if filename:
-            self.brain_widget.save_weights(filename)
-
-    def load_weights(self):
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Load Weights", "", "Text Files (*.txt)")
-        if filename:
-            self.brain_widget.load_weights(filename)
-
     def stimulate_brain(self):
         dialog = StimulateDialog(self)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
@@ -277,8 +434,17 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             if stimulation_values is not None:
                 self.brain_widget.stimulate_brain(stimulation_values)
 
+    class ConsoleOutput:
+        def __init__(self, text_edit):
+            self.text_edit = text_edit
+
+        def write(self, text):
+            self.text_edit.append(text)
+
+        def flush(self):
+            pass
+
 if __name__ == "__main__":
-    import sys
     app = QtWidgets.QApplication(sys.argv)
     window = SquidBrainWindow()
     window.show()

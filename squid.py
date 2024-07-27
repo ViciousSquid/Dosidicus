@@ -1,6 +1,4 @@
-# A cute squid with a view cone that he uses to locate food
-# by Rufus Pearce (ViciousSquid)  |  July 2024  |  MIT License
-# https://github.com/ViciousSquid/Dosidicus
+# A squid with a simple neural network
 
 import os
 import random
@@ -38,12 +36,16 @@ class Squid:
 
         self.status = "roaming"  # Initialize status
 
-        self.view_cone_angle = math.pi / 2.5  # 80 degrees, as before
+        self.view_cone_angle = math.pi / 2.5  # Squid has a view cone of 80 degrees
         self.current_view_angle = random.uniform(0, 2 * math.pi)
         self.view_cone_change_interval = 3000  # milliseconds
         self.last_view_cone_change = 0
         self.pursuing_food = False
         self.target_food = None
+
+        self.satisfaction = 50
+        self.anxiety = 50
+        self.curiosity = 50
 
     def set_animation_speed(self, speed):
         self.animation_speed = speed
@@ -112,15 +114,33 @@ class Squid:
         if self.is_sick:
             self.stay_at_bottom()
             self.status = "sick and lethargic"
-        elif self.hunger > 30:  # Search for food if this hungry
+        elif self.anxiety > 70:
+            self.status = "anxious"
+            self.move_erratically()
+        elif self.curiosity > 70 and random.random() < 0.5:
+            self.status = "exploring"
+            self.explore_environment()
+        elif self.hunger > 30 or self.satisfaction < 30:
             self.status = "searching for food"
             self.search_for_food()
-        elif self.sleepiness > 70:  # try to go to sleep if this tired
+        elif self.sleepiness > 70:
             self.status = "tired"
             self.go_to_sleep()
         else:
-            self.status = "roaming"  # Default status
+            self.status = "roaming"
             self.move_randomly()
+
+    def move_erratically(self):
+        # Implement erratic movement when anxious
+        directions = ["left", "right", "up", "down"]
+        self.squid_direction = random.choice(directions)
+        self.move_squid()
+
+    def explore_environment(self):
+        # Implement exploration behavior
+        if random.random() < 0.3:
+            self.change_direction()
+        self.move_squid()
 
     def search_for_food(self):  # Search for food within the view cone and move towards it
         visible_food = self.get_visible_food()
@@ -248,6 +268,8 @@ class Squid:
                     self.status = "Ate food"
                     self.hunger = max(0, self.hunger - 20)
                     self.happiness = min(100, self.happiness + 10)
+                    self.satisfaction = min(100, self.satisfaction + 15)
+                    self.anxiety = max(0, self.anxiety - 10)
                     self.tamagotchi_logic.remove_food(food_item)
                     print("The squid ate the food")
                     self.show_eating_effect()

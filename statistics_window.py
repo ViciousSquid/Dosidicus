@@ -1,89 +1,123 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+class StatBox(QtWidgets.QWidget):
+    def __init__(self, label, parent=None):
+        super().__init__(parent)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        self.value_label = QtWidgets.QLabel("0")
+        self.value_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.value_label.setStyleSheet("font-size: 28px; font-weight: bold; border: 2px solid black; background-color: white;")
+        layout.addWidget(self.value_label)
+        
+        self.value_edit = QtWidgets.QLineEdit()
+        self.value_edit.setAlignment(QtCore.Qt.AlignCenter)
+        self.value_edit.setStyleSheet("font-size: 28px; font-weight: bold; border: 2px solid black; background-color: white;")
+        self.value_edit.hide()  # Initially hidden
+        layout.addWidget(self.value_edit)
+        
+        name_label = QtWidgets.QLabel(label)
+        name_label.setAlignment(QtCore.Qt.AlignCenter)
+        name_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        layout.addWidget(name_label)
+        
+        self.setFixedSize(120, 100)  # Increased size to accommodate larger text
+
+    def set_value(self, value):
+        self.value_label.setText(str(int(value)))
+        self.value_edit.setText(str(int(value)))
+
+    def get_value(self):
+        return int(self.value_edit.text())
+
+    def set_editable(self, editable):
+        self.value_label.setVisible(not editable)
+        self.value_edit.setVisible(editable)
+
 class StatisticsWindow(QtWidgets.QWidget):
     def __init__(self, squid):
         super().__init__()
         self.squid = squid
 
         self.setWindowTitle("Statistics")
-        self.setGeometry(100, 100, 300, 450)
         self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
 
-        self.layout = QtWidgets.QVBoxLayout()  # Changed to instance variable
+        # Set the initial position to top-left corner
+        self.move(0, 0)
 
-        # Create a label for the health value
-        self.health_label = QtWidgets.QLabel()
-        self.health_label.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
-        self.layout.addWidget(self.health_label)
+        # Set the initial dimensions (adjusted for larger text and boxes)
+        self.setFixedSize(450, 600)  # Width: 400px, Height: 600px
 
-        self.statistic_inputs = {
-            "hunger": QtWidgets.QLineEdit(),
-            "sleepiness": QtWidgets.QLineEdit(),
-            "happiness": QtWidgets.QLineEdit(),
-            "cleanliness": QtWidgets.QLineEdit(),
+        main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.setSpacing(10)
+
+        grid_layout = QtWidgets.QGridLayout()
+        grid_layout.setSpacing(10)
+        main_layout.addLayout(grid_layout)
+
+        self.stat_boxes = {
+            "hunger": StatBox("Hunger"),
+            "happiness": StatBox("Happiness"),
+            "cleanliness": StatBox("Cleanliness"),
+            "sleepiness": StatBox("Sleepiness"),
+            "health": StatBox("Health"),
+            "satisfaction": StatBox("Satisfaction"),
+            "curiosity": StatBox("Curiosity"),
+            "anxiety": StatBox("Anxiety")
         }
 
-        font = QtGui.QFont()
-        font.setPointSize(10)  # Set the desired font size
+        # Add stat boxes to the grid
+        grid_layout.addWidget(self.stat_boxes["hunger"], 0, 0)
+        grid_layout.addWidget(self.stat_boxes["happiness"], 0, 1)
+        grid_layout.addWidget(self.stat_boxes["health"], 0, 2)
+        grid_layout.addWidget(self.stat_boxes["cleanliness"], 1, 0)
+        grid_layout.addWidget(self.stat_boxes["sleepiness"], 1, 1)
 
-        for key, input_field in self.statistic_inputs.items():
-            label = QtWidgets.QLabel(key.capitalize() + ":")
-            label.setFont(font)  # Set the font for the label
-            self.layout.addWidget(label)
-            input_field.setFont(font)  # Set the font for the input field
-            input_field.setReadOnly(True)  # Set input fields to read-only by default
-            self.layout.addWidget(input_field)
+        # Add a separator
+        separator = QtWidgets.QFrame()
+        separator.setFrameShape(QtWidgets.QFrame.HLine)
+        separator.setFrameShadow(QtWidgets.QFrame.Sunken)
+        main_layout.addWidget(separator)
 
-        self.statistic_labels = {
-            # "is_sleeping": QtWidgets.QLabel(),
-            # "direction": QtWidgets.QLabel(),
-            # "position": QtWidgets.QLabel(),
-            "status": QtWidgets.QLabel(),
-            # "is_sick": QtWidgets.QLabel(),
-        }
+        new_neurons_layout = QtWidgets.QHBoxLayout()
+        new_neurons_layout.setSpacing(15)
+        main_layout.addLayout(new_neurons_layout)
+        new_neurons_layout.addWidget(self.stat_boxes["satisfaction"])
+        new_neurons_layout.addWidget(self.stat_boxes["curiosity"])
+        new_neurons_layout.addWidget(self.stat_boxes["anxiety"])
 
-        for label in self.statistic_labels.values():
-            label.setFont(font)  # Set the font for the label
-            self.layout.addWidget(label)
+        # Status label
+        self.status_label = QtWidgets.QLabel()
+        self.status_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.status_label.setStyleSheet("font-size: 20px;")
+        main_layout.addWidget(self.status_label)
 
-        # Add the apply button
-        self.apply_button = QtWidgets.QPushButton("Apply")
-        self.apply_button.setFont(font)  # Set the font for the button
-        self.apply_button.clicked.connect(self.apply_statistic_changes)
-        self.apply_button.setVisible(False)  # Initially hide the button
-        self.layout.addWidget(self.apply_button)
-
-        self.setLayout(self.layout)
-
-    def apply_statistic_changes(self):
-        if self.squid is not None:
-            for key, input_field in self.statistic_inputs.items():
-                try:
-                    value = int(input_field.text())
-                    setattr(self.squid, key, value)
-                except ValueError:
-                    pass
+        # Apply button (initially hidden)
+        self.apply_button = QtWidgets.QPushButton("Apply Changes")
+        self.apply_button.clicked.connect(self.apply_changes)
+        self.apply_button.hide()
+        self.apply_button.setStyleSheet("font-size: 18px;")
+        main_layout.addWidget(self.apply_button)
 
     def update_statistics(self):
         if self.squid is not None:
-            # Update the health label
-            self.health_label.setText(f"Health: {int(self.squid.health)}")
-
-            for key, input_field in self.statistic_inputs.items():
-                input_field.setText(str(int(getattr(self.squid, key))))
-
-            # self.statistic_labels["is_sleeping"].setText(f"Sleeping: {self.squid.is_sleeping}")
-            # self.statistic_labels["direction"].setText(f"Direction: {self.squid.squid_direction}")
-            # self.statistic_labels["position"].setText(f"Position: ({int(self.squid.squid_x)}, {int(self.squid.squid_y)})")
-            self.statistic_labels["status"].setText(f"Status: {self.squid.status}")
-            # self.statistic_labels["is_sick"].setText(f"Sick: {self.squid.is_sick}")
+            for key, box in self.stat_boxes.items():
+                if hasattr(self.squid, key):
+                    box.set_value(getattr(self.squid, key))
+            self.status_label.setText(f"Status: {self.squid.status}")
 
     def set_debug_mode(self, enabled):
-        for input_field in self.statistic_inputs.values():
-            input_field.setReadOnly(not enabled)
+        for box in self.stat_boxes.values():
+            box.set_editable(enabled)
         self.apply_button.setVisible(enabled)
 
+    def apply_changes(self):
+        if self.squid is not None:
+            for key, box in self.stat_boxes.items():
+                if hasattr(self.squid, key):
+                    setattr(self.squid, key, box.get_value())
+        self.update_statistics()
+
     def closeEvent(self, event):
-        # Hide the window instead of closing it
-        self.hide()
-        event.ignore()
+        event.accept()

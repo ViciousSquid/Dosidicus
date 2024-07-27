@@ -1,14 +1,16 @@
 import os
 import json
+import math
 from PyQt5 import QtCore, QtGui, QtWidgets
 from squid_brain_window import SquidBrainWindow
+from statistics_window import StatisticsWindow
 
 class DecorationItem(QtWidgets.QLabel):
     def __init__(self, pixmap, filename):
         super().__init__()
-        self.setPixmap(pixmap.scaled(100, 100, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+        self.setPixmap(pixmap.scaled(128, 128, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
         self.filename = filename
-        self.setFixedSize(110, 110)
+        self.setFixedSize(138, 138)  # Increased to accommodate larger thumbnails
         self.setAlignment(QtCore.Qt.AlignCenter)
         self.setToolTip(filename)
 
@@ -24,7 +26,8 @@ class DecorationItem(QtWidgets.QLabel):
 
 class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
     def __init__(self, pixmap, filename):
-        super().__init__(pixmap)
+        scaled_pixmap = pixmap.scaled(128, 128, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+        super().__init__(scaled_pixmap)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable)
         self.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
@@ -32,6 +35,47 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         self.original_pixmap = pixmap
         self.filename = filename
         self.stat_multipliers, self.category = self.get_decoration_info()
+
+    def boundingRect(self):
+        return super().boundingRect().adjusted(0, 0, 20, 20)
+
+    def paint(self, painter, option, widget):
+        super().paint(painter, option, widget)
+        if self.isSelected():
+            painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 255), 2))
+            painter.drawRect(self.boundingRect())
+
+            handle_pos = self.boundingRect().bottomRight() - QtCore.QPointF(20, 20)
+            handle_rect = QtCore.QRectF(handle_pos, QtCore.QSizeF(20, 20))
+            painter.fillRect(handle_rect, QtGui.QColor(0, 0, 255))
+
+    def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            pos = event.pos()
+            if QtCore.QRectF(self.boundingRect().bottomRight() - QtCore.QPointF(20, 20),
+                             QtCore.QSizeF(20, 20)).contains(pos):
+                self.resize_handle = self.mapToScene(pos)
+            else:
+                self.resize_handle = None
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self.resize_handle is not None:
+            new_pos = self.mapToScene(event.pos())
+            width = max(new_pos.x() - self.pos().x(), 20)
+            height = max(new_pos.y() - self.pos().y(), 20)
+            aspect_ratio = self.original_pixmap.width() / self.original_pixmap.height()
+            if width / height > aspect_ratio:
+                width = height * aspect_ratio
+            else:
+                height = width / aspect_ratio
+            self.setPixmap(self.original_pixmap.scaled(int(width), int(height), QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self.resize_handle = None
+        super().mouseReleaseEvent(event)
 
     def get_decoration_info(self):
         try:
@@ -46,47 +90,11 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
             print("Error decoding decoration_stats.json. Using empty stats.")
             return {}, 'rock'
 
-    def boundingRect(self):
-        return super().boundingRect().adjusted(0, 0, 20, 20)  # Increased the size of the resize handle
-
-    def paint(self, painter, option, widget):
-        super().paint(painter, option, widget)
-        if self.isSelected():
-            painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 255), 2))
-            painter.drawRect(self.boundingRect())
-
-            handle_pos = self.boundingRect().bottomRight() - QtCore.QPointF(20, 20)  # Increased the size of the resize handle
-            handle_rect = QtCore.QRectF(handle_pos, QtCore.QSizeF(20, 20))  # Increased the size of the resize handle
-            painter.fillRect(handle_rect, QtGui.QColor(0, 0, 255))
-
-    def mousePressEvent(self, event):
-        if event.button() == QtCore.Qt.LeftButton:
-            pos = event.pos()
-            if QtCore.QRectF(self.boundingRect().bottomRight() - QtCore.QPointF(20, 20),  # Increased the size of the resize handle
-                             QtCore.QSizeF(20, 20)).contains(pos):  # Increased the size of the resize handle
-                self.resize_handle = self.mapToScene(pos)
-            else:
-                self.resize_handle = None
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if self.resize_handle is not None:
-            new_pos = self.mapToScene(event.pos())
-            width = max(new_pos.x() - self.pos().x(), 20)
-            height = max(new_pos.y() - self.pos().y(), 20)
-            self.setPixmap(self.original_pixmap.scaled(int(width), int(height), QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
-        else:
-            super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        self.resize_handle = None
-        super().mouseReleaseEvent(event)
-
 class DecorationWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Decorations")
-        self.setFixedWidth(400)
+        self.setFixedWidth(550)  # Increased width
 
         layout = QtWidgets.QVBoxLayout(self)
         scroll_area = QtWidgets.QScrollArea()
@@ -102,7 +110,7 @@ class DecorationWindow(QtWidgets.QWidget):
 
     def load_decorations(self):
         decoration_path = "images/decoration"
-        items_per_row = 3
+        items_per_row = 3  # Increased to 4 items per row
         row, col = 0, 0
 
         for filename in os.listdir(decoration_path):
@@ -118,7 +126,7 @@ class DecorationWindow(QtWidgets.QWidget):
                     row += 1
 
         # Set the window height based on the number of rows
-        self.setFixedHeight(min((row + 1) * 120 + 40, 600))  # 120 pixels per row, max height of 600
+        self.setFixedHeight(min((row + 1) * 148 + 40, 650))  # 148 pixels per row (138 + 10 padding), max height of 600
 
 class Ui:
     def __init__(self, window):
@@ -142,21 +150,23 @@ class Ui:
         # Initialize SquidBrainWindow
         self.squid_brain_window = SquidBrainWindow()
 
-        # Remove the decoration button
-        # self.decoration_button = QtWidgets.QPushButton("Decorations")
-        # self.decoration_button.clicked.connect(self.toggle_decoration_window)
-        # self.decoration_button_proxy = self.scene.addWidget(self.decoration_button)
-        # self.decoration_button_proxy.setPos(self.window_width - 170, self.window_height - 100)
-        # self.decoration_button_proxy.setZValue(1)
-
         # Create decoration window
         self.decoration_window = DecorationWindow()
+
+        # Initialize statistics window
+        self.statistics_window = None
 
         # Enable drag and drop for the main window
         self.view.setAcceptDrops(True)
         self.view.dragEnterEvent = self.dragEnterEvent
         self.view.dragMoveEvent = self.dragMoveEvent
         self.view.dropEvent = self.dropEvent
+
+        # Add this line to enable key events for the view
+        self.view.setFocusPolicy(QtCore.Qt.StrongFocus)
+
+        # Connect the key press event
+        self.view.keyPressEvent = self.keyPressEvent
 
         # Setup other UI elements
         self.setup_ui_elements()
@@ -215,9 +225,6 @@ class Ui:
         self.points_label.setPos(self.window_width - 265, 10)  # Move the label to the left by 15 pixels
         self.points_value_label.setPos(self.window_width - 95, 10)
 
-        # Update decoration button position
-        # self.decoration_button_proxy.setPos(self.window_width - 170, self.window_height - 100)  # Move up and left by 50 pixels
-
     def show_message(self, message):
         self.feeding_message.setHtml(f'<div style="text-align: center;">{message}</div>')
         self.feeding_message.setOpacity(1)
@@ -261,10 +268,13 @@ class Ui:
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Delete:
-            selected_items = self.scene.selectedItems()
-            for item in selected_items:
-                if isinstance(item, ResizablePixmapItem):
-                    self.scene.removeItem(item)
+            self.delete_selected_items()
+
+    def delete_selected_items(self):
+        for item in self.scene.selectedItems():
+            if isinstance(item, ResizablePixmapItem):
+                self.scene.removeItem(item)
+        self.scene.update()
 
     def setup_menu_bar(self):
         self.menu_bar = self.window.menuBar()
@@ -286,12 +296,6 @@ class Ui:
         self.medicine_action = QtWidgets.QAction('Medicine', self.window)
         actions_menu.addAction(self.medicine_action)
 
-        decorations_menu = self.menu_bar.addMenu('Decorations')
-
-        self.decoration_action = QtWidgets.QAction('Toggle Decoration Window', self.window)
-        self.decoration_action.triggered.connect(self.toggle_decoration_window)
-        decorations_menu.addAction(self.decoration_action)
-
         debug_menu = self.menu_bar.addMenu('Debug')
 
         self.brain_action = QtWidgets.QAction('Toggle Brain View', self.window)
@@ -307,24 +311,41 @@ class Ui:
         self.view_cone_action.setCheckable(True)
         debug_menu.addAction(self.view_cone_action)
 
-        # help_menu = self.menu_bar.addMenu('Help')
+        view_menu = self.menu_bar.addMenu('View')
+        self.stats_window_action = QtWidgets.QAction('Statistics Window', self.window)
+        self.stats_window_action.triggered.connect(self.toggle_statistics_window)
+        view_menu.addAction(self.stats_window_action)
 
-        # about_action = QtWidgets.QAction('About', self.window)
-       #  about_action.triggered.connect(self.show_about_dialog)
-        # help_menu.addAction(about_action)
+        # Add Decorations option to View menu
+        self.decorations_action = QtWidgets.QAction('Decorations', self.window)
+        self.decorations_action.triggered.connect(self.toggle_decoration_window)
+        view_menu.addAction(self.decorations_action)
+
+    def toggle_statistics_window(self):
+        if self.statistics_window is None:
+            self.create_statistics_window()
+
+        if self.statistics_window is not None:
+            if self.statistics_window.isVisible():
+                self.statistics_window.hide()
+            else:
+             self.statistics_window.show()
+        else:
+            print("Failed to create statistics window")
+
+    def create_statistics_window(self):
+        if hasattr(self, 'tamagotchi_logic'):
+            if not hasattr(self.tamagotchi_logic, 'statistics_window'):
+                self.tamagotchi_logic.statistics_window = StatisticsWindow(self.tamagotchi_logic.squid)
+            self.statistics_window = self.tamagotchi_logic.statistics_window
+        else:
+            print("TamagotchiLogic not initialized")
 
     def toggle_brain_window(self, checked):
         if checked:
             self.squid_brain_window.show()
         else:
             self.squid_brain_window.hide()
-
-    def show_about_dialog(self):
-        about_message = ("<h2>Dosidicus Electronicae</h2>"
-                         "<p>Research project</p>"
-                         "<p>Version 1.0.32</p>"
-                         "<p>https://github.com/ViciousSquid/Dosidicus")
-        QtWidgets.QMessageBox.about(self.window, "About", about_message)
 
     def connect_view_cone_action(self, toggle_function):
         self.view_cone_action.triggered.connect(toggle_function)

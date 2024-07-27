@@ -1,4 +1,4 @@
-# Implementation of a (nearly) full Tamagotchi logic - look after the pet's needs or it will get sick and die :-(
+# Tamagotchi logic for a digital pet with a neural network
 # by Rufus Pearce (ViciousSquid)  |  July 2024  |  MIT License
 # https://github.com/ViciousSquid/Dosidicus
 
@@ -63,6 +63,11 @@ class TamagotchiLogic:
         self.brain_update_timer.start(1000)  # Update every second
 
         self.load_game()
+
+        # Initialize new neurons
+        self.squid.satisfaction = 50
+        self.squid.anxiety = 50
+        self.squid.curiosity = 50
 
     def setup_speed_menu(self):
         speed_menu = self.user_interface.menu_bar.addMenu('Speed')
@@ -197,6 +202,11 @@ class TamagotchiLogic:
                 self.squid.sleepiness = min(100, self.squid.sleepiness + (0.1 * self.simulation_speed))
                 self.squid.happiness = max(0, self.squid.happiness - (0.1 * self.simulation_speed))
                 self.squid.cleanliness = max(0, self.squid.cleanliness - (0.1 * self.simulation_speed))
+
+                # Update new neurons
+                self.update_satisfaction()
+                self.update_anxiety()
+                self.update_curiosity()
 
                 # Check if cleanliness has been too low for too long
                 if self.squid.cleanliness < 20:
@@ -408,6 +418,11 @@ class TamagotchiLogic:
         self.squid.health = 100
         self.squid.is_sick = False
 
+        # Reset new neurons
+        self.squid.satisfaction = 50
+        self.squid.anxiety = 50
+        self.squid.curiosity = 50
+
         # Reset game variables
         self.cleanliness_threshold_time = 0
         self.hunger_threshold_time = 0
@@ -468,18 +483,24 @@ class TamagotchiLogic:
             self.user_interface.update_points(self.points)
 
     def update_squid_brain(self):
+        brain_state = {}
         if self.squid and self.user_interface.squid_brain_window.isVisible():
             brain_state = {
                 "hunger": self.squid.hunger,
                 "happiness": self.squid.happiness,
                 "cleanliness": self.squid.cleanliness,
                 "sleepiness": self.squid.sleepiness,
+                "satisfaction": self.squid.satisfaction,
+                "anxiety": self.squid.anxiety,
+                "curiosity": self.squid.curiosity,
                 "is_sick": self.squid.is_sick,
                 "is_eating": self.squid.status == "eating",
                 "is_sleeping": self.squid.is_sleeping,
-                "pursuing_food": self.squid.pursuing_food
+                "pursuing_food": self.squid.pursuing_food,
+                "direction": self.squid.squid_direction,
+                "position": (self.squid.squid_x, self.squid.squid_y)
             }
-            self.user_interface.squid_brain_window.update_brain(brain_state)
+        self.user_interface.squid_brain_window.update_brain(brain_state)
 
     def save_game(self):
         squid_data = {
@@ -490,7 +511,10 @@ class TamagotchiLogic:
             "health": self.squid.health,
             "is_sick": self.squid.is_sick,
             "squid_x": self.squid.squid_x,
-            "squid_y": self.squid.squid_y
+            "squid_y": self.squid.squid_y,
+            "satisfaction": self.squid.satisfaction,
+            "anxiety": self.squid.anxiety,
+            "curiosity": self.squid.curiosity
         }
 
         tamagotchi_logic_data = {
@@ -508,3 +532,37 @@ class TamagotchiLogic:
         }
 
         self.save_manager.save_game(save_data)
+
+    # New methods to update the new neurons
+    def update_satisfaction(self):
+        # Update satisfaction based on hunger, happiness, and cleanliness
+        hunger_factor = max(0, 1 - self.squid.hunger / 100)
+        happiness_factor = self.squid.happiness / 100
+        cleanliness_factor = self.squid.cleanliness / 100
+
+        satisfaction_change = (hunger_factor + happiness_factor + cleanliness_factor) / 3
+        satisfaction_change = (satisfaction_change - 0.5) * 2  # Scale to range from -1 to 1
+
+        self.squid.satisfaction += satisfaction_change * self.simulation_speed
+        self.squid.satisfaction = max(0, min(100, self.squid.satisfaction))
+
+    def update_anxiety(self):
+        # Update anxiety based on hunger, cleanliness, and health
+        hunger_factor = self.squid.hunger / 100
+        cleanliness_factor = 1 - self.squid.cleanliness / 100
+        health_factor = 1 - self.squid.health / 100
+
+        anxiety_change = (hunger_factor + cleanliness_factor + health_factor) / 3
+
+        self.squid.anxiety += anxiety_change * self.simulation_speed
+        self.squid.anxiety = max(0, min(100, self.squid.anxiety))
+
+    def update_curiosity(self):
+        # Update curiosity based on satisfaction and anxiety
+        if self.squid.satisfaction > 70 and self.squid.anxiety < 30:
+            curiosity_change = 0.2 * self.simulation_speed
+        else:
+            curiosity_change = -0.1 * self.simulation_speed
+
+        self.squid.curiosity += curiosity_change
+        self.squid.curiosity = max(0, min(100, self.squid.curiosity))
