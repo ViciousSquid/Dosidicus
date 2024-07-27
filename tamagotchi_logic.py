@@ -6,6 +6,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import random
 import os
 import time
+import math
 from statistics_window import StatisticsWindow
 from save_manager import SaveManager
 from rps_game import RPSGame
@@ -114,6 +115,42 @@ class TamagotchiLogic:
     def move_objects(self):
         self.move_foods()
         self.move_poops()
+
+    def move_squid_to_bottom_left(self, callback):      # Currently buggy but working
+        target_x = 150  # Left edge + margin
+        target_y = self.user_interface.window_height - 150 - self.squid.squid_height  # Bottom edge - margin - squid height
+        
+        def step_movement():
+            dx = target_x - self.squid.squid_x
+            dy = target_y - self.squid.squid_y
+            
+            if abs(dx) < 90 and abs(dy) < 90:
+                # If close enough, snap to final position and call callback
+                self.squid.squid_x = target_x
+                self.squid.squid_y = target_y
+                self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
+                callback()
+            else:
+                # Determine direction of movement
+                if abs(dx) > abs(dy):
+                    # Move horizontally
+                    self.squid.squid_x += 90 if dx > 0 else -90
+                else:
+                    # Move vertically
+                    self.squid.squid_y += 90 if dy > 0 else -90
+                
+                # Update squid position
+                self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
+                
+                # Schedule next movement in 1 second
+                QtCore.QTimer.singleShot(1000, step_movement)
+        
+        # Start the movement
+        step_movement()
+
+    def start_rps_game(self):
+        self.rps_game = RPSGame(self)
+        self.rps_game.start_game()
 
     def give_medicine(self):
         if self.squid is not None and self.squid.is_sick:

@@ -287,6 +287,22 @@ class Ui:
 
         actions_menu = self.menu_bar.addMenu('Actions')
 
+        debug_menu = self.menu_bar.addMenu('Debug')
+
+        self.brain_action = QtWidgets.QAction('Toggle Brain View', self.window)
+        self.brain_action.setCheckable(True)
+        self.brain_action.triggered.connect(self.toggle_brain_window)
+        debug_menu.addAction(self.brain_action)
+
+        self.debug_action = QtWidgets.QAction('Toggle Debug Mode', self.window)
+        self.debug_action.setCheckable(True)
+        debug_menu.addAction(self.debug_action)
+
+        # Add this line to create the view_cone_action
+        self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
+        self.view_cone_action.setCheckable(True)
+        debug_menu.addAction(self.view_cone_action)
+
         self.feed_action = QtWidgets.QAction('Feed', self.window)
         actions_menu.addAction(self.feed_action)
 
@@ -299,6 +315,12 @@ class Ui:
         self.rps_game_action = QtWidgets.QAction('Play Rock, Paper, Scissors', self.window)
         actions_menu.addAction(self.rps_game_action)
         self.rps_game_action.triggered.connect(self.start_rps_game)
+
+    def start_rps_game(self):
+        if hasattr(self, 'tamagotchi_logic'):
+            self.tamagotchi_logic.start_rps_game()
+        else:
+            print("TamagotchiLogic not initialized")
 
         debug_menu = self.menu_bar.addMenu('Debug')
 

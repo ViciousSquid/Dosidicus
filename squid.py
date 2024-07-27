@@ -318,6 +318,13 @@ class Squid:
 
     def is_debug_mode(self):
         return self.tamagotchi_logic.debug_mode
+    
+    def change_to_rps_image(self):
+        self.rps_image = QtGui.QPixmap(os.path.join("images", "squid_rps_frame.png"))
+        self.squid_item.setPixmap(self.rps_image)
+
+    def restore_normal_image(self):
+        self.squid_item.setPixmap(self.current_image())
 
     def go_to_sleep(self):
         if not self.is_sleeping:

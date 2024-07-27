@@ -12,29 +12,40 @@ class RPSGame:
         self.result = None
 
     def start_game(self):
-        self.create_game_window()
-        self.game_window.show()
+        # Move squid to bottom left
+        self.tamagotchi_logic.move_squid_to_bottom_left(self.create_game_window)
 
     def create_game_window(self):
+        # Pause the simulation
+        self.tamagotchi_logic.set_simulation_speed(0)
+        
+        # Change squid image
+        self.squid.change_to_rps_image()
+        
         self.game_window = QtWidgets.QWidget()
         self.game_window.setWindowTitle("Rock, Paper, Scissors")
         layout = QtWidgets.QVBoxLayout()
 
-        # Create buttons for rock, paper, scissors
         for choice in self.choices:
             button = QtWidgets.QPushButton(choice.capitalize())
             button.clicked.connect(lambda _, c=choice: self.play_round(c))
             layout.addWidget(button)
 
-        # Result label
         self.result_label = QtWidgets.QLabel("Make your choice!")
         layout.addWidget(self.result_label)
 
-        # Squid's choice label
         self.squid_choice_label = QtWidgets.QLabel("Squid's choice: ")
         layout.addWidget(self.squid_choice_label)
 
         self.game_window.setLayout(layout)
+        self.game_window.show()
+        
+        # Connect the close event
+        self.game_window.closeEvent = self.handle_close_event
+
+    def handle_close_event(self, event):
+        self.end_game()
+        event.accept()
 
     def play_round(self, player_choice):
         self.player_choice = player_choice
@@ -56,6 +67,16 @@ class RPSGame:
 
         self.result_label.setText(self.result)
         self.update_squid_stats()
+
+        # Add a button to play again or end the game
+        play_again_button = QtWidgets.QPushButton("Play Again")
+        play_again_button.clicked.connect(self.reset_game)
+        end_game_button = QtWidgets.QPushButton("End Game")
+        end_game_button.clicked.connect(self.end_game)
+
+        layout = self.game_window.layout()
+        layout.addWidget(play_again_button)
+        layout.addWidget(end_game_button)
 
     def get_squid_choice(self):
         # Biased choice based on squid's curiosity
@@ -81,3 +102,23 @@ class RPSGame:
         self.squid.hunger = min(100, self.squid.hunger + 3)
         self.tamagotchi_logic.update_statistics()
         self.tamagotchi_logic.user_interface.update_points(self.tamagotchi_logic.points)
+
+    def reset_game(self):
+        # Remove play again and end game buttons
+        layout = self.game_window.layout()
+        for i in reversed(range(layout.count())): 
+            widget = layout.itemAt(i).widget()
+            if isinstance(widget, QtWidgets.QPushButton) and widget.text() in ["Play Again", "End Game"]:
+                layout.removeWidget(widget)
+                widget.deleteLater()
+
+        # Reset labels
+        self.result_label.setText("Make your choice!")
+        self.squid_choice_label.setText("Squid's choice: ")
+
+    def end_game(self):
+        if self.game_window:
+            self.game_window.close()
+            self.game_window = None
+        self.squid.restore_normal_image()
+        self.tamagotchi_logic.set_simulation_speed(1)  # Resume normal speed
