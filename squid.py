@@ -261,6 +261,17 @@ class Squid:
         else:
             self.squid_direction = "down" if dy > 0 else "up"
 
+    def move_towards_position(self, target_pos):
+        dx = target_pos.x() - (self.squid_x + self.squid_width // 2)
+        dy = target_pos.y() - (self.squid_y + self.squid_height // 2)
+
+        if abs(dx) > abs(dy):
+            self.squid_direction = "right" if dx > 0 else "left"
+        else:
+            self.squid_direction = "down" if dy > 0 else "up"
+
+        self.move_squid()
+
     def eat(self):
         if not self.is_sick:
             for food_item in self.tamagotchi_logic.food_items:
@@ -318,7 +329,7 @@ class Squid:
 
     def is_debug_mode(self):
         return self.tamagotchi_logic.debug_mode
-    
+
     def change_to_rps_image(self):
         self.rps_image = QtGui.QPixmap(os.path.join("images", "squid_rps_frame.png"))
         self.squid_item.setPixmap(self.rps_image)

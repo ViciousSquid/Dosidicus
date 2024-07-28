@@ -101,7 +101,6 @@ class DecorationWindow(QtWidgets.QWidget):
 
         # Create a list to store the decoration items
         self.decoration_items = []
-        
 
         layout = QtWidgets.QVBoxLayout(self)
         scroll_area = QtWidgets.QScrollArea()
@@ -139,12 +138,13 @@ class DecorationWindow(QtWidgets.QWidget):
         self.setFixedHeight(min((row + 1) * 148 + 40, 650))  # 148 pixels per row (138 + 10 padding), max height of 600
 
 class Ui:
-    def __init__(self, window):
+    def __init__(self, window, tamagotchi_logic):
         self.window = window
-        self.window.setWindowTitle("Dosidicus")
-
+        self.tamagotchi_logic = tamagotchi_logic
         self.window_width = 1280
         self.window_height = 820
+
+        self.window.setWindowTitle("Dosidicus")
 
         self.window.resize(self.window_width, self.window_height)
 
@@ -193,8 +193,8 @@ class Ui:
         # Create the feeding message
         self.feeding_message = QtWidgets.QGraphicsTextItem("Squid requires feeding")
         self.feeding_message.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        self.feeding_message.setFont(QtGui.QFont("Arial", 14, QtGui.QFont.Bold))
-        self.feeding_message.setPos(0, self.window_height - 30)
+        self.feeding_message.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        self.feeding_message.setPos(0, self.window_height - 75 )
         self.feeding_message.setTextWidth(self.window_width)
         self.feeding_message.setHtml('<div style="text-align: center;">Squid requires feeding</div>')
         self.feeding_message.setOpacity(0)
@@ -229,22 +229,38 @@ class Ui:
         self.rect_item.setRect(50, 50, self.window_width - 100, self.window_height - 100)
         self.cleanliness_overlay.setRect(50, 50, self.window_width - 100, self.window_height - 100)
 
-        self.feeding_message.setPos(0, self.window_height - 30)
+        self.feeding_message.setPos(0, self.window_height - 75)
         self.feeding_message.setTextWidth(self.window_width)
 
         self.points_label.setPos(self.window_width - 265, 10)  # Move the label to the left by 15 pixels
         self.points_value_label.setPos(self.window_width - 95, 10)
 
     def show_message(self, message):
-        self.feeding_message.setHtml(f'<div style="text-align: center;">{message}</div>')
-        self.feeding_message.setOpacity(1)
+        # Remove any existing message items
+        for item in self.scene.items():
+            if isinstance(item, QtWidgets.QGraphicsTextItem):
+                self.scene.removeItem(item)
 
-        fade_out = QtCore.QVariantAnimation()
-        fade_out.setStartValue(1.0)
-        fade_out.setEndValue(0.0)
-        fade_out.setDuration(3000)
-        fade_out.valueChanged.connect(lambda value: self.feeding_message.setOpacity(value))
-        fade_out.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
+        # Create a new QGraphicsTextItem for the message
+        self.message_item = QtWidgets.QGraphicsTextItem(message)
+        self.message_item.setDefaultTextColor(QtGui.QColor(255, 255, 255))  # White text
+        self.message_item.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        self.message_item.setPos(0, self.window_height - 75)  # Position the message higher
+        self.message_item.setTextWidth(self.window_width)
+        self.message_item.setHtml(f'<div style="text-align: center; background-color: #000000; padding: 5px;">{message}</div>')
+        self.message_item.setZValue(10)  # Ensure the message is on top
+        self.message_item.setOpacity(1)
+
+        # Add the new message item to the scene
+        self.scene.addItem(self.message_item)
+
+        # Fade out the message after 8 seconds
+        self.fade_out_animation = QtCore.QPropertyAnimation(self.message_item, b"opacity")
+        self.fade_out_animation.setDuration(8000)
+        self.fade_out_animation.setStartValue(1.0)
+        self.fade_out_animation.setEndValue(0.0)
+        self.fade_out_animation.finished.connect(lambda: self.scene.removeItem(self.message_item))
+        self.fade_out_animation.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
 
     def update_points(self, points):
         self.points_value_label.setPlainText(str(points))
@@ -344,31 +360,6 @@ class Ui:
         else:
             print("TamagotchiLogic not initialized")
 
-        debug_menu = self.menu_bar.addMenu('Debug')
-
-        self.brain_action = QtWidgets.QAction('Toggle Brain View', self.window)
-        self.brain_action.setCheckable(True)
-        self.brain_action.triggered.connect(self.toggle_brain_window)
-        debug_menu.addAction(self.brain_action)
-
-        self.debug_action = QtWidgets.QAction('Toggle Debug Mode', self.window)
-        self.debug_action.setCheckable(True)
-        debug_menu.addAction(self.debug_action)
-
-        self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
-        self.view_cone_action.setCheckable(True)
-        debug_menu.addAction(self.view_cone_action)
-
-        view_menu = self.menu_bar.addMenu('View')
-        self.stats_window_action = QtWidgets.QAction('Statistics', self.window)
-        self.stats_window_action.triggered.connect(self.toggle_statistics_window)
-        view_menu.addAction(self.stats_window_action)
-
-        # Add Decorations option to View menu
-        self.decorations_action = QtWidgets.QAction('Decorations', self.window)
-        self.decorations_action.triggered.connect(self.toggle_decoration_window)
-        view_menu.addAction(self.decorations_action)
-
     def toggle_statistics_window(self):
         if self.statistics_window is None:
             self.create_statistics_window()
@@ -377,7 +368,7 @@ class Ui:
             if self.statistics_window.isVisible():
                 self.statistics_window.hide()
             else:
-             self.statistics_window.show()
+                self.statistics_window.show()
         else:
             print("Failed to create statistics window")
 

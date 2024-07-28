@@ -73,15 +73,15 @@ class TamagotchiLogic:
 
     def check_for_decoration_attraction(self):
         # Check if there are any decorations in the scene
-        if self.ui.decoration_window.decoration_items:
+        if self.user_interface.decoration_window.decoration_items:
             # Randomly determine if the squid is attracted to a decoration
-            if random.random() < 0.1:  # 10% chance of attraction
+            if random.random() < 0.05:  # 5% chance of attraction
                 # Choose a random decoration item
-                decoration_item = random.choice(self.ui.decoration_window.decoration_items)
+                decoration_item = random.choice(self.user_interface.decoration_window.decoration_items)
                 # Swim towards the decoration
                 self.squid.move_towards_position(decoration_item.pos())
                 # Play an animation or sound to indicate the squid's attraction
-                self.ui.show_message("Squid is investigating a decoration")
+                self.user_interface.show_message("Squid is investigating a decoration")
 
     def setup_speed_menu(self):
         speed_menu = self.user_interface.menu_bar.addMenu('Speed')
@@ -123,24 +123,39 @@ class TamagotchiLogic:
         self.update_statistics()
         if self.squid:
             self.squid.move_squid()
+            self.check_for_decoration_attraction()
+
+            # Check if the squid is not in the middle of the RPS game
+            if not hasattr(self, 'rps_game') or not self.rps_game.game_window:
+                # Check if squid becomes sick (80% chance)
+                if (self.cleanliness_threshold_time >= 10 * self.simulation_speed and self.cleanliness_threshold_time <= 60 * self.simulation_speed) or \
+                (self.hunger_threshold_time >= 10 * self.simulation_speed and self.hunger_threshold_time <= 50 * self.simulation_speed):
+                    if random.random() < 0.8:
+                        self.squid.is_sick = True
+            else:
+                self.squid.is_sick = False
 
     def move_objects(self):
         self.move_foods()
         self.move_poops()
 
-    def move_squid_to_bottom_left(self, callback):      # Currently buggy but working
+    def move_squid_to_bottom_left(self, callback):
         target_x = 150  # Left edge + margin
         target_y = self.user_interface.window_height - 150 - self.squid.squid_height  # Bottom edge - margin - squid height
-        
+
+        # Disable the squid's ability to move in any other direction
+        self.squid.can_move = False
+
         def step_movement():
             dx = target_x - self.squid.squid_x
             dy = target_y - self.squid.squid_y
-            
+
             if abs(dx) < 90 and abs(dy) < 90:
                 # If close enough, snap to final position and call callback
                 self.squid.squid_x = target_x
                 self.squid.squid_y = target_y
                 self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
+                self.squid.can_move = True  # Re-enable the squid's movement
                 callback()
             else:
                 # Determine direction of movement
@@ -150,13 +165,13 @@ class TamagotchiLogic:
                 else:
                     # Move vertically
                     self.squid.squid_y += 90 if dy > 0 else -90
-                
+
                 # Update squid position
                 self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
-                
-                # Schedule next movement in 1 second
+
+                # Schedule next movement in 1000 ms
                 QtCore.QTimer.singleShot(1000, step_movement)
-        
+
         # Start the movement
         step_movement()
 
@@ -181,10 +196,6 @@ class TamagotchiLogic:
             self.display_needle_image()
         else:
             self.show_message("Squid is not sick. Medicine not needed.")
-
-    def start_rps_game(self):       ## Entry point for Rock Paper Scissors game
-        rps_game = RPSGame(self)
-        rps_game.start_game()
 
     def display_needle_image(self):
         needle_pixmap = QtGui.QPixmap(os.path.join("images", "needle.jpg"))
@@ -326,7 +337,7 @@ class TamagotchiLogic:
             self.user_interface.cleanliness_overlay.setRect(50, 50, self.user_interface.window_width - 100, self.user_interface.window_height - 100)
 
         if hasattr(self.user_interface, 'feeding_message'):
-            self.user_interface.feeding_message.setPos(0, self.user_interface.window_height - 30)
+            self.user_interface.feeding_message.setPos(0, self.user_interface.window_height - 85)
             self.user_interface.feeding_message.setTextWidth(self.user_interface.window_width)
 
         if self.squid:
@@ -346,7 +357,7 @@ class TamagotchiLogic:
 
         # Create a cleaning line
         self.cleaning_line = QtWidgets.QGraphicsLineItem(self.user_interface.window_width, 0,
-                                                         self.user_interface.window_width, self.user_interface.window_height - 120)
+                                                         self.user_interface.window_width, self.user_interface.window_height - 400)
         self.cleaning_line.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 10))  # Thick black line
         self.user_interface.scene.addItem(self.cleaning_line)
 

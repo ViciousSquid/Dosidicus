@@ -18,10 +18,10 @@ class RPSGame:
     def create_game_window(self):
         # Pause the simulation
         self.tamagotchi_logic.set_simulation_speed(0)
-        
+
         # Change squid image
         self.squid.change_to_rps_image()
-        
+
         self.game_window = QtWidgets.QWidget()
         self.game_window.setWindowTitle("Rock, Paper, Scissors")
         layout = QtWidgets.QVBoxLayout()
@@ -39,7 +39,7 @@ class RPSGame:
 
         self.game_window.setLayout(layout)
         self.game_window.show()
-        
+
         # Connect the close event
         self.game_window.closeEvent = self.handle_close_event
 
@@ -68,15 +68,30 @@ class RPSGame:
         self.result_label.setText(self.result)
         self.update_squid_stats()
 
-        # Add a button to play again or end the game
-        play_again_button = QtWidgets.QPushButton("Play Again")
-        play_again_button.clicked.connect(self.reset_game)
-        end_game_button = QtWidgets.QPushButton("End Game")
-        end_game_button.clicked.connect(self.end_game)
+        # Check if the "Play Again" button already exists in the layout
+        play_again_button = self.find_button("Play Again")
+        if play_again_button is None:
+            # Add a button to play again
+            play_again_button = QtWidgets.QPushButton("Play Again")
+            play_again_button.clicked.connect(self.reset_game)
+            self.game_window.layout().addWidget(play_again_button)
 
+        # Check if the "End Game" button already exists in the layout
+        end_game_button = self.find_button("End Game")
+        if end_game_button is None:
+            # Add a button to end the game
+            end_game_button = QtWidgets.QPushButton("End Game")
+            end_game_button.clicked.connect(self.end_game)
+            self.game_window.layout().addWidget(end_game_button)
+
+    def find_button(self, text):
+        # Helper function to find a button with the given text
         layout = self.game_window.layout()
-        layout.addWidget(play_again_button)
-        layout.addWidget(end_game_button)
+        for i in range(layout.count()):
+            widget = layout.itemAt(i).widget()
+            if isinstance(widget, QtWidgets.QPushButton) and widget.text() == text:
+                return widget
+        return None
 
     def get_squid_choice(self):
         # Biased choice based on squid's curiosity
@@ -106,7 +121,7 @@ class RPSGame:
     def reset_game(self):
         # Remove play again and end game buttons
         layout = self.game_window.layout()
-        for i in reversed(range(layout.count())): 
+        for i in reversed(range(layout.count())):
             widget = layout.itemAt(i).widget()
             if isinstance(widget, QtWidgets.QPushButton) and widget.text() in ["Play Again", "End Game"]:
                 layout.removeWidget(widget)
