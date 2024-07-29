@@ -5,8 +5,7 @@
 
 * requirements: `PyQt5` and `numpy`
 
-![image](https://github.com/user-attachments/assets/a534692c-b33a-4980-8e92-96ea17e6b2bd)
-
+![image](https://github.com/user-attachments/assets/9d607996-2b62-4654-8c27-c3585c7c787c)
 
 
 ### Autonomous Behavior:
