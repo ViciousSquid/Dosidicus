@@ -6,7 +6,7 @@ There are seven different squid personalities that affect their needs and how th
 * `Energetic`: Faster movement and higher activity levels 
 * `Introvert`: Prefers solitude and quiet environments 
 * `Greedy`: More focused on food and resources
-* `Stubborn`: Strong-willed and difficult 
+* `Stubborn`: Fussy and difficult 
 
 One of these is randomly chosen  at the start of a new game, immediately after the egg hatches. 
 
