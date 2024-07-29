@@ -53,8 +53,6 @@ class TamagotchiLogic:
 
         self.needle_item = None
 
-        self.save_manager = SaveManager("save_data.json")
-
         self.points = 0
         self.score_update_timer = QtCore.QTimer()
         self.score_update_timer.timeout.connect(self.update_score)
@@ -63,6 +61,11 @@ class TamagotchiLogic:
         self.brain_update_timer = QtCore.QTimer()
         self.brain_update_timer.timeout.connect(self.update_squid_brain)
         self.brain_update_timer.start(1000)  # Update every second
+
+        self.save_manager = SaveManager()
+
+        self.autosave_timer = QtCore.QTimer()
+        self.autosave_timer.timeout.connect(self.autosave)
 
         self.load_game()
 
@@ -519,24 +522,32 @@ class TamagotchiLogic:
     def load_game(self):
         save_data = self.save_manager.load_game()
         if save_data is not None:
-            squid_data = save_data["squid"]
-            self.squid.hunger = squid_data["hunger"]
-            self.squid.sleepiness = squid_data["sleepiness"]
-            self.squid.happiness = squid_data["happiness"]
-            self.squid.cleanliness = squid_data["cleanliness"]
-            self.squid.health = squid_data["health"]
-            self.squid.is_sick = squid_data["is_sick"]
-            self.squid.squid_x = squid_data["squid_x"]
-            self.squid.squid_y = squid_data["squid_y"]
+            squid_data = save_data['squid']
+            self.squid.hunger = squid_data['hunger']
+            self.squid.sleepiness = squid_data['sleepiness']
+            self.squid.happiness = squid_data['happiness']
+            self.squid.cleanliness = squid_data['cleanliness']
+            self.squid.health = squid_data['health']
+            self.squid.is_sick = squid_data['is_sick']
+            self.squid.squid_x = squid_data['squid_x']
+            self.squid.squid_y = squid_data['squid_y']
+            self.squid.satisfaction = squid_data['satisfaction']
+            self.squid.anxiety = squid_data['anxiety']
+            self.squid.curiosity = squid_data['curiosity']
             self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
 
-            tamagotchi_logic_data = save_data["tamagotchi_logic"]
-            self.cleanliness_threshold_time = tamagotchi_logic_data["cleanliness_threshold_time"]
-            self.hunger_threshold_time = tamagotchi_logic_data["hunger_threshold_time"]
-            self.last_clean_time = tamagotchi_logic_data["last_clean_time"]
+            tamagotchi_logic_data = save_data['tamagotchi_logic']
+            self.cleanliness_threshold_time = tamagotchi_logic_data['cleanliness_threshold_time']
+            self.hunger_threshold_time = tamagotchi_logic_data['hunger_threshold_time']
+            self.last_clean_time = tamagotchi_logic_data['last_clean_time']
+            self.points = tamagotchi_logic_data['points']
 
             decorations_data = save_data.get('decorations', [])
             self.user_interface.load_decorations_data(decorations_data)
+
+            print("Game loaded successfully")
+        else:
+            print("No save data found")
 
     def update_score(self):
         if self.squid is not None:
@@ -567,36 +578,39 @@ class TamagotchiLogic:
             }
         self.user_interface.squid_brain_window.update_brain(brain_state)
 
-    def save_game(self):
-        squid_data = {
-            "hunger": self.squid.hunger,
-            "sleepiness": self.squid.sleepiness,
-            "happiness": self.squid.happiness,
-            "cleanliness": self.squid.cleanliness,
-            "health": self.squid.health,
-            "is_sick": self.squid.is_sick,
-            "squid_x": self.squid.squid_x,
-            "squid_y": self.squid.squid_y,
-            "satisfaction": self.squid.satisfaction,
-            "anxiety": self.squid.anxiety,
-            "curiosity": self.squid.curiosity
-        }
-
-        tamagotchi_logic_data = {
-            "cleanliness_threshold_time": self.cleanliness_threshold_time,
-            "hunger_threshold_time": self.hunger_threshold_time,
-            "last_clean_time": self.last_clean_time
-        }
-
-        decorations_data = self.user_interface.get_decorations_data()
-
+    def save_game(self, squid, tamagotchi_logic, is_autosave=False):
         save_data = {
-            'squid': squid_data,
-            'tamagotchi_logic': tamagotchi_logic_data,
-            'decorations': decorations_data
+            'squid': {
+                'hunger': squid.hunger,
+                'sleepiness': squid.sleepiness,
+                'happiness': squid.happiness,
+                'cleanliness': squid.cleanliness,
+                'health': squid.health,
+                'is_sick': squid.is_sick,
+                'squid_x': squid.squid_x,
+                'squid_y': squid.squid_y,
+                'satisfaction': squid.satisfaction,
+                'anxiety': squid.anxiety,
+                'curiosity': squid.curiosity
+            },
+            'tamagotchi_logic': {
+                'cleanliness_threshold_time': self.cleanliness_threshold_time,
+                'hunger_threshold_time': self.hunger_threshold_time,
+                'last_clean_time': self.last_clean_time,
+                'points': self.points
+            },
+            'decorations': self.user_interface.get_decorations_data()
         }
+        
+        filepath = self.save_manager.save_game(save_data, is_autosave)
+        print(f"Game {'autosaved' if is_autosave else 'saved'} successfully to {filepath}")
 
-        self.save_manager.save_game(save_data)
+    def start_autosave(self):
+        self.autosave_timer.start(600000)  # 600000 ms = 10 minutes
+
+    def autosave(self):
+        print("Autosaving...")
+        self.save_game(self.squid, self, is_autosave=True)
 
     # New methods to update the new neurons
     def update_satisfaction(self):

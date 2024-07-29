@@ -393,8 +393,13 @@ class Ui:
         decorations_data = []
         for item in self.scene.items():
             if isinstance(item, ResizablePixmapItem):
+                pixmap = item.pixmap()
+                buffer = QtCore.QBuffer()
+                buffer.open(QtCore.QIODevice.WriteOnly)
+                pixmap.save(buffer, "PNG")
+                pixmap_data = buffer.data().toBase64().data().decode()
                 decorations_data.append({
-                    'pixmap': item.pixmap(),
+                    'pixmap_data': pixmap_data,
                     'pos': item.pos(),
                     'scale': item.scale()
                 })
@@ -402,15 +407,16 @@ class Ui:
 
     def load_decorations_data(self, decorations_data):
         for decoration_data in decorations_data:
-            pixmap = decoration_data['pixmap']
+            pixmap_data = decoration_data['pixmap_data']
+            pixmap = QtGui.QPixmap()
+            pixmap.loadFromData(QtCore.QByteArray.fromBase64(pixmap_data.encode()))
             pos = decoration_data['pos']
             scale = decoration_data['scale']
-            item = ResizablePixmapItem(pixmap)
+            item = ResizablePixmapItem(pixmap, "decoration_item")
             item.setPos(pos)
             item.setScale(scale)
             self.scene.addItem(item)
 
-    # Add this method to start the RPS game
     def start_rps_game(self):
         if hasattr(self, 'tamagotchi_logic'):
             self.tamagotchi_logic.start_rps_game()
