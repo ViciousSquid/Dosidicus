@@ -5,6 +5,7 @@ import random
 from enum import Enum
 import math
 from PyQt5 import QtCore, QtGui, QtWidgets
+from mental_states import MentalStateManager
 
 class Personality(Enum):
     TIMID = "timid"
@@ -22,6 +23,8 @@ class Squid:
         self.load_images()
         self.load_poop_images()
         self.initialize_attributes()
+
+        self.mental_state_manager = MentalStateManager(self, self.ui.scene)
 
         self.squid_item = QtWidgets.QGraphicsPixmapItem(self.current_image())
         self.squid_item.setPos(self.squid_x, self.squid_y)
@@ -47,13 +50,13 @@ class Squid:
 
         self.view_cone_angle = math.pi / 2.5  # Squid has a view cone of 80 degrees
         self.current_view_angle = random.uniform(0, 2 * math.pi)
-        self.view_cone_change_interval = 3000  # milliseconds
+        self.view_cone_change_interval = 2500  # milliseconds
         self.last_view_cone_change = 0
         self.pursuing_food = False
         self.target_food = None
 
         self.satisfaction = 50
-        self.anxiety = 50
+        self.anxiety = 10
         self.curiosity = 50
 
         self.personality = personality if personality else random.choice(list(Personality))

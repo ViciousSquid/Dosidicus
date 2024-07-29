@@ -268,6 +268,34 @@ class Ui:
     def update_points(self, points):
         self.points_value_label.setPlainText(str(points))
 
+    def get_nearby_decorations(self, x, y, radius=100):
+        nearby_decorations = []
+        for item in self.scene.items():
+            if isinstance(item, ResizablePixmapItem):
+                item_center = item.sceneBoundingRect().center()
+                distance = ((item_center.x() - x) ** 2 + (item_center.y() - y) ** 2) ** 0.5
+                if distance <= radius:
+                    nearby_decorations.append(item)
+        return nearby_decorations
+
+    def move_decoration(self, decoration, dx):
+        current_pos = decoration.pos()
+        new_x = current_pos.x() + dx
+        
+        # Ensure the decoration stays within the scene boundaries
+        scene_rect = self.scene.sceneRect()
+        new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
+        
+        decoration.setPos(new_x, current_pos.y())
+
+        # Create a small animation to make the movement smoother
+        #animation = QtCore.QPropertyAnimation(decoration, b"pos")
+        #animation.setDuration(300)  # 300 ms duration
+        #animation.setStartValue(current_pos)
+        #animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
+        #animation.setEasingCurve(QtCore.QEasingCurve.OutCubic)
+        #animation.start()
+
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.accept()

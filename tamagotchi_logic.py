@@ -75,12 +75,28 @@ class TamagotchiLogic:
 
         self.load_game()
 
-        # Initialize mood neurons
+        # Initialize goal neurons
         self.squid.satisfaction = 50
         self.squid.anxiety = 10
-        self.squid.curiosity = 60
+        self.squid.curiosity = 55
 
-    def update_from_brain(self, brain_state):   # Two-way communication between brain tool and the squid
+                        ################################
+                        #### MENTAL STATE COOLDOWNS ####
+                        ################################
+
+        self.startle_cooldown = 0
+        self.startle_cooldown_max = 10 
+        self.mental_states_enabled = True 
+        self.curious_cooldown = 0
+        self.curious_cooldown_max = 20
+        self.curious_interaction_cooldown = 1
+        self.curious_interaction_cooldown_max = 5
+
+    def set_mental_states_enabled(self, enabled):
+        self.mental_states_enabled = enabled
+        self.squid.mental_state_manager.set_mental_states_enabled(enabled)
+
+    def update_from_brain(self, brain_state):   # Communication between brain tool and Squid
         if self.squid is not None:
             for key, value in brain_state.items():
                 if hasattr(self.squid, key):
@@ -89,7 +105,7 @@ class TamagotchiLogic:
             # Handle special cases
             if brain_state['sleepiness'] >= 100 and not self.squid.is_sleeping:
                 self.squid.go_to_sleep()
-            elif brain_state['sleepiness'] < 100 and self.squid.is_sleeping:
+            elif brain_state['sleepiness'] < 50 and self.squid.is_sleeping:
                 self.squid.wake_up()
 
             if brain_state['direction'] != self.squid.squid_direction:
@@ -114,6 +130,8 @@ class TamagotchiLogic:
 
         if active_decorations:
             self.apply_decoration_effects(active_decorations)
+            if self.mental_states_enabled:
+                self.check_decoration_startle(active_decorations)
 
     def apply_decoration_effects(self, active_decorations):
         total_effects = {
@@ -143,20 +161,38 @@ class TamagotchiLogic:
         decoration_center = strongest_decoration.boundingRect().center() + strongest_decoration.pos()
         self.squid.move_towards_position(decoration_center)
 
-        # Show a message about the squid's interaction with the decoration
+        # Show a message about Squid's interaction with the decoration
         self.show_decoration_message(strongest_decoration)
+
+    def check_decoration_startle(self, active_decorations):
+        if not self.mental_states_enabled:
+            return
+
+        if self.startle_cooldown > 0:
+            return
+
+        # Very low chance of being startled by decorations
+        decoration_startle_chance = 0.001 * len(active_decorations)  # 0.1% chance per decoration
+
+        # Increase chance if anxiety is high
+        if self.squid.anxiety > 70:
+            decoration_startle_chance *= (self.squid.anxiety / 50)
+
+        if random.random() < decoration_startle_chance:
+            self.startle_squid()
+            self.show_message("Squid was startled by a decoration!")
 
     def show_decoration_message(self, decoration):
         category = decoration.category
         messages = {
             'plant': [
-                "The squid seems fascinated by the plants!",
+                "Squid seems fascinated by the plants!",
                 "Your squid is enjoying the greenery.",
                 "The plant decoration is making your squid happy."
             ],
             'rock': [
                 "Your squid is exploring the rocky terrain.",
-                "The squid seems intrigued by the rock formation.",
+                "Squid seems intrigued by the rock formation.",
                 "The rock decoration provides a nice hiding spot for your squid."
             ]
         }
@@ -164,7 +200,7 @@ class TamagotchiLogic:
         if category in messages:
             message = random.choice(messages[category])
         else:
-            message = "Your squid is interacting with the decoration."
+            message = "Squid is interacting with the decoration."
 
         self.user_interface.show_message(message)
 
@@ -202,6 +238,43 @@ class TamagotchiLogic:
             interval = self.base_interval // self.simulation_speed
             self.simulation_timer.start(interval)
 
+    def check_for_startle(self):                ## Certain personalities are more easily startled than others
+        if not self.mental_states_enabled:
+            return
+
+        if self.startle_cooldown > 0:
+            self.startle_cooldown -= 1
+            return
+
+        # Base chance of being startled
+        startle_chance = 0.01  # 1% base chance
+
+        # Increase chance if anxiety is high
+        if self.squid.anxiety > 70:
+            startle_chance *= (self.squid.anxiety / 50)  # Up to 2x more likely when anxiety is at 100
+
+        # Check for startle
+        if random.random() < startle_chance:
+            self.startle_squid()
+
+    def startle_squid(self):
+        if not self.mental_states_enabled:
+            return
+
+        self.squid.mental_state_manager.set_state("startled", True)
+        self.startle_cooldown = self.startle_cooldown_max
+        self.show_message("The squid was startled!")
+        
+        # Increase anxiety
+        self.squid.anxiety = min(100, self.squid.anxiety + 10)
+        
+        # Schedule the end of the startle state
+        QtCore.QTimer.singleShot(3000, self.end_startle)  # End startle after 3 seconds
+
+    def end_startle(self):
+        if self.mental_states_enabled:
+            self.squid.mental_state_manager.set_state("startled", False)
+
     def update_simulation(self):
         self.move_objects()
         self.animate_poops()
@@ -209,56 +282,146 @@ class TamagotchiLogic:
         if self.squid:
             self.squid.move_squid()
             self.check_for_decoration_attraction()
+            self.check_for_sickness()
+            if self.mental_states_enabled:
+                self.check_for_startle()
+                self.check_for_curiosity()
 
-            # Check if the squid is not in the middle of the RPS game
+            # Check if Squid is not in the middle of the RPS game
             if not hasattr(self, 'rps_game') or not self.rps_game.game_window:
                 # Check if squid becomes sick (80% chance)
                 if (self.cleanliness_threshold_time >= 10 * self.simulation_speed and self.cleanliness_threshold_time <= 60 * self.simulation_speed) or \
                 (self.hunger_threshold_time >= 10 * self.simulation_speed and self.hunger_threshold_time <= 50 * self.simulation_speed):
-                    if random.random() < 0.8:
-                        self.squid.is_sick = True
+                    if random.random() < 0.4:
+                        self.squid.mental_state_manager.set_state("sick", True)
             else:
                 self.squid.is_sick = False
 
-            # Check if the squid has high anxiety for a prolonged time
+            # Check if Squid has high anxiety for a prolonged time
             if self.squid.anxiety > 80:
                 self.high_anxiety_time += 1
             else:
                 self.high_anxiety_time = 0
 
-            # If the squid has high anxiety for more than 5 simulation steps
-            if self.high_anxiety_time > 5 * self.simulation_speed:
+            # If Squid has high anxiety for more than 10 simulation steps
+            if self.high_anxiety_time > 10 * self.simulation_speed:
                 self.squid.health = max(0, self.squid.health - (0.5 * self.simulation_speed))
                 self.squid.status = "ill from anxiety"
 
                 if self.high_anxiety_time % (5 * self.simulation_speed) == 0:
-                    self.show_message("High anxiety is causing the squid to become ill!")
+                    self.show_message("High anxiety is causing Squid to feel a little unwell")
 
-                # Make the squid move slowly and erratically
+                # Make Squid move slowly and erratically
                 self.squid.move_slowly()
                 self.squid.move_erratically()
+
+    def check_for_sickness(self):
+        # Existing sickness logic
+        if (self.cleanliness_threshold_time >= 10 * self.simulation_speed and self.cleanliness_threshold_time <= 60 * self.simulation_speed) or \
+           (self.hunger_threshold_time >= 10 * self.simulation_speed and self.hunger_threshold_time <= 50 * self.simulation_speed):
+            if random.random() < 0.8:
+                self.squid.mental_state_manager.set_state("sick", True)
+                self.show_message("Squid is feeling sick!")
+        else:
+            self.squid.mental_state_manager.set_state("sick", False)
+    
+    def check_for_curiosity(self):
+        if self.curious_cooldown > 0:
+            self.curious_cooldown -= 1
+            return
+
+        # Base chance of becoming curious
+        curious_chance = 0.02  # 2% base chance
+
+        # Increase chance if satisfaction is high and anxiety is low
+        if self.squid.satisfaction > 70 and self.squid.anxiety < 30:
+            curious_chance *= 2  # Double the chance
+
+        # Check for curiosity
+        if random.random() < curious_chance:
+            self.make_squid_curious()
+
+    def make_squid_curious(self):
+        self.squid.mental_state_manager.set_state("curious", True)
+        self.curious_cooldown = self.curious_cooldown_max
+        self.show_message("Squid is feeling curious!")
+        
+        # Increase curiosity
+        self.squid.curiosity = min(100, self.squid.curiosity + 20)
+        
+        # Schedule the end of the curious state
+        QtCore.QTimer.singleShot(5000, self.end_curious)  # End curious after 5 seconds
+
+        # Start curious interactions
+        self.curious_interaction_timer = QtCore.QTimer()
+        self.curious_interaction_timer.timeout.connect(self.curious_interaction)
+        self.curious_interaction_timer.start(1000)  # Check for interactions every second
+
+    def end_curious(self):
+        if self.mental_states_enabled:
+            self.squid.mental_state_manager.set_state("curious", False)
+        if hasattr(self, 'curious_interaction_timer'):
+            self.curious_interaction_timer.stop()
+
+    def curious_interaction(self):
+        if self.curious_interaction_cooldown > 0:
+            self.curious_interaction_cooldown -= 1
+            return
+
+        if random.random() < 0.2:  # 20% chance to interact when called
+            decorations = self.user_interface.get_nearby_decorations(self.squid.squid_x, self.squid.squid_y)
+            if decorations:
+                decoration = random.choice(decorations)
+                if random.random() < 0.1:  # 10% chance to push the decoration
+                    direction = random.choice([-1, 1])  # -1 for left, 1 for right
+                    self.user_interface.move_decoration(decoration, direction * 10)  # Move 10 pixels
+                    self.show_message("Squid pushed a decoration!")
+                else:
+                    self.show_message("Squid is curious about a decoration...")
+                
+                self.curious_interaction_cooldown = self.curious_interaction_cooldown_max
+
+    def update_curiosity(self):
+        # Update curiosity based on satisfaction and anxiety
+        if self.squid.satisfaction > 70 and self.squid.anxiety < 30:
+            curiosity_change = 0.2 * self.simulation_speed
+        else:
+            curiosity_change = -0.1 * self.simulation_speed
+
+        # Adjust curiosity change based on personality
+        if self.squid.personality == Personality.TIMID:
+            curiosity_change *= 0.5  # Timid squids are less curious
+        elif self.squid.personality == Personality.ADVENTUROUS:
+            curiosity_change *= 1.5  # Adventurous squids are more curious
+
+        self.squid.curiosity += curiosity_change
+        self.squid.curiosity = max(0, min(100, self.squid.curiosity))
+
+        # Check if the squid should enter the curious state
+        if self.squid.curiosity > 80 and self.mental_states_enabled:
+            self.check_for_curiosity()
 
     def move_objects(self):
         self.move_foods()
         self.move_poops()
 
-    def move_squid_to_bottom_left(self, callback):
+    def move_squid_to_bottom_left(self, callback):      # Force the squid to move to bottom left (buggy)
         target_x = 150  # Left edge + margin
         target_y = self.user_interface.window_height - 150 - self.squid.squid_height  # Bottom edge - margin - squid height
 
-        # Disable the squid's ability to move in any other direction
+        # Disable Squid's ability to move in any other direction - doesn't work 100% - he puts up a fight sometimes!!
         self.squid.can_move = False
 
         def step_movement():
             dx = target_x - self.squid.squid_x
             dy = target_y - self.squid.squid_y
 
-            if abs(dx) < 90 and abs(dy) < 90:
+            if abs(dx) < 100 and abs(dy) < 100:
                 # If close enough, snap to final position and call callback
                 self.squid.squid_x = target_x
                 self.squid.squid_y = target_y
                 self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
-                self.squid.can_move = True  # Re-enable the squid's movement
+                self.squid.can_move = True  # Re-enable Squid's movement
                 callback()
             else:
                 # Determine direction of movement
@@ -273,7 +436,7 @@ class TamagotchiLogic:
                 self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
 
                 # Schedule next movement in 1000 ms
-                QtCore.QTimer.singleShot(1000, step_movement)
+                QtCore.QTimer.singleShot(900, step_movement)
 
         # Start the movement
         step_movement()
@@ -292,7 +455,7 @@ class TamagotchiLogic:
             # Hide the sick icon immediately
             self.squid.hide_sick_icon()
 
-            # Put the squid to sleep
+            # Put Squid to sleep
             self.squid.go_to_sleep()
 
             # Display the needle image
@@ -392,9 +555,9 @@ class TamagotchiLogic:
                 if (self.cleanliness_threshold_time >= 10 * self.simulation_speed and self.cleanliness_threshold_time <= 60 * self.simulation_speed) or \
                    (self.hunger_threshold_time >= 10 * self.simulation_speed and self.hunger_threshold_time <= 50 * self.simulation_speed):
                     if random.random() < 0.8:
-                        self.squid.is_sick = True
+                        self.squid.mental_state_manager.set_state("sick", True)
                 else:
-                    self.squid.is_sick = False
+                    self.squid.mental_state_manager.set_state("sick", False)
 
                 # New logic for health decrease based on happiness and cleanliness
                 if self.squid.happiness < 20 and self.squid.cleanliness < 20:
@@ -501,7 +664,7 @@ class TamagotchiLogic:
         # Remove the cleaning line
         self.user_interface.scene.removeItem(self.cleaning_line)
 
-        # Update squid stats if the squid object is available
+        # Update squid stats if Squid object is available
         if self.squid is not None:
             self.squid.cleanliness = 100
             self.squid.happiness = min(100, self.squid.happiness + 20)
