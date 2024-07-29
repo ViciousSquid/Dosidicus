@@ -1,3 +1,10 @@
+###########
+###########     BRAIN TOOL
+###########     Version 1.0.37 29th July 2024
+###########
+###########
+###########
+
 import sys
 import os
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -41,6 +48,15 @@ class BrainWidget(QtWidgets.QWidget):
         self.associations = np.zeros((len(self.neuron_positions), len(self.neuron_positions)))
         self.learning_rate = 0.1
         self.capture_training_data_enabled = False
+
+        # Define pastel colors for each state
+        self.state_colors = {
+            'is_sick': (255, 204, 204),  # Pastel red
+            'is_eating': (204, 255, 204),  # Pastel green
+            'is_sleeping': (204, 229, 255),  # Pastel blue
+            'pursuing_food': (255, 229, 204),  # Pastel orange
+            'direction': (229, 204, 255)  # Pastel purple
+        }
 
     def initialize_connections(self):
         connections = []
@@ -167,10 +183,17 @@ class BrainWidget(QtWidgets.QWidget):
 
     def draw_neurons(self, painter, scale):
         for name, pos in self.neuron_positions.items():
-            self.draw_neuron(painter, pos[0], pos[1], self.state[name], name, scale=scale)
+            if name in self.state_colors:
+                color = self.state_colors[name]
+                self.draw_neuron(painter, pos[0], pos[1], self.state[name], name, color=color, scale=scale)
+            else:
+                self.draw_neuron(painter, pos[0], pos[1], self.state[name], name, scale=scale)
 
-    def draw_neuron(self, painter, x, y, value, label, binary=False, scale=1.0):
-        color = QtGui.QColor(int(255 * (1 - value / 100)), int(255 * (value / 100)), 0)
+    def draw_neuron(self, painter, x, y, value, label, color=(0, 255, 0), binary=False, scale=1.0):
+        if binary:
+            color = (0, 255, 0) if value else (255, 0, 0)
+        else:
+            color = QtGui.QColor(*color)
 
         painter.setBrush(QtGui.QBrush(color))
         painter.drawEllipse(x - 25, y - 25, 50, 50)
@@ -326,12 +349,31 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.update_data_table(state)
 
     def update_data_table(self, state):
+        state_colors = {
+            'is_sick': (255, 204, 204),  # Pastel red
+            'is_eating': (204, 255, 204),  # Pastel green
+            'is_sleeping': (204, 229, 255),  # Pastel blue
+            'pursuing_food': (255, 229, 204),  # Pastel orange
+            'direction': (229, 204, 255)  # Pastel purple
+        }
+
         self.data_table.insertRow(0)
         for col, (key, value) in enumerate(state.items()):
-            self.data_table.setItem(0, col, QtWidgets.QTableWidgetItem(str(value)))
+            item = QtWidgets.QTableWidgetItem(str(value))
+
+            if key in state_colors:
+                color = state_colors[key]
+                item.setBackground(QtGui.QColor(*color))
+                item.setToolTip(key)
+
+            self.data_table.setItem(0, col, item)
 
         if self.data_table.rowCount() > 100:
             self.data_table.removeRow(100)
+
+        headers = list(state.keys())
+        self.data_table.setColumnCount(len(headers))
+        self.data_table.setHorizontalHeaderLabels(headers)
 
     def init_about_tab(self):
         about_text = QtWidgets.QTextEdit()
@@ -344,7 +386,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             <li>version 1.0.37</li>
             <li>by Rufus Pearce</li>
         <p>This is a research project. Please suggest features.</p>
-        </ul>        
+        </ul>
         """)
         self.about_tab_layout.addWidget(about_text)
 
