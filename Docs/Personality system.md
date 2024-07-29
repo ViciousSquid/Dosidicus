@@ -1,4 +1,4 @@
-There are six different squid personalities that affect their needs and how they behave: 
+There are seven different squid personalities that affect their needs and how they behave: 
 
 * `Timid`: Higher chance of becoming anxious 
 * `Adventurous`: Increased curiosity and exploration 
