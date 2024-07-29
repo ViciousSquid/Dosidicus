@@ -47,7 +47,8 @@ class SplashScreen(QtWidgets.QWidget):
             self.timer.stop()
 
     def end_animation(self):
-        print("Animation complete, hiding splash screen")
+        print("A squid has hatched!")
+        print("You'll need to look after him...")
         self.hide()
         self.finished.emit()
 

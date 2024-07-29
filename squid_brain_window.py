@@ -1,8 +1,9 @@
 ###########
-###########     BRAIN TOOL
-###########     Version 1.0.37 29th July 2024
+########### BRAIN TOOL
+########### Version 1.0.39A 29th July 2024
 ###########
-###########
+########### by Rufus Pearce
+########### github.com/ViciousSquid/Dosidicus
 ###########
 
 import sys
@@ -70,9 +71,9 @@ class BrainWidget(QtWidgets.QWidget):
         return {conn: random.uniform(-1, 1) for conn in self.connections}
 
     def update_state(self, new_state):
-        # Update only the keys that exist in self.state
+        # Update only the keys that exist in self.state and are allowed to be modified
         for key in self.state.keys():
-            if key in new_state:
+            if key in new_state and key not in ['satisfaction', 'anxiety', 'curiosity']:
                 self.state[key] = new_state[key]
         self.update_weights()
         self.update()
@@ -193,9 +194,9 @@ class BrainWidget(QtWidgets.QWidget):
         if binary:
             color = (0, 255, 0) if value else (255, 0, 0)
         else:
-            color = QtGui.QColor(*color)
+            color = QtGui.QBrush(QtGui.QColor(*color))
 
-        painter.setBrush(QtGui.QBrush(color))
+        painter.setBrush(color)
         painter.drawEllipse(x - 25, y - 25, 50, 50)
 
         painter.setPen(QtGui.QColor(0, 0, 0))
@@ -219,7 +220,7 @@ class BrainWidget(QtWidgets.QWidget):
         self.capture_training_data_enabled = state
 
 class StimulateDialog(QtWidgets.QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, current_state=None):
         super().__init__(parent)
         self.setWindowTitle("Stimulate Brain")
         self.layout = QtWidgets.QVBoxLayout()
@@ -229,17 +230,28 @@ class StimulateDialog(QtWidgets.QDialog):
         self.layout.addLayout(self.form_layout)
 
         self.neuron_inputs = {}
-        neurons = ["hunger", "happiness", "cleanliness", "sleepiness", "satisfaction", "anxiety", "curiosity", "is_sick", "is_eating", "is_sleeping", "pursuing_food", "direction"]
+        neurons = [
+            "hunger", "happiness", "cleanliness", "sleepiness", "satisfaction",
+            "anxiety", "curiosity", "is_sick", "is_eating", "is_sleeping",
+            "pursuing_food", "direction"
+        ]
+
         for neuron in neurons:
-            if neuron.startswith("is_"):
+            current_value = current_state.get(neuron, 0) if current_state else 0
+
+            if neuron in ["is_sick", "is_eating", "is_sleeping", "pursuing_food"]:
                 input_widget = QtWidgets.QComboBox()
                 input_widget.addItems(["False", "True"])
+                input_widget.setCurrentText(str(current_value))
             elif neuron == "direction":
                 input_widget = QtWidgets.QComboBox()
                 input_widget.addItems(["up", "down", "left", "right"])
+                input_widget.setCurrentText(current_value if current_value else "up")
             else:
                 input_widget = QtWidgets.QSpinBox()
                 input_widget.setRange(0, 100)
+                input_widget.setValue(int(current_value))
+
             self.form_layout.addRow(neuron, input_widget)
             self.neuron_inputs[neuron] = input_widget
 
@@ -254,12 +266,17 @@ class StimulateDialog(QtWidgets.QDialog):
             if isinstance(input_widget, QtWidgets.QSpinBox):
                 stimulation_values[neuron] = input_widget.value()
             elif isinstance(input_widget, QtWidgets.QComboBox):
-                stimulation_values[neuron] = input_widget.currentText()
+                value = input_widget.currentText()
+                if value in ["True", "False"]:
+                    stimulation_values[neuron] = value == "True"
+                else:
+                    stimulation_values[neuron] = value
         return stimulation_values
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, tamagotchi_logic=None):
         super().__init__()
+        self.tamagotchi_logic = tamagotchi_logic
         self.setWindowTitle("Brain")
         self.resize(1024, 768)
 
@@ -383,8 +400,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <p>github.com/ViciousSquid/Dosidicus</p>
         <p>A Tamagotchi-style digital pet with a simple neural network</p>
         <ul>
-            <li>version 1.0.37</li>
             <li>by Rufus Pearce</li>
+            <li>Brain Tool version 1.0.39A</li>
+            <li>Dosidicus version 1.0.36</li>
         <p>This is a research project. Please suggest features.</p>
         </ul>
         """)
@@ -499,13 +517,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         sys.stdout = ConsoleOutput(self.console_output)
 
     def update_brain(self, state):
-        # Update the brain_widget state with the provided state
-        # If a key is missing, use a default value of 0
-        updated_state = {
-            neuron: state.get(neuron, 0)
-            for neuron in self.brain_widget.neuron_positions.keys()
-        }
-        self.brain_widget.update_state(updated_state)
+        self.brain_widget.update_state(state)
 
     def create_button(self, text, callback, color):
         button = QtWidgets.QPushButton(text)
@@ -515,11 +527,16 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         return button
 
     def stimulate_brain(self):
-        dialog = StimulateDialog(self)
+        current_state = self.brain_widget.state  # Get the current state
+        dialog = StimulateDialog(self, current_state)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             stimulation_values = dialog.get_stimulation_values()
             if stimulation_values is not None:
                 self.brain_widget.stimulate_brain(stimulation_values)
+                if self.tamagotchi_logic:
+                    self.tamagotchi_logic.update_from_brain(stimulation_values)
+                else:
+                    print("Warning: tamagotchi_logic is not set. Brain stimulation will not affect the squid.")
 
 class ConsoleOutput:
     def __init__(self, text_edit):

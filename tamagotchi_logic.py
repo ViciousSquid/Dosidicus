@@ -69,10 +69,29 @@ class TamagotchiLogic:
 
         self.load_game()
 
-        # Initialize new neurons
+        # Initialize mood neurons
         self.squid.satisfaction = 50
         self.squid.anxiety = 10
         self.squid.curiosity = 60
+
+    def update_from_brain(self, brain_state):   # Two-way communication between brain tool and the squid
+        if self.squid is not None:
+            for key, value in brain_state.items():
+                if hasattr(self.squid, key):
+                    setattr(self.squid, key, value)
+
+            # Handle special cases
+            if brain_state['sleepiness'] >= 100 and not self.squid.is_sleeping:
+                self.squid.go_to_sleep()
+            elif brain_state['sleepiness'] < 100 and self.squid.is_sleeping:
+                self.squid.wake_up()
+
+            if brain_state['direction'] != self.squid.squid_direction:
+                self.squid.squid_direction = brain_state['direction']
+                self.squid.move_squid()
+
+        self.update_statistics()
+        self.user_interface.scene.update()
 
     def check_for_decoration_attraction(self):
         # Check if there are any decorations in the scene
