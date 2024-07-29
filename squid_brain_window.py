@@ -1,6 +1,6 @@
 ###########
 ########### BRAIN TOOL
-########### Version 1.0.39A 29th July 2024
+########### Version 1.0.42 29th July 2024
 ###########
 ########### by Rufus Pearce
 ########### github.com/ViciousSquid/Dosidicus
@@ -12,6 +12,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import random
 import numpy as np
 import json
+from squid import Personality
 
 class BrainWidget(QtWidgets.QWidget):
     def __init__(self):
@@ -31,15 +32,16 @@ class BrainWidget(QtWidgets.QWidget):
             "direction": "up",
             "position": (0, 0)
         }
-        self.neuron_positions = {
+        self.original_neuron_positions = {
             "hunger": (150, 150),
             "happiness": (450, 150),
             "cleanliness": (750, 150),
-            "sleepiness": (150, 350),
-            "satisfaction": (450, 350),
-            "anxiety": (750, 350),
-            "curiosity": (450, 550)
+            "sleepiness": (1050, 150),
+            "satisfaction": (300, 350),
+            "anxiety": (600, 350),
+            "curiosity": (900, 350)
         }
+        self.neuron_positions = self.original_neuron_positions.copy()
         self.connections = self.initialize_connections()
         self.weights = self.initialize_weights()
         self.show_links = True
@@ -49,6 +51,9 @@ class BrainWidget(QtWidgets.QWidget):
         self.associations = np.zeros((len(self.neuron_positions), len(self.neuron_positions)))
         self.learning_rate = 0.1
         self.capture_training_data_enabled = False
+        self.dragging = False
+        self.dragged_neuron = None
+        self.drag_start_pos = None
 
         # Define pastel colors for each state
         self.state_colors = {
@@ -183,14 +188,26 @@ class BrainWidget(QtWidgets.QWidget):
             painter.drawText(midpoint[0] - text_area_width // 2, midpoint[1] - text_area_height // 2, text_area_width, text_area_height, QtCore.Qt.AlignCenter, f"{weight:.2f}")
 
     def draw_neurons(self, painter, scale):
-        for name, pos in self.neuron_positions.items():
+        circular_neurons = ["hunger", "happiness", "cleanliness", "sleepiness"]
+        square_neurons = ["satisfaction", "anxiety", "curiosity"]
+
+        for name in circular_neurons:
+            pos = self.neuron_positions[name]
             if name in self.state_colors:
                 color = self.state_colors[name]
-                self.draw_neuron(painter, pos[0], pos[1], self.state[name], name, color=color, scale=scale)
+                self.draw_circular_neuron(painter, pos[0], pos[1], self.state[name], name, color=color, scale=scale)
             else:
-                self.draw_neuron(painter, pos[0], pos[1], self.state[name], name, scale=scale)
+                self.draw_circular_neuron(painter, pos[0], pos[1], self.state[name], name, scale=scale)
 
-    def draw_neuron(self, painter, x, y, value, label, color=(0, 255, 0), binary=False, scale=1.0):
+        for name in square_neurons:
+            pos = self.neuron_positions[name]
+            if name in self.state_colors:
+                color = self.state_colors[name]
+                self.draw_square_neuron(painter, pos[0], pos[1], self.state[name], name, color=color, scale=scale)
+            else:
+                self.draw_square_neuron(painter, pos[0], pos[1], self.state[name], name, scale=scale)
+
+    def draw_circular_neuron(self, painter, x, y, value, label, color=(0, 255, 0), binary=False, scale=1.0):
         if binary:
             color = (0, 255, 0) if value else (255, 0, 0)
         else:
@@ -198,6 +215,21 @@ class BrainWidget(QtWidgets.QWidget):
 
         painter.setBrush(color)
         painter.drawEllipse(x - 25, y - 25, 50, 50)
+
+        painter.setPen(QtGui.QColor(0, 0, 0))
+        font = painter.font()
+        font.setPointSize(8)
+        painter.setFont(font)
+        painter.drawText(x - 50, y + 30, 100, 20, QtCore.Qt.AlignCenter, label)
+
+    def draw_square_neuron(self, painter, x, y, value, label, color=(0, 255, 0), binary=False, scale=1.0):
+        if binary:
+            color = (0, 255, 0) if value else (255, 0, 0)
+        else:
+            color = QtGui.QBrush(QtGui.QColor(*color))
+
+        painter.setBrush(color)
+        painter.drawRect(x - 25, y - 25, 50, 50)
 
         painter.setPen(QtGui.QColor(0, 0, 0))
         font = painter.font()
@@ -219,8 +251,40 @@ class BrainWidget(QtWidgets.QWidget):
     def toggle_capture_training_data(self, state):
         self.capture_training_data_enabled = state
 
+    def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            for name, pos in self.neuron_positions.items():
+                if self.is_point_inside_neuron(event.pos(), pos):
+                    self.dragging = True
+                    self.dragged_neuron = name
+                    self.drag_start_pos = event.pos()
+                    break
+
+    def mouseMoveEvent(self, event):
+        if self.dragging and self.dragged_neuron:
+            delta = event.pos() - self.drag_start_pos
+            self.neuron_positions[self.dragged_neuron] = (
+                self.neuron_positions[self.dragged_neuron][0] + delta.x(),
+                self.neuron_positions[self.dragged_neuron][1] + delta.y()
+            )
+            self.drag_start_pos = event.pos()
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self.dragging = False
+            self.dragged_neuron = None
+
+    def is_point_inside_neuron(self, point, neuron_pos):
+        neuron_x, neuron_y = neuron_pos
+        return (neuron_x - 25 <= point.x() <= neuron_x + 25) and (neuron_y - 25 <= point.y() <= neuron_y + 25)
+
+    def reset_positions(self):
+        self.neuron_positions = self.original_neuron_positions.copy()
+        self.update()
+
 class StimulateDialog(QtWidgets.QDialog):
-    def __init__(self, parent=None, current_state=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Stimulate Brain")
         self.layout = QtWidgets.QVBoxLayout()
@@ -230,28 +294,17 @@ class StimulateDialog(QtWidgets.QDialog):
         self.layout.addLayout(self.form_layout)
 
         self.neuron_inputs = {}
-        neurons = [
-            "hunger", "happiness", "cleanliness", "sleepiness", "satisfaction",
-            "anxiety", "curiosity", "is_sick", "is_eating", "is_sleeping",
-            "pursuing_food", "direction"
-        ]
-
+        neurons = ["hunger", "happiness", "cleanliness", "sleepiness", "is_sick", "is_eating", "is_sleeping", "pursuing_food", "direction"]
         for neuron in neurons:
-            current_value = current_state.get(neuron, 0) if current_state else 0
-
-            if neuron in ["is_sick", "is_eating", "is_sleeping", "pursuing_food"]:
+            if neuron.startswith("is_"):
                 input_widget = QtWidgets.QComboBox()
                 input_widget.addItems(["False", "True"])
-                input_widget.setCurrentText(str(current_value))
             elif neuron == "direction":
                 input_widget = QtWidgets.QComboBox()
                 input_widget.addItems(["up", "down", "left", "right"])
-                input_widget.setCurrentText(current_value if current_value else "up")
             else:
                 input_widget = QtWidgets.QSpinBox()
                 input_widget.setRange(0, 100)
-                input_widget.setValue(int(current_value))
-
             self.form_layout.addRow(neuron, input_widget)
             self.neuron_inputs[neuron] = input_widget
 
@@ -266,11 +319,7 @@ class StimulateDialog(QtWidgets.QDialog):
             if isinstance(input_widget, QtWidgets.QSpinBox):
                 stimulation_values[neuron] = input_widget.value()
             elif isinstance(input_widget, QtWidgets.QComboBox):
-                value = input_widget.currentText()
-                if value in ["True", "False"]:
-                    stimulation_values[neuron] = value == "True"
-                else:
-                    stimulation_values[neuron] = value
+                stimulation_values[neuron] = input_widget.currentText()
         return stimulation_values
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
@@ -291,6 +340,30 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.central_widget.setLayout(self.layout)
 
         self.init_tabs()
+
+    def update_personality_display(self, personality):
+        print(f"Updating personality display with: {personality}")
+        if isinstance(personality, Personality):
+            self.personality_type_label.setText(f"Squid Personality: {personality.value.capitalize()}")
+            modifier = self.get_personality_modifier(personality)
+            self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
+        elif isinstance(personality, str):
+            self.personality_type_label.setText(f"Squid Personality: {personality.capitalize()}")
+            modifier = self.get_personality_modifier(Personality(personality))
+            self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
+        else:
+            print(f"Warning: Invalid personality type: {type(personality)}")
+
+    def get_personality_modifier(self, personality):
+        modifiers = {
+            Personality.TIMID: "Higher chance of becoming anxious",
+            Personality.ADVENTUROUS: "Increased curiosity and exploration",
+            Personality.LAZY: "Slower movement and energy consumption",
+            Personality.ENERGETIC: "Faster movement and higher activity levels",
+            Personality.INTROVERT: "Prefers solitude and quiet environments",
+            Personality.GREEDY: "More focused on food and resources"
+        }
+        return modifiers.get(personality, "No specific modifier")
 
     def init_tabs(self):
         self.tabs = QtWidgets.QTabWidget()
@@ -323,10 +396,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.stimulate_button = self.create_button("Stimulate Brain", self.stimulate_brain, "#D8BFD8")
         self.save_button = self.create_button("Save Brain State", self.save_brain_state, "#90EE90")
         self.load_button = self.create_button("Load Brain State", self.load_brain_state, "#ADD8E6")
+        # self.reset_button = self.create_button("Reset Positions", self.brain_widget.reset_positions, "#FFD700")
 
         button_layout.addWidget(self.stimulate_button)
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.load_button)
+        # button_layout.addWidget(self.reset_button)
 
         main_content_layout.addLayout(button_layout)
 
@@ -340,12 +415,20 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.data_tab, "Data")
         self.init_data_table()
 
+        # Personality tab
+        self.personality_tab = QtWidgets.QWidget()
+        self.personality_tab_layout = QtWidgets.QVBoxLayout()
+        self.personality_tab.setLayout(self.personality_tab_layout)
+        self.tabs.addTab(self.personality_tab, "Personality")
+        self.init_personality_tab()
+
         # Training Data tab
         self.training_data_tab = QtWidgets.QWidget()
         self.training_data_tab_layout = QtWidgets.QVBoxLayout()
         self.training_data_tab.setLayout(self.training_data_tab_layout)
         self.tabs.addTab(self.training_data_tab, "Training")
         self.init_training_data_tab()
+    
 
         # Console tab
         self.console_tab = QtWidgets.QWidget()
@@ -361,36 +444,62 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.about_tab, "About")
         self.init_about_tab()
 
-    def update_brain_state(self, state):
+        
+
+    def init_personality_tab(self):
+        # Personality type display
+                # Separator
+        self.personality_tab_layout.addWidget(QtWidgets.QFrame(frameShape=QtWidgets.QFrame.HLine))
+        self.personality_type_label = QtWidgets.QLabel("Squid Personality: ")
+        self.personality_type_label.setStyleSheet("font-size: 22px; font-weight: bold;")
+        self.personality_tab_layout.addWidget(self.personality_type_label)
+
+        # Personality modifier display
+        self.personality_modifier_label = QtWidgets.QLabel("Personality Modifier: ")
+        self.personality_modifier_label.setStyleSheet("font-size: 20px;")
+        self.personality_tab_layout.addWidget(self.personality_modifier_label)
+
+        # Separator
+        self.personality_tab_layout.addWidget(QtWidgets.QFrame(frameShape=QtWidgets.QFrame.HLine))
+
+
+        # Personality types information
+        personality_info = QtWidgets.QTextEdit()
+        personality_info.setReadOnly(True)
+        personality_info.setHtml("""
+        <br><p>The game features six different squid personalities that affect their needs and how they behave: </p>
+        <br>
+        <ul>
+            <li><strong>Timid:</strong> Higher chance of becoming anxious</li>
+            <li><strong>Adventurous:</strong> Increased curiosity and exploration</li>
+            <li><strong>Lazy:</strong> Slower movement and energy consumption</li>
+            <li><strong>Energetic:</strong> Faster movement and higher activity levels</li>
+            <li><strong>Introvert:</strong> Prefers solitude and quiet environments</li>
+            <li><strong>Greedy:</strong> More focused on food and resources</li>
+        </ul>
+        <p>Personality is randomly generated at the start of a new game</p>
+        <br><p>More information is available in the online documentation</p>
+        """)
+        self.personality_tab_layout.addWidget(personality_info)
+
+    def get_personality_modifier(self, personality):
+        modifiers = {
+            Personality.TIMID: "Higher chance of becoming anxious",
+            Personality.ADVENTUROUS: "Increased curiosity and exploration",
+            Personality.LAZY: "Slower movement and energy consumption",
+            Personality.ENERGETIC: "Faster movement and higher activity levels",
+            Personality.INTROVERT: "Prefers solitude and quiet environments",
+            Personality.GREEDY: "More focused on food and resources"
+        }
+        return modifiers.get(personality, "No specific modifier")
+
+    def update_brain(self, state):
         self.brain_widget.update_state(state)
         self.update_data_table(state)
-
-    def update_data_table(self, state):
-        state_colors = {
-            'is_sick': (255, 204, 204),  # Pastel red
-            'is_eating': (204, 255, 204),  # Pastel green
-            'is_sleeping': (204, 229, 255),  # Pastel blue
-            'pursuing_food': (255, 229, 204),  # Pastel orange
-            'direction': (229, 204, 255)  # Pastel purple
-        }
-
-        self.data_table.insertRow(0)
-        for col, (key, value) in enumerate(state.items()):
-            item = QtWidgets.QTableWidgetItem(str(value))
-
-            if key in state_colors:
-                color = state_colors[key]
-                item.setBackground(QtGui.QColor(*color))
-                item.setToolTip(key)
-
-            self.data_table.setItem(0, col, item)
-
-        if self.data_table.rowCount() > 100:
-            self.data_table.removeRow(100)
-
-        headers = list(state.keys())
-        self.data_table.setColumnCount(len(headers))
-        self.data_table.setHorizontalHeaderLabels(headers)
+        if 'personality' in state:
+            self.update_personality_display(state['personality'])
+        else:
+            print("Warning: Personality not found in brain state")
 
     def init_about_tab(self):
         about_text = QtWidgets.QTextEdit()
@@ -401,7 +510,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <p>A Tamagotchi-style digital pet with a simple neural network</p>
         <ul>
             <li>by Rufus Pearce</li>
-            <li>Brain Tool version 1.0.39A</li>
+            <li>Brain Tool version 1.0.42</li>
             <li>Dosidicus version 1.0.36</li>
         <p>This is a research project. Please suggest features.</p>
         </ul>
@@ -509,6 +618,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.data_timer.timeout.connect(lambda: self.update_data_table(self.brain_widget.state))
         self.data_timer.start(1000)  # Update every second
 
+    def update_data_table(self, state):
+        self.data_table.setRowCount(1)
+        for col, (key, value) in enumerate(state.items()):
+            if key in self.brain_widget.neuron_positions:
+                item = QtWidgets.QTableWidgetItem(str(value))
+                self.data_table.setItem(0, col, item)
+
     def init_console(self):
         self.console_output = QtWidgets.QTextEdit()
         self.console_output.setReadOnly(True)
@@ -516,8 +632,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         sys.stdout = ConsoleOutput(self.console_output)
 
-    def update_brain(self, state):
-        self.brain_widget.update_state(state)
+
 
     def create_button(self, text, callback, color):
         button = QtWidgets.QPushButton(text)
@@ -527,8 +642,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         return button
 
     def stimulate_brain(self):
-        current_state = self.brain_widget.state  # Get the current state
-        dialog = StimulateDialog(self, current_state)
+        dialog = StimulateDialog(self)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             stimulation_values = dialog.get_stimulation_values()
             if stimulation_values is not None:

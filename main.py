@@ -1,9 +1,9 @@
 import sys
 from PyQt5 import QtWidgets, QtCore
-
+import random
 from ui import Ui
 from tamagotchi_logic import TamagotchiLogic
-from squid import Squid
+from squid import Squid, Personality
 from splash_screen import SplashScreen
 from save_manager import SaveManager
 from squid_brain_window import SquidBrainWindow
@@ -12,10 +12,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.user_interface = Ui(self, None)
-        self.squid = Squid(self.user_interface, None)
-        self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid)
         
-        self.squid.tamagotchi_logic = self.tamagotchi_logic
+        personality = random.choice(list(Personality))  # Randomly select a personality  
+        self.squid = Squid(self.user_interface, None, personality)
+        
+        self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid)
+        self.squid.tamagotchi_logic = self.tamagotchi_logic  # Set tamagotchi_logic for the squid
         self.user_interface.tamagotchi_logic = self.tamagotchi_logic
 
         self.user_interface.load_action.triggered.connect(self.tamagotchi_logic.load_game)
@@ -24,6 +26,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Create and show the SquidBrainWindow
         self.brain_window = SquidBrainWindow(self.tamagotchi_logic)
         self.brain_window.show()
+        self.brain_window.update_personality_display(self.squid.personality)
 
         # The DecorationWindow is now created within the Ui class, so we don't need to create it here
         # Connect the decoration action to toggle the decoration window

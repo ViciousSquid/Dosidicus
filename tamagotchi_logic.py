@@ -10,11 +10,15 @@ import math
 from statistics_window import StatisticsWindow
 from save_manager import SaveManager
 from rps_game import RPSGame
+from squid import Personality, Squid
 
 class TamagotchiLogic:
     def __init__(self, user_interface, squid):
         self.user_interface = user_interface
         self.squid = squid
+
+        if not isinstance(squid.personality, Personality):
+            squid.personality = random.choice(list(Personality))
 
         # Connect menu actions
         self.user_interface.feed_action.triggered.connect(self.feed_squid)
@@ -24,6 +28,8 @@ class TamagotchiLogic:
         self.user_interface.debug_action.triggered.connect(self.toggle_debug_mode)
 
         self.user_interface.window.resizeEvent = self.handle_window_resize
+
+        self.squid.personality = random.choice(list(Personality))
 
         self.lights_on = True
         self.debug_mode = False
@@ -94,16 +100,73 @@ class TamagotchiLogic:
         self.user_interface.scene.update()
 
     def check_for_decoration_attraction(self):
-        # Check if there are any decorations in the scene
-        if self.user_interface.decoration_window.decoration_items:
-            # Randomly determine if the squid is attracted to a decoration
-            if random.random() < 0.05:  # 5% chance of attraction
-                # Choose a random decoration item
-                decoration_item = random.choice(self.user_interface.decoration_window.decoration_items)
-                # Swim towards the decoration
-                self.squid.move_towards_position(decoration_item.pos())
-                # Play an animation or sound to indicate the squid's attraction
-                self.user_interface.show_message("Squid is investigating a decoration")
+        if not self.user_interface.decoration_window.decoration_items:
+            return
+
+        squid_rect = self.squid.squid_item.boundingRect().translated(self.squid.squid_item.pos())
+        active_decorations = []
+
+        for decoration_item in self.user_interface.decoration_window.decoration_items:
+            decoration_rect = decoration_item.boundingRect().translated(decoration_item.pos())
+
+            if squid_rect.intersects(decoration_rect):
+                active_decorations.append(decoration_item)
+
+        if active_decorations:
+            self.apply_decoration_effects(active_decorations)
+
+    def apply_decoration_effects(self, active_decorations):
+        total_effects = {
+            'happiness': 0,
+            'cleanliness': 0,
+            'curiosity': 0,
+            'satisfaction': 0,
+            'anxiety': 0
+        }
+
+        for decoration in active_decorations:
+            for stat, multiplier in decoration.stat_multipliers.items():
+                if stat in total_effects:
+                    total_effects[stat] += multiplier
+
+        # Apply the cumulative effects
+        self.squid.happiness = min(100, max(0, self.squid.happiness + total_effects['happiness']))
+        self.squid.cleanliness = min(100, max(0, self.squid.cleanliness + total_effects['cleanliness']))
+        self.squid.curiosity = min(100, max(0, self.squid.curiosity + total_effects['curiosity']))
+        self.squid.satisfaction = min(100, max(0, self.squid.satisfaction + total_effects['satisfaction']))
+        self.squid.anxiety = min(100, max(0, self.squid.anxiety + total_effects['anxiety']))
+
+        # Determine the decoration with the strongest effect
+        strongest_decoration = max(active_decorations, key=lambda d: max(d.stat_multipliers.values()))
+
+        # Move towards the center of the strongest decoration
+        decoration_center = strongest_decoration.boundingRect().center() + strongest_decoration.pos()
+        self.squid.move_towards_position(decoration_center)
+
+        # Show a message about the squid's interaction with the decoration
+        self.show_decoration_message(strongest_decoration)
+
+    def show_decoration_message(self, decoration):
+        category = decoration.category
+        messages = {
+            'plant': [
+                "The squid seems fascinated by the plants!",
+                "Your squid is enjoying the greenery.",
+                "The plant decoration is making your squid happy."
+            ],
+            'rock': [
+                "Your squid is exploring the rocky terrain.",
+                "The squid seems intrigued by the rock formation.",
+                "The rock decoration provides a nice hiding spot for your squid."
+            ]
+        }
+
+        if category in messages:
+            message = random.choice(messages[category])
+        else:
+            message = "Your squid is interacting with the decoration."
+
+        self.user_interface.show_message(message)
 
     def setup_speed_menu(self):
         speed_menu = self.user_interface.menu_bar.addMenu('Speed')
@@ -156,6 +219,24 @@ class TamagotchiLogic:
                         self.squid.is_sick = True
             else:
                 self.squid.is_sick = False
+
+            # Check if the squid has high anxiety for a prolonged time
+            if self.squid.anxiety > 80:
+                self.high_anxiety_time += 1
+            else:
+                self.high_anxiety_time = 0
+
+            # If the squid has high anxiety for more than 5 simulation steps
+            if self.high_anxiety_time > 5 * self.simulation_speed:
+                self.squid.health = max(0, self.squid.health - (0.5 * self.simulation_speed))
+                self.squid.status = "ill from anxiety"
+
+                if self.high_anxiety_time % (5 * self.simulation_speed) == 0:
+                    self.show_message("High anxiety is causing the squid to become ill!")
+
+                # Make the squid move slowly and erratically
+                self.squid.move_slowly()
+                self.squid.move_erratically()
 
     def move_objects(self):
         self.move_foods()
@@ -553,7 +634,15 @@ class TamagotchiLogic:
             self.squid.satisfaction = squid_data['satisfaction']
             self.squid.anxiety = squid_data['anxiety']
             self.squid.curiosity = squid_data['curiosity']
+            self.squid.personality = squid_data['personality']
             self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
+
+            # Handle missing personality data
+            if 'personality' in squid_data:
+                self.squid.personality = Personality(squid_data['personality'])
+            else:
+                self.squid.personality = random.choice(list(Personality))
+                print(f"No personality data found. Assigned random personality: {self.squid.personality.value}")
 
             tamagotchi_logic_data = save_data['tamagotchi_logic']
             self.cleanliness_threshold_time = tamagotchi_logic_data['cleanliness_threshold_time']
@@ -593,8 +682,19 @@ class TamagotchiLogic:
                 "is_sleeping": self.squid.is_sleeping,
                 "pursuing_food": self.squid.pursuing_food,
                 "direction": self.squid.squid_direction,
-                "position": (self.squid.squid_x, self.squid.squid_y)
-            }
+                "position": (self.squid.squid_x, self.squid.squid_y),
+        }
+            
+            if hasattr(self.squid, 'personality'):
+                if self.squid.personality is not None:
+                    brain_state["personality"] = self.squid.personality.value
+                    print(f"Setting personality in brain state: {self.squid.personality.value}")  # Debug print
+                else:
+                    print("Warning: Squid personality is None")  # Debug print
+            else:
+                print("Warning: Squid does not have a personality attribute")  # Debug print
+        
+        print("Final brain state:", brain_state)  # Debug print
         self.user_interface.squid_brain_window.update_brain(brain_state)
 
     def save_game(self, squid, tamagotchi_logic, is_autosave=False):
@@ -610,7 +710,8 @@ class TamagotchiLogic:
                 'squid_y': squid.squid_y,
                 'satisfaction': squid.satisfaction,
                 'anxiety': squid.anxiety,
-                'curiosity': squid.curiosity
+                'curiosity': squid.curiosity,
+                'personality': squid.personality.value
             },
             'tamagotchi_logic': {
                 'cleanliness_threshold_time': self.cleanliness_threshold_time,
@@ -620,7 +721,7 @@ class TamagotchiLogic:
             },
             'decorations': self.user_interface.get_decorations_data()
         }
-        
+
         filepath = self.save_manager.save_game(save_data, is_autosave)
         print(f"Game {'autosaved' if is_autosave else 'saved'} successfully to {filepath}")
 
@@ -650,7 +751,13 @@ class TamagotchiLogic:
         cleanliness_factor = 1 - self.squid.cleanliness / 100
         health_factor = 1 - self.squid.health / 100
 
+        if self.squid.personality == Personality.GREEDY:
+            hunger_factor *= 1.5  # Greedy squids get more anxious when hungry
+
         anxiety_change = (hunger_factor + cleanliness_factor + health_factor) / 3
+
+        if self.squid.personality == Personality.TIMID and self.squid.is_near_plant():
+            anxiety_change *= 0.5  # Timid squids are less anxious near plants
 
         self.squid.anxiety += anxiety_change * self.simulation_speed
         self.squid.anxiety = max(0, min(100, self.squid.anxiety))
@@ -661,6 +768,12 @@ class TamagotchiLogic:
             curiosity_change = 0.2 * self.simulation_speed
         else:
             curiosity_change = -0.1 * self.simulation_speed
+
+        # Adjust curiosity change based on personality
+        if self.squid.personality == Personality.TIMID:
+            curiosity_change *= 0.5  # Timid squids are less curious
+        elif self.squid.personality == Personality.ADVENTUROUS:
+            curiosity_change *= 1.5  # Adventurous squids are more curious
 
         self.squid.curiosity += curiosity_change
         self.squid.curiosity = max(0, min(100, self.squid.curiosity))

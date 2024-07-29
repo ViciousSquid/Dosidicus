@@ -2,14 +2,23 @@
 
 import os
 import random
+from enum import Enum
 import math
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-class Squid:
-    def __init__(self, ui, tamagotchi_logic):
-        self.ui = ui
-        self.tamagotchi_logic = tamagotchi_logic
+class Personality(Enum):
+    TIMID = "timid"
+    ADVENTUROUS = "adventurous"
+    LAZY = "lazy"
+    ENERGETIC = "energetic"
+    INTROVERT = "introvert"
+    GREEDY = "greedy"
 
+class Squid:
+    def __init__(self, user_interface, tamagotchi_logic, personality=None):
+        self.ui = user_interface
+        self.tamagotchi_logic = tamagotchi_logic
+        
         self.load_images()
         self.load_poop_images()
         self.initialize_attributes()
@@ -46,6 +55,10 @@ class Squid:
         self.satisfaction = 50
         self.anxiety = 50
         self.curiosity = 50
+
+        self.personality = personality if personality else random.choice(list(Personality))
+
+        print(f"Squid created with personality: {self.personality}")
 
     def set_animation_speed(self, speed):
         self.animation_speed = speed
@@ -117,7 +130,7 @@ class Squid:
         elif self.anxiety > 70:
             self.status = "anxious"
             self.move_erratically()
-        elif self.curiosity > 70 and random.random() < 0.5:
+        elif self.curiosity > 50 and random.random() < 0.5:
             self.status = "exploring"
             self.explore_environment()
         elif self.hunger > 30 or self.satisfaction < 30:
@@ -126,23 +139,52 @@ class Squid:
         elif self.sleepiness > 70:
             self.status = "tired"
             self.go_to_sleep()
-        else:
-            self.status = "roaming"
-            self.move_randomly()
+        elif self.personality == Personality.INTROVERT:
+            if self.happiness > 70:
+                self.status = "content in solitude"
+                self.move_slowly()
+            else:
+                self.status = "seeking alone time"
+                self.explore_environment()
+
+        elif self.personality == Personality.GREEDY:
+            if self.hunger > 50 and self.anxiety > 60:
+                self.status = "anxious and hungry"
+                self.search_for_food()
+            elif self.curiosity > 50:
+                self.status = "curiously seeking food"
+                self.explore_environment()
+            else:
+                self.status = "content for now"
+                self.move_randomly()
+
+        elif self.personality == Personality.TIMID:
+            if self.anxiety > 50 and not self.is_near_plant():
+                self.status = "anxiously seeking plants"
+                self.move_towards_plant()
+            elif self.curiosity < 30:
+                self.status = "timidly exploring"
+                self.explore_environment()
+            else:
+                self.status = "content amongst plants"
+                self.move_slowly()
 
     def move_erratically(self):
-        # Implement erratic movement when anxious
         directions = ["left", "right", "up", "down"]
         self.squid_direction = random.choice(directions)
         self.move_squid()
 
+    def move_slowly(self):
+        self.base_squid_speed = self.base_squid_speed // 2
+        self.base_vertical_speed = self.base_vertical_speed // 2
+        self.move_squid()
+
     def explore_environment(self):
-        # Implement exploration behavior
         if random.random() < 0.3:
             self.change_direction()
         self.move_squid()
 
-    def search_for_food(self):  # Search for food within the view cone and move towards it
+    def search_for_food(self):
         visible_food = self.get_visible_food()
         if visible_food:
             closest_food = min(visible_food, key=lambda f: self.distance_to(f[0], f[1]))
@@ -153,6 +195,8 @@ class Squid:
             self.move_randomly()
 
     def get_visible_food(self):
+        if self.tamagotchi_logic is None:
+            return []
         visible_food = []
         for food_item in self.tamagotchi_logic.food_items:
             food_x, food_y = food_item.pos().x(), food_item.pos().y()
@@ -165,7 +209,6 @@ class Squid:
         dy = y - (self.squid_y + self.squid_height // 2)
         distance = math.sqrt(dx**2 + dy**2)
 
-        # Define vision cone parameters
         cone_length = max(self.ui.window_width, self.ui.window_height)
 
         if distance > cone_length:
@@ -190,7 +233,6 @@ class Squid:
 
         current_time = QtCore.QTime.currentTime().msecsSinceStartOfDay()
 
-        # Check for visible food
         visible_food = self.get_visible_food()
 
         if visible_food:
@@ -199,18 +241,15 @@ class Squid:
             self.target_food = closest_food
             self.move_towards(closest_food[0], closest_food[1])
         elif self.pursuing_food:
-            # If was pursuing food but it's no longer visible, stop pursuing
             self.pursuing_food = False
             self.target_food = None
             self.move_randomly()
         else:
-            # If not pursuing food, change view cone direction at intervals
             if current_time - self.last_view_cone_change > self.view_cone_change_interval:
                 self.change_view_cone_direction()
                 self.last_view_cone_change = current_time
             self.move_randomly()
 
-        # Update squid position
         squid_x_new = self.squid_x
         squid_y_new = self.squid_y
 
@@ -223,7 +262,6 @@ class Squid:
         elif self.squid_direction == "down":
             squid_y_new += self.base_vertical_speed * self.animation_speed
 
-        # Check if the squid hits the screen edge
         if squid_x_new < 50:
             squid_x_new = 50
             self.change_direction()
@@ -290,7 +328,7 @@ class Squid:
                     break
 
     def start_poop_timer(self):
-        poop_delay = random.randint(11000, 30000)  # 11 to 30 seconds until poop is created (to simulate digestion)
+        poop_delay = random.randint(11000, 30000)
         print("Poop random timer started")
         self.poop_timer = QtCore.QTimer()
         self.poop_timer.setSingleShot(True)
@@ -306,25 +344,21 @@ class Squid:
             return
 
         effect_item = QtWidgets.QGraphicsEllipseItem(self.squid_x, self.squid_y, self.squid_width, self.squid_height)
-        effect_item.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 0, 100)))  # Yellow, semi-transparent
+        effect_item.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 0, 100)))
         effect_item.setPen(QtGui.QPen(QtCore.Qt.NoPen))
         self.ui.scene.addItem(effect_item)
 
-        # Create a QGraphicsOpacityEffect
         opacity_effect = QtWidgets.QGraphicsOpacityEffect()
         effect_item.setGraphicsEffect(opacity_effect)
 
-        # Create a QPropertyAnimation for the opacity effect
         self.eating_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
-        self.eating_animation.setDuration(5000)  # 5 seconds duration
+        self.eating_animation.setDuration(5000)
         self.eating_animation.setStartValue(1.0)
         self.eating_animation.setEndValue(0.0)
         self.eating_animation.setEasingCurve(QtCore.QEasingCurve.InQuad)
 
-        # Connect the finished signal to remove the item
         self.eating_animation.finished.connect(lambda: self.ui.scene.removeItem(effect_item))
 
-        # Start the animation
         self.eating_animation.start()
 
     def is_debug_mode(self):
@@ -349,8 +383,8 @@ class Squid:
         self.sleepiness = 0
         self.happiness = min(100, self.happiness + 20)
         self.status = "roaming"
-        self.squid_direction = "left"  # Set a default direction when waking up
-        self.update_squid_image()  # Update the squid's image to reflect the new state
+        self.squid_direction = "left"
+        self.update_squid_image()
         self.tamagotchi_logic.show_message("Squid woke up!")
 
     def update_squid_image(self):
@@ -365,10 +399,10 @@ class Squid:
             return self.images[f"right{self.current_frame + 1}"]
         elif self.squid_direction == "up":
             return self.images[f"up{self.current_frame + 1}"]
-        return self.images["left1"]  # Default to left-facing image if direction is unknown
+        return self.images["left1"]
 
     def move_randomly(self):
-        if random.random() < 0.20:  # 20% chance to change direction
+        if random.random() < 0.20:
             self.change_direction()
 
     def get_food_position(self):
@@ -408,7 +442,6 @@ class Squid:
             squid_center_y = self.squid_y + self.squid_height // 2
 
             if self.pursuing_food and self.target_food:
-                # Point the view cone towards the food
                 dx = self.target_food[0] - squid_center_x
                 dy = self.target_food[1] - squid_center_y
                 self.current_view_angle = math.atan2(dy, dx)
@@ -449,3 +482,8 @@ class Squid:
         if self.sick_icon_item is not None:
             self.sick_icon_item.setPos(self.squid_x + self.squid_width // 2 - self.sick_icon_item.pixmap().width() // 2 + self.sick_icon_offset.x(),
                                        self.squid_y + self.sick_icon_offset.y())
+
+    def is_near_plant(self):
+        # This method should be implemented to check if the squid is near a plant decoration
+        # For now, we'll return False as a placeholder
+        return False
