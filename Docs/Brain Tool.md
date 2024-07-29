@@ -31,3 +31,5 @@ This Tab implements basic tools for **Capturing** (recording) `training data` fo
 Select the 'capture learning data' checkbox to start capturing. The captured data will be displayed in real-time in the columns and a copy will be saved to `training-data` folder as a single file - the folder will be created if it does not exist.
 
 Once sufficient data has bee captured, the network can be trained using the 'Train Hebbian' button - This will automatically open the console tab and show the progress.
+
+For some more information on Hebbian learning, [see this article](https://medium.datadriveninvestor.com/what-is-hebbian-learning-3a027e8e4bbb)
