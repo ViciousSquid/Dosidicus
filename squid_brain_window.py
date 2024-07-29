@@ -511,7 +511,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <ul>
             <li>by Rufus Pearce</li>
             <li>Brain Tool version 1.0.42</li>
-            <li>Dosidicus version 1.0.36</li>
+            <li>Dosidicus version 1.0.370</li>
         <p>This is a research project. Please suggest features.</p>
         </ul>
         """)
