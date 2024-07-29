@@ -44,7 +44,7 @@ The player needs to care for the squid in several ways:
 1. Feeding: Player must spawn food items for the squid to eat, managing its hunger.
 2. Cleaning: Player must clean the environment to maintain cleanliness and prevent sickness.
 3. Medicine: If the squid becomes sick, the player must administer medicine.
-4. Entertainment: While not directly implemented, maintaining high happiness likely involves player interaction.
+4. Entertainment: Player can play Rock Paper Scissors with the squid and can place decorations which affect mood/behaviours
 
 ## 6. Environmental Factors
 
