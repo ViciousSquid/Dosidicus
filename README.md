@@ -2,7 +2,7 @@
 ### A Tamagotchi-style digital pet with a simple neural network
 * Includes detailed tools for visualising and understanding how neural networks and Hebbian learning work
 
-* **requires** PyQt5 , pyqtgraph and numpy
+* requirements: `PyQt5` , `pyqtgraph` and `numpy`
 
 ![image](https://github.com/user-attachments/assets/78ff4252-6d7a-4bbd-bf91-261e25ac5ef4)
 
