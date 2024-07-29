@@ -5,7 +5,10 @@
 
 * requirements: `PyQt5` and `numpy`
 
-![image](https://github.com/user-attachments/assets/9d607996-2b62-4654-8c27-c3585c7c787c)
+![image](https://github.com/user-attachments/assets/78ff4252-6d7a-4bbd-bf91-261e25ac5ef4)
+
+
+
 
 
 ### Autonomous Behavior:
@@ -23,13 +26,9 @@
 
 Be aware the squid hates taking medicine and will become depressed and need sleep if made to do so.
 
-### Personality System:
+NEW IN VERSION 1.3: Decorate the squid's environment with plants and rocks that affect the squid's behaviour. Additional decorations coming soon.
 
-6 different personalities with different needs and behaviours
 
-### Decorations!
-
-Place rocks and plants within the squid's environment that may affect mood or behaviour
 
 ### Debug Tools:
 

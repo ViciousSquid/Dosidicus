@@ -361,18 +361,96 @@ class Squid:
         if not self.is_sick:
             for food_item in self.tamagotchi_logic.food_items:
                 if self.squid_item.collidesWithItem(food_item):
-                    self.status = "Ate food"
-                    self.hunger = max(0, self.hunger - 20)
-                    self.happiness = min(100, self.happiness + 10)
-                    self.satisfaction = min(100, self.satisfaction + 15)
-                    self.anxiety = max(0, self.anxiety - 10)
-                    self.tamagotchi_logic.remove_food(food_item)
-                    print("The squid ate the food")
-                    self.show_eating_effect()
-                    self.start_poop_timer()
-                    self.pursuing_food = False
-                    self.target_food = None
+                    if self.personality == Personality.STUBBORN:
+                        if not getattr(food_item, 'is_sushi', False):
+                            if self.hunger > 80:  # Extremely hungry
+                                self.eat_begrudgingly(food_item)
+                            else:
+                                self.investigate_food(food_item)
+                            return
+                    elif self.personality == Personality.GREEDY:
+                        self.eat_greedily(food_item)
+                        return
+
+                    self.consume_food(food_item)
                     break
+
+    def eat_greedily(self, food_item):
+        self.status = "Eating greedily"
+        food_type = "sushi" if getattr(food_item, 'is_sushi', False) else "cheese"
+        
+        # Reduce hunger more than usual
+        self.hunger = max(0, self.hunger - 25)
+        
+        # Increase happiness more
+        self.happiness = min(100, self.happiness + 15)
+        
+        # Increase satisfaction significantly
+        self.satisfaction = min(100, self.satisfaction + 20)
+        
+        # Slightly increase anxiety (from overeating)
+        self.anxiety = min(100, self.anxiety + 5)
+        
+        self.tamagotchi_logic.remove_food(food_item)
+        print(f"The greedy squid enthusiastically ate the {food_type}")
+        self.show_eating_effect()
+        self.start_poop_timer()
+        self.pursuing_food = False
+        self.target_food = None
+        
+        # Occasionally show a message
+        if random.random() < 0.2:  # 20% chance to show a message
+            self.tamagotchi_logic.show_message("Nom nom! Greedy squid devours the food!")
+
+        # Check if there's more food nearby
+        if self.check_for_more_food():
+            if random.random() < 0.1:  # 10% chance to show this message
+                self.tamagotchi_logic.show_message("Greedy squid looks around for more food...")
+        else:
+            if random.random() < 0.1:  # 10% chance to show this message
+                self.tamagotchi_logic.show_message("Greedy squid is satisfied... for now.")
+
+    def check_for_more_food(self):
+        for food_item in self.tamagotchi_logic.food_items:
+            if self.is_food_nearby(food_item):
+                return True
+        return False
+    
+    def investigate_food(self, food_item):
+        self.status = "Investigating food"
+        self.tamagotchi_logic.show_message("Stubborn squid investigates the food...")
+        
+        # Move towards the food
+        food_pos = food_item.pos()
+        self.move_towards_position(food_pos)
+        
+        # Wait for a moment (might need to implement a delay here)
+        
+        self.tamagotchi_logic.show_message("Stubborn squid ignored the food")
+        self.status = "I don't like that food"
+
+    def consume_food(self, food_item):
+        self.status = "Ate food"
+        self.hunger = max(0, self.hunger - 20)
+        self.happiness = min(100, self.happiness + 10)
+        self.satisfaction = min(100, self.satisfaction + 15)
+        self.anxiety = max(0, self.anxiety - 10)
+        self.tamagotchi_logic.remove_food(food_item)
+        print("The squid ate the food")
+        self.show_eating_effect()
+        self.start_poop_timer()
+        self.pursuing_food = False
+        self.target_food = None
+        
+        # Occasionally show a message based on personality
+        if random.random() < 0.2:  # 20% chance to show a message
+            if self.personality == Personality.STUBBORN and getattr(food_item, 'is_sushi', False):
+                self.tamagotchi_logic.show_message("Nom nom! Stubborn squid enjoys the sushi!")
+            elif self.personality == Personality.GREEDY:
+                food_type = "sushi" if getattr(food_item, 'is_sushi', False) else "cheese"
+                self.tamagotchi_logic.show_message(f"Nom nom! Greedy squid gobbles up the {food_type}!")
+            else:
+                self.tamagotchi_logic.show_message("Nom nom! Squid enjoys the meal!")
 
     def start_poop_timer(self):
         poop_delay = random.randint(11000, 30000)

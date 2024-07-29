@@ -730,7 +730,7 @@ class TamagotchiLogic:
                 food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
                 food_item.is_sushi = True
             else:
-                food_pixmap = QtGui.QPixmap(os.path.join("images", "food.png"))
+                food_pixmap = QtGui.QPixmap(os.path.join("images", "cheese.png"))
                 food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
                 food_item.is_sushi = False
 
