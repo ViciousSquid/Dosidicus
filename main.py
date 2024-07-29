@@ -9,26 +9,27 @@ from save_manager import SaveManager
 from squid_brain_window import SquidBrainWindow
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.user_interface = Ui(self, None)
-        
-        personality = random.choice(list(Personality))  # Randomly select a personality  
+        personality = random.choice(list(Personality))
         self.squid = Squid(self.user_interface, None, personality)
         
-        self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid)
-        self.squid.tamagotchi_logic = self.tamagotchi_logic  # Set tamagotchi_logic for the squid
+        # Create SquidBrainWindow before TamagotchiLogic
+        self.brain_window = SquidBrainWindow()
+        self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
+        
+        # Set tamagotchi_logic for the squid and user_interface after it's created
+        self.squid.tamagotchi_logic = self.tamagotchi_logic
         self.user_interface.tamagotchi_logic = self.tamagotchi_logic
 
         self.user_interface.load_action.triggered.connect(self.tamagotchi_logic.load_game)
         self.user_interface.save_action.triggered.connect(lambda: self.tamagotchi_logic.save_game(self.squid, self.tamagotchi_logic))
 
-        # Create and show the SquidBrainWindow
-        self.brain_window = SquidBrainWindow(self.tamagotchi_logic)
+        # Show the SquidBrainWindow
         self.brain_window.show()
         self.brain_window.update_personality_display(self.squid.personality)
 
-        # The DecorationWindow is now created within the Ui class, so we don't need to create it here
         # Connect the decoration action to toggle the decoration window
         self.user_interface.decorations_action.triggered.connect(self.user_interface.toggle_decoration_window)
 
@@ -64,7 +65,8 @@ class MainWindow(QtWidgets.QMainWindow):
             "is_sleeping": self.squid.is_sleeping,
             "pursuing_food": self.squid.pursuing_food,
             "direction": self.squid.squid_direction,
-            "position": (self.squid.squid_x, self.squid.squid_y)
+            "position": (self.squid.squid_x, self.squid.squid_y),
+            "personality": self.squid.personality.value
         }
         self.brain_window.update_brain(current_state)
 
@@ -79,10 +81,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tamagotchi_logic.start_autosave()
 
 def main():
-    app = QtWidgets.QApplication(sys.argv)
+    application = QtWidgets.QApplication(sys.argv)
     main_window = MainWindow()
     main_window.show()
-    sys.exit(app.exec_())
+    sys.exit(application.exec_())
 
 if __name__ == '__main__':
     main()

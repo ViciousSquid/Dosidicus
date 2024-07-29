@@ -13,12 +13,10 @@ from rps_game import RPSGame
 from squid import Personality, Squid
 
 class TamagotchiLogic:
-    def __init__(self, user_interface, squid):
+    def __init__(self, user_interface, squid, squid_brain_window):
         self.user_interface = user_interface
         self.squid = squid
-
-        if not isinstance(squid.personality, Personality):
-            squid.personality = random.choice(list(Personality))
+        self.squid_brain_window = squid_brain_window
 
         # Connect menu actions
         self.user_interface.feed_action.triggered.connect(self.feed_squid)
@@ -495,17 +493,45 @@ class TamagotchiLogic:
 
     def move_foods(self):
         for food_item in self.food_items[:]:
-            food_x = food_item.pos().x()
-            food_y = food_item.pos().y() + (self.base_food_speed * self.simulation_speed)
+            if getattr(food_item, 'is_sushi', False):
+                self.move_sushi(food_item)
+            else:
+                self.move_cheese(food_item)
 
-            if food_y > self.user_interface.window_height - 120 - self.food_height:
-                food_y = self.user_interface.window_height - 120 - self.food_height
+    def get_food_item_at(self, x, y):
+        for food_item in self.food_items:
+            if food_item.pos().x() == x and food_item.pos().y() == y:
+                return food_item
+        return None
 
-            food_item.setPos(food_x, food_y)
+    def move_cheese(self, cheese_item):
+        cheese_x = cheese_item.pos().x()
+        cheese_y = cheese_item.pos().y() + (self.base_food_speed * self.simulation_speed)
 
-            if self.squid is not None and food_item.collidesWithItem(self.squid.squid_item):
-                self.squid.eat()
-                self.remove_food(food_item)
+        if cheese_y > self.user_interface.window_height - 120 - self.food_height:
+            cheese_y = self.user_interface.window_height - 120 - self.food_height
+
+        cheese_item.setPos(cheese_x, cheese_y)
+
+        if self.squid is not None and cheese_item.collidesWithItem(self.squid.squid_item):
+            self.squid.eat()
+            self.remove_food(cheese_item)
+
+    def move_sushi(self, sushi_item):
+        sushi_x = sushi_item.pos().x()
+        sushi_y = sushi_item.pos().y() + (self.base_food_speed * self.simulation_speed)
+
+        if sushi_y > self.user_interface.window_height - 120 - self.food_height:
+            sushi_y = self.user_interface.window_height - 120 - self.food_height
+
+        sushi_item.setPos(sushi_x, sushi_y)
+
+        if self.squid is not None and sushi_item.collidesWithItem(self.squid.squid_item):
+            self.squid.eat()
+            self.remove_food(sushi_item)
+
+    def is_sushi(self, food_item):
+        return getattr(food_item, 'is_sushi', False)     
 
     def remove_food(self, food_item):
         if food_item in self.food_items:
@@ -609,8 +635,11 @@ class TamagotchiLogic:
         if self.squid:
             self.squid.update_preferred_vertical_range()
 
-    def feed_squid(self):
-        self.spawn_food()
+    def feed_squid(self):           ## 50% chance to spawn cheese , 50% chance to spawn sushi
+        if random.random() < 0.5:
+            self.spawn_food(is_sushi=True)
+        else:
+            self.spawn_food(is_sushi=False)
 
     def clean_environment(self):
         current_time = time.time()
@@ -694,12 +723,16 @@ class TamagotchiLogic:
                 opacity = 0
             self.user_interface.cleanliness_overlay.setBrush(QtGui.QBrush(QtGui.QColor(139, 69, 19, opacity)))
 
-    def spawn_food(self):
+    def spawn_food(self, is_sushi=False):
         if len(self.food_items) < self.max_food:
-            food_pixmap = QtGui.QPixmap(os.path.join("images", "food.png"))
-            food_pixmap = food_pixmap.scaled(self.food_width, self.food_height)
-
-            food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
+            if is_sushi:
+                food_pixmap = QtGui.QPixmap(os.path.join("images", "sushi.png"))
+                food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
+                food_item.is_sushi = True
+            else:
+                food_pixmap = QtGui.QPixmap(os.path.join("images", "food.png"))
+                food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
+                food_item.is_sushi = False
 
             food_x = random.randint(50, self.user_interface.window_width - 50 - self.food_width)
             food_y = 50  # Start at the top of the screen
@@ -707,6 +740,22 @@ class TamagotchiLogic:
 
             self.user_interface.scene.addItem(food_item)
             self.food_items.append(food_item)
+    
+    def spawn_sushi(self):
+        if len(self.food_items) < self.max_food:
+            sushi_pixmap = QtGui.QPixmap(os.path.join("images", "sushi.png"))
+            sushi_pixmap = sushi_pixmap.scaled(self.food_width, self.food_height)
+
+            sushi_item = QtWidgets.QGraphicsPixmapItem(sushi_pixmap)
+
+            sushi_x = random.randint(50, self.user_interface.window_width - 50 - self.food_width)
+            sushi_y = 50  # Start at the top of the screen
+            sushi_item.setPos(sushi_x, sushi_y)
+
+            self.user_interface.scene.addItem(sushi_item)
+            sushi_item = QtWidgets.QGraphicsPixmapItem(sushi_pixmap)
+            sushi_item.is_sushi = True
+            self.food_items.append(sushi_item)
 
     def spawn_poop(self, x, y):
         if len(self.poop_items) < self.max_poop and self.squid is not None:
@@ -800,23 +849,7 @@ class TamagotchiLogic:
             self.squid.personality = squid_data['personality']
             self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
 
-            # Handle missing personality data
-            if 'personality' in squid_data:
-                self.squid.personality = Personality(squid_data['personality'])
-            else:
-                self.squid.personality = random.choice(list(Personality))
-                print(f"No personality data found. Assigned random personality: {self.squid.personality.value}")
-
-            tamagotchi_logic_data = save_data['tamagotchi_logic']
-            self.cleanliness_threshold_time = tamagotchi_logic_data['cleanliness_threshold_time']
-            self.hunger_threshold_time = tamagotchi_logic_data['hunger_threshold_time']
-            self.last_clean_time = tamagotchi_logic_data['last_clean_time']
-            self.points = tamagotchi_logic_data['points']
-
-            decorations_data = save_data.get('decorations', [])
-            self.user_interface.load_decorations_data(decorations_data)
-
-            print("Game loaded successfully")
+            print(f"Loaded personality: {self.squid.personality.value}")
         else:
             print("No save data found")
 
@@ -846,19 +879,11 @@ class TamagotchiLogic:
                 "pursuing_food": self.squid.pursuing_food,
                 "direction": self.squid.squid_direction,
                 "position": (self.squid.squid_x, self.squid.squid_y),
-        }
-            
-            if hasattr(self.squid, 'personality'):
-                if self.squid.personality is not None:
-                    brain_state["personality"] = self.squid.personality.value
-                    print(f"Setting personality in brain state: {self.squid.personality.value}")  # Debug print
-                else:
-                    print("Warning: Squid personality is None")  # Debug print
-            else:
-                print("Warning: Squid does not have a personality attribute")  # Debug print
-        
-        print("Final brain state:", brain_state)  # Debug print
-        self.user_interface.squid_brain_window.update_brain(brain_state)
+                "personality": self.squid.personality.value
+            }
+
+            print("Final brain state:", brain_state)
+            self.user_interface.squid_brain_window.update_brain(brain_state)
 
     def save_game(self, squid, tamagotchi_logic, is_autosave=False):
         save_data = {

@@ -342,7 +342,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.init_tabs()
 
     def update_personality_display(self, personality):
-        print(f"Updating personality display with: {personality}")
         if isinstance(personality, Personality):
             self.personality_type_label.setText(f"Squid Personality: {personality.value.capitalize()}")
             modifier = self.get_personality_modifier(personality)
@@ -361,7 +360,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             Personality.LAZY: "Slower movement and energy consumption",
             Personality.ENERGETIC: "Faster movement and higher activity levels",
             Personality.INTROVERT: "Prefers solitude and quiet environments",
-            Personality.GREEDY: "More focused on food and resources"
+            Personality.GREEDY: "More focused on food and resources",
+            Personality.STUBBORN: "Only eats favorite food (sushi), may refuse to sleep"
         }
         return modifiers.get(personality, "No specific modifier")
 
@@ -467,7 +467,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         personality_info = QtWidgets.QTextEdit()
         personality_info.setReadOnly(True)
         personality_info.setHtml("""
-        <br><p>The game features six different squid personalities that affect their needs and how they behave: </p>
+        <br><p>The game features seven different squid personalities that affect their needs and how they behave: </p>
         <br>
         <ul>
             <li><strong>Timid:</strong> Higher chance of becoming anxious</li>
@@ -476,6 +476,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             <li><strong>Energetic:</strong> Faster movement and higher activity levels</li>
             <li><strong>Introvert:</strong> Prefers solitude and quiet environments</li>
             <li><strong>Greedy:</strong> More focused on food and resources</li>
+            <li><strong>Stubborn:</strong> Fussy and difficult</li>
         </ul>
         <p>Personality is randomly generated at the start of a new game</p>
         <br><p>More information is available in the online documentation</p>

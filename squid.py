@@ -1,4 +1,4 @@
-# A squid with a simple neural network
+# A squid with a simple neural network and a personality with natural behaviours
 
 import os
 import random
@@ -14,12 +14,14 @@ class Personality(Enum):
     ENERGETIC = "energetic"
     INTROVERT = "introvert"
     GREEDY = "greedy"
+    STUBBORN = "stubborn"
 
 class Squid:
     def __init__(self, user_interface, tamagotchi_logic, personality=None):
         self.ui = user_interface
         self.tamagotchi_logic = tamagotchi_logic
         
+
         self.load_images()
         self.load_poop_images()
         self.initialize_attributes()
@@ -59,9 +61,12 @@ class Squid:
         self.anxiety = 10
         self.curiosity = 50
 
-        self.personality = personality if personality else random.choice(list(Personality))
+        if personality is None:
+            self.personality = random.choice(list(Personality))
+        else:
+            self.personality = personality
+        #self.tamagotchi_logic.squid_brain_window.print_to_console(f"Squid created with personality: {self.personality}")
 
-        print(f"Squid created with personality: {self.personality}")
 
     def set_animation_speed(self, speed):
         self.animation_speed = speed
@@ -172,6 +177,42 @@ class Squid:
                 self.status = "content amongst plants"
                 self.move_slowly()
 
+        elif self.personality == Personality.STUBBORN:
+            if self.hunger > 40 and self.target_food is None:
+                self.status = "searching for favorite food"
+                self.search_for_favorite_food()
+            elif self.sleepiness > 80 and random.random() < 0.5:
+                self.status = "refusing to sleep"
+                self.move_randomly()
+            else:
+                self.status = "being stubborn"
+                self.move_slowly()
+
+    def search_for_favorite_food(self):
+        visible_food = self.get_visible_food()
+        if visible_food:
+            for food_x, food_y in visible_food:
+                if self.is_favorite_food(self.tamagotchi_logic.get_food_item_at(food_x, food_y)):
+                    self.move_towards(food_x, food_y)
+                    return
+            # If no favorite food is found, display a message and move randomly
+            self.tamagotchi_logic.show_message("Stubborn squid does not like that type of food!")
+            self.move_randomly()
+        else:
+            self.move_randomly()
+    
+    def get_favorite_food(self):
+        # Implement logic to find the squid's favorite food
+        for food_item in self.tamagotchi_logic.food_items:
+            if self.is_favorite_food(food_item):
+             return food_item.pos().x(), food_item.pos().y()
+        return None
+    
+    def is_favorite_food(self, food_item):
+        return food_item is not None and getattr(food_item, 'is_sushi', False)
+
+
+
     def move_erratically(self):
         directions = ["left", "right", "up", "down"]
         self.squid_direction = random.choice(directions)
@@ -204,7 +245,10 @@ class Squid:
         for food_item in self.tamagotchi_logic.food_items:
             food_x, food_y = food_item.pos().x(), food_item.pos().y()
             if self.is_in_vision_cone(food_x, food_y):
-                visible_food.append((food_x, food_y))
+                if getattr(food_item, 'is_sushi', False):
+                    visible_food.insert(0, (food_x, food_y))  # Prioritize sushi
+                else:
+                    visible_food.append((food_x, food_y))  # Add cheese to the end of the list
         return visible_food
 
     def is_in_vision_cone(self, x, y):
