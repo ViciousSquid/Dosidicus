@@ -95,7 +95,7 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
 
 class DecorationWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent, QtCore.Qt.Window)
         self.setWindowTitle("Decorations")
         self.setFixedWidth(550)  # Increased width
 
@@ -161,7 +161,9 @@ class Ui:
         self.squid_brain_window = SquidBrainWindow()
 
         # Create decoration window
-        self.decoration_window = DecorationWindow()
+        self.decoration_window = DecorationWindow(self.window)
+        self.decoration_window.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.Tool)
+        self.decoration_window.setAttribute(QtCore.Qt.WA_QuitOnClose, False)
 
         # Initialize statistics window
         self.statistics_window = None
@@ -215,11 +217,12 @@ class Ui:
         self.points_value_label.setZValue(2)  # Increase Z-value to ensure it's on top
         self.scene.addItem(self.points_value_label)
 
-    def toggle_decoration_window(self):
-        if self.decoration_window.isVisible():
-            self.decoration_window.hide()
-        else:
+    def toggle_decoration_window(self, checked):
+        if checked:
             self.decoration_window.show()
+            self.decoration_window.activateWindow()
+        else:
+            self.decoration_window.hide()
 
     def handle_window_resize(self, event):
         self.window_width = event.size().width()
@@ -321,6 +324,7 @@ class Ui:
         view_menu.addAction(self.stats_window_action)
 
         self.decorations_action = QtWidgets.QAction('Decorations', self.window)
+        self.decorations_action.setCheckable(True)
         self.decorations_action.triggered.connect(self.toggle_decoration_window)
         view_menu.addAction(self.decorations_action)
 
@@ -417,8 +421,10 @@ class Ui:
             item.setScale(scale)
             self.scene.addItem(item)
 
-    def start_rps_game(self):
-        if hasattr(self, 'tamagotchi_logic'):
-            self.tamagotchi_logic.start_rps_game()
-        else:
-            print("TamagotchiLogic not initialized")
+    def closeEvent(self, event):
+        # Instead of closing, just hide the window
+        event.ignore()
+        self.hide()
+        # Uncheck the menu item
+        if hasattr(self.parent(), 'decorations_action'):
+            self.parent().decorations_action.setChecked(False)
