@@ -24,10 +24,15 @@
 * Needs change over time and affect the pet's health and behavior.
 * The squid can become sick if his needs are neglected.
 
+### Personality System:
+
+* Seven possible different personality types which influence behaviour - [see here](https://github.com/ViciousSquid/Dosidicus/blob/main/Docs/Personalities.md)
+
 
 Be aware the squid hates taking medicine and will become depressed and need sleep if made to do so.
 
-NEW IN VERSION 1.3: Decorate the squid's environment with plants and rocks that affect the squid's behaviour. Additional decorations coming soon.
+
+Please Read the [Documentation](https://github.com/ViciousSquid/Dosidicus/tree/main/Docs)
 
 
 
