@@ -1,3 +1,5 @@
+Personality affects squid needs and behaviour. A random personality is assigned every time a new squid is born, and caould be thought of as a sort of "difficulty level" with 'Lazy' being the easiest and 'Stubborn' being hardest.
+
 There are seven different squid personalities that affect their needs and how they behave: 
 
 * `Timid`: Higher chance of becoming anxious 
