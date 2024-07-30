@@ -3,8 +3,8 @@
 ### 50% Tamagotchi, 50% research project
 * Includes detailed tools for visualising and understanding how neural networks and Hebbian learning work
 
-* requirements: `PyQt5` and `numpy`
-or visit the [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page for compiled binary for Windows x64
+* requires `python 3.10`+ with `PyQt5` and `numpy`
+* a compiled binary for Windows is available on the [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
 
 ![image](https://github.com/user-attachments/assets/78ff4252-6d7a-4bbd-bf91-261e25ac5ef4)
 
