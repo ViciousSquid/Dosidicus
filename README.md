@@ -4,6 +4,7 @@
 * Includes detailed tools for visualising and understanding how neural networks and Hebbian learning work
 
 * requirements: `PyQt5` and `numpy`
+or visit the [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page for compiled binary for Windows x64
 
 ![image](https://github.com/user-attachments/assets/78ff4252-6d7a-4bbd-bf91-261e25ac5ef4)
 
