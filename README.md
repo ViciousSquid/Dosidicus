@@ -3,7 +3,8 @@
 ### 50% Tamagotchi, 50% research project
 * Includes detailed tools for visualising and understanding how neural networks and Hebbian learning work
 
-* requirements: `PyQt5` and `numpy`
+* requires `python 3.10`+ with `PyQt5` and `numpy`
+* a compiled binary for Windows is available on the [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
 
 ![image](https://github.com/user-attachments/assets/78ff4252-6d7a-4bbd-bf91-261e25ac5ef4)
 
@@ -23,12 +24,15 @@
 * Needs change over time and affect the pet's health and behavior.
 * The squid can become sick if his needs are neglected.
 
-
 Be aware the squid hates taking medicine and will become depressed and need sleep if made to do so.
 
-NEW IN VERSION 1.3: Decorate the squid's environment with plants and rocks that affect the squid's behaviour. Additional decorations coming soon.
+### Personality system
 
+* Seven different [personality types](https://github.com/ViciousSquid/Dosidicus/blob/main/Docs/Personalities.md) which influence behaviour
 
+### Decorate and customise!
+
+* Choose decorations to be placed into the environment which the squid will interact with!
 
 ### Debug Tools:
 
