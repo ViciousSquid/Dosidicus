@@ -3,6 +3,7 @@ import os
 
 class SplashScreen(QtWidgets.QWidget):
     finished = QtCore.pyqtSignal()
+    second_frame = QtCore.pyqtSignal()  # New signal for second frame
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -40,6 +41,8 @@ class SplashScreen(QtWidgets.QWidget):
         self.frame_index += 1
         if self.frame_index < len(self.frames):
             self.label.setPixmap(self.frames[self.frame_index])
+            if self.frame_index == 1:  # Second frame (index 1)
+                self.second_frame.emit()  # Emit signal for second frame
         elif self.frame_index == len(self.frames):
             # Last frame shown, schedule hiding
             QtCore.QTimer.singleShot(2000, self.end_animation)

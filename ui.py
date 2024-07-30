@@ -38,6 +38,10 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         self.original_pixmap = pixmap
         self.filename = filename
         self.stat_multipliers, self.category = self.get_decoration_info()
+        
+        # Ensure stat_multipliers is never empty
+        if not self.stat_multipliers:
+            self.stat_multipliers = {'happiness': 1}
 
     def boundingRect(self):
         return super().boundingRect().adjusted(0, 0, 20, 20)
@@ -311,16 +315,24 @@ class Ui:
     def dropEvent(self, event):
         if event.mimeData().hasUrls():
             url = event.mimeData().urls()[0]
-            pixmap = QtGui.QPixmap(url.toLocalFile())
+            file_path = url.toLocalFile()
+            pixmap = QtGui.QPixmap(file_path)
             if not pixmap.isNull():
-                # Generate a random scale factor between 0.5 and 2
-                scale_factor = random.uniform(0.5, 2)
-                item = ResizablePixmapItem(pixmap, url.toLocalFile())
+                filename = os.path.basename(file_path)
+                item = ResizablePixmapItem(pixmap, file_path)
+                
+                if filename.startswith('st_'):
+                    # Keep original size for static decorations
+                    scale_factor = 1.0
+                else:
+                    # Generate a random scale factor between 0.5 and 2 for non-static decorations
+                    scale_factor = random.uniform(0.5, 2)
+                
                 item.setScale(scale_factor)
                 pos = self.view.mapToScene(event.pos())
                 item.setPos(pos)
                 self.scene.addItem(item)
-                self.decoration_window.add_decoration_item(item)  # Add the item to the DecorationWindow
+                self.decoration_window.add_decoration_item(item)
                 event.accept()
             else:
                 event.ignore()

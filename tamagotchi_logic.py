@@ -11,12 +11,13 @@ from statistics_window import StatisticsWindow
 from save_manager import SaveManager
 from rps_game import RPSGame
 from squid import Personality, Squid
+from ui import ResizablePixmapItem
 
 class TamagotchiLogic:
-    def __init__(self, user_interface, squid, squid_brain_window):
+    def __init__(self, user_interface, squid, brain_window):
         self.user_interface = user_interface
         self.squid = squid
-        self.squid_brain_window = squid_brain_window
+        self.brain_window = brain_window
 
         # Connect menu actions
         self.user_interface.feed_action.triggered.connect(self.feed_squid)
@@ -114,53 +115,74 @@ class TamagotchiLogic:
         self.user_interface.scene.update()
 
     def check_for_decoration_attraction(self):
-        if not self.user_interface.decoration_window.decoration_items:
-            return
-
-        squid_rect = self.squid.squid_item.boundingRect().translated(self.squid.squid_item.pos())
-        active_decorations = []
-
-        for decoration_item in self.user_interface.decoration_window.decoration_items:
-            decoration_rect = decoration_item.boundingRect().translated(decoration_item.pos())
-
-            if squid_rect.intersects(decoration_rect):
-                active_decorations.append(decoration_item)
-
+        squid_x = self.squid.squid_x
+        squid_y = self.squid.squid_y
+        
+        active_decorations = self.get_nearby_decorations(squid_x, squid_y)
+        
         if active_decorations:
             self.apply_decoration_effects(active_decorations)
-            if self.mental_states_enabled:
-                self.check_decoration_startle(active_decorations)
+            
+            # Move decorations
+            for decoration in active_decorations:
+                decoration_pos = decoration.pos()
+                if decoration_pos.x() < squid_x:
+                    self.move_decoration(decoration, 5)  # Move right
+                else:
+                    self.move_decoration(decoration, -5)  # Move left
+
+    def get_nearby_decorations(self, x, y, radius=100):
+        nearby_decorations = []
+        for item in self.user_interface.scene.items():
+            if isinstance(item, ResizablePixmapItem):
+                item_center = item.sceneBoundingRect().center()
+                distance = ((item_center.x() - x) ** 2 + (item_center.y() - y) ** 2) ** 0.5
+                if distance <= radius:
+                    nearby_decorations.append(item)
+        return nearby_decorations
+    
+    def check_collision_with_cheese(self, cheese_item):
+        if self.squid.personality == Personality.STUBBORN:
+            return False  # Stubborn squids never collide with cheese
+        
+        squid_rect = self.squid.boundingRect().translated(self.squid.squid_x, self.squid.squid_y)
+        cheese_rect = cheese_item.boundingRect().translated(cheese_item.pos())
+        
+        return squid_rect.intersects(cheese_rect)
+    
+    def move_decoration(self, decoration, dx):
+        current_pos = decoration.pos()
+        new_x = current_pos.x() + dx
+        
+        # Ensure the decoration stays within the scene boundaries
+        scene_rect = self.user_interface.scene.sceneRect()
+        new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
+        
+        decoration.setPos(new_x, current_pos.y())
 
     def apply_decoration_effects(self, active_decorations):
-        total_effects = {
-            'happiness': 0,
-            'cleanliness': 0,
-            'curiosity': 0,
-            'satisfaction': 0,
-            'anxiety': 0
-        }
+        if not active_decorations:
+            return
 
-        for decoration in active_decorations:
-            for stat, multiplier in decoration.stat_multipliers.items():
-                if stat in total_effects:
-                    total_effects[stat] += multiplier
+        # Filter out decorations with empty stat_multipliers
+        valid_decorations = [d for d in active_decorations if d.stat_multipliers]
 
-        # Apply the cumulative effects
-        self.squid.happiness = min(100, max(0, self.squid.happiness + total_effects['happiness']))
-        self.squid.cleanliness = min(100, max(0, self.squid.cleanliness + total_effects['cleanliness']))
-        self.squid.curiosity = min(100, max(0, self.squid.curiosity + total_effects['curiosity']))
-        self.squid.satisfaction = min(100, max(0, self.squid.satisfaction + total_effects['satisfaction']))
-        self.squid.anxiety = min(100, max(0, self.squid.anxiety + total_effects['anxiety']))
+        if not valid_decorations:
+            return
 
-        # Determine the decoration with the strongest effect
-        strongest_decoration = max(active_decorations, key=lambda d: max(d.stat_multipliers.values()))
+        strongest_decoration = max(valid_decorations, key=lambda d: max(d.stat_multipliers.values()))
+        
+        for stat, multiplier in strongest_decoration.stat_multipliers.items():
+            if hasattr(self.squid, stat):
+                current_value = getattr(self.squid, stat)
+                new_value = min(current_value * multiplier, 100)  # Cap at 100
+                setattr(self.squid, stat, new_value)
 
-        # Move towards the center of the strongest decoration
-        decoration_center = strongest_decoration.boundingRect().center() + strongest_decoration.pos()
-        self.squid.move_towards_position(decoration_center)
-
-        # Show a message about Squid's interaction with the decoration
-        self.show_decoration_message(strongest_decoration)
+        # Apply category-specific effects
+        if strongest_decoration.category == 'plant':
+            self.squid.cleanliness = min(self.squid.cleanliness + 5, 100)
+        elif strongest_decoration.category == 'rock':
+            self.squid.satisfaction = min(self.squid.satisfaction + 5, 100)
 
     def check_decoration_startle(self, active_decorations):
         if not self.mental_states_enabled:
@@ -284,6 +306,7 @@ class TamagotchiLogic:
             if self.mental_states_enabled:
                 self.check_for_startle()
                 self.check_for_curiosity()
+                
 
             # Check if Squid is not in the middle of the RPS game
             if not hasattr(self, 'rps_game') or not self.rps_game.game_window:

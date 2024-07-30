@@ -346,12 +346,28 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             self.personality_type_label.setText(f"Squid Personality: {personality.value.capitalize()}")
             modifier = self.get_personality_modifier(personality)
             self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
+            description = self.get_personality_description(personality)
+            self.personality_description.setPlainText(description)
         elif isinstance(personality, str):
             self.personality_type_label.setText(f"Squid Personality: {personality.capitalize()}")
             modifier = self.get_personality_modifier(Personality(personality))
             self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
+            description = self.get_personality_description(Personality(personality))
+            self.personality_description.setPlainText(description)
         else:
             print(f"Warning: Invalid personality type: {type(personality)}")
+
+    def get_personality_description(self, personality):
+        descriptions = {
+            Personality.TIMID: "Your squid is Timid. It tends to be more easily startled and anxious, especially in new situations. It may prefer quiet, calm environments and might be less likely to explore on its own. However, it can form strong bonds when it feels safe and secure.",
+            Personality.ADVENTUROUS: "Your squid is Adventurous. It loves to explore and try new things. It's often the first to investigate new objects or areas in its environment. This squid thrives on novelty and might get bored more easily in unchanging surroundings.",
+            Personality.LAZY: "Your squid is Lazy. It prefers a relaxed lifestyle and may be less active than other squids. It might need extra encouragement to engage in activities but can be quite content just lounging around. This squid is great at conserving energy!",
+            Personality.ENERGETIC: "Your squid is Energetic. It's always on the move, full of life and vigor. This squid needs plenty of stimulation and activities to keep it happy. It might get restless if not given enough opportunity to burn off its excess energy.",
+            Personality.INTROVERT: "Your squid is an Introvert. It enjoys solitude and might prefer quieter, less crowded spaces. While it can interact with others, it may need time alone to 'recharge'. This squid might be more observant and thoughtful in its actions.",
+            Personality.GREEDY: "Your squid is Greedy. It has a strong focus on food and resources. This squid might be more motivated by treats and rewards than others. While it can be more demanding, it also tends to be resourceful and good at finding hidden treats!",
+            Personality.STUBBORN: "Your squid is Stubborn. It has a strong will and definite preferences. This squid might be more resistant to change and could take longer to adapt to new routines. However, its determination can also make it persistent in solving problems."
+        }
+        return descriptions.get(personality, "Unknown personality type")
 
     def get_personality_modifier(self, personality):
         modifiers = {
@@ -448,7 +464,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def init_personality_tab(self):
         # Personality type display
-                # Separator
         self.personality_tab_layout.addWidget(QtWidgets.QFrame(frameShape=QtWidgets.QFrame.HLine))
         self.personality_type_label = QtWidgets.QLabel("Squid Personality: ")
         self.personality_type_label.setStyleSheet("font-size: 22px; font-weight: bold;")
@@ -462,26 +477,16 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Separator
         self.personality_tab_layout.addWidget(QtWidgets.QFrame(frameShape=QtWidgets.QFrame.HLine))
 
+        # Personality description
+        self.personality_description = QtWidgets.QTextEdit()
+        self.personality_description.setReadOnly(True)
+        self.personality_description.setStyleSheet("font-size: 16px;")
+        self.personality_tab_layout.addWidget(self.personality_description)
 
-        # Personality types information
-        personality_info = QtWidgets.QTextEdit()
-        personality_info.setReadOnly(True)
-        personality_info.setHtml("""
-        <br><p>The game features seven different squid personalities that affect their needs and how they behave: </p>
-        <br>
-        <ul>
-            <li><strong>Timid:</strong> Higher chance of becoming anxious</li>
-            <li><strong>Adventurous:</strong> Increased curiosity and exploration</li>
-            <li><strong>Lazy:</strong> Slower movement and energy consumption</li>
-            <li><strong>Energetic:</strong> Faster movement and higher activity levels</li>
-            <li><strong>Introvert:</strong> Prefers solitude and quiet environments</li>
-            <li><strong>Greedy:</strong> More focused on food and resources</li>
-            <li><strong>Stubborn:</strong> Fussy and difficult</li>
-        </ul>
-        <p>Personality is randomly generated at the start of a new game</p>
-        <br><p>More information is available in the online documentation</p>
-        """)
-        self.personality_tab_layout.addWidget(personality_info)
+        # Note about personality generation
+        note_label = QtWidgets.QLabel("Note: Personality is randomly generated at the start of a new game")
+        note_label.setStyleSheet("font-size: 14px; font-style: italic;")
+        self.personality_tab_layout.addWidget(note_label)
 
     def get_personality_modifier(self, personality):
         modifiers = {

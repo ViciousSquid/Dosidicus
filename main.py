@@ -73,12 +73,17 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_splash_screen(self):
         self.splash = SplashScreen(self)
         self.splash.finished.connect(self.start_simulation)
+        self.splash.second_frame.connect(self.show_hatching_notification)
         self.splash.show()
 
     def start_simulation(self):
         print("Starting simulation")
         self.tamagotchi_logic.set_simulation_speed(1)
         self.tamagotchi_logic.start_autosave()
+
+    def show_hatching_notification(self):
+        self.user_interface.show_message("Squid is hatching!")
+        # The message will automatically fade out after 8 seconds as per the show_message implementation
 
 def main():
     application = QtWidgets.QApplication(sys.argv)
