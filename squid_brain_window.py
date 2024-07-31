@@ -1,4 +1,4 @@
-###########
+
 ########### BRAIN TOOL
 ########### Version 1.0.5.0 - July 2024
 ###########
@@ -433,20 +433,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.personality_tab, "Personality")
         self.init_personality_tab()
 
-        # Console tab
-        self.console_tab = QtWidgets.QWidget()
-        self.console_tab_layout = QtWidgets.QVBoxLayout()
-        self.console_tab.setLayout(self.console_tab_layout)
-        self.tabs.addTab(self.console_tab, "Console")
-        self.init_console()
-
-        # About tab
-        self.about_tab = QtWidgets.QWidget()
-        self.about_tab_layout = QtWidgets.QVBoxLayout()
-        self.about_tab.setLayout(self.about_tab_layout)
-        self.tabs.addTab(self.about_tab, "About")
-        self.init_about_tab()
-
         # Learning tab
         self.learning_tab = QtWidgets.QWidget()
         self.learning_tab_layout = QtWidgets.QVBoxLayout()
@@ -460,6 +446,20 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.associations_tab.setLayout(self.associations_tab_layout)
         self.tabs.addTab(self.associations_tab, "Associations")
         self.init_associations_tab()
+
+        # Console tab
+        self.console_tab = QtWidgets.QWidget()
+        self.console_tab_layout = QtWidgets.QVBoxLayout()
+        self.console_tab.setLayout(self.console_tab_layout)
+        self.tabs.addTab(self.console_tab, "Console")
+        self.init_console()
+
+        # About tab
+        self.about_tab = QtWidgets.QWidget()
+        self.about_tab_layout = QtWidgets.QVBoxLayout()
+        self.about_tab.setLayout(self.about_tab_layout)
+        self.tabs.addTab(self.about_tab, "About")
+        self.init_about_tab()
 
     def init_associations_tab(self):
         # Add a checkbox to toggle explanation
