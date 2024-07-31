@@ -1,6 +1,6 @@
 ###########
 ########### BRAIN TOOL
-########### Version 1.0.42 29th July 2024
+########### Version 1.0.5.0 - July 2024
 ###########
 ########### by Rufus Pearce
 ########### github.com/ViciousSquid/Dosidicus
@@ -322,6 +322,8 @@ class StimulateDialog(QtWidgets.QDialog):
                 stimulation_values[neuron] = input_widget.currentText()
         return stimulation_values
 
+
+
 class SquidBrainWindow(QtWidgets.QMainWindow):
     def __init__(self, tamagotchi_logic=None):
         super().__init__()
@@ -341,45 +343,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         self.init_tabs()
 
-    def update_personality_display(self, personality):
-        if isinstance(personality, Personality):
-            self.personality_type_label.setText(f"Squid Personality: {personality.value.capitalize()}")
-            modifier = self.get_personality_modifier(personality)
-            self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
-            description = self.get_personality_description(personality)
-            self.personality_description.setPlainText(description)
-        elif isinstance(personality, str):
-            self.personality_type_label.setText(f"Squid Personality: {personality.capitalize()}")
-            modifier = self.get_personality_modifier(Personality(personality))
-            self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
-            description = self.get_personality_description(Personality(personality))
-            self.personality_description.setPlainText(description)
-        else:
-            print(f"Warning: Invalid personality type: {type(personality)}")
+        self.hebbian_timer = QtCore.QTimer()
+        self.hebbian_timer.timeout.connect(self.perform_hebbian_learning)
+        self.hebbian_timer.start(2000)  # Update every 2 seconds
 
-    def get_personality_description(self, personality):
-        descriptions = {
-            Personality.TIMID: "Your squid is Timid. It tends to be more easily startled and anxious, especially in new situations. It may prefer quiet, calm environments and might be less likely to explore on its own. However, it can form strong bonds when it feels safe and secure.",
-            Personality.ADVENTUROUS: "Your squid is Adventurous. It loves to explore and try new things. It's often the first to investigate new objects or areas in its environment. This squid thrives on novelty and might get bored more easily in unchanging surroundings.",
-            Personality.LAZY: "Your squid is Lazy. It prefers a relaxed lifestyle and may be less active than other squids. It might need extra encouragement to engage in activities but can be quite content just lounging around. This squid is great at conserving energy!",
-            Personality.ENERGETIC: "Your squid is Energetic. It's always on the move, full of life and vigor. This squid needs plenty of stimulation and activities to keep it happy. It might get restless if not given enough opportunity to burn off its excess energy.",
-            Personality.INTROVERT: "Your squid is an Introvert. It enjoys solitude and might prefer quieter, less crowded spaces. While it can interact with others, it may need time alone to 'recharge'. This squid might be more observant and thoughtful in its actions.",
-            Personality.GREEDY: "Your squid is Greedy. It has a strong focus on food and resources. This squid might be more motivated by treats and rewards than others. While it can be more demanding, it also tends to be resourceful and good at finding hidden treats!",
-            Personality.STUBBORN: "Your squid is Stubborn. It has a strong will and definite preferences. This squid might be more resistant to change and could take longer to adapt to new routines. However, its determination can also make it persistent in solving problems."
-        }
-        return descriptions.get(personality, "Unknown personality type")
-
-    def get_personality_modifier(self, personality):
-        modifiers = {
-            Personality.TIMID: "Higher chance of becoming anxious",
-            Personality.ADVENTUROUS: "Increased curiosity and exploration",
-            Personality.LAZY: "Slower movement and energy consumption",
-            Personality.ENERGETIC: "Faster movement and higher activity levels",
-            Personality.INTROVERT: "Prefers solitude and quiet environments",
-            Personality.GREEDY: "More focused on food and resources",
-            Personality.STUBBORN: "Only eats favorite food (sushi), may refuse to sleep"
-        }
-        return modifiers.get(personality, "No specific modifier")
+        self.log_window = None
 
     def init_tabs(self):
         self.tabs = QtWidgets.QTabWidget()
@@ -439,12 +407,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.init_personality_tab()
 
         # Training Data tab
-        self.training_data_tab = QtWidgets.QWidget()
-        self.training_data_tab_layout = QtWidgets.QVBoxLayout()
-        self.training_data_tab.setLayout(self.training_data_tab_layout)
-        self.tabs.addTab(self.training_data_tab, "Training")
-        self.init_training_data_tab()
-    
+        #self.training_data_tab = QtWidgets.QWidget()
+        #self.training_data_tab_layout = QtWidgets.QVBoxLayout()
+        #self.training_data_tab.setLayout(self.training_data_tab_layout)
+        #self.tabs.addTab(self.training_data_tab, "Training")
+        #self.init_training_data_tab()
 
         # Console tab
         self.console_tab = QtWidgets.QWidget()
@@ -460,7 +427,113 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.about_tab, "About")
         self.init_about_tab()
 
+        # Learning tab
+        self.learning_tab = QtWidgets.QWidget()
+        self.learning_tab_layout = QtWidgets.QVBoxLayout()
+        self.learning_tab.setLayout(self.learning_tab_layout)
+        self.tabs.addTab(self.learning_tab, "Learning")
+        self.init_learning_tab()
+
+    def init_learning_tab(self):
+        self.weight_changes_text = QtWidgets.QTextEdit()
+        self.weight_changes_text.setReadOnly(True)
+        self.learning_tab_layout.addWidget(self.weight_changes_text)
+
+    def perform_hebbian_learning(self):
+        if not hasattr(self, 'brain_widget'):
+            return
+
+        neuron_pairs = list(self.brain_widget.weights.keys())
+        if not neuron_pairs:
+            return
+
+        # Randomly select a pair of neurons
+        pair = random.choice(neuron_pairs)
+
+        # Perform Hebbian learning
+        prev_weight = self.brain_widget.weights[pair]
+        neuron1_value = self.brain_widget.state[pair[0]]
+        neuron2_value = self.brain_widget.state[pair[1]]
+
+        # Simple Hebbian learning rule
+        weight_change = 0.01 * neuron1_value * neuron2_value
+        new_weight = prev_weight + weight_change
+
+        # Update the weight
+        self.brain_widget.weights[pair] = new_weight
+
+        # Display the weight change
+        timestamp = QtCore.QTime.currentTime().toString("hh:mm:ss")
+        change_text = f"{timestamp} - Weight changed between {pair[0].upper()} and {pair[1].upper()}\n"
+        change_text += f"Previous value: {prev_weight:.4f}\n"
+        change_text += f"New value: {new_weight:.4f}\n"
         
+        # Deduce and add the reason for weight change
+        reason = self.deduce_weight_change_reason(pair, neuron1_value, neuron2_value)
+        change_text += f"Reason: {reason}\n\n"
+
+        self.weight_changes_text.append(change_text)
+
+        # Update log window if open
+        if self.log_window and self.log_window.isVisible():
+            self.log_window.update_log(change_text)
+
+
+    def deduce_weight_change_reason(self, pair, value1, value2):        ## Ask the network for reason why the weights changed (!!):-p
+        neuron1, neuron2 = pair
+        threshold = 70  # Threshold for considering a value as "high"
+
+        if value1 > threshold and value2 > threshold:
+            return f"{neuron1.upper()} was HIGH when {neuron2.upper()} was HIGH"
+        elif value1 < threshold and value2 < threshold:
+            return f"{neuron1.upper()} was LOW when {neuron2.upper()} was LOW"
+        elif value1 > threshold:
+            return f"{neuron1.upper()} was HIGH when {neuron2.upper()} changed"
+        elif value2 > threshold:
+            return f"{neuron2.upper()} was HIGH when {neuron1.upper()} changed"
+        else:
+            return "No clear single reason, complex interaction"
+
+
+    def update_personality_display(self, personality):
+        if isinstance(personality, Personality):
+            self.personality_type_label.setText(f"Squid Personality: {personality.value.capitalize()}")
+            modifier = self.get_personality_modifier(personality)
+            self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
+            description = self.get_personality_description(personality)
+            self.personality_description.setPlainText(description)
+        elif isinstance(personality, str):
+            self.personality_type_label.setText(f"Squid Personality: {personality.capitalize()}")
+            modifier = self.get_personality_modifier(Personality(personality))
+            self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
+            description = self.get_personality_description(Personality(personality))
+            self.personality_description.setPlainText(description)
+        else:
+            print(f"Warning: Invalid personality type: {type(personality)}")
+
+    def get_personality_description(self, personality):
+        descriptions = {
+            Personality.TIMID: "Your squid is Timid. It tends to be more easily startled and anxious, especially in new situations. It may prefer quiet, calm environments and might be less likely to explore on its own. However, it can form strong bonds when it feels safe and secure.",
+            Personality.ADVENTUROUS: "Your squid is Adventurous. It loves to explore and try new things. It's often the first to investigate new objects or areas in its environment. This squid thrives on novelty and might get bored more easily in unchanging surroundings.",
+            Personality.LAZY: "Your squid is Lazy. It prefers a relaxed lifestyle and may be less active than other squids. It might need extra encouragement to engage in activities but can be quite content just lounging around. This squid is great at conserving energy!",
+            Personality.ENERGETIC: "Your squid is Energetic. It's always on the move, full of life and vigor. This squid needs plenty of stimulation and activities to keep it happy. It might get restless if not given enough opportunity to burn off its excess energy.",
+            Personality.INTROVERT: "Your squid is an Introvert. It enjoys solitude and might prefer quieter, less crowded spaces. While it can interact with others, it may need time alone to 'recharge'. This squid might be more observant and thoughtful in its actions.",
+            Personality.GREEDY: "Your squid is Greedy. It has a strong focus on food and resources. This squid might be more motivated by treats and rewards than others. While it can be more demanding, it also tends to be resourceful and good at finding hidden treats!",
+            Personality.STUBBORN: "Your squid is Stubborn. It has a strong will and definite preferences. This squid might be more resistant to change and could take longer to adapt to new routines. However, its determination can also make it persistent in solving problems."
+        }
+        return descriptions.get(personality, "Unknown personality type")
+
+    def get_personality_modifier(self, personality):
+        modifiers = {
+            Personality.TIMID: "Higher chance of becoming anxious",
+            Personality.ADVENTUROUS: "Increased curiosity and exploration",
+            Personality.LAZY: "Slower movement and energy consumption",
+            Personality.ENERGETIC: "Faster movement and higher activity levels",
+            Personality.INTROVERT: "Prefers solitude and quiet environments",
+            Personality.GREEDY: "More focused on food and resources",
+            Personality.STUBBORN: "Only eats favorite food (sushi), may refuse to sleep"
+        }
+        return modifiers.get(personality, "No specific modifier")
 
     def init_personality_tab(self):
         # Personality type display
@@ -488,17 +561,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         note_label.setStyleSheet("font-size: 14px; font-style: italic;")
         self.personality_tab_layout.addWidget(note_label)
 
-    def get_personality_modifier(self, personality):
-        modifiers = {
-            Personality.TIMID: "Higher chance of becoming anxious",
-            Personality.ADVENTUROUS: "Increased curiosity and exploration",
-            Personality.LAZY: "Slower movement and energy consumption",
-            Personality.ENERGETIC: "Faster movement and higher activity levels",
-            Personality.INTROVERT: "Prefers solitude and quiet environments",
-            Personality.GREEDY: "More focused on food and resources"
-        }
-        return modifiers.get(personality, "No specific modifier")
-
     def update_brain(self, state):
         self.brain_widget.update_state(state)
         self.update_data_table(state)
@@ -516,8 +578,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <p>A Tamagotchi-style digital pet with a simple neural network</p>
         <ul>
             <li>by Rufus Pearce</li>
-            <li>Brain Tool version 1.0.42</li>
-            <li>Dosidicus version 1.0.370</li>
+            <li>Brain Tool version 1.0.5.0</li>
+            <li>Dosidicus version 1.0.370 (milestone 1)</li>
         <p>This is a research project. Please suggest features.</p>
         </ul>
         """)
@@ -638,8 +700,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         sys.stdout = ConsoleOutput(self.console_output)
 
-
-
     def create_button(self, text, callback, color):
         button = QtWidgets.QPushButton(text)
         button.clicked.connect(callback)
@@ -658,12 +718,51 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 else:
                     print("Warning: tamagotchi_logic is not set. Brain stimulation will not affect the squid.")
 
+class LogWindow(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Learning Log")
+        self.resize(600, 400)
+
+        layout = QtWidgets.QVBoxLayout()
+        self.setLayout(layout)
+
+        self.log_text = QtWidgets.QTextEdit()
+        self.log_text.setReadOnly(True)
+        layout.addWidget(self.log_text)
+
+        self.export_button = QtWidgets.QPushButton("Export Log")
+        self.export_button.clicked.connect(self.export_log)
+        layout.addWidget(self.export_button)
+
+    def update_log(self, text):
+        self.log_text.append(text)
+
+    def export_log(self):
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export Log", "", "Text Files (*.txt)")
+        if file_name:
+            with open(file_name, 'w') as f:
+                f.write(self.log_text.toPlainText())
+            QtWidgets.QMessageBox.information(self, "Export Successful", f"Log exported to {file_name}")
+
 class ConsoleOutput:
     def __init__(self, text_edit):
         self.text_edit = text_edit
 
     def write(self, text):
-        self.text_edit.append(text)
+        cursor = self.text_edit.textCursor()
+        format = QtGui.QTextCharFormat()
+
+        if text.startswith("Previous value:"):
+            format.setForeground(QtGui.QColor("red"))
+        elif text.startswith("New value:"):
+            format.setForeground(QtGui.QColor("green"))
+        else:
+            format.setForeground(QtGui.QColor("black"))
+
+        cursor.insertText(text, format)
+        self.text_edit.setTextCursor(cursor)
+        self.text_edit.ensureCursorVisible()
 
     def flush(self):
         pass
