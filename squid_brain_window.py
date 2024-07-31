@@ -7,7 +7,9 @@
 ###########
 
 import sys
+import csv
 import os
+import time
 from PyQt5 import QtCore, QtGui, QtWidgets
 import random
 import numpy as np
@@ -43,7 +45,8 @@ class BrainWidget(QtWidgets.QWidget):
         }
         self.neuron_positions = self.original_neuron_positions.copy()
         self.connections = self.initialize_connections()
-        self.weights = self.initialize_weights()
+        self.weights = {}  # Initialize an empty dictionary for weights
+        self.initialize_weights()  # Call method to populate weights
         self.show_links = True
         self.frozen_weights = None
         self.history = []
@@ -73,17 +76,20 @@ class BrainWidget(QtWidgets.QWidget):
         return connections
 
     def initialize_weights(self):
-        return {conn: random.uniform(-1, 1) for conn in self.connections}
+        neurons = list(self.neuron_positions.keys())
+        for i in range(len(neurons)):
+            for j in range(i+1, len(neurons)):
+                self.weights[(neurons[i], neurons[j])] = random.uniform(-1, 1)
 
-    def update_state(self, new_state):
-        # Update only the keys that exist in self.state and are allowed to be modified
-        for key in self.state.keys():
-            if key in new_state and key not in ['satisfaction', 'anxiety', 'curiosity']:
-                self.state[key] = new_state[key]
-        self.update_weights()
-        self.update()
-        if self.capture_training_data_enabled:
-            self.capture_training_data(new_state)
+        def update_state(self, new_state):
+            # Update only the keys that exist in self.state and are allowed to be modified
+            for key in self.state.keys():
+                if key in new_state and key not in ['satisfaction', 'anxiety', 'curiosity']:
+                    self.state[key] = new_state[key]
+            self.update_weights()
+            self.update()
+            if self.capture_training_data_enabled:
+                self.capture_training_data(new_state)
 
     def update_weights(self):
         if self.frozen_weights is not None:
@@ -97,6 +103,18 @@ class BrainWidget(QtWidgets.QWidget):
 
     def unfreeze_weights(self):
         self.frozen_weights = None
+
+    def update_state(self, new_state):
+        # Update only the keys that exist in self.state
+        for key in self.state.keys():
+            if key in new_state:
+                self.state[key] = new_state[key]
+        
+        # Perform any necessary updates after state change
+        self.update()  # Trigger a repaint of the widget
+        if self.capture_training_data_enabled:
+            self.capture_training_data(new_state)
+
 
     def save_weights(self, filename):
         with open(filename, 'w') as file:
@@ -347,7 +365,16 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.hebbian_timer.timeout.connect(self.perform_hebbian_learning)
         self.hebbian_timer.start(2000)  # Update every 2 seconds
 
+        self.update_timer = QtCore.QTimer()
+        self.update_timer.timeout.connect(self.update_associations)
+        self.update_timer.start(10000)  # Update every 10 seconds
+        self.last_update_time = time.time()
+        self.update_threshold = 5  # Minimum seconds between updates
+
+
         self.log_window = None
+        self.learning_data = []
+        self.is_paused = False
 
     def init_tabs(self):
         self.tabs = QtWidgets.QTabWidget()
@@ -406,13 +433,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.personality_tab, "Personality")
         self.init_personality_tab()
 
-        # Training Data tab
-        #self.training_data_tab = QtWidgets.QWidget()
-        #self.training_data_tab_layout = QtWidgets.QVBoxLayout()
-        #self.training_data_tab.setLayout(self.training_data_tab_layout)
-        #self.tabs.addTab(self.training_data_tab, "Training")
-        #self.init_training_data_tab()
-
         # Console tab
         self.console_tab = QtWidgets.QWidget()
         self.console_tab_layout = QtWidgets.QVBoxLayout()
@@ -434,65 +454,350 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.learning_tab, "Learning")
         self.init_learning_tab()
 
+        # Associations tab
+        self.associations_tab = QtWidgets.QWidget()
+        self.associations_tab_layout = QtWidgets.QVBoxLayout()
+        self.associations_tab.setLayout(self.associations_tab_layout)
+        self.tabs.addTab(self.associations_tab, "Associations")
+        self.init_associations_tab()
+
+    def init_associations_tab(self):
+        # Add a checkbox to toggle explanation
+        self.show_explanation_checkbox = QtWidgets.QCheckBox("Show Explanation")
+        self.show_explanation_checkbox.stateChanged.connect(self.toggle_explanation)
+        self.associations_tab_layout.addWidget(self.show_explanation_checkbox)
+
+        # Add explanation text (hidden by default)
+        self.explanation_text = QtWidgets.QTextEdit()
+        self.explanation_text.setReadOnly(True)
+        self.explanation_text.setHidden(True)
+        self.explanation_text.setPlainText(
+            "This tab shows the learned associations between different neural states of the squid. "
+            "These associations are formed through the Hebbian learning process, where 'neurons that fire together, wire together'. "
+            "The strength of an association is determined by how often these states occur together or influence each other. "
+            "Positive associations mean that as one state increases, the other tends to increase as well. "
+            "Negative associations (indicated by 'reduced') mean that as one state increases, the other tends to decrease. "
+            "These associations help us understand how the squid's experiences shape its behavior and decision-making processes."
+        )
+        self.associations_tab_layout.addWidget(self.explanation_text)
+
+        # Add a label for the associations
+        label = QtWidgets.QLabel("Learned associations:")
+        self.associations_tab_layout.addWidget(label)
+
+        # Add a text area to display associations
+        self.associations_text = QtWidgets.QTextEdit()
+        self.associations_text.setReadOnly(True)
+        self.associations_tab_layout.addWidget(self.associations_text)
+
+        # Add a button to update associations
+        # update_button = QtWidgets.QPushButton("Update Associations")
+        # update_button.clicked.connect(self.update_associations)
+        # self.associations_tab_layout.addWidget(update_button)
+
+    def toggle_explanation(self, state):
+        self.explanation_text.setVisible(state == QtCore.Qt.Checked)
+
+    def update_associations(self):
+        self.associations_text.clear()
+        sorted_weights = sorted(self.brain_widget.weights.items(), key=lambda x: abs(x[1]), reverse=True)
+        for pair, weight in sorted_weights[:15]:  # Display only top 15 strongest associations
+            summary = self.generate_association_summary(pair[0], pair[1], weight)
+            self.associations_text.append(summary + "\n")
+
+    def generate_association_summary(self, neuron1, neuron2, weight):
+        strength = "strongly" if abs(weight) > 0.8 else "moderately"
+        if weight > 0:
+            relation = "associated with"
+        else:
+            relation = "associated with reduced"
+
+        # Correct grammar for specific neurons
+        neuron1_text = self.get_neuron_display_name(neuron1)
+        neuron2_text = self.get_neuron_display_name(neuron2)
+
+        summaries = {
+            "hunger-satisfaction": f"{neuron1_text} is {strength} associated with satisfaction (probably from eating)",
+            "satisfaction-hunger": f"Feeling satisfied is {strength} associated with reduced hunger",
+            "cleanliness-anxiety": f"{neuron1_text} is {strength} {relation} anxiety",
+            "anxiety-cleanliness": f"Feeling anxious is {strength} associated with reduced cleanliness",
+            "curiosity-happiness": f"{neuron1_text} is {strength} associated with happiness",
+            "happiness-curiosity": f"Being happy is {strength} associated with increased curiosity",
+            "hunger-anxiety": f"{neuron1_text} is {strength} associated with increased anxiety",
+            "sleepiness-satisfaction": f"{neuron1_text} is {strength} {relation} satisfaction",
+            "happiness-cleanliness": f"Being happy is {strength} associated with cleanliness",
+        }
+
+        key = f"{neuron1}-{neuron2}"
+        if key in summaries:
+            return summaries[key]
+        else:
+            return f"{neuron1_text} is {strength} {relation} {neuron2_text}"
+        
+    def get_neuron_display_name(self, neuron):
+        display_names = {
+            "cleanliness": "Being clean",
+            "sleepiness": "Being sleepy",
+            "happiness": "Being happy",
+            "hunger": "Being hungry",
+            "satisfaction": "Satisfaction",
+            "anxiety": "Being anxious",
+            "curiosity": "Curiosity",
+            "direction": "Direction"
+        }
+        return display_names.get(neuron, f"{neuron}")
+
+
     def init_learning_tab(self):
-        self.weight_changes_text = QtWidgets.QTextEdit()
+        learning_layout = QtWidgets.QVBoxLayout()
+        
+        # Weight changes text area
+        self.weight_changes_text = AutoScrollTextEdit()
         self.weight_changes_text.setReadOnly(True)
-        self.learning_tab_layout.addWidget(self.weight_changes_text)
+        self.weight_changes_text.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse | QtCore.Qt.TextSelectableByKeyboard)
+        self.weight_changes_text.setAcceptRichText(True)  # Enable rich text interpretation
+        learning_layout.addWidget(self.weight_changes_text)
+
+        # Learning data table
+        self.learning_data_table = AutoScrollTable()
+        self.learning_data_table.setColumnCount(5)
+        self.learning_data_table.setHorizontalHeaderLabels(["Time", "Neuron 1", "Neuron 2", "Weight Change", "Direction"])
+        # Set column widths
+        header = self.learning_data_table.horizontalHeader()
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        header.resizeSection(0, 150)  # Timestamp
+        header.resizeSection(1, 160)  # Neuron 1
+        header.resizeSection(2, 160)  # Neuron 2
+        header.resizeSection(3, 200)  # Weight Change
+        header.resizeSection(4, 150)  # Direction
+        
+        learning_layout.addWidget(self.learning_data_table)
+
+        # Controls
+        controls_layout = QtWidgets.QHBoxLayout()
+        
+        self.export_button = QtWidgets.QPushButton("Export...")
+        self.export_button.clicked.connect(self.export_learning_data)
+        controls_layout.addWidget(self.export_button)
+
+        self.clear_button = QtWidgets.QPushButton("Clear")
+        self.clear_button.clicked.connect(self.clear_learning_data)
+        controls_layout.addWidget(self.clear_button)
+
+        learning_layout.addLayout(controls_layout)
+
+        learning_widget = QtWidgets.QWidget()
+        learning_widget.setLayout(learning_layout)
+        self.learning_tab_layout.addWidget(learning_widget)
 
     def perform_hebbian_learning(self):
-        if not hasattr(self, 'brain_widget'):
+        if self.is_paused or not hasattr(self, 'brain_widget'):
             return
 
-        neuron_pairs = list(self.brain_widget.weights.keys())
-        if not neuron_pairs:
+        # Get the current state of all neurons
+        current_state = self.brain_widget.state
+
+        # Determine which neurons are significantly active
+        active_neurons = []
+        for neuron, value in current_state.items():
+            if neuron == 'position':
+                # Skip the position tuple
+                continue
+            if isinstance(value, (int, float)) and value > 50:
+                active_neurons.append(neuron)
+            elif isinstance(value, bool) and value:
+                active_neurons.append(neuron)
+            elif isinstance(value, str):
+                # For string values (like 'direction'), we consider them active
+                active_neurons.append(neuron)
+            else:
+                print(f"Warning: Unexpected type for neuron {neuron}: {type(value)}")
+
+        # If less than two neurons are active, no learning occurs
+        if len(active_neurons) < 2:
             return
 
-        # Randomly select a pair of neurons
-        pair = random.choice(neuron_pairs)
+        # Perform learning for a random subset of active neuron pairs
+        sample_size = min(5, len(active_neurons) * (len(active_neurons) - 1) // 2)
+        sampled_pairs = random.sample([(i, j) for i in range(len(active_neurons)) for j in range(i+1, len(active_neurons))], sample_size)
+        
+        for i, j in sampled_pairs:
+            neuron1 = active_neurons[i]
+            neuron2 = active_neurons[j]
+            value1 = self.get_neuron_value(current_state[neuron1])
+            value2 = self.get_neuron_value(current_state[neuron2])
+            self.update_connection(neuron1, neuron2, value1, value2)
 
-        # Perform Hebbian learning
-        prev_weight = self.brain_widget.weights[pair]
-        neuron1_value = self.brain_widget.state[pair[0]]
-        neuron2_value = self.brain_widget.state[pair[1]]
 
-        # Simple Hebbian learning rule
-        weight_change = 0.01 * neuron1_value * neuron2_value
-        new_weight = prev_weight + weight_change
+    def deduce_weight_change_reason(self, pair, value1, value2, prev_weight, new_weight, weight_change):
+        neuron1, neuron2 = pair
+        threshold_high = 70
+        threshold_low = 30
+
+        reasons = []
+
+        # Analyze neuron activity levels
+        if value1 > threshold_high and value2 > threshold_high:
+            reasons.append(f"Both {neuron1.upper()} and {neuron2.upper()} were highly active")
+        elif value1 < threshold_low and value2 < threshold_low:
+            reasons.append(f"Both {neuron1.upper()} and {neuron2.upper()} had low activity")
+        elif value1 > threshold_high:
+            reasons.append(f"{neuron1.upper()} was highly active")
+        elif value2 > threshold_high:
+            reasons.append(f"{neuron2.upper()} was highly active")
+        
+        # Analyze weight change
+        if abs(weight_change) > 0.1:
+            if weight_change > 0:
+                reasons.append("Strong positive reinforcement")
+            else:
+                reasons.append("Strong negative reinforcement")
+        elif abs(weight_change) > 0.01:
+            if weight_change > 0:
+                reasons.append("Moderate positive reinforcement")
+            else:
+                reasons.append("Moderate negative reinforcement")
+        else:
+            reasons.append("Weak reinforcement")
+
+        # Analyze the relationship between neurons
+        if "hunger" in pair and "satisfaction" in pair:
+            reasons.append("Potential hunger-satisfaction relationship")
+        elif "cleanliness" in pair and "happiness" in pair:
+            reasons.append("Potential cleanliness-happiness relationship")
+
+        # Analyze the current weight
+        if abs(new_weight) > 0.8:
+            reasons.append("Strong connection formed")
+        elif abs(new_weight) < 0.2:
+            reasons.append("Weak connection")
+
+        # Analyze learning progress
+        if abs(prev_weight) < 0.1 and abs(new_weight) > 0.1:
+            reasons.append("New significant connection emerging")
+        elif abs(prev_weight) > 0.8 and abs(new_weight) < 0.8:
+            reasons.append("Previously strong connection weakening")
+
+        # Combine reasons
+        if len(reasons) > 1:
+            return " | ".join(reasons)
+        elif len(reasons) == 1:
+            return reasons[0]
+        else:
+            return "Complex interaction with no clear single reason"
+
+        
+    def update_connection(self, neuron1, neuron2, value1, value2):
+        pair = (neuron1, neuron2)
+        reverse_pair = (neuron2, neuron1)
+
+        # Check if the pair or its reverse exists in weights, if not, initialize it
+        if pair not in self.brain_widget.weights and reverse_pair not in self.brain_widget.weights:
+            self.brain_widget.weights[pair] = 0.0  # Initialize with a neutral weight
+            print(f"Initialized new weight for pair: {pair}")
+
+        # Use the correct pair order
+        use_pair = pair if pair in self.brain_widget.weights else reverse_pair
+
+        prev_weight = self.brain_widget.weights[use_pair]
+
+        # Hebbian learning rule: neurons that fire together, wire together
+        weight_change = 0.01 * (value1 / 100) * (value2 / 100)  # Normalize values to 0-1 range
+        new_weight = min(max(prev_weight + weight_change, -1), 1)  # Ensure weight stays in [-1, 1] range
 
         # Update the weight
-        self.brain_widget.weights[pair] = new_weight
+        self.brain_widget.weights[use_pair] = new_weight
+
+        # Determine if weight increased or decreased
+        if weight_change > 0:
+            change_direction = "Increased"
+            color = QtGui.QColor("green")
+        elif weight_change < 0:
+            change_direction = "Decreased"
+            color = QtGui.QColor("red")
+        else:
+            change_direction = "No change"
+            color = QtGui.QColor("black")
+        
+        # Check if enough time has passed since the last update
+        current_time = time.time()
+        if current_time - self.last_update_time >= self.update_threshold:
+            self.update_associations()
+            self.last_update_time = current_time
 
         # Display the weight change
         timestamp = QtCore.QTime.currentTime().toString("hh:mm:ss")
-        change_text = f"{timestamp} - Weight changed between {pair[0].upper()} and {pair[1].upper()}\n"
-        change_text += f"Previous value: {prev_weight:.4f}\n"
-        change_text += f"New value: {new_weight:.4f}\n"
-        
-        # Deduce and add the reason for weight change
-        reason = self.deduce_weight_change_reason(pair, neuron1_value, neuron2_value)
-        change_text += f"Reason: {reason}\n\n"
+        self.weight_changes_text.append(f"{timestamp} - Weight changed between {neuron1.upper()} and {neuron2.upper()}")
+        self.weight_changes_text.append(f"Previous value: {prev_weight:.4f}")
+        self.weight_changes_text.append(f"New value: {new_weight:.4f}")
 
-        self.weight_changes_text.append(change_text)
+        # Set text color for the change line
+        cursor = self.weight_changes_text.textCursor()
+        format = QtGui.QTextCharFormat()
+        format.setForeground(color)
+        cursor.insertText(f"Change: {change_direction} by {abs(weight_change):.4f}\n", format)
+
+        # Deduce and add the reason for weight change
+        reason = self.deduce_weight_change_reason(use_pair, value1, value2, prev_weight, new_weight, weight_change)
+        self.weight_changes_text.append(f"Reason: {reason}\n")
+
+        # Update learning data
+        self.learning_data.append((timestamp, neuron1, neuron2, weight_change, change_direction))
+        self.update_learning_data_table()
+        # Update associations after each connection update
+        self.update_associations()
 
         # Update log window if open
         if self.log_window and self.log_window.isVisible():
-            self.log_window.update_log(change_text)
+            self.log_window.update_log(self.weight_changes_text.toPlainText())
 
-
-    def deduce_weight_change_reason(self, pair, value1, value2):        ## Ask the network for reason why the weights changed (!!):-p
-        neuron1, neuron2 = pair
-        threshold = 70  # Threshold for considering a value as "high"
-
-        if value1 > threshold and value2 > threshold:
-            return f"{neuron1.upper()} was HIGH when {neuron2.upper()} was HIGH"
-        elif value1 < threshold and value2 < threshold:
-            return f"{neuron1.upper()} was LOW when {neuron2.upper()} was LOW"
-        elif value1 > threshold:
-            return f"{neuron1.upper()} was HIGH when {neuron2.upper()} changed"
-        elif value2 > threshold:
-            return f"{neuron2.upper()} was HIGH when {neuron1.upper()} changed"
+    def get_neuron_value(self, value):
+        if isinstance(value, (int, float)):
+            return value
+        elif isinstance(value, bool):
+            return 100 if value else 0
+        elif isinstance(value, str):
+            # For string values (like 'direction'), return a default value
+            return 75
         else:
-            return "No clear single reason, complex interaction"
+            print(f"Warning: Unexpected type in get_neuron_value: {type(value)}")
+            return 0
+        
+    def update_learning_data_table(self):
+        self.learning_data_table.setRowCount(len(self.learning_data))
+        for row, data in enumerate(self.learning_data):
+            for col, value in enumerate(data):
+                item = QtWidgets.QTableWidgetItem(str(value))
+                if col == 3:  # Weight change column
+                    item.setData(QtCore.Qt.DisplayRole, f"{value:.4f}")
+                if col == 4:  # Direction column
+                    if value == "INCREASED":
+                        item.setForeground(QtGui.QColor("green"))
+                    elif value == "DECREASED":
+                        item.setForeground(QtGui.QColor("red"))
+                self.learning_data_table.setItem(row, col, item)
+        self.learning_data_table.scrollToBottom()
+
+    def set_pause_state(self, is_paused):
+        self.is_paused = is_paused
+        if is_paused:
+            self.hebbian_timer.stop()
+        else:
+            self.hebbian_timer.start(2000)
+
+    def export_learning_data(self):
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export Learning Data", "", "CSV Files (*.csv)")
+        if file_name:
+            with open(file_name, 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(["Timestamp", "Neuron 1", "Neuron 2", "Weight Change"])
+                writer.writerows(self.learning_data)
+            QtWidgets.QMessageBox.information(self, "Export Successful", f"Learning data exported to {file_name}")
+
+    def clear_learning_data(self):
+        self.learning_data.clear()
+        self.weight_changes_text.clear()
+        self.learning_data_table.setRowCount(0)
 
 
     def update_personality_display(self, personality):
@@ -744,6 +1049,24 @@ class LogWindow(QtWidgets.QWidget):
             with open(file_name, 'w') as f:
                 f.write(self.log_text.toPlainText())
             QtWidgets.QMessageBox.information(self, "Export Successful", f"Log exported to {file_name}")
+
+class AutoScrollTextEdit(QtWidgets.QTextEdit):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.textChanged.connect(self.scroll_to_bottom)
+
+    def scroll_to_bottom(self):
+        scrollbar = self.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+class AutoScrollTable(QtWidgets.QTableWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.verticalScrollBar().rangeChanged.connect(self.scroll_to_bottom)
+
+    def scroll_to_bottom(self):
+        scrollbar = self.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
 class ConsoleOutput:
     def __init__(self, text_edit):
