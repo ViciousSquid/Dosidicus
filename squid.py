@@ -416,6 +416,14 @@ class Squid:
                 return True
         return False
     
+    def is_food_nearby(self, food_item):
+        food_x, food_y = food_item.pos().x(), food_item.pos().y()
+        squid_center_x = self.squid_x + self.squid_width // 2
+        squid_center_y = self.squid_y + self.squid_height // 2
+        distance = math.sqrt((squid_center_x - food_x)**2 + (squid_center_y - food_y)**2)
+        return distance < 100  # Adjust the distance threshold as needed
+
+
     def investigate_food(self, food_item):
         self.status = "Investigating food"
         self.tamagotchi_logic.show_message("Stubborn squid investigates the food...")
