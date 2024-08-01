@@ -610,8 +610,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             elif isinstance(value, str):
                 # For string values (like 'direction'), we consider them active
                 active_neurons.append(neuron)
-            else:
-                print(f"Warning: Unexpected type for neuron {neuron}: {type(value)}")
 
         # If less than two neurons are active, no learning occurs
         if len(active_neurons) < 2:
@@ -753,15 +751,14 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def get_neuron_value(self, value):
         if isinstance(value, (int, float)):
-            return value
+            return float(value)
         elif isinstance(value, bool):
-            return 100 if value else 0
+            return 100.0 if value else 0.0
         elif isinstance(value, str):
             # For string values (like 'direction'), return a default value
-            return 75
+            return 75.0
         else:
-            print(f"Warning: Unexpected type in get_neuron_value: {type(value)}")
-            return 0
+            return 0.0
         
     def update_learning_data_table(self):
         self.learning_data_table.setRowCount(len(self.learning_data))
