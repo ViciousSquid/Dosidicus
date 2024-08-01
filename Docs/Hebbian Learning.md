@@ -1,4 +1,4 @@
-The squid utilises hebbian learning: *neurons that fire together wire together*
+The squid utilises hebbian learning: *"neurons that fire together wire together"*
 
 When two neurons are activated above a certain threshold at the same time, the weights are strenthened between them in both directions.
 
