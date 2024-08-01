@@ -1,5 +1,6 @@
 # Brain Tool
-The **Brain Tool** allows for visualising and manipulating the Dosidicus neural network. It has tools for editing neurons (which directly affect the squid's mood and behaviour) and shows how the brain learns and forms associations.
+The **Brain Tool** allows for visualising and manipulating the Dosidicus neural network.
+Tools are included for editing neurons (which directly affect the squid's mood and behaviour) and visualising how the brain learns new information and forms associations.
 
 ![image](https://github.com/user-attachments/assets/1736d8cd-1ef4-4221-8618-d69e470783cd)
 
