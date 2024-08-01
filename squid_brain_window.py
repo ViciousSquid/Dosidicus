@@ -1,4 +1,3 @@
-
 ########### BRAIN TOOL
 ########### Version 1.0.5.0 - July 2024
 ###########
@@ -109,12 +108,11 @@ class BrainWidget(QtWidgets.QWidget):
         for key in self.state.keys():
             if key in new_state:
                 self.state[key] = new_state[key]
-        
+
         # Perform any necessary updates after state change
         self.update()  # Trigger a repaint of the widget
         if self.capture_training_data_enabled:
             self.capture_training_data(new_state)
-
 
     def save_weights(self, filename):
         with open(filename, 'w') as file:
@@ -340,8 +338,6 @@ class StimulateDialog(QtWidgets.QDialog):
                 stimulation_values[neuron] = input_widget.currentText()
         return stimulation_values
 
-
-
 class SquidBrainWindow(QtWidgets.QMainWindow):
     def __init__(self, tamagotchi_logic=None):
         super().__init__()
@@ -370,7 +366,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.update_timer.start(10000)  # Update every 10 seconds
         self.last_update_time = time.time()
         self.update_threshold = 5  # Minimum seconds between updates
-
 
         self.log_window = None
         self.learning_data = []
@@ -490,10 +485,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.associations_text.setReadOnly(True)
         self.associations_tab_layout.addWidget(self.associations_text)
 
-        # Add a button to update associations
-        # update_button = QtWidgets.QPushButton("Update Associations")
-        # update_button.clicked.connect(self.update_associations)
-        # self.associations_tab_layout.addWidget(update_button)
+        # Add export button
+        self.export_associations_button = QtWidgets.QPushButton("Export Associations")
+        self.export_associations_button.clicked.connect(self.export_associations)
+        self.associations_tab_layout.addWidget(self.export_associations_button, alignment=QtCore.Qt.AlignRight)
 
     def toggle_explanation(self, state):
         self.explanation_text.setVisible(state == QtCore.Qt.Checked)
@@ -533,7 +528,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             return summaries[key]
         else:
             return f"{neuron1_text} is {strength} {relation} {neuron2_text}"
-        
+
     def get_neuron_display_name(self, neuron):
         display_names = {
             "cleanliness": "Being clean",
@@ -547,10 +542,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         }
         return display_names.get(neuron, f"{neuron}")
 
-
     def init_learning_tab(self):
         learning_layout = QtWidgets.QVBoxLayout()
-        
+
         # Weight changes text area
         self.weight_changes_text = AutoScrollTextEdit()
         self.weight_changes_text.setReadOnly(True)
@@ -570,19 +564,20 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         header.resizeSection(2, 160)  # Neuron 2
         header.resizeSection(3, 200)  # Weight Change
         header.resizeSection(4, 150)  # Direction
-        
+
         learning_layout.addWidget(self.learning_data_table)
 
         # Controls
         controls_layout = QtWidgets.QHBoxLayout()
-        
+
         self.export_button = QtWidgets.QPushButton("Export...")
         self.export_button.clicked.connect(self.export_learning_data)
         controls_layout.addWidget(self.export_button)
 
-        self.clear_button = QtWidgets.QPushButton("Clear")
-        self.clear_button.clicked.connect(self.clear_learning_data)
-        controls_layout.addWidget(self.clear_button)
+        # Add export button
+        self.export_learning_button = QtWidgets.QPushButton("Export Learning Data")
+        self.export_learning_button.clicked.connect(self.export_learning_tab_contents)
+        controls_layout.addWidget(self.export_learning_button, alignment=QtCore.Qt.AlignRight)
 
         learning_layout.addLayout(controls_layout)
 
@@ -618,14 +613,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Perform learning for a random subset of active neuron pairs
         sample_size = min(5, len(active_neurons) * (len(active_neurons) - 1) // 2)
         sampled_pairs = random.sample([(i, j) for i in range(len(active_neurons)) for j in range(i+1, len(active_neurons))], sample_size)
-        
+
         for i, j in sampled_pairs:
             neuron1 = active_neurons[i]
             neuron2 = active_neurons[j]
             value1 = self.get_neuron_value(current_state[neuron1])
             value2 = self.get_neuron_value(current_state[neuron2])
             self.update_connection(neuron1, neuron2, value1, value2)
-
 
     def deduce_weight_change_reason(self, pair, value1, value2, prev_weight, new_weight, weight_change):
         neuron1, neuron2 = pair
@@ -643,7 +637,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             reasons.append(f"{neuron1.upper()} was highly active")
         elif value2 > threshold_high:
             reasons.append(f"{neuron2.upper()} was highly active")
-        
+
         # Analyze weight change
         if abs(weight_change) > 0.1:
             if weight_change > 0:
@@ -684,7 +678,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         else:
             return "Complex interaction with no clear single reason"
 
-        
     def update_connection(self, neuron1, neuron2, value1, value2):
         pair = (neuron1, neuron2)
         reverse_pair = (neuron2, neuron1)
@@ -716,7 +709,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         else:
             change_direction = "No change"
             color = QtGui.QColor("black")
-        
+
         # Check if enough time has passed since the last update
         current_time = time.time()
         if current_time - self.last_update_time >= self.update_threshold:
@@ -759,7 +752,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             return 75.0
         else:
             return 0.0
-        
+
     def update_learning_data_table(self):
         self.learning_data_table.setRowCount(len(self.learning_data))
         for row, data in enumerate(self.learning_data):
@@ -783,19 +776,46 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             self.hebbian_timer.start(2000)
 
     def export_learning_data(self):
-        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export Learning Data", "", "CSV Files (*.csv)")
+        # Save the weight changes text to a file
+        with open("weight_changes.txt", 'w') as file:
+            file.write(self.weight_changes_text.toPlainText())
+
+        # Save the learning data table to a CSV file
+        with open("learning_data.csv", 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Timestamp", "Neuron 1", "Neuron 2", "Weight Change", "Direction"])
+            for row in range(self.learning_data_table.rowCount()):
+                row_data = []
+                for col in range(self.learning_data_table.columnCount()):
+                    item = self.learning_data_table.item(row, col)
+                    row_data.append(item.text() if item else "")
+                writer.writerow(row_data)
+
+        QtWidgets.QMessageBox.information(self, "Export Successful", "Learning data exported to 'weight_changes.txt' and 'learning_data.csv'")
+
+    def export_learning_tab_contents(self):
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export Learning Tab Contents", "", "Text Files (*.txt)")
         if file_name:
-            with open(file_name, 'w', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(["Timestamp", "Neuron 1", "Neuron 2", "Weight Change"])
-                writer.writerows(self.learning_data)
-            QtWidgets.QMessageBox.information(self, "Export Successful", f"Learning data exported to {file_name}")
+            with open(file_name, 'w') as file:
+                file.write("Learning Data Table:\n")
+                for row in range(self.learning_data_table.rowCount()):
+                    row_data = []
+                    for col in range(self.learning_data_table.columnCount()):
+                        item = self.learning_data_table.item(row, col)
+                        row_data.append(item.text() if item else "")
+                    file.write("\t".join(row_data) + "\n")
 
-    def clear_learning_data(self):
-        self.learning_data.clear()
-        self.weight_changes_text.clear()
-        self.learning_data_table.setRowCount(0)
+                file.write("\nWeight Changes Text:\n")
+                file.write(self.weight_changes_text.toPlainText())
 
+            QtWidgets.QMessageBox.information(self, "Export Successful", f"Learning tab contents exported to {file_name}")
+
+    def export_associations(self):
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export Associations", "", "Text Files (*.txt)")
+        if file_name:
+            with open(file_name, 'w') as file:
+                file.write(self.associations_text.toPlainText())
+            QtWidgets.QMessageBox.information(self, "Export Successful", f"Associations exported to {file_name}")
 
     def update_personality_display(self, personality):
         if isinstance(personality, Personality):
