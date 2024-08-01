@@ -11,7 +11,7 @@ caring for the squid and giving him the correct environment in which to thrive a
 
 A squid with the `introverted` personality will require different care than a `lazy` or `greedy` squid.
 
-See [[personality system.md] ](https://github.com/ViciousSquid/Dosidicus/blob/main/Docs/Personality%20system.md)
+See https://github.com/ViciousSquid/Dosidicus/blob/main/Docs/Personalities.md
 
 
 
