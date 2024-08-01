@@ -685,7 +685,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Check if the pair or its reverse exists in weights, if not, initialize it
         if pair not in self.brain_widget.weights and reverse_pair not in self.brain_widget.weights:
             self.brain_widget.weights[pair] = 0.0  # Initialize with a neutral weight
-            print(f"Initialized new weight for pair: {pair}")
+            print(f"** Hebbian: Initialized new weight for pair: {pair}")
 
         # Use the correct pair order
         use_pair = pair if pair in self.brain_widget.weights else reverse_pair
