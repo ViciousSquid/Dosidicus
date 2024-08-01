@@ -1,5 +1,11 @@
 The squid utilises hebbian learning:
 
+When two neurons are activated above a certain threshold at the same time, the weights are strenthened between them in both directions.
+
+Over time this results in relationships between neurons which can lead to complex emergent behaviours.
+
+The learning algorithm runs every few seconds and forms   [associations](https://github.com/ViciousSquid/Dosidicus/blob/main/Docs/BrainTool/Associations%20tab.md) in the brain which inform decision-making.
+
 ```python
 def perform_hebbian_learning(self):
         if self.is_paused or not hasattr(self, 'brain_widget'):
