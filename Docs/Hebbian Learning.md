@@ -39,7 +39,7 @@ def perform_hebbian_learning(self):
                 self.update_connection(neuron1, neuron2, value1, value2)
 ```
 
-We can ask the network to theorise why weights changed and it will try its best!
+We can ask the network to theorise the reason for the weight change using `deduce_weight_change_reason` which will analyse the activity levels based on LOW and HIGH threshold values. This also shows the likelihood of neuron-neuron relationships and the strengths: 
 
 ```python
 def deduce_weight_change_reason(self, pair, value1, value2, prev_weight, new_weight, weight_change):
