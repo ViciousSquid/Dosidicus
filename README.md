@@ -6,7 +6,9 @@
 * requires `python 3.10`+ with `PyQt5` and `numpy`
 * a compiled binary for Windows is available on the [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
 
-![image](https://github.com/user-attachments/assets/8b587227-4f63-4159-aac2-f10cf75d6246)
+![image](https://github.com/user-attachments/assets/7feba5ba-dd0f-4751-a17c-dab106eea9d4)
+
+
 
 
 
