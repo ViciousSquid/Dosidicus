@@ -1,6 +1,6 @@
+What if a Tamagotchi had a neural network and could learn stuff?
 # Dosidicus electronicae
-### A digital pet with a simple neural network
-### 50% Tamagotchi, 50% research project
+### A digital pet with a simple neural network [research project]
 * Includes detailed tools for visualising and understanding how neural networks and Hebbian learning work
 
 * requires `python 3.10`+ with `PyQt5` and `numpy`
