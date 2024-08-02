@@ -444,7 +444,7 @@ class Ui:
                 pixmap_data = buffer.data().toBase64().data().decode()
                 decorations_data.append({
                     'pixmap_data': pixmap_data,
-                    'pos': item.pos(),
+                    'pos': (item.pos().x(), item.pos().y()),  # Convert QPointF to tuple
                     'scale': item.scale()
                 })
         return decorations_data
@@ -454,12 +454,21 @@ class Ui:
             pixmap_data = decoration_data['pixmap_data']
             pixmap = QtGui.QPixmap()
             pixmap.loadFromData(QtCore.QByteArray.fromBase64(pixmap_data.encode()))
-            pos = decoration_data['pos']
+            pos = QtCore.QPointF(decoration_data['pos'][0], decoration_data['pos'][1])
             scale = decoration_data['scale']
-            item = ResizablePixmapItem(pixmap, "decoration_item")
+            filename = decoration_data['filename']
+            item = ResizablePixmapItem(pixmap, filename)
             item.setPos(pos)
             item.setScale(scale)
             self.scene.addItem(item)
+
+    def get_pixmap_data(self, item):
+        pixmap = item.pixmap()
+        buffer = QtCore.QBuffer()
+        buffer.open(QtCore.QIODevice.WriteOnly)
+        pixmap.save(buffer, "PNG")
+        pixmap_data = buffer.data().toBase64().data().decode()
+        return pixmap_data
 
     def closeEvent(self, event):
         # Instead of closing, just hide the window

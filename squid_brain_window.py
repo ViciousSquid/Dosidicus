@@ -575,9 +575,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         controls_layout.addWidget(self.export_button)
 
         # Add export button
-        self.export_learning_button = QtWidgets.QPushButton("Export Learning Data")
-        self.export_learning_button.clicked.connect(self.export_learning_tab_contents)
-        controls_layout.addWidget(self.export_learning_button, alignment=QtCore.Qt.AlignRight)
+        #self.export_learning_button = QtWidgets.QPushButton("Export Learning Data")
+        #self.export_learning_button.clicked.connect(self.export_learning_tab_contents)
+        #controls_layout.addWidget(self.export_learning_button, alignment=QtCore.Qt.AlignRight)
 
         learning_layout.addLayout(controls_layout)
 
@@ -777,11 +777,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def export_learning_data(self):
         # Save the weight changes text to a file
-        with open("weight_changes.txt", 'w') as file:
+        with open("learningdata_reasons.txt", 'w') as file:
             file.write(self.weight_changes_text.toPlainText())
 
         # Save the learning data table to a CSV file
-        with open("learning_data.csv", 'w', newline='') as file:
+        with open("learningdata_weights.csv", 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Timestamp", "Neuron 1", "Neuron 2", "Weight Change", "Direction"])
             for row in range(self.learning_data_table.rowCount()):
@@ -861,7 +861,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Personality type display
         self.personality_tab_layout.addWidget(QtWidgets.QFrame(frameShape=QtWidgets.QFrame.HLine))
         self.personality_type_label = QtWidgets.QLabel("Squid Personality: ")
-        self.personality_type_label.setStyleSheet("font-size: 22px; font-weight: bold;")
+        self.personality_type_label.setStyleSheet("font-size: 20px; font-weight: bold;")
         self.personality_tab_layout.addWidget(self.personality_type_label)
 
         # Personality modifier display
@@ -875,12 +875,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Personality description
         self.personality_description = QtWidgets.QTextEdit()
         self.personality_description.setReadOnly(True)
-        self.personality_description.setStyleSheet("font-size: 16px;")
+        self.personality_description.setStyleSheet("font-size: 20px;")
         self.personality_tab_layout.addWidget(self.personality_description)
 
         # Note about personality generation
         note_label = QtWidgets.QLabel("Note: Personality is randomly generated at the start of a new game")
-        note_label.setStyleSheet("font-size: 14px; font-style: italic;")
+        note_label.setStyleSheet("font-size: 20px; font-style: italic;")
         self.personality_tab_layout.addWidget(note_label)
 
     def update_brain(self, state):

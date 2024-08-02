@@ -869,10 +869,14 @@ class TamagotchiLogic:
             self.squid.satisfaction = squid_data['satisfaction']
             self.squid.anxiety = squid_data['anxiety']
             self.squid.curiosity = squid_data['curiosity']
-            self.squid.personality = squid_data['personality']
+            self.squid.personality = Personality(squid_data['personality'])
             self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
 
             print(f"Loaded personality: {self.squid.personality.value}")
+
+            # Load decoration data
+            decorations_data = save_data.get('decorations', [])
+            self.user_interface.load_decorations_data(decorations_data)
         else:
             print("No save data found")
 
@@ -930,7 +934,16 @@ class TamagotchiLogic:
                 'last_clean_time': self.last_clean_time,
                 'points': self.points
             },
-            'decorations': self.user_interface.get_decorations_data()
+            'decorations': [
+                {
+                    'pixmap_data': self.user_interface.get_pixmap_data(item),
+                    'pos': [item.pos().x(), item.pos().y()],
+                    'scale': item.scale(),
+                    'filename': item.filename
+                }
+                for item in self.user_interface.scene.items()
+                if isinstance(item, ResizablePixmapItem)
+            ]
         }
 
         filepath = self.save_manager.save_game(save_data, is_autosave)
