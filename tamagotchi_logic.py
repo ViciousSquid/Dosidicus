@@ -7,17 +7,20 @@ import random
 import os
 import time
 import math
+import traceback
 from statistics_window import StatisticsWindow
 from save_manager import SaveManager
 from rps_game import RPSGame
 from squid import Personality, Squid
 from ui import ResizablePixmapItem
+from error_logging import log_error
 
 class TamagotchiLogic:
     def __init__(self, user_interface, squid, brain_window):
         self.user_interface = user_interface
         self.squid = squid
         self.brain_window = brain_window
+        self.throwable_items = []
 
         # Connect menu actions
         self.user_interface.feed_action.triggered.connect(self.feed_squid)
@@ -32,6 +35,7 @@ class TamagotchiLogic:
 
         self.lights_on = True
         self.debug_mode = False
+        self.brain_window = brain_window
         self.statistics_window = StatisticsWindow(squid)
         self.statistics_window.show()
 
@@ -114,23 +118,6 @@ class TamagotchiLogic:
         self.update_statistics()
         self.user_interface.scene.update()
 
-    def check_for_decoration_attraction(self):
-        squid_x = self.squid.squid_x
-        squid_y = self.squid.squid_y
-        
-        active_decorations = self.get_nearby_decorations(squid_x, squid_y)
-        
-        if active_decorations:
-            self.apply_decoration_effects(active_decorations)
-            
-            # Move decorations
-            for decoration in active_decorations:
-                decoration_pos = decoration.pos()
-                if decoration_pos.x() < squid_x:
-                    self.move_decoration(decoration, 5)  # Move right
-                else:
-                    self.move_decoration(decoration, -5)  # Move left
-
     def get_nearby_decorations(self, x, y, radius=100):
         nearby_decorations = []
         for item in self.user_interface.scene.items():
@@ -140,6 +127,16 @@ class TamagotchiLogic:
                 if distance <= radius:
                     nearby_decorations.append(item)
         return nearby_decorations
+    
+    def get_nearby_throwable_items(self, x, y, radius=100):
+        nearby_items = []
+        for item in self.user_interface.scene.items():
+            if isinstance(item, ResizablePixmapItem) and item.is_throwable and not item.is_picked_up:
+                item_center = item.sceneBoundingRect().center()
+                distance = math.sqrt((x - item_center.x())**2 + (y - item_center.y())**2)
+                if distance <= radius:
+                    nearby_items.append(item)
+        return nearby_items
     
     def check_collision_with_cheese(self, cheese_item):
         if self.squid.personality == Personality.STUBBORN:
@@ -296,17 +293,22 @@ class TamagotchiLogic:
             self.squid.mental_state_manager.set_state("startled", False)
 
     def update_simulation(self):
+        if self.squid:
+            self.squid.update()
+            self.update_satisfaction()
+            self.update_anxiety()
+            self.update_curiosity()
+            self.check_for_decoration_attraction()
+        
         self.move_objects()
         self.animate_poops()
         self.update_statistics()
+        
         if self.squid:
-            self.squid.move_squid()
-            self.check_for_decoration_attraction()
             self.check_for_sickness()
             if self.mental_states_enabled:
                 self.check_for_startle()
                 self.check_for_curiosity()
-                
 
             # Check if Squid is not in the middle of the RPS game
             if not hasattr(self, 'rps_game') or not self.rps_game.game_window:
@@ -335,6 +337,42 @@ class TamagotchiLogic:
                 # Make Squid move slowly and erratically
                 self.squid.move_slowly()
                 self.squid.move_erratically()
+
+    def check_for_decoration_attraction(self):
+        if self.squid:
+            squid_x = self.squid.squid_x
+            squid_y = self.squid.squid_y
+            
+            active_decorations = self.user_interface.get_nearby_decorations(squid_x, squid_y)
+            
+            if active_decorations:
+                self.apply_decoration_effects(active_decorations)
+                
+                # Move decorations
+                for decoration in active_decorations:
+                    decoration_pos = decoration.pos()
+                    if decoration_pos.x() < squid_x:
+                        self.user_interface.move_decoration(decoration, 5)  # Move right
+                    else:
+                        self.user_interface.move_decoration(decoration, -5)  # Move left
+
+
+    def check_squid_item_interaction(self):
+        if not self.squid.holding_item:
+            for item in self.throwable_items:
+                if not item.is_picked_up and self.squid.squid_item.collidesWithItem(item):
+                    self.squid.pick_up_item(item)
+                    self.show_message("Squid picked up a small rock!")
+                    break
+
+    def update_throwable_items(self):
+        self.throwable_items = [item for item in self.user_interface.scene.items() 
+                                if isinstance(item, ResizablePixmapItem) and item.is_throwable]
+
+    def remove_throwable_item(self, item):
+        if item in self.throwable_items:
+            self.throwable_items.remove(item)
+            self.user_interface.scene.removeItem(item)
 
     def check_for_sickness(self):
         # Existing sickness logic
@@ -732,11 +770,104 @@ class TamagotchiLogic:
 
     def toggle_debug_mode(self):
         self.debug_mode = not self.debug_mode
+        if self.debug_mode:
+            # Enable debug mode
+            self.brain_window.print_to_console("Debug mode enabled. Output will be saved to console.txt")
+        else:
+            # Disable debug mode and save output
+            self.save_debug_output()
+            self.brain_window.print_to_console("Debug mode disabled. Output saved to console.txt")
+
         self.statistics_window.set_debug_mode(self.debug_mode)
-        print(f"Debug mode {'enabled' if self.debug_mode else 'disabled'}")
+        self.user_interface.set_debug_mode(self.debug_mode)
+
+    def save_debug_output(self):
+        console_text = self.brain_window.get_console_text()
+        with open('console.txt', 'w', encoding='utf-8') as f:
+            f.write(console_text)
+        self.brain_window.print_to_console("Debug output saved to console.txt")
+
+    def pick_up_rock_debug(self):
+        log_error("Entering pick_up_rock_debug method")
+        try:
+            if self.debug_mode and self.squid:
+                log_error("Creating rock pixmap")
+                rock_pixmap = QtGui.QPixmap("images/rock_small.png")
+                log_error(f"Rock pixmap created: {rock_pixmap is not None}")
+                
+                log_error("Creating ResizablePixmapItem")
+                rock_item = ResizablePixmapItem(rock_pixmap, "rock_small.png")
+                log_error(f"ResizablePixmapItem created: {rock_item is not None}")
+                
+                rock_item.setScale(0.5)
+                rock_item.is_throwable = True
+                
+                log_error(f"Squid position: ({self.squid.squid_x}, {self.squid.squid_y})")
+                rock_item.setPos(self.squid.squid_x + self.squid.squid_width, self.squid.squid_y)
+                log_error("Rock positioned")
+                
+                log_error("Adding rock to scene")
+                self.user_interface.scene.addItem(rock_item)
+                log_error("Rock added to scene")
+                
+                log_error("Squid picking up rock")
+                self.squid.pick_up_item(rock_item)
+                log_error(f"Squid picked up the rock: {self.squid.holding_item is not None}")
+                
+                if self.squid.holding_item:
+                    log_error("Squid is now holding the rock and changed to RPS image")
+                else:
+                    log_error("Squid failed to pick up the rock")
+            else:
+                log_error("Debug mode is off or squid doesn't exist")
+        except Exception as e:
+            error_message = f"Error in pick_up_rock_debug: {str(e)}"
+            log_error(error_message)
+            log_error(traceback.format_exc())
+
+    def throw_rock_debug(self):
+        log_error("Entering throw_rock_debug method")
+        try:
+            log_error(f"Debug mode: {self.debug_mode}, Squid exists: {self.squid is not None}")
+            if self.debug_mode and self.squid:
+                log_error("Creating rock pixmap")
+                rock_pixmap = QtGui.QPixmap("images/rock_small.png")
+                log_error(f"Rock pixmap created: {rock_pixmap is not None}")
+                
+                log_error("Creating ResizablePixmapItem")
+                rock_item = ResizablePixmapItem(rock_pixmap, "rock_small.png")
+                log_error(f"ResizablePixmapItem created: {rock_item is not None}")
+                
+                rock_item.setScale(0.5)
+                rock_item.is_throwable = True
+                
+                log_error(f"Squid position: ({self.squid.squid_x}, {self.squid.squid_y})")
+                rock_item.setPos(self.squid.squid_x + self.squid.squid_width, self.squid.squid_y)
+                log_error("Rock positioned")
+                
+                log_error("Adding rock to scene")
+                self.user_interface.scene.addItem(rock_item)
+                log_error("Rock added to scene")
+                
+                log_error("Squid picking up rock")
+                self.squid.pick_up_item(rock_item)
+                log_error(f"Squid picked up the rock: {self.squid.holding_item is not None}")
+                
+                if self.squid.holding_item:
+                    log_error("Squid throwing rock")
+                    self.squid.throw_item()
+                    log_error("Squid throw_item called")
+                else:
+                    log_error("Squid failed to pick up the rock")
+            else:
+                log_error("Debug mode is off or squid doesn't exist")
+        except Exception as e:
+            error_message = f"Error in throw_rock_debug: {str(e)}"
+            log_error(error_message)
+            log_error(traceback.format_exc())
 
     def update_cleanliness_overlay(self):
-        if self.squid is not None:
+        if self.squid is not None and hasattr(self.user_interface, 'cleanliness_overlay'):
             cleanliness = self.squid.cleanliness
             if cleanliness < 15:
                 opacity = 200

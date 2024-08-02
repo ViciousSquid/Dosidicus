@@ -1,4 +1,5 @@
 import sys
+import traceback
 from PyQt5 import QtWidgets, QtCore
 import random
 from ui import Ui
@@ -7,6 +8,7 @@ from squid import Squid, Personality
 from splash_screen import SplashScreen
 from save_manager import SaveManager
 from squid_brain_window import SquidBrainWindow
+from error_logging import log_error
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
@@ -51,6 +53,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.brain_update_timer.timeout.connect(self.update_brain_window)
         self.brain_update_timer.start(2000)  # Update every 2000 ms
 
+        # Connect the save_debug_output method to the application's aboutToQuit signal
+        QtCore.QCoreApplication.instance().aboutToQuit.connect(self.tamagotchi_logic.save_debug_output)
+
     def update_brain_window(self):
         # Get the current state from your squid or tamagotchi logic
         current_state = {
@@ -85,11 +90,50 @@ class MainWindow(QtWidgets.QMainWindow):
         self.user_interface.show_message("Squid is hatching!")
         # The message will automatically fade out after 8 seconds as per the show_message implementation
 
+def exception_hook(exctype, value, tb):
+    error_msg = ''.join(traceback.format_exception(exctype, value, tb))
+    print(error_msg)  # Print to console
+    log_error(f"Uncaught exception:\n{error_msg}")  # Log to file
+    QtWidgets.QApplication.quit()  # Terminate the application
+
 def main():
-    application = QtWidgets.QApplication(sys.argv)
-    main_window = MainWindow()
-    main_window.show()
-    sys.exit(application.exec_())
+    # Set up global exception handling
+    sys.excepthook = exception_hook
+
+    try:
+        application = QtWidgets.QApplication(sys.argv)
+        
+        # Set up event loop exception handling
+        def qt_message_handler(mode, context, message):
+            if mode == QtCore.QtInfoMsg:
+                mode = 'INFO'
+            elif mode == QtCore.QtWarningMsg:
+                mode = 'WARNING'
+            elif mode == QtCore.QtCriticalMsg:
+                mode = 'CRITICAL'
+            elif mode == QtCore.QtFatalMsg:
+                mode = 'FATAL'
+            else:
+                mode = 'DEBUG'
+            print(f'Qt {mode}: {message}')
+            log_error(f'Qt {mode}: {message}')
+
+        QtCore.qInstallMessageHandler(qt_message_handler)
+
+        main_window = MainWindow()
+        main_window.show()
+
+        # Wrap the exec_ call in a try-except block
+        try:
+            sys.exit(application.exec_())
+        except Exception as e:
+            log_error(f"Exception in application.exec_(): {str(e)}")
+            raise
+
+    except Exception as e:
+        error_message = f"Unhandled exception in main: {str(e)}"
+        log_error(error_message)
+        raise  # Re-raise the exception after logging
 
 if __name__ == '__main__':
     main()

@@ -1,32 +1,42 @@
 {
-    "plant01.png": {
-      "happiness": 5,
-      "cleanliness": 5
-    },
-    "plant02.png": {
-      "happiness": 5,
-      "cleanliness": 7
-    },
-    "plant03.png": {
-      "happiness": 5,
-      "cleanliness": 5
-    },
-    "plant04.png": {
-      "happiness": 5,
-      "cleanliness": 5
-    },
-    "plant05.png": {
-      "happiness": 5,
-      "cleanliness": 5
-    },
-    "plant06.png": {
-      "happiness": 5,
-      "cleanliness": 5
-    },
-    "rock01.png": {
-      "happiness": 2
-    },
-    "rock02.png": {
-      "happiness": 2
-    }
+  "plant01.png": {
+      "category": "plant",
+      "cleanliness": 3
+  },
+  "plant02.png": {
+      "category": "plant",
+      "cleanliness": 3
+  },
+  "plant03.png": {
+      "category": "plant",
+      "cleanliness": 3
+  },
+  "plant04.png": {
+      "category": "plant",
+      "cleanliness": 3
+  },
+  "plant05.png": {
+      "category": "plant",
+      "cleanliness": 3
+  },
+  "plant06.png": {
+      "category": "plant",
+      "cleanliness": 3
+  },
+  "sml_plant01.png": {
+      "category": "plant",
+      "cleanliness": 2
+  },
+  "rock01.png": {
+      "category": "rock",
+      "weight": 10
+  },
+  "rock02.png": {
+      "category": "rock",
+      "weight": 10
+  },
+  "rock_small.png": {
+      "category": "rock",
+      "weight": 2
   }
+}

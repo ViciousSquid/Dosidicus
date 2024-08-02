@@ -5,43 +5,40 @@ import random
 from PyQt5 import QtCore, QtGui, QtWidgets
 from squid_brain_window import SquidBrainWindow
 from statistics_window import StatisticsWindow
-
-class DecorationItem(QtWidgets.QLabel):
-    def __init__(self, pixmap, filename):
-        super().__init__()
-        self.setPixmap(pixmap.scaled(128, 128, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
-        self.filename = filename
-        self.setFixedSize(138, 138)  # Increased to accommodate larger thumbnails
-        self.setAlignment(QtCore.Qt.AlignCenter)
-        self.setToolTip(filename)
-
-        self.decoration_items = []
-
-    def mousePressEvent(self, event):
-        if event.button() == QtCore.Qt.LeftButton:
-            drag = QtGui.QDrag(self)
-            mime_data = QtCore.QMimeData()
-            mime_data.setUrls([QtCore.QUrl.fromLocalFile(self.filename)])
-            drag.setMimeData(mime_data)
-            drag.setPixmap(self.pixmap())
-            drag.setHotSpot(event.pos() - self.rect().topLeft())
-            drag.exec_(QtCore.Qt.CopyAction)
+from error_logging import log_error
 
 class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
     def __init__(self, pixmap, filename):
-        scaled_pixmap = pixmap.scaled(128, 128, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
-        super().__init__(scaled_pixmap)
+        super().__init__(pixmap)
+        self.filename = filename
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable)
         self.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
         self.resize_handle = None
         self.original_pixmap = pixmap
-        self.filename = filename
         self.stat_multipliers, self.category = self.get_decoration_info()
-        
-        # Ensure stat_multipliers is never empty
-        if not self.stat_multipliers:
-            self.stat_multipliers = {'happiness': 1}
+        self.is_rock = self.category == 'rock'
+        self.is_sinking = False
+        self.sink_speed = 2  # pixels per frame, adjust as needed
+        self.is_throwable = self.category == 'rock' and self.boundingRect().width() <= 50  # Only small rocks are throwable
+        self.is_picked_up = False  # Add this line
+
+    def calculate_weight(self):
+        if self.is_throwable:
+            size = max(self.boundingRect().width(), self.boundingRect().height())
+            if size <= 30:
+                return max(random.uniform(0.1, 0.5), 0.1)  # Small items, minimum weight 0.1
+            elif size <= 50:
+                return max(random.uniform(0.5, 2), 0.1)  # Medium items, minimum weight 0.1
+            else:
+                return max(random.uniform(2, 5), 0.1)  # Large items, minimum weight 0.1
+        return 0.1  # Non-throwable items have a minimal weight
+
+    def check_if_throwable(self):
+        is_throwable = (self.category == 'rock' and
+                        max(self.boundingRect().width(), self.boundingRect().height()) <= 50)
+        log_error(f"Checking if item is throwable: {is_throwable}")
+        return is_throwable
 
     def boundingRect(self):
         return super().boundingRect().adjusted(0, 0, 20, 20)
@@ -89,13 +86,71 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
             with open('decoration_stats.json', 'r') as f:
                 stats = json.load(f)
             info = stats.get(self.filename, {})
-            return {k: v for k, v in info.items() if k != 'category'}, info.get('category', 'rock')
+            return {k: v for k, v in info.items() if k != 'category'}, info.get('category', 'unknown')
         except FileNotFoundError:
-            print("decoration_stats.json not found. Using empty stats.")
-            return {}, 'rock'
-        except json.JSONDecodeError:
-            print("Error decoding decoration_stats.json. Using empty stats.")
-            return {}, 'rock'
+            print("decoration_stats.json not found. Using default stats.")
+            return {}, 'unknown'
+
+class ThrowableItem(ResizablePixmapItem):
+    def __init__(self, pixmap, filename, size):
+        super().__init__(pixmap, filename)
+        self.size = size  # 'small', 'medium', or 'large'
+        self.weight = self.calculate_weight()
+        self.sink_speed = self.calculate_sink_speed()
+        self.is_picked_up = False
+
+    def advance(self, phase):
+        if not phase or not self.is_rock or not self.is_sinking:
+            return
+
+        new_pos = self.pos() + QtCore.QPointF(0, self.sink_speed)
+        scene_bottom = self.scene().sceneRect().bottom()
+        if new_pos.y() + self.boundingRect().height() > scene_bottom:
+            new_pos.setY(scene_bottom - self.boundingRect().height())
+            self.is_sinking = False
+        self.setPos(new_pos)
+
+    def start_sinking(self):
+        if self.is_rock:
+            self.is_sinking = True
+
+    def calculate_weight(self):
+        if self.size == 'small':
+            return random.uniform(0.1, 0.5)
+        elif self.size == 'medium':
+            return random.uniform(0.5, 2)
+        else:  # large
+            return random.uniform(2, 5)
+
+    def calculate_sink_speed(self):
+        # Adjust the sinking speed based on the weight
+        if self.weight <= 0.5:
+            return 1  # Slow sinking speed for light items
+        elif self.weight <= 2:
+            return 2  # Medium sinking speed for medium items
+        else:
+            return 5  # Fast sinking speed for heavy items
+
+class DecorationItem(QtWidgets.QLabel):
+    def __init__(self, pixmap, filename):
+        super().__init__()
+        self.setPixmap(pixmap.scaled(128, 128, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+        self.filename = filename
+        self.setFixedSize(138, 138)  # Increased to accommodate larger thumbnails
+        self.setAlignment(QtCore.Qt.AlignCenter)
+        self.setToolTip(filename)
+
+        self.decoration_items = []
+
+    def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            drag = QtGui.QDrag(self)
+            mime_data = QtCore.QMimeData()
+            mime_data.setUrls([QtCore.QUrl.fromLocalFile(self.filename)])
+            drag.setMimeData(mime_data)
+            drag.setPixmap(self.pixmap())
+            drag.setHotSpot(event.pos() - self.rect().topLeft())
+            drag.exec_(QtCore.Qt.CopyAction)
 
 class DecorationWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -149,7 +204,6 @@ class Ui:
         self.window_height = 820
 
         self.window.setWindowTitle("Dosidicus")
-
         self.window.resize(self.window_width, self.window_height)
 
         self.scene = QtWidgets.QGraphicsScene()
@@ -184,10 +238,29 @@ class Ui:
         # Connect the key press event
         self.view.keyPressEvent = self.keyPressEvent
 
+        self.debug_mode = False
+        self.throw_rock_button = None
+
         # Setup other UI elements
         self.setup_ui_elements()
+        self.setup_scene_elements()
+
+        # Set up the scene update timer
+        self.scene_update_timer = QtCore.QTimer()
+        self.scene_update_timer.timeout.connect(self.update_scene)
+        self.scene_update_timer.start(50)  # Update every 50ms
+
+        # Setup throwable items
+        self.setup_throwable_items()
+
+        # Add small rocks randomly at the bottom of the screen
+        self.add_random_small_rocks()
 
     def setup_ui_elements(self):
+        # Add UI elements that don't depend on the scene
+        pass
+
+    def setup_scene_elements(self):
         # Create the rectangle item
         self.rect_item = self.scene.addRect(50, 50, self.window_width - 100, self.window_height - 100,
                                             QtGui.QPen(QtGui.QColor(0, 0, 0)), QtGui.QBrush(QtGui.QColor(255, 255, 255)))
@@ -206,20 +279,52 @@ class Ui:
         self.feeding_message.setOpacity(0)
         self.scene.addItem(self.feeding_message)
 
-        # Create points labels
-        self.points_label = QtWidgets.QGraphicsTextItem("Points:")
-        self.points_label.setDefaultTextColor(QtGui.QColor(0, 0, 0))  # Set font color to black
-        self.points_label.setFont(QtGui.QFont("Arial", 12))
-        self.points_label.setPos(self.window_width - 255, 10)  # Move the label to the left by 15 pixels
-        self.points_label.setZValue(2)  # Increase Z-value to ensure it's on top
-        self.scene.addItem(self.points_label)
+    def setup_throwable_items(self):
+        # Load throwable item images
+        self.throwable_item_images = {
+            'small': QtGui.QPixmap("images/rock_small.png"),
+            'medium': QtGui.QPixmap("images/rock_medium.png"),
+            'large': QtGui.QPixmap("images/rock_large.png")
+        }
 
-        self.points_value_label = QtWidgets.QGraphicsTextItem("0")
-        self.points_value_label.setDefaultTextColor(QtGui.QColor(0, 0, 0))  # Set font color to black
-        self.points_value_label.setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
-        self.points_value_label.setPos(self.window_width - 95, 10)
-        self.points_value_label.setZValue(2)  # Increase Z-value to ensure it's on top
-        self.scene.addItem(self.points_value_label)
+    def create_throwable_item(self, size, x, y):
+        item = ThrowableItem(self.throwable_item_images[size], f"rock_{size}.png", size)
+        item.setPos(x, y)
+        self.scene.addItem(item)
+        return item
+
+    def update_rectangle_size(self):
+        if self.debug_mode:
+            self.rect_item.setRect(50, 50, self.window_width - 100, self.window_height - 150)
+            self.create_throw_rock_button()
+            self.create_pick_up_rock_button()
+        else:
+            self.rect_item.setRect(50, 50, self.window_width - 100, self.window_height - 100)
+            self.remove_throw_rock_button()
+            self.remove_pick_up_rock_button()
+
+    def create_throw_rock_button(self):
+        if self.throw_rock_button is None:
+            self.throw_rock_button = QtWidgets.QPushButton("Throw Rock", self.window)
+            self.throw_rock_button.setGeometry(50, self.window_height - 90, 100, 30)
+            self.throw_rock_button.clicked.connect(self.tamagotchi_logic.throw_rock_debug)
+        self.throw_rock_button.show()
+
+    def remove_throw_rock_button(self):
+        if self.throw_rock_button is not None:
+            self.throw_rock_button.hide()
+
+    def create_pick_up_rock_button(self):
+        if not hasattr(self, 'pick_up_rock_button'):
+            self.pick_up_rock_button = QtWidgets.QPushButton("Pick Up Rock", self.window)
+            self.pick_up_rock_button.setGeometry(160, self.window_height - 90, 100, 30)
+            self.pick_up_rock_button.clicked.connect(self.tamagotchi_logic.pick_up_rock_debug)
+            self.pick_up_rock_button.show()
+
+    def remove_pick_up_rock_button(self):
+        if hasattr(self, 'pick_up_rock_button'):
+            self.pick_up_rock_button.deleteLater()
+            delattr(self, 'pick_up_rock_button')
 
     def toggle_decoration_window(self, checked):
         if checked:
@@ -239,8 +344,11 @@ class Ui:
         self.feeding_message.setPos(0, self.window_height - 75)
         self.feeding_message.setTextWidth(self.window_width)
 
-        self.points_label.setPos(self.window_width - 265, 10)  # Move the label to the left by 15 pixels
-        self.points_value_label.setPos(self.window_width - 95, 10)
+        self.update_rectangle_size()
+        if self.throw_rock_button:
+            self.throw_rock_button.setGeometry(50, self.window_height - 90, 100, 30)
+        if hasattr(self, 'pick_up_rock_button'):
+            self.pick_up_rock_button.setGeometry(160, self.window_height - 90, 100, 30)
 
     def show_message(self, message):
         # Remove any existing message items
@@ -270,7 +378,8 @@ class Ui:
         self.fade_out_animation.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
 
     def update_points(self, points):
-        self.points_value_label.setPlainText(str(points))
+        # Keep the functionality but remove the display
+        pass
 
     def get_nearby_decorations(self, x, y, radius=100):
         nearby_decorations = []
@@ -285,11 +394,11 @@ class Ui:
     def move_decoration(self, decoration, dx):
         current_pos = decoration.pos()
         new_x = current_pos.x() + dx
-        
+
         # Ensure the decoration stays within the scene boundaries
         scene_rect = self.scene.sceneRect()
         new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
-        
+
         decoration.setPos(new_x, current_pos.y())
 
         # Create a small animation to make the movement smoother
@@ -319,20 +428,27 @@ class Ui:
             pixmap = QtGui.QPixmap(file_path)
             if not pixmap.isNull():
                 filename = os.path.basename(file_path)
-                item = ResizablePixmapItem(pixmap, file_path)
-                
-                if filename.startswith('st_'):
-                    # Keep original size for static decorations
-                    scale_factor = 1.0
+                item = None
+
+                # Check if the item is a rock and determine its size
+                if 'rock' in filename.lower():
+                    size = 'small' if 'small' in filename.lower() else 'medium' if 'medium' in filename.lower() else 'large'
+                    item = ThrowableItem(pixmap, filename, size)
                 else:
-                    # Generate a random scale factor between 0.5 and 2 for non-static decorations
-                    scale_factor = random.uniform(0.5, 2)
-                
+                    item = ResizablePixmapItem(pixmap, filename)
+
+                # Generate a random scale factor between 0.5 and 2
+                scale_factor = random.uniform(0.5, 2)
                 item.setScale(scale_factor)
+
                 pos = self.view.mapToScene(event.pos())
                 item.setPos(pos)
                 self.scene.addItem(item)
-                self.decoration_window.add_decoration_item(item)
+
+                # Start sinking if the item is a ThrowableItem
+                if isinstance(item, ThrowableItem):
+                    item.start_sinking()
+
                 event.accept()
             else:
                 event.ignore()
@@ -462,6 +578,31 @@ class Ui:
             item.setScale(scale)
             self.scene.addItem(item)
 
+    def set_debug_mode(self, enabled):
+        self.debug_mode = enabled
+        self.update_rectangle_size()
+
+    def update_rectangle_size(self):
+        if self.debug_mode:
+            self.rect_item.setRect(50, 50, self.window_width - 100, self.window_height - 150)
+            self.create_throw_rock_button()
+            self.create_pick_up_rock_button()
+        else:
+            self.rect_item.setRect(50, 50, self.window_width - 100, self.window_height - 100)
+            self.remove_throw_rock_button()
+            self.remove_pick_up_rock_button()
+
+    def create_throw_rock_button(self):
+        if self.throw_rock_button is None:
+            self.throw_rock_button = QtWidgets.QPushButton("Throw Rock", self.window)
+            self.throw_rock_button.setGeometry(50, self.window_height - 90, 100, 30)
+            self.throw_rock_button.clicked.connect(self.tamagotchi_logic.throw_rock_debug)
+        self.throw_rock_button.show()
+
+    def remove_throw_rock_button(self):
+        if self.throw_rock_button is not None:
+            self.throw_rock_button.hide()
+
     def get_pixmap_data(self, item):
         pixmap = item.pixmap()
         buffer = QtCore.QBuffer()
@@ -477,3 +618,27 @@ class Ui:
         # Uncheck the menu item
         if hasattr(self.parent(), 'decorations_action'):
             self.parent().decorations_action.setChecked(False)
+
+    def update_scene(self):
+        self.ensure_rocks_sink_to_bottom()
+        self.scene.update()
+
+    def add_random_small_rocks(self):
+        num_rocks = random.randint(2, 3)  # Add between 2 and 3 small rocks
+        for _ in range(num_rocks):
+            x = random.randint(50, self.window_width - 50)
+            y = self.window_height - random.randint(25, 50)  # Ensure rocks are within 25 pixels of the bottom
+            rock_item = self.create_throwable_item('small', x, y)
+            rock_item.setScale(random.uniform(0.3, 0.5))  # Scale the size randomly between 30% and 50%
+            rock_item.setRotation(random.uniform(0, 360))  # Rotate the rock randomly
+            rock_item.start_sinking()
+
+    def ensure_rocks_sink_to_bottom(self):
+        for item in self.scene.items():
+            if isinstance(item, ThrowableItem) and item.is_sinking:
+                new_pos = item.pos() + QtCore.QPointF(0, item.sink_speed)
+                scene_bottom = self.scene.sceneRect().bottom()
+                if new_pos.y() + item.boundingRect().height() > scene_bottom:
+                    new_pos.setY(scene_bottom - item.boundingRect().height())
+                    item.is_sinking = False
+                item.setPos(new_pos)

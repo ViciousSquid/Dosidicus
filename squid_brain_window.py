@@ -80,15 +80,15 @@ class BrainWidget(QtWidgets.QWidget):
             for j in range(i+1, len(neurons)):
                 self.weights[(neurons[i], neurons[j])] = random.uniform(-1, 1)
 
-        def update_state(self, new_state):
-            # Update only the keys that exist in self.state and are allowed to be modified
-            for key in self.state.keys():
-                if key in new_state and key not in ['satisfaction', 'anxiety', 'curiosity']:
-                    self.state[key] = new_state[key]
-            self.update_weights()
-            self.update()
-            if self.capture_training_data_enabled:
-                self.capture_training_data(new_state)
+    def update_state(self, new_state):
+        # Update only the keys that exist in self.state and are allowed to be modified
+        for key in self.state.keys():
+            if key in new_state and key not in ['satisfaction', 'anxiety', 'curiosity']:
+                self.state[key] = new_state[key]
+        self.update_weights()
+        self.update()
+        if self.capture_training_data_enabled:
+            self.capture_training_data(new_state)
 
     def update_weights(self):
         if self.frozen_weights is not None:
@@ -371,6 +371,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.learning_data = []
         self.is_paused = False
 
+    def log_message(self, message):
+        print(f"SquidBrain: {message}")
+
     def init_tabs(self):
         self.tabs = QtWidgets.QTabWidget()
         self.layout.addWidget(self.tabs)
@@ -455,6 +458,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.about_tab.setLayout(self.about_tab_layout)
         self.tabs.addTab(self.about_tab, "About")
         self.init_about_tab()
+
+    def print_to_console(self, message):
+        print(message)  # This will use the ConsoleOutput we've set up
+
+    def get_console_text(self):
+        return self.console_output.toPlainText()
 
     def init_associations_tab(self):
         # Add a checkbox to toggle explanation
@@ -574,10 +583,19 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.export_button.clicked.connect(self.export_learning_data)
         controls_layout.addWidget(self.export_button)
 
-        # Add export button
-        #self.export_learning_button = QtWidgets.QPushButton("Export Learning Data")
-        #self.export_learning_button.clicked.connect(self.export_learning_tab_contents)
-        #controls_layout.addWidget(self.export_learning_button, alignment=QtCore.Qt.AlignRight)
+        # Add export checkboxes
+        self.export_weight_changes_checkbox = QtWidgets.QCheckBox("Export weight changes")
+        self.export_weight_changes_checkbox.setChecked(True)
+        controls_layout.addWidget(self.export_weight_changes_checkbox)
+
+        self.export_reasoning_checkbox = QtWidgets.QCheckBox("Export reasoning")
+        self.export_reasoning_checkbox.setChecked(True)
+        controls_layout.addWidget(self.export_reasoning_checkbox)
+
+        # Add clear button
+        self.clear_button = QtWidgets.QPushButton("Clear")
+        self.clear_button.clicked.connect(self.clear_learning_data)
+        controls_layout.addWidget(self.clear_button)
 
         learning_layout.addLayout(controls_layout)
 
@@ -777,21 +795,23 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def export_learning_data(self):
         # Save the weight changes text to a file
-        with open("learningdata_reasons.txt", 'w') as file:
-            file.write(self.weight_changes_text.toPlainText())
+        if self.export_weight_changes_checkbox.isChecked():
+            with open("learningdata_weights.csv", 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(["Timestamp", "Neuron 1", "Neuron 2", "Weight Change", "Direction"])
+                for row in range(self.learning_data_table.rowCount()):
+                    row_data = []
+                    for col in range(self.learning_data_table.columnCount()):
+                        item = self.learning_data_table.item(row, col)
+                        row_data.append(item.text() if item else "")
+                    writer.writerow(row_data)
 
         # Save the learning data table to a CSV file
-        with open("learningdata_weights.csv", 'w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(["Timestamp", "Neuron 1", "Neuron 2", "Weight Change", "Direction"])
-            for row in range(self.learning_data_table.rowCount()):
-                row_data = []
-                for col in range(self.learning_data_table.columnCount()):
-                    item = self.learning_data_table.item(row, col)
-                    row_data.append(item.text() if item else "")
-                writer.writerow(row_data)
+        if self.export_reasoning_checkbox.isChecked():
+            with open("learningdata_reasons.txt", 'w') as file:
+                file.write(self.weight_changes_text.toPlainText())
 
-        QtWidgets.QMessageBox.information(self, "Export Successful", "Learning data exported to 'weight_changes.txt' and 'learning_data.csv'")
+        QtWidgets.QMessageBox.information(self, "Export Successful", "Learning data exported to 'learningdata_weights.csv' and 'learningdata_reasons.txt'")
 
     def export_learning_tab_contents(self):
         file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export Learning Tab Contents", "", "Text Files (*.txt)")
@@ -1039,6 +1059,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                     self.tamagotchi_logic.update_from_brain(stimulation_values)
                 else:
                     print("Warning: tamagotchi_logic is not set. Brain stimulation will not affect the squid.")
+
+    def clear_learning_data(self):
+        self.weight_changes_text.clear()
+        self.learning_data_table.setRowCount(0)
+        self.brain_widget.training_data = []
+        self.learning_data = []
 
 class LogWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
