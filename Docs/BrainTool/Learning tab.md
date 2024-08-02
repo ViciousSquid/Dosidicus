@@ -22,5 +22,8 @@ This information is used to infer associations which can be seen on the associat
 The bottom window shows a table of which neurons changed, by how much and in which direction
 
 Either or both of these can be selected for Export.
+
+The `learningdata_weights.csv` and/or `learningdata_reasons.txt` will be created in the application folder
+
 Please be aware that the exported files can be VERY large as all activity is recorded since egg hatch.
 Use the 'Clear' button to clear existing data before export if you only want slices of the data.
