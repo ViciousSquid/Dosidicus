@@ -370,6 +370,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.log_window = None
         self.learning_data = []
         self.is_paused = False
+        self.console = ConsoleOutput(self.console_output)
 
     def init_tabs(self):
         self.tabs = QtWidgets.QTabWidget()
@@ -1019,8 +1020,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.console_output = QtWidgets.QTextEdit()
         self.console_output.setReadOnly(True)
         self.console_tab_layout.addWidget(self.console_output)
-
-        sys.stdout = ConsoleOutput(self.console_output)
+        self.console = ConsoleOutput(self.console_output)
 
     def create_button(self, text, callback, color):
         button = QtWidgets.QPushButton(text)

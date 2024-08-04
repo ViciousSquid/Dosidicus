@@ -148,25 +148,6 @@ class Squid:
         elif self.sleepiness > 70:
             self.status = "tired"
             self.go_to_sleep()
-        elif self.personality == Personality.INTROVERT:
-            if self.happiness > 70:
-                self.status = "content in solitude"
-                self.move_slowly()
-            else:
-                self.status = "seeking alone time"
-                self.explore_environment()
-
-        elif self.personality == Personality.GREEDY:
-            if self.hunger > 50 and self.anxiety > 60:
-                self.status = "anxious and hungry"
-                self.search_for_food()
-            elif self.curiosity > 50:
-                self.status = "curiously seeking food"
-                self.explore_environment()
-            else:
-                self.status = "content for now"
-                self.move_randomly()
-
         elif self.personality == Personality.TIMID:
             if self.anxiety > 50 and not self.is_near_plant():
                 self.status = "anxiously seeking plants"
@@ -618,6 +599,22 @@ class Squid:
                                        self.squid_y + self.sick_icon_offset.y())
 
     def is_near_plant(self):
-        # This method should be implemented to check if the squid is near a plant decoration
-        # For now, we'll return False as a placeholder
-        return False
+        if self.tamagotchi_logic is None:
+            return False
+        
+        nearby_decorations = self.tamagotchi_logic.get_nearby_decorations(self.squid_x, self.squid_y)
+        return any(decoration.category == 'plant' for decoration in nearby_decorations)
+    
+    def move_towards_plant(self):
+        if self.tamagotchi_logic is None:
+            return
+        
+        nearby_decorations = self.tamagotchi_logic.get_nearby_decorations(self.squid_x, self.squid_y)
+        plants = [d for d in nearby_decorations if d.category == 'plant']
+        
+        if plants:
+            closest_plant = min(plants, key=lambda p: self.distance_to(p.pos().x(), p.pos().y()))
+            self.move_towards(closest_plant.pos().x(), closest_plant.pos().y())
+        else:
+            self.move_randomly()
+
