@@ -1,3 +1,5 @@
+# Main Entry point
+
 import sys
 from PyQt5 import QtWidgets, QtCore
 import random
@@ -7,7 +9,6 @@ from squid import Squid, Personality
 from splash_screen import SplashScreen
 from save_manager import SaveManager
 from squid_brain_window import SquidBrainWindow
-from personalities import GREEDY, INTROVERT, LAZY, STUBBORN, TIMID
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):

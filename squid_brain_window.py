@@ -1,5 +1,5 @@
 ########### BRAIN TOOL
-########### Version 1.0.5.0 - July 2024
+########### Version 1.0.5.5 - July 2024
 ###########
 ########### by Rufus Pearce
 ########### github.com/ViciousSquid/Dosidicus
@@ -900,8 +900,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <p>A Tamagotchi-style digital pet with a simple neural network</p>
         <ul>
             <li>by Rufus Pearce</li>
-            <li>Brain Tool version 1.0.5.0</li>
-            <li>Dosidicus version 1.0.370 (milestone 1)</li>
+            <li>Brain Tool version 1.0.5.5</li>
+            <li>Dosidicus version 1.0.370.2 (milestone 1)</li>
         <p>This is a research project. Please suggest features.</p>
         </ul>
         """)

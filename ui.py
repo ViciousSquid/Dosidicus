@@ -1,3 +1,5 @@
+## UI Stuff
+
 import os
 import json
 import math
@@ -88,15 +90,13 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         try:
             with open('decoration_stats.json', 'r') as f:
                 stats = json.load(f)
-            base_filename = os.path.basename(self.filename)
-            info = stats.get(base_filename, {})
-            category = 'plant' if base_filename.startswith('plant') else 'rock'
-            return info, category
+            info = stats.get(self.filename, {})
+            return {k: v for k, v in info.items() if k != 'category'}, info.get('category', 'rock')
         except FileNotFoundError:
-            print("decoration_stats.json not found. Using default stats.")
+            print("decoration_stats.json not found. Using empty stats.")
             return {}, 'rock'
         except json.JSONDecodeError:
-            print("Error decoding decoration_stats.json. Using default stats.")
+            print("Error decoding decoration_stats.json. Using empty stats.")
             return {}, 'rock'
 
 class DecorationWindow(QtWidgets.QWidget):

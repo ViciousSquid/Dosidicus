@@ -1,5 +1,5 @@
 # Tamagotchi logic for a digital pet with a neural network
-# by Rufus Pearce (ViciousSquid)  |  July 2024  |  MIT License
+# by Rufus Pearce (ViciousSquid)  |  July 2024  |  version 1.0.370.2
 # https://github.com/ViciousSquid/Dosidicus
 
 from PyQt5 import QtCore, QtGui, QtWidgets
