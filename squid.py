@@ -6,6 +6,12 @@ from enum import Enum
 import math
 from PyQt5 import QtCore, QtGui, QtWidgets
 from mental_states import MentalStateManager
+from personalities import GREEDY, INTROVERT, LAZY, STUBBORN, TIMID
+from personalities.greedy_personality import greedy_decision, eat_greedily
+from personalities.introvert_personality import introvert_decision
+from personalities.lazy_personality import lazy_decision
+from personalities.stubborn_personality import stubborn_decision
+from personalities.timid_personality import timid_decision
 
 class Personality(Enum):
     TIMID = "timid"
@@ -48,11 +54,11 @@ class Squid:
         self.sick_icon_item = None
         self.sick_icon_offset = QtCore.QPointF(0, -100)  # Offset the sick icon above the squid
 
-        self.status = "roaming"  # Initialize status
+        self.status = "Roaming"  # Initialize status
 
         self.view_cone_angle = math.pi / 2.5  # Squid has a view cone of 80 degrees
         self.current_view_angle = random.uniform(0, 2 * math.pi)
-        self.view_cone_change_interval = 2500  # milliseconds
+        self.view_cone_change_interval = 1000  # milliseconds
         self.last_view_cone_change = 0
         self.pursuing_food = False
         self.target_food = None
@@ -61,11 +67,7 @@ class Squid:
         self.anxiety = 10
         self.curiosity = 50
 
-        if personality is None:
-            self.personality = random.choice(list(Personality))
-        else:
-            self.personality = personality
-        #self.tamagotchi_logic.squid_brain_window.print_to_console(f"Squid created with personality: {self.personality}")
+        self.personality = personality
 
 
     def set_animation_speed(self, speed):
@@ -132,74 +134,19 @@ class Squid:
         pass
 
     def make_decision(self):
-        if self.is_sick:
-            self.stay_at_bottom()
-            self.status = "sick and lethargic"
-        elif self.anxiety > 70:
-            self.status = "anxious"
-            self.move_erratically()
-        elif self.curiosity > 50 and random.random() < 0.5:
-            self.status = "exploring"
-            self.explore_environment()
-        elif self.hunger > 30 or self.satisfaction < 30:
-            self.status = "searching for food"
-            self.search_for_food()
-        elif self.sleepiness > 70:
-            self.status = "tired"
-            self.go_to_sleep()
-        elif self.personality == Personality.INTROVERT:
-            if self.happiness > 70:
-                self.status = "content in solitude"
-                self.move_slowly()
-            else:
-                self.status = "seeking alone time"
-                self.explore_environment()
-
-        elif self.personality == Personality.GREEDY:
-            if self.hunger > 50 and self.anxiety > 60:
-                self.status = "anxious and hungry"
-                self.search_for_food()
-            elif self.curiosity > 50:
-                self.status = "curiously seeking food"
-                self.explore_environment()
-            else:
-                self.status = "content for now"
-                self.move_randomly()
-
-        elif self.personality == Personality.TIMID:
-            if self.anxiety > 50 and not self.is_near_plant():
-                self.status = "anxiously seeking plants"
-                self.move_towards_plant()
-            elif self.curiosity < 30:
-                self.status = "timidly exploring"
-                self.explore_environment()
-            else:
-                self.status = "content amongst plants"
-                self.move_slowly()
-
-        elif self.personality == Personality.STUBBORN:
-            if self.hunger > 40 and self.target_food is None:
-                self.status = "searching for favorite food"
-                self.search_for_favorite_food()
-            elif self.sleepiness > 80 and random.random() < 0.5:
-                self.status = "refusing to sleep"
-                self.move_randomly()
-            else:
-                self.status = "being stubborn"
-                self.move_slowly()
-
-    def search_for_favorite_food(self):
-        visible_food = self.get_visible_food()
-        if visible_food:
-            for food_x, food_y in visible_food:
-                if self.is_favorite_food(self.tamagotchi_logic.get_food_item_at(food_x, food_y)):
-                    self.move_towards(food_x, food_y)
-                    return
-            # If no favorite food is found, display a message and move randomly
-            self.tamagotchi_logic.show_message("Stubborn squid does not like that type of food!")
-            self.move_randomly()
+        if self.personality == GREEDY:
+            greedy_decision(self)
+        elif self.personality == INTROVERT:
+            introvert_decision(self)
+        elif self.personality == LAZY:
+            lazy_decision(self)
+        elif self.personality == STUBBORN:
+            stubborn_decision(self)
+        elif self.personality == TIMID:
+            timid_decision(self)
         else:
-            self.move_randomly()
+            # Default decision logic
+            pass
     
     def get_favorite_food(self):
         # Implement logic to find the squid's favorite food
@@ -346,6 +293,20 @@ class Squid:
         else:
             self.squid_direction = "down" if dy > 0 else "up"
 
+        speed = self.base_squid_speed * self.animation_speed
+        self.squid_x += dx * speed / (abs(dx) + abs(dy))
+        self.squid_y += dy * speed / (abs(dx) + abs(dy))
+
+        self.squid_x = max(50, min(self.squid_x, self.ui.window_width - 50 - self.squid_width))
+        self.squid_y = max(50, min(self.squid_y, self.ui.window_height - 120 - self.squid_height))
+
+        self.squid_item.setPos(self.squid_x, self.squid_y)
+
+        # Apply effects of nearby decorations
+        nearby_decorations = self.ui.get_nearby_decorations(self.squid_x, self.squid_y)
+        for decoration in nearby_decorations:
+            self.apply_decoration_effects(decoration)
+
     def move_towards_position(self, target_pos):
         dx = target_pos.x() - (self.squid_x + self.squid_width // 2)
         dy = target_pos.y() - (self.squid_y + self.squid_height // 2)
@@ -361,18 +322,12 @@ class Squid:
         if not self.is_sick:
             for food_item in self.tamagotchi_logic.food_items:
                 if self.squid_item.collidesWithItem(food_item):
-                    if self.personality == Personality.STUBBORN:
-                        if not getattr(food_item, 'is_sushi', False):
-                            if self.hunger > 80:  # Extremely hungry
-                                self.eat_begrudgingly(food_item)
-                            else:
-                                self.investigate_food(food_item)
-                            return
-                    elif self.personality == Personality.GREEDY:
-                        self.eat_greedily(food_item)
-                        return
-
-                    self.consume_food(food_item)
+                    if self.personality == GREEDY:
+                        eat_greedily(self, food_item)
+                    elif self.personality == STUBBORN:
+                        self.investigate_food(food_item)
+                    else:
+                        self.consume_food(food_item)
                     break
 
     def eat_greedily(self, food_item):
@@ -617,6 +572,24 @@ class Squid:
                                        self.squid_y + self.sick_icon_offset.y())
 
     def is_near_plant(self):
-        # This method should be implemented to check if the squid is near a plant decoration
-        # For now, we'll return False as a placeholder
-        return False
+        return bool(self.get_nearby_plants())
+    
+    def get_nearby_plants(self):
+        nearby_decorations = self.ui.get_nearby_decorations(self.squid_x, self.squid_y)
+        return [item for item in nearby_decorations if item.category == 'plant']
+    
+    def apply_decoration_effects(self, decoration):
+        for stat, value in decoration.stat_multipliers.items():
+            if hasattr(self, stat):
+                current_value = getattr(self, stat)
+                new_value = min(current_value + value, 100)  # Cap at 100
+                setattr(self, stat, new_value)
+
+    def get_visible_plants(self):
+        visible_plants = []
+        for item in self.ui.scene.items():
+            if isinstance(item, ResizablePixmapItem) and item.category == 'plant':
+                plant_x, plant_y = item.pos().x(), item.pos().y()
+                if self.is_in_vision_cone(plant_x, plant_y):
+                    visible_plants.append(item)
+        return visible_plants
