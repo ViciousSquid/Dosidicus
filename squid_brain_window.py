@@ -825,12 +825,20 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
             description = self.get_personality_description(personality)
             self.personality_description.setPlainText(description)
+            care_tips = self.get_care_tips(personality)
+            self.care_tips.setPlainText(care_tips)
+            modifiers = self.get_personality_modifiers(personality)
+            self.modifiers_text.setPlainText(modifiers)
         elif isinstance(personality, str):
             self.personality_type_label.setText(f"Squid Personality: {personality.capitalize()}")
             modifier = self.get_personality_modifier(Personality(personality))
             self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
             description = self.get_personality_description(Personality(personality))
             self.personality_description.setPlainText(description)
+            care_tips = self.get_care_tips(Personality(personality))
+            self.care_tips.setPlainText(care_tips)
+            modifiers = self.get_personality_modifiers(Personality(personality))
+            self.modifiers_text.setPlainText(modifiers)
         else:
             print(f"Warning: Invalid personality type: {type(personality)}")
 
@@ -857,31 +865,84 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             Personality.STUBBORN: "Only eats favorite food (sushi), may refuse to sleep"
         }
         return modifiers.get(personality, "No specific modifier")
+    
+    def get_care_tips(self, personality):
+        tips = {
+            Personality.TIMID: "- Place plants in the environment to reduce anxiety\n- Keep the environment clean and calm\n- Approach slowly and avoid sudden movements",
+            Personality.ADVENTUROUS: "- Regularly introduce new objects or decorations\n- Provide diverse food options\n- Encourage exploration with strategic food placement",
+            Personality.LAZY: "- Place food closer to the squid's resting spots\n- Clean the environment more frequently\n- Use enticing food to encourage movement",
+            Personality.ENERGETIC: "- Provide a large, open space for movement\n- Offer frequent feeding opportunities\n- Introduce interactive elements or games",
+            Personality.INTROVERT: "- Create quiet, secluded areas with decorations\n- Avoid overcrowding the environment\n- Respect the squid's need for alone time",
+            Personality.GREEDY: "- Offer a variety of food types, including sushi\n- Use food as a reward for desired behaviors\n- Be cautious not to overfeed",
+            Personality.STUBBORN: "- Always have sushi available as it's their favorite food\n- Be patient when introducing changes\n- Use positive reinforcement for desired behaviors"
+        }
+        return tips.get(personality, "No specific care tips available for this personality.")
+    
+    def get_personality_modifiers(self, personality):
+        modifiers = {
+            Personality.TIMID: "- Anxiety increases 50% faster\n- Curiosity increases 50% slower\n- Anxiety decreases by 50% when near plants",
+            Personality.ADVENTUROUS: "- Curiosity increases 50% faster",
+            Personality.LAZY: "- Moves slower\n- Energy consumption is lower",
+            Personality.ENERGETIC: "- Moves faster\n- Energy consumption is higher",
+            Personality.INTROVERT: "- Prefers quieter, less crowded spaces\n- May need more time alone to 'recharge'",
+            Personality.GREEDY: "- Gets 50% more anxious when hungry\n- Satisfaction increases more when eating",
+            Personality.STUBBORN: "- Only eats favorite food (sushi)\n- May refuse to sleep even when tired"
+        }
+        return modifiers.get(personality, "No specific modifiers available for this personality.")
 
     def init_personality_tab(self):
+        # Common style for all text elements
+        base_font_size = 20
+        text_style = f"font-size: {base_font_size}px;"
+        header_style = f"font-size: {base_font_size + 4}px; font-weight: bold;"
+
         # Personality type display
         self.personality_tab_layout.addWidget(QtWidgets.QFrame(frameShape=QtWidgets.QFrame.HLine))
         self.personality_type_label = QtWidgets.QLabel("Squid Personality: ")
-        self.personality_type_label.setStyleSheet("font-size: 20px; font-weight: bold;")
+        self.personality_type_label.setStyleSheet(header_style)
         self.personality_tab_layout.addWidget(self.personality_type_label)
 
         # Personality modifier display
         self.personality_modifier_label = QtWidgets.QLabel("Personality Modifier: ")
-        self.personality_modifier_label.setStyleSheet("font-size: 20px;")
+        self.personality_modifier_label.setStyleSheet(text_style)
         self.personality_tab_layout.addWidget(self.personality_modifier_label)
 
         # Separator
         self.personality_tab_layout.addWidget(QtWidgets.QFrame(frameShape=QtWidgets.QFrame.HLine))
 
         # Personality description
+        description_label = QtWidgets.QLabel("Description:")
+        description_label.setStyleSheet(header_style)
+        self.personality_tab_layout.addWidget(description_label)
+
         self.personality_description = QtWidgets.QTextEdit()
         self.personality_description.setReadOnly(True)
-        self.personality_description.setStyleSheet("font-size: 20px;")
+        self.personality_description.setStyleSheet(text_style)
         self.personality_tab_layout.addWidget(self.personality_description)
+
+        # Personality modifiers
+        self.modifiers_label = QtWidgets.QLabel("Personality Modifiers:")
+        self.modifiers_label.setStyleSheet(header_style)
+        self.personality_tab_layout.addWidget(self.modifiers_label)
+
+        self.modifiers_text = QtWidgets.QTextEdit()
+        self.modifiers_text.setReadOnly(True)
+        self.modifiers_text.setStyleSheet(text_style)
+        self.personality_tab_layout.addWidget(self.modifiers_text)
+
+        # Care tips
+        self.care_tips_label = QtWidgets.QLabel("Care Tips:")
+        self.care_tips_label.setStyleSheet(header_style)
+        self.personality_tab_layout.addWidget(self.care_tips_label)
+
+        self.care_tips = QtWidgets.QTextEdit()
+        self.care_tips.setReadOnly(True)
+        self.care_tips.setStyleSheet(text_style)
+        self.personality_tab_layout.addWidget(self.care_tips)
 
         # Note about personality generation
         note_label = QtWidgets.QLabel("Note: Personality is randomly generated at the start of a new game")
-        note_label.setStyleSheet("font-size: 20px; font-style: italic;")
+        note_label.setStyleSheet(text_style + "font-style: italic;")
         self.personality_tab_layout.addWidget(note_label)
 
     def update_brain(self, state):
