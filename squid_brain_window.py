@@ -575,16 +575,22 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.export_button.clicked.connect(self.export_learning_data)
         controls_layout.addWidget(self.export_button)
 
-        # Add export button
-        #self.export_learning_button = QtWidgets.QPushButton("Export Learning Data")
-        #self.export_learning_button.clicked.connect(self.export_learning_tab_contents)
-        #controls_layout.addWidget(self.export_learning_button, alignment=QtCore.Qt.AlignRight)
+        # Add Clear button
+        self.clear_button = QtWidgets.QPushButton("Clear")
+        self.clear_button.clicked.connect(self.clear_learning_data)
+        controls_layout.addWidget(self.clear_button)
 
         learning_layout.addLayout(controls_layout)
 
         learning_widget = QtWidgets.QWidget()
         learning_widget.setLayout(learning_layout)
         self.learning_tab_layout.addWidget(learning_widget)
+
+    def clear_learning_data(self):
+        self.weight_changes_text.clear()
+        self.learning_data_table.setRowCount(0)
+        self.learning_data = []
+        print("Learning data cleared.")
 
     def perform_hebbian_learning(self):
         if self.is_paused or not hasattr(self, 'brain_widget'):
