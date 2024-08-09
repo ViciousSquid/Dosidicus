@@ -133,42 +133,38 @@ class Squid:
         pass
 
     def make_decision(self):
-        if self.is_sick:
-            self.stay_at_bottom()
-            self.status = "sick and lethargic"
-        elif self.anxiety > 70:
-            self.status = "anxious"
-            self.move_erratically()
-        elif self.curiosity > 50 and random.random() < 0.5:
-            self.status = "exploring"
-            self.explore_environment()
-        elif self.hunger > 30 or self.satisfaction < 30:
-            self.status = "searching for food"
-            self.search_for_food()
-        elif self.sleepiness > 70:
-            self.status = "tired"
-            self.go_to_sleep()
-        elif self.personality == Personality.TIMID:
-            if self.anxiety > 50 and not self.is_near_plant():
-                self.status = "anxiously seeking plants"
-                self.move_towards_plant()
-            elif self.curiosity < 30:
-                self.status = "timidly exploring"
-                self.explore_environment()
-            else:
-                self.status = "content amongst plants"
-                self.move_slowly()
+        # Get the current state of the squid
+        current_state = {
+            "hunger": self.hunger,
+            "happiness": self.happiness,
+            "cleanliness": self.cleanliness,
+            "sleepiness": self.sleepiness,
+            "satisfaction": self.satisfaction,
+            "anxiety": self.anxiety,
+            "curiosity": self.curiosity,
+            "is_sick": self.is_sick,
+            "is_sleeping": self.is_sleeping,
+            "food_visible": bool(self.get_visible_food()),
+            "personality": self.personality.value
+        }
 
-        elif self.personality == Personality.STUBBORN:
-            if self.hunger > 40 and self.target_food is None:
-                self.status = "searching for favorite food"
-                self.search_for_favorite_food()
-            elif self.sleepiness > 80 and random.random() < 0.5:
-                self.status = "refusing to sleep"
-                self.move_randomly()
-            else:
-                self.status = "being stubborn"
-                self.move_slowly()
+        # Feed the current state into the neural network to get the decision
+        decision = self.tamagotchi_logic.squid_brain_window.make_decision(current_state)
+
+        # Execute the decision based on the neural network's output
+        if decision == "search_for_food":
+            self.search_for_food()
+        elif decision == "explore":
+            self.explore_environment()
+        elif decision == "sleep":
+            self.go_to_sleep()
+        elif decision == "move_slowly":
+            self.move_slowly()
+        elif decision == "move_erratically":
+            self.move_erratically()
+        else:
+            # Default behavior if no specific decision is made
+            self.move_randomly()
 
     def search_for_favorite_food(self):
         visible_food = self.get_visible_food()
@@ -193,6 +189,30 @@ class Squid:
     def is_favorite_food(self, food_item):
         return food_item is not None and getattr(food_item, 'is_sushi', False)
 
+    def push_decoration(self, decoration, direction):
+        push_distance = 20  # pixels to push
+        current_pos = decoration.pos()
+        new_x = current_pos.x() + (push_distance * direction)
+        
+        # Ensure the decoration stays within the scene boundaries
+        scene_rect = self.ui.scene.sceneRect()
+        new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
+        
+        # Create a small animation to make the movement smoother
+        animation = QtCore.QPropertyAnimation(decoration, b"pos")
+        animation.setDuration(300)  # 300 ms duration
+        animation.setStartValue(current_pos)
+        animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
+        animation.setEasingCurve(QtCore.QEasingCurve.OutCubic)
+        animation.start()
+
+        # Update squid's state
+        self.happiness = min(100, self.happiness + 5)
+        self.curiosity = min(100, self.curiosity + 10)
+        self.status = "pushing decoration"
+
+        # Show a message
+        self.ui.show_message(f"Squid pushed a decoration")
 
 
     def move_erratically(self):

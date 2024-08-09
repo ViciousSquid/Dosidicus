@@ -288,8 +288,48 @@ class TamagotchiLogic:
         # Increase anxiety
         self.squid.anxiety = min(100, self.squid.anxiety + 10)
         
+        # 60% chance to create an ink cloud
+        if random.random() < 0.6:
+            self.create_ink_cloud()
+        
         # Schedule the end of the startle state
         QtCore.QTimer.singleShot(3000, self.end_startle)  # End startle after 3 seconds
+
+    def create_ink_cloud(self):
+        ink_cloud_pixmap = QtGui.QPixmap(os.path.join("images", "inkcloud.png"))
+        ink_cloud_item = QtWidgets.QGraphicsPixmapItem(ink_cloud_pixmap)
+        
+        # Set the center of the ink cloud to match the center of the squid
+        squid_center_x = self.squid.squid_x + self.squid.squid_width // 2
+        squid_center_y = self.squid.squid_y + self.squid.squid_height // 2
+        ink_cloud_item.setPos(squid_center_x - ink_cloud_pixmap.width() // 2, 
+                              squid_center_y - ink_cloud_pixmap.height() // 2)
+        
+        self.user_interface.scene.addItem(ink_cloud_item)
+        
+        # Create a QGraphicsOpacityEffect without a parent
+        opacity_effect = QtWidgets.QGraphicsOpacityEffect()
+        ink_cloud_item.setGraphicsEffect(opacity_effect)
+
+        # Create a QPropertyAnimation for the opacity effect
+        self.fade_out_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
+        self.fade_out_animation.setDuration(10000)  # 10 seconds duration
+        self.fade_out_animation.setStartValue(1.0)
+        self.fade_out_animation.setEndValue(0.0)
+        self.fade_out_animation.setEasingCurve(QtCore.QEasingCurve.InQuad)
+
+        # Connect the finished signal to remove the item
+        self.fade_out_animation.finished.connect(lambda: self.remove_ink_cloud(ink_cloud_item))
+
+        # Start the animation
+        self.fade_out_animation.start()
+
+    def remove_ink_cloud(self, ink_cloud_item):
+        if ink_cloud_item in self.user_interface.scene.items():
+            self.user_interface.scene.removeItem(ink_cloud_item)
+        if ink_cloud_item.graphicsEffect():
+            ink_cloud_item.graphicsEffect().deleteLater()
+        ink_cloud_item.setGraphicsEffect(None)
 
     def end_startle(self):
         if self.mental_states_enabled:
@@ -389,14 +429,13 @@ class TamagotchiLogic:
             self.curious_interaction_cooldown -= 1
             return
 
-        if random.random() < 0.2:  # 20% chance to interact when called
+        if random.random() < 0.3:  # Increased chance to 30% for more frequent interactions
             decorations = self.user_interface.get_nearby_decorations(self.squid.squid_x, self.squid.squid_y)
             if decorations:
                 decoration = random.choice(decorations)
-                if random.random() < 0.1:  # 10% chance to push the decoration
+                if random.random() < 0.5:  # 50% chance to push the decoration
                     direction = random.choice([-1, 1])  # -1 for left, 1 for right
-                    self.user_interface.move_decoration(decoration, direction * 10)  # Move 10 pixels
-                    self.show_message("Squid pushed a decoration!")
+                    self.squid.push_decoration(decoration, direction)
                 else:
                     self.show_message("Squid is curious about a decoration...")
                 

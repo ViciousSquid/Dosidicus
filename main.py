@@ -2,16 +2,27 @@
 
 import sys
 import os
+import traceback
+import logging
 from PyQt5 import QtWidgets, QtCore
 import random
+import argparse
 from ui import Ui
 from tamagotchi_logic import TamagotchiLogic
 from squid import Squid, Personality
 from splash_screen import SplashScreen
 from save_manager import SaveManager
 from squid_brain_window import SquidBrainWindow
-import argparse
-import logging
+
+# Set up logging
+logging.basicConfig(filename='error_log.txt', level=logging.ERROR, 
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
+def global_exception_handler(exctype, value, tb):
+    """Global exception handler to log unhandled exceptions"""
+    error_msg = ''.join(traceback.format_exception(exctype, value, tb))
+    logging.error("Unhandled exception:\n%s", error_msg)
+    QtWidgets.QMessageBox.critical(None, "Error", "An unexpected error occurred. Please check error_log.txt for details.")
 
 class TeeStream:
     def __init__(self, original_stream, file_stream):
@@ -55,7 +66,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.load_game()
         else:
             print(f"Starting a new simulation with {self.specified_personality.value if self.specified_personality else 'random'} squid.")
-            self.create_new_game()
+            self.create_new_game(self.specified_personality)
 
         self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
         
@@ -110,11 +121,9 @@ class MainWindow(QtWidgets.QMainWindow):
         sys.stdout = tee_stdout
         sys.stderr = tee_stderr
 
-    def create_new_game(self):
-        if self.specified_personality is None:
+    def create_new_game(self, personality=None):
+        if personality is None:
             personality = random.choice(list(Personality))
-        else:
-            personality = self.specified_personality
         
         self.squid = Squid(self.user_interface, None, personality)
         print(f"Created new squid with personality: {self.squid.personality.value}")
@@ -172,11 +181,17 @@ class MainWindow(QtWidgets.QMainWindow):
         # The message will automatically fade out after 8 seconds as per the show_message implementation
 
 def main():
+    # Set the global exception handler
+    sys.excepthook = global_exception_handler
+
     parser = argparse.ArgumentParser(description="Start the squid game with a specific personality and optional debug mode.")
-    parser.add_argument('-personality', type=str, choices=[p.value for p in Personality], 
+    parser.add_argument('-p', '--personality', type=str, choices=[p.value for p in Personality], 
                         help='Specify the squid personality')
-    parser.add_argument('-debug', action='store_true', help='Enable debug mode and log console output to console.txt')
+    parser.add_argument('-d', '--debug', action='store_true', help='Enable debug mode and log console output to console.txt')
     args = parser.parse_args()
+
+    print(f"Personality argument: {args.personality}")
+    print(f"Debug argument: {args.debug}")
 
     application = QtWidgets.QApplication(sys.argv)
     
@@ -185,9 +200,13 @@ def main():
     else:
         personality = None
     
-    main_window = MainWindow(personality, args.debug)
-    main_window.show()
-    sys.exit(application.exec_())
+    try:
+        main_window = MainWindow(personality, args.debug)
+        main_window.show()
+        sys.exit(application.exec_())
+    except Exception as e:
+        logging.exception("Error in main function")
+        QtWidgets.QMessageBox.critical(None, "Error", f"An error occurred: {str(e)}\nPlease check error_log.txt for details.")
 
 if __name__ == '__main__':
     main()
