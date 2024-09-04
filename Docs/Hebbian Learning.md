@@ -16,14 +16,68 @@ Hebbian learning is a fundamental principle in neuroscience that states, "Neuron
 - **Connections**: The connections between neurons are initialized in a list called `connections`.
 - **Weights**: The weights of the connections are initialized in a dictionary called `weights`. Initially, the weights are set to random values between -1 and 1.
 
-#### Stimulating the Brain
-
-- **Update State**: The `update_state` method is used to update the state of the brain based on the input stimulation. This method updates the states of the neurons and triggers a repaint of the brain visualization.
-- **Capture Training Data**: If the `capture_training_data_enabled` flag is set, the current state of the brain is captured and added to the training data.
-
 #### Performing Hebbian Learning
 
-The `perform_hebbian_learning` method is the core of the Hebbian learning implementation. Here's a detailed breakdown of how it works:
+The `perform_hebbian_learning` method is the core of the Hebbian learning implementation:
+
+```python
+def perform_hebbian_learning(self):
+        if self.is_paused or not hasattr(self, 'brain_widget') or not self.tamagotchi_logic or not self.tamagotchi_logic.squid:
+            return
+
+        # Get the current state of all neurons
+        current_state = self.brain_widget.state
+
+        # Determine which neurons are significantly active
+        active_neurons = []
+        for neuron, value in current_state.items():
+            if neuron == 'position':
+                # Skip the position tuple
+                continue
+            if isinstance(value, (int, float)) and value > 50:
+                active_neurons.append(neuron)
+            elif isinstance(value, bool) and value:
+                active_neurons.append(neuron)
+            elif isinstance(value, str):
+                # For string values (like 'direction'), we consider them active
+                active_neurons.append(neuron)
+
+        # Include decoration effects in learning
+        decoration_memories = self.tamagotchi_logic.squid.memory_manager.get_all_short_term_memories('decorations')
+        
+        if isinstance(decoration_memories, dict):
+            for decoration, effects in decoration_memories.items():
+                for stat, boost in effects.items():
+                    if isinstance(boost, (int, float)) and boost > 0:
+                        if stat not in active_neurons:
+                            active_neurons.append(stat)
+        elif isinstance(decoration_memories, list):
+            for memory in decoration_memories:
+                for stat, boost in memory.get('effects', {}).items():
+                    if isinstance(boost, (int, float)) and boost > 0:
+                        if stat not in active_neurons:
+                            active_neurons.append(stat)
+
+        # If less than two neurons are active, no learning occurs
+        if len(active_neurons) < 2:
+            return
+
+        # Perform learning for a random subset of active neuron pairs
+        sample_size = min(5, len(active_neurons) * (len(active_neurons) - 1) // 2)
+        sampled_pairs = random.sample([(i, j) for i in range(len(active_neurons)) for j in range(i+1, len(active_neurons))], sample_size)
+
+        for i, j in sampled_pairs:
+            neuron1 = active_neurons[i]
+            neuron2 = active_neurons[j]
+            value1 = self.get_neuron_value(current_state.get(neuron1, 50))  # Default to 50 if not in current_state
+            value2 = self.get_neuron_value(current_state.get(neuron2, 50))
+            self.update_connection(neuron1, neuron2, value1, value2)
+
+        # Update the brain visualization
+        self.brain_widget.update()
+```
+
+ Here's a detailed breakdown of how it works:
 
 1. **Get Current State**: The current state of all neurons is retrieved. This state includes the levels of hunger, happiness, cleanliness, sleepiness, etc.
 
@@ -44,7 +98,66 @@ The `perform_hebbian_learning` method is the core of the Hebbian learning implem
    - `prev_weight` is the previous weight of the connection.
    - `new_weight` is the updated weight, clamped to the range [-1, 1].
 
-6. **Deduce Weight Change Reason**: The method deduces the reason for the weight change based on the activity levels of the neurons and the magnitude of the weight change. This information is used to generate a summary of the weight change.
+6. **Deduce Weight Change Reason**: The method deduces the reason for the weight change based on the activity levels of the neurons and the magnitude of the weight change:
+
+```python
+def deduce_weight_change_reason(self, pair, value1, value2, prev_weight, new_weight, weight_change):
+        neuron1, neuron2 = pair
+        threshold_high = 70
+        threshold_low = 30
+
+        reasons = []
+
+        # Analyze neuron activity levels
+        if value1 > threshold_high and value2 > threshold_high:
+            reasons.append(f"Both {neuron1.upper()} and {neuron2.upper()} were highly active")
+        elif value1 < threshold_low and value2 < threshold_low:
+            reasons.append(f"Both {neuron1.upper()} and {neuron2.upper()} had low activity")
+        elif value1 > threshold_high:
+            reasons.append(f"{neuron1.upper()} was highly active")
+        elif value2 > threshold_high:
+            reasons.append(f"{neuron2.upper()} was highly active")
+
+        # Analyze weight change
+        if abs(weight_change) > 0.1:
+            if weight_change > 0:
+                reasons.append("Strong positive reinforcement")
+            else:
+                reasons.append("Strong negative reinforcement")
+        elif abs(weight_change) > 0.01:
+            if weight_change > 0:
+                reasons.append("Moderate positive reinforcement")
+            else:
+                reasons.append("Moderate negative reinforcement")
+        else:
+            reasons.append("Weak reinforcement")
+
+        # Analyze the relationship between neurons
+        if "hunger" in pair and "satisfaction" in pair:
+            reasons.append("Potential hunger-satisfaction relationship")
+        elif "cleanliness" in pair and "happiness" in pair:
+            reasons.append("Potential cleanliness-happiness relationship")
+
+        # Analyze the current weight
+        if abs(new_weight) > 0.8:
+            reasons.append("Strong connection formed")
+        elif abs(new_weight) < 0.2:
+            reasons.append("Weak connection")
+
+        # Analyze learning progress
+        if abs(prev_weight) < 0.1 and abs(new_weight) > 0.1:
+            reasons.append("New significant connection emerging")
+        elif abs(prev_weight) > 0.8 and abs(new_weight) < 0.8:
+            reasons.append("Previously strong connection weakening")
+
+        # Combine reasons
+        if len(reasons) > 1:
+            return " | ".join(reasons)
+        elif len(reasons) == 1:
+            return reasons[0]
+        else:
+            return "Complex interaction with no clear single reason"
+```
 
 7. **Update Visualization**: The brain visualization is updated to reflect the changes in the weights of the connections.
 
