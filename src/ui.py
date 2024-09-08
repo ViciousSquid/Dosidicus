@@ -5,8 +5,11 @@ import json
 import math
 import random
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtCore import QObject, pyqtProperty
+from PyQt5.QtWidgets import QGraphicsPixmapItem
 from .squid_brain_window import SquidBrainWindow
 from .statistics_window import StatisticsWindow
+
 
 class DecorationItem(QtWidgets.QLabel):
     def __init__(self, pixmap, filename):
@@ -366,8 +369,10 @@ class Ui:
         self.menu_bar = self.window.menuBar()
 
         file_menu = self.menu_bar.addMenu('File')
-        self.load_action = QtWidgets.QAction('Load', self.window)
-        self.save_action = QtWidgets.QAction('Save', self.window)
+        self.new_game_action = QtWidgets.QAction('New Game', self.window)
+        self.load_action = QtWidgets.QAction('Load Game', self.window)
+        self.save_action = QtWidgets.QAction('Save Game', self.window)
+        file_menu.addAction(self.new_game_action)
         file_menu.addAction(self.load_action)
         file_menu.addAction(self.save_action)
 

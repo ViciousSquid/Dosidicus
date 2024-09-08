@@ -35,7 +35,7 @@ class SplashScreen(QtWidgets.QWidget):
         
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.next_frame)
-        self.timer.start(2000)  # 2 seconds between frames
+        self.timer.start(1500)  # 1.5 seconds between frames
 
     def next_frame(self):
         self.frame_index += 1
@@ -45,13 +45,15 @@ class SplashScreen(QtWidgets.QWidget):
                 self.second_frame.emit()  # Emit signal for second frame
         elif self.frame_index == len(self.frames):
             # Last frame shown, schedule hiding
-            QtCore.QTimer.singleShot(2000, self.end_animation)
+            QtCore.QTimer.singleShot(1500, self.end_animation)
         else:
             self.timer.stop()
 
     def end_animation(self):
-        print("A squid has hatched!")
-        print("You'll need to look after him...")
+        print("******************************")
+        print("***  A SQUID HAS HATCHED!  ***")
+        print(" YOU NEED TO LOOK AFTER HIM.. ")
+        print("******************************")
         self.hide()
         self.finished.emit()
 

@@ -1,5 +1,5 @@
 # Tamagotchi logic for a digital pet with a neural network
-# by Rufus Pearce (ViciousSquid)  |  July 2024  |  version 1.0.370.2
+# by Rufus Pearce (ViciousSquid)  |  July 2024  |  version 1.0.371
 # https://github.com/ViciousSquid/Dosidicus
 
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -124,6 +124,45 @@ class TamagotchiLogic:
         self.update_statistics()
         self.user_interface.scene.update()
 
+
+    def update_decoration_learning(self, effects):
+        if not effects:
+            return
+
+        # Get the current state of the squid
+        current_state = {
+            "hunger": self.squid.hunger,
+            "happiness": self.squid.happiness,
+            "cleanliness": self.squid.cleanliness,
+            "sleepiness": self.squid.sleepiness,
+            "satisfaction": self.squid.satisfaction,
+            "anxiety": self.squid.anxiety,
+            "curiosity": self.squid.curiosity
+        }
+
+        # Update the brain based on the decoration effects
+        for stat, boost in effects.items():
+            if stat in current_state:
+                # Increase the connection strength between the affected stat and satisfaction
+                self.brain_window.brain_widget.strengthen_connection(stat, 'satisfaction', boost * 0.01)
+                
+                # If the boost is significant, also strengthen connection with happiness
+                if boost > 5:
+                    self.brain_window.brain_widget.strengthen_connection(stat, 'happiness', boost * 0.005)
+
+        # Update the squid's memory
+        decoration_memory = {
+            "category": "decorations",
+            "effects": effects,
+            "timestamp": time.time()
+        }
+        self.squid.memory_manager.add_short_term_memory('decorations', str(time.time()), decoration_memory)
+
+        # If this is a significant effect, consider transferring to long-term memory
+        if any(boost > 10 for boost in effects.values()):
+            self.squid.memory_manager.transfer_to_long_term_memory('decorations', str(time.time()))
+
+
     def _log_thought(self, thought):
         self.thought_log.append(thought)
         print(f"Squid thought: {thought}")
@@ -213,9 +252,6 @@ class TamagotchiLogic:
                 boost = new_value - current_value
                 setattr(self.squid, stat, new_value)
                 effects[stat] = boost
-
-                if self.debug_mode:
-                    print(f"DEBUG: Squid experienced a {stat} boost from {strongest_decoration.filename}. {stat.capitalize()} changed from {current_value:.2f} to {new_value:.2f}")
 
         # Apply category-specific effects
         if strongest_decoration.category == 'plant':
@@ -333,11 +369,17 @@ class TamagotchiLogic:
 
         self.squid.mental_state_manager.set_state("startled", True)
         self.startle_cooldown = self.startle_cooldown_max
-        self.show_message("The squid was startled!")
-        self.brain_window.add_thought("STARTLED!")
-        
+
         # Increase anxiety
+        old_anxiety = self.squid.anxiety
         self.squid.anxiety = min(100, self.squid.anxiety + 10)
+        anxiety_increase = self.squid.anxiety - old_anxiety
+
+        # Create a negative memory for being startled
+        memory_value = f"Startled: Anxiety +{anxiety_increase:.2f}"
+        self.squid.memory_manager.add_short_term_memory('mental_state', 'startled', memory_value)
+
+        self.show_message("The squid was startled!")
         
         # 60% chance to create an ink cloud
         if random.random() < 0.6:
@@ -399,7 +441,9 @@ class TamagotchiLogic:
             if self.mental_states_enabled:
                 self.check_for_startle()
                 self.check_for_curiosity()
-                
+            
+            # Periodically manage memories
+            self.squid.memory_manager.periodic_memory_management()
 
             # Check if Squid is not in the middle of the RPS game
             if not hasattr(self, 'rps_game') or not self.rps_game.game_window:

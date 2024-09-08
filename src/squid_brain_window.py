@@ -1,5 +1,5 @@
 ########### BRAIN TOOL
-########### Version 1.0.5.5 - July 2024
+########### Version 1.0.6.0 - Aug 2024
 ###########
 ########### by Rufus Pearce
 ########### github.com/ViciousSquid/Dosidicus
@@ -10,6 +10,7 @@ import csv
 import os
 import time
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QSplitter
 import random
 import numpy as np
 import json
@@ -112,6 +113,27 @@ class BrainWidget(QtWidgets.QWidget):
 
     def unfreeze_weights(self):
         self.frozen_weights = None
+
+    def strengthen_connection(self, neuron1, neuron2, amount):
+        pair = (neuron1, neuron2)
+        reverse_pair = (neuron2, neuron1)
+
+        # Check if the pair or its reverse exists in weights, if not, initialize it
+        if pair not in self.weights and reverse_pair not in self.weights:
+            self.weights[pair] = 0.0
+
+        # Use the correct pair order
+        use_pair = pair if pair in self.weights else reverse_pair
+
+        # Update the weight
+        self.weights[use_pair] += amount
+        self.weights[use_pair] = max(-1, min(1, self.weights[use_pair]))  # Ensure weight stays in [-1, 1] range
+
+        # Update the brain visualization
+        self.update()
+
+        # Optionally, you can add logging here
+        #print(f"Connection between {neuron1} and {neuron2} strengthened by {amount}. New weight: {self.weights[use_pair]}")
 
     def update_state(self, new_state):
         # Update only the keys that exist in self.state
@@ -349,38 +371,66 @@ class StimulateDialog(QtWidgets.QDialog):
         return stimulation_values
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
-    def __init__(self, tamagotchi_logic):
-        super().__init__()
-        self.tamagotchi_logic = tamagotchi_logic
-        self.setWindowTitle("Brain")
-        self.resize(1024, 768)
+    def __init__(self, tamagotchi_logic, debug_mode=False):
+            super().__init__()
+            self.tamagotchi_logic = tamagotchi_logic
+            self.debug_mode = debug_mode
+            self.setWindowTitle("Brain Tool")
+            self.resize(1024, 768)
 
-        screen = QtWidgets.QDesktopWidget().screenNumber(QtWidgets.QDesktopWidget().cursor().pos())
-        screen_geometry = QtWidgets.QDesktopWidget().screenGeometry(screen)
-        self.move(screen_geometry.right() - 1024, screen_geometry.top())
+            screen = QtWidgets.QDesktopWidget().screenNumber(QtWidgets.QDesktopWidget().cursor().pos())
+            screen_geometry = QtWidgets.QDesktopWidget().screenGeometry(screen)
+            self.move(screen_geometry.right() - 1024, screen_geometry.top())
 
-        self.central_widget = QtWidgets.QWidget()
-        self.setCentralWidget(self.central_widget)
+            self.central_widget = QtWidgets.QWidget()
+            self.setCentralWidget(self.central_widget)
 
-        self.layout = QtWidgets.QVBoxLayout()
-        self.central_widget.setLayout(self.layout)
+            self.layout = QtWidgets.QVBoxLayout()
+            self.central_widget.setLayout(self.layout)
 
-        self.init_tabs()
+            self.init_tabs()
 
-        self.hebbian_timer = QtCore.QTimer()
-        self.hebbian_timer.timeout.connect(self.perform_hebbian_learning)
-        self.hebbian_timer.start(2000)  # Update every 2 seconds
+            self.hebbian_timer = QtCore.QTimer()
+            self.hebbian_timer.timeout.connect(self.perform_hebbian_learning)
+            self.hebbian_timer.start(2000)  # Update every 2 seconds
 
-        self.update_timer = QtCore.QTimer()
-        self.update_timer.timeout.connect(self.update_associations)
-        self.update_timer.start(10000)  # Update every 10 seconds
-        self.last_update_time = time.time()
-        self.update_threshold = 5  # Minimum seconds between updates
+            self.update_timer = QtCore.QTimer()
+            self.update_timer.timeout.connect(self.update_associations)
+            self.update_timer.start(10000)  # Update every 10 seconds
+            self.last_update_time = time.time()
+            self.update_threshold = 5  # Minimum seconds between updates
 
-        self.log_window = None
-        self.learning_data = []
-        self.is_paused = False
-        self.console = ConsoleOutput(self.console_output)
+            self.log_window = None
+            self.learning_data = []
+            self.is_paused = False
+            self.console = ConsoleOutput(self.console_output)
+
+            # Initialize memory text widgets
+            self.short_term_memory_text = QtWidgets.QTextEdit()
+            self.short_term_memory_text.setReadOnly(True)
+            self.short_term_memory_text.setAcceptRichText(True)
+
+            self.long_term_memory_text = QtWidgets.QTextEdit()
+            self.long_term_memory_text.setReadOnly(True)
+            self.long_term_memory_text.setAcceptRichText(True)
+
+            self.memory_tab_layout.addWidget(QtWidgets.QLabel("Short-term Memories:"))
+            self.memory_tab_layout.addWidget(self.short_term_memory_text)
+            self.memory_tab_layout.addWidget(QtWidgets.QLabel("Long-term Memories:"))
+            self.memory_tab_layout.addWidget(self.long_term_memory_text)
+
+            # Set up a timer to update the memory tab
+            self.memory_update_timer = QtCore.QTimer(self)
+            self.memory_update_timer.timeout.connect(self.update_memory_tab)
+            self.memory_update_timer.start(2000)  # Update every 2 secs
+
+    def debug_print(self, message):
+        if self.debug_mode:
+            print(f"DEBUG: {message}")
+
+    def toggle_debug_mode(self, enabled):
+        self.debug_mode = enabled
+        self.debug_print(f"Debug mode {'enabled' if enabled else 'disabled'}")
 
     def get_brain_state(self):
         weights = {}
@@ -455,13 +505,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Add the main content widget to the main tab layout
         self.main_tab_layout.addWidget(main_content_widget)
 
-        # Data tab
-        #self.data_tab = QtWidgets.QWidget()
-        #self.data_tab_layout = QtWidgets.QVBoxLayout()
-        #self.data_tab.setLayout(self.data_tab_layout)
-        #self.tabs.addTab(self.data_tab, "Data")
-        #self.init_data_table()
-
         # Thoughts tab
         self.thoughts_tab = QtWidgets.QWidget()
         self.thoughts_tab_layout = QtWidgets.QVBoxLayout()
@@ -497,12 +540,96 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.console_tab, "Console")
         self.init_console()
 
+        # Remove the console and thought tabs
+        self.tabs.removeTab(self.tabs.indexOf(self.console_tab))
+        self.tabs.removeTab(self.tabs.indexOf(self.thoughts_tab))
+
+        # Add a new memory tab
+        self.memory_tab = QtWidgets.QWidget()
+        self.memory_tab_layout = QtWidgets.QVBoxLayout()
+        self.memory_tab.setLayout(self.memory_tab_layout)
+        self.tabs.addTab(self.memory_tab, "Memory")
+        self.init_memory_tab()
+
+        # Add a new decisions tab
+        self.decisions_tab = QtWidgets.QWidget()
+        self.decisions_tab_layout = QtWidgets.QVBoxLayout()
+        self.decisions_tab.setLayout(self.decisions_tab_layout)
+        self.tabs.addTab(self.decisions_tab, "Decisions")
+        self.init_decisions_tab()
+
         # About tab
         self.about_tab = QtWidgets.QWidget()
         self.about_tab_layout = QtWidgets.QVBoxLayout()
         self.about_tab.setLayout(self.about_tab_layout)
         self.tabs.addTab(self.about_tab, "About")
         self.init_about_tab()
+
+
+    def init_memory_tab(self):
+        # Create a layout for the memory tab
+        memory_layout = QtWidgets.QVBoxLayout()
+
+        # Short-term memories section
+        memory_layout.addWidget(QtWidgets.QLabel("Short-term Memories:"))
+        self.short_term_memory_text = QtWidgets.QTextEdit()
+        self.short_term_memory_text.setReadOnly(True)
+        self.short_term_memory_text.setAcceptRichText(True)
+
+        # Long-term memories section
+        self.long_term_memory_text = QtWidgets.QTextEdit()
+        self.long_term_memory_text.setReadOnly(True)
+        self.long_term_memory_text.setAcceptRichText(True)
+
+        # Create a QSplitter to add a vertical drag handle between short and long term memories
+        splitter = QSplitter(QtCore.Qt.Vertical)
+        splitter.addWidget(self.short_term_memory_text)
+        splitter.addWidget(self.long_term_memory_text)
+
+        # Set initial sizes for the splitter
+        splitter.setSizes([self.height() // 2, self.height() // 2])
+
+        # Add the splitter to the layout
+        memory_layout.addWidget(splitter)
+
+        # Set the layout for the memory tab
+        self.memory_tab.setLayout(memory_layout)
+
+    def update_memory_tab(self):
+        if self.tamagotchi_logic and self.tamagotchi_logic.squid:
+            short_term_memories = self.tamagotchi_logic.squid.memory_manager.get_all_short_term_memories()
+            long_term_memories = self.tamagotchi_logic.squid.memory_manager.get_all_long_term_memories()
+
+            self.debug_print(f"Retrieved {len(short_term_memories)} short-term memories and {len(long_term_memories)} long-term memories")
+
+            # Display short-term memories
+            self.short_term_memory_text.clear()
+            for memory in short_term_memories:
+                formatted_memory = self.tamagotchi_logic.squid.memory_manager.format_memory(memory)
+                self.short_term_memory_text.append(formatted_memory)
+                self.debug_print(f"Appended short-term memory to display: {formatted_memory}")
+
+            # Display long-term memories
+            self.long_term_memory_text.clear()
+            for memory in long_term_memories:
+                formatted_memory = self.tamagotchi_logic.squid.memory_manager.format_memory(memory)
+                self.long_term_memory_text.append(formatted_memory)
+                self.debug_print(f"Appended long-term memory to display: {formatted_memory}")
+
+            # Force update of the QTextEdit widgets
+            self.short_term_memory_text.repaint()
+            self.long_term_memory_text.repaint()
+
+            #self.debug_print("Memory tab update completed")
+
+    def display_memories(self, memories, text_widget):
+        for memory in memories:
+            category = memory.get('category', 'Unknown')
+            text_widget.append(f"Category: {category}")
+            for key, value in memory.items():
+                if key != 'category':
+                    text_widget.append(f"  {key}: {value}")
+            text_widget.append("")
 
     def init_thoughts_tab(self):
         self.thoughts_text = QtWidgets.QTextEdit()
@@ -515,6 +642,34 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def clear_thoughts(self):
         self.thoughts_text.clear()
+
+    def init_decisions_tab(self):
+        # Add a label for decision history
+        decision_history_label = QtWidgets.QLabel("Decision History:")
+        self.decisions_tab_layout.addWidget(decision_history_label)
+
+        # Add a text area to display decision history
+        self.decision_history_text = QtWidgets.QTextEdit()
+        self.decision_history_text.setReadOnly(True)
+        self.decisions_tab_layout.addWidget(self.decision_history_text)
+
+        # Add a label for decision inputs
+        decision_inputs_label = QtWidgets.QLabel("Decision Inputs:")
+        self.decisions_tab_layout.addWidget(decision_inputs_label)
+
+        # Add a text area to display decision inputs
+        self.decision_inputs_text = QtWidgets.QTextEdit()
+        self.decision_inputs_text.setReadOnly(True)
+        self.decisions_tab_layout.addWidget(self.decision_inputs_text)
+
+    def update_decisions_tab(self, decision, decision_inputs):
+        # Append the decision to the decision history
+        self.decision_history_text.append(f"Decision: {decision}")
+
+        # Display the decision inputs
+        self.decision_inputs_text.clear()
+        for key, value in decision_inputs.items():
+            self.decision_inputs_text.append(f"{key}: {value}")
 
     def init_associations_tab(self):
         # Add a checkbox to toggle explanation
@@ -1031,6 +1186,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def update_brain(self, state):
         self.brain_widget.update_state(state)
+        self.update_memory_tab()
         
         if 'personality' in state:
             self.update_personality_display(state['personality'])
@@ -1046,8 +1202,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <p>A Tamagotchi-style digital pet with a simple neural network</p>
         <ul>
             <li>by Rufus Pearce</li>
-            <li>Brain Tool version 1.0.5.5</li>
-            <li>Dosidicus version 1.0.370.2 (milestone 1)</li>
+            <li>Brain Tool version 1.0.6.0</li>
+            <li>Dosidicus version 1.0.371 (milestone 2)</li>
         <p>This is a research project. Please suggest features.</p>
         </ul>
         """)

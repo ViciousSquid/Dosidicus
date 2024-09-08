@@ -1,5 +1,5 @@
 # Dosidicus
-# Version 1.0.370.2
+# Version 1.0.371
 
 import os
 import random
@@ -149,8 +149,17 @@ class Squid:
             "personality": self.personality.value
         }
 
-        # Feed the current state into the neural network to get the decision
-        decision = self.tamagotchi_logic.squid_brain_window.make_decision(current_state)
+        # Retrieve relevant memories
+        short_term_memories = self.memory_manager.get_all_short_term_memories('experiences')
+        long_term_memories = self.memory_manager.get_all_long_term_memories('experiences')
+
+        # Combine memories and current state
+        combined_state = current_state.copy()
+        combined_state.update(short_term_memories)
+        combined_state.update(long_term_memories)
+
+        # Feed the combined state into the neural network to get the decision
+        decision = self.tamagotchi_logic.squid_brain_window.make_decision(combined_state)
 
         # Execute the decision based on the neural network's output
         if decision == "search_for_food":
@@ -251,13 +260,19 @@ class Squid:
         scene_rect = self.ui.scene.sceneRect()
         new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
         
-        # Create a small animation to make the movement smoother
-        animation = QtCore.QPropertyAnimation(decoration, b"pos")
-        animation.setDuration(300)  # 300 ms duration
-        animation.setStartValue(current_pos)
-        animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
-        animation.setEasingCurve(QtCore.QEasingCurve.OutCubic)
-        animation.start()
+        # Create a QGraphicsItemAnimation to animate the position
+        animation = QtWidgets.QGraphicsItemAnimation()
+        animation.setItem(decoration)
+        animation.setTimeLine(QtCore.QTimeLine(300))  # 300 ms duration
+        
+        # Set the start and end positions for the animation
+        start_pos = QtCore.QPointF(current_pos)
+        end_pos = QtCore.QPointF(new_x, current_pos.y())
+        animation.setPosAt(0, start_pos)
+        animation.setPosAt(1, end_pos)
+        
+        # Start the animation
+        animation.timeLine().start()
 
         # Update squid's state
         self.happiness = min(100, self.happiness + 5)
@@ -413,22 +428,51 @@ class Squid:
         self.move_squid()
 
     def eat(self):
-        if not self.is_sick:
-            for food_item in self.tamagotchi_logic.food_items:
-                if self.squid_item.collidesWithItem(food_item):
-                    if self.personality == Personality.STUBBORN:
-                        if not getattr(food_item, 'is_sushi', False):
-                            if self.hunger > 80:  # Extremely hungry
-                                self.eat_begrudgingly(food_item)
-                            else:
-                                self.investigate_food(food_item)
-                            return
-                    elif self.personality == Personality.GREEDY:
-                        self.eat_greedily(food_item)
-                        return
-
-                    self.consume_food(food_item)
-                    break
+        for food_item in self.tamagotchi_logic.food_items:
+            if self.squid_item.collidesWithItem(food_item):
+                effects = {}
+                
+                # Basic effects for all food types
+                effects['hunger'] = max(-20, -self.hunger)  # Reduce hunger by 20, but not below 0
+                effects['happiness'] = min(10, 100 - self.happiness)  # Increase happiness by 10, but not above 100
+                
+                # Special effects based on food type
+                if getattr(food_item, 'is_sushi', False):
+                    effects['satisfaction'] = min(15, 100 - self.satisfaction)
+                    food_name = "sushi"
+                else:
+                    effects['satisfaction'] = min(10, 100 - self.satisfaction)
+                    food_name = "cheese"
+                
+                # Apply effects
+                for attr, change in effects.items():
+                    current_value = getattr(self, attr)
+                    new_value = current_value + change
+                    setattr(self, attr, new_value)
+                
+                # Format effects for memory
+                formatted_effects = ', '.join(f"{attr.capitalize()} {'+' if val >= 0 else ''}{val:.2f}" for attr, val in effects.items())
+                memory_value = f"Ate {food_name}: {formatted_effects}"
+                
+                # Add memory
+                self.memory_manager.add_short_term_memory('food', food_name, memory_value)
+                
+                # Additional effects
+                self.status = "Ate food"
+                self.tamagotchi_logic.remove_food(food_item)
+                print(f"The squid ate the {food_name}")
+                self.show_eating_effect()
+                self.start_poop_timer()
+                self.pursuing_food = False
+                self.target_food = None
+                
+                # Personality-specific reactions
+                if self.personality == Personality.GREEDY:
+                    self.eat_greedily()
+                elif self.personality == Personality.STUBBORN and not getattr(food_item, 'is_sushi', False):
+                    self.react_stubborn_eating()
+                
+                break  # Exit the loop after eating one food item
 
     def eat_greedily(self, food_item):
         self.status = "Eating greedily"
@@ -464,6 +508,13 @@ class Squid:
         else:
             if random.random() < 0.1:  # 10% chance to show this message
                 self.tamagotchi_logic.show_message("Greedy squid is satisfied... for now.")
+
+    def react_stubborn_eating(self):
+        if self.hunger > 80:  # Extremely hungry
+            self.happiness = max(0, self.happiness - 5)
+            self.tamagotchi_logic.show_message("Stubborn squid reluctantly eats non-sushi food.")
+        else:
+            self.tamagotchi_logic.show_message("Stubborn squid ignores non-sushi food.")
 
     def check_for_more_food(self):
         for food_item in self.tamagotchi_logic.food_items:
