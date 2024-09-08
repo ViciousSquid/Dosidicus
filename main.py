@@ -18,9 +18,9 @@ from src.squid_brain_window import SquidBrainWindow
 logging.basicConfig(filename='dosidicus_log.txt', level=logging.ERROR, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-def global_exception_handler(exctype, value, traceback):
+def global_exception_handler(exctype, value, tb):
     """Global exception handler to log unhandled exceptions"""
-    error_message = ''.join(traceback.format_exception(exctype, value, traceback))
+    error_message = ''.join(traceback.format_exception(exctype, value, tb))
     logging.error("Unhandled exception:\n%s", error_message)
     QtWidgets.QMessageBox.critical(None, "Error", "An unexpected error occurred. Please check dosidicus_log.txt for details.")
 
@@ -49,8 +49,8 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.user_interface = Ui(self, None)  # Pass None for tamagotchi_logic initially
         
-        # Create SquidBrainWindow
-        self.brain_window = SquidBrainWindow(None)  # We'll set tamagotchi_logic later
+        # Create SquidBrainWindow with debug_mode
+        self.brain_window = SquidBrainWindow(None, self.debug_mode)  # Pass debug_mode here
         self.user_interface.squid_brain_window = self.brain_window
         
         self.specified_personality = specified_personality
@@ -73,6 +73,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.user_interface.tamagotchi_logic = self.tamagotchi_logic
         self.brain_window.tamagotchi_logic = self.tamagotchi_logic
 
+        self.user_interface.new_game_action.triggered.connect(self.start_new_game)
         self.user_interface.load_action.triggered.connect(self.load_game)
         self.user_interface.save_action.triggered.connect(self.save_game)
 
@@ -125,7 +126,22 @@ class MainWindow(QtWidgets.QMainWindow):
             personality = random.choice(list(Personality))
         
         self.squid = Squid(self.user_interface, None, personality)
+        print(f"Init: STARTING A NEW SIMULATION")
         print(f"Created new squid with personality: {self.squid.personality.value}")
+        
+        # Clear all memories when starting a new game
+        self.squid.memory_manager.clear_all_memories()
+        
+        self.show_splash_screen()
+
+    def start_new_game(self):
+        self.create_new_game()
+        self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
+        self.squid.tamagotchi_logic = self.tamagotchi_logic
+        self.user_interface.tamagotchi_logic = self.tamagotchi_logic
+        self.brain_window.tamagotchi_logic = self.tamagotchi_logic
+        self.brain_window.update_personality_display(self.squid.personality)
+        self.tamagotchi_logic.set_simulation_speed(0)  # Initially pause the simulation
         self.show_splash_screen()
 
     def create_squid_from_save_data(self):
@@ -179,7 +195,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def show_hatching_notification(self):
         self.user_interface.show_message("Squid is hatching!")
-        # The message will automatically fade out after 8 seconds as per the show_message implementation
+
 
 def main():
     # Set the global exception handler
