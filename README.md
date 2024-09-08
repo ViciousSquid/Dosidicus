@@ -6,7 +6,8 @@ What if a Tamagotchi had a neural network and could learn stuff?
 * requires `PyQt5` and `numpy`
 * a compiled binary for Windows is available on the [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
 
-![image](https://github.com/user-attachments/assets/7feba5ba-dd0f-4751-a17c-dab106eea9d4)
+![image](https://github.com/user-attachments/assets/6102225a-52d6-440c-adfb-a58fd800f1cd)
+
 
 
 
