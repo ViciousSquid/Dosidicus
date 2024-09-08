@@ -43,6 +43,4 @@ Be aware the squid hates taking medicine and will become depressed and need slee
 
 ### Debug Tools:
 
-* View and edit the squid's internal state. 
-* Behaviour can be influenced by editing neurons and weights
-* Ability to record brain state and apply Hebbian learning
+* Directly View and edit the squid's internal states 
