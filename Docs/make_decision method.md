@@ -58,21 +58,6 @@ The combined state is fed into a neural network (represented by `squid_brain_win
 
 ### 4. Executing the Decision
 
-```python
-if decision == "search_for_food":
-    self.search_for_food()
-elif decision == "explore":
-    self.explore_environment()
-elif decision == "sleep":
-    self.go_to_sleep()
-elif decision == "move_slowly":
-    self.move_slowly()
-elif decision == "move_erratically":
-    self.move_erratically()
-else:
-    self.move_randomly()
-```
-
 Based on the neural network's output, the method calls the appropriate function to execute the decision. If no specific decision is made, it defaults to random movement.
 
 ### 5. Considering Environmental Factors
