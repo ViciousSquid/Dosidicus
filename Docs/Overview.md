@@ -1,5 +1,7 @@
 # Squid Brain Technical Overview
 
+
+
 ## 1. Brain Structure and State
 
 The squid's brain is represented by a set of neurons, each corresponding to a specific attribute or state. The main components are:
@@ -11,7 +13,7 @@ These neurons are interconnected, and their states influence each other based on
 
 ## 2. Neural Network Implementation
 
-The brain is implemented as a simple neural network:
+The brain is implemented as a simple neural network (single layer perceptron with 7 inputs)
 
 - Neurons are represented as nodes with activation values (`0-100` for most states).
 - Connections between neurons have weights (`-1 to 1`) that determine how much one neuron's state influences another.
