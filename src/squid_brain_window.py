@@ -519,12 +519,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.personality_tab, "Personality")
         self.init_personality_tab()
 
-        # Learning tab
+        # Learning tab (lazy loaded)
         self.learning_tab = QtWidgets.QWidget()
         self.learning_tab_layout = QtWidgets.QVBoxLayout()
         self.learning_tab.setLayout(self.learning_tab_layout)
         self.tabs.addTab(self.learning_tab, "Learning")
-        self.init_learning_tab()
+        self.tabs.currentChanged.connect(self.on_tab_changed)
 
         # Associations tab
         self.associations_tab = QtWidgets.QWidget()
@@ -594,6 +594,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Set the layout for the memory tab
         self.memory_tab.setLayout(memory_layout)
+
+    def on_tab_changed(self, index):
+        if self.tabs.tabText(index) == "Learning" and not hasattr(self, 'learning_tab_initialized'):
+            self.init_learning_tab()
+            self.learning_tab_initialized = True
 
     def update_memory_tab(self):
         if self.tamagotchi_logic and self.tamagotchi_logic.squid:
@@ -758,20 +763,28 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         return display_names.get(neuron, f"{neuron}")
 
     def init_learning_tab(self):
+        if hasattr(self, 'learning_tab_initialized'):
+            return
+
         learning_layout = QtWidgets.QVBoxLayout()
 
         # Weight changes text area
         self.weight_changes_text = AutoScrollTextEdit()
         self.weight_changes_text.setReadOnly(True)
         self.weight_changes_text.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse | QtCore.Qt.TextSelectableByKeyboard)
-        self.weight_changes_text.setAcceptRichText(True)  # Enable rich text interpretation
+        self.weight_changes_text.setAcceptRichText(True)
         learning_layout.addWidget(self.weight_changes_text)
+
+        # If there are pending weight changes, add them to the text area
+        if hasattr(self, 'pending_weight_changes'):
+            for text in self.pending_weight_changes:
+                self.weight_changes_text.append(text)
+            delattr(self, 'pending_weight_changes')
 
         # Learning data table
         self.learning_data_table = AutoScrollTable()
         self.learning_data_table.setColumnCount(5)
         self.learning_data_table.setHorizontalHeaderLabels(["Time", "Neuron 1", "Neuron 2", "Weight Change", "Direction"])
-        # Set column widths
         header = self.learning_data_table.horizontalHeader()
         header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
         header.resizeSection(0, 150)  # Timestamp
@@ -794,17 +807,41 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.clear_button.clicked.connect(self.clear_learning_data)
         controls_layout.addWidget(self.clear_button)
 
+        # Add Load More button
+        self.load_more_button = QtWidgets.QPushButton("Load More")
+        self.load_more_button.clicked.connect(self.load_more_learning_data)
+        controls_layout.addWidget(self.load_more_button)
+
         learning_layout.addLayout(controls_layout)
 
         learning_widget = QtWidgets.QWidget()
         learning_widget.setLayout(learning_layout)
         self.learning_tab_layout.addWidget(learning_widget)
 
+        # Initialize the displayed data count
+        self.displayed_data_count = 0
+
+        # Update the learning data table with initial 100 items
+        self.update_learning_data_table(initial_load=True)
+
+        self.learning_tab_initialized = True
+
     def clear_learning_data(self):
         self.weight_changes_text.clear()
-        self.learning_data_table.setRowCount(0)
+        if hasattr(self, 'learning_data_table'):
+            self.learning_data_table.setRowCount(0)
         self.learning_data = []
+        self.displayed_data_count = 0
         print("Learning data cleared.")
+
+    def append_to_weight_changes(self, text):
+        if hasattr(self, 'weight_changes_text'):
+            self.weight_changes_text.append(text)
+        else:
+            # If weight_changes_text doesn't exist yet, store the text for later
+            if not hasattr(self, 'pending_weight_changes'):
+                self.pending_weight_changes = []
+            self.pending_weight_changes.append(text)
 
     def perform_hebbian_learning(self):
         if self.is_paused or not hasattr(self, 'brain_widget') or not self.tamagotchi_logic or not self.tamagotchi_logic.squid:
@@ -856,10 +893,25 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             neuron2 = active_neurons[j]
             value1 = self.get_neuron_value(current_state.get(neuron1, 50))  # Default to 50 if not in current_state
             value2 = self.get_neuron_value(current_state.get(neuron2, 50))
-            self.update_connection(neuron1, neuron2, value1, value2)
+            weight_change, change_direction = self.update_connection(neuron1, neuron2, value1, value2)
+
+            # Update learning data
+            timestamp = QtCore.QTime.currentTime().toString("hh:mm:ss")
+            self.learning_data.append((timestamp, neuron1, neuron2, weight_change, change_direction))
 
         # Update the brain visualization
         self.brain_widget.update()
+
+        # Check if enough time has passed since the last update
+        current_time = time.time()
+        if current_time - self.last_update_time >= self.update_threshold:
+            self.update_associations()
+            self.last_update_time = current_time
+
+        # Update learning data table if initialized
+        if hasattr(self, 'learning_tab_initialized'):
+            if self.displayed_data_count < len(self.learning_data):
+                self.update_learning_data_table()
 
     def deduce_weight_change_reason(self, pair, value1, value2, prev_weight, new_weight, weight_change):
         neuron1, neuron2 = pair
@@ -950,37 +1002,31 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             change_direction = "No change"
             color = QtGui.QColor("black")
 
-        # Check if enough time has passed since the last update
-        current_time = time.time()
-        if current_time - self.last_update_time >= self.update_threshold:
-            self.update_associations()
-            self.last_update_time = current_time
-
         # Display the weight change
         timestamp = QtCore.QTime.currentTime().toString("hh:mm:ss")
-        self.weight_changes_text.append(f"{timestamp} - Weight changed between {neuron1.upper()} and {neuron2.upper()}")
-        self.weight_changes_text.append(f"Previous value: {prev_weight:.4f}")
-        self.weight_changes_text.append(f"New value: {new_weight:.4f}")
-
-        # Set text color for the change line
-        cursor = self.weight_changes_text.textCursor()
-        format = QtGui.QTextCharFormat()
-        format.setForeground(color)
-        cursor.insertText(f"Change: {change_direction} by {abs(weight_change):.4f}\n", format)
+        self.append_to_weight_changes(f"{timestamp} - Weight changed between {neuron1.upper()} and {neuron2.upper()}")
+        self.append_to_weight_changes(f"Previous value: {prev_weight:.4f}")
+        self.append_to_weight_changes(f"New value: {new_weight:.4f}")
+        self.append_to_weight_changes(f"Change: {change_direction} by {abs(weight_change):.4f}")
 
         # Deduce and add the reason for weight change
         reason = self.deduce_weight_change_reason(use_pair, value1, value2, prev_weight, new_weight, weight_change)
-        self.weight_changes_text.append(f"Reason: {reason}\n")
+        self.append_to_weight_changes(f"Reason: {reason}")
+        self.append_to_weight_changes("")  # Add a blank line for readability
 
         # Update learning data
         self.learning_data.append((timestamp, neuron1, neuron2, weight_change, change_direction))
-        self.update_learning_data_table()
+        if hasattr(self, 'learning_tab_initialized'):
+            self.update_learning_data_table()
+
         # Update associations after each connection update
         self.update_associations()
 
         # Update log window if open
         if self.log_window and self.log_window.isVisible():
-            self.log_window.update_log(self.weight_changes_text.toPlainText())
+            self.log_window.update_log("\n".join(self.pending_weight_changes) if hasattr(self, 'pending_weight_changes') else "")
+
+        return weight_change, change_direction
 
     def get_neuron_value(self, value):
         if isinstance(value, (int, float)):
@@ -993,9 +1039,20 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         else:
             return 0.0
 
-    def update_learning_data_table(self):
-        self.learning_data_table.setRowCount(len(self.learning_data))
-        for row, data in enumerate(self.learning_data):
+    def update_learning_data_table(self, initial_load=False):
+        if not hasattr(self, 'learning_data_table'):
+            return
+
+        if initial_load:
+            self.displayed_data_count = 0
+
+        start_index = self.displayed_data_count
+        end_index = min(start_index + 100, len(self.learning_data))
+
+        self.learning_data_table.setRowCount(end_index)
+
+        for row in range(start_index, end_index):
+            data = self.learning_data[row]
             for col, value in enumerate(data):
                 item = QtWidgets.QTableWidgetItem(str(value))
                 if col == 3:  # Weight change column
@@ -1006,7 +1063,17 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                     elif value == "DECREASED":
                         item.setForeground(QtGui.QColor("red"))
                 self.learning_data_table.setItem(row, col, item)
-        self.learning_data_table.scrollToBottom()
+
+        self.displayed_data_count = end_index
+
+        # Update the "Load More" button state
+        self.load_more_button.setEnabled(self.displayed_data_count < len(self.learning_data))
+
+        if not initial_load:
+            self.learning_data_table.scrollToBottom()
+
+    def load_more_learning_data(self):
+        self.update_learning_data_table()
 
     def set_pause_state(self, is_paused):
         self.is_paused = is_paused
