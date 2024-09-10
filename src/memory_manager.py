@@ -56,27 +56,15 @@ class MemoryManager:
         except Exception as e:
             print(f"Error saving memory to {file_path}: {e}")
 
-    def add_short_term_memory(self, category, key, value, importance=1):
+    def add_short_term_memory(self, category, key, value):
         timestamp = datetime.now()
-
-        if category == 'decorations':
-            decoration_name = os.path.basename(key)
-            effects = ', '.join(
-                f"{attr.capitalize()} {'+' if isinstance(val, (int, float)) and val >= 0 else ''}{val:.2f}"
-                for attr, val in value.items()
-                if isinstance(val, (int, float)) and val != 0
-            )
-            formatted_value = f"Interaction with {decoration_name}: {effects}"
-        else:
-            formatted_value = value
 
         memory = {
             'category': category,
             'key': key,
-            'value': formatted_value,
-            'raw_value': value,  # Store the original value for internal use
-            'timestamp': timestamp.isoformat(),  # Convert to ISO format string
-            'importance': importance,
+            'value': value,
+            'timestamp': timestamp.isoformat(),
+            'importance': 1,
             'access_count': 1
         }
         self.short_term_memory.append(memory)
@@ -85,7 +73,6 @@ class MemoryManager:
             self.cleanup_short_term_memory()
 
         self.save_memory(self.short_term_memory, self.short_term_file)
-        #print(f"DEBUG: Added short-term memory: {memory}")
 
 
     def cleanup_short_term_memory(self):
@@ -234,22 +221,28 @@ class MemoryManager:
         if isinstance(timestamp, str):
             timestamp = datetime.fromisoformat(timestamp)
         timestamp = timestamp.strftime("%H:%M:%S")
-        formatted_memory = f"[{timestamp}] {memory['value']}"
+
+        formatted_memory = f"[{timestamp}] "
+        interaction_type = "<b>Neutral</b>"
+        total_effect = 0
+
+        if 'value' in memory and isinstance(memory['value'], dict):
+            if 'decoration' in memory['value'] and 'effects' in memory['value']:
+                decoration = memory['value']['decoration']
+                effects = memory['value']['effects']
+                formatted_effects = ', '.join(f"{attr.capitalize()} {'Decreased' if attr == 'anxiety' and val < 0 else '+' if val >= 0 else ''}{abs(val):.2f}" for attr, val in effects.items())
+                formatted_memory += f"Interaction with {decoration}: {formatted_effects}"
+                total_effect = sum(float(val) if attr != 'anxiety' else -float(val) for attr, val in effects.items())
+            else:
+                formatted_memory += str(memory['value'])
+        else:
+            formatted_memory += str(memory.get('value', 'No value'))
 
         # Determine if the memory is positive, negative, or neutral
-        if memory['category'] == 'mental_state' and memory['key'] == 'startled':
+        if total_effect > 0:
+            interaction_type = "<font color='green'><b>Positive</b></font>"
+        elif total_effect < 0:
             interaction_type = "<font color='red'><b>Negative</b></font>"
-        elif isinstance(memory['raw_value'], dict):
-            total_effect = sum(float(val) for val in memory['raw_value'].values() if isinstance(val, (int, float)))
-            if total_effect > 0:
-                interaction_type = "<font color='green'><b>Positive</b></font>"
-            elif total_effect < 0:
-                interaction_type = "<font color='red'><b>Negative</b></font>"
-            else:
-                interaction_type = "<b>Neutral</b>"
-        else:
-            # For non-numeric memories, default to neutral
-            interaction_type = "<b>Neutral</b>"
 
         # Add background color based on interaction type
         if "Negative" in interaction_type:
@@ -260,4 +253,3 @@ class MemoryManager:
             background_color = "#FFFACD"  # Pastel yellow
 
         return f"<div style='background-color: {background_color}; padding: 5px; margin: 5px; border-radius: 5px;'>{formatted_memory}<br>{interaction_type}<hr></div>"
-

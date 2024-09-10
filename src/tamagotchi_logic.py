@@ -147,8 +147,13 @@ class TamagotchiLogic:
                 self.brain_window.brain_widget.strengthen_connection(stat, 'satisfaction', boost * 0.01)
                 
                 # If the boost is significant, also strengthen connection with happiness
-                if boost > 5:
+                if abs(boost) > 5:
                     self.brain_window.brain_widget.strengthen_connection(stat, 'happiness', boost * 0.005)
+                
+                # For anxiety, strengthen the inverse connection
+                if stat == 'anxiety':
+                    self.brain_window.brain_widget.strengthen_connection(stat, 'satisfaction', -boost * 0.01)
+                    self.brain_window.brain_widget.strengthen_connection(stat, 'happiness', -boost * 0.005)
 
         # Update the squid's memory
         decoration_memory = {
@@ -159,7 +164,7 @@ class TamagotchiLogic:
         self.squid.memory_manager.add_short_term_memory('decorations', str(time.time()), decoration_memory)
 
         # If this is a significant effect, consider transferring to long-term memory
-        if any(boost > 10 for boost in effects.values()):
+        if any(abs(boost) > 10 for boost in effects.values()):
             self.squid.memory_manager.transfer_to_long_term_memory('decorations', str(time.time()))
 
 
@@ -242,14 +247,18 @@ class TamagotchiLogic:
         if not valid_decorations:
             return
 
-        strongest_decoration = max(valid_decorations, key=lambda d: max(d.stat_multipliers.values()))
+        strongest_decoration = max(valid_decorations, key=lambda d: max(d.stat_multipliers.values(), key=abs))
         
         effects = {}
-        for stat, multiplier in strongest_decoration.stat_multipliers.items():
+        for stat, value in strongest_decoration.stat_multipliers.items():
             if hasattr(self.squid, stat):
                 current_value = getattr(self.squid, stat)
-                new_value = min(current_value * multiplier, 100)
-                boost = new_value - current_value
+                if stat == 'anxiety':
+                    new_value = max(current_value - abs(value), 0)  # Anxiety decreases
+                    boost = -(current_value - new_value)  # Negative boost for anxiety reduction
+                else:
+                    new_value = min(current_value + value, 100)
+                    boost = new_value - current_value
                 setattr(self.squid, stat, new_value)
                 effects[stat] = boost
 
@@ -257,14 +266,24 @@ class TamagotchiLogic:
         if strongest_decoration.category == 'plant':
             old_cleanliness = self.squid.cleanliness
             self.squid.cleanliness = min(self.squid.cleanliness + 5, 100)
-            effects['cleanliness'] = effects.get('cleanliness', 0) + (self.squid.cleanliness - old_cleanliness)
+            effects['cleanliness'] = self.squid.cleanliness - old_cleanliness
+            
+            old_anxiety = self.squid.anxiety
+            self.squid.anxiety = max(self.squid.anxiety - 5, 0)
+            effects['anxiety'] = -(old_anxiety - self.squid.anxiety)  # Negative value for anxiety reduction
         elif strongest_decoration.category == 'rock':
             old_satisfaction = self.squid.satisfaction
             self.squid.satisfaction = min(self.squid.satisfaction + 5, 100)
-            effects['satisfaction'] = effects.get('satisfaction', 0) + (self.squid.satisfaction - old_satisfaction)
+            effects['satisfaction'] = self.squid.satisfaction - old_satisfaction
 
+        # Create memory value as a dictionary
+        memory_value = {
+            'decoration': strongest_decoration.filename,
+            'effects': effects
+        }
+        
         # Update squid's memory
-        self.squid.memory_manager.add_short_term_memory('decorations', strongest_decoration.filename, effects)
+        self.squid.memory_manager.add_short_term_memory('decorations', strongest_decoration.filename, memory_value)
 
         # Trigger Hebbian learning
         self.update_decoration_learning(effects)
