@@ -1,0 +1,9 @@
+2024-09-11 23:05:09,662 - ERROR - Unhandled exception:
+Traceback (most recent call last):
+  File "C:\Users\rufus\Desktop\Projects\Dosidicus_DEV\src\tamagotchi_logic.py", line 539, in curious_interaction
+    self.squid.push_decoration(decoration, direction)
+  File "C:\Users\rufus\Desktop\Projects\Dosidicus_DEV\src\squid.py", line 264, in push_decoration
+    animation = QtWidgets.QGraphicsItemAnimation()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'PyQt5.QtWidgets' has no attribute 'QGraphicsItemAnimation'
+
