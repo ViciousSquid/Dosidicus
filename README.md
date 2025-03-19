@@ -3,7 +3,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 ### A digital pet with a simple neural network [research project]
 * Includes detailed tools for visualising and understanding how neural networks and Hebbian learning work
 
-* requires `PyQt5` and `numpy`
+* requires `PyQt5` , `numpy` and `torch`
 * a compiled binary for Windows is available on the [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
 
 ![image](https://github.com/user-attachments/assets/6102225a-52d6-440c-adfb-a58fd800f1cd)
