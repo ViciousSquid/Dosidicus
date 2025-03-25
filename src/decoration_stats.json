@@ -1,32 +1,48 @@
 {
-    "plant01.png": {
-      "happiness": 5,
-      "cleanliness": 5
-    },
-    "plant02.png": {
-      "happiness": 5,
-      "cleanliness": 7
-    },
-    "plant03.png": {
-      "happiness": 5,
-      "cleanliness": 5
-    },
-    "plant04.png": {
-      "happiness": 5,
-      "cleanliness": 5
-    },
-    "plant05.png": {
-      "happiness": 5,
-      "cleanliness": 5
-    },
-    "plant06.png": {
-      "happiness": 5,
-      "cleanliness": 5
-    },
-    "rock01.png": {
-      "happiness": 2
-    },
-    "rock02.png": {
-      "happiness": 2
-    }
+  "plant01.png": {
+    "happiness": 5,
+    "cleanliness": 5
+  },
+  "plant02.png": {
+    "happiness": 5,
+    "cleanliness": 7
+  },
+  "plant03.png": {
+    "happiness": 5,
+    "cleanliness": 5
+  },
+  "plant04.png": {
+    "happiness": 5,
+    "cleanliness": 5
+  },
+  "plant05.png": {
+    "happiness": 5,
+    "cleanliness": 5
+  },
+  "plant06.png": {
+    "happiness": 5,
+    "cleanliness": 5
+  },
+  "plant07.png": {
+    "happiness": 6,
+    "cleanliness": 6
+  },
+  "plant08.png": {
+    "happiness": 4,
+    "cleanliness": 8
+  },
+  "plant09.png": {
+    "happiness": 7,
+    "cleanliness": 4
+  },
+  "plant10.png": {
+    "happiness": 5,
+    "cleanliness": 6
+  },
+  "rock01.png": {
+    "happiness": 2
+  },
+  "rock02.png": {
+    "happiness": 2
   }
+}

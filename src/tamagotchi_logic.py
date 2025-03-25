@@ -1,5 +1,5 @@
 # Tamagotchi logic for a digital pet with a neural network
-# by Rufus Pearce (ViciousSquid)  |  July 2024  |  version 1.0.371
+# by Rufus Pearce (ViciousSquid)  |  March 2025  |  version 1.0.375
 # https://github.com/ViciousSquid/Dosidicus
 
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -14,13 +14,28 @@ from .rps_game import RPSGame
 from .squid import Personality, Squid
 from .ui import ResizablePixmapItem
 from .squid_brain_window import SquidBrainWindow
+from .learning import HebbianLearning
 
 class TamagotchiLogic:
     def __init__(self, user_interface, squid, brain_window):
         self.user_interface = user_interface
         self.squid = squid
         self.brain_window = brain_window
-        self.squid_brain_window = brain_window  # Assign brain_window to squid_brain_window
+        
+        # Initialize HebbianLearning only if squid is not None
+        if self.squid is not None:
+            self.squid.hebbian_learning = HebbianLearning(self.squid, brain_window)
+
+        # Ensure the brain_window has the add_thought method
+        if hasattr(self.brain_window, 'add_thought'):
+            self.add_thought = self.brain_window.add_thought
+        else:
+            raise AttributeError("brain_window does not have an add_thought method")
+
+        # Initialize attributes
+        self.mental_states_enabled = True
+        self.startle_cooldown = 0
+        self.curious_cooldown = 0
 
         # If brain_window is None, create a simple thought logger
         if self.brain_window is None:
@@ -28,6 +43,12 @@ class TamagotchiLogic:
             self.add_thought = self._log_thought
         else:
             self.add_thought = self.brain_window.add_thought
+
+        # Initialize save_manager before loading the game
+        self.save_manager = SaveManager()  # Add this line
+
+        # Load the game
+        self.load_game()  # Now save_manager is initialized before this call
 
         # Connect menu actions
         self.user_interface.feed_action.triggered.connect(self.feed_squid)
@@ -77,17 +98,14 @@ class TamagotchiLogic:
         self.brain_update_timer.timeout.connect(self.update_squid_brain)
         self.brain_update_timer.start(1000)  # Update every second
 
-        self.save_manager = SaveManager()
-
         self.autosave_timer = QtCore.QTimer()
         self.autosave_timer.timeout.connect(self.autosave)
-
-        self.load_game()
 
         # Initialize goal neurons
         self.squid.satisfaction = 50
         self.squid.anxiety = 10
         self.squid.curiosity = 55
+
 
                         ################################
                         #### MENTAL STATE COOLDOWNS ####
@@ -101,9 +119,81 @@ class TamagotchiLogic:
         self.curious_interaction_cooldown = 1
         self.curious_interaction_cooldown_max = 5
 
+    def set_squid(self, squid):
+        self.squid = squid
+
+    def set_brain_window(self, brain_window):
+        self.brain_window = brain_window
+
     def set_mental_states_enabled(self, enabled):
         self.mental_states_enabled = enabled
         self.squid.mental_state_manager.set_mental_states_enabled(enabled)
+
+
+    def get_decision_data(self):
+        """Package decision-making information for visualization"""
+        return {
+            'timestamp': time.strftime("%H:%M:%S"),
+            'inputs': self.get_current_state(),
+            'active_memories': self.get_active_memories(),
+            'possible_actions': self.get_available_actions(),
+            'final_decision': self.squid.status,
+            'confidence': random.uniform(0.7, 0.95),
+            'processing_time': random.randint(50, 200),
+            'personality_influence': self.squid.personality.value,
+            'emotions': {
+                'happiness': self.squid.happiness,
+                'anxiety': self.squid.anxiety,
+                'curiosity': self.squid.curiosity
+            },
+            'learning_history': self.get_recent_learning()
+        }
+
+    def get_active_memories(self):
+        return [m['value'] for m in self.squid.memory_manager.get_all_short_term_memories()][:5]
+
+    def get_available_actions(self):
+        return ["search_for_food", "explore", "sleep", "move_randomly", "interact_object"]
+
+    def get_recent_learning(self):
+        """Get last 3 significant weight changes"""
+        if hasattr(self.squid, 'hebbian_learning') and self.squid.hebbian_learning:
+            try:
+                learning_data = self.squid.hebbian_learning.get_learning_data()
+                return [f"{n1}-{n2}: {delta:.2f}" for _,n1,n2,delta in learning_data[-3:]]
+            except AttributeError:
+                return ["Learning system initializing"]
+        return ["No learning data available"]
+    
+
+    def get_current_state(self):
+        """Get current sensory inputs and status"""
+        return {
+            'hunger': self.squid.hunger,
+            'happiness': self.squid.happiness,
+            'cleanliness': self.squid.cleanliness,
+            'sleepiness': self.squid.sleepiness,
+            'satisfaction': self.squid.satisfaction,
+            'anxiety': self.squid.anxiety,
+            'curiosity': self.squid.curiosity,
+            'is_sick': self.squid.is_sick,
+            'near_food': len(self.squid.get_visible_food()) > 0,
+            'near_poop': len(self.poop_items) > 0
+        }
+
+    def get_active_memories(self):
+        """Get 3 most relevant recent memories"""
+        memories = self.squid.memory_manager.get_all_short_term_memories()
+        return [f"{m['category']}: {m['value']}" for m in memories[:3]]
+
+    def get_available_actions(self):
+        """List of currently available actions"""
+        actions = ["explore", "sleep", "move_randomly"]
+        if self.squid.hunger > 50:
+            actions.append("search_for_food")
+        if self.squid.curiosity > 60:
+            actions.append("investigate_object")
+        return actions
 
     def update_from_brain(self, brain_state):   # Communication between brain tool and Squid
         if self.squid is not None:
@@ -147,13 +237,8 @@ class TamagotchiLogic:
                 self.brain_window.brain_widget.strengthen_connection(stat, 'satisfaction', boost * 0.01)
                 
                 # If the boost is significant, also strengthen connection with happiness
-                if abs(boost) > 5:
+                if boost > 5:
                     self.brain_window.brain_widget.strengthen_connection(stat, 'happiness', boost * 0.005)
-                
-                # For anxiety, strengthen the inverse connection
-                if stat == 'anxiety':
-                    self.brain_window.brain_widget.strengthen_connection(stat, 'satisfaction', -boost * 0.01)
-                    self.brain_window.brain_widget.strengthen_connection(stat, 'happiness', -boost * 0.005)
 
         # Update the squid's memory
         decoration_memory = {
@@ -164,7 +249,7 @@ class TamagotchiLogic:
         self.squid.memory_manager.add_short_term_memory('decorations', str(time.time()), decoration_memory)
 
         # If this is a significant effect, consider transferring to long-term memory
-        if any(abs(boost) > 10 for boost in effects.values()):
+        if any(boost > 10 for boost in effects.values()):
             self.squid.memory_manager.transfer_to_long_term_memory('decorations', str(time.time()))
 
 
@@ -247,18 +332,14 @@ class TamagotchiLogic:
         if not valid_decorations:
             return
 
-        strongest_decoration = max(valid_decorations, key=lambda d: max(d.stat_multipliers.values(), key=abs))
+        strongest_decoration = max(valid_decorations, key=lambda d: max(d.stat_multipliers.values()))
         
         effects = {}
-        for stat, value in strongest_decoration.stat_multipliers.items():
+        for stat, multiplier in strongest_decoration.stat_multipliers.items():
             if hasattr(self.squid, stat):
                 current_value = getattr(self.squid, stat)
-                if stat == 'anxiety':
-                    new_value = max(current_value - abs(value), 0)  # Anxiety decreases
-                    boost = -(current_value - new_value)  # Negative boost for anxiety reduction
-                else:
-                    new_value = min(current_value + value, 100)
-                    boost = new_value - current_value
+                new_value = min(current_value * multiplier, 100)
+                boost = new_value - current_value
                 setattr(self.squid, stat, new_value)
                 effects[stat] = boost
 
@@ -266,24 +347,14 @@ class TamagotchiLogic:
         if strongest_decoration.category == 'plant':
             old_cleanliness = self.squid.cleanliness
             self.squid.cleanliness = min(self.squid.cleanliness + 5, 100)
-            effects['cleanliness'] = self.squid.cleanliness - old_cleanliness
-            
-            old_anxiety = self.squid.anxiety
-            self.squid.anxiety = max(self.squid.anxiety - 5, 0)
-            effects['anxiety'] = -(old_anxiety - self.squid.anxiety)  # Negative value for anxiety reduction
+            effects['cleanliness'] = effects.get('cleanliness', 0) + (self.squid.cleanliness - old_cleanliness)
         elif strongest_decoration.category == 'rock':
             old_satisfaction = self.squid.satisfaction
             self.squid.satisfaction = min(self.squid.satisfaction + 5, 100)
-            effects['satisfaction'] = self.squid.satisfaction - old_satisfaction
+            effects['satisfaction'] = effects.get('satisfaction', 0) + (self.squid.satisfaction - old_satisfaction)
 
-        # Create memory value as a dictionary
-        memory_value = {
-            'decoration': strongest_decoration.filename,
-            'effects': effects
-        }
-        
         # Update squid's memory
-        self.squid.memory_manager.add_short_term_memory('decorations', strongest_decoration.filename, memory_value)
+        self.squid.memory_manager.add_short_term_memory('decorations', strongest_decoration.filename, effects)
 
         # Trigger Hebbian learning
         self.update_decoration_learning(effects)
@@ -347,8 +418,8 @@ class TamagotchiLogic:
     def set_simulation_speed(self, speed):
         self.simulation_speed = speed
         self.update_timers()
-        if self.squid:
-            self.squid.set_animation_speed(speed)
+        #if self.squid:
+        #    self.squid.set_animation_speed(speed)
         print(f"Simulation speed set to {speed}x")
 
     def setup_timers(self):
@@ -360,6 +431,7 @@ class TamagotchiLogic:
         if self.simulation_speed == 0:
             self.simulation_timer.stop()
         else:
+            # Original "slower" scaling (e.g., 1x=1000ms, 2x=500ms, 4x=250ms)
             interval = self.base_interval // self.simulation_speed
             self.simulation_timer.start(interval)
 
@@ -697,9 +769,9 @@ class TamagotchiLogic:
 
         cheese_item.setPos(cheese_x, cheese_y)
 
-        if self.squid is not None and cheese_item.collidesWithItem(self.squid.squid_item):
-            self.squid.eat()
-            self.remove_food(cheese_item)
+        # Directly check collision without redundant checks
+        if self.squid and cheese_item.collidesWithItem(self.squid.squid_item):
+            self.squid.eat(cheese_item)
 
     def move_sushi(self, sushi_item):
         sushi_x = sushi_item.pos().x()
@@ -711,7 +783,7 @@ class TamagotchiLogic:
         sushi_item.setPos(sushi_x, sushi_y)
 
         if self.squid is not None and sushi_item.collidesWithItem(self.squid.squid_item):
-            self.squid.eat()
+            self.squid.eat(sushi_item)  # Pass the sushi_item as an argument
             self.remove_food(sushi_item)
 
     def is_sushi(self, food_item):
@@ -821,11 +893,35 @@ class TamagotchiLogic:
         if self.squid:
             self.squid.update_preferred_vertical_range()
 
-    def feed_squid(self):           ## 50% chance to spawn cheese , 50% chance to spawn sushi
-        if random.random() < 0.5:
-            self.spawn_food(is_sushi=True)
+    def feed_squid(self):
+        """Spawn exactly one food item per feeding"""
+        if len(self.food_items) >= self.max_food:
+            return
+        
+        # Only create one food item
+        is_sushi = random.random() < 0.5
+        self.spawn_food(is_sushi=is_sushi)
+
+    def spawn_food(self, is_sushi=False):
+        if len(self.food_items) >= self.max_food:
+            return
+        
+        # Create only one food item
+        if is_sushi:
+            food_pixmap = QtGui.QPixmap(os.path.join("images", "sushi.png"))
+            food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
+            food_item.is_sushi = True
         else:
-            self.spawn_food(is_sushi=False)
+            food_pixmap = QtGui.QPixmap(os.path.join("images", "cheese.png"))
+            food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
+            food_item.is_sushi = False
+
+        food_x = random.randint(50, self.user_interface.window_width - 50 - self.food_width)
+        food_item.setPos(food_x, 50)
+        
+        # Add to scene and tracking list
+        self.user_interface.scene.addItem(food_item)
+        self.food_items.append(food_item)  # Single addition
 
     def clean_environment(self):
         current_time = time.time()

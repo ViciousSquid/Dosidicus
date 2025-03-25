@@ -1,10 +1,3 @@
-########### BRAIN TOOL
-########### Version 1.0.6.0 - Aug 2024
-###########
-########### by Rufus Pearce
-########### github.com/ViciousSquid/Dosidicus
-###########
-
 import sys
 import csv
 import os
@@ -14,7 +7,7 @@ from PyQt5.QtWidgets import QSplitter
 import random
 import numpy as np
 import json
-from .squid import Personality
+from .personality import Personality
 
 class BrainWidget(QtWidgets.QWidget):
     def __init__(self):
@@ -91,15 +84,15 @@ class BrainWidget(QtWidgets.QWidget):
             for j in range(i+1, len(neurons)):
                 self.weights[(neurons[i], neurons[j])] = random.uniform(-1, 1)
 
-        def update_state(self, new_state):
-            # Update only the keys that exist in self.state and are allowed to be modified
-            for key in self.state.keys():
-                if key in new_state and key not in ['satisfaction', 'anxiety', 'curiosity']:
-                    self.state[key] = new_state[key]
-            self.update_weights()
-            self.update()
-            if self.capture_training_data_enabled:
-                self.capture_training_data(new_state)
+    def update_state(self, new_state):
+        # Update only the keys that exist in self.state and are allowed to be modified
+        for key in self.state.keys():
+            if key in new_state and key not in ['satisfaction', 'anxiety', 'curiosity']:
+                self.state[key] = new_state[key]
+        self.update_weights()
+        self.update()
+        if self.capture_training_data_enabled:
+            self.capture_training_data(new_state)
 
     def update_weights(self):
         if self.frozen_weights is not None:
@@ -131,38 +124,6 @@ class BrainWidget(QtWidgets.QWidget):
 
         # Update the brain visualization
         self.update()
-
-        # Optionally, you can add logging here
-        #print(f"Connection between {neuron1} and {neuron2} strengthened by {amount}. New weight: {self.weights[use_pair]}")
-
-    def update_state(self, new_state):
-        # Update only the keys that exist in self.state
-        for key in self.state.keys():
-            if key in new_state:
-                self.state[key] = new_state[key]
-
-        # Perform any necessary updates after state change
-        self.update()  # Trigger a repaint of the widget
-        if self.capture_training_data_enabled:
-            self.capture_training_data(new_state)
-
-    def save_weights(self, filename):
-        with open(filename, 'w') as file:
-            for conn, weight in self.weights.items():
-                file.write(f"{conn[0]} {conn[1]} {weight}\n\n")
-
-    def load_weights(self, filename):
-        with open(filename, 'r') as file:
-            for line in file:
-                conn, weight = line.strip().split()
-                self.weights[(conn[0], conn[1])] = float(weight)
-
-    def stimulate_brain(self, new_state):
-        self.update_state(new_state)
-        self.record_history()
-
-    def record_history(self):
-        self.history.append(self.state.copy())
 
     def capture_training_data(self, state):
         training_sample = [state[neuron] for neuron in self.neuron_positions.keys()]
@@ -372,57 +333,62 @@ class StimulateDialog(QtWidgets.QDialog):
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
     def __init__(self, tamagotchi_logic, debug_mode=False):
-            super().__init__()
-            self.tamagotchi_logic = tamagotchi_logic
-            self.debug_mode = debug_mode
-            self.setWindowTitle("Brain Tool")
-            self.resize(1024, 768)
+        super().__init__()
+        self.tamagotchi_logic = tamagotchi_logic
+        self.debug_mode = debug_mode
+        self.setWindowTitle("Brain Tool")
+        self.resize(1024, 768)
 
-            screen = QtWidgets.QDesktopWidget().screenNumber(QtWidgets.QDesktopWidget().cursor().pos())
-            screen_geometry = QtWidgets.QDesktopWidget().screenGeometry(screen)
-            self.move(screen_geometry.right() - 1024, screen_geometry.top())
+        # Initialize logging variables
+        self.is_logging = False
+        self.thought_log = []
 
-            self.central_widget = QtWidgets.QWidget()
-            self.setCentralWidget(self.central_widget)
+        screen = QtWidgets.QDesktopWidget().screenNumber(QtWidgets.QDesktopWidget().cursor().pos())
+        screen_geometry = QtWidgets.QDesktopWidget().screenGeometry(screen)
+        self.move(screen_geometry.right() - 1024, screen_geometry.top())
 
-            self.layout = QtWidgets.QVBoxLayout()
-            self.central_widget.setLayout(self.layout)
+        self.central_widget = QtWidgets.QWidget()
+        self.setCentralWidget(self.central_widget)
 
-            self.init_tabs()
+        self.layout = QtWidgets.QVBoxLayout()
+        self.central_widget.setLayout(self.layout)
 
-            self.hebbian_timer = QtCore.QTimer()
-            self.hebbian_timer.timeout.connect(self.perform_hebbian_learning)
-            self.hebbian_timer.start(2000)  # Update every 2 seconds
+        self.init_tabs()
 
-            self.update_timer = QtCore.QTimer()
-            self.update_timer.timeout.connect(self.update_associations)
-            self.update_timer.start(10000)  # Update every 10 seconds
-            self.last_update_time = time.time()
-            self.update_threshold = 5  # Minimum seconds between updates
+        self.hebbian_timer = QtCore.QTimer()
+        self.hebbian_timer.timeout.connect(self.perform_hebbian_learning)
+        self.hebbian_timer.start(2000)  # Update every 2 seconds
 
-            self.log_window = None
-            self.learning_data = []
-            self.is_paused = False
-            self.console = ConsoleOutput(self.console_output)
+        self.update_timer = QtCore.QTimer()
+        self.update_timer.timeout.connect(self.update_associations)
+        self.update_timer.start(10000)  # Update every 10 seconds
+        self.last_update_time = time.time()
+        self.update_threshold = 5  # Minimum seconds between updates
 
-            # Initialize memory text widgets
-            self.short_term_memory_text = QtWidgets.QTextEdit()
-            self.short_term_memory_text.setReadOnly(True)
-            self.short_term_memory_text.setAcceptRichText(True)
+        self.log_window = None
+        self.learning_data = []
+        self.is_paused = False
+        self.console = ConsoleOutput(self.console_output)
 
-            self.long_term_memory_text = QtWidgets.QTextEdit()
-            self.long_term_memory_text.setReadOnly(True)
-            self.long_term_memory_text.setAcceptRichText(True)
+        # Initialize memory text widgets
+        self.short_term_memory_text = QtWidgets.QTextEdit()
+        self.short_term_memory_text.setReadOnly(True)
+        self.short_term_memory_text.setAcceptRichText(True)
 
-            self.memory_tab_layout.addWidget(QtWidgets.QLabel("Short-term Memories:"))
-            self.memory_tab_layout.addWidget(self.short_term_memory_text)
-            self.memory_tab_layout.addWidget(QtWidgets.QLabel("Long-term Memories:"))
-            self.memory_tab_layout.addWidget(self.long_term_memory_text)
+        self.long_term_memory_text = QtWidgets.QTextEdit()
+        self.long_term_memory_text.setReadOnly(True)
+        self.long_term_memory_text.setAcceptRichText(True)
 
-            # Set up a timer to update the memory tab
-            self.memory_update_timer = QtCore.QTimer(self)
-            self.memory_update_timer.timeout.connect(self.update_memory_tab)
-            self.memory_update_timer.start(2000)  # Update every 2 secs
+        self.memory_tab_layout.addWidget(QtWidgets.QLabel("Short-term Memories:"))
+        self.memory_tab_layout.addWidget(self.short_term_memory_text)
+        self.memory_tab_layout.addWidget(QtWidgets.QLabel("Long-term Memories:"))
+        self.memory_tab_layout.addWidget(self.long_term_memory_text)
+
+        # Set up a timer to update the memory tab
+        self.memory_update_timer = QtCore.QTimer(self)
+        self.memory_update_timer.timeout.connect(self.update_memory_tab)
+        self.memory_update_timer.start(2000)  # Update every 2 secs
+        self.init_thought_process_tab()
 
     def debug_print(self, message):
         if self.debug_mode:
@@ -543,6 +509,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Remove the console and thought tabs
         self.tabs.removeTab(self.tabs.indexOf(self.console_tab))
         self.tabs.removeTab(self.tabs.indexOf(self.thoughts_tab))
+        self.tabs.removeTab(self.tabs.indexOf(self.associations_tab))
 
         # Add a new memory tab
         self.memory_tab = QtWidgets.QWidget()
@@ -565,6 +532,141 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.about_tab, "About")
         self.init_about_tab()
 
+    def init_thought_process_tab(self):
+        self.thought_process_tab = QtWidgets.QWidget()
+        self.thought_process_layout = QtWidgets.QVBoxLayout()
+        self.thought_process_tab.setLayout(self.thought_process_layout)
+
+        # Decision flowchart
+        self.decision_canvas = QtWidgets.QGraphicsView()
+        self.decision_scene = QtWidgets.QGraphicsScene()
+        self.decision_canvas.setScene(self.decision_scene)
+        self.thought_process_layout.addWidget(self.decision_canvas)
+
+        # Real-time thought display
+        self.thought_process_text = QtWidgets.QTextEdit()
+        self.thought_process_text.setReadOnly(True)
+        self.thought_process_layout.addWidget(self.thought_process_text)
+
+        # Key metrics
+        self.metrics_widget = QtWidgets.QWidget()
+        metrics_layout = QtWidgets.QHBoxLayout()
+        self.confidence_meter = QtWidgets.QProgressBar()
+        self.decision_time_label = QtWidgets.QLabel("Processing: 0ms")
+        metrics_layout.addWidget(QtWidgets.QLabel("Confidence:"))
+        metrics_layout.addWidget(self.confidence_meter)
+        metrics_layout.addWidget(self.decision_time_label)
+        self.metrics_widget.setLayout(metrics_layout)
+        self.thought_process_layout.addWidget(self.metrics_widget)
+
+        # Logging button
+        self.logging_button = QtWidgets.QPushButton("Start Logging")
+        self.logging_button.clicked.connect(self.toggle_logging)
+        self.thought_process_layout.addWidget(self.logging_button)
+
+        # Button to display recent thoughts
+        self.view_thoughts_button = QtWidgets.QPushButton("View Recent Thoughts")
+        self.view_thoughts_button.clicked.connect(self.show_recent_thoughts)
+        self.thought_process_layout.addWidget(self.view_thoughts_button)
+
+        self.tabs.addTab(self.thought_process_tab, "Thinking")
+
+    def toggle_logging(self):
+        self.is_logging = not self.is_logging
+        if self.is_logging:
+            self.logging_button.setText("Stop Logging")
+        else:
+            self.logging_button.setText("Start Logging")
+
+    def show_recent_thoughts(self):
+        dialog = RecentThoughtsDialog(self.thought_log, self)
+        dialog.exec_()
+
+    def update_thought_process(self, decision_data):
+        self.decision_scene.clear()
+
+        # Format the inputs to show only rounded numbers
+        formatted_inputs = "\n".join(f"{k}: {int(v)}" for k, v in decision_data['inputs'].items())
+
+        nodes = {
+            'input': f"Senses:\n{formatted_inputs}",
+            'memories': "Memories:\n" + '\n'.join(decision_data['active_memories'][:3]),
+            'options': "Possible Actions:\n" + '\n'.join(decision_data['possible_actions']),
+            'decision': f"Chosen Action:\n{decision_data['final_decision']}"
+        }
+
+        positions = {
+            'input': (0, 0),
+            'memories': (0, 200),  # Adjust position for better spacing
+            'options': (350, 100),  # Center options node
+            'decision': (700, 0)    # Move decision node to the right
+        }
+
+        for name, text in nodes.items():
+            node = self.create_thought_node(text)
+            node.setPos(*positions[name])
+            self.decision_scene.addItem(node)
+
+        self.draw_connection(positions['input'], positions['options'], "Considers")
+        self.draw_connection(positions['memories'], positions['options'], "Recalls")
+        self.draw_connection(positions['options'], positions['decision'], "Selects")
+
+        # Log the thought process if logging is enabled
+        if self.is_logging:
+            log_entry = {
+                'timestamp': decision_data['timestamp'],
+                'inputs': decision_data['inputs'],
+                'active_memories': decision_data['active_memories'],
+                'possible_actions': decision_data['possible_actions'],
+                'final_decision': decision_data['final_decision'],
+                'confidence': decision_data['confidence'],
+                'processing_time': decision_data['processing_time']
+            }
+            self.thought_log.append(log_entry)
+
+        self.thought_process_text.setText(
+            f"Decision Process:\n"
+            f"Time: {decision_data['timestamp']}\n"
+            f"Personality Factors: {decision_data['personality_influence']}\n"
+            f"Emotional State: {decision_data['emotions']}\n"
+            f"Learning History: {decision_data['learning_history']}"
+        )
+        self.confidence_meter.setValue(int(decision_data['confidence'] * 100))
+        self.decision_time_label.setText(f"Processing: {decision_data['processing_time']}ms")
+
+    def create_thought_node(self, text):
+        node = QtWidgets.QGraphicsRectItem(0, 0, 250, 150)  # Increase node size
+        node.setBrush(QtGui.QBrush(QtGui.QColor(240, 248, 255)))
+
+        # Use QTextDocument for better text handling
+        text_document = QtGui.QTextDocument()
+        text_document.setPlainText(text)
+        text_document.setTextWidth(230)  # Set text width to fit within the node
+
+        # Create a QGraphicsTextItem with an empty string
+        text_item = QtWidgets.QGraphicsTextItem()
+        text_item.setDocument(text_document)
+        text_item.setPos(10, 10)
+
+        group = QtWidgets.QGraphicsItemGroup()
+        group.addToGroup(node)
+        group.addToGroup(text_item)
+        return group
+
+    def draw_connection(self, start, end, label):
+        line = QtWidgets.QGraphicsLineItem(start[0]+200, start[1]+50, end[0], end[1]+50)
+        line.setPen(QtGui.QPen(QtCore.Qt.darkGray, 2, QtCore.Qt.DashLine))
+        self.decision_scene.addItem(line)
+
+        arrow = QtWidgets.QGraphicsPolygonItem(
+            QtGui.QPolygonF([QtCore.QPointF(0, -5), QtCore.QPointF(10, 0), QtCore.QPointF(0, 5)]))
+        arrow.setPos(end[0], end[1]+50)
+        arrow.setRotation(180 if start[0] > end[0] else 0)
+        self.decision_scene.addItem(arrow)
+
+        label_item = QtWidgets.QGraphicsTextItem(label)
+        label_item.setPos((start[0]+end[0])/2, (start[1]+end[1])/2)
+        self.decision_scene.addItem(label_item)
 
     def init_memory_tab(self):
         # Create a layout for the memory tab
@@ -829,7 +931,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Include decoration effects in learning
         decoration_memories = self.tamagotchi_logic.squid.memory_manager.get_all_short_term_memories('decorations')
-        
+
         if isinstance(decoration_memories, dict):
             for decoration, effects in decoration_memories.items():
                 for stat, boost in effects.items():
@@ -1104,7 +1206,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             Personality.STUBBORN: "Only eats favorite food (sushi), may refuse to sleep"
         }
         return modifiers.get(personality, "No specific modifier")
-    
+
     def get_care_tips(self, personality):
         tips = {
             Personality.TIMID: "- Place plants in the environment to reduce anxiety\n- Keep the environment clean and calm\n- Approach slowly and avoid sudden movements",
@@ -1116,7 +1218,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             Personality.STUBBORN: "- Always have sushi available as it's their favorite food\n- Be patient when introducing changes\n- Use positive reinforcement for desired behaviors"
         }
         return tips.get(personality, "No specific care tips available for this personality.")
-    
+
     def get_personality_modifiers(self, personality):
         modifiers = {
             Personality.TIMID: "- Anxiety increases 50% faster\n- Curiosity increases 50% slower\n- Anxiety decreases by 50% when near plants",
@@ -1187,11 +1289,14 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
     def update_brain(self, state):
         self.brain_widget.update_state(state)
         self.update_memory_tab()
-        
+
         if 'personality' in state:
             self.update_personality_display(state['personality'])
         else:
             print("Warning: Personality not found in brain state")
+
+        decision_data = self.tamagotchi_logic.get_decision_data()
+        self.update_thought_process(decision_data)
 
     def init_about_tab(self):
         about_text = QtWidgets.QTextEdit()
@@ -1202,8 +1307,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <p>A Tamagotchi-style digital pet with a simple neural network</p>
         <ul>
             <li>by Rufus Pearce</li>
-            <li>Brain Tool version 1.0.6.0</li>
-            <li>Dosidicus version 1.0.371 (milestone 2)</li>
+            <li>Brain Tool version 1.0.6.1</li>
+            <li>Dosidicus version 1.0.375 (milestone 3)</li>
         <p>This is a research project. Please suggest features.</p>
         </ul>
         """)
@@ -1299,7 +1404,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 state = json.load(f)
             self.brain_widget.update_state(state)
 
-    
     def init_console(self):
         self.console_output = QtWidgets.QTextEdit()
         self.console_output.setReadOnly(True)
@@ -1323,6 +1427,44 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                     self.tamagotchi_logic.update_from_brain(stimulation_values)
                 else:
                     print("Warning: tamagotchi_logic is not set. Brain stimulation will not affect the squid.")
+
+class RecentThoughtsDialog(QtWidgets.QDialog):
+    def __init__(self, thought_log, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Recent Thoughts")
+        self.thought_log = thought_log
+
+        layout = QtWidgets.QVBoxLayout()
+        self.setLayout(layout)
+
+        # List widget to display recent thoughts
+        self.thought_list = QtWidgets.QListWidget()
+        self.thought_list.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+        layout.addWidget(self.thought_list)
+
+        # Populate the list with summarized thought logs
+        for log in self.thought_log:
+            summary = f"Time: {log['timestamp']} - Decision: {log['final_decision']}"
+            self.thought_list.addItem(summary)
+
+        # Save button
+        self.save_button = QtWidgets.QPushButton("Save Selected Thoughts")
+        self.save_button.clicked.connect(self.save_selected_thoughts)
+        layout.addWidget(self.save_button)
+
+    def save_selected_thoughts(self):
+        selected_items = self.thought_list.selectedItems()
+        if not selected_items:
+            QtWidgets.QMessageBox.information(self, "No Selection", "No thoughts selected to save.")
+            return
+
+        # Get the file name to save the selected thoughts
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Selected Thoughts", "", "Text Files (*.txt)")
+        if file_name:
+            with open(file_name, 'w') as file:
+                for item in selected_items:
+                    file.write(item.text() + "\n")
+            QtWidgets.QMessageBox.information(self, "Save Successful", f"Selected thoughts saved to {file_name}")
 
 class LogWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):

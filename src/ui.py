@@ -1,4 +1,4 @@
-## UI Stuff
+# UI Stuff
 
 import os
 import json
@@ -337,11 +337,11 @@ class Ui:
                 filename = os.path.basename(file_path)
                 item = ResizablePixmapItem(pixmap, file_path)
                 
-                if filename.startswith('st_'):
-                    # Keep original size for static decorations
+                # Don't scale rocks or anything eginning with st_
+                if filename.startswith(('rock01', 'rock02', 'st_')):
                     scale_factor = 1.0
                 else:
-                    # Generate a random scale factor between 0.5 and 2 for non-static decorations
+                    # Generate a random scale factor between 0.5 and 2 for other decorations
                     scale_factor = random.uniform(0.5, 2)
                 
                 item.setScale(scale_factor)
@@ -412,9 +412,9 @@ class Ui:
         self.medicine_action = QtWidgets.QAction('Medicine', self.window)
         actions_menu.addAction(self.medicine_action)
 
-        self.rps_game_action = QtWidgets.QAction('Play Rock, Paper, Scissors', self.window)
-        actions_menu.addAction(self.rps_game_action)
-        self.rps_game_action.triggered.connect(self.start_rps_game)
+        #self.rps_game_action = QtWidgets.QAction('Play Rock, Paper, Scissors', self.window)
+        #actions_menu.addAction(self.rps_game_action)
+        #self.rps_game_action.triggered.connect(self.start_rps_game)
 
     def start_rps_game(self):
         if hasattr(self, 'tamagotchi_logic'):

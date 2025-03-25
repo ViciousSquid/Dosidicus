@@ -1,5 +1,5 @@
 # Dosidicus
-# Version 1.0.371
+# Version 1.0.400       March 2025
 
 import os
 import random
@@ -8,15 +8,7 @@ import math
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .mental_states import MentalStateManager
 from .memory_manager import MemoryManager
-
-class Personality(Enum):
-    TIMID = "timid"
-    ADVENTUROUS = "adventurous"
-    LAZY = "lazy"
-    ENERGETIC = "energetic"
-    INTROVERT = "introvert"
-    GREEDY = "greedy"
-    STUBBORN = "stubborn"
+from .personality import Personality
 
 class Squid:
     def __init__(self, user_interface, tamagotchi_logic, personality=None):
@@ -68,7 +60,6 @@ class Squid:
         else:
             self.personality = personality
         #self.tamagotchi_logic.squid_brain_window.print_to_console(f"Squid created with personality: {self.personality}")
-
 
     def set_animation_speed(self, speed):
         self.animation_speed = speed
@@ -146,8 +137,15 @@ class Squid:
             "is_sick": self.is_sick,
             "is_sleeping": self.is_sleeping,
             "food_visible": bool(self.get_visible_food()),
-            "personality": self.personality.value
+            "personality": self.personality.value,
+            "near_rocks": self.is_near_decorations('rock')
         }
+
+        # New goal check logic
+        if self.should_organize_decorations():
+            return "organize_decorations"
+        if current_state["near_rocks"] and self.curiosity > 60:
+            return "interact_with_rocks"
 
         # Retrieve relevant memories
         short_term_memories = self.memory_manager.get_all_short_term_memories('experiences')
@@ -181,15 +179,15 @@ class Squid:
         if nearby_decorations:
             decoration_memories = self.memory_manager.get_all_short_term_memories('decorations')
             best_decoration = max(nearby_decorations, key=lambda decoration: sum(
-                decoration_memories.get(decoration.filename, {}).get(stat, 0) 
+                decoration_memories.get(decoration.filename, {}).get(stat, 0)
                 for stat in ['happiness', 'cleanliness', 'satisfaction']
             ))
-            
+
             total_effect = sum(
-                decoration_memories.get(best_decoration.filename, {}).get(stat, 0) 
+                decoration_memories.get(best_decoration.filename, {}).get(stat, 0)
                 for stat in ['happiness', 'cleanliness', 'satisfaction']
             )
-            
+
             if total_effect > 0:
                 self.move_towards(best_decoration.pos().x(), best_decoration.pos().y())
                 return "moving towards beneficial decoration"
@@ -225,17 +223,17 @@ class Squid:
             self.move_randomly()
         else:
             self.move_randomly()
-    
+
     def get_favorite_food(self):
         # Implement logic to find the squid's favorite food
         for food_item in self.tamagotchi_logic.food_items:
             if self.is_favorite_food(food_item):
-             return food_item.pos().x(), food_item.pos().y()
+                return food_item.pos().x(), food_item.pos().y()
         return None
-    
+
     def is_favorite_food(self, food_item):
         return food_item is not None and getattr(food_item, 'is_sushi', False)
-    
+
     def load_state(self, state):
         self.hunger = state['hunger']
         self.sleepiness = state['sleepiness']
@@ -255,22 +253,22 @@ class Squid:
         push_distance = 25  # pixels to push
         current_pos = decoration.pos()
         new_x = current_pos.x() + (push_distance * direction)
-        
+
         # Ensure the decoration stays within the scene boundaries
         scene_rect = self.ui.scene.sceneRect()
         new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
-        
+
         # Create a QGraphicsItemAnimation to animate the position
         animation = QtWidgets.QGraphicsItemAnimation()
         animation.setItem(decoration)
         animation.setTimeLine(QtCore.QTimeLine(300))  # 300 ms duration
-        
+
         # Set the start and end positions for the animation
         start_pos = QtCore.QPointF(current_pos)
         end_pos = QtCore.QPointF(new_x, current_pos.y())
         animation.setPosAt(0, start_pos)
         animation.setPosAt(1, end_pos)
-        
+
         # Start the animation
         animation.timeLine().start()
 
@@ -281,7 +279,6 @@ class Squid:
 
         # Show a message
         self.ui.show_message(f"Squid pushed a decoration")
-
 
     def move_erratically(self):
         directions = ["left", "right", "up", "down"]
@@ -427,76 +424,72 @@ class Squid:
 
         self.move_squid()
 
-    def eat(self):
-        for food_item in self.tamagotchi_logic.food_items:
-            if self.squid_item.collidesWithItem(food_item):
-                effects = {}
-                
-                # Basic effects for all food types
-                effects['hunger'] = max(-20, -self.hunger)  # Reduce hunger by 20, but not below 0
-                effects['happiness'] = min(10, 100 - self.happiness)  # Increase happiness by 10, but not above 100
-                
-                # Special effects based on food type
-                if getattr(food_item, 'is_sushi', False):
-                    effects['satisfaction'] = min(15, 100 - self.satisfaction)
-                    food_name = "sushi"
-                else:
-                    effects['satisfaction'] = min(10, 100 - self.satisfaction)
-                    food_name = "cheese"
-                
-                # Apply effects
-                for attr, change in effects.items():
-                    current_value = getattr(self, attr)
-                    new_value = current_value + change
-                    setattr(self, attr, new_value)
-                
-                # Format effects for memory
-                formatted_effects = ', '.join(f"{attr.capitalize()} {'+' if val >= 0 else ''}{val:.2f}" for attr, val in effects.items())
-                memory_value = f"Ate {food_name}: {formatted_effects}"
-                
-                # Add memory
-                self.memory_manager.add_short_term_memory('food', food_name, memory_value)
-                
-                # Additional effects
-                self.status = "Ate food"
-                self.tamagotchi_logic.remove_food(food_item)
-                print(f"The squid ate the {food_name}")
-                self.show_eating_effect()
-                self.start_poop_timer()
-                self.pursuing_food = False
-                self.target_food = None
-                
-                # Personality-specific reactions
-                if self.personality == Personality.GREEDY:
-                    self.eat_greedily()
-                elif self.personality == Personality.STUBBORN and not getattr(food_item, 'is_sushi', False):
-                    self.react_stubborn_eating()
-                
-                break  # Exit the loop after eating one food item
+    def eat(self, food_item):
+        effects = {}
+
+        # Basic effects for all food types
+        effects['hunger'] = max(-20, -self.hunger)  # Reduce hunger by 20, but not below 0
+        effects['happiness'] = min(10, 100 - self.happiness)  # Increase happiness by 10, but not above 100
+
+        # Special effects based on food type
+        if getattr(food_item, 'is_sushi', False):
+            effects['satisfaction'] = min(15, 100 - self.satisfaction)
+            food_name = "sushi"
+        else:
+            effects['satisfaction'] = min(10, 100 - self.satisfaction)
+            food_name = "cheese"
+
+        # Apply effects
+        for attr, change in effects.items():
+            current_value = getattr(self, attr)
+            new_value = current_value + change
+            setattr(self, attr, new_value)
+
+        # Format effects for memory
+        formatted_effects = ', '.join(f"{attr.capitalize()} {'+' if val >= 0 else ''}{val:.2f}" for attr, val in effects.items())
+        memory_value = f"Ate {food_name}: {formatted_effects}"
+
+        # Add memory
+        self.memory_manager.add_short_term_memory('food', food_name, memory_value)
+
+        # Additional effects
+        self.status = "Ate food"
+        self.tamagotchi_logic.remove_food(food_item)
+        print(f"The squid ate the {food_name}")
+        self.show_eating_effect()
+        self.start_poop_timer()
+        self.pursuing_food = False
+        self.target_food = None
+
+        # Personality-specific reactions
+        if self.personality == Personality.GREEDY:
+            self.eat_greedily(food_item)
+        elif self.personality == Personality.STUBBORN and not getattr(food_item, 'is_sushi', False):
+            self.react_stubborn_eating()
 
     def eat_greedily(self, food_item):
         self.status = "Eating greedily"
         food_type = "sushi" if getattr(food_item, 'is_sushi', False) else "cheese"
-        
+
         # Reduce hunger more than usual
         self.hunger = max(0, self.hunger - 25)
-        
+
         # Increase happiness more
         self.happiness = min(100, self.happiness + 15)
-        
+
         # Increase satisfaction significantly
         self.satisfaction = min(100, self.satisfaction + 20)
-        
+
         # Slightly increase anxiety (from overeating)
         self.anxiety = min(100, self.anxiety + 5)
-        
+
         self.tamagotchi_logic.remove_food(food_item)
         print(f"The greedy squid enthusiastically ate the {food_type}")
         self.show_eating_effect()
         self.start_poop_timer()
         self.pursuing_food = False
         self.target_food = None
-        
+
         # Occasionally show a message
         if random.random() < 0.2:  # 20% chance to show a message
             self.tamagotchi_logic.show_message("Nom nom! Greedy squid devours the food!")
@@ -521,7 +514,7 @@ class Squid:
             if self.is_food_nearby(food_item):
                 return True
         return False
-    
+
     def is_food_nearby(self, food_item):
         food_x, food_y = food_item.pos().x(), food_item.pos().y()
         squid_center_x = self.squid_x + self.squid_width // 2
@@ -529,17 +522,16 @@ class Squid:
         distance = math.sqrt((squid_center_x - food_x)**2 + (squid_center_y - food_y)**2)
         return distance < 100  # Adjust the distance threshold as needed
 
-
     def investigate_food(self, food_item):
         self.status = "Investigating food"
         self.tamagotchi_logic.show_message("Stubborn squid investigates the food...")
-        
+
         # Move towards the food
         food_pos = food_item.pos()
         self.move_towards_position(food_pos)
-        
+
         # Wait for a moment (might need to implement a delay here)
-        
+
         self.tamagotchi_logic.show_message("Stubborn squid ignored the food")
         self.status = "I don't like that food"
 
@@ -555,7 +547,7 @@ class Squid:
         self.start_poop_timer()
         self.pursuing_food = False
         self.target_food = None
-        
+
         # Occasionally show a message based on personality
         if random.random() < 0.2:  # 20% chance to show a message
             if self.personality == Personality.STUBBORN and getattr(food_item, 'is_sushi', False):
@@ -725,20 +717,48 @@ class Squid:
     def is_near_plant(self):
         if self.tamagotchi_logic is None:
             return False
-        
+
         nearby_decorations = self.tamagotchi_logic.get_nearby_decorations(self.squid_x, self.squid_y)
         return any(decoration.category == 'plant' for decoration in nearby_decorations)
-    
+
     def move_towards_plant(self):
         if self.tamagotchi_logic is None:
             return
-        
+
         nearby_decorations = self.tamagotchi_logic.get_nearby_decorations(self.squid_x, self.squid_y)
         plants = [d for d in nearby_decorations if d.category == 'plant']
-        
+
         if plants:
             closest_plant = min(plants, key=lambda p: self.distance_to(p.pos().x(), p.pos().y()))
             self.move_towards(closest_plant.pos().x(), closest_plant.pos().y())
         else:
             self.move_randomly()
 
+    def should_organize_decorations(self):
+        return (self.curiosity > 70 and
+                self.satisfaction < 80 and
+                self.personality in [Personality.ADVENTUROUS, Personality.ENERGETIC])
+
+    def organize_decorations(self):
+        target_corner = (50, 50)  # Top-left corner
+        decorations = self.tamagotchi_logic.get_nearby_decorations(self.squid_x, self.squid_y)
+
+        if decorations:
+            closest = min(decorations, key=lambda d: self.distance_to(d.pos().x(), d.pos().y()))
+            self.move_towards(closest.pos().x(), closest.pos().y())
+
+            if self.distance_to(closest.pos().x(), closest.pos().y()) < 50:
+                self.push_decoration(closest, direction=1 if random.random() < 0.5 else -1)
+                self.satisfaction = min(100, self.satisfaction + 5)
+                return "organizing decorations"
+        return "searching for decorations"
+
+    def interact_with_rocks(self):
+        rocks = [d for d in self.tamagotchi_logic.get_nearby_decorations(self.squid_x, self.squid_y)
+                 if d.category == 'rock']
+        if rocks:
+            self.push_decoration(random.choice(rocks), random.choice([-1, 1]))
+            self.satisfaction = min(100, self.satisfaction + 8)
+            self.happiness = min(100, self.happiness + 5)
+            return "interacting with rocks"
+        return "no rocks nearby"
