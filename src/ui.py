@@ -336,15 +336,21 @@ class Ui:
             if not pixmap.isNull():
                 filename = os.path.basename(file_path)
                 item = ResizablePixmapItem(pixmap, file_path)
-                
-                # Don't scale rocks or anything eginning with st_
-                if filename.startswith(('rock01', 'rock02', 'st_')):
+
+                # Set fixed size for Rock01 and Rock02
+                if filename.lower().startswith(('rock01', 'rock02')):
+                    item.setPixmap(pixmap.scaled(100, 100, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+                    item.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable)
+                    item.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable)
+                    item.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
+                elif filename.startswith('st_'):
+                    # Don't scale items starting with 'st_'
                     scale_factor = 1.0
                 else:
                     # Generate a random scale factor between 0.5 and 2 for other decorations
-                    scale_factor = random.uniform(0.5, 2)
-                
-                item.setScale(scale_factor)
+                    scale_factor = random.uniform(0.75, 2)
+                    item.setScale(scale_factor)
+
                 pos = self.view.mapToScene(event.pos())
                 item.setPos(pos)
                 self.scene.addItem(item)
@@ -354,6 +360,7 @@ class Ui:
                 event.ignore()
         else:
             event.ignore()
+
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Delete:

@@ -228,6 +228,34 @@ class MemoryManager:
         if isinstance(val, (int, float)):
             return f"{val:.2f}"
         return str(val)
+    
+    def get_active_memories_data(self, count=None):
+        """Get active memories with formatted data for display"""
+        current_time = datetime.now()
+        active_memories = []
+        
+        for memory in self.short_term_memory:
+            timestamp = memory['timestamp']
+            if isinstance(timestamp, str):
+                timestamp = datetime.fromisoformat(timestamp)
+                
+            if (current_time - timestamp) <= self.short_term_duration:
+                formatted_memory = {
+                    'category': memory['category'],
+                    'formatted_value': memory['value'],
+                    'raw_value': memory['raw_value'],
+                    'timestamp': timestamp,
+                    'importance': memory.get('importance', 1),
+                    'access_count': memory.get('access_count', 1)
+                }
+                active_memories.append(formatted_memory)
+        
+        # Sort by importance and access count
+        active_memories.sort(key=lambda x: (x['importance'], x['access_count']), reverse=True)
+        
+        if count is not None:
+            return active_memories[:count]
+        return active_memories
 
     def format_memory(self, memory):
         timestamp = memory['timestamp']

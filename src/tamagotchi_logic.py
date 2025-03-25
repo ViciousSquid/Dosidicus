@@ -21,6 +21,17 @@ class TamagotchiLogic:
         self.user_interface = user_interface
         self.squid = squid
         self.brain_window = brain_window
+        self.neurogenesis_triggers = {
+            'novel_objects': 0,
+            'high_stress_cycles': 0
+        }
+        self.new_object_encountered = False
+        self.recent_positive_outcome = False
+        self.neurogenesis_triggers = {
+            'novel_objects': 0,
+            'high_stress_cycles': 0,
+            'positive_outcomes': 0
+}
         
         # Initialize HebbianLearning only if squid is not None
         if self.squid is not None:
@@ -150,7 +161,9 @@ class TamagotchiLogic:
         }
 
     def get_active_memories(self):
-        return [m['value'] for m in self.squid.memory_manager.get_all_short_term_memories()][:5]
+        # Get raw memory objects instead of display strings
+        memories = self.squid.memory_manager.get_all_short_term_memories(raw=True)[:3]
+        return [f"{m['category']}: {m['value']}" for m in memories]
 
     def get_available_actions(self):
         return ["search_for_food", "explore", "sleep", "move_randomly", "interact_object"]
@@ -182,9 +195,8 @@ class TamagotchiLogic:
         }
 
     def get_active_memories(self):
-        """Get 3 most relevant recent memories"""
-        memories = self.squid.memory_manager.get_all_short_term_memories()
-        return [f"{m['category']}: {m['value']}" for m in memories[:3]]
+        memories = self.squid.memory_manager.get_active_memories_data(3)
+        return [f"{m['category']}: {m['formatted_value']}" for m in memories]
 
     def get_available_actions(self):
         """List of currently available actions"""
@@ -522,49 +534,60 @@ class TamagotchiLogic:
             self.brain_window.add_thought("No longer startled")
 
     def update_simulation(self):
+        # 1. Handle existing simulation updates
         self.move_objects()
         self.animate_poops()
         self.update_statistics()
+        
         if self.squid:
+            # 2. Core squid updates
             self.squid.move_squid()
             self.check_for_decoration_attraction()
             self.check_for_sickness()
+            
+            # 3. Mental state updates
             if self.mental_states_enabled:
                 self.check_for_startle()
                 self.check_for_curiosity()
             
-            # Periodically manage memories
+            # 4. Neurogenesis tracking
+            self.track_neurogenesis_triggers()
+            
+            # 5. Memory management
             self.squid.memory_manager.periodic_memory_management()
+            
+            # 6. Prepare brain state with neurogenesis data
+            brain_state = {
+                "hunger": self.squid.hunger,
+                "happiness": self.squid.happiness,
+                "cleanliness": self.squid.cleanliness,
+                "sleepiness": self.squid.sleepiness,
+                "satisfaction": self.squid.satisfaction,
+                "anxiety": self.squid.anxiety,
+                "curiosity": self.squid.curiosity,
+                "is_sick": self.squid.is_sick,
+                "is_sleeping": self.squid.is_sleeping,
+                "pursuing_food": self.squid.pursuing_food,
+                "direction": self.squid.squid_direction,
+                "position": (self.squid.squid_x, self.squid.squid_y),
+                
+                # Neurogenesis-specific additions
+                "novelty_exposure": self.neurogenesis_triggers['novel_objects'],
+                "sustained_stress": self.neurogenesis_triggers['high_stress_cycles'] / 10.0,
+                "recent_rewards": self.neurogenesis_triggers['positive_outcomes'],
+                "personality": self.squid.personality.value
+            }
+            
+            # 7. Update brain (will trigger neurogenesis checks)
+            self.brain_window.update_brain(brain_state)
+            
+            # 8. Reset frame-specific flags
+            self.new_object_encountered = False
+            self.recent_positive_outcome = False
 
-            # Check if Squid is not in the middle of the RPS game
-            if not hasattr(self, 'rps_game') or not self.rps_game.game_window:
-                # Check if squid becomes sick (80% chance)
-                if (self.cleanliness_threshold_time >= 10 * self.simulation_speed and self.cleanliness_threshold_time <= 60 * self.simulation_speed) or \
-                (self.hunger_threshold_time >= 10 * self.simulation_speed and self.hunger_threshold_time <= 50 * self.simulation_speed):
-                    if random.random() < 0.4:
-                        self.squid.mental_state_manager.set_state("sick", True)
-            else:
-                self.squid.is_sick = False
-
-            # Check if Squid has high anxiety for a prolonged time
-            if self.squid.anxiety > 80:
-                self.high_anxiety_time += 1
-            else:
-                self.high_anxiety_time = 0
-
-            # If Squid has high anxiety for more than 10 simulation steps
-            if self.high_anxiety_time > 10 * self.simulation_speed:
-                self.squid.health = max(0, self.squid.health - (0.5 * self.simulation_speed))
-                self.squid.status = "ill from anxiety"
-
-                if self.high_anxiety_time % (5 * self.simulation_speed) == 0:
-                    self.show_message("High anxiety is causing Squid to feel a little unwell")
-                    # Add thoughts
-                self.brain_window.add_thought("I feel anxious and unwell...")
-
-                # Make Squid move slowly and erratically
-                self.squid.move_slowly()
-                self.squid.move_erratically()
+        # 9. Handle RPS game state if active
+        if hasattr(self, 'rps_game') and self.rps_game.game_window:
+            self.rps_game.update_state()
 
     def check_for_sickness(self):
         # Existing sickness logic
@@ -591,6 +614,52 @@ class TamagotchiLogic:
         # Check for curiosity
         if random.random() < curious_chance:
             self.make_squid_curious()
+
+    def track_neurogenesis_triggers(self):
+        """Update counters for neurogenesis triggers"""
+        # Novelty tracking
+        if self.new_object_encountered:
+            self.neurogenesis_triggers['novel_objects'] = min(
+                self.neurogenesis_triggers['novel_objects'] + 1,
+                10  # Max cap
+            )
+            # Add thought about novelty
+            self.add_thought("Encountered something new!")
+        else:
+            # Gradual decay when no novelty
+            self.neurogenesis_triggers['novel_objects'] *= 0.95
+        
+        # Stress tracking
+        if self.squid.anxiety > 70:
+            self.neurogenesis_triggers['high_stress_cycles'] += 1
+            # Add thought about stress if threshold crossed
+            if self.neurogenesis_triggers['high_stress_cycles'] > 5:
+                self.add_thought("Feeling stressed for a while...")
+        else:
+            self.neurogenesis_triggers['high_stress_cycles'] = max(
+                0,
+                self.neurogenesis_triggers['high_stress_cycles'] - 0.5
+            )
+        
+        # Reward tracking (positive outcomes like eating, playing)
+        if self.recent_positive_outcome:
+            self.neurogenesis_triggers['positive_outcomes'] = min(
+                self.neurogenesis_triggers['positive_outcomes'] + 1,
+                5  # Max cap
+            )
+            # Add thought about positive experience
+            if random.random() < 0.3:  # 30% chance to comment
+                self.add_thought("That was enjoyable!")
+        else:
+            # Gradual decay when no rewards
+            self.neurogenesis_triggers['positive_outcomes'] = max(
+                0,
+                self.neurogenesis_triggers['positive_outcomes'] - 0.2
+            )
+        
+        # Debug output if in debug mode
+        if self.debug_mode:
+            print(f"Neurogenesis triggers: {self.neurogenesis_triggers}")
 
     def make_squid_curious(self):
         self.squid.mental_state_manager.set_state("curious", True)

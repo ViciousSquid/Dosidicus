@@ -1,0 +1,11 @@
+{
+    "triggers": {
+        "novelty_threshold": 3,
+        "stress_threshold": 0.7,
+        "reward_threshold": 5
+    },
+    "visual": {
+        "new_neuron_size": 35,
+        "highlight_duration": 5.0
+    }
+}

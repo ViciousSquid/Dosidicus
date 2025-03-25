@@ -125,7 +125,11 @@ class Squid:
         pass
 
     def make_decision(self):
-        # Get the current state of the squid
+        # Reset novelty tracking flag at start of each decision cycle
+        self.tamagotchi_logic.new_object_encountered = False
+        self.tamagotchi_logic.recent_positive_outcome = False
+
+        # Get current state including neurogenesis data
         current_state = {
             "hunger": self.hunger,
             "happiness": self.happiness,
@@ -138,78 +142,72 @@ class Squid:
             "is_sleeping": self.is_sleeping,
             "food_visible": bool(self.get_visible_food()),
             "personality": self.personality.value,
-            "near_rocks": self.is_near_decorations('rock')
+            "near_rocks": self.is_near_decorations('rock'),
+            "has_novelty_neurons": any(n.startswith('novel') for n in 
+                                    self.tamagotchi_logic.brain_window.brain_widget.new_neurons)
         }
 
-        # New goal check logic
+        # Check for neurogenesis-triggered behaviors first
+        if "defense_0" in self.tamagotchi_logic.brain_window.brain_widget.state:
+            if current_state['anxiety'] > 60:
+                self.status = "avoiding_threat"
+                return self.move_away_from_threat()
+
+        # Personality-specific decision modifiers
+        personality_modifiers = {
+            Personality.TIMID: self._make_timid_decision,
+            Personality.GREEDY: self._make_greedy_decision,
+            Personality.STUBBORN: self._make_stubborn_decision
+        }
+        if self.personality in personality_modifiers:
+            decision = personality_modifiers[self.personality](current_state)
+            if decision:
+                return decision
+
+        # Main decision hierarchy
         if self.should_organize_decorations():
             return "organize_decorations"
+        
         if current_state["near_rocks"] and self.curiosity > 60:
             return "interact_with_rocks"
 
-        # Retrieve relevant memories
-        short_term_memories = self.memory_manager.get_all_short_term_memories('experiences')
-        long_term_memories = self.memory_manager.get_all_long_term_memories('experiences')
+        # Enhanced food decision with neurogenesis consideration
+        if current_state["hunger"] > 70 and self.get_visible_food():
+            closest_food = min(self.get_visible_food(), 
+                            key=lambda f: self.distance_to(f[0], f[1]))
+            
+            # If we have novelty neurons, be more exploratory
+            if current_state["has_novelty_neurons"] and random.random() < 0.3:
+                self.tamagotchi_logic.new_object_encountered = True
+                return "explore_food_options"
+            else:
+                self.move_towards(closest_food[0], closest_food[1])
+                return "moving_to_food"
 
-        # Combine memories and current state
-        combined_state = current_state.copy()
-        combined_state.update(short_term_memories)
-        combined_state.update(long_term_memories)
+        # Sleep decision with neurogenesis modifier
+        if current_state["sleepiness"] > 90:
+            if "stress_response" in self.tamagotchi_logic.brain_window.brain_widget.new_neurons:
+                # Stress neurons make sleep harder
+                if random.random() < 0.7:
+                    self.go_to_sleep()
+                    return "sleeping"
+            else:
+                self.go_to_sleep()
+                return "sleeping"
 
-        # Feed the combined state into the neural network to get the decision
-        decision = self.tamagotchi_logic.squid_brain_window.make_decision(combined_state)
+        # Default behaviors with neurogenesis influence
+        if current_state["has_novelty_neurons"] and random.random() < 0.4:
+            self.tamagotchi_logic.new_object_encountered = True
+            return "exploring_novelty"
 
-        # Execute the decision based on the neural network's output
-        if decision == "search_for_food":
-            self.search_for_food()
-        elif decision == "explore":
-            self.explore_environment()
-        elif decision == "sleep":
-            self.go_to_sleep()
-        elif decision == "move_slowly":
-            self.move_slowly()
-        elif decision == "move_erratically":
-            self.move_erratically()
-        else:
-            # Default behavior if no specific decision is made
-            self.move_randomly()
+        # Fallback to neural network decision
+        decision = self.tamagotchi_logic.squid_brain_window.make_decision(current_state)
+        
+        # Record positive outcomes for neurogenesis
+        if decision in ["eating", "playing", "exploring"]:
+            self.tamagotchi_logic.recent_positive_outcome = True
 
-        # Consider decoration preferences based on learned associations
-        nearby_decorations = self.tamagotchi_logic.get_nearby_decorations(self.squid_x, self.squid_y)
-        if nearby_decorations:
-            decoration_memories = self.memory_manager.get_all_short_term_memories('decorations')
-            best_decoration = max(nearby_decorations, key=lambda decoration: sum(
-                decoration_memories.get(decoration.filename, {}).get(stat, 0)
-                for stat in ['happiness', 'cleanliness', 'satisfaction']
-            ))
-
-            total_effect = sum(
-                decoration_memories.get(best_decoration.filename, {}).get(stat, 0)
-                for stat in ['happiness', 'cleanliness', 'satisfaction']
-            )
-
-            if total_effect > 0:
-                self.move_towards(best_decoration.pos().x(), best_decoration.pos().y())
-                return "moving towards beneficial decoration"
-
-        # If the squid is hungry and food is visible, move towards the food
-        if self.hunger > 70 and self.get_visible_food():
-            closest_food = min(self.get_visible_food(), key=lambda food: self.distance_to(food[0], food[1]))
-            self.move_towards(closest_food[0], closest_food[1])
-            return "moving towards food"
-
-        # If the squid is very sleepy, go to sleep
-        if self.sleepiness > 90:
-            self.go_to_sleep()
-            return "going to sleep"
-
-        # If the squid is dirty and near a plant, move towards the plant
-        if self.cleanliness < 30 and self.is_near_plant():
-            self.move_towards_plant()
-            return "moving towards plant for cleaning"
-
-        # If none of the above conditions are met, return the decision made by the neural network
-        return decision
+        return decision or "exploring_default"
 
     def search_for_favorite_food(self):
         visible_food = self.get_visible_food()

@@ -12,6 +12,17 @@ from .personality import Personality
 class BrainWidget(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
+        # Add these right after existing state initialization
+        self.neurogenesis_data = {
+            'novelty_counter': 0,
+            'new_neurons': [],
+            'last_neuron_time': time.time()
+        }
+        self.neurogenesis_config = {
+            'novelty_threshold': 3,
+            'stress_threshold': 0.7,
+            'cooldown': 300  # 5 minutes (in seconds)
+        }
         self.state = {
             "hunger": 50,
             "happiness": 50,
@@ -93,6 +104,28 @@ class BrainWidget(QtWidgets.QWidget):
         self.update()
         if self.capture_training_data_enabled:
             self.capture_training_data(new_state)
+            # Neurogenesis check (add at end)
+        current_time = time.time()
+        if current_time - self.neurogenesis_data['last_neuron_time'] > self.neurogenesis_config['cooldown']:
+            self.check_neurogenesis(new_state)
+        
+        self.update()
+  
+    def check_neurogenesis(self, state):
+        """Check triggers for new neuron creation"""
+        # Novelty trigger
+        if state.get('novelty_exposure', 0) > self.neurogenesis_config['novelty_threshold']:
+            self.create_neuron('novelty', state)
+            
+        # Stress trigger
+        if state.get('anxiety', 0) > self.neurogenesis_config['stress_threshold']:
+            self.create_neuron('stress', state)
+            
+        # Reward trigger
+        if state.get('satisfaction', 0) > self.neurogenesis_config['reward_threshold']:
+            self.create_neuron('reward', state)
+
+
 
     def update_weights(self):
         if self.frozen_weights is not None:
@@ -124,6 +157,54 @@ class BrainWidget(QtWidgets.QWidget):
 
         # Update the brain visualization
         self.update()
+
+    
+    def create_neuron(self, neuron_type, trigger_data):
+        """Add after all other methods"""
+        base_name = {
+            'novelty': 'novel',
+            'stress': 'defense',
+            'reward': 'reward'
+        }[neuron_type]
+        
+        new_name = f"{base_name}_{len(self.neurogenesis_data['new_neurons'])}"
+        
+        # Position near most active connected neuron
+        active_neurons = sorted(
+            [(k,v) for k,v in self.state.items() if isinstance(v, (int, float))],
+            key=lambda x: x[1],
+            reverse=True
+        )
+        base_x, base_y = self.neuron_positions[active_neurons[0][0]] if active_neurons else (600, 300)
+        
+        self.neuron_positions[new_name] = (
+            base_x + random.randint(-50, 50),
+            base_y + random.randint(-50, 50)
+        )
+        
+        # Initialize state and connections
+        self.state[new_name] = 50
+        self.state_colors[new_name] = {
+            'novelty': (255, 255, 150),  # Pale yellow
+            'stress': (255, 150, 150),    # Light red
+            'reward': (150, 255, 150)     # Light green
+        }[neuron_type]
+        
+        # Default connections
+        default_weights = {
+            'novelty': {'curiosity': 0.6, 'anxiety': -0.4},
+            'stress': {'anxiety': -0.7, 'happiness': 0.3},
+            'reward': {'satisfaction': 0.8, 'happiness': 0.5}
+        }
+        
+        for target, weight in default_weights[neuron_type].items():
+            self.weights[(new_name, target)] = weight
+            self.weights[(target, new_name)] = weight * 0.5  # Weaker reciprocal
+            
+        self.neurogenesis_data['new_neurons'].append(new_name)
+        self.neurogenesis_data['last_neuron_time'] = time.time()
+        
+        return new_name
 
     def capture_training_data(self, state):
         training_sample = [state[neuron] for neuron in self.neuron_positions.keys()]
@@ -707,31 +788,24 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             # Display short-term memories
             self.short_term_memory_text.clear()
             for memory in short_term_memories:
-                if isinstance(memory.get('value'), dict) and 'decoration' in memory['value']:
-                    formatted_memory = self.tamagotchi_logic.squid.memory_manager.format_memory(memory)
-                    self.short_term_memory_text.append(formatted_memory)
-                    self.debug_print(f"Appended short-term memory to display: {formatted_memory}")
+                if isinstance(memory, dict):
+                    # Use the formatted value directly
+                    self.short_term_memory_text.append(memory['value'])
+                else:
+                    self.short_term_memory_text.append(str(memory))
 
             # Display long-term memories
             self.long_term_memory_text.clear()
             for memory in long_term_memories:
-                if isinstance(memory.get('value'), dict) and 'decoration' in memory['value']:
-                    formatted_memory = self.tamagotchi_logic.squid.memory_manager.format_memory(memory)
-                    self.long_term_memory_text.append(formatted_memory)
-                    self.debug_print(f"Appended long-term memory to display: {formatted_memory}")
+                if isinstance(memory, dict):
+                    # Use the formatted value directly
+                    self.long_term_memory_text.append(memory['value'])
+                else:
+                    self.long_term_memory_text.append(str(memory))
 
             # Force update of the QTextEdit widgets
             self.short_term_memory_text.repaint()
             self.long_term_memory_text.repaint()
-
-    def display_memories(self, memories, text_widget):
-        for memory in memories:
-            category = memory.get('category', 'Unknown')
-            text_widget.append(f"Category: {category}")
-            for key, value in memory.items():
-                if key != 'category':
-                    text_widget.append(f"  {key}: {value}")
-            text_widget.append("")
 
     def init_thoughts_tab(self):
         self.thoughts_text = QtWidgets.QTextEdit()
