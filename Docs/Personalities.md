@@ -12,6 +12,8 @@ There are seven different squid personalities that affect their needs and how th
 
 One of these is randomly chosen  at the start of a new game, immediately after the egg hatches. 
 
+A personality type can be forced at launch using the `-p` flag followed by the personality name above (example: `main.py -p lazy`) 
+
 Each personality type presents unique challenges and requirements for the player to manage. Understanding and accommodating the specific needs and behaviors of each personality type is crucial for the player's success in caring for the squid and maintaining its well-being.
 
 Here's a description of the different personality types and their corresponding behaviors in the game:
