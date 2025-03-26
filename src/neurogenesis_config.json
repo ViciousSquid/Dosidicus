@@ -2,10 +2,50 @@
     "triggers": {
         "novelty_threshold": 3,
         "stress_threshold": 0.7,
-        "reward_threshold": 5
+        "reward_threshold": 5,
+        "cooldown": 295,
+        "min_time_between_neurons": 60
     },
     "visual": {
         "new_neuron_size": 35,
-        "highlight_duration": 5.0
+        "highlight_duration": 5.0,
+        "highlight_color": [255, 255, 150],
+        "novelty_color": [255, 255, 150],
+        "stress_color": [255, 150, 150],
+        "reward_color": [150, 255, 150]
+    },
+    "growth": {
+        "initial_connection_strength": 0.6,
+        "reciprocal_strength_factor": 0.5,
+        "max_new_neurons": 5,
+        "decay_rate": 0.95
+    },
+    "personality_modifiers": {
+        "timid": {
+            "stress_sensitivity": 1.5,
+            "novelty_sensitivity": 0.7
+        },
+        "adventurous": {
+            "novelty_sensitivity": 1.8,
+            "reward_sensitivity": 1.2
+        },
+        "lazy": {
+            "stress_sensitivity": 0.8,
+            "reward_sensitivity": 0.8
+        }
+    },
+    "default_connections": {
+        "novelty": {
+            "curiosity": 0.6,
+            "anxiety": -0.4
+        },
+        "stress": {
+            "anxiety": -0.7,
+            "happiness": 0.3
+        },
+        "reward": {
+            "satisfaction": 0.8,
+            "happiness": 0.5
+        }
     }
 }

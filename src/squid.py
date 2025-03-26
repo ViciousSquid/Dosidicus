@@ -11,10 +11,14 @@ from .memory_manager import MemoryManager
 from .personality import Personality
 
 class Squid:
-    def __init__(self, user_interface, tamagotchi_logic, personality=None):
+    def __init__(self, user_interface, tamagotchi_logic=None, personality=None, neuro_cooldown=None):
         self.ui = user_interface
         self.tamagotchi_logic = tamagotchi_logic
         self.memory_manager = MemoryManager()
+        self.push_animation = None
+        
+        # Set neurogenesis cooldown (default to 60 seconds if not specified)
+        self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 120
 
         self.load_images()
         self.load_poop_images()
@@ -30,15 +34,11 @@ class Squid:
 
         self.view_cone_item = None
         self.view_cone_visible = False
-
         self.poop_timer = None
-
         self.animation_speed = 1
         self.base_move_interval = 1000  # 1 second
-
         self.health = 100
         self.is_sick = False
-
         self.sick_icon_item = None
         self.sick_icon_offset = QtCore.QPointF(0, -100)  # Offset the sick icon above the squid
 
@@ -248,35 +248,37 @@ class Squid:
         self.squid_item.setPos(self.squid_x, self.squid_y)
 
     def push_decoration(self, decoration, direction):
-        push_distance = 25  # pixels to push
+        push_distance = 40  # pixels to push
         current_pos = decoration.pos()
         new_x = current_pos.x() + (push_distance * direction)
 
-        # Ensure the decoration stays within the scene boundaries
+        # Ensure the decoration stays within scene boundaries
         scene_rect = self.ui.scene.sceneRect()
         new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
 
-        # Create a QGraphicsItemAnimation to animate the position
-        animation = QtWidgets.QGraphicsItemAnimation()
-        animation.setItem(decoration)
-        animation.setTimeLine(QtCore.QTimeLine(300))  # 300 ms duration
+        # Create animation using modern approach
+        self.push_animation = QtCore.QPropertyAnimation(decoration, b"pos")
+        self.push_animation.setDuration(300)  # 300ms animation
+        self.push_animation.setStartValue(current_pos)
+        self.push_animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
+        self.push_animation.setEasingCurve(QtCore.QEasingCurve.OutQuad)
+        
+        # Connect cleanup callback
+        self.push_animation.finished.connect(
+            lambda: self._on_push_complete(decoration))
+        
+        self.push_animation.start()
 
-        # Set the start and end positions for the animation
-        start_pos = QtCore.QPointF(current_pos)
-        end_pos = QtCore.QPointF(new_x, current_pos.y())
-        animation.setPosAt(0, start_pos)
-        animation.setPosAt(1, end_pos)
 
-        # Start the animation
-        animation.timeLine().start()
-
-        # Update squid's state
+    def _on_push_complete(self, decoration):
+        """Callback when push animation finishes"""
         self.happiness = min(100, self.happiness + 5)
         self.curiosity = min(100, self.curiosity + 10)
         self.status = "pushing decoration"
-
-        # Show a message
-        self.ui.show_message(f"Squid pushed a decoration")
+        self.ui.show_message("Squid pushed a decoration")
+        
+        # Remove animation reference
+        self.push_animation = None
 
     def move_erratically(self):
         directions = ["left", "right", "up", "down"]

@@ -3,7 +3,9 @@
 import os
 import json
 import math
+import time
 import random
+import traceback
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import QObject, pyqtProperty
 from PyQt5.QtWidgets import QGraphicsPixmapItem
@@ -32,10 +34,11 @@ class DecorationItem(QtWidgets.QLabel):
             drag.setHotSpot(event.pos() - self.rect().topLeft())
             drag.exec_(QtCore.Qt.CopyAction)
 
-class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
+class ResizablePixmapItem(QtWidgets.QGraphicsObject):
     def __init__(self, pixmap, filename):
-        scaled_pixmap = pixmap.scaled(128, 128, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
-        super().__init__(scaled_pixmap)
+        super().__init__()
+        self.pixmap_item = QtWidgets.QGraphicsPixmapItem(self)
+        self.pixmap_item.setPixmap(pixmap.scaled(128, 128, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable)
         self.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
@@ -43,20 +46,18 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         self.original_pixmap = pixmap
         self.filename = filename
         self.stat_multipliers, self.category = self.get_decoration_info()
-        
-        # Ensure stat_multipliers is never empty
+
         if not self.stat_multipliers:
             self.stat_multipliers = {'happiness': 1}
 
     def boundingRect(self):
-        return super().boundingRect().adjusted(0, 0, 20, 20)
+        return self.pixmap_item.boundingRect().adjusted(0, 0, 20, 20)
 
     def paint(self, painter, option, widget):
-        super().paint(painter, option, widget)
+        self.pixmap_item.paint(painter, option, widget)
         if self.isSelected():
             painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 255), 2))
             painter.drawRect(self.boundingRect())
-
             handle_pos = self.boundingRect().bottomRight() - QtCore.QPointF(20, 20)
             handle_rect = QtCore.QRectF(handle_pos, QtCore.QSizeF(20, 20))
             painter.fillRect(handle_rect, QtGui.QColor(0, 0, 255))
@@ -81,7 +82,7 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
                 width = height * aspect_ratio
             else:
                 height = width / aspect_ratio
-            self.setPixmap(self.original_pixmap.scaled(int(width), int(height), QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+            self.pixmap_item.setPixmap(self.original_pixmap.scaled(int(width), int(height), QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
         else:
             super().mouseMoveEvent(event)
 
@@ -91,20 +92,12 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
 
     def get_decoration_info(self):
         try:
-            # Construct the path to decoration_stats.json
             file_path = os.path.join(os.path.dirname(__file__), 'decoration_stats.json')
-            
-            # Open and read the JSON file
             with open(file_path, 'r') as f:
                 stats = json.load(f)
-            
-            # Get the info for this decoration
             info = stats.get(self.filename, {})
-            
-            # Extract stat multipliers and category
             stat_multipliers = {k: v for k, v in info.items() if k != 'category'}
             category = info.get('category', 'plant')
-            
             return stat_multipliers, category
         except FileNotFoundError:
             print(f"decoration_stats.json not found at {file_path}. Using empty stats.")
@@ -112,6 +105,7 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         except json.JSONDecodeError:
             print(f"Error decoding decoration_stats.json at {file_path}. Using empty stats.")
             return {}, 'plant'
+
 
 class DecorationWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -176,16 +170,13 @@ class Ui:
         self.window.setCentralWidget(self.view)
 
         self.setup_menu_bar()
-
-        # Initialize SquidBrainWindow
+        self.neuron_inspector = None
         self.squid_brain_window = None
 
-        # Create decoration window
         self.decoration_window = DecorationWindow(self.window)
         self.decoration_window.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.Tool)
         self.decoration_window.setAttribute(QtCore.Qt.WA_QuitOnClose, False)
 
-        # Initialize statistics window
         self.statistics_window = None
 
         # Enable drag and drop for the main window
@@ -194,14 +185,13 @@ class Ui:
         self.view.dragMoveEvent = self.dragMoveEvent
         self.view.dropEvent = self.dropEvent
 
-        # Add this line to enable key events for the view
         self.view.setFocusPolicy(QtCore.Qt.StrongFocus)
-
-        # Connect the key press event
         self.view.keyPressEvent = self.keyPressEvent
-
-        # Setup other UI elements
         self.setup_ui_elements()
+
+    def optimize_animations(self):
+        self.scene.setItemIndexMethod(QtWidgets.QGraphicsScene.NoIndex)  # Better for moving items
+        self.view.setCacheMode(QtWidgets.QGraphicsView.CacheBackground)
 
     def setup_ui_elements(self):
         # Create the rectangle item
@@ -236,6 +226,189 @@ class Ui:
         self.points_value_label.setPos(self.window_width - 95, 10)
         self.points_value_label.setZValue(2)  # Increase Z-value to ensure it's on top
         self.scene.addItem(self.points_value_label)
+
+    def check_neurogenesis(self, state):
+        """Handle neuron creation, with special debug mode that bypasses all checks"""
+        current_time = time.time()
+        
+        # DEBUG MODE: Bypass all checks and force creation
+        if state.get('_debug_forced_neurogenesis', False):
+            # Create unique name with timestamp
+            new_name = f"debug_neuron_{int(current_time)}"
+            
+            # Calculate position near center of existing network
+            if self.neuron_positions:
+                center_x = sum(pos[0] for pos in self.neuron_positions.values()) / len(self.neuron_positions)
+                center_y = sum(pos[1] for pos in self.neuron_positions.values()) / len(self.neuron_positions)
+            else:
+                center_x, center_y = 600, 300  # Default center position
+            
+            # Add some randomness to the position
+            self.neuron_positions[new_name] = (
+                center_x + random.randint(-100, 100),
+                center_y + random.randint(-100, 100)
+            )
+            
+            # Initialize with high activation
+            self.state[new_name] = 80
+            self.state_colors[new_name] = (150, 200, 255)  # Light blue color
+            
+            # Create connections to all existing neurons
+            for existing in self.neuron_positions:
+                if existing != new_name:
+                    # Create bidirectional connections with random weights
+                    self.weights[(new_name, existing)] = random.uniform(-0.8, 0.8)
+                    self.weights[(existing, new_name)] = random.uniform(-0.8, 0.8)
+            
+            # Update neurogenesis tracking
+            if 'new_neurons' not in self.neurogenesis_data:
+                self.neurogenesis_data['new_neurons'] = []
+            self.neurogenesis_data['new_neurons'].append(new_name)
+            self.neurogenesis_data['last_neuron_time'] = current_time
+            
+            # Debug output
+            print(f"DEBUG: Created neuron '{new_name}' at {self.neuron_positions[new_name]}")
+            print(f"New connections: {[(k,v) for k,v in self.weights.items() if new_name in k]}")
+            
+            self.update()  # Force redraw
+            return True
+
+        # NORMAL OPERATION (only runs if debug flag is False)
+        if current_time - self.neurogenesis_data.get('last_neuron_time', 0) > self.neurogenesis_config['cooldown']:
+            created = False
+            
+            # Novelty-based neurogenesis
+            if state.get('novelty_exposure', 0) > self.neurogenesis_config['novelty_threshold']:
+                self._create_neuron_internal('novelty', state)
+                created = True
+            
+            # Stress-based neurogenesis
+            if state.get('sustained_stress', 0) > self.neurogenesis_config['stress_threshold']:
+                self._create_neuron_internal('stress', state)
+                created = True
+            
+            # Reward-based neurogenesis
+            if state.get('recent_rewards', 0) > self.neurogenesis_config['reward_threshold']:
+                self._create_neuron_internal('reward', state)
+                created = True
+                
+            return created
+        
+        return False
+    
+    def _create_neuron(self, neuron_type, trigger_data):
+        """Internal neuron creation method for normal operation"""
+        base_name = {
+            'novelty': 'novel',
+            'stress': 'defense', 
+            'reward': 'reward'
+        }[neuron_type]
+        
+        new_name = f"{base_name}_{len(self.neurogenesis_data['new_neurons'])}"
+        
+        # Position near most active connected neuron
+        active_neurons = sorted(
+            [(k, v) for k, v in self.state.items() if isinstance(v, (int, float))],
+            key=lambda x: x[1],
+            reverse=True
+        )
+        
+        if active_neurons:
+            base_x, base_y = self.neuron_positions[active_neurons[0][0]]
+        else:
+            base_x, base_y = 600, 300  # Default position
+        
+        self.neuron_positions[new_name] = (
+            base_x + random.randint(-50, 50),
+            base_y + random.randint(-50, 50)
+        )
+        
+        # Initialize state
+        self.state[new_name] = 50  # Neutral activation
+        self.state_colors[new_name] = {
+            'novelty': (255, 255, 150),
+            'stress': (255, 150, 150),
+            'reward': (150, 255, 150)
+        }[neuron_type]
+        
+        # Create default connections
+        default_weights = {
+            'novelty': {'curiosity': 0.6, 'anxiety': -0.4},
+            'stress': {'anxiety': -0.7, 'happiness': 0.3},
+            'reward': {'satisfaction': 0.8, 'happiness': 0.5}
+        }
+        
+        for target, weight in default_weights[neuron_type].items():
+            self.weights[(new_name, target)] = weight
+            self.weights[(target, new_name)] = weight * 0.5  # Weaker reciprocal
+        
+        # Update tracking
+        self.neurogenesis_data['new_neurons'].append(new_name)
+        self.neurogenesis_data['last_neuron_time'] = time.time()
+        
+        return new_name
+    
+    def trigger_neurogenesis(self):
+        """Guaranteed neuron creation with validation"""
+        try:
+            if not hasattr(self, 'squid_brain_window'):
+                raise ValueError("Brain window not initialized")
+                
+            # Get current neuron count and names
+            brain = self.squid_brain_window.brain_widget
+            prev_count = len(brain.neuron_positions)
+            prev_neurons = set(brain.neuron_positions.keys())
+            
+            # Create forced state with debug flag
+            forced_state = {
+                "_debug_forced_neurogenesis": True,
+                "personality": getattr(self.tamagotchi_logic.squid, 'personality', None)
+            }
+            
+            # Force update - call update_state directly to ensure it runs
+            brain.update_state(forced_state)
+            
+            # Verify creation
+            new_count = len(brain.neuron_positions)
+            new_neurons = set(brain.neuron_positions.keys()) - prev_neurons
+            
+            if not new_neurons:
+                # If no new neurons, try forcing it again with more debug info
+                print("First attempt failed, trying again with debug info:")
+                print(f"Before state: {brain.state}")
+                print(f"Before positions: {brain.neuron_positions}")
+                
+                # Force create a neuron directly
+                new_name = f"forced_{time.time()}"
+                brain.neuron_positions[new_name] = (600, 300)
+                brain.state[new_name] = 50
+                brain.state_colors[new_name] = (255, 150, 150)
+                brain.update()
+                
+                new_neurons = set(brain.neuron_positions.keys()) - prev_neurons
+                if not new_neurons:
+                    raise RuntimeError(
+                        "Neurogenesis completely failed. Check:\n"
+                        f"- Previous count: {prev_count}\n"
+                        f"- New count: {len(brain.neuron_positions)}\n"
+                        f"- State keys: {brain.state.keys()}\n"
+                        f"- Position keys: {brain.neuron_positions.keys()}\n"
+                        f"- Debug flag was: {forced_state['_debug_forced_neurogenesis']}"
+                    )
+            
+            neuron_name = new_neurons.pop()
+            self.show_message(f"Created neuron: {neuron_name}")
+            print(f"Successfully created neuron: {neuron_name}")
+            print(f"New neuron state: {brain.state[neuron_name]}")
+            print(f"New neuron position: {brain.neuron_positions[neuron_name]}")
+            
+        except Exception as e:
+            self.show_message(f"Neurogenesis Error: {str(e)}")
+            print(f"NEUROGENESIS FAILURE:\n{traceback.format_exc()}")
+            print("CURRENT NETWORK STATE:")
+            print(f"State: {self.squid_brain_window.brain_widget.state}")
+            print(f"Positions: {self.squid_brain_window.brain_widget.neuron_positions}")
+            print(f"Weights: {list(self.squid_brain_window.brain_widget.weights.items())[:5]}...")
 
     def toggle_decoration_window(self, checked):
         if checked:
@@ -339,7 +512,7 @@ class Ui:
 
                 # Set fixed size for Rock01 and Rock02
                 if filename.lower().startswith(('rock01', 'rock02')):
-                    item.setPixmap(pixmap.scaled(100, 100, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+                    item.pixmap_item.setPixmap(pixmap.scaled(100, 100, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
                     item.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable)
                     item.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable)
                     item.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
@@ -360,7 +533,6 @@ class Ui:
                 event.ignore()
         else:
             event.ignore()
-
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Delete:
@@ -397,11 +569,6 @@ class Ui:
 
         debug_menu = self.menu_bar.addMenu('Debug')
 
-        self.brain_action = QtWidgets.QAction('Toggle Brain View', self.window)
-        self.brain_action.setCheckable(True)
-        self.brain_action.triggered.connect(self.toggle_brain_window)
-        debug_menu.addAction(self.brain_action)
-
         self.debug_action = QtWidgets.QAction('Toggle Debug Mode', self.window)
         self.debug_action.setCheckable(True)
         debug_menu.addAction(self.debug_action)
@@ -409,6 +576,21 @@ class Ui:
         self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
         self.view_cone_action.setCheckable(True)
         debug_menu.addAction(self.view_cone_action)
+
+         # Add inspector action to existing debug menu
+        self.inspector_action = QtWidgets.QAction('Neuron Inspector', self.window)
+        self.inspector_action.triggered.connect(self.show_neuron_inspector)
+        debug_menu.addAction(self.inspector_action)
+
+        self.brain_action = QtWidgets.QAction('Toggle Brain View', self.window)
+        self.brain_action.setCheckable(True)
+        self.brain_action.triggered.connect(self.toggle_brain_window)
+        debug_menu.addAction(self.brain_action)
+
+        # Add neurogenesis debug action
+        self.neurogenesis_action = QtWidgets.QAction('Trigger Neurogenesis', self.window)
+        self.neurogenesis_action.triggered.connect(self.trigger_neurogenesis)
+        debug_menu.addAction(self.neurogenesis_action)
 
         self.feed_action = QtWidgets.QAction('Feed', self.window)
         actions_menu.addAction(self.feed_action)
@@ -428,6 +610,17 @@ class Ui:
             self.tamagotchi_logic.start_rps_game()
         else:
             print("TamagotchiLogic not initialized")
+
+    def show_neuron_inspector(self):
+        if not self.squid_brain_window:
+            self.squid_brain_window = SquidBrainWindow(self.tamagotchi_logic, self.debug_mode)
+            
+        if not self.neuron_inspector:
+            self.neuron_inspector = NeuronInspector(self.squid_brain_window, self.window)
+            
+        self.neuron_inspector.show()
+        self.neuron_inspector.raise_()
+        self.neuron_inspector.update_neuron_list()
 
     def toggle_statistics_window(self):
         if self.statistics_window is None:
@@ -502,3 +695,67 @@ class Ui:
         # Uncheck the menu item
         if hasattr(self.parent(), 'decorations_action'):
             self.parent().decorations_action.setChecked(False)
+
+class NeuronInspector(QtWidgets.QDialog):
+    def __init__(self, brain_window, parent=None):
+        super().__init__(parent)
+        self.brain_window = brain_window
+        self.setWindowTitle("Neuron Inspector")
+        self.setFixedSize(400, 400)
+        
+        layout = QtWidgets.QVBoxLayout()
+        self.setLayout(layout)
+        
+        # Neuron selector
+        self.neuron_combo = QtWidgets.QComboBox()
+        layout.addWidget(self.neuron_combo)
+        
+        # Info display
+        self.info_text = QtWidgets.QTextEdit()
+        self.info_text.setReadOnly(True)
+        layout.addWidget(self.info_text)
+        
+        # Connection list
+        self.connections_list = QtWidgets.QListWidget()
+        layout.addWidget(self.connections_list)
+        
+        # Refresh button
+        self.refresh_btn = QtWidgets.QPushButton("Refresh")
+        self.refresh_btn.clicked.connect(self.update_info)
+        layout.addWidget(self.refresh_btn)
+        
+        self.update_neuron_list()
+
+    def update_neuron_list(self):
+        if hasattr(self.brain_window, 'brain_widget'):
+            brain = self.brain_window.brain_widget
+            self.neuron_combo.clear()
+            self.neuron_combo.addItems(sorted(brain.neuron_positions.keys()))
+            self.update_info()
+
+    def update_info(self):
+        if not hasattr(self.brain_window, 'brain_widget'):
+            return
+            
+        brain = self.brain_window.brain_widget
+        neuron = self.neuron_combo.currentText()
+        
+        if neuron not in brain.neuron_positions:
+            return
+            
+        pos = brain.neuron_positions[neuron]
+        activation = brain.state.get(neuron, 0)
+        
+        info = f"""<b>{neuron}</b>
+Position: ({pos[0]:.1f}, {pos[1]:.1f})
+Activation: {activation:.1f}
+Type: {'Original' if neuron in getattr(brain, 'original_neuron_positions', {}) else 'New'}"""
+        
+        self.info_text.setHtml(info)
+        self.connections_list.clear()
+        
+        for (src, dst), weight in brain.weights.items():
+            if src == neuron or dst == neuron:
+                item = QtWidgets.QListWidgetItem(f"{src} → {dst}: {weight:.2f}")
+                item.setForeground(QtGui.QColor("green") if weight > 0 else QtGui.QColor("red"))
+                self.connections_list.addItem(item)
