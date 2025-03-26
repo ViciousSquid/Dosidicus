@@ -120,7 +120,14 @@ class BrainWidget(QtWidgets.QWidget):
         self.update()
   
     def check_neurogenesis(self, state):
-        """Force neuron creation when debug flag is set, regardless of cooldown"""
+        """Check conditions for neurogenesis and create new neurons when triggered.
+        
+        Args:
+            state (dict): Current brain state containing trigger values
+            
+        Returns:
+            bool: True if any neurons were created, False otherwise
+        """
         current_time = time.time()
         
         # DEBUG: Bypass all checks when forced
@@ -159,20 +166,45 @@ class BrainWidget(QtWidgets.QWidget):
             self.update()
             return True
         
-        # Original checks (only used in normal operation)
-        if current_time - self.neurogenesis_data['last_neuron_time'] > self.neurogenesis_config['cooldown']:
+        # Normal operation checks
+        if current_time - self.neurogenesis_data['last_neuron_time'] > self.neurogenesis_config['general']['cooldown']:
             created = False
-            if state.get('novelty_exposure', 0) > self.neurogenesis_config['novelty_threshold']:
+            
+            # Novelty check with personality modifier
+            if (state.get('novelty_exposure', 0) > 
+                self.get_neurogenesis_threshold('novelty') * 
+                self.get_personality_modifier(state.get('personality'), 'novelty')):
                 self._create_neuron_internal('novelty', state)
                 created = True
-            if state.get('sustained_stress', 0) > self.neurogenesis_config['stress_threshold']:
+                
+            # Stress check with personality modifier
+            if (state.get('sustained_stress', 0) > 
+                self.get_neurogenesis_threshold('stress') * 
+                self.get_personality_modifier(state.get('personality'), 'stress')):
                 self._create_neuron_internal('stress', state)
                 created = True
-            if state.get('recent_rewards', 0) > self.neurogenesis_config['reward_threshold']:
+                
+            # Reward check
+            if (state.get('recent_rewards', 0) > 
+                self.get_neurogenesis_threshold('reward')):
                 self._create_neuron_internal('reward', state)
                 created = True
+                
             return created
         return False
+    
+    def get_neurogenesis_threshold(self, trigger_type):
+        """Safely get threshold for a trigger type with fallback defaults"""
+        try:
+            return self.neurogenesis_config['triggers'][trigger_type]['threshold']
+        except KeyError:
+            # Fallback defaults if config is missing
+            defaults = {
+                'novelty': 0.7,
+                'stress': 0.8, 
+                'reward': 0.6
+            }
+            return defaults.get(trigger_type, 1.0)  # High threshold if type unknown
     
     def stimulate_brain(self, stimulation_values):
         """Handle brain stimulation with validation"""

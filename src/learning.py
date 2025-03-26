@@ -39,7 +39,6 @@ class HebbianLearning:
     def learn_from_organization(self):
         self.strengthen_connection('curiosity', 'satisfaction', self.learning_rate * 2)
         self.strengthen_connection('cleanliness', 'satisfaction', self.learning_rate)
-        self.strengthen_connection('organization', 'completion', self.learning_rate * 1.2)
 
     def learn_from_sickness(self):
         self.strengthen_connection('is_sick', 'cleanliness', self.learning_rate)
@@ -48,7 +47,6 @@ class HebbianLearning:
     def learn_from_curiosity(self):
         self.strengthen_connection('curiosity', 'happiness', self.learning_rate)
         self.strengthen_connection('curiosity', 'satisfaction', self.learning_rate)
-        self.strengthen_connection('curiosity', 'exploration', self.learning_rate * 1.3)
 
     def learn_from_anxiety(self):
         self.strengthen_connection('anxiety', 'is_sick', self.learning_rate)
