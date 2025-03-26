@@ -1,4 +1,4 @@
-
+Additional article here: [https://github.com/ViciousSquid/Dosidicus/blob/main/Docs/neurogenesis_config.json.md]
 
 Neural Network Architecture
 ===========================
