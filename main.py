@@ -39,7 +39,7 @@ class TeeStream:
         self.file_stream.flush()
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, specified_personality=None, debug_mode=False, parent=None):
+    def __init__(self, specified_personality=None, debug_mode=False, neuro_cooldown=None, parent=None):
         super().__init__(parent)
         
         # Set up debugging first
@@ -54,6 +54,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.user_interface.squid_brain_window = self.brain_window
         
         self.specified_personality = specified_personality
+        self.neuro_cooldown = neuro_cooldown  # Store the neurogenesis cooldown value
         self.squid = None  # We'll create the squid after deciding on the personality
         
         # Check for existing save data
@@ -125,9 +126,17 @@ class MainWindow(QtWidgets.QMainWindow):
         if personality is None:
             personality = random.choice(list(Personality))
         
-        self.squid = Squid(self.user_interface, None, personality)
-        print(f"Init: STARTING A NEW SIMULATION")
+        # Create the squid with all parameters in correct order
+        self.squid = Squid(
+            user_interface=self.user_interface,
+            tamagotchi_logic=None,
+            personality=personality,
+            neuro_cooldown=self.neuro_cooldown
+        )
+        print(f"--- STARTING A NEW SIMULATION ---")
         print(f"Created new squid with personality: {self.squid.personality.value}")
+        if self.neuro_cooldown is not None:
+            print(f"Neurogenesis cooldown set to: {self.neuro_cooldown} seconds")
         
         # Clear all memories when starting a new game
         self.squid.memory_manager.clear_all_memories()
@@ -205,10 +214,13 @@ def main():
     parser.add_argument('-p', '--personality', type=str, choices=[p.value for p in Personality], 
                         help='Specify the squid personality')
     parser.add_argument('-d', '--debug', action='store_true', help='Enable debug mode and log console output to console.txt')
+    parser.add_argument('-nc', '--neurocooldown', type=int, 
+                        help='Set the neurogenesis cooldown time in seconds')
     args = parser.parse_args()
 
     print(f"Personality argument: {args.personality}")
     print(f"Debug argument: {args.debug}")
+    print(f"Neurocooldown argument: {args.neurocooldown}")
 
     application = QtWidgets.QApplication(sys.argv)
     
@@ -218,7 +230,7 @@ def main():
         personality = None
     
     try:
-        main_window = MainWindow(personality, args.debug)
+        main_window = MainWindow(personality, args.debug, args.neurocooldown)
         main_window.show()
         sys.exit(application.exec_())
     except Exception as exception:
