@@ -21,6 +21,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 * Neural network can make decisions and form associations
 * Weights are analysed, tweaked and trained by Hebbian learning algorithm
 * Experiences from short-term and long-term memory can influence decision-making
+* Squid can create new neurons in response to his environment (Neurogenesis)
 
 I'm trying to document everything!
 [https://github.com/ViciousSquid/Dosidicus/tree/main/Docs]
