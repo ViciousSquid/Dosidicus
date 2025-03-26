@@ -5,6 +5,8 @@ Neurogenesis Implementation
 
 Neurogenesis is the process of creating new neurons in the squid's neural network network based on experiences.
 
+Further reading here: [https://github.com/ViciousSquid/Dosidicus/blob/main/Docs/neurogenesis_config.json.md]
+
 1\. State Tracking
 ------------------
 
