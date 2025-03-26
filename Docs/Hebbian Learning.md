@@ -22,59 +22,145 @@ The `perform_hebbian_learning` method is the core of the Hebbian learning implem
 
 ```python
 def perform_hebbian_learning(self):
-        if self.is_paused or not hasattr(self, 'brain_widget') or not self.tamagotchi_logic or not self.tamagotchi_logic.squid:
-            return
-
-        # Get the current state of all neurons
-        current_state = self.brain_widget.state
-
-        # Determine which neurons are significantly active
-        active_neurons = []
-        for neuron, value in current_state.items():
-            if neuron == 'position':
-                # Skip the position tuple
-                continue
-            if isinstance(value, (int, float)) and value > 50:
-                active_neurons.append(neuron)
-            elif isinstance(value, bool) and value:
-                active_neurons.append(neuron)
-            elif isinstance(value, str):
-                # For string values (like 'direction'), we consider them active
-                active_neurons.append(neuron)
-
-        # Include decoration effects in learning
-        decoration_memories = self.tamagotchi_logic.squid.memory_manager.get_all_short_term_memories('decorations')
+    """Enhanced Hebbian learning with neurogenesis support"""
+    if self.is_paused:
+        return
         
-        if isinstance(decoration_memories, dict):
-            for decoration, effects in decoration_memories.items():
-                for stat, boost in effects.items():
-                    if isinstance(boost, (int, float)) and boost > 0:
-                        if stat not in active_neurons:
-                            active_neurons.append(stat)
-        elif isinstance(decoration_memories, list):
-            for memory in decoration_memories:
-                for stat, boost in memory.get('effects', {}).items():
-                    if isinstance(boost, (int, float)) and boost > 0:
-                        if stat not in active_neurons:
-                            active_neurons.append(stat)
+    print("Starting Hebbian training...")
+    
+    # Get all neurons including new ones
+    all_neurons = list(self.brain_widget.neuron_positions.keys())
+    current_state = self.brain_widget.state
+    
+    # Get personality modifier
+    personality = getattr(self.tamagotchi_logic.squid, 'personality', 'ADVENTUROUS')
+    personality_mod = self._get_personality_modifier(personality)
+    
+    # Include neurons that are either:
+    # - Above activation threshold (50) 
+    # OR
+    # - Newly created (less than 2 minutes old)
+    active_neurons = []
+    for neuron in all_neurons:
+        value = current_state.get(neuron, 0)
+        
+        # Check if neuron is active
+        is_active = (isinstance(value, (int, float)) and (value > 50)
+        
+        # Check if neuron is new (give them priority)
+        is_new = (neuron in getattr(self.tamagotchi_logic.squid.hebbian_learning, 'new_neurons', []))
+        
+        if is_active or is_new:
+            active_neurons.append(neuron)
+    
+    if len(active_neurons) < 2:
+        return
 
-        # If less than two neurons are active, no learning occurs
-        if len(active_neurons) < 2:
-            return
+    # Calculate dynamic learning rate based on squid's state
+    base_rate = 0.1
+    learning_rate = base_rate * personality_mod
+    
+    # Boost learning when squid is curious or satisfied
+    if current_state.get('curiosity', 0) > 70:
+        learning_rate *= 1.5
+    if current_state.get('satisfaction', 0) > 65:
+        learning_rate *= 1.3
+        
+    # Perform learning for neuron pairs
+    sample_size = min(8, len(active_neurons) * (len(active_neurons) - 1) // 2)
+    sampled_pairs = random.sample(
+        [(i, j) for i in range(len(active_neurons)) for j in range(i+1, len(active_neurons))],
+        sample_size
+    )
 
-        # Perform learning for a random subset of active neuron pairs
-        sample_size = min(5, len(active_neurons) * (len(active_neurons) - 1) // 2)
-        sampled_pairs = random.sample([(i, j) for i in range(len(active_neurons)) for j in range(i+1, len(active_neurons))], sample_size)
+    for i, j in sampled_pairs:
+        neuron1 = active_neurons[i]
+        neuron2 = active_neurons[j]
+        
+        # Get neuron values (handle boolean states)
+        val1 = self.get_neuron_value(current_state.get(neuron1, 50))
+        val2 = self.get_neuron_value(current_state.get(neuron2, 50))
+        
+        # Apply learning
+        self.update_connection(neuron1, neuron2, val1, val2, learning_rate)
+        
+        # Special handling for new neurons - form additional connections
+        is_new1 = neuron1 in getattr(self.tamagotchi_logic.squid.hebbian_learning, 'new_neurons', [])
+        is_new2 = neuron2 in getattr(self.tamagotchi_logic.squid.hebbian_learning, 'new_neurons', [])
+        
+        if is_new1 or is_new2:
+            # New neurons get extra connections to core emotions
+            for core_neuron in ['happiness', 'satisfaction', 'curiosity']:
+                if core_neuron not in [neuron1, neuron2]:
+                    core_val = self.get_neuron_value(current_state.get(core_neuron, 50))
+                    self.update_connection(neuron1, core_neuron, val1, core_val, learning_rate * 1.3)
+                    self.update_connection(neuron2, core_neuron, val2, core_val, learning_rate * 1.3)
 
-        for i, j in sampled_pairs:
-            neuron1 = active_neurons[i]
-            neuron2 = active_neurons[j]
-            value1 = self.get_neuron_value(current_state.get(neuron1, 50))  # Default to 50 if not in current_state
-            value2 = self.get_neuron_value(current_state.get(neuron2, 50))
-            self.update_connection(neuron1, neuron2, value1, value2)
+    # Update visualization and associations
+    self.brain_widget.update()
+    self.update_associations()
+    
+    # Debug output
+    if self.debug_mode:
+        print(f"Hebbian learning complete. Processed {len(sampled_pairs)} pairs.")
+        print(f"Learning rate: {learning_rate:.2f} (Personality mod: {personality_mod:.1f})")
+        if any(n in getattr(self.tamagotchi_logic.squid.hebbian_learning, 'new_neurons', []) for n in active_neurons):
+            print("New neurons participated in learning")
 
-        # Update the brain visualization
-        self.brain_widget.update()
+def _get_personality_modifier(self, personality):
+    """Get learning rate modifier based on personality"""
+    modifiers = {
+        'TIMID': 0.8,    # Learns more slowly
+        'ADVENTUROUS': 1.5, # Learns faster
+        'LAZY': 0.7,
+        'ENERGETIC': 1.2,
+        'INTROVERT': 0.9,
+        'GREEDY': 1.3,   # Learns quickly about food
+        'STUBBORN': 0.6  # Resists learning
+    }
+    if isinstance(personality, str):
+        return modifiers.get(personality, 1.0)
+    return modifiers.get(personality.name, 1.0)
+
+def update_connection(self, neuron1, neuron2, value1, value2, learning_rate):
+    """Enhanced connection update with neurogenesis support"""
+    # Ensure connection exists
+    if (neuron1, neuron2) not in self.brain_widget.weights:
+        self.brain_widget.weights[(neuron1, neuron2)] = 0.0
+        if (neuron1, neuron2) not in self.brain_widget.connections:
+            self.brain_widget.connections.append((neuron1, neuron2))
+    
+    # Calculate weight change with novelty boost
+    is_new_neuron = (neuron1 in getattr(self.tamagotchi_logic.squid.hebbian_learning, 'new_neurons', []) or
+                    neuron2 in getattr(self.tamagotchi_logic.squid.hebbian_learning, 'new_neurons', []))
+    
+    novelty_boost = 1.5 if is_new_neuron else 1.0
+    weight_change = learning_rate * novelty_boost * (value1/100) * (value2/100)
+    
+    # Apply weight change
+    prev_weight = self.brain_widget.weights[(neuron1, neuron2)]
+    new_weight = max(-1.0, min(1.0, prev_weight + weight_change))
+    self.brain_widget.weights[(neuron1, neuron2)] = new_weight
+    
+    # Log the change
+    self._log_weight_change(neuron1, neuron2, prev_weight, new_weight, is_new_neuron)
+
+def _log_weight_change(self, neuron1, neuron2, prev, new, is_new):
+    """Enhanced logging with neurogenesis awareness"""
+    timestamp = QtCore.QTime.currentTime().toString("hh:mm:ss")
+    change = new - prev
+    
+    # Format message with color coding
+    msg = f"{timestamp} - {neuron1} ↔ {neuron2}: "
+    msg += f"<font color='red'>{prev:.3f}</font> → " 
+    msg += f"<font color='green'>{new:.3f}</font> "
+    msg += f"(Δ: {change:+.3f})"
+    
+    if is_new:
+        msg += " <font color='blue'>[NEW NEURON]</font>"
+    
+    self.weight_changes_text.append(msg)
+    self.learning_data.append((timestamp, neuron1, neuron2, change, is_new))
 ```
 
  Here's a detailed breakdown of how it works:
