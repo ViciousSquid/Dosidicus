@@ -1,48 +1,47 @@
+
+
 Neurogenesis Implementation
 ===========================
+
+Neurogenesis is the process of creating new neurons in the squid's neural network network based on experiences.
 
 1\. State Tracking
 ------------------
 
-Neurogenesis is tracked through these data structures in `BrainWidget`:
+The system tracks neurogenesis data in the `BrainWidget` class:
 
-```self.neurogenesis\_data = { 'novelty\_counter': 0, 'new\_neurons': \[\], # List of neuron names 'last\_neuron\_time': time.time() } self.neurogenesis\_config = { 'novelty\_threshold': 3, 'stress\_threshold': 0.7, 'cooldown': 300 # 5 minutes (seconds) }```
+\# In BrainWidget.\_\_init\_\_() self.neurogenesis\_data = { 'novelty\_counter': 0, # Counts novel experiences 'new\_neurons': \[\], # List of created neurons 'last\_neuron\_time': time.time() # Timestamp of last creation } # Configuration from neurogenesis\_config.json self.neurogenesis\_config = { 'novelty\_threshold': 3, # Required novel experiences 'stress\_threshold': 0.7, # Stress level needed 'reward\_threshold': 5, # Positive outcomes needed 'cooldown': 300 # 5 min cooldown (seconds) }
 
 2\. Trigger Conditions
 ----------------------
 
-Three factors can trigger neurogenesis (tracked in `tamagotchi_logic.py`):
+Three experience types can trigger neurogenesis:
 
-```self.neurogenesis\_triggers = { 'novel\_objects': 0, # Counts new interactions 'high\_stress\_cycles': 0, # Duration of stress 'positive\_outcomes': 0 # Reward events }```
+*   Novelty: New objects/interactions
+*   Stress: Sustained high anxiety
+*   Reward: Positive outcomes (eating, playing)
 
-### Thresholds (from neurogenesis\_config.json):
+These are tracked in `tamagotchi_logic.py`:
 
-*   Novelty: 3+ new objects
-*   Stress: >0.7 sustained stress
-*   Reward: 5+ positive outcomes
+\# In TamagotchiLogic.\_\_init\_\_() self.neurogenesis\_triggers = { 'novel\_objects': 0, # Count of new objects encountered 'high\_stress\_cycles': 0, # Duration of stress periods 'positive\_outcomes': 0 # Count of rewards received }
 
-3\. Neuron Creation Logic
--------------------------
-
-When `update_state()` is called, it checks conditions:
-
-```def check\_neurogenesis(self, state): current\_time = time.time() # Debug bypass if state.get('\_debug\_forced\_neurogenesis', False): self.\_create\_neuron\_internal('debug', state) return True # Check cooldown period if current\_time - self.neurogenesis\_data\['last\_neuron\_time'\] > self.neurogenesis\_config\['cooldown'\]: # Check each trigger condition if state.get('novelty\_exposure', 0) > self.neurogenesis\_config\['novelty\_threshold'\]: self.\_create\_neuron\_internal('novelty', state) if state.get('sustained\_stress', 0) > self.neurogenesis\_config\['stress\_threshold'\]: self.\_create\_neuron\_internal('stress', state) if state.get('recent\_rewards', 0) > self.neurogenesis\_config\['reward\_threshold'\]: self.\_create\_neuron\_internal('reward', state)```
-
-4\. Neuron Creation Process
+3\. Neuron Creation Process
 ---------------------------
 
-```def \_create\_neuron\_internal(self, neuron\_type, trigger\_data): # Generate unique name (e.g., "novel\_1") base\_name = {'novelty': 'novel', 'stress': 'defense', 'reward': 'reward'}\[neuron\_type\] new\_name = f"{base\_name}\_{len(self.neurogenesis\_data\['new\_neurons'\])}" # Position near an active neuron base\_x, base\_y = random.choice(list(self.neuron\_positions.values())) self.neuron\_positions\[new\_name\] = ( base\_x + random.randint(-50, 50), base\_y + random.randint(-50, 50) ) # Initialize state (50 = medium activation) self.state\[new\_name\] = 50 # Set color based on type self.state\_colors\[new\_name\] = { 'novelty': (255, 255, 150), # Yellow 'stress': (255, 150, 150), # Red 'reward': (150, 255, 150) # Green }\[neuron\_type\] # Create default connections for target, weight in self.neurogenesis\_config\['default\_connections'\]\[neuron\_type\].items(): self.weights\[(new\_name, target)\] = weight self.weights\[(target, new\_name)\] = weight \* 0.5 # Weaker reciprocal # Track and visualize self.neurogenesis\_data\['new\_neurons'\].append(new\_name) self.neurogenesis\_data\['last\_neuron\_time'\] = time.time() self.\_highlight\_neuron(new\_name)```
+When thresholds are met, new neurons are created:
 
-5\. Visualization
+```def \_create\_neuron\_internal(self, neuron\_type, trigger\_data): # Generate unique name (e.g., "novel\_1", "defense\_2") name\_map = {'novelty': 'novel', 'stress': 'defense', 'reward': 'reward'} new\_name = f"{name\_map\[neuron\_type\]}\_{len(self.neurogenesis\_data\['new\_neurons'\])}" # Position near an active neuron (or center if none) if self.neuron\_positions: center\_x = sum(x for x,y in self.neuron\_positions.values())/len(self.neuron\_positions) center\_y = sum(y for x,y in self.neuron\_positions.values())/len(self.neuron\_positions) else: center\_x, center\_y = 600, 300 self.neuron\_positions\[new\_name\] = ( center\_x + random.randint(-100, 100), center\_y + random.randint(-100, 100) ) # Initialize state and color self.state\[new\_name\] = 80 # High initial activation self.state\_colors\[new\_name\] = { 'novelty': (255, 255, 150), # Yellow 'stress': (255, 150, 150), # Red 'reward': (150, 255, 150) # Green }\[neuron\_type\] # Create connections to existing neurons for existing in self.neuron\_positions: if existing != new\_name: self.weights\[(new\_name, existing)\] = random.uniform(-0.5, 0.5) if (existing, new\_name) not in self.weights: self.weights\[(existing, new\_name)\] = random.uniform(-0.5, 0.5) # Update tracking data self.neurogenesis\_data\['new\_neurons'\].append(new\_name) self.neurogenesis\_data\['last\_neuron\_time'\] = time.time() # Visual highlight self.neurogenesis\_highlight = { 'neuron': new\_name, 'start\_time': time.time(), 'duration': 5.0 } self.update() # Redraw the display```
+
+4\. Visualization
 -----------------
 
-New neurons are drawn as triangles with type-specific colors:
+New neurons are visually distinct:
 
-```def draw\_triangular\_neuron(self, painter, x, y, value, label): # Get color based on neuron type prefix if label.startswith('novel'): color = QtGui.QColor(255, 255, 150) # Yellow elif label.startswith('defense'): color = QtGui.QColor(255, 150, 150) # Red else: # reward color = QtGui.QColor(150, 255, 150) # Green painter.setBrush(color) # Draw triangle triangle = QtGui.QPolygonF() size = 25 triangle.append(QtCore.QPointF(x - size, y + size)) triangle.append(QtCore.QPointF(x + size, y + size)) triangle.append(QtCore.QPointF(x, y - size)) painter.drawPolygon(triangle)```
+```def draw\_triangular\_neuron(self, painter, x, y, value, label, scale=1.0): # Determine color by neuron type prefix if label.startswith('defense'): color = QtGui.QColor(255, 150, 150) # Light red elif label.startswith('novel'): color = QtGui.QColor(255, 255, 150) # Pale yellow else: # reward color = QtGui.QColor(150, 255, 150) # Light green painter.setBrush(color) # Draw triangle triangle = QtGui.QPolygonF() size = 25 \* scale triangle.append(QtCore.QPointF(x - size, y + size)) triangle.append(QtCore.QPointF(x + size, y + size)) triangle.append(QtCore.QPointF(x, y - size)) painter.drawPolygon(triangle) # Draw label painter.setPen(QtGui.QColor(0, 0, 0)) font = painter.font() font.setPointSize(int(8 \* scale)) painter.setFont(font) painter.drawText(int(x - 30 \* scale), int(y + 40 \* scale), int(60 \* scale), int(20 \* scale), QtCore.Qt.AlignCenter, label)```
 
-6\. Personality Modifiers
--------------------------
+Key Features:
 
-From `neurogenesis_config.json`:
-
-```"personality\_modifiers": { "timid": { "stress\_sensitivity": 1.5, # 50% more sensitive to stress "novelty\_sensitivity": 0.7 # 30% less sensitive to novelty }, "adventurous": { "novelty\_sensitivity": 1.8, # 80% more sensitive "reward\_sensitivity": 1.2 # 20% more sensitive } }```
+*   New neurons are triangular (vs original circular/square neurons)
+*   Color-coded by type (yellow=novelty, red=stress, green=reward)
+*   Highlighted for 5 seconds after creation
+*   Connected to existing neurons with randomized weights
