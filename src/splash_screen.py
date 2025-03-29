@@ -50,10 +50,11 @@ class SplashScreen(QtWidgets.QWidget):
             self.timer.stop()
 
     def end_animation(self):
-        print("******************************")
-        print("***  A SQUID HAS HATCHED!  ***")
-        print(" YOU NEED TO LOOK AFTER HIM.. ")
-        print("******************************")
+        
+        print("                     ******************************")
+        print( "                    ***  A SQUID HAS HATCHED!  ***")
+        print("                      YOU NEED TO LOOK AFTER HIM.. ")
+        print("                     ******************************")
         self.hide()
         self.finished.emit()
 

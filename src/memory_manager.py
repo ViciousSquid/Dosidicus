@@ -147,16 +147,29 @@ class MemoryManager:
                 timestamp = datetime.fromisoformat(timestamp)
             return (current_time - timestamp) <= self.short_term_duration
 
+        all_memories = [memory for memory in self.short_term_memory if is_valid_memory(memory)]
+        
+        # Filter out timestamp-only memories
+        filtered_memories = []
+        for memory in all_memories:
+            if not (isinstance(memory['key'], str) and memory['key'].isdigit()):
+                filtered_memories.append(memory)
+        
         if category:
-            return [memory for memory in self.short_term_memory
-                    if memory.get('category') == category and is_valid_memory(memory)]
-        return [memory for memory in self.short_term_memory if is_valid_memory(memory)]
+            return [m for m in filtered_memories if m.get('category') == category]
+        return filtered_memories
 
 
     def get_all_long_term_memories(self, category=None):
+        # Filter out timestamp-only memories
+        filtered_memories = []
+        for memory in self.long_term_memory:
+            if not (isinstance(memory['key'], str) and memory['key'].isdigit()):
+                filtered_memories.append(memory)
+        
         if category:
-            return [memory for memory in self.long_term_memory if memory.get('category') == category]
-        return self.long_term_memory
+            return [m for m in filtered_memories if m.get('category') == category]
+        return filtered_memories
 
     def clear_short_term_memory(self):
         self.short_term_memory = []

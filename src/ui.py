@@ -34,9 +34,10 @@ class DecorationItem(QtWidgets.QLabel):
             drag.setHotSpot(event.pos() - self.rect().topLeft())
             drag.exec_(QtCore.Qt.CopyAction)
 
-class ResizablePixmapItem(QtWidgets.QGraphicsObject):
+class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
     def __init__(self, pixmap, filename):
-        super().__init__()
+        super().__init__(pixmap)
+        self.filename = filename
         self.pixmap_item = QtWidgets.QGraphicsPixmapItem(self)
         self.pixmap_item.setPixmap(pixmap.scaled(128, 128, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable)
@@ -49,6 +50,11 @@ class ResizablePixmapItem(QtWidgets.QGraphicsObject):
 
         if not self.stat_multipliers:
             self.stat_multipliers = {'happiness': 1}
+
+        # Add these rock interaction attributes
+        self.can_be_picked_up = 'rock' in filename.lower()  # Auto-detect rocks from filename
+        self.is_being_carried = False
+        self.original_scale = 1.0  # Store original scale for restoration
 
     def boundingRect(self):
         return self.pixmap_item.boundingRect().adjusted(0, 0, 20, 20)
@@ -111,7 +117,7 @@ class DecorationWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent, QtCore.Qt.Window)
         self.setWindowTitle("Decorations")
-        self.setFixedWidth(550)  # Increased width
+        self.setFixedWidth(800)  # Increased width
 
         # Create a list to store the decoration items
         self.decoration_items = []
@@ -133,7 +139,7 @@ class DecorationWindow(QtWidgets.QWidget):
 
     def load_decorations(self):
         decoration_path = "images/decoration"
-        items_per_row = 3  # Increased to 4 items per row
+        items_per_row = 4  # Increased to 4 items per row
         row, col = 0, 0
 
         for filename in os.listdir(decoration_path):
@@ -547,6 +553,7 @@ class Ui:
     def setup_menu_bar(self):
         self.menu_bar = self.window.menuBar()
 
+        # File Menu
         file_menu = self.menu_bar.addMenu('File')
         self.new_game_action = QtWidgets.QAction('New Game', self.window)
         self.load_action = QtWidgets.QAction('Load Game', self.window)
@@ -555,6 +562,7 @@ class Ui:
         file_menu.addAction(self.load_action)
         file_menu.addAction(self.save_action)
 
+        # View Menu
         view_menu = self.menu_bar.addMenu('View')
         self.stats_window_action = QtWidgets.QAction('Statistics', self.window)
         self.stats_window_action.triggered.connect(self.toggle_statistics_window)
@@ -565,33 +573,47 @@ class Ui:
         self.decorations_action.triggered.connect(self.toggle_decoration_window)
         view_menu.addAction(self.decorations_action)
 
-        actions_menu = self.menu_bar.addMenu('Actions')
-
-        debug_menu = self.menu_bar.addMenu('Debug')
-
-        self.debug_action = QtWidgets.QAction('Toggle Debug Mode', self.window)
-        self.debug_action.setCheckable(True)
-        debug_menu.addAction(self.debug_action)
-
-        self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
-        self.view_cone_action.setCheckable(True)
-        debug_menu.addAction(self.view_cone_action)
-
-         # Add inspector action to existing debug menu
-        self.inspector_action = QtWidgets.QAction('Neuron Inspector', self.window)
-        self.inspector_action.triggered.connect(self.show_neuron_inspector)
-        debug_menu.addAction(self.inspector_action)
-
         self.brain_action = QtWidgets.QAction('Toggle Brain View', self.window)
         self.brain_action.setCheckable(True)
         self.brain_action.triggered.connect(self.toggle_brain_window)
-        debug_menu.addAction(self.brain_action)
+        view_menu.addAction(self.brain_action)
 
-        # Add neurogenesis debug action
-        self.neurogenesis_action = QtWidgets.QAction('Trigger Neurogenesis', self.window)
-        self.neurogenesis_action.triggered.connect(self.trigger_neurogenesis)
-        debug_menu.addAction(self.neurogenesis_action)
+        self.inspector_action = QtWidgets.QAction('Neuron Inspector', self.window)
+        self.inspector_action.triggered.connect(self.show_neuron_inspector)
+        view_menu.addAction(self.inspector_action)
 
+        # Speed Menu
+        speed_menu = self.menu_bar.addMenu('Speed')
+        
+        self.pause_action = QtWidgets.QAction('Pause', self.window)
+        self.pause_action.setCheckable(True)
+        self.pause_action.triggered.connect(lambda: self.set_simulation_speed(0))
+        speed_menu.addAction(self.pause_action)
+        
+        self.normal_speed_action = QtWidgets.QAction('Normal Speed', self.window)
+        self.normal_speed_action.setCheckable(True)
+        self.normal_speed_action.triggered.connect(lambda: self.set_simulation_speed(1))
+        speed_menu.addAction(self.normal_speed_action)
+        
+        self.fast_speed_action = QtWidgets.QAction('Fast Speed', self.window)
+        self.fast_speed_action.setCheckable(True)
+        self.fast_speed_action.triggered.connect(lambda: self.set_simulation_speed(2))
+        speed_menu.addAction(self.fast_speed_action)
+        
+        self.very_fast_speed_action = QtWidgets.QAction('Very Fast', self.window)
+        self.very_fast_speed_action.setCheckable(True)
+        self.very_fast_speed_action.triggered.connect(lambda: self.set_simulation_speed(3))
+        speed_menu.addAction(self.very_fast_speed_action)
+
+        # Create an action group for the speed menu to make them mutually exclusive
+        self.speed_action_group = QtWidgets.QActionGroup(self.window)
+        self.speed_action_group.addAction(self.pause_action)
+        self.speed_action_group.addAction(self.normal_speed_action)
+        self.speed_action_group.addAction(self.fast_speed_action)
+        self.speed_action_group.addAction(self.very_fast_speed_action)
+
+        # Actions Menu
+        actions_menu = self.menu_bar.addMenu('Actions')
         self.feed_action = QtWidgets.QAction('Feed', self.window)
         actions_menu.addAction(self.feed_action)
 
@@ -601,15 +623,127 @@ class Ui:
         self.medicine_action = QtWidgets.QAction('Medicine', self.window)
         actions_menu.addAction(self.medicine_action)
 
-        #self.rps_game_action = QtWidgets.QAction('Play Rock, Paper, Scissors', self.window)
-        #actions_menu.addAction(self.rps_game_action)
-        #self.rps_game_action.triggered.connect(self.start_rps_game)
+        # Debug Menu
+        debug_menu = self.menu_bar.addMenu('Debug')
+        
+        # Debug Mode Toggle
+        self.debug_action = QtWidgets.QAction('Toggle Debug Mode', self.window)
+        self.debug_action.setCheckable(True)
+        self.debug_action.triggered.connect(self.toggle_debug_mode)
+        debug_menu.addAction(self.debug_action)
+
+        # View Cone Toggle
+        self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
+        self.view_cone_action.setCheckable(True)
+        if hasattr(self.tamagotchi_logic, 'connect_view_cone_action'):
+            self.view_cone_action.triggered.connect(self.tamagotchi_logic.connect_view_cone_action)
+        debug_menu.addAction(self.view_cone_action)
+
+        # Rock Test Action
+        self.rock_test_action = QtWidgets.QAction('Test Rock Interaction', self.window)
+        self.rock_test_action.setEnabled(False)  # Disabled by default
+        if hasattr(self.tamagotchi_logic, 'test_rock_interaction'):
+            self.rock_test_action.triggered.connect(self.tamagotchi_logic.test_rock_interaction)
+        debug_menu.addAction(self.rock_test_action)
+
+        # Neurogenesis Action
+        self.neurogenesis_action = QtWidgets.QAction('Trigger Neurogenesis', self.window)
+        self.neurogenesis_action.setEnabled(False)  # Disabled by default
+        if hasattr(self.tamagotchi_logic, 'trigger_neurogenesis'):
+            self.neurogenesis_action.triggered.connect(self.trigger_neurogenesis)
+        debug_menu.addAction(self.neurogenesis_action)
+
+        # Add to debug menu
+        self.rock_test_action = QtWidgets.QAction('+ Rock test', self.window)
+        self.rock_test_action.triggered.connect(self.trigger_rock_test)
+        debug_menu.addAction(self.rock_test_action)
+
+        # Disabled RPS Game Action (commented out)
+        # self.rps_game_action = QtWidgets.QAction('Play Rock, Paper, Scissors', self.window)
+        # actions_menu.addAction(self.rps_game_action)
+        # self.rps_game_action.triggered.connect(self.start_rps_game)
+
+    def set_simulation_speed(self, speed):
+        """Set the simulation speed (0 = paused, 1 = normal, 2 = fast, 3 = very fast)"""
+        if hasattr(self, 'tamagotchi_logic'):
+            self.tamagotchi_logic.set_simulation_speed(speed)
+            
+            # Update the menu check states
+            self.pause_action.setChecked(speed == 0)
+            self.normal_speed_action.setChecked(speed == 1)
+            self.fast_speed_action.setChecked(speed == 2)
+            self.very_fast_speed_action.setChecked(speed == 3)
+            
+            speed_names = ["Paused", "Normal", "Fast", "Very Fast"]
+            self.show_message(f"Simulation speed set to {speed_names[speed]}")
+        else:
+            self.show_message("Game logic not initialized!")
+
+    def toggle_debug_mode(self):
+        """Toggle debug mode state"""
+        if hasattr(self, 'tamagotchi_logic'):
+            self.tamagotchi_logic.debug_mode = not self.tamagotchi_logic.debug_mode
+            self.debug_action.setChecked(self.tamagotchi_logic.debug_mode)
+            
+            # Enable/disable debug-specific actions
+            if hasattr(self, 'rock_test_action'):
+                self.rock_test_action.setEnabled(self.tamagotchi_logic.debug_mode)
+            if hasattr(self, 'neurogenesis_action'):
+                self.neurogenesis_action.setEnabled(self.tamagotchi_logic.debug_mode)
+            
+            print(f"Debug mode {'enabled' if self.tamagotchi_logic.debug_mode else 'disabled'}")
+
+    def trigger_rock_test(self):
+        """Trigger rock test from UI using the interaction manager"""
+        if not hasattr(self.tamagotchi_logic, 'rock_interaction'):
+            self.show_message("Rock interaction system not initialized!")
+            return
+                
+        # Find all valid rocks in the scene using the interaction manager's checker
+        rocks = [item for item in self.scene.items() 
+                if isinstance(item, ResizablePixmapItem) 
+                and self.tamagotchi_logic.rock_interaction.is_valid_rock(item)]
+        
+        if not rocks:
+            self.show_message("No rocks found in the tank!")
+            return
+            
+        if not hasattr(self.tamagotchi_logic, 'squid'):
+            self.show_message("Squid not initialized!")
+            return
+            
+        # Find nearest rock to squid
+        nearest_rock = min(rocks, key=lambda r: 
+            math.hypot(
+                r.sceneBoundingRect().center().x() - self.tamagotchi_logic.squid.squid_x,
+                r.sceneBoundingRect().center().y() - self.tamagotchi_logic.squid.squid_y
+            )
+        )
+        
+        # Start the test through the interaction manager
+        self.tamagotchi_logic.rock_interaction.start_rock_test(nearest_rock)
+        
+        # Show status message
+        self.show_message("Rock test initiated")
 
     def start_rps_game(self):
         if hasattr(self, 'tamagotchi_logic'):
             self.tamagotchi_logic.start_rps_game()
         else:
             print("TamagotchiLogic not initialized")
+
+    def test_rock_interaction(self):
+        """Trigger rock interaction test from debug menu"""
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            if not self.tamagotchi_logic.debug_mode:
+                self.show_message("Enable debug mode first!")
+                return
+                
+            print("[DEBUG] Starting rock interaction test from menu...")
+            self.tamagotchi_logic.test_rock_interaction()
+        else:
+            print("TamagotchiLogic not available for rock testing")
+            self.show_message("Game logic not initialized!")
 
     def show_neuron_inspector(self):
         if not self.squid_brain_window:
@@ -695,6 +829,25 @@ class Ui:
         # Uncheck the menu item
         if hasattr(self.parent(), 'decorations_action'):
             self.parent().decorations_action.setChecked(False)
+
+    def get_rock_items(self):
+        """Return all rock items in the scene"""
+        return [item for item in self.scene.items() 
+                if isinstance(item, ResizablePixmapItem) 
+                and getattr(item, 'can_be_picked_up', False)]
+    
+    def highlight_rock(self, rock, highlight=True):
+        """Visually highlight a rock"""
+        effect = QtWidgets.QGraphicsColorizeEffect()
+        effect.setColor(QtGui.QColor(255, 255, 0))  # Yellow highlight
+        effect.setStrength(0.7 if highlight else 0.0)
+        rock.setGraphicsEffect(effect if highlight else None)
+
+    def reset_all_rock_states(self):
+        """Reset all rocks to default state"""
+        for rock in self.get_rock_items():
+            rock.is_being_carried = False
+            self.highlight_rock(rock, False)
 
 class NeuronInspector(QtWidgets.QDialog):
     def __init__(self, brain_window, parent=None):

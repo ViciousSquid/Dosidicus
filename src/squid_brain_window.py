@@ -5,15 +5,46 @@ import csv
 import os
 import time
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QSplitter
 import random
 import numpy as np
 import json
 from .personality import Personality
+from .learning import LearningConfig
 
 class BrainWidget(QtWidgets.QWidget):
-    def __init__(self):
+    def __init__(self, config=None, debug_mode=False): 
         super().__init__()
+        # Initialize with config
+        self.config = config if config else LearningConfig()
+        self.debug_mode = debug_mode  # Initialize debug_mode
+        
+        # Initialize neurogenesis data
+        self.neurogenesis_data = {
+            'novelty_counter': 0,
+            'stress_counter': 0,
+            'reward_counter': 0,
+            'new_neurons': [],
+            'last_neuron_time': time.time()
+        }
+        
+        # Ensure neurogenesis config exists
+        if not hasattr(self.config, 'neurogenesis'):
+            self.config.neurogenesis = {
+                'decay_rate': 0.95,  # Default decay rate if not specified
+                'novelty_threshold': 3,
+                'stress_threshold': 0.7,
+                'reward_threshold': 0.6,
+                'cooldown': 300,
+                'highlight_duration': 5.0
+            }
+            
+        # Now use self.config for all configuration
+        self.neurogenesis_config = self.config.neurogenesis
+        self.state = {
+            'neurogenesis_active': False
+        }
         # Add neurogenesis visualization tracking
         self.neurogenesis_highlight = {
             'neuron': None,
@@ -70,6 +101,18 @@ class BrainWidget(QtWidgets.QWidget):
         self.drag_start_pos = None
         self.setMouseTracking(True)
 
+        # Neurogenesis configuration
+        self.neurogenesis_config = config.neurogenesis if config else {
+            'novelty_threshold': 3,
+            'stress_threshold': 0.7,
+            'reward_threshold': 0.6,
+            'cooldown': 300,
+            'highlight_duration': 5.0
+        }
+        
+        # Add this to the state dictionary
+        self.state['neurogenesis_active'] = False
+
         # Define pastel colors for each state
         self.state_colors = {
             'is_sick': (255, 204, 204),  # Pastel red
@@ -104,20 +147,100 @@ class BrainWidget(QtWidgets.QWidget):
                 self.weights[(neurons[i], neurons[j])] = random.uniform(-1, 1)
 
     def update_state(self, new_state):
+        """Update the brain state with new values, handling both Hebbian learning and neurogenesis"""
+        
+        # Initialize missing counters if they don't exist
+        if 'stress_counter' not in self.neurogenesis_data:
+            self.neurogenesis_data['stress_counter'] = 0
+        if 'reward_counter' not in self.neurogenesis_data:
+            self.neurogenesis_data['reward_counter'] = 0
+            
+        # Ensure neurogenesis config exists with all required parameters
+        if not hasattr(self.config, 'neurogenesis'):
+            self.config.neurogenesis = {}
+        if 'decay_rate' not in self.config.neurogenesis:
+            self.config.neurogenesis['decay_rate'] = 0.95  # Default decay rate
+        
         # Update only the keys that exist in self.state and are allowed to be modified
         for key in self.state.keys():
             if key in new_state and key not in ['satisfaction', 'anxiety', 'curiosity']:
                 self.state[key] = new_state[key]
+        
+        # Track neurogenesis triggers if they exist in the new state
+        neurogenesis_triggers = {
+            'novelty_exposure': new_state.get('novelty_exposure', 0),
+            'sustained_stress': new_state.get('sustained_stress', 0),
+            'recent_rewards': new_state.get('recent_rewards', 0)
+        }
+        
+        # Apply weight decay to prevent weights from growing too large
+        current_time = time.time()
+        if hasattr(self, 'last_weight_decay_time'):
+            if current_time - self.last_weight_decay_time > 60:  # Decay every minute
+                for conn in self.weights:
+                    decay_factor = 1.0 - self.config.hebbian.get('weight_decay', 0.01)
+                    self.weights[conn] *= decay_factor
+                self.last_weight_decay_time = current_time
+        else:
+            self.last_weight_decay_time = current_time
+        
+        # Update weights based on current activity
         self.update_weights()
+        
+        # Check for neurogenesis conditions if we have a Hebbian learning reference
+        if hasattr(self, 'hebbian_learning') and self.hebbian_learning:
+            # Check if neurogenesis should occur
+            if self.hebbian_learning.check_neurogenesis_conditions(new_state):
+                # Determine which trigger was strongest
+                strongest_trigger = max(
+                    ['novelty', 'stress', 'reward'],
+                    key=lambda x: neurogenesis_triggers[f"{x}_exposure"] if x != 'reward' else neurogenesis_triggers['recent_rewards']
+                )
+                
+                # Create new neuron
+                new_neuron_name = self.hebbian_learning.create_new_neuron(strongest_trigger, new_state)
+                
+                # Update visualization
+                self.neurogenesis_highlight = {
+                    'neuron': new_neuron_name,
+                    'start_time': time.time(),
+                    'duration': self.neurogenesis_config.get('highlight_duration', 5.0)
+                }
+                
+                # Add to tracking data
+                if new_neuron_name not in self.neurogenesis_data['new_neurons']:
+                    self.neurogenesis_data['new_neurons'].append(new_neuron_name)
+                    self.neurogenesis_data['last_neuron_time'] = time.time()
+                    
+                    # Add initial state for the new neuron
+                    self.state[new_neuron_name] = 50  # Mid-range activation
+                    
+                    # Add to connections
+                    neurons = list(self.neuron_positions.keys())
+                    for neuron in neurons:
+                        if neuron != new_neuron_name:
+                            self.weights[(neuron, new_neuron_name)] = random.uniform(-0.3, 0.3)
+                            self.weights[(new_neuron_name, neuron)] = random.uniform(-0.3, 0.3)
+        
+        # Update the visualization
         self.update()
+        
+        # Capture training data if enabled
         if self.capture_training_data_enabled:
             self.capture_training_data(new_state)
-            # Neurogenesis check (add at end)
-        current_time = time.time()
-        if current_time - self.neurogenesis_data['last_neuron_time'] > self.neurogenesis_config['cooldown']:
-            self.check_neurogenesis(new_state)
         
-        self.update()
+        # Update neurogenesis counters with decay
+        self.neurogenesis_data['novelty_counter'] *= self.config.neurogenesis.get('decay_rate', 0.95)
+        self.neurogenesis_data['stress_counter'] *= self.config.neurogenesis.get('decay_rate', 0.95)
+        self.neurogenesis_data['reward_counter'] *= self.config.neurogenesis.get('decay_rate', 0.95)
+        
+        # Debug output if in debug mode
+        if self.debug_mode:
+            print(f"\nBrain State Update:")
+            print(f"Active neurons: {[n for n,v in self.state.items() if isinstance(v, (int, float)) and v > 50]}")
+            print(f"Neurogenesis triggers: {neurogenesis_triggers}")
+            print(f"New neurons: {self.neurogenesis_data['new_neurons']}")
+            print(f"Weights updated: {len([w for w in self.weights.values() if abs(w) > 0.5])} strong connections")
   
     def check_neurogenesis(self, state):
         """Check conditions for neurogenesis and create new neurons when triggered.
@@ -617,10 +740,14 @@ class StimulateDialog(QtWidgets.QDialog):
         return stimulation_values
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
-    def __init__(self, tamagotchi_logic, debug_mode=False):
+    def __init__(self, tamagotchi_logic, debug_mode=False, config=None):
         super().__init__()
-        self.tamagotchi_logic = tamagotchi_logic
+        # Initialize font size FIRST
+        self.base_font_size = 8
         self.debug_mode = debug_mode
+        self.config = config if config else LearningConfig()  # Initialize config
+        self.debug_mode = debug_mode
+        self.tamagotchi_logic = tamagotchi_logic
         self.setWindowTitle("Brain Tool")
         self.resize(1024, 768)
 
@@ -642,7 +769,24 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         self.hebbian_timer = QtCore.QTimer()
         self.hebbian_timer.timeout.connect(self.perform_hebbian_learning)
-        self.hebbian_timer.start(2000)  # Update every 2 seconds
+        self.hebbian_timer.start(self.config.hebbian.get('learning_interval', 30000))
+        self.hebbian_countdown_seconds = 0
+        self.last_hebbian_time = time.time()  # Track last learning time
+
+        # Add countdown timer
+        self.countdown_timer = QtCore.QTimer()
+        self.countdown_timer.timeout.connect(self.update_countdown)
+        self.countdown_timer.start(1000)  # Update every second
+
+
+        # Add countdown display to learning tab
+        self.countdown_label = QtWidgets.QLabel()
+        self.learning_tab_layout.insertWidget(0, self.countdown_label)
+        
+        self.last_hebbian_time = time.time()
+
+        # Add a last_hebbian_time tracking variable
+        self.last_hebbian_time = time.time()
 
         self.update_timer = QtCore.QTimer()
         self.update_timer.timeout.connect(self.update_associations)
@@ -674,6 +818,16 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.memory_update_timer.timeout.connect(self.update_memory_tab)
         self.memory_update_timer.start(2000)  # Update every 2 secs
         self.init_thought_process_tab()
+
+
+    def on_hebbian_countdown_finished(self):
+        """Called when the Hebbian learning countdown reaches zero"""
+        # Implement what should happen when countdown finishes
+        # print("Hebbian learning countdown finished")
+        # Add your Hebbian learning trigger logic here
+        # Example:
+        # self.trigger_hebbian_learning()
+        pass
 
     def init_inspector(self):
         self.inspector_action = QtWidgets.QAction("Neuron Inspector", self)
@@ -725,6 +879,17 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.brain_widget.update()  # Trigger a redraw of the brain widget
 
     def init_tabs(self):
+        # First create the tab widget
+        self.tabs = QtWidgets.QTabWidget()
+        self.layout.addWidget(self.tabs)
+        
+        # Set base font for all tab content
+        base_font = QtGui.QFont()
+        base_font.setPointSize(self.base_font_size)
+        self.tabs.setFont(base_font)
+        
+        # Create brain widget after tabs are set up
+        self.brain_widget = BrainWidget(self.config)
         self.tabs = QtWidgets.QTabWidget()
         self.layout.addWidget(self.tabs)
 
@@ -755,12 +920,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.stimulate_button = self.create_button("Stimulate Brain", self.stimulate_brain, "#D8BFD8")
         self.save_button = self.create_button("Save Brain State", self.save_brain_state, "#90EE90")
         self.load_button = self.create_button("Load Brain State", self.load_brain_state, "#ADD8E6")
-        # self.reset_button = self.create_button("Reset Positions", self.brain_widget.reset_positions, "#FFD700")
 
         button_layout.addWidget(self.stimulate_button)
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.load_button)
-        # button_layout.addWidget(self.reset_button)
 
         main_content_layout.addLayout(button_layout)
 
@@ -861,7 +1024,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.thought_process_layout.addWidget(self.logging_button)
 
         # Button to display recent thoughts
-        self.view_thoughts_button = QtWidgets.QPushButton("View Recent Thoughts")
+        self.view_thoughts_button = QtWidgets.QPushButton("View Recent Logs")
         self.view_thoughts_button.clicked.connect(self.show_recent_thoughts)
         self.thought_process_layout.addWidget(self.view_thoughts_button)
 
@@ -965,6 +1128,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.decision_scene.addItem(label_item)
 
     def init_memory_tab(self):
+        font = QtGui.QFont()
+        font.setPointSize(self.base_font_size)
         # Create a layout for the memory tab
         memory_layout = QtWidgets.QVBoxLayout()
 
@@ -985,7 +1150,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         splitter.addWidget(self.long_term_memory_text)
 
         # Set initial sizes for the splitter
-        splitter.setSizes([self.height() // 2, self.height() // 2])
+        splitter.setSizes([self.height() // 3, self.height() // 2])
 
         # Add the splitter to the layout
         memory_layout.addWidget(splitter)
@@ -1003,26 +1168,73 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             # Display short-term memories
             self.short_term_memory_text.clear()
             for memory in short_term_memories:
-                if isinstance(memory, dict):
-                    # Use the formatted value directly
-                    self.short_term_memory_text.append(memory['value'])
-                else:
-                    self.short_term_memory_text.append(str(memory))
+                if isinstance(memory, dict) and 'value' in memory:
+                    # Only display if it's not a timestamp memory
+                    if not (isinstance(memory.get('key'), str) and memory['key'].isdigit()):
+                        self.short_term_memory_text.append(self.format_memory_display(memory))
 
             # Display long-term memories
             self.long_term_memory_text.clear()
             for memory in long_term_memories:
-                if isinstance(memory, dict):
-                    # Use the formatted value directly
-                    self.long_term_memory_text.append(memory['value'])
-                else:
-                    self.long_term_memory_text.append(str(memory))
+                if isinstance(memory, dict) and 'value' in memory:
+                    # Only display if it's not a timestamp memory
+                    if not (isinstance(memory.get('key'), str) and memory['key'].isdigit()):
+                        self.long_term_memory_text.append(self.format_memory_display(memory))
 
-            # Force update of the QTextEdit widgets
-            self.short_term_memory_text.repaint()
-            self.long_term_memory_text.repaint()
+    def format_memory_display(self, memory):
+        """Format a memory dictionary for display with colored boxes based on valence"""
+        if not isinstance(memory, dict):
+            return ""
+        
+        # Determine memory value and timestamp
+        value = memory.get('formatted_value', memory.get('value', ''))
+        timestamp = memory.get('timestamp', '')
+        if isinstance(timestamp, str):
+            try:
+                timestamp = datetime.fromisoformat(timestamp).strftime("%H:%M:%S")
+            except:
+                timestamp = ""
+        
+        # Determine if the memory is positive, negative or neutral
+        if memory.get('category') == 'mental_state' and memory.get('key') == 'startled':
+            interaction_type = "Negative"
+            background_color = "#FFD1DC"  # Pastel red
+        elif isinstance(memory.get('raw_value'), dict):
+            total_effect = sum(float(val) for val in memory['raw_value'].values() 
+                            if isinstance(val, (int, float)))
+            if total_effect > 0:
+                interaction_type = "Positive"
+                background_color = "#D1FFD1"  # Pastel green
+            elif total_effect < 0:
+                interaction_type = "Negative"
+                background_color = "#FFD1DC"  # Pastel red
+            else:
+                interaction_type = "Neutral"
+                background_color = "#FFFACD"  # Pastel yellow
+        else:
+            interaction_type = "Neutral"
+            background_color = "#FFFACD"  # Pastel yellow
+        
+        # Create HTML formatted memory box
+        formatted_memory = f"""
+        <div style="
+            background-color: {background_color}; 
+            padding: 8px; 
+            margin: 5px; 
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        ">
+            <div style="font-weight: bold; margin-bottom: 5px;">{interaction_type}</div>
+            <div>{value}</div>
+            <div style="font-size: 0.8em; color: #555; margin-top: 5px;">{timestamp}</div>
+        </div>
+        """
+        
+        return formatted_memory
 
     def init_thoughts_tab(self):
+        font = QtGui.QFont()
+        font.setPointSize(self.base_font_size)
         self.thoughts_text = QtWidgets.QTextEdit()
         self.thoughts_text.setReadOnly(True)
         self.thoughts_tab_layout.addWidget(self.thoughts_text)
@@ -1035,6 +1247,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.thoughts_text.clear()
 
     def init_decisions_tab(self):
+        font = QtGui.QFont()
+        font.setPointSize(self.base_font_size)
         # Add a label for decision history
         decision_history_label = QtWidgets.QLabel("Decision History:")
         self.decisions_tab_layout.addWidget(decision_history_label)
@@ -1063,6 +1277,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             self.decision_inputs_text.append(f"{key}: {value}")
 
     def init_associations_tab(self):
+        font = QtGui.QFont()
+        font.setPointSize(self.base_font_size)
         # Add a checkbox to toggle explanation
         self.show_explanation_checkbox = QtWidgets.QCheckBox("Show Explanation")
         self.show_explanation_checkbox.stateChanged.connect(self.toggle_explanation)
@@ -1150,19 +1366,54 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def init_learning_tab(self):
         learning_layout = QtWidgets.QVBoxLayout()
+        
+        # 1. Add countdown and interval controls at the TOP with larger fonts
+        control_layout = QtWidgets.QHBoxLayout()
+        
+        # Create and configure font for control elements
+        control_font = QtGui.QFont()
+        control_font.setPointSize(8)
+        
+        # Countdown label
+        #self.countdown_label = QtWidgets.QLabel("Next Hebbian learning in: -- seconds")
+        #self.countdown_label.setFont(control_font)
+        #control_layout.addWidget(self.countdown_label)
+        
+        # Interval control
+        control_layout.addStretch()
+        
+        interval_label = QtWidgets.QLabel("Interval (sec):")
+        interval_label.setFont(control_font)
+        control_layout.addWidget(interval_label)
+        
+        self.interval_spinbox = QtWidgets.QSpinBox()
+        self.interval_spinbox.setFont(control_font)
+        self.interval_spinbox.setRange(5, 300)  # 5 sec to 5 min
+        self.interval_spinbox.setValue(int(self.config.hebbian['learning_interval'] / 1000))
+        self.interval_spinbox.valueChanged.connect(self.update_learning_interval)
+        control_layout.addWidget(self.interval_spinbox)
+        
+        learning_layout.addLayout(control_layout)
+        
+        # 2. Add separator
+        separator = QtWidgets.QFrame()
+        separator.setFrameShape(QtWidgets.QFrame.HLine)
+        learning_layout.addWidget(separator)
 
-        # Weight changes text area
+        # 3. Existing weight changes text area (keep original font size)
         self.weight_changes_text = AutoScrollTextEdit()
         self.weight_changes_text.setReadOnly(True)
-        self.weight_changes_text.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse | QtCore.Qt.TextSelectableByKeyboard)
-        self.weight_changes_text.setAcceptRichText(True)  # Enable rich text interpretation
+        self.weight_changes_text.setTextInteractionFlags(
+            QtCore.Qt.TextSelectableByMouse | QtCore.Qt.TextSelectableByKeyboard)
+        self.weight_changes_text.setAcceptRichText(True)
         learning_layout.addWidget(self.weight_changes_text)
 
-        # Learning data table
+        # 4. Learning data table (keep original font size)
         self.learning_data_table = AutoScrollTable()
         self.learning_data_table.setColumnCount(5)
-        self.learning_data_table.setHorizontalHeaderLabels(["Time", "Neuron 1", "Neuron 2", "Weight Change", "Direction"])
-        # Set column widths
+        self.learning_data_table.setHorizontalHeaderLabels(
+            ["Time", "Neuron 1", "Neuron 2", "Weight Change", "Direction"])
+        
         header = self.learning_data_table.horizontalHeader()
         header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
         header.resizeSection(0, 150)  # Timestamp
@@ -1173,23 +1424,58 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         learning_layout.addWidget(self.learning_data_table)
 
-        # Controls
+        # 5. Button controls at bottom (keep original font size)
         controls_layout = QtWidgets.QHBoxLayout()
-
+        
         self.export_button = QtWidgets.QPushButton("Export...")
         self.export_button.clicked.connect(self.export_learning_data)
         controls_layout.addWidget(self.export_button)
-
-        # Add Clear button
+        
         self.clear_button = QtWidgets.QPushButton("Clear")
         self.clear_button.clicked.connect(self.clear_learning_data)
         controls_layout.addWidget(self.clear_button)
-
+        
         learning_layout.addLayout(controls_layout)
 
+        # Set the layout to a container widget
         learning_widget = QtWidgets.QWidget()
         learning_widget.setLayout(learning_layout)
         self.learning_tab_layout.addWidget(learning_widget)
+
+    def update_countdown(self):
+        # Check if attribute exists (defensive programming)
+        if not hasattr(self, 'hebbian_countdown_seconds'):
+            self.hebbian_countdown_seconds = 0
+
+        # Calculate time until next learning cycle
+        if hasattr(self, 'last_hebbian_time'):
+            time_remaining = max(0, (self.last_hebbian_time + (self.config.hebbian['learning_interval'] / 1000)) - time.time())
+            self.hebbian_countdown_seconds = int(time_remaining)
+
+        # Update countdown display with larger font
+        if self.hebbian_countdown_seconds > 0:
+            countdown_text = f"Next Hebbian learning in: {self.hebbian_countdown_seconds} seconds"
+        else:
+            countdown_text = "Next Hebbian learning in: -- seconds"
+
+        # Apply consistent styling
+        self.countdown_label.setText(countdown_text)
+
+        # Set a larger font for the countdown label
+        font = QFont()
+        font.setPointSize(8)  # Set the desired font size
+        self.countdown_label.setFont(font)
+
+        # Check if reached zero this tick
+        if self.hebbian_countdown_seconds == 0:
+            if hasattr(self, 'on_hebbian_countdown_finished'):
+                self.on_hebbian_countdown_finished()
+            else:
+                print("Warning: Countdown finished but no handler!")
+
+        # Force UI update if needed
+        if not self.is_paused and self.countdown_label.isVisible():
+            self.countdown_label.repaint()
 
     def clear_learning_data(self):
         self.weight_changes_text.clear()
@@ -1197,7 +1483,27 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.learning_data = []
         print("Learning data cleared.")
 
+    def update_learning_interval(self, seconds):
+        """Update the learning interval when spinbox value changes"""
+        # Convert seconds to milliseconds (QTimer uses ms)
+        interval_ms = seconds * 1000
+        
+        # Update config
+        if hasattr(self.config, 'hebbian'):
+            self.config.hebbian['learning_interval'] = interval_ms
+        else:
+            self.config.hebbian = {'learning_interval': interval_ms}
+        
+        # Restart timer with new interval
+        if hasattr(self, 'hebbian_timer'):
+            self.hebbian_timer.setInterval(interval_ms)
+            self.last_hebbian_time = time.time()  # Reset countdown
+        
+        if self.debug_mode:
+            print(f"Learning interval updated to {seconds} seconds ({interval_ms} ms)")
+
     def perform_hebbian_learning(self):
+        self.last_hebbian_time = time.time()
         if self.is_paused or not hasattr(self, 'brain_widget') or not self.tamagotchi_logic or not self.tamagotchi_logic.squid:
             return
 

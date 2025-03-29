@@ -15,51 +15,58 @@ from .squid import Personality, Squid
 from .ui import ResizablePixmapItem
 from .squid_brain_window import SquidBrainWindow
 from .learning import HebbianLearning
+from .interactions import RockInteractionManager
 
 class TamagotchiLogic:
     def __init__(self, user_interface, squid, brain_window):
         self.user_interface = user_interface
         self.squid = squid
         self.brain_window = brain_window
-        self.neurogenesis_triggers = {
-            'novel_objects': 0,
-            'high_stress_cycles': 0
-        }
-        self.new_object_encountered = False
-        self.recent_positive_outcome = False
+
+        # Initialize core attributes first
+        self.simulation_speed = 1  # Default to 1x speed
+        self.base_interval = 1000  # 1000ms = 1 second base interval
+        self.base_food_speed = 90  # pixels per update at 1x speed
+
+        # Initialize game objects BEFORE load_game()
+        self.food_items = []
+        self.max_food = 3
+        self.food_width = 64
+        self.food_height = 64
+        self.poop_items = []
+        self.max_poop = 3
+        self.points = 0
+
+        # Initialize rock interaction manager
+        self.rock_interaction = RockInteractionManager(
+            squid=self.squid,
+            logic=self,
+            scene=self.user_interface.scene,
+            message_callback=self.show_message
+        )
+
+        # Initialize neurogenesis triggers with all required keys
         self.neurogenesis_triggers = {
             'novel_objects': 0,
             'high_stress_cycles': 0,
             'positive_outcomes': 0
-}
-        
-        # Initialize HebbianLearning only if squid is not None
-        if self.squid is not None:
-            self.squid.hebbian_learning = HebbianLearning(self.squid, brain_window)
+        }
+        self.new_object_encountered = False
+        self.recent_positive_outcome = False
 
-        # Ensure the brain_window has the add_thought method
+        # Setup timers with required arguments
+        self.setup_timers()
+
+        # Initialize thought system
         if hasattr(self.brain_window, 'add_thought'):
             self.add_thought = self.brain_window.add_thought
         else:
-            raise AttributeError("brain_window does not have an add_thought method")
-
-        # Initialize attributes
-        self.mental_states_enabled = True
-        self.startle_cooldown = 0
-        self.curious_cooldown = 0
-
-        # If brain_window is None, create a simple thought logger
-        if self.brain_window is None:
             self.thought_log = []
             self.add_thought = self._log_thought
-        else:
-            self.add_thought = self.brain_window.add_thought
 
-        # Initialize save_manager before loading the game
-        self.save_manager = SaveManager()  # Add this line
-
-        # Load the game
-        self.load_game()  # Now save_manager is initialized before this call
+        # Initialize save manager
+        self.save_manager = SaveManager()
+        self.load_game()
 
         # Connect menu actions
         self.user_interface.feed_action.triggered.connect(self.feed_squid)
@@ -68,46 +75,30 @@ class TamagotchiLogic:
         self.user_interface.medicine_action.triggered.connect(self.give_medicine)
         self.user_interface.debug_action.triggered.connect(self.toggle_debug_mode)
 
+        # Window setup
         self.user_interface.window.resizeEvent = self.handle_window_resize
 
-        self.squid.personality = random.choice(list(Personality))
-
+        # Initialize state tracking
+        self.last_clean_time = 0
+        self.clean_cooldown = 60
+        self.cleanliness_threshold_time = 0
+        self.hunger_threshold_time = 0
+        self.needle_item = None
         self.lights_on = True
         self.debug_mode = False
+
+        # Initialize statistics window
         self.statistics_window = StatisticsWindow(squid)
         self.statistics_window.show()
 
-        self.food_items = []
-        self.max_food = 3
-        self.base_food_speed = 90  # pixels per update at 1x speed
-        self.food_width = 64
-        self.food_height = 64
-
-        self.poop_items = []
-        self.max_poop = 3
-
-        self.last_clean_time = 0
-        self.clean_cooldown = 60  # 60 seconds cooldown
-
-        self.simulation_speed = 1
-        self.setup_speed_menu()
-
-        self.base_interval = 1000  # 1000 milliseconds (1 second)
-        self.setup_timers()
-
-        self.cleanliness_threshold_time = 0
-        self.hunger_threshold_time = 0
-
-        self.needle_item = None
-
-        self.points = 0
+        # Setup additional timers
         self.score_update_timer = QtCore.QTimer()
         self.score_update_timer.timeout.connect(self.update_score)
-        self.score_update_timer.start(5000)  # Update score every 5 seconds
+        self.score_update_timer.start(5000)
 
         self.brain_update_timer = QtCore.QTimer()
         self.brain_update_timer.timeout.connect(self.update_squid_brain)
-        self.brain_update_timer.start(1000)  # Update every second
+        self.brain_update_timer.start(1000)
 
         self.autosave_timer = QtCore.QTimer()
         self.autosave_timer.timeout.connect(self.autosave)
@@ -117,10 +108,9 @@ class TamagotchiLogic:
         self.squid.anxiety = 10
         self.squid.curiosity = 55
 
-
-                        ################################
-                        #### MENTAL STATE COOLDOWNS ####
-                        ################################
+        ################################
+        #### MENTAL STATE COOLDOWNS ####
+        ################################
 
         self.startle_cooldown = 0
         self.startle_cooldown_max = 10 
@@ -432,19 +422,63 @@ class TamagotchiLogic:
         self.update_timers()
         #if self.squid:
         #    self.squid.set_animation_speed(speed)
-        print(f"Simulation speed set to {speed}x")
 
-    def setup_timers(self):
+
+        print(f"\033[38;5;208;1m >> Simulation speed: {speed}x\033[0m")
+
+
+    def setup_timers(self, scene=None, message_callback=None):
+        """Setup all timers including rock interaction timers"""
+        # Initialize core timers
         self.simulation_timer = QtCore.QTimer()
         self.simulation_timer.timeout.connect(self.update_simulation)
+        
+        # Set default simulation speed
+        if not hasattr(self, 'simulation_speed'):
+            self.simulation_speed = 1
+        
+        # Configure initial timer intervals
         self.update_timers()
+        
+        # Score update timer
+        self.score_update_timer = QtCore.QTimer()
+        self.score_update_timer.timeout.connect(self.update_score)
+        self.score_update_timer.start(5000)  # 5 seconds
+        
+        # Brain update timer
+        self.brain_update_timer = QtCore.QTimer()
+        self.brain_update_timer.timeout.connect(self.update_squid_brain)
+        self.brain_update_timer.start(1000)  # 1 second
+        
+        # Autosave timer
+        self.autosave_timer = QtCore.QTimer()
+        self.autosave_timer.timeout.connect(self.autosave)
+        
+        # Configure rock interaction timers
+        if hasattr(self, 'rock_interaction'):
+            self.rock_interaction.setup_timers(interval=100)
+            self.rock_interaction.rock_test_timer.timeout.connect(
+                self.rock_interaction.update_rock_test
+            )
+            self.rock_interaction.throw_animation_timer.timeout.connect(
+                self.rock_interaction.update_throw_animation
+            )
+        
+        # Start the simulation timer
+        self.simulation_timer.start()
 
     def update_timers(self):
+        """Update timer intervals based on current simulation speed"""
+        if not hasattr(self, 'base_interval'):
+            self.base_interval = 1000  # Ensure base_interval exists
+            
+        if not hasattr(self, 'simulation_speed'):
+            self.simulation_speed = 1
+            
         if self.simulation_speed == 0:
             self.simulation_timer.stop()
         else:
-            # Original "slower" scaling (e.g., 1x=1000ms, 2x=500ms, 4x=250ms)
-            interval = self.base_interval // self.simulation_speed
+            interval = max(10, self.base_interval // self.simulation_speed)  # Ensure minimum interval
             self.simulation_timer.start(interval)
 
     def check_for_startle(self):                ## Certain personalities are more easily startled than others
@@ -690,7 +724,7 @@ class TamagotchiLogic:
             self.curious_interaction_cooldown -= 1
             return
 
-        if random.random() < 0.3:  # Increased chance to 30% for more frequent interactions
+        if random.random() < 0.6:  # Increased chance to 60% for more frequent interactions
             decorations = self.user_interface.get_nearby_decorations(self.squid.squid_x, self.squid.squid_y)
             if decorations:
                 decoration = random.choice(decorations)
@@ -1192,7 +1226,7 @@ class TamagotchiLogic:
             self.squid.load_state(squid_data)
 
             # Load brain state
-            self.squid_brain_window.set_brain_state(save_data['brain_state'])
+            self.brain_window.set_brain_state(save_data['brain_state'])
 
             # Load memories
             self.squid.memory_manager.short_term_memory = save_data['ShortTerm']
@@ -1202,7 +1236,7 @@ class TamagotchiLogic:
             self.squid.memory_manager.short_term_memory = self.squid.memory_manager.load_memory(self.squid.memory_manager.short_term_file)
             self.squid.memory_manager.long_term_memory = self.squid.memory_manager.load_memory(self.squid.memory_manager.long_term_file)
 
-            print(f"Loaded personality: {self.squid.personality.value}")
+            print(f"\033[33;1m >>Loaded personality: {self.squid.personality.value}\033[0m")
 
             # Load decoration data
             decorations_data = game_state.get('decorations', [])
@@ -1236,9 +1270,9 @@ class TamagotchiLogic:
                 "happiness": self.squid.happiness,
                 "cleanliness": self.squid.cleanliness,
                 "sleepiness": self.squid.sleepiness,
-                "satisfaction": self.squid.satisfaction,
                 "anxiety": self.squid.anxiety,
                 "curiosity": self.squid.curiosity,
+                "satisfaction": self.squid.satisfaction,
                 "is_sick": self.squid.is_sick,
                 "is_eating": self.squid.status == "eating",
                 "is_sleeping": self.squid.is_sleeping,
@@ -1359,3 +1393,89 @@ class TamagotchiLogic:
 
         self.squid.curiosity += curiosity_change
         self.squid.curiosity = max(0, min(100, self.squid.curiosity))
+
+
+    def trigger_rock_test(self):
+        """Trigger rock test from UI using the interaction manager"""
+        if not hasattr(self, 'rock_interaction'):
+            self.show_message("Rock interaction system not initialized!")
+            return
+                
+        # Find all valid rocks in the scene using the interaction manager's checker
+        rocks = [item for item in self.user_interface.scene.items() 
+                if isinstance(item, ResizablePixmapItem) 
+                and self.rock_interaction.is_valid_rock(item)]
+        
+        if not rocks:
+            self.show_message("No rocks found in the tank!")
+            return
+            
+        if not hasattr(self, 'squid'):
+            self.show_message("Squid not initialized!")
+            return
+            
+        # Find nearest rock to squid
+        nearest_rock = min(rocks, key=lambda r: 
+            math.hypot(
+                r.sceneBoundingRect().center().x() - self.squid.squid_x,
+                r.sceneBoundingRect().center().y() - self.squid.squid_y
+            )
+        )
+        
+        # Highlight the rock (visual feedback)
+        self.highlight_rock(nearest_rock)
+        
+        # Start the test through the interaction manager
+        self.rock_interaction.start_rock_test(nearest_rock)
+        
+        # Show status message
+        self.show_message("Rock test initiated")
+
+    def is_valid_rock(self, item):
+        """Check if an item is a valid rock decoration"""
+        if not isinstance(item, ResizablePixmapItem):
+            return False
+        # Check if it's a rock based on filename or category
+        if hasattr(item, 'category') and item.category == 'rock':
+            return True
+        if hasattr(item, 'filename') and 'rock' in item.filename.lower():
+            return True
+        return False
+
+    def update_rock_interaction(self):
+        """Unified method used for both test and autonomous interactions"""
+        if not hasattr(self.squid, 'current_rock_target') or not self.squid.current_rock_target:
+            return
+        
+        rock = self.squid.current_rock_target
+        rock_rect = rock.sceneBoundingRect()
+        squid_rect = self.squid.squid_item.sceneBoundingRect()
+        
+        # Calculate precise distance between edges
+        dx = rock_rect.center().x() - squid_rect.center().x()
+        dy = rock_rect.center().y() - squid_rect.center().y()
+        distance = math.hypot(dx, dy)
+        
+        if self.squid.status == "approaching_rock":
+            if distance < 40:  # Close enough to pick up
+                if self.squid.pick_up_rock(rock):
+                    self.squid.status = "carrying_rock"
+                    self.squid.rock_carry_timer = random.randint(30, 50)  # 3-5 seconds
+                else:
+                    self.squid.current_rock_target = None
+            else:
+                # Move toward rock at normal speed
+                self.squid.move_toward_position(rock_rect.center())
+        
+        elif self.squid.status == "carrying_rock":
+            self.squid.rock_carry_timer -= 1
+            if self.squid.rock_carry_timer <= 0:
+                direction = "left" if random.random() < 0.5 else "right"
+                if self.squid.throw_rock(direction):
+                    self.squid.status = "roaming"
+                    self.squid.current_rock_target = None
+
+    def update_rock_test(self):
+        """Delegate to interaction manager"""
+        if hasattr(self, 'rock_interaction'):
+            self.rock_interaction.update_rock_test()
