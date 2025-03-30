@@ -158,14 +158,15 @@ class DecorationWindow(QtWidgets.QWidget):
         self.setFixedHeight(min((row + 1) * 148 + 40, 650))  # 148 pixels per row (138 + 10 padding), max height of 600
 
 class Ui:
-    def __init__(self, window, tamagotchi_logic):
+    def __init__(self, window, debug_mode=False):  # Modified signature
         self.window = window
-        self.tamagotchi_logic = tamagotchi_logic
+        self.tamagotchi_logic = None
+        self.debug_mode = debug_mode 
+        self.window.setMinimumSize(1280, 900)
         self.window_width = 1280
-        self.window_height = 820
+        self.window_height = 900
 
         self.window.setWindowTitle("Dosidicus")
-
         self.window.resize(self.window_width, self.window_height)
 
         self.scene = QtWidgets.QGraphicsScene()
@@ -178,6 +179,18 @@ class Ui:
         self.setup_menu_bar()
         self.neuron_inspector = None
         self.squid_brain_window = None
+
+        # Add debug text item
+        self.debug_text = QtWidgets.QGraphicsTextItem("DEBUG")
+        self.debug_text.setDefaultTextColor(QtGui.QColor("#2a2a2a"))
+        font = QtGui.QFont()
+        font.setPointSize(40)
+        self.debug_text.setFont(font)
+        self.debug_text.setRotation(-90)
+        self.debug_text.setPos(50, 50)
+        self.debug_text.setZValue(100)
+        self.debug_text.setVisible(self.debug_mode)  # Use the stored debug_mode
+        self.scene.addItem(self.debug_text)
 
         self.decoration_window = DecorationWindow(self.window)
         self.decoration_window.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.Tool)
@@ -199,6 +212,14 @@ class Ui:
         self.scene.setItemIndexMethod(QtWidgets.QGraphicsScene.NoIndex)  # Better for moving items
         self.view.setCacheMode(QtWidgets.QGraphicsView.CacheBackground)
 
+    def set_tamagotchi_logic(self, logic):
+        self.tamagotchi_logic = logic
+        if hasattr(logic, 'debug_mode'):
+            # Sync the debug mode with the logic
+            self.debug_mode = logic.debug_mode
+            self.debug_action.setChecked(self.debug_mode)
+            self.debug_text.setVisible(self.debug_mode)
+
     def setup_ui_elements(self):
         # Create the rectangle item
         self.rect_item = self.scene.addRect(50, 50, self.window_width - 100, self.window_height - 100,
@@ -206,13 +227,13 @@ class Ui:
 
         # Create the cleanliness overlay
         self.cleanliness_overlay = self.scene.addRect(50, 50, self.window_width - 100, self.window_height - 100,
-                                                      QtGui.QPen(QtCore.Qt.NoPen), QtGui.QBrush(QtGui.QColor(139, 69, 19, 0)))
+                                                    QtGui.QPen(QtCore.Qt.NoPen), QtGui.QBrush(QtGui.QColor(139, 69, 19, 0)))
 
         # Create the feeding message
         self.feeding_message = QtWidgets.QGraphicsTextItem("Squid requires feeding")
         self.feeding_message.setDefaultTextColor(QtGui.QColor(255, 255, 255))
         self.feeding_message.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
-        self.feeding_message.setPos(0, self.window_height - 75 )
+        self.feeding_message.setPos(0, self.window_height - 75)
         self.feeding_message.setTextWidth(self.window_width)
         self.feeding_message.setHtml('<div style="text-align: center;">Squid requires feeding</div>')
         self.feeding_message.setOpacity(0)
@@ -220,18 +241,22 @@ class Ui:
 
         # Create points labels
         self.points_label = QtWidgets.QGraphicsTextItem("Points:")
-        self.points_label.setDefaultTextColor(QtGui.QColor(255, 255, 255))  # Set font color to white HACK HACK
+        self.points_label.setDefaultTextColor(QtGui.QColor(255, 255, 255))
         self.points_label.setFont(QtGui.QFont("Arial", 12))
-        self.points_label.setPos(self.window_width - 255, 10)  # Move the label to the left by 15 pixels
-        self.points_label.setZValue(2)  # Increase Z-value to ensure it's on top
+        self.points_label.setPos(self.window_width - 255, 10)
+        self.points_label.setZValue(2)
         self.scene.addItem(self.points_label)
 
         self.points_value_label = QtWidgets.QGraphicsTextItem("0")
-        self.points_value_label.setDefaultTextColor(QtGui.QColor(255, 255, 255))  # Set font color to black HACK HACK
+        self.points_value_label.setDefaultTextColor(QtGui.QColor(255, 255, 255))
         self.points_value_label.setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
         self.points_value_label.setPos(self.window_width - 95, 10)
-        self.points_value_label.setZValue(2)  # Increase Z-value to ensure it's on top
+        self.points_value_label.setZValue(2)
         self.scene.addItem(self.points_value_label)
+
+        # Check if tamagotchi_logic exists before accessing debug_mode
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None:
+            self.debug_text.setVisible(getattr(self.tamagotchi_logic, 'debug_mode', False))
 
     def check_neurogenesis(self, state):
         """Handle neuron creation, with special debug mode that bypasses all checks"""
@@ -434,8 +459,11 @@ class Ui:
         self.feeding_message.setPos(0, self.window_height - 75)
         self.feeding_message.setTextWidth(self.window_width)
 
-        self.points_label.setPos(self.window_width - 265, 10)  # Move the label to the left by 15 pixels
+        self.points_label.setPos(self.window_width - 265, 10)
         self.points_value_label.setPos(self.window_width - 95, 10)
+        
+        # Update debug text position
+        self.debug_text.setPos(self.window_width - 60, self.window_height - 60)
 
     def show_message(self, message):
         # Remove any existing message items
@@ -640,7 +668,7 @@ class Ui:
         debug_menu.addAction(self.view_cone_action)
 
         # Rock Test Action
-        self.rock_test_action = QtWidgets.QAction('Test Rock Interaction', self.window)
+        self.rock_test_action = QtWidgets.QAction('Rock test (native)', self.window)
         self.rock_test_action.setEnabled(False)  # Disabled by default
         if hasattr(self.tamagotchi_logic, 'test_rock_interaction'):
             self.rock_test_action.triggered.connect(self.tamagotchi_logic.test_rock_interaction)
@@ -654,7 +682,7 @@ class Ui:
         debug_menu.addAction(self.neurogenesis_action)
 
         # Add to debug menu
-        self.rock_test_action = QtWidgets.QAction('+ Rock test', self.window)
+        self.rock_test_action = QtWidgets.QAction('Rock test (forced)', self.window)
         self.rock_test_action.triggered.connect(self.trigger_rock_test)
         debug_menu.addAction(self.rock_test_action)
 
@@ -681,17 +709,30 @@ class Ui:
 
     def toggle_debug_mode(self):
         """Toggle debug mode state"""
-        if hasattr(self, 'tamagotchi_logic'):
-            self.tamagotchi_logic.debug_mode = not self.tamagotchi_logic.debug_mode
-            self.debug_action.setChecked(self.tamagotchi_logic.debug_mode)
-            
-            # Enable/disable debug-specific actions
-            if hasattr(self, 'rock_test_action'):
-                self.rock_test_action.setEnabled(self.tamagotchi_logic.debug_mode)
-            if hasattr(self, 'neurogenesis_action'):
-                self.neurogenesis_action.setEnabled(self.tamagotchi_logic.debug_mode)
-            
-            print(f"Debug mode {'enabled' if self.tamagotchi_logic.debug_mode else 'disabled'}")
+        # Get current debug mode state
+        current_debug = getattr(self.tamagotchi_logic, 'debug_mode', False) if hasattr(self, 'tamagotchi_logic') else self.debug_mode
+        
+        # Toggle the state
+        new_debug_mode = not current_debug
+        
+        # Update all components
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None:
+            self.tamagotchi_logic.debug_mode = new_debug_mode
+            if hasattr(self.tamagotchi_logic, 'statistics_window'):
+                self.tamagotchi_logic.statistics_window.set_debug_mode(new_debug_mode)
+        
+        self.debug_mode = new_debug_mode
+        self.debug_action.setChecked(new_debug_mode)
+        self.debug_text.setVisible(new_debug_mode)
+        
+        # Sync with brain window if it exists
+        if hasattr(self, 'squid_brain_window'):
+            self.squid_brain_window.debug_mode = new_debug_mode
+            if hasattr(self.squid_brain_window, 'brain_widget'):
+                self.squid_brain_window.brain_widget.debug_mode = new_debug_mode
+        
+        print(f"Debug mode {'enabled' if new_debug_mode else 'disabled'}")
+        self.show_message(f"Debug mode {'enabled' if new_debug_mode else 'disabled'}")
 
     def trigger_rock_test(self):
         """Trigger rock test from UI using the interaction manager"""

@@ -146,8 +146,65 @@ class BrainWidget(QtWidgets.QWidget):
             for j in range(i+1, len(neurons)):
                 self.weights[(neurons[i], neurons[j])] = random.uniform(-1, 1)
 
+    def get_neuron_count(self):
+        return len(self.neuron_positions)
+    
+    def get_edge_count(self):
+        return len(self.connections)
+    
+    def get_weakest_connections(self, n=3):
+        """Return the n weakest connections by absolute weight"""
+        return sorted(self.weights.items(), key=lambda x: abs(x[1]))[:n]
+
+    def get_extreme_neurons(self, n=3):
+        """Return neurons deviating most from baseline (50)"""
+        neurons = [(k, v) for k, v in self.state.items() 
+                if isinstance(v, (int, float)) and k in self.neuron_positions]
+        most_positive = sorted(neurons, key=lambda x: -x[1])[:n]
+        most_negative = sorted(neurons, key=lambda x: x[1])[:n]
+        return {'overactive': most_positive, 'underactive': most_negative}
+
+    def get_unbalanced_connections(self, n=3):
+        """Return connections with largest weight disparities"""
+        unbalanced = []
+        for (a, b), w1 in self.weights.items():
+            w2 = self.weights.get((b, a), 0)
+            if abs(w1 - w2) > 0.3:  # Only consider significant differences
+                unbalanced.append(((a, b), (w1, w2), abs(w1 - w2)))
+        return sorted(unbalanced, key=lambda x: -x[2])[:n]
+    
+    def calculate_network_health(self):
+        """Calculate network health based on connection weights and neuron activity"""
+        total_weight = sum(abs(w) for w in self.weights.values())
+        avg_weight = total_weight / len(self.weights) if self.weights else 0
+        
+        # Health is based on average connection strength (0-100 scale)
+        health = min(100, max(0, avg_weight * 100))
+        return health
+
+    def calculate_network_efficiency(self):
+        """Calculate network efficiency based on connection distribution"""
+        if not self.connections:
+            return 0
+            
+        # Count reciprocal connections
+        reciprocal_count = 0
+        for conn in self.connections:
+            reverse_conn = (conn[1], conn[0])
+            if reverse_conn in self.connections:
+                reciprocal_count += 1
+                
+        # Efficiency is based on percentage of reciprocal connections
+        efficiency = (reciprocal_count / len(self.connections)) * 100
+        return efficiency
+
     def update_state(self, new_state):
         """Update the brain state with new values, handling both Hebbian learning and neurogenesis"""
+        # Update only the keys that exist in self.state and are allowed to be modified
+        excluded = ['is_sick', 'is_eating', 'pursuing_food', 'direction']
+        for key in self.state.keys():
+            if key in new_state and key not in excluded:
+                self.state[key] = new_state[key]
         
         # Initialize missing counters if they don't exist
         if 'stress_counter' not in self.neurogenesis_data:
@@ -160,11 +217,6 @@ class BrainWidget(QtWidgets.QWidget):
             self.config.neurogenesis = {}
         if 'decay_rate' not in self.config.neurogenesis:
             self.config.neurogenesis['decay_rate'] = 0.95  # Default decay rate
-        
-        # Update only the keys that exist in self.state and are allowed to be modified
-        for key in self.state.keys():
-            if key in new_state and key not in ['satisfaction', 'anxiety', 'curiosity']:
-                self.state[key] = new_state[key]
         
         # Track neurogenesis triggers if they exist in the new state
         neurogenesis_triggers = {
@@ -233,14 +285,6 @@ class BrainWidget(QtWidgets.QWidget):
         self.neurogenesis_data['novelty_counter'] *= self.config.neurogenesis.get('decay_rate', 0.95)
         self.neurogenesis_data['stress_counter'] *= self.config.neurogenesis.get('decay_rate', 0.95)
         self.neurogenesis_data['reward_counter'] *= self.config.neurogenesis.get('decay_rate', 0.95)
-        
-        # Debug output if in debug mode
-        if self.debug_mode:
-            print(f"\nBrain State Update:")
-            print(f"Active neurons: {[n for n,v in self.state.items() if isinstance(v, (int, float)) and v > 50]}")
-            print(f"Neurogenesis triggers: {neurogenesis_triggers}")
-            print(f"New neurons: {self.neurogenesis_data['new_neurons']}")
-            print(f"Weights updated: {len([w for w in self.weights.values() if abs(w) > 0.5])} strong connections")
   
     def check_neurogenesis(self, state):
         """Check conditions for neurogenesis and create new neurons when triggered.
@@ -480,6 +524,32 @@ class BrainWidget(QtWidgets.QWidget):
         idx1 = list(self.neuron_positions.keys()).index(neuron1)
         idx2 = list(self.neuron_positions.keys()).index(neuron2)
         return self.associations[idx1][idx2]
+    
+    def draw_connections(self, painter, scale):
+            for conn in self.connections:
+                start = self.neuron_positions[conn[0]]
+                end = self.neuron_positions[conn[1]]
+                weight = self.weights[conn]
+
+                color = QtGui.QColor(0, int(255 * abs(weight)), 0) if weight > 0 else QtGui.QColor(int(255 * abs(weight)), 0, 0)
+                painter.setPen(QtGui.QPen(color, 2))
+                painter.drawLine(start[0], start[1], end[0], end[1])
+
+                midpoint = ((start[0] + end[0]) // 2, (start[1] + end[1]) // 2)
+                painter.setPen(QtGui.QColor(0, 0, 0))
+
+                # Increase the area for drawing the weights
+                text_area_width = 60
+                text_area_height = 20
+
+                # Adjust the font size based on the scale with a maximum font size
+                max_font_size = 12
+                font_size = max(8, min(max_font_size, int(8 * scale)))
+                font = painter.font()
+                font.setPointSize(font_size)
+                painter.setFont(font)
+
+                painter.drawText(midpoint[0] - text_area_width // 2, midpoint[1] - text_area_height // 2, text_area_width, text_area_height, QtCore.Qt.AlignCenter, f"{weight:.2f}")
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
@@ -491,6 +561,30 @@ class BrainWidget(QtWidgets.QWidget):
         painter.scale(scale, scale)
 
         painter.fillRect(QtCore.QRectF(0, 0, 1024, 768), QtGui.QColor(240, 240, 240))
+
+        # Draw metrics at top
+        metrics_font = QtGui.QFont()
+        metrics_font.setPointSize(10)
+        metrics_font.setBold(True)
+        painter.setFont(metrics_font)
+        
+        # Calculate metrics
+        neuron_count = self.get_neuron_count()
+        edge_count = self.get_edge_count()
+        health = self.calculate_network_health()
+        efficiency = self.calculate_network_efficiency()
+        
+        # Draw metrics in top bar
+        metrics_text = f"Neurons: {neuron_count}    Edges: {edge_count}    Health: {health:.1f}%    Efficiency: {efficiency:.1f}%"
+        metrics_rect = QtCore.QRectF(0, 5, self.width(), 25)
+        painter.setPen(QtGui.QColor(0, 0, 0))
+        painter.drawText(metrics_rect, QtCore.Qt.AlignCenter, metrics_text)
+        
+        # Draw "Neurons" title below metrics
+        title_font = painter.font()
+        title_font.setPointSize(12)
+        painter.setFont(title_font)
+        #painter.drawText(QtCore.QRectF(0, 30, self.width(), 30), QtCore.Qt.AlignCenter, "Neurons")
 
         # Draw all neurons including new ones
         self.draw_neurons(painter, scale)
@@ -505,53 +599,15 @@ class BrainWidget(QtWidgets.QWidget):
         # Draw highlight for recently created neurons
         self.draw_neurogenesis_highlights(painter, scale)
 
-        painter.setPen(QtGui.QColor(0, 0, 0))
-        font = painter.font()
-        font.setPointSize(12)
-        painter.setFont(font)
-        painter.drawText(QtCore.QRectF(0, 20, 1200, 30), QtCore.Qt.AlignCenter, "Neurons")
-
         if self.show_links:
             self.draw_connections(painter, scale)
 
-        # Draw neuron highlights
-        if 'highlighted_neuron' in self.neurogenesis_data:
-            hl = self.neurogenesis_data['highlighted_neuron']
-            if time.time() - hl['start_time'] < self.neurogenesis_config['visual']['highlight_duration']:
-                self.draw_neuron_highlight(painter, hl['position'][0], hl['position'][1])
-            else:
-                del self.neurogenesis_data['highlighted_neuron']
+        def draw_neuron_highlight(self, painter, x, y):
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3))
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.drawEllipse(x - 35, y - 35, 70, 70)
 
-    def draw_neuron_highlight(self, painter, x, y):
-        painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3))
-        painter.setBrush(QtCore.Qt.NoBrush)
-        painter.drawEllipse(x - 35, y - 35, 70, 70)
-
-    def draw_connections(self, painter, scale):
-        for conn in self.connections:
-            start = self.neuron_positions[conn[0]]
-            end = self.neuron_positions[conn[1]]
-            weight = self.weights[conn]
-
-            color = QtGui.QColor(0, int(255 * abs(weight)), 0) if weight > 0 else QtGui.QColor(int(255 * abs(weight)), 0, 0)
-            painter.setPen(QtGui.QPen(color, 2))
-            painter.drawLine(start[0], start[1], end[0], end[1])
-
-            midpoint = ((start[0] + end[0]) // 2, (start[1] + end[1]) // 2)
-            painter.setPen(QtGui.QColor(0, 0, 0))
-
-            # Increase the area for drawing the weights
-            text_area_width = 60
-            text_area_height = 20
-
-            # Adjust the font size based on the scale with a maximum font size
-            max_font_size = 12
-            font_size = max(8, min(max_font_size, int(8 * scale)))
-            font = painter.font()
-            font.setPointSize(font_size)
-            painter.setFont(font)
-
-            painter.drawText(midpoint[0] - text_area_width // 2, midpoint[1] - text_area_height // 2, text_area_width, text_area_height, QtCore.Qt.AlignCenter, f"{weight:.2f}")
+        
 
     def draw_neurons(self, painter, scale):
         # Original neurons
@@ -616,7 +672,12 @@ class BrainWidget(QtWidgets.QWidget):
                         int(60 * scale), int(20 * scale),
                         QtCore.Qt.AlignCenter, label)
 
-
+    def show_diagnostic_report(self):
+        """Show the diagnostic report dialog by accessing the brain widget"""
+        if hasattr(self, 'brain_widget'):
+            self.brain_widget.show_diagnostic_report()
+        else:
+            print("Error: Brain widget not initialized")
         
     def draw_neurogenesis_highlights(self, painter, scale):
         if (self.neurogenesis_highlight['neuron'] and 
@@ -660,14 +721,32 @@ class BrainWidget(QtWidgets.QWidget):
         self.capture_training_data_enabled = state
 
     def mousePressEvent(self, event):
+        # Calculate scale factors
+        scale_x = self.width() / 1200
+        scale_y = self.height() / 600
+        scale = min(scale_x, scale_y)
+        
+        # Convert click position to widget coordinates
+        click_pos = event.pos()
+        
+        if help_rect.contains(click_pos):
+            self.show_diagnostic_report()
+            return
+        
+        # Existing neuron dragging logic
         if event.button() == QtCore.Qt.LeftButton:
             for name, pos in self.neuron_positions.items():
-                if self._is_click_on_neuron(event.pos(), pos):
+                # Pass the scale to the click detection method
+                if self._is_click_on_neuron(click_pos, pos, scale):
                     self.dragging = True
                     self.dragged_neuron = name
-                    self.drag_start_pos = event.pos()
+                    self.drag_start_pos = click_pos
                     self.update()
                     break
+
+    def show_diagnostic_report(self):
+        dialog = DiagnosticReportDialog(self, self.parent())
+        dialog.exec_()
 
     def mouseMoveEvent(self, event):
         if self.dragging and self.dragged_neuron:
@@ -686,24 +765,33 @@ class BrainWidget(QtWidgets.QWidget):
             self.dragged_neuron = None
             self.update()
 
-    def _is_click_on_neuron(self, point, neuron_pos):
-        """Check if click is within neuron bounds"""
+    def _is_click_on_neuron(self, point, neuron_pos, scale):
+        """Check if click is within neuron bounds, accounting for scaling"""
         neuron_x, neuron_y = neuron_pos
-        return (abs(neuron_x - point.x()) <= 25 and 
-                abs(neuron_y - point.y()) <= 25)
+        # Scale the neuron position to match the visual representation
+        scaled_x = neuron_x * scale
+        scaled_y = neuron_y * scale
+        # Use scaled neuron size (25 was original radius)
+        return (abs(scaled_x - point.x()) <= 25 * scale and 
+                abs(scaled_y - point.y()) <= 25 * scale)
 
-    def is_point_inside_neuron(self, point, neuron_pos):
+    def is_point_inside_neuron(self, point, neuron_pos, scale):
         neuron_x, neuron_y = neuron_pos
-        return (neuron_x - 25 <= point.x() <= neuron_x + 25) and (neuron_y - 25 <= point.y() <= neuron_y + 25)
+        scaled_x = neuron_x * scale
+        scaled_y = neuron_y * scale
+        return ((scaled_x - 25 * scale) <= point.x() <= (scaled_x + 25 * scale) and 
+                (scaled_y - 25 * scale) <= point.y() <= (scaled_y + 25 * scale))
 
     def reset_positions(self):
         self.neuron_positions = self.original_neuron_positions.copy()
         self.update()
 
 class StimulateDialog(QtWidgets.QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, brain_widget, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Stimulate Brain")
+        self.brain_widget = brain_widget
+        
         self.layout = QtWidgets.QVBoxLayout()
         self.setLayout(self.layout)
 
@@ -711,32 +799,81 @@ class StimulateDialog(QtWidgets.QDialog):
         self.layout.addLayout(self.form_layout)
 
         self.neuron_inputs = {}
-        neurons = ["hunger", "happiness", "cleanliness", "sleepiness", "is_sick", "is_eating", "is_sleeping", "pursuing_food", "direction"]
+        neurons = ["hunger", "happiness", "cleanliness", "sleepiness", 
+                  "is_sick", "is_eating", "is_sleeping", "pursuing_food", "direction"]
+        
+        # Load current values from brain widget
+        current_state = self.brain_widget.state
+        
         for neuron in neurons:
+            current_value = current_state.get(neuron, None)
+            
             if neuron.startswith("is_"):
                 input_widget = QtWidgets.QComboBox()
                 input_widget.addItems(["False", "True"])
+                if current_value is not None:
+                    input_widget.setCurrentText(str(current_value))
             elif neuron == "direction":
                 input_widget = QtWidgets.QComboBox()
                 input_widget.addItems(["up", "down", "left", "right"])
+                if current_value is not None:
+                    input_widget.setCurrentText(current_value)
             else:
                 input_widget = QtWidgets.QSpinBox()
                 input_widget.setRange(0, 100)
+                if current_value is not None:
+                    input_widget.setValue(int(current_value))
+                
+                # Prevent manual entry of invalid values
+                input_widget.setKeyboardTracking(False)
+                input_widget.lineEdit().setValidator(QtGui.QIntValidator(0, 100))
+            
             self.form_layout.addRow(neuron, input_widget)
             self.neuron_inputs[neuron] = input_widget
 
-        self.buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        self.buttons.accepted.connect(self.accept)
+        self.buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        self.buttons.accepted.connect(self.validate_and_accept)
         self.buttons.rejected.connect(self.reject)
         self.layout.addWidget(self.buttons)
 
+    def validate_and_accept(self):
+        """Validate all fields before accepting the dialog"""
+        try:
+            # Validate all spinbox values
+            for neuron, widget in self.neuron_inputs.items():
+                if isinstance(widget, QtWidgets.QSpinBox):
+                    value = widget.value()
+                    if value < 0 or value > 100:
+                        QtWidgets.QMessageBox.warning(
+                            self, "Invalid Value", 
+                            f"{neuron} must be between 0 and 100"
+                        )
+                        return
+                        
+            # If all validations pass, accept the dialog
+            self.accept()
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(
+                self, "Validation Error", 
+                f"An error occurred during validation: {str(e)}"
+            )
+
     def get_stimulation_values(self):
+        """Get stimulation values with proper type conversion"""
         stimulation_values = {}
         for neuron, input_widget in self.neuron_inputs.items():
             if isinstance(input_widget, QtWidgets.QSpinBox):
                 stimulation_values[neuron] = input_widget.value()
             elif isinstance(input_widget, QtWidgets.QComboBox):
-                stimulation_values[neuron] = input_widget.currentText()
+                text = input_widget.currentText()
+                if text.lower() == 'true':
+                    stimulation_values[neuron] = True
+                elif text.lower() == 'false':
+                    stimulation_values[neuron] = False
+                else:
+                    stimulation_values[neuron] = text
         return stimulation_values
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
@@ -746,8 +883,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.base_font_size = 8
         self.debug_mode = debug_mode
         self.config = config if config else LearningConfig()  # Initialize config
-        self.debug_mode = debug_mode
         self.tamagotchi_logic = tamagotchi_logic
+        
+        # Ensure brain widget gets the debug mode
+        self.brain_widget = BrainWidget(self.config, self.debug_mode)
         self.setWindowTitle("Brain Tool")
         self.resize(1024, 768)
 
@@ -819,6 +958,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.memory_update_timer.start(2000)  # Update every 2 secs
         self.init_thought_process_tab()
 
+        def set_debug_mode(self, enabled):
+            self.debug_mode = enabled
+            if hasattr(self, 'brain_widget'):
+                self.brain_widget.debug_mode = enabled
+            self.update()
+
 
     def on_hebbian_countdown_finished(self):
         """Called when the Hebbian learning countdown reaches zero"""
@@ -847,6 +992,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
     def toggle_debug_mode(self, enabled):
         self.debug_mode = enabled
         self.debug_print(f"Debug mode {'enabled' if enabled else 'disabled'}")
+        # Update stimulate button state
+        if hasattr(self, 'stimulate_button'):
+            self.stimulate_button.setEnabled(enabled)
 
     def get_brain_state(self):
         weights = {}
@@ -917,10 +1065,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Create button layout
         button_layout = QtWidgets.QHBoxLayout()
-        self.stimulate_button = self.create_button("Stimulate Brain", self.stimulate_brain, "#D8BFD8")
-        self.save_button = self.create_button("Save Brain State", self.save_brain_state, "#90EE90")
-        self.load_button = self.create_button("Load Brain State", self.load_brain_state, "#ADD8E6")
+        self.stimulate_button = self.create_button("Stimulate", self.stimulate_brain, "#d3d3d3")
+        self.stimulate_button.setEnabled(self.debug_mode)
+        self.save_button = self.create_button("Save State", self.save_brain_state, "#d3d3d3")
+        self.load_button = self.create_button("Load State", self.load_brain_state, "#d3d3d3")
+        self.report_button = self.create_button("Network Report", self.brain_widget.show_diagnostic_report, "#ADD8E6")
 
+        button_layout.addWidget(self.report_button)
         button_layout.addWidget(self.stimulate_button)
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.load_button)
@@ -1160,34 +1311,54 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def update_memory_tab(self):
         if self.tamagotchi_logic and self.tamagotchi_logic.squid:
-            short_term_memories = self.tamagotchi_logic.squid.memory_manager.get_all_short_term_memories()
-            long_term_memories = self.tamagotchi_logic.squid.memory_manager.get_all_long_term_memories()
+            # Get only properly formatted short-term memories
+            short_term_memories = [
+                mem for mem in self.tamagotchi_logic.squid.memory_manager.get_all_short_term_memories()
+                if self._is_displayable_memory(mem)
+            ]
+            
+            # Get only properly formatted long-term memories
+            long_term_memories = [
+                mem for mem in self.tamagotchi_logic.squid.memory_manager.get_all_long_term_memories()
+                if self._is_displayable_memory(mem)
+            ]
 
-            self.debug_print(f"Retrieved {len(short_term_memories)} short-term memories and {len(long_term_memories)} long-term memories")
+            self.debug_print(f"Retrieved {len(short_term_memories)} short-term and {len(long_term_memories)} long-term displayable memories")
 
             # Display short-term memories
             self.short_term_memory_text.clear()
             for memory in short_term_memories:
-                if isinstance(memory, dict) and 'value' in memory:
-                    # Only display if it's not a timestamp memory
-                    if not (isinstance(memory.get('key'), str) and memory['key'].isdigit()):
-                        self.short_term_memory_text.append(self.format_memory_display(memory))
+                self.short_term_memory_text.append(self.format_memory_display(memory))
 
             # Display long-term memories
             self.long_term_memory_text.clear()
             for memory in long_term_memories:
-                if isinstance(memory, dict) and 'value' in memory:
-                    # Only display if it's not a timestamp memory
-                    if not (isinstance(memory.get('key'), str) and memory['key'].isdigit()):
-                        self.long_term_memory_text.append(self.format_memory_display(memory))
+                self.long_term_memory_text.append(self.format_memory_display(memory))
+
+    def _is_displayable_memory(self, memory):
+        """Check if a memory should be displayed in the UI"""
+        if not isinstance(memory, dict):
+            return False
+        
+        # Skip timestamp-only memories (they have numeric keys)
+        if isinstance(memory.get('key'), str) and memory['key'].isdigit():
+            return False
+        
+        # Must have either formatted_value or a displayable value
+        if 'formatted_value' not in memory and not isinstance(memory.get('value'), str):
+            return False
+        
+        return True
 
     def format_memory_display(self, memory):
         """Format a memory dictionary for display with colored boxes based on valence"""
-        if not isinstance(memory, dict):
+        if not self._is_displayable_memory(memory):
             return ""
         
-        # Determine memory value and timestamp
-        value = memory.get('formatted_value', memory.get('value', ''))
+        # Get the display text - prefer formatted_value, fall back to value
+        display_text = memory.get('formatted_value', memory.get('value', ''))
+        
+        # Get and format timestamp
         timestamp = memory.get('timestamp', '')
         if isinstance(timestamp, str):
             try:
@@ -1195,7 +1366,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             except:
                 timestamp = ""
         
-        # Determine if the memory is positive, negative or neutral
+        # Determine valence (same logic as MemoryManager.format_memory())
         if memory.get('category') == 'mental_state' and memory.get('key') == 'startled':
             interaction_type = "Negative"
             background_color = "#FFD1DC"  # Pastel red
@@ -1225,7 +1396,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             border: 1px solid #ccc;
         ">
             <div style="font-weight: bold; margin-bottom: 5px;">{interaction_type}</div>
-            <div>{value}</div>
+            <div>{display_text}</div>
             <div style="font-size: 0.8em; color: #555; margin-top: 5px;">{timestamp}</div>
         </div>
         """
@@ -1510,11 +1681,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Get the current state of all neurons
         current_state = self.brain_widget.state
 
-        # Determine which neurons are significantly active
+        # Determine which neurons are significantly active (excluding specified neurons)
+        excluded_neurons = ['is_sick', 'is_eating', 'pursuing_food', 'direction']
         active_neurons = []
         for neuron, value in current_state.items():
-            if neuron == 'position':
-                # Skip the position tuple
+            if neuron in excluded_neurons:
                 continue
             if isinstance(value, (int, float)) and value > 50:
                 active_neurons.append(neuron)
@@ -1522,6 +1693,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 active_neurons.append(neuron)
             elif isinstance(value, str):
                 # For string values (like 'direction'), we consider them active
+                # But we're excluding 'direction' via excluded_neurons
                 active_neurons.append(neuron)
 
         # Include decoration effects in learning
@@ -1530,12 +1702,16 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         if isinstance(decoration_memories, dict):
             for decoration, effects in decoration_memories.items():
                 for stat, boost in effects.items():
+                    if stat in excluded_neurons:
+                        continue
                     if isinstance(boost, (int, float)) and boost > 0:
                         if stat not in active_neurons:
                             active_neurons.append(stat)
         elif isinstance(decoration_memories, list):
             for memory in decoration_memories:
                 for stat, boost in memory.get('effects', {}).items():
+                    if stat in excluded_neurons:
+                        continue
                     if isinstance(boost, (int, float)) and boost > 0:
                         if stat not in active_neurons:
                             active_neurons.append(stat)
@@ -1639,10 +1815,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Determine if weight increased or decreased
         if weight_change > 0:
             change_direction = "Increased"
-            color = QtGui.QColor("green")
+            color = QtGui.QColor("black")
         elif weight_change < 0:
             change_direction = "Decreased"
-            color = QtGui.QColor("red")
+            color = QtGui.QColor("black")
         else:
             change_direction = "No change"
             color = QtGui.QColor("black")
@@ -1698,9 +1874,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 if col == 3:  # Weight change column
                     item.setData(QtCore.Qt.DisplayRole, f"{value:.4f}")
                 if col == 4:  # Direction column
-                    if value == "INCREASED":
+                    if value == "increase ⬆️":
                         item.setForeground(QtGui.QColor("green"))
-                    elif value == "DECREASED":
+                    elif value == "⬇️ decrease":
                         item.setForeground(QtGui.QColor("red"))
                 self.learning_data_table.setItem(row, col, item)
         self.learning_data_table.scrollToBottom()
@@ -1828,7 +2004,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def init_personality_tab(self):
         # Common style for all text elements
-        base_font_size = 20
+        base_font_size = 18
         text_style = f"font-size: {base_font_size}px;"
         header_style = f"font-size: {base_font_size + 4}px; font-weight: bold;"
 
@@ -1903,12 +2079,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             "direction": state.get("direction", "up"),
             "position": state.get("position", (0, 0)),
             
-            # Neurogenesis triggers (critical for new neuron creation)
+            # Neurogenesis triggers
             "novelty_exposure": state.get("novelty_exposure", 0),
             "sustained_stress": state.get("sustained_stress", 0),
             "recent_rewards": state.get("recent_rewards", 0),
             
-            # Debug flag for forced neurogenesis
+            # Debug flag
             "_debug_forced_neurogenesis": state.get("_debug_forced_neurogenesis", False),
             
             # Personality
@@ -1921,8 +2097,32 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Force immediate visualization update
         self.brain_widget.update()
         
-        # Update memory tab
-        self.update_memory_tab()
+        # Update memory tab with properly filtered memories
+        if hasattr(self.tamagotchi_logic, 'squid') and hasattr(self.tamagotchi_logic.squid, 'memory_manager'):
+            # Run periodic memory management
+            self.tamagotchi_logic.squid.memory_manager.periodic_memory_management()
+            
+            # Get only properly formatted short-term memories
+            short_term_memories = [
+                mem for mem in self.tamagotchi_logic.squid.memory_manager.get_all_short_term_memories()
+                if self._is_displayable_memory(mem)
+            ]
+            
+            # Get only properly formatted long-term memories
+            long_term_memories = [
+                mem for mem in self.tamagotchi_logic.squid.memory_manager.get_all_long_term_memories()
+                if self._is_displayable_memory(mem)
+            ]
+
+            # Update short-term memory display
+            self.short_term_memory_text.clear()
+            for memory in short_term_memories:
+                self.short_term_memory_text.append(self.format_memory_display(memory))
+
+            # Update long-term memory display
+            self.long_term_memory_text.clear()
+            for memory in long_term_memories:
+                self.long_term_memory_text.append(self.format_memory_display(memory))
 
         # Update personality display if available
         if 'personality' in full_state and full_state['personality']:
@@ -1934,17 +2134,15 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         if hasattr(self.tamagotchi_logic, 'get_decision_data'):
             decision_data = self.tamagotchi_logic.get_decision_data()
             self.update_thought_process(decision_data)
-        else:
-            print("Warning: Decision data not available")
 
         # Debug output for neurogenesis
-        if self.debug_mode:
-            print("\nCurrent Brain State:")
-            print(f"Neurons: {list(self.brain_widget.neuron_positions.keys())}")
-            print(f"New neurons: {self.brain_widget.neurogenesis_data.get('new_neurons', [])}")
-            print(f"Novelty: {full_state['novelty_exposure']}")
-            print(f"Stress: {full_state['sustained_stress']}")
-            print(f"Rewards: {full_state['recent_rewards']}\n")
+        #if self.debug_mode:
+        #    print("\nCurrent Brain State:")
+        #    print(f"Neurons: {list(self.brain_widget.neuron_positions.keys())}")
+        #    print(f"New neurons: {self.brain_widget.neurogenesis_data.get('new_neurons', [])}")
+        #    print(f"Novelty: {full_state['novelty_exposure']}")
+        #    print(f"Stress: {full_state['sustained_stress']}")
+        #    print(f"Rewards: {full_state['recent_rewards']}\n")
 
     def init_about_tab(self):
         about_text = QtWidgets.QTextEdit()
@@ -1955,7 +2153,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <p>A Tamagotchi-style digital pet with a simple neural network</p>
         <ul>
             <li>by Rufus Pearce</li>
-            <li>Brain Tool version 1.0.6.1</li>
+            <li>Brain Tool version 1.0.6.2</li>
             <li>Dosidicus version 1.0.400 (milestone 3)</li>
         <p>This is a research project. Please suggest features.</p>
         </ul>
@@ -2182,6 +2380,133 @@ class ConsoleOutput:
 
     def flush(self):
         pass
+
+class DiagnosticReportDialog(QtWidgets.QDialog):
+    def __init__(self, brain_widget, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Network Health Diagnosis")
+        self.setMinimumSize(640, 800)
+        
+        self.brain_widget = brain_widget
+        self.history_data = parent.tamagotchi_logic.get_health_history() if hasattr(parent, 'tamagotchi_logic') else []
+        
+        self.layout = QtWidgets.QVBoxLayout()
+        self.setLayout(self.layout)
+        
+        # Create tab widget
+        self.tabs = QtWidgets.QTabWidget()
+        self.layout.addWidget(self.tabs)
+        
+        # Create report tabs
+        self.create_connections_tab()
+        self.create_neurons_tab()
+        self.create_balance_tab()
+        
+        # Add history graph section
+        self.create_history_section()
+        
+        # Add close button
+        self.close_button = QtWidgets.QPushButton("Close")
+        self.close_button.clicked.connect(self.close)
+        self.layout.addWidget(self.close_button)
+    
+    def create_connections_tab(self):
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout()
+        
+        label = QtWidgets.QLabel("<h3>Weak Connections Report</h3>")
+        layout.addWidget(label)
+        
+        weakest = self.brain_widget.get_weakest_connections(5)
+        report_text = "TOP WEAK CONNECTIONS:\n\n"
+        for (a, b), weight in weakest:
+            report_text += f"{a} ↔ {b}: {weight:.2f}\n"
+        
+        text_edit = QtWidgets.QTextEdit()
+        text_edit.setPlainText(report_text)
+        text_edit.setReadOnly(True)
+        layout.addWidget(text_edit)
+        
+        tab.setLayout(layout)
+        self.tabs.addTab(tab, "Connections")
+    
+    def create_neurons_tab(self):
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout()
+        
+        label = QtWidgets.QLabel("<h3>Neuron Activity Report</h3>")
+        layout.addWidget(label)
+        
+        extremes = self.brain_widget.get_extreme_neurons(3)
+        report_text = "OVERACTIVE NEURONS:\n"
+        for name, val in extremes['overactive']:
+            report_text += f"{name}: {val:.0f}%\n"
+        
+        report_text += "\nUNDERACTIVE NEURONS:\n"
+        for name, val in extremes['underactive']:
+            report_text += f"{name}: {val:.0f}%\n"
+        
+        text_edit = QtWidgets.QTextEdit()
+        text_edit.setPlainText(report_text)
+        text_edit.setReadOnly(True)
+        layout.addWidget(text_edit)
+        
+        tab.setLayout(layout)
+        self.tabs.addTab(tab, "Neurons")
+    
+    def create_balance_tab(self):
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout()
+        
+        label = QtWidgets.QLabel("<h3>Connection Balance Report</h3>")
+        layout.addWidget(label)
+        
+        unbalanced = self.brain_widget.get_unbalanced_connections(5)
+        report_text = "UNBALANCED CONNECTIONS:\n\n"
+        for (a, b), (w1, w2), diff in unbalanced:
+            report_text += f"{a}→{b}: {w1:.2f}\n"
+            report_text += f"{b}→{a}: {w2:.2f} (Δ{diff:.2f})\n\n"
+        
+        text_edit = QtWidgets.QTextEdit()
+        text_edit.setPlainText(report_text)
+        text_edit.setReadOnly(True)
+        layout.addWidget(text_edit)
+        
+        tab.setLayout(layout)
+        self.tabs.addTab(tab, "Balance")
+    
+    def create_history_section(self):
+        group = QtWidgets.QGroupBox("Health History")
+        layout = QtWidgets.QVBoxLayout()
+        
+        # Add toggle checkbox
+        self.show_history_check = QtWidgets.QCheckBox("Show historical trends")
+        self.show_history_check.toggled.connect(self.toggle_history_graph)
+        layout.addWidget(self.show_history_check)
+        
+        # Placeholder for graph
+        self.history_graph = QtWidgets.QLabel("Graph will appear here when enabled")
+        self.history_graph.setAlignment(QtCore.Qt.AlignCenter)
+        self.history_graph.setMinimumHeight(200)
+        layout.addWidget(self.history_graph)
+        
+        group.setLayout(layout)
+        self.layout.addWidget(group)
+    
+    def toggle_history_graph(self, checked):
+        if checked and self.history_data:
+            # In a real implementation, you'd generate an actual graph here
+            timestamps = [x[0] for x in self.history_data]
+            values = [x[1] for x in self.history_data]
+            
+            # This is placeholder - you'd use matplotlib or similar in practice
+            graph_text = "HEALTH TREND:\n\n"
+            for t, v in zip(timestamps[-10:], values[-10:]):
+                graph_text += f"{t}: {'='*int(v/10)}{v:.0f}%\n"
+            
+            self.history_graph.setText(graph_text)
+        else:
+            self.history_graph.setText("Graph will appear here when enabled")
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)

@@ -16,7 +16,9 @@ class HebbianLearning:
             'interact_with_rocks': 0.7,
             'move_to_plants': 0.4
         }
-        # Initialize with config values
+
+        self.excluded_neurons = ['is_sick', 'is_eating', 'is_sleeping', 'pursuing_food', 'direction']
+
         self.learning_rate = self.config.hebbian['base_learning_rate']
         self.threshold = self.config.hebbian['threshold']
         self.goal_weights = self.config.hebbian['goal_weights']
@@ -25,8 +27,6 @@ class HebbianLearning:
         self.last_neurogenesis_time = time.time()
         self.neurogenesis_active = False
 
-        # Neurons to exclude from Hebbian learning
-        self.excluded_neurons = ['direction', 'is_sick', 'pursuing_food']
 
     def get_learning_data(self):
         return self.learning_data

@@ -350,14 +350,14 @@ class Squid:
         # Ensure the decoration stays within scene boundaries
         scene_rect = self.ui.scene.sceneRect()
         new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
-
-        # Create animation targeting the decoration's position
+        
+        # Create animation for the position change
         self.push_animation = QtCore.QPropertyAnimation()
-        self.push_animation.setTargetObject(decoration)  # Explicitly set target object
-        self.push_animation.setPropertyName(b"pos")      # Explicitly set property
+        self.push_animation.setTargetObject(decoration)
+        self.push_animation.setPropertyName(b"pos")
         self.push_animation.setDuration(300)
-        self.push_animation.setStartValue(decoration.pos())
-        self.push_animation.setEndValue(QtCore.QPointF(new_x, decoration.pos().y()))
+        self.push_animation.setStartValue(current_pos)
+        self.push_animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
 
         # Connect cleanup callback
         self.push_animation.finished.connect(

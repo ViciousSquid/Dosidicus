@@ -22,6 +22,12 @@ class TamagotchiLogic:
         self.user_interface = user_interface
         self.squid = squid
         self.brain_window = brain_window
+        self.window_resize_cooldown = 0
+        self.window_resize_cooldown_max = 30  # 30 updates before another resize can startle
+        self.has_been_resized = False
+        self.was_big = False
+        self.debug_mode = False
+        self.last_window_size = (1280, 900)  # Default size
 
         # Initialize core attributes first
         self.simulation_speed = 1  # Default to 1x speed
@@ -85,7 +91,6 @@ class TamagotchiLogic:
         self.hunger_threshold_time = 0
         self.needle_item = None
         self.lights_on = True
-        self.debug_mode = False
 
         # Initialize statistics window
         self.statistics_window = StatisticsWindow(squid)
@@ -500,30 +505,40 @@ class TamagotchiLogic:
         if random.random() < startle_chance:
             self.startle_squid()
 
-    def startle_squid(self):
+    def startle_squid(self, source="unknown"):
         if not self.mental_states_enabled:
             return
 
         self.squid.mental_state_manager.set_state("startled", True)
         self.startle_cooldown = self.startle_cooldown_max
 
-        # Increase anxiety
+        # Special case for first resize
+        if source == "first_resize":
+            anxiety_increase = 5
+            message = "The squid noticed its environment changing!"
+        else:
+            anxiety_increase = 10
+            message = "The squid was startled!"
+
         old_anxiety = self.squid.anxiety
-        self.squid.anxiety = min(100, self.squid.anxiety + 10)
-        anxiety_increase = self.squid.anxiety - old_anxiety
-
-        # Create a negative memory for being startled
-        memory_value = f"Startled: Anxiety +{anxiety_increase:.2f}"
-        self.squid.memory_manager.add_short_term_memory('mental_state', 'startled', memory_value)
-
-        self.show_message("The squid was startled!")
+        self.squid.anxiety = min(100, self.squid.anxiety + anxiety_increase)
         
-        # 60% chance to create an ink cloud
-        if random.random() < 0.6:
+        # Create memory
+        memory_category = "first_resize" if source == "first_resize" else "startle"
+        memory_value = f"Startled: Anxiety +{anxiety_increase}"
+        self.squid.memory_manager.add_short_term_memory(
+            'environment', 
+            memory_category, 
+            memory_value
+        )
+
+        self.show_message(message)
+        
+        # Only create ink cloud for non-window events
+        if source != "first_resize" and random.random() < 0.6:
             self.create_ink_cloud()
         
-        # Schedule the end of the startle state
-        QtCore.QTimer.singleShot(3000, self.end_startle)  # End startle after 3 seconds
+        QtCore.QTimer.singleShot(3000, self.end_startle)
 
     def create_ink_cloud(self):
         ink_cloud_pixmap = QtGui.QPixmap(os.path.join("images", "inkcloud.png"))
@@ -979,22 +994,72 @@ class TamagotchiLogic:
             self.user_interface.update_points(self.points)
 
     def handle_window_resize(self, event):
-        self.user_interface.window_width = event.size().width()
-        self.user_interface.window_height = event.size().height()
-        self.user_interface.scene.setSceneRect(0, 0, self.user_interface.window_width, self.user_interface.window_height)
-
-        if hasattr(self.user_interface, 'rect_item'):
-            self.user_interface.rect_item.setRect(50, 50, self.user_interface.window_width - 100, self.user_interface.window_height - 100)
-
-        if hasattr(self.user_interface, 'cleanliness_overlay'):
-            self.user_interface.cleanliness_overlay.setRect(50, 50, self.user_interface.window_width - 100, self.user_interface.window_height - 100)
-
-        if hasattr(self.user_interface, 'feeding_message'):
-            self.user_interface.feeding_message.setPos(0, self.user_interface.window_height - 85)
-            self.user_interface.feeding_message.setTextWidth(self.user_interface.window_width)
-
-        if self.squid:
-            self.squid.update_preferred_vertical_range()
+        new_width = event.size().width()
+        new_height = event.size().height()
+        
+        # Get current dimensions from user interface
+        current_width = self.user_interface.window_width
+        current_height = self.user_interface.window_height
+        
+        # Calculate size change
+        width_change = new_width - current_width
+        height_change = new_height - current_height
+        
+        # Update window dimensions in UI
+        self.user_interface.window_width = new_width
+        self.user_interface.window_height = new_height
+        
+        # Update UI elements through user interface
+        self.user_interface.handle_window_resize(event)
+        
+        # Notify logic about resize with size change info
+        self.handle_window_resize_event(
+            width_change, 
+            height_change,
+            (new_width, new_height)
+        )
+    
+    def handle_window_resize_event(self, width_change, height_change, new_size):
+        """Handle window resize events with specific effects"""
+        # First resize startles the squid (only once)
+        if not self.has_been_resized:
+            self.startle_squid(source="first_resize")
+            self.has_been_resized = True
+            self.add_thought("The environment changed suddenly!")
+            self.last_window_size = new_size
+            return
+        
+        # Check if window got bigger
+        if new_size[0] > self.last_window_size[0] or new_size[1] > self.last_window_size[1]:
+            # Positive effect for enlargement
+            self.squid.happiness = min(100, self.squid.happiness + 5)
+            self.squid.satisfaction = min(100, self.squid.satisfaction + 3)
+            self.was_big = True
+            
+            memory_msg = "positive: increased happiness and satisfaction from more space"
+            self.squid.memory_manager.add_short_term_memory(
+                'environment', 
+                'window_enlarged', 
+                memory_msg
+            )
+            self.add_thought("More space to swim!")
+        
+        # Check if window got smaller after being big
+        elif self.was_big and (new_size[0] < self.last_window_size[0] or new_size[1] < self.last_window_size[1]):
+            # Negative effect for reduction
+            self.squid.happiness = max(0, self.squid.happiness - 5)
+            self.squid.anxiety = min(100, self.squid.anxiety + 5)
+            
+            memory_msg = "negative: decreased happiness and increased anxiety from less space"
+            self.squid.memory_manager.add_short_term_memory(
+                'environment', 
+                'window_reduced', 
+                memory_msg
+            )
+            self.add_thought("The space is shrinking...")
+        
+        # Update last known size
+        self.last_window_size = new_size
 
     def feed_squid(self):
         """Spawn exactly one food item per feeding"""
