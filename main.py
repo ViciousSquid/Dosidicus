@@ -59,8 +59,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.debug_mode:
             self.setup_logging()
         
-        # Initialize UI
-        self.user_interface = Ui(self, None)
+        # Initialize UI with debug mode
+        self.user_interface = Ui(self, debug_mode=self.debug_mode)
         
         # Create SquidBrainWindow with config
         self.brain_window = SquidBrainWindow(None, self.debug_mode, self.config)
