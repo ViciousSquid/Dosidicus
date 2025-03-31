@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# Main Entry point for Dosidicus digital pet simulation
-
 import sys
 import time
 import json
@@ -78,7 +75,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
             self.create_squid_from_save_data()
         else:
-            print(f"\033[33;1;4m >> Initialising a new simulation with {self.specified_personality.value if self.specified_personality else 'random'} squid.\033[0m")
+            print(f"\033[92;22m >> Initialising a new simulation with {self.specified_personality.value if self.specified_personality else 'random'} squid.\033[0m")
             self.create_new_game(self.specified_personality)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
         
@@ -98,6 +95,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.brain_window.update_personality_display(self.squid.personality)
         self.tamagotchi_logic.set_simulation_speed(0)  # Start paused
 
+        # Create but don't show brain window yet
+        self.brain_window = SquidBrainWindow(None, self.debug_mode, self.config)
+        self.user_interface.squid_brain_window = self.brain_window
+
         # Position and show decoration window at startup
         QtCore.QTimer.singleShot(100, self.position_and_show_decoration_window)
 
@@ -107,7 +108,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.brain_update_timer.start(2000)
 
         if self.debug_mode:
-            print("Debug mode enabled. Console output logged to console.txt")
+            print(f"\033[91;22m DEBUG MODE ENABLED: Console output is being logged to console.txt\033[0m")
 
     def position_and_show_decoration_window(self):
         """Position the decoration window in the bottom right and show it"""
@@ -151,9 +152,9 @@ class MainWindow(QtWidgets.QMainWindow):
             neuro_cooldown=self.neuro_cooldown
         )
         
-        print(f"Squid personality: {self.squid.personality.value}")
+        print(f"\033Squid personality:\033[0m {self.squid.personality.value}")
         if self.neuro_cooldown:
-            print(f"Neurogenesis cooldown: {self.neuro_cooldown} seconds")
+            print(f"\033Neurogenesis cooldown:\033[0m {self.neuro_cooldown}")
         
         self.squid.memory_manager.clear_all_memories()
         self.show_splash_screen()
@@ -176,7 +177,7 @@ class MainWindow(QtWidgets.QMainWindow):
             squid_data = save_data['game_state']['squid']
             personality = Personality(squid_data['personality'])
             self.squid.load_state(squid_data)
-            print(f"Loaded squid with personality: {self.squid.personality.value}")
+            print(f"\033Loaded squid with personality:\033[0m {self.squid.personality.value}")
             self.start_simulation()
         else:
             print("No save data found. Starting new game.")
