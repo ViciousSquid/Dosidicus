@@ -1,5 +1,5 @@
 # Dosidicus - digital pet with a neural network
-# by Rufus Pearce (ViciousSquid)  |  March 2025  |  version 1.0.400
+# by Rufus Pearce (ViciousSquid)  |  March 2025  |  version 1.0.400.3
 # https://github.com/ViciousSquid/Dosidicus
 
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -16,9 +16,24 @@ from .ui import ResizablePixmapItem
 from .squid_brain_window import SquidBrainWindow
 from .learning import HebbianLearning
 from .interactions import RockInteractionManager
+from .config_manager import ConfigManager
 
 class TamagotchiLogic:
     def __init__(self, user_interface, squid, brain_window):
+        self.config_manager = ConfigManager()
+        # Initialize other components first
+        self.user_interface = user_interface
+        self.squid = squid
+        self.brain_window = brain_window
+        
+        # Initialize rock interaction manager with config
+        self.rock_interaction = RockInteractionManager(
+            squid=self.squid,
+            logic=self,
+            scene=self.user_interface.scene,
+            message_callback=self.show_message,
+            config_manager=self.config_manager  # Add this line
+        )
         self.user_interface = user_interface
         self.squid = squid
         self.brain_window = brain_window
@@ -43,13 +58,16 @@ class TamagotchiLogic:
         self.max_poop = 3
         self.points = 0
 
-        # Initialize rock interaction manager
-        self.rock_interaction = RockInteractionManager(
-            squid=self.squid,
-            logic=self,
-            scene=self.user_interface.scene,
-            message_callback=self.show_message
-        )
+        # Flag to indicate the first instance of the application start
+        self.is_first_instance = True
+
+        # Initialize a timer for the initial delay if it's the first instance
+        if self.is_first_instance:
+            self.initial_delay_timer = QtCore.QTimer()
+            self.initial_delay_timer.setSingleShot(True)
+            self.initial_delay_timer.timeout.connect(self.allow_initial_startle)
+            self.initial_delay_timer.start(8000)  # 8000 ms = 8 seconds
+            self.initial_startle_allowed = False
 
         # Initialize neurogenesis triggers with all required keys
         self.neurogenesis_triggers = {
@@ -490,6 +508,10 @@ class TamagotchiLogic:
         if not self.mental_states_enabled:
             return
 
+            # Only check for new startle if not currently startled
+        if self.squid.is_fleeing:
+            return
+
         if self.startle_cooldown > 0:
             self.startle_cooldown -= 1
             return
@@ -509,36 +531,83 @@ class TamagotchiLogic:
         if not self.mental_states_enabled:
             return
 
-        self.squid.mental_state_manager.set_state("startled", True)
-        self.startle_cooldown = self.startle_cooldown_max
+        try:
+            # Ensure speed attributes exist
+            if not hasattr(self.squid, 'base_speed'):
+                self.squid.base_speed = 90
+            if not hasattr(self.squid, 'current_speed'):
+                self.squid.current_speed = self.squid.base_speed
 
-        # Special case for first resize
-        if source == "first_resize":
-            anxiety_increase = 5
-            message = "The squid noticed its environment changing!"
-        else:
-            anxiety_increase = 10
-            message = "The squid was startled!"
+            # Set startled state
+            self.squid.mental_state_manager.set_state("startled", True)
+            self.startle_cooldown = self.startle_cooldown_max
 
-        old_anxiety = self.squid.anxiety
-        self.squid.anxiety = min(100, self.squid.anxiety + anxiety_increase)
-        
-        # Create memory
-        memory_category = "first_resize" if source == "first_resize" else "startle"
-        memory_value = f"Startled: Anxiety +{anxiety_increase}"
-        self.squid.memory_manager.add_short_term_memory(
-            'environment', 
-            memory_category, 
-            memory_value
-        )
+            # Change status to fleeing
+            previous_status = getattr(self.squid, 'status', "roaming")
+            self.squid.status = "fleeing"
+            self.squid.is_fleeing = True
+            self.squid.current_speed = 180  # 2x speed boost
+            
+            # Random direction
+            self.squid.direction = random.choice(['up', 'down', 'left', 'right'])
 
-        self.show_message(message)
-        
-        # Only create ink cloud for non-window events
-        if source != "first_resize" and random.random() < 0.6:
-            self.create_ink_cloud()
-        
-        QtCore.QTimer.singleShot(3000, self.end_startle)
+            # First startle detection
+            is_first_startle = not hasattr(self, '_has_startled_before')
+            if is_first_startle:
+                self._has_startled_before = True
+
+            # Configure based on source
+            if source == "first_resize":
+                anxiety_increase = 5
+                message = "The squid noticed its environment changing!"
+                produce_ink = True
+            else:
+                anxiety_increase = 10
+                message = "The squid was startled!"
+                produce_ink = is_first_startle or random.random() < 0.6
+
+            # Apply anxiety
+            self.squid.anxiety = min(100, self.squid.anxiety + anxiety_increase)
+            
+            # Create memory
+            memory_value = (f"Startled! Status changed from {previous_status} to fleeing, "
+                        f"Speed {self.squid.current_speed}px, Direction {self.squid.direction}")
+            self.squid.memory_manager.add_short_term_memory(
+                'behavior',
+                'startle_response',
+                memory_value
+            )
+
+            self.show_message(message)
+            
+            # Ink cloud
+            if produce_ink:
+                self.create_ink_cloud()
+            
+            # End flee after 3 seconds
+            QtCore.QTimer.singleShot(self.startle_cooldown_max * 100, self.end_fleeing)
+            
+        except Exception as e:
+            print(f"Error during startle: {str(e)}")
+            self.show_message("The squid panicked!")
+            
+
+    def end_fleeing(self, previous_status="roaming"):
+        """Reset speed and status after fleeing ends"""
+        if hasattr(self, 'squid') and self.squid:
+            self.squid.is_fleeing = False
+            self.squid.current_speed = self.squid.base_speed
+            self.squid.status = previous_status
+            self.squid.mental_state_manager.set_state("startled", False)  # Explicitly clear startled state
+            
+            if self.debug_mode:
+                print(f"Fleeing ended - status returned to {previous_status}")
+            
+            self.squid.memory_manager.add_short_term_memory(
+                'behavior',
+                'calm_after_startle',
+                f"Returned to {previous_status} status after fleeing"
+            )
 
     def create_ink_cloud(self):
         ink_cloud_pixmap = QtGui.QPixmap(os.path.join("images", "inkcloud.png"))
@@ -1018,46 +1087,51 @@ class TamagotchiLogic:
             height_change,
             (new_width, new_height)
         )
+
+    def allow_initial_startle(self):
+        """Allow the squid to be startled after the initial delay."""
+        self.initial_startle_allowed = True
+        self.is_first_instance = False  # Reset the flag after the first instance
     
     def handle_window_resize_event(self, width_change, height_change, new_size):
         """Handle window resize events with specific effects"""
-        # First resize startles the squid (only once)
-        if not self.has_been_resized:
+        # First resize startles the squid (only once and after the initial delay)
+        if not self.has_been_resized and self.initial_startle_allowed:
             self.startle_squid(source="first_resize")
             self.has_been_resized = True
             self.add_thought("The environment changed suddenly!")
             self.last_window_size = new_size
             return
-        
+
         # Check if window got bigger
         if new_size[0] > self.last_window_size[0] or new_size[1] > self.last_window_size[1]:
             # Positive effect for enlargement
             self.squid.happiness = min(100, self.squid.happiness + 5)
             self.squid.satisfaction = min(100, self.squid.satisfaction + 3)
             self.was_big = True
-            
+
             memory_msg = "positive: increased happiness and satisfaction from more space"
             self.squid.memory_manager.add_short_term_memory(
-                'environment', 
-                'window_enlarged', 
+                'environment',
+                'window_enlarged',
                 memory_msg
             )
             self.add_thought("More space to swim!")
-        
+
         # Check if window got smaller after being big
         elif self.was_big and (new_size[0] < self.last_window_size[0] or new_size[1] < self.last_window_size[1]):
             # Negative effect for reduction
             self.squid.happiness = max(0, self.squid.happiness - 5)
             self.squid.anxiety = min(100, self.squid.anxiety + 5)
-            
+
             memory_msg = "negative: decreased happiness and increased anxiety from less space"
             self.squid.memory_manager.add_short_term_memory(
-                'environment', 
-                'window_reduced', 
+                'environment',
+                'window_reduced',
                 memory_msg
             )
             self.add_thought("The space is shrinking...")
-        
+
         # Update last known size
         self.last_window_size = new_size
 

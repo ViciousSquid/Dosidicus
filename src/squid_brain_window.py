@@ -110,7 +110,6 @@ class BrainWidget(QtWidgets.QWidget):
             'highlight_duration': 5.0
         }
         
-        # Add this to the state dictionary
         self.state['neurogenesis_active'] = False
 
         # Define pastel colors for each state
@@ -121,6 +120,70 @@ class BrainWidget(QtWidgets.QWidget):
             'pursuing_food': (255, 229, 204),  # Pastel orange
             'direction': (229, 204, 255)  # Pastel purple
         }
+
+    def resizeEvent(self, event):
+        """Handle window resize events - startles squid and enforces minimum size"""
+        super().resizeEvent(event)
+        
+        # Only trigger startle if we're actually resizing (not just moving)
+        old_size = event.oldSize()
+        if (old_size.isValid() and 
+            hasattr(self, 'tamagotchi_logic') and 
+            self.tamagotchi_logic):
+            
+            new_size = event.size()
+            width_change = abs(new_size.width() - old_size.width())
+            height_change = abs(new_size.height() - old_size.height())
+            
+            # Only startle if change is significant (>50px)
+            if width_change > 50 or height_change > 50:
+                # Check if first resize
+                if not hasattr(self, '_has_resized_before'):
+                    source = "first_resize"
+                    self._has_resized_before = True
+                else:
+                    source = "window_resize"
+                
+                self.tamagotchi_logic.startle_squid(source=source)
+                
+                if self.debug_mode:
+                    print(f"Squid startled by {source}")
+        
+        # Enforce minimum window size (1280x900)
+        min_width, min_height = 1280, 900
+        if event.size().width() < min_width or event.size().height() < min_height:
+            self.resize(
+                max(event.size().width(), min_width),
+                max(event.size().height(), min_height)
+            )
+
+    def closeEvent(self, event):
+        """Handle window close event - save state and clean up resources"""
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            # Save current brain state
+            try:
+                brain_state = self.brain_widget.save_brain_state()
+                with open('last_brain_state.json', 'w') as f:
+                    json.dump(brain_state, f)
+            except Exception as e:
+                print(f"Error saving brain state: {e}")
+
+            # Clean up timers
+            if hasattr(self, 'hebbian_timer'):
+                self.hebbian_timer.stop()
+            if hasattr(self, 'countdown_timer'):
+                self.countdown_timer.stop()
+            if hasattr(self, 'memory_update_timer'):
+                self.memory_update_timer.stop()
+
+        # Close any child windows
+        if hasattr(self, '_inspector') and self._inspector:
+            self._inspector.close()
+        if hasattr(self, 'log_window') and self.log_window:
+            self.log_window.close()
+
+        # Accept the close event
+        event.accept()
 
     def save_brain_state(self):
         return {
@@ -577,6 +640,14 @@ class BrainWidget(QtWidgets.QWidget):
         # Draw metrics in top bar
         metrics_text = f"Neurons: {neuron_count}    Edges: {edge_count}    Health: {health:.1f}%    Efficiency: {efficiency:.1f}%"
         metrics_rect = QtCore.QRectF(0, 5, self.width(), 25)
+
+        # Create and configure font
+        metrics_font = painter.font()
+        metrics_font.setPointSize(8)  # Smaller font size
+        metrics_font.setBold(False)   # Remove bold
+        painter.setFont(metrics_font)
+
+        # Draw the text
         painter.setPen(QtGui.QColor(0, 0, 0))
         painter.drawText(metrics_rect, QtCore.Qt.AlignCenter, metrics_text)
         
@@ -729,10 +800,6 @@ class BrainWidget(QtWidgets.QWidget):
         # Convert click position to widget coordinates
         click_pos = event.pos()
         
-        if help_rect.contains(click_pos):
-            self.show_diagnostic_report()
-            return
-        
         # Existing neuron dragging logic
         if event.button() == QtCore.Qt.LeftButton:
             for name, pos in self.neuron_positions.items():
@@ -884,11 +951,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.debug_mode = debug_mode
         self.config = config if config else LearningConfig()  # Initialize config
         self.tamagotchi_logic = tamagotchi_logic
-        
-        # Ensure brain widget gets the debug mode
+        self.initialized = False
         self.brain_widget = BrainWidget(self.config, self.debug_mode)
         self.setWindowTitle("Brain Tool")
-        self.resize(1024, 768)
+        self.resize(1280, 768)
 
         # Initialize logging variables
         self.is_logging = False
@@ -1343,11 +1409,19 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Skip timestamp-only memories (they have numeric keys)
         if isinstance(memory.get('key'), str) and memory['key'].isdigit():
             return False
-        
-        # Must have either formatted_value or a displayable value
+            
+        # Skip memories that don't have a proper category or value
+        if not memory.get('category') or not memory.get('value'):
+            return False
+            
+        # Skip memories where the value is just a timestamp number
+        if isinstance(memory.get('value'), (int, float)) and 'timestamp' in str(memory['value']).lower():
+            return False
+            
+        # Must have either formatted_value or a displayable string value
         if 'formatted_value' not in memory and not isinstance(memory.get('value'), str):
             return False
-        
+            
         return True
 
     def format_memory_display(self, memory):
@@ -1356,9 +1430,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             return ""
         
         # Get the display text - prefer formatted_value, fall back to value
-        display_text = memory.get('formatted_value', memory.get('value', ''))
+        display_text = memory.get('formatted_value', str(memory.get('value', '')))
         
-        # Get and format timestamp
+        # Skip if the display text contains just a timestamp
+        if 'timestamp' in display_text.lower() and len(display_text.split()) < 3:
+            return ""
+        
+        # Rest of the formatting logic remains the same...
         timestamp = memory.get('timestamp', '')
         if isinstance(timestamp, str):
             try:
@@ -2058,6 +2136,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.personality_tab_layout.addWidget(note_label)
 
     def update_brain(self, state):
+        if not self.initialized:
+            self.initialized = True
+            return  # Skip first update
         # Ensure all required state values are present
         full_state = {
             # Core state values
@@ -2154,7 +2235,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <ul>
             <li>by Rufus Pearce</li>
             <li>Brain Tool version 1.0.6.2</li>
-            <li>Dosidicus version 1.0.400 (milestone 3)</li>
+            <li>Dosidicus version 1.0.400.1 (milestone 4)</li>
         <p>This is a research project. Please suggest features.</p>
         </ul>
         """)

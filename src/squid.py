@@ -3,6 +3,7 @@
 
 import os
 import random
+from datetime import datetime
 from enum import Enum
 import math
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -37,11 +38,13 @@ class Squid:
         self.rock_throw_power = 10  # Base throw strength
         self.rock_throw_cooldown = 0
 
-        # Interaction timers
+        # Rock Interactions
         self.rock_interaction_timer = QtCore.QTimer()
         self.rock_interaction_timer.timeout.connect(self.check_rock_interaction)
         self.rock_interaction_timer.start(1000)  # Check every second
-
+        self.rock_hold_start_time = 0
+        self.rock_hold_duration = 0
+        self.rock_decision_made = False
         self.rock_animation_timer = QtCore.QTimer()
         self.rock_animation_timer.timeout.connect(self.update_rock_throw)
 
@@ -58,6 +61,9 @@ class Squid:
         self.ui.window.resizeEvent = self.handle_window_resize
 
         self.view_cone_item = None
+        self.base_speed = 90  # Normal movement speed
+        self.current_speed = self.base_speed
+        self.is_fleeing = False
         self.view_cone_visible = False
         self.poop_timer = None
         self.animation_speed = 1
@@ -76,6 +82,7 @@ class Squid:
         self.pursuing_food = False
         self.target_food = None
 
+        # Goal neurons
         self.satisfaction = 50
         self.anxiety = 10
         self.curiosity = 50
@@ -85,6 +92,23 @@ class Squid:
         else:
             self.personality = personality
         # self.tamagotchi_logic.squid_brain_window.print_to_console(f"Squid created with personality: {self.personality}")
+
+
+    @property
+    def carrying_rock(self):
+        return hasattr(self, 'is_carrying_rock') and self.is_carrying_rock
+    
+    @carrying_rock.setter
+    def carrying_rock(self, value):
+        self.is_carrying_rock = value
+    
+    @property 
+    def current_rock(self):
+        return getattr(self, 'carried_rock', None)
+    
+    @current_rock.setter
+    def current_rock(self, value):
+        self.carried_rock = value
 
     def set_animation_speed(self, speed):
         self.animation_speed = speed
@@ -152,12 +176,31 @@ class Squid:
     #========== MakeDecision
 
     def make_decision(self):
-        """Package decision-making information for visualization"""
-        # Reset novelty tracking flags
-        self.tamagotchi_logic.new_object_encountered = False
-        self.tamagotchi_logic.recent_positive_outcome = False
+        """Complete decision-making with debug override and full logging"""
+        # ===== DEBUG OVERRIDE - FORCE ROCK INTERACTIONS =====
+        debug_rocks = [d for d in self.tamagotchi_logic.get_nearby_decorations(
+            self.squid_x, self.squid_y, 150) 
+            if getattr(d, 'can_be_picked_up', False)]
+        
+        if debug_rocks:
+            print("\n=== DEBUG FORCE-ROCK ===")
+            print(f"Found {len(debug_rocks)} rocks nearby (carrying: {self.carrying_rock})")
+            for i, rock in enumerate(debug_rocks):
+                dist = math.sqrt((self.squid_x - rock.pos().x())**2 + 
+                            (self.squid_y - rock.pos().y())**2)
+                print(f"Rock {i+1}: {getattr(rock, 'filename', 'unknown')} "
+                    f"at {dist:.1f}px")
+            
+            if not self.carrying_rock and self.rock_throw_cooldown == 0:
+                print("DEBUG: Forcing rock pickup!")
+                self.current_rock_target = debug_rocks[0]
+                return "picking_up_rock"
+            elif self.carrying_rock and self.rock_throw_cooldown == 0:
+                print("DEBUG: Forcing rock throw!")
+                return "throwing_rock"
+        # ===== END DEBUG OVERRIDE =====
 
-        # Get current state including neurogenesis data
+        # Original decision logic with enhanced logging
         current_state = {
             "hunger": self.hunger,
             "happiness": self.happiness,
@@ -176,41 +219,43 @@ class Squid:
             "carrying_rock": self.carrying_rock
         }
 
-        # Check for neurogenesis-triggered behaviors first
+        print("\n=== DECISION CYCLE ===")
+        print("Current State:", {k:v for k,v in current_state.items() if not isinstance(v, bool) or v})
+
+        # Neurogenesis-triggered behaviors
         if "defense_0" in self.tamagotchi_logic.brain_window.brain_widget.state:
             if current_state['anxiety'] > 60:
-                self.status = "avoiding_threat"
+                print("DEFENSIVE BEHAVIOR: Avoiding threat")
                 return self.move_away_from_threat()
 
-        # Personality-specific decision modifiers
+        # Personality-specific decisions
         personality_modifiers = {
             Personality.TIMID: self._make_timid_decision,
             Personality.GREEDY: self._make_greedy_decision,
             Personality.STUBBORN: self._make_stubborn_decision,
             Personality.ADVENTUROUS: self._make_adventurous_decision
         }
+        
         if self.personality in personality_modifiers:
             decision = personality_modifiers[self.personality](current_state)
             if decision:
+                print(f"PERSONALITY DECISION ({self.personality.name}): {decision}")
                 return decision
 
-        # Unified rock interaction handling through RockInteractionManager
+        # Rock interactions
         if hasattr(self.tamagotchi_logic, 'rock_interaction'):
-            # Throwing behavior when carrying rock
             if (self.carrying_rock and 
                 self.rock_throw_cooldown == 0 and 
                 random.random() < 0.2 and 
-                self.satisfaction > 60):
+                self.satisfaction > 40):
                 if self.tamagotchi_logic.rock_interaction.start_rock_test():
-                    self.tamagotchi_logic.show_message("Squid threw a rock!")
+                    print("ROCK ACTION: Throwing rock")
                     return "throwing_rock"
             
-            # Pickup behavior when not carrying
             elif (not self.carrying_rock and 
                 self.rock_throw_cooldown == 0 and 
                 self.curiosity > 60 and 
                 random.random() < 0.3):
-                
                 nearby_rocks = [d for d in self.tamagotchi_logic.get_nearby_decorations(
                     self.squid_x, self.squid_y, 150)
                     if self.tamagotchi_logic.rock_interaction.is_valid_rock(d)]
@@ -218,54 +263,62 @@ class Squid:
                 if nearby_rocks:
                     target_rock = random.choice(nearby_rocks)
                     if self.tamagotchi_logic.rock_interaction.start_rock_test(target_rock):
+                        print(f"ROCK ACTION: Picking up {getattr(target_rock, 'filename', 'rock')}")
                         return "picking_up_rock"
                     return "approaching_rock"
 
         # Main decision hierarchy
         if self.should_organize_decorations():
-            return self.organize_decorations()
+            org_result = self.organize_decorations()
+            print(f"ORGANIZING: {org_result}")
+            return org_result
 
-        # Enhanced food decision
+        # Food seeking
         if current_state["hunger"] > 70 and self.get_visible_food():
             closest_food = min(self.get_visible_food(),
                             key=lambda f: self.distance_to(f[0], f[1]))
 
             if current_state["has_novelty_neurons"] and random.random() < 0.3:
+                print("NOVELTY: Exploring food options")
                 self.tamagotchi_logic.new_object_encountered = True
                 return "explore_food_options"
             else:
+                print(f"MOVING TO FOOD: {closest_food}")
                 self.move_towards(closest_food[0], closest_food[1])
                 return "moving_to_food"
 
-        # Sleep decision with neurogenesis modifier
+        # Sleep
         if current_state["sleepiness"] > 90:
             if "stress_response" in self.tamagotchi_logic.brain_window.brain_widget.new_neurons:
                 if random.random() < 0.7:
+                    print("SLEEP: Stress-induced")
                     self.go_to_sleep()
                     return "sleeping"
             else:
+                print("SLEEP: Normal")
                 self.go_to_sleep()
                 return "sleeping"
 
-        # Default behaviors with neurogenesis influence
+        # Novelty exploration
         if current_state["has_novelty_neurons"] and random.random() < 0.4:
+            print("NOVELTY: Exploring")
             self.tamagotchi_logic.new_object_encountered = True
             return "exploring_novelty"
         
-        # Check for startle conditions
-        if current_state['anxiety'] > 70:  # High anxiety indicates startle
+        # Startle response
+        if current_state['anxiety'] > 70:
             startle_reason = self.determine_startle_reason(current_state)
             if startle_reason:
+                print(f"STARTLED: {startle_reason}")
                 self.record_startle_reason(startle_reason)
                 return "avoiding_threat"
 
-        # Fallback to neural network decision
+        # Neural network fallback
         decision = self.tamagotchi_logic.squid_brain_window.make_decision(current_state)
-
-        # Record positive outcomes for neurogenesis
         if decision in ["eating", "playing", "exploring", "picking_up_rock", "throwing_rock"]:
             self.tamagotchi_logic.recent_positive_outcome = True
 
+        print(f"FALLBACK DECISION: {decision or 'exploring_default'}")
         return decision or "exploring_default"
     
     def determine_startle_reason(self, current_state):
@@ -343,27 +396,35 @@ class Squid:
         self.squid_item.setPos(self.squid_x, self.squid_y)
 
     def push_decoration(self, decoration, direction):
-        push_distance = 40  # pixels to push
-        current_pos = decoration.pos()
-        new_x = current_pos.x() + (push_distance * direction)
+        """Push a decoration with proper animation handling"""
+        try:
+            push_distance = 40  # pixels to push
+            current_pos = decoration.pos()
+            new_x = current_pos.x() + (push_distance * direction)
 
-        # Ensure the decoration stays within scene boundaries
-        scene_rect = self.ui.scene.sceneRect()
-        new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
-        
-        # Create animation for the position change
-        self.push_animation = QtCore.QPropertyAnimation()
-        self.push_animation.setTargetObject(decoration)
-        self.push_animation.setPropertyName(b"pos")
-        self.push_animation.setDuration(300)
-        self.push_animation.setStartValue(current_pos)
-        self.push_animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
+            # Ensure the decoration stays within scene boundaries
+            scene_rect = self.ui.scene.sceneRect()
+            new_x = max(scene_rect.left(), 
+                    min(new_x, scene_rect.right() - decoration.boundingRect().width()))
+            
+            # Only create animation if we don't have one running
+            if self.push_animation and self.push_animation.state() == QtCore.QAbstractAnimation.Running:
+                self.push_animation.stop()
 
-        # Connect cleanup callback
-        self.push_animation.finished.connect(
-            lambda: self._on_push_complete(decoration))
-
-        self.push_animation.start()
+            # Create position animation
+            self.push_animation = QtCore.QPropertyAnimation(decoration, b"pos")
+            self.push_animation.setDuration(300)
+            self.push_animation.setStartValue(current_pos)
+            self.push_animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
+            self.push_animation.finished.connect(
+                lambda: self._on_push_complete(decoration))
+            self.push_animation.start()
+            
+        except Exception as e:
+            print(f"Error pushing decoration: {e}")
+            # Fallback to immediate movement
+            decoration.setPos(new_x, current_pos.y())
+            self._on_push_complete(decoration)
 
     def _on_push_complete(self, decoration):
         """Callback when push animation finishes"""
@@ -771,10 +832,11 @@ class Squid:
         self.tamagotchi_logic.show_message("Squid woke up!")
 
     def update_squid_image(self):
+        self.check_rock_hold_time()
         self.squid_item.setPixmap(self.current_image())
 
     def current_image(self):
-        """Return the current image of the squid, with rock if carrying."""
+        """Return the current image of the squid"""
         # Determine base image
         if self.is_sleeping:
             base_image = self.images[f"sleep{self.current_frame + 1}"]
@@ -786,34 +848,7 @@ class Squid:
             base_image = self.images[f"up{self.current_frame + 1}"]
         else:
             base_image = self.images["left1"]
-
-        # If carrying a rock, create a composite image
-        if self.carrying_rock and self.current_rock:
-            # Create a pixmap large enough for squid + rock
-            composite = QtGui.QPixmap(base_image.width(), base_image.height())
-            composite.fill(QtCore.Qt.transparent)
-            painter = QtGui.QPainter(composite)
-            
-            # Draw squid first
-            painter.drawPixmap(0, 0, base_image)
-            
-            # Get and scale rock image
-            rock_pixmap = self.current_rock.pixmap_item.pixmap()
-            rock_pixmap = rock_pixmap.scaled(
-                base_image.width() // 2, 
-                base_image.height() // 2,
-                QtCore.Qt.KeepAspectRatio,
-                QtCore.Qt.SmoothTransformation
-            )
-            
-            # Draw rock near tentacles (adjust position as needed)
-            rock_x = base_image.width() - rock_pixmap.width() - 10
-            rock_y = base_image.height() - rock_pixmap.height() - 5
-            painter.drawPixmap(rock_x, rock_y, rock_pixmap)
-            
-            painter.end()
-            return composite
-
+        
         return base_image
 
     def move_randomly(self):
@@ -973,7 +1008,7 @@ class Squid:
         return can_pick
 
     def pick_up_rock(self, rock):
-        """Delegate to interaction manager"""
+        """Delegate to interaction manager with random carry duration"""
         if not hasattr(self.tamagotchi_logic, 'rock_interaction'):
             return False
         return self.tamagotchi_logic.rock_interaction.attach_rock_to_squid(rock)
@@ -1029,32 +1064,44 @@ class Squid:
 
 
     def check_rock_interaction(self):
-        """Periodically check for rock interaction opportunities"""
-        if self.is_sleeping or not self.tamagotchi_logic:
-            return
+        """Debug-enhanced rock interaction check"""
+        config = self.tamagotchi_logic.config_manager.get_rock_config()
+        
+        # Find nearby rocks
+        decorations = self.tamagotchi_logic.get_nearby_decorations(
+            self.squid_x, self.squid_y, 150)
+        rocks = [d for d in decorations if getattr(d, 'can_be_picked_up', False)]
 
         # Rock throwing
-        if (self.carrying_rock and self.rock_throw_cooldown == 0 and
-            random.random() < 0.05 and self.satisfaction > 60):
+        if (self.carrying_rock 
+                and self.rock_throw_cooldown == 0 
+                and random.random() < config['throw_prob']):
+            #print("[DEBUG] Attempting to throw rock!")
             direction = random.choice(["left", "right"])
             if self.throw_rock(direction):
-                self.tamagotchi_logic.show_message(f"Squid threw a rock!")
+                #print("[DEBUG] Rock thrown successfully!")
                 return
 
-        # Rock pickup - with bottom boundary check
-        elif (not self.carrying_rock and self.rock_throw_cooldown == 0 and
-            self.curiosity > 70 and random.random() < 0.02):
+        # Rock pickup
+        if (not self.carrying_rock 
+                and self.rock_throw_cooldown == 0 
+                and rocks 
+                and random.random() < config['pickup_prob']):
+            target_rock = random.choice(rocks)
+            #print(f"[DEBUG] Attempting to pick up: {getattr(target_rock, 'filename', 'unknown_rock')}")
             
-            # Get nearby rocks, excluding those at the very bottom
-            rocks = [d for d in self.tamagotchi_logic.get_nearby_decorations(
-                    self.squid_x, self.squid_y, 150)
-                    if (getattr(d, 'category', None) == 'rock' and 
-                    d.pos().y() < self.ui.window_height - 150)]  # 150px from bottom
-            
-            if rocks:
-                rock = random.choice(rocks)
-                if self.pick_up_rock(rock):
-                    self.tamagotchi_logic.show_message("Squid picked up a rock!")
+            if self.pick_up_rock(target_rock):
+                #print("[DEBUG] Pickup successful!")
+                # Debug memory entry
+                mem_details = {
+                    "rock": getattr(target_rock, 'filename', 'unknown'),
+                    "position": (target_rock.pos().x(), target_rock.pos().y()),
+                    "timestamp": datetime.now().isoformat()
+                }
+                self.memory_manager.add_short_term_memory(
+                    'interaction', 'rock_pickup', mem_details)
+            else:
+                print("[DEBUG] Pickup failed")
 
     def get_center(self):
         """Return the center position of the squid"""

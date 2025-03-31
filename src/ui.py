@@ -12,7 +12,6 @@ from PyQt5.QtWidgets import QGraphicsPixmapItem
 from .squid_brain_window import SquidBrainWindow
 from .statistics_window import StatisticsWindow
 
-
 class DecorationItem(QtWidgets.QLabel):
     def __init__(self, pixmap, filename):
         super().__init__()
@@ -34,39 +33,61 @@ class DecorationItem(QtWidgets.QLabel):
             drag.setHotSpot(event.pos() - self.rect().topLeft())
             drag.exec_(QtCore.Qt.CopyAction)
 
-class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
-    def __init__(self, pixmap, filename):
-        super().__init__(pixmap)
-        self.filename = filename
-        self.pixmap_item = QtWidgets.QGraphicsPixmapItem(self)
-        self.pixmap_item.setPixmap(pixmap.scaled(128, 128, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
-        self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable)
-        self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable)
-        self.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
+
+class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
+    def __init__(self, pixmap=None, filename=None, parent=None):
+        # Initialize both parent classes properly
+        QtWidgets.QGraphicsPixmapItem.__init__(self, parent)  # Initialize QGraphicsPixmapItem first
+        QObject.__init__(self)  # Then initialize QObject
+        
+        # Remove the nested pixmap_item - we'll use the base class's pixmap directly
+        if pixmap:
+            # Set the pixmap directly on this item (not on a child item)
+            scaled_pixmap = pixmap.scaled(128, 128, 
+                                       QtCore.Qt.KeepAspectRatio, 
+                                       QtCore.Qt.SmoothTransformation)
+            self.setPixmap(scaled_pixmap)
+        
+        # Set all flags at once for better performance
+        self.setFlags(QtWidgets.QGraphicsItem.ItemIsMovable |
+                     QtWidgets.QGraphicsItem.ItemIsSelectable |
+                     QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
+        
         self.resize_handle = None
-        self.original_pixmap = pixmap
+        self.original_pixmap = pixmap  # Store original for resizing
         self.filename = filename
-        self.stat_multipliers, self.category = self.get_decoration_info()
+        
+        # Initialize with default values first
+        self.stat_multipliers = {'happiness': 1}
+        self.category = 'generic'
+        
+        # Then try to get decoration info if filename exists
+        if filename:
+            multipliers, category = self.get_decoration_info()
+            if multipliers:
+                self.stat_multipliers = multipliers
+            if category:
+                self.category = category
 
-        if not self.stat_multipliers:
-            self.stat_multipliers = {'happiness': 1}
-
-        # Add these rock interaction attributes
-        self.can_be_picked_up = 'rock' in filename.lower()  # Auto-detect rocks from filename
+        # Rock interaction attributes
+        self.can_be_picked_up = filename and 'rock' in filename.lower()
         self.is_being_carried = False
-        self.original_scale = 1.0  # Store original scale for restoration
+        self.original_scale = 1.0
 
     def boundingRect(self):
-        return self.pixmap_item.boundingRect().adjusted(0, 0, 20, 20)
+        return super().boundingRect().adjusted(0, 0, 20, 20)
+
+
 
     def paint(self, painter, option, widget):
-        self.pixmap_item.paint(painter, option, widget)
+        super().paint(painter, option, widget)
         if self.isSelected():
             painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 255), 2))
             painter.drawRect(self.boundingRect())
             handle_pos = self.boundingRect().bottomRight() - QtCore.QPointF(20, 20)
             handle_rect = QtCore.QRectF(handle_pos, QtCore.QSizeF(20, 20))
             painter.fillRect(handle_rect, QtGui.QColor(0, 0, 255))
+
 
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton:
@@ -181,15 +202,15 @@ class Ui:
         self.squid_brain_window = None
 
         # Add debug text item
-        self.debug_text = QtWidgets.QGraphicsTextItem("DEBUG")
-        self.debug_text.setDefaultTextColor(QtGui.QColor("#2a2a2a"))
+        self.debug_text = QtWidgets.QGraphicsTextItem("Debug")
+        self.debug_text.setDefaultTextColor(QtGui.QColor("#a9a9a9"))
         font = QtGui.QFont()
-        font.setPointSize(40)
+        font.setPointSize(20)
         self.debug_text.setFont(font)
         self.debug_text.setRotation(-90)
-        self.debug_text.setPos(50, 50)
+        self.debug_text.setPos(75, 75)
         self.debug_text.setZValue(100)
-        self.debug_text.setVisible(self.debug_mode)  # Use the stored debug_mode
+        self.debug_text.setVisible(self.debug_mode)
         self.scene.addItem(self.debug_text)
 
         self.decoration_window = DecorationWindow(self.window)
@@ -542,26 +563,34 @@ class Ui:
             pixmap = QtGui.QPixmap(file_path)
             if not pixmap.isNull():
                 filename = os.path.basename(file_path)
+                
+                # Create the item - don't set flags here since they're set in __init__
                 item = ResizablePixmapItem(pixmap, file_path)
-
-                # Set fixed size for Rock01 and Rock02
+                
+                # Handle scaling
                 if filename.lower().startswith(('rock01', 'rock02')):
-                    item.pixmap_item.setPixmap(pixmap.scaled(100, 100, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
-                    item.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable)
-                    item.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable)
-                    item.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
-                elif filename.startswith('st_'):
-                    # Don't scale items starting with 'st_'
-                    scale_factor = 1.0
-                else:
-                    # Generate a random scale factor between 0.5 and 2 for other decorations
+                    # For rocks, set a fixed size
+                    item.setPixmap(pixmap.scaled(
+                        100, 100, 
+                        QtCore.Qt.KeepAspectRatio, 
+                        QtCore.Qt.SmoothTransformation
+                    ))
+                elif not filename.startswith('st_'):
+                    # For other decorations, random scale
                     scale_factor = random.uniform(0.75, 2)
                     item.setScale(scale_factor)
 
+                # Set position and add to scene
                 pos = self.view.mapToScene(event.pos())
                 item.setPos(pos)
                 self.scene.addItem(item)
-                self.decoration_window.add_decoration_item(item)
+                
+                # Bring to front to ensure it's clickable
+                item.setZValue(1)
+                
+                # Update scene to ensure item is visible/interactive
+                self.scene.update()
+                
                 event.accept()
             else:
                 event.ignore()
@@ -709,8 +738,11 @@ class Ui:
 
     def toggle_debug_mode(self):
         """Toggle debug mode state"""
-        # Get current debug mode state
-        current_debug = getattr(self.tamagotchi_logic, 'debug_mode', False) if hasattr(self, 'tamagotchi_logic') else self.debug_mode
+        # Get current debug mode state from logic if available
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None:
+            current_debug = self.tamagotchi_logic.debug_mode
+        else:
+            current_debug = self.debug_mode
         
         # Toggle the state
         new_debug_mode = not current_debug
@@ -721,9 +753,15 @@ class Ui:
             if hasattr(self.tamagotchi_logic, 'statistics_window'):
                 self.tamagotchi_logic.statistics_window.set_debug_mode(new_debug_mode)
         
+        # Update UI state
         self.debug_mode = new_debug_mode
         self.debug_action.setChecked(new_debug_mode)
         self.debug_text.setVisible(new_debug_mode)
+        
+        # Force update the debug text visibility
+        if hasattr(self, 'debug_text'):
+            self.debug_text.setVisible(new_debug_mode)
+            self.scene.update()
         
         # Sync with brain window if it exists
         if hasattr(self, 'squid_brain_window'):

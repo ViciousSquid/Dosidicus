@@ -301,4 +301,3 @@ class MemoryManager:
             background_color = "#FFFACD"  # Pastel yellow
 
         return f"<div style='background-color: {background_color}; padding: 5px; margin: 5px; border-radius: 5px;'>{formatted_memory}<br>{interaction_type}<hr></div>"
-
