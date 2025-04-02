@@ -2,7 +2,7 @@
 
 # Squid Class Technical Overview
 
-The Squid class represents the main character in the Dosidicus application, a virtual pet simulation with complex behaviors and personality traits.
+The Squid class represents a squid with complex behaviors and personality traits.
 
 ## Class Overview
 
@@ -51,24 +51,7 @@ def change_direction(self):
     # Randomly changes the squid's movement direction
 ```
 
-### Decision Making
-
-```
-def make_decision(self):
-    # The main decision-making function that determines the squid's behavior
-```
-
-```
-def _make_timid_decision(self, current_state):
-    # Personality-specific decision making for timid squids
-```
-
-```
-def _make_greedy_decision(self, current_state):
-    # Personality-specific decision making for greedy squids
-```
-
-### Food Interaction
+### Food Interactions
 
 ```
 def eat(self, food_item):
@@ -94,7 +77,7 @@ def push_decoration(self, decoration, direction):
 
 ```
 def organize_decorations(self):
-    # Organizes nearby decorations (personality-specific behavior)
+    # Hoards nearby decorations (personality-specific behavior)
 ```
 
 ### State Management
@@ -116,18 +99,8 @@ def load_state(self, state):
 
 ## Detailed Method Explanations
 
-### make\_decision()
 
-The core decision-making method that determines the squid's behavior based on:
-
-*   Current needs (hunger, sleepiness, etc.)
-*   Personality traits
-*   Environmental factors
-*   Neurogenesis state (brain development)
-
-Implements a hierarchical decision system that checks conditions in priority order.
-
-### move\_squid()
+### `move_squid()`
 
 Handles the squid's movement with several key features:
 
@@ -137,7 +110,7 @@ Handles the squid's movement with several key features:
 *   Changes direction at screen boundaries
 *   Updates visual representation (animation frames)
 
-### eat()
+### `eat()`
 
 Complex food consumption behavior that:
 
@@ -155,21 +128,20 @@ The squid implements distinct personality types that modify behavior:
 *   **GREEDY**: Focused on food, eats more
 *   **STUBBORN**: Prefers specific foods, resistant to change
 
-Personality affects decision making through specialized methods (\_make\_\*\_decision).
 
 ## Vision System
 
 The squid has a limited field of view implemented with:
 
-*   80-degree view cone (view\_cone\_angle)
-*   Visualization capability (toggle\_view\_cone())
-*   Food prioritization within view (get\_visible\_food())
+*   80-degree view cone (`view_cone_angle`)
+*   Visualization capability (`toggle_view_cone()`)
+*   Food prioritization within view (`get_visible_food()`)
 
 ## Animation System
 
 The visual representation uses:
 
-*   Frame-based animation (current\_frame)
+*   Frame-based animation (current_frame)
 *   Direction-specific sprites
 *   Sleeping state animation
 *   Adjustable animation speed
@@ -192,9 +164,9 @@ The squid maintains numerous state variables:
 
 The squid interacts with its environment through:
 
-*   Food consumption (eat())
-*   Decoration manipulation (push\_decoration())
-*   Personality-specific behaviors (organize\_decorations())
-*   Visual feedback (show\_eating\_effect())
+*   Food consumption (`eat()`)
+*   Decoration manipulation (`push_decoration()`)
+*   Personality-specific behaviors (`organize_decorations()`)
+
 
 **Note:** The Squid class demonstrates a sophisticated virtual pet implementation with complex behavior patterns, personality-driven decision making, and rich environmental interactions.
