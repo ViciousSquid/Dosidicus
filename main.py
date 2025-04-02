@@ -2,6 +2,7 @@ import sys
 import time
 import json
 import os
+os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false'
 import traceback
 import logging
 from PyQt5 import QtWidgets, QtCore
@@ -73,16 +74,23 @@ class MainWindow(QtWidgets.QMainWindow):
             print("Existing save data found and will be loaded")
             self.squid = Squid(self.user_interface, None, None)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
+            
+            # Set up connections first
+            self.squid.tamagotchi_logic = self.tamagotchi_logic
+            self.user_interface.tamagotchi_logic = self.tamagotchi_logic
+            self.brain_window.tamagotchi_logic = self.tamagotchi_logic
+            
+            # Now load from save data
             self.create_squid_from_save_data()
         else:
             print(f"\033[92;22m >> Initialising a new simulation with {self.specified_personality.value if self.specified_personality else 'random'} squid.\033[0m")
             self.create_new_game(self.specified_personality)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
-        
-        # Connect components
-        self.squid.tamagotchi_logic = self.tamagotchi_logic
-        self.user_interface.tamagotchi_logic = self.tamagotchi_logic
-        self.brain_window.tamagotchi_logic = self.tamagotchi_logic
+            
+            # Connect components
+            self.squid.tamagotchi_logic = self.tamagotchi_logic
+            self.user_interface.tamagotchi_logic = self.tamagotchi_logic
+            self.brain_window.tamagotchi_logic = self.tamagotchi_logic
 
         # Connect signals
         self.user_interface.new_game_action.triggered.connect(self.start_new_game)
@@ -173,14 +181,27 @@ class MainWindow(QtWidgets.QMainWindow):
     def create_squid_from_save_data(self):
         """Load squid state from save file"""
         save_data = self.save_manager.load_game()
-        if save_data:
+        if save_data and 'game_state' in save_data and 'squid' in save_data['game_state']:
             squid_data = save_data['game_state']['squid']
             personality = Personality(squid_data['personality'])
             self.squid.load_state(squid_data)
             print(f"\033Loaded squid with personality:\033[0m {self.squid.personality.value}")
+            
+            # Make sure tamagotchi_logic is properly initialized
+            if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+                # Start the simulation paused
+                self.tamagotchi_logic.set_simulation_speed(0)
+                
+                # Show the pause message
+                if hasattr(self.user_interface, 'show_pause_message'):
+                    try:
+                        self.user_interface.show_pause_message(True)
+                    except Exception as e:
+                        print(f"Warning: Failed to show pause message: {e}")
+            
             self.start_simulation()
         else:
-            print("No save data found. Starting new game.")
+            print("No save data found or invalid save data. Starting new simulation")
             self.create_new_game()
 
     def load_game(self):
@@ -248,7 +269,7 @@ def main():
 
     print(f"Personality: {args.personality}")
     print(f"Debug mode: {args.debug}")
-    print(f"Neurogenesis cooldown: {args.neurocooldown or 'default (120)'}")
+    print(f"Cooldown {args.neurocooldown or 'will be loaded from config'}")
 
     app = QtWidgets.QApplication(sys.argv)
     
