@@ -229,7 +229,7 @@ class LearningConfig:
             'novelty_threshold': 3,
             'stress_threshold': 0.7,
             'reward_threshold': 0.6,
-            'cooldown': 300,  # 5 minutes in seconds
+            'cooldown': 200,  # Changed from 300 to 200 seconds
             'new_neuron_initial_weight': 0.5,
             'max_new_neurons': 5,
             'decay_rate': 0.95  # How quickly novelty/stress/reward counters decay

@@ -176,6 +176,10 @@ class RockInteractionManager:
         config = self.rock_config
         rock = self.squid.carried_rock
         
+        # Set squid status to throwing rock
+        if hasattr(self.squid, 'status'):
+            self.squid.status = "throwing_rock"
+        
         # Detach from squid and reset parent to scene
         rock.setParentItem(None)
         
@@ -301,7 +305,14 @@ class RockInteractionManager:
             # Make sure to reset all rock-related states
             self.squid.carried_rock.is_being_carried = False
             self.squid.carried_rock = None
+        
+        # Reset squid states
         self.squid.is_carrying_rock = False
+        
+        # Reset status to default if it was set to "throwing_rock"
+        if hasattr(self.squid, 'status') and self.squid.status == "throwing_rock":
+            self.squid.status = "roaming"
+        
         self.throw_velocity_x = 0
         self.throw_velocity_y = 0
         self.cleanup()

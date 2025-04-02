@@ -1,5 +1,5 @@
 # Dosidicus
-# Version 1.0.400       March 2025
+# Version 1.0.400.5 (milestone 4)      April 2025
 
 import os
 import random
@@ -10,6 +10,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from .mental_states import MentalStateManager
 from .memory_manager import MemoryManager
 from .personality import Personality
+from .decision_engine import DecisionEngine
 
 class Squid:
     def __init__(self, user_interface, tamagotchi_logic=None, personality=None, neuro_cooldown=None):
@@ -18,8 +19,8 @@ class Squid:
         self.memory_manager = MemoryManager()
         self.push_animation = None
 
-        # Set neurogenesis cooldown (default to 120 seconds if not specified)
-        self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 120
+        # Set neurogenesis cooldown (default to 200 seconds if not specified)
+        self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 200
 
         # Rock interaction system
         self.carrying_rock = False
@@ -91,7 +92,6 @@ class Squid:
             self.personality = random.choice(list(Personality))
         else:
             self.personality = personality
-        # self.tamagotchi_logic.squid_brain_window.print_to_console(f"Squid created with personality: {self.personality}")
 
 
     @property
@@ -173,153 +173,13 @@ class Squid:
         # This method was moved to TamagotchiLogic 26/07/2024
         pass
 
-    #========== MakeDecision
-
     def make_decision(self):
-        """Complete decision-making with debug override and full logging"""
-        # ===== DEBUG OVERRIDE - FORCE ROCK INTERACTIONS =====
-        debug_rocks = [d for d in self.tamagotchi_logic.get_nearby_decorations(
-            self.squid_x, self.squid_y, 150) 
-            if getattr(d, 'can_be_picked_up', False)]
+        """Delegate to the decision engine for emergent behavior"""
+        if not hasattr(self, '_decision_engine'):
+            from .decision_engine import DecisionEngine
+            self._decision_engine = DecisionEngine(self)
         
-        if debug_rocks:
-            print("\n=== DEBUG FORCE-ROCK ===")
-            print(f"Found {len(debug_rocks)} rocks nearby (carrying: {self.carrying_rock})")
-            for i, rock in enumerate(debug_rocks):
-                dist = math.sqrt((self.squid_x - rock.pos().x())**2 + 
-                            (self.squid_y - rock.pos().y())**2)
-                print(f"Rock {i+1}: {getattr(rock, 'filename', 'unknown')} "
-                    f"at {dist:.1f}px")
-            
-            if not self.carrying_rock and self.rock_throw_cooldown == 0:
-                print("DEBUG: Forcing rock pickup!")
-                self.current_rock_target = debug_rocks[0]
-                return "picking_up_rock"
-            elif self.carrying_rock and self.rock_throw_cooldown == 0:
-                print("DEBUG: Forcing rock throw!")
-                return "throwing_rock"
-        # ===== END DEBUG OVERRIDE =====
-
-        # Original decision logic with enhanced logging
-        current_state = {
-            "hunger": self.hunger,
-            "happiness": self.happiness,
-            "cleanliness": self.cleanliness,
-            "sleepiness": self.sleepiness,
-            "satisfaction": self.satisfaction,
-            "anxiety": self.anxiety,
-            "curiosity": self.curiosity,
-            "is_sick": self.is_sick,
-            "is_sleeping": self.is_sleeping,
-            "food_visible": bool(self.get_visible_food()),
-            "personality": self.personality.value,
-            "near_rocks": self.is_near_decorations('rock'),
-            "has_novelty_neurons": any(n.startswith('novel') for n in
-                                    self.tamagotchi_logic.brain_window.brain_widget.new_neurons),
-            "carrying_rock": self.carrying_rock
-        }
-
-        print("\n=== DECISION CYCLE ===")
-        print("Current State:", {k:v for k,v in current_state.items() if not isinstance(v, bool) or v})
-
-        # Neurogenesis-triggered behaviors
-        if "defense_0" in self.tamagotchi_logic.brain_window.brain_widget.state:
-            if current_state['anxiety'] > 60:
-                print("DEFENSIVE BEHAVIOR: Avoiding threat")
-                return self.move_away_from_threat()
-
-        # Personality-specific decisions
-        personality_modifiers = {
-            Personality.TIMID: self._make_timid_decision,
-            Personality.GREEDY: self._make_greedy_decision,
-            Personality.STUBBORN: self._make_stubborn_decision,
-            Personality.ADVENTUROUS: self._make_adventurous_decision
-        }
-        
-        if self.personality in personality_modifiers:
-            decision = personality_modifiers[self.personality](current_state)
-            if decision:
-                print(f"PERSONALITY DECISION ({self.personality.name}): {decision}")
-                return decision
-
-        # Rock interactions
-        if hasattr(self.tamagotchi_logic, 'rock_interaction'):
-            if (self.carrying_rock and 
-                self.rock_throw_cooldown == 0 and 
-                random.random() < 0.2 and 
-                self.satisfaction > 40):
-                if self.tamagotchi_logic.rock_interaction.start_rock_test():
-                    print("ROCK ACTION: Throwing rock")
-                    return "throwing_rock"
-            
-            elif (not self.carrying_rock and 
-                self.rock_throw_cooldown == 0 and 
-                self.curiosity > 60 and 
-                random.random() < 0.3):
-                nearby_rocks = [d for d in self.tamagotchi_logic.get_nearby_decorations(
-                    self.squid_x, self.squid_y, 150)
-                    if self.tamagotchi_logic.rock_interaction.is_valid_rock(d)]
-                
-                if nearby_rocks:
-                    target_rock = random.choice(nearby_rocks)
-                    if self.tamagotchi_logic.rock_interaction.start_rock_test(target_rock):
-                        print(f"ROCK ACTION: Picking up {getattr(target_rock, 'filename', 'rock')}")
-                        return "picking_up_rock"
-                    return "approaching_rock"
-
-        # Main decision hierarchy
-        if self.should_organize_decorations():
-            org_result = self.organize_decorations()
-            print(f"ORGANIZING: {org_result}")
-            return org_result
-
-        # Food seeking
-        if current_state["hunger"] > 70 and self.get_visible_food():
-            closest_food = min(self.get_visible_food(),
-                            key=lambda f: self.distance_to(f[0], f[1]))
-
-            if current_state["has_novelty_neurons"] and random.random() < 0.3:
-                print("NOVELTY: Exploring food options")
-                self.tamagotchi_logic.new_object_encountered = True
-                return "explore_food_options"
-            else:
-                print(f"MOVING TO FOOD: {closest_food}")
-                self.move_towards(closest_food[0], closest_food[1])
-                return "moving_to_food"
-
-        # Sleep
-        if current_state["sleepiness"] > 90:
-            if "stress_response" in self.tamagotchi_logic.brain_window.brain_widget.new_neurons:
-                if random.random() < 0.7:
-                    print("SLEEP: Stress-induced")
-                    self.go_to_sleep()
-                    return "sleeping"
-            else:
-                print("SLEEP: Normal")
-                self.go_to_sleep()
-                return "sleeping"
-
-        # Novelty exploration
-        if current_state["has_novelty_neurons"] and random.random() < 0.4:
-            print("NOVELTY: Exploring")
-            self.tamagotchi_logic.new_object_encountered = True
-            return "exploring_novelty"
-        
-        # Startle response
-        if current_state['anxiety'] > 70:
-            startle_reason = self.determine_startle_reason(current_state)
-            if startle_reason:
-                print(f"STARTLED: {startle_reason}")
-                self.record_startle_reason(startle_reason)
-                return "avoiding_threat"
-
-        # Neural network fallback
-        decision = self.tamagotchi_logic.squid_brain_window.make_decision(current_state)
-        if decision in ["eating", "playing", "exploring", "picking_up_rock", "throwing_rock"]:
-            self.tamagotchi_logic.recent_positive_outcome = True
-
-        print(f"FALLBACK DECISION: {decision or 'exploring_default'}")
-        return decision or "exploring_default"
+        return self._decision_engine.make_decision()
     
     def determine_startle_reason(self, current_state):
         """Determine why the squid is startled based on environment"""
@@ -1065,6 +925,12 @@ class Squid:
 
     def check_rock_interaction(self):
         """Debug-enhanced rock interaction check"""
+        if not hasattr(self, 'tamagotchi_logic') or self.tamagotchi_logic is None:
+            return False
+            
+        if not hasattr(self.tamagotchi_logic, 'config_manager'):
+            return False
+            
         config = self.tamagotchi_logic.config_manager.get_rock_config()
         
         # Find nearby rocks

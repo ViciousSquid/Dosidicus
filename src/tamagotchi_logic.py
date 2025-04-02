@@ -1,5 +1,5 @@
 # Dosidicus - digital pet with a neural network
-# by Rufus Pearce (ViciousSquid)  |  March 2025  |  version 1.0.400.3
+# by Rufus Pearce (ViciousSquid)  |  March 2025  |  1.0.400.5 (milestone 4)
 # https://github.com/ViciousSquid/Dosidicus
 
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -154,24 +154,121 @@ class TamagotchiLogic:
         self.squid.mental_state_manager.set_mental_states_enabled(enabled)
 
 
+
     def get_decision_data(self):
-        """Package decision-making information for visualization"""
-        return {
+        """Package decision-making information for visualization based on DecisionEngine"""
+        # Default empty data structure
+        decision_data = {
             'timestamp': time.strftime("%H:%M:%S"),
-            'inputs': self.get_current_state(),
-            'active_memories': self.get_active_memories(),
-            'possible_actions': self.get_available_actions(),
-            'final_decision': self.squid.status,
-            'confidence': random.uniform(0.7, 0.95),
-            'processing_time': random.randint(50, 200),
-            'personality_influence': self.squid.personality.value,
-            'emotions': {
-                'happiness': self.squid.happiness,
-                'anxiety': self.squid.anxiety,
-                'curiosity': self.squid.curiosity
-            },
-            'learning_history': self.get_recent_learning()
+            'inputs': {},
+            'active_memories': [],
+            'possible_actions': [],
+            'final_decision': "unknown",
+            'confidence': 0.0,
+            'processing_time': 0,
+            'personality_influence': getattr(self.squid, 'personality', 'unknown'),
+            'weights': {},
+            'adjusted_weights': {},
+            'randomness': {}
         }
+        
+        if not hasattr(self, 'squid') or not self.squid:
+            return decision_data
+            
+        try:
+            # Get current state for inputs
+            decision_data['inputs'] = {
+                "hunger": self.squid.hunger,
+                "happiness": self.squid.happiness,
+                "cleanliness": self.squid.cleanliness,
+                "sleepiness": self.squid.sleepiness,
+                "satisfaction": self.squid.satisfaction,
+                "anxiety": self.squid.anxiety,
+                "curiosity": self.squid.curiosity,
+                "is_sick": self.squid.is_sick,
+                "is_sleeping": self.squid.is_sleeping,
+                "has_food_visible": bool(self.squid.get_visible_food()),
+                "carrying_rock": getattr(self.squid, 'carrying_rock', False),
+            }
+            
+            # Capture decision engine logic before making the decision
+            decision_data['final_decision'] = self.squid.status
+            
+            # Get active memories
+            if hasattr(self.squid, 'memory_manager'):
+                active_memories = self.squid.memory_manager.get_active_memories_data(3)
+                decision_data['active_memories'] = [
+                    f"{mem.get('category', 'memory')}: {str(mem.get('formatted_value', ''))[:50]}"
+                    for mem in active_memories
+                ]
+            
+            # Simulate processing time (would be cool to measure actual time)
+            decision_data['processing_time'] = random.randint(20, 100)
+            
+            # Confidence of the decision (higher for more extreme weight differences)
+            # Here we're estimating based on the squid's state and randomizing a bit
+            base_confidence = 0.5
+            # Adjust confidence based on state extremes
+            for key, value in decision_data['inputs'].items():
+                if isinstance(value, (int, float)) and value > 80:
+                    base_confidence += 0.1  # More confident with extreme values
+                elif isinstance(value, (int, float)) and value < 20:
+                    base_confidence += 0.1
+            # Cap and add randomness
+            base_confidence = min(0.9, base_confidence)
+            decision_data['confidence'] = base_confidence + random.uniform(-0.1, 0.1)
+            
+            # Get brain network state if available
+            if hasattr(self, 'squid_brain_window') and self.squid_brain_window:
+                brain_state = self.squid_brain_window.brain_widget.state
+            else:
+                brain_state = {}
+            
+            # Calculate decision weights (replicating the logic from DecisionEngine)
+            weights = {
+                "exploring": brain_state.get("curiosity", 50) * 0.8 * (1 - (brain_state.get("anxiety", 50) / 100)),
+                "eating": brain_state.get("hunger", 50) * 1.2 if self.squid.get_visible_food() else 0,
+                "approaching_rock": brain_state.get("curiosity", 50) * 0.7 if not getattr(self.squid, 'carrying_rock', False) else 0,
+                "throwing_rock": brain_state.get("satisfaction", 50) * 0.7 if getattr(self.squid, 'carrying_rock', False) else 0,
+                "avoiding_threat": brain_state.get("anxiety", 50) * 0.9,
+                "organizing": brain_state.get("satisfaction", 50) * 0.5
+            }
+            
+            decision_data['weights'] = weights
+            
+            # Apply personality modifiers (replicating logic from DecisionEngine)
+            adjusted_weights = weights.copy()
+            
+            # Personality modifiers from the DecisionEngine
+            if self.squid.personality.value == "timid":
+                adjusted_weights["avoiding_threat"] *= 1.5
+                adjusted_weights["approaching_rock"] *= 0.7
+            elif self.squid.personality.value == "adventurous":
+                adjusted_weights["exploring"] *= 1.3
+                adjusted_weights["approaching_rock"] *= 1.2
+            elif self.squid.personality.value == "greedy":
+                adjusted_weights["eating"] *= 1.5
+                
+            decision_data['adjusted_weights'] = adjusted_weights
+            
+            # Generate random factors for each action
+            randomness = {}
+            for action in weights.keys():
+                randomness[action] = random.uniform(0.85, 1.15)
+            
+            decision_data['randomness'] = randomness
+            
+            # Possible actions
+            decision_data['possible_actions'] = [
+                action for action, weight in adjusted_weights.items()
+                if weight > 0
+            ]
+        except Exception as e:
+            print(f"Error generating decision data: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        
+        return decision_data
 
     def get_active_memories(self):
         # Get raw memory objects instead of display strings
@@ -443,9 +540,12 @@ class TamagotchiLogic:
     def set_simulation_speed(self, speed):
         self.simulation_speed = speed
         self.update_timers()
-        #if self.squid:
-        #    self.squid.set_animation_speed(speed)
-
+        
+        if hasattr(self, 'squid'):
+            self.squid.set_animation_speed(speed)
+        
+        if hasattr(self, 'brain_window'):
+            self.brain_window.set_pause_state(speed == 0)
 
         print(f"\033[38;5;208;1m >> Simulation speed: {speed}x\033[0m")
 
@@ -885,13 +985,26 @@ class TamagotchiLogic:
         self.rps_game.start_game()
 
     def give_medicine(self):
-        if self.squid is not None and self.squid.is_sick:
+        print(f"Debug: Give medicine called.")
+        print(f"Debug: Squid is_sick: {self.squid.is_sick}")
+        print(f"Debug: Mental state manager sick state: {self.squid.mental_state_manager.is_state_active('sick')}")
+        
+        if (self.squid is not None and 
+            (self.squid.is_sick or 
+            self.squid.mental_state_manager.is_state_active('sick'))):
+            
+            print("Debug: Applying medicine effects")
             self.squid.is_sick = False
+            self.squid.mental_state_manager.set_state("sick", False)
+            
             self.squid.happiness = max(0, self.squid.happiness - 30)
             self.squid.sleepiness = min(100, self.squid.sleepiness + 50)
-            self.show_message("Medicine given. Squid is no longer sick but feels drowsy.")
+            
+            self.show_message("Medicine given. Squid didn't like that!")
+            
             # Add thoughts
-            self.brain_window.add_thought("I am grumpy and anxious because I was forced to take medicine")
+            if hasattr(self.brain_window, 'add_thought'):
+                self.brain_window.add_thought("I am grumpy and anxious because I was forced to take medicine")
 
             # Hide the sick icon immediately
             self.squid.hide_sick_icon()

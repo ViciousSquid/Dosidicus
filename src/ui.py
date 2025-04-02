@@ -40,9 +40,12 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
         QtWidgets.QGraphicsPixmapItem.__init__(self, parent)  # Initialize QGraphicsPixmapItem first
         QObject.__init__(self)  # Then initialize QObject
         
-        # Remove the nested pixmap_item - we'll use the base class's pixmap directly
+        # Set the _is_pause_message attribute explicitly to None for safer checking
+        self._is_pause_message = None
+        
+        self.original_pixmap = pixmap  # Store original pixmap for resizing
         if pixmap:
-            # Set the pixmap directly on this item (not on a child item)
+            # Set the pixmap directly on this item
             scaled_pixmap = pixmap.scaled(128, 128, 
                                        QtCore.Qt.KeepAspectRatio, 
                                        QtCore.Qt.SmoothTransformation)
@@ -54,7 +57,6 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
                      QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
         
         self.resize_handle = None
-        self.original_pixmap = pixmap  # Store original for resizing
         self.filename = filename
         
         # Initialize with default values first
@@ -84,36 +86,64 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
         if self.isSelected():
             painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 255), 2))
             painter.drawRect(self.boundingRect())
+            
+            # Draw resize handle at bottom right
             handle_pos = self.boundingRect().bottomRight() - QtCore.QPointF(20, 20)
             handle_rect = QtCore.QRectF(handle_pos, QtCore.QSizeF(20, 20))
             painter.fillRect(handle_rect, QtGui.QColor(0, 0, 255))
 
 
     def mousePressEvent(self, event):
-        if event.button() == QtCore.Qt.LeftButton:
-            pos = event.pos()
-            if QtCore.QRectF(self.boundingRect().bottomRight() - QtCore.QPointF(20, 20),
-                             QtCore.QSizeF(20, 20)).contains(pos):
-                self.resize_handle = self.mapToScene(pos)
-            else:
-                self.resize_handle = None
-        super().mousePressEvent(event)
+        # Check if resize handle is clicked
+        pos = event.pos()
+        handle_rect = QtCore.QRectF(
+            self.boundingRect().bottomRight() - QtCore.QPointF(20, 20), 
+            QtCore.QSizeF(20, 20)
+        )
+        
+        if handle_rect.contains(pos):
+            # Resize mode
+            self.resize_handle = pos
+            event.accept()
+        else:
+            # Normal move mode
+            self.resize_handle = None
+            super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self.resize_handle is not None:
-            new_pos = self.mapToScene(event.pos())
-            width = max(new_pos.x() - self.pos().x(), 20)
-            height = max(new_pos.y() - self.pos().y(), 20)
+        if self.resize_handle is not None and self.original_pixmap:
+            # Calculate new size based on mouse movement
+            start_pos = self.resize_handle
+            current_pos = event.pos()
+            
+            # Calculate width and height
+            width = abs(current_pos.x() - start_pos.x())
+            height = abs(current_pos.y() - start_pos.y())
+            
+            # Maintain aspect ratio
             aspect_ratio = self.original_pixmap.width() / self.original_pixmap.height()
+            
             if width / height > aspect_ratio:
                 width = height * aspect_ratio
             else:
                 height = width / aspect_ratio
-            self.pixmap_item.setPixmap(self.original_pixmap.scaled(int(width), int(height), QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+            
+            # Scale pixmap
+            scaled_pixmap = self.original_pixmap.scaled(
+                int(width), int(height), 
+                QtCore.Qt.KeepAspectRatio, 
+                QtCore.Qt.SmoothTransformation
+            )
+            
+            # Set the scaled pixmap
+            self.setPixmap(scaled_pixmap)
+            
+            event.accept()
         else:
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        # Reset resize handle
         self.resize_handle = None
         super().mouseReleaseEvent(event)
 
@@ -469,6 +499,187 @@ class Ui:
         else:
             self.decoration_window.hide()
 
+    def show_pause_message(self, is_paused):
+        # Remove existing pause items
+        for item in self.scene.items():
+            if hasattr(item, '_is_pause_message'):
+                self.scene.removeItem(item)
+
+        # Get current window dimensions
+        win_width = self.window_width
+        win_height = self.window_height
+
+        if is_paused:
+            # Background rectangle 200 pixels wider than the window, 250 pixels tall
+            background = QtWidgets.QGraphicsRectItem(
+                -200,  # Start 200 pixels left of the window
+                (win_height - 250) / 2,  # Vertically center the 250-pixel tall rectangle
+                win_width + 400,  # Total width is window width + 400 (200 on each side)
+                250  # Fixed height of 250 pixels
+            )
+            background.setBrush(QtGui.QColor(0, 0, 0, 180))
+            background.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+            background.setZValue(1000)
+            # Store the original rectangle dimensions to prevent resizing
+            background.original_rect = background.rect()
+            setattr(background, '_is_pause_message', True)
+            self.scene.addItem(background)
+
+            # Main pause text
+            pause_text = self.scene.addText("p a u s e d", QtGui.QFont("Arial", 24, QtGui.QFont.Bold))
+            pause_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+            pause_text.setZValue(1002)
+            setattr(pause_text, '_is_pause_message', True)
+            
+            # Center text using view coordinates
+            text_rect = pause_text.boundingRect()
+            pause_text_x = (win_width - text_rect.width()) / 2
+            pause_text_y = (win_height - text_rect.height()) / 2 - 30
+            pause_text.setPos(pause_text_x, pause_text_y)
+
+            # Subtext
+            sub_text = self.scene.addText("Use 'Speed' menu to unpause", QtGui.QFont("Arial", 14))
+            sub_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
+            sub_text.setZValue(1002)
+            setattr(sub_text, '_is_pause_message', True)
+            
+            sub_rect = sub_text.boundingRect()
+            sub_text_x = (win_width - sub_rect.width()) / 2
+            sub_text_y = pause_text_y + text_rect.height() + 10
+            sub_text.setPos(sub_text_x, sub_text_y)
+
+            # Create a timer to keep redrawing the pause message
+            self.pause_redraw_timer = QtCore.QTimer()
+            self.pause_redraw_timer.timeout.connect(self._redraw_pause_message)
+            self.pause_redraw_timer.start(500)  # Redraw every 500ms
+
+        else:
+            # Stop the redraw timer if it exists
+            if hasattr(self, 'pause_redraw_timer'):
+                self.pause_redraw_timer.stop()
+
+    def _redraw_pause_message(self):
+        # Check if we're still paused
+        if not hasattr(self, 'tamagotchi_logic') or self.tamagotchi_logic.simulation_speed != 0:
+            if hasattr(self, 'pause_redraw_timer'):
+                self.pause_redraw_timer.stop()
+            return
+
+        # Remove existing pause items
+        for item in self.scene.items():
+            if hasattr(item, '_is_pause_message'):
+                # Restore original rectangle for background if it exists
+                if isinstance(item, QtWidgets.QGraphicsRectItem) and hasattr(item, 'original_rect'):
+                    item.setRect(item.original_rect)
+                else:
+                    self.scene.removeItem(item)
+
+        # Get current window dimensions
+        win_width = self.window_width
+        win_height = self.window_height
+
+        # Recreate the existing pause items
+        # Background rectangle 200 pixels wider than the window, 250 pixels tall
+        background = QtWidgets.QGraphicsRectItem(
+            -200,  # Start 200 pixels left of the window
+            (win_height - 250) / 2,  # Vertically center the 250-pixel tall rectangle
+            win_width + 400,  # Total width is window width + 400 (200 on each side)
+            250  # Fixed height of 250 pixels
+        )
+        background.setBrush(QtGui.QColor(0, 0, 0, 180))
+        background.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+        background.setZValue(1000)
+        # Store the original rectangle dimensions to prevent resizing
+        background.original_rect = background.rect()
+        setattr(background, '_is_pause_message', True)
+        self.scene.addItem(background)
+
+        # Main pause text
+        pause_text = self.scene.addText("p a u s e d", QtGui.QFont("Arial", 24, QtGui.QFont.Bold))
+        pause_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+        pause_text.setZValue(1002)
+        setattr(pause_text, '_is_pause_message', True)
+        
+        # Center text using view coordinates
+        text_rect = pause_text.boundingRect()
+        pause_text_x = (win_width - text_rect.width()) / 2
+        pause_text_y = (win_height - text_rect.height()) / 2 - 30
+        pause_text.setPos(pause_text_x, pause_text_y)
+
+        # Subtext
+        sub_text = self.scene.addText("Use 'Speed' menu to unpause", QtGui.QFont("Arial", 14))
+        sub_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
+        sub_text.setZValue(1002)
+        setattr(sub_text, '_is_pause_message', True)
+        
+        sub_rect = sub_text.boundingRect()
+        sub_text_x = (win_width - sub_rect.width()) / 2
+        sub_text_y = pause_text_y + text_rect.height() + 10
+        sub_text.setPos(sub_text_x, sub_text_y)
+
+        # Ensure redraw
+        self.scene.update()
+        self.view.viewport().update()
+
+    def show_pause_message(self, is_paused):
+        # Remove existing pause items
+        for item in self.scene.items():
+            if hasattr(item, '_is_pause_message'):
+                self.scene.removeItem(item)
+
+        # Get current window dimensions
+        win_width = self.window_width
+        win_height = self.window_height
+
+        if is_paused:
+            # Background rectangle 200 pixels wider than the window, 300 pixels tall
+            background = QtWidgets.QGraphicsRectItem(
+                -200,  # Start 200 pixels left of the window
+                (win_height - 250) / 2,  # Vertically center the 300-pixel tall rectangle
+                win_width + 400,  # Total width is window width + 400 (200 on each side)
+                250  # Fixed height of 250 pixels
+            )
+            background.setBrush(QtGui.QColor(0, 0, 0, 180))
+            background.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+            background.setZValue(1000)
+            # Store the original rectangle dimensions to prevent resizing
+            background.original_rect = background.rect()
+            setattr(background, '_is_pause_message', True)
+            self.scene.addItem(background)
+
+            # Main pause text
+            pause_text = self.scene.addText("p a u s e d", QtGui.QFont("Arial", 24, QtGui.QFont.Bold))
+            pause_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+            pause_text.setZValue(1002)
+            setattr(pause_text, '_is_pause_message', True)
+            
+            # Center text using view coordinates
+            text_rect = pause_text.boundingRect()
+            pause_text_x = (win_width - text_rect.width()) / 2
+            pause_text_y = (win_height - text_rect.height()) / 2 - 30
+            pause_text.setPos(pause_text_x, pause_text_y)
+
+            # Subtext
+            sub_text = self.scene.addText("Use 'Speed' menu to unpause", QtGui.QFont("Arial", 14))
+            sub_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
+            sub_text.setZValue(1002)
+            setattr(sub_text, '_is_pause_message', True)
+            
+            sub_rect = sub_text.boundingRect()
+            sub_text_x = (win_width - sub_rect.width()) / 2
+            sub_text_y = pause_text_y + text_rect.height() + 10
+            sub_text.setPos(sub_text_x, sub_text_y)
+
+            # Create a timer to keep redrawing the pause message
+            self.pause_redraw_timer = QtCore.QTimer()
+            self.pause_redraw_timer.timeout.connect(self._redraw_pause_message)
+            self.pause_redraw_timer.start(500)  # Redraw every 500ms
+
+        else:
+            # Stop the redraw timer if it exists
+            if hasattr(self, 'pause_redraw_timer'):
+                self.pause_redraw_timer.stop()
+
     def handle_window_resize(self, event):
         self.window_width = event.size().width()
         self.window_height = event.size().height()
@@ -701,19 +912,19 @@ class Ui:
         self.rock_test_action.setEnabled(False)  # Disabled by default
         if hasattr(self.tamagotchi_logic, 'test_rock_interaction'):
             self.rock_test_action.triggered.connect(self.tamagotchi_logic.test_rock_interaction)
-        debug_menu.addAction(self.rock_test_action)
+        #debug_menu.addAction(self.rock_test_action)
 
         # Neurogenesis Action
         self.neurogenesis_action = QtWidgets.QAction('Trigger Neurogenesis', self.window)
         self.neurogenesis_action.setEnabled(False)  # Disabled by default
         if hasattr(self.tamagotchi_logic, 'trigger_neurogenesis'):
             self.neurogenesis_action.triggered.connect(self.trigger_neurogenesis)
-        debug_menu.addAction(self.neurogenesis_action)
+        #debug_menu.addAction(self.neurogenesis_action)
 
         # Add to debug menu
         self.rock_test_action = QtWidgets.QAction('Rock test (forced)', self.window)
         self.rock_test_action.triggered.connect(self.trigger_rock_test)
-        debug_menu.addAction(self.rock_test_action)
+        #debug_menu.addAction(self.rock_test_action)
 
         # Disabled RPS Game Action (commented out)
         # self.rps_game_action = QtWidgets.QAction('Play Rock, Paper, Scissors', self.window)
@@ -722,7 +933,13 @@ class Ui:
 
     def set_simulation_speed(self, speed):
         """Set the simulation speed (0 = paused, 1 = normal, 2 = fast, 3 = very fast)"""
+        #print(f"DEBUG: set_simulation_speed called with speed={speed}")  # Debug print
+        
         if hasattr(self, 'tamagotchi_logic'):
+            # Show/hide pause message
+            #print(f"DEBUG: Showing pause message: {speed == 0}")  # Additional debug print
+            self.show_pause_message(speed == 0)
+            
             self.tamagotchi_logic.set_simulation_speed(speed)
             
             # Update the menu check states

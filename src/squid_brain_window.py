@@ -1,12 +1,13 @@
-# A window into the mind of a digital pet
+
 
 import sys
 import csv
 import os
 import time
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QSplitter
+from PyQt5.QtGui import QPixmap, QFont
+
 import random
 import numpy as np
 import json
@@ -19,6 +20,7 @@ class BrainWidget(QtWidgets.QWidget):
         # Initialize with config
         self.config = config if config else LearningConfig()
         self.debug_mode = debug_mode  # Initialize debug_mode
+        self.is_paused = False
         
         # Initialize neurogenesis data
         self.neurogenesis_data = {
@@ -262,6 +264,8 @@ class BrainWidget(QtWidgets.QWidget):
         return efficiency
 
     def update_state(self, new_state):
+        if self.is_paused:
+            return
         """Update the brain state with new values, handling both Hebbian learning and neurogenesis"""
         # Update only the keys that exist in self.state and are allowed to be modified
         excluded = ['is_sick', 'is_eating', 'pursuing_food', 'direction']
@@ -638,7 +642,7 @@ class BrainWidget(QtWidgets.QWidget):
         efficiency = self.calculate_network_efficiency()
         
         # Draw metrics in top bar
-        metrics_text = f"Neurons: {neuron_count}    Edges: {edge_count}    Health: {health:.1f}%    Efficiency: {efficiency:.1f}%"
+        metrics_text = f"Neurons: {neuron_count}    Connections: {edge_count}    Network Health: {health:.1f}%"
         metrics_rect = QtCore.QRectF(0, 5, self.width(), 25)
 
         # Create and configure font
@@ -962,7 +966,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         screen = QtWidgets.QDesktopWidget().screenNumber(QtWidgets.QDesktopWidget().cursor().pos())
         screen_geometry = QtWidgets.QDesktopWidget().screenGeometry(screen)
-        self.move(screen_geometry.right() - 1024, screen_geometry.top())
+        self.move(screen_geometry.right() - 1280, screen_geometry.top())
 
         self.central_widget = QtWidgets.QWidget()
         self.setCentralWidget(self.central_widget)
@@ -1033,12 +1037,16 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def on_hebbian_countdown_finished(self):
         """Called when the Hebbian learning countdown reaches zero"""
-        # Implement what should happen when countdown finishes
-        # print("Hebbian learning countdown finished")
-        # Add your Hebbian learning trigger logic here
-        # Example:
-        # self.trigger_hebbian_learning()
         pass
+
+    def set_pause_state(self, is_paused):
+        self.is_paused = is_paused
+        if hasattr(self, 'brain_widget'):
+            self.brain_widget.is_paused = is_paused
+        if is_paused:
+            self.hebbian_timer.stop()
+        else:
+            self.hebbian_timer.start(self.config.hebbian['learning_interval'])
 
     def init_inspector(self):
         self.inspector_action = QtWidgets.QAction("Neuron Inspector", self)
@@ -1154,12 +1162,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.thoughts_tab, "Thoughts")
         self.init_thoughts_tab()
 
-        # Personality tab
+        # Personality tab - initialize but don't add to tab widget
         self.personality_tab = QtWidgets.QWidget()
         self.personality_tab_layout = QtWidgets.QVBoxLayout()
         self.personality_tab.setLayout(self.personality_tab_layout)
-        self.tabs.addTab(self.personality_tab, "Personality")
-        self.init_personality_tab()
+        # Comment out or remove this line:
+        # self.tabs.addTab(self.personality_tab, "Personality")
+        self.init_personality_tab()  # Still initialize the tab contents
 
         # Learning tab
         self.learning_tab = QtWidgets.QWidget()
@@ -1194,12 +1203,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.memory_tab, "Memory")
         self.init_memory_tab()
 
-        # Add a new decisions tab
+        # Decisions tab - initialize but don't add to tab widget
         self.decisions_tab = QtWidgets.QWidget()
         self.decisions_tab_layout = QtWidgets.QVBoxLayout()
         self.decisions_tab.setLayout(self.decisions_tab_layout)
-        self.tabs.addTab(self.decisions_tab, "Decisions")
-        self.init_decisions_tab()
+        # self.tabs.addTab(self.decisions_tab, "Decisions")
+        self.init_decisions_tab()  # Still initialize the tab contents
 
         # About tab
         self.about_tab = QtWidgets.QWidget()
@@ -1208,107 +1217,523 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.about_tab, "About")
         self.init_about_tab()
 
+
     def init_thought_process_tab(self):
+        """Initialize the thinking tab with visualizations focused on the decision engine"""
         self.thought_process_tab = QtWidgets.QWidget()
         self.thought_process_layout = QtWidgets.QVBoxLayout()
         self.thought_process_tab.setLayout(self.thought_process_layout)
+        self.thought_process_layout.setContentsMargins(0, 0, 0, 0)  # Remove extra margins
 
-        # Decision flowchart
-        self.decision_canvas = QtWidgets.QGraphicsView()
-        self.decision_scene = QtWidgets.QGraphicsScene()
-        self.decision_canvas.setScene(self.decision_scene)
-        self.thought_process_layout.addWidget(self.decision_canvas)
+        # Create a QSplitter for resizable sections
+        main_splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        self.thought_process_layout.addWidget(main_splitter)
 
-        # Real-time thought display
-        self.thought_process_text = QtWidgets.QTextEdit()
-        self.thought_process_text.setReadOnly(True)
-        self.thought_process_layout.addWidget(self.thought_process_text)
+        # Top section: Decision weights visualization
+        self.weights_widget = QtWidgets.QWidget()
+        weights_layout = QtWidgets.QVBoxLayout(self.weights_widget)
+        
+        weights_title = QtWidgets.QLabel("<h2>Decision Weights</h2>")
+        weights_title.setAlignment(QtCore.Qt.AlignCenter)
+        weights_layout.addWidget(weights_title)
+        
+        # Create a scene for the decision weights bars
+        self.weights_scene = QtWidgets.QGraphicsScene()
+        self.weights_view = QtWidgets.QGraphicsView(self.weights_scene)
+        self.weights_view.setRenderHint(QtGui.QPainter.Antialiasing)
+        self.weights_view.setMinimumHeight(200)
+        weights_layout.addWidget(self.weights_view)
+        
+        # Add the weights widget to the splitter
+        main_splitter.addWidget(self.weights_widget)
 
-        # Key metrics
-        self.metrics_widget = QtWidgets.QWidget()
-        metrics_layout = QtWidgets.QHBoxLayout()
-        self.confidence_meter = QtWidgets.QProgressBar()
-        self.decision_time_label = QtWidgets.QLabel("Processing: 0ms")
-        metrics_layout.addWidget(QtWidgets.QLabel("Confidence:"))
-        metrics_layout.addWidget(self.confidence_meter)
-        metrics_layout.addWidget(self.decision_time_label)
-        self.metrics_widget.setLayout(metrics_layout)
-        self.thought_process_layout.addWidget(self.metrics_widget)
+        # Middle section: Decision flow
+        self.flow_widget = QtWidgets.QWidget()
+        flow_layout = QtWidgets.QVBoxLayout(self.flow_widget)
+        
+        flow_title = QtWidgets.QLabel("<h2>Decision Flow</h2>")
+        flow_title.setAlignment(QtCore.Qt.AlignCenter)
+        flow_layout.addWidget(flow_title)
+        
+        # Horizontal flow diagram
+        flow_diagram = QtWidgets.QWidget()
+        flow_diagram_layout = QtWidgets.QHBoxLayout(flow_diagram)
+        
+        # 1. Input factors group - made wider
+        inputs_group = QtWidgets.QGroupBox("Input State")
+        inputs_layout = QtWidgets.QVBoxLayout(inputs_group)
+        
+        self.inputs_table = QtWidgets.QTableWidget()
+        self.inputs_table.setColumnCount(2)
+        self.inputs_table.setHorizontalHeaderLabels(["Factor", "Value"])
+        self.inputs_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        inputs_layout.addWidget(self.inputs_table)
+        
+        flow_diagram_layout.addWidget(inputs_group, stretch=1)  # Add stretch factor
+        
+        # Arrow1
+        arrow_pixmap = QPixmap("images/arrow.png")
+        arrow1 = QtWidgets.QLabel()
+        arrow1.setPixmap(arrow_pixmap)
+        arrow1.setAlignment(QtCore.Qt.AlignCenter)
+        flow_diagram_layout.addWidget(arrow1)
+        
+        # 2. Memory influence - made wider
+        memory_group = QtWidgets.QGroupBox("Memory Influence")
+        memory_layout = QtWidgets.QVBoxLayout(memory_group)
+        
+        self.memory_list = QtWidgets.QListWidget()
+        memory_layout.addWidget(self.memory_list)
+        
+        flow_diagram_layout.addWidget(memory_group, stretch=1)  # Add stretch factor
+        
+        # Arrow2
+        arrow_pixmap = QPixmap("images/arrow.png")
+        arrow2 = QtWidgets.QLabel()
+        arrow2.setPixmap(arrow_pixmap)
+        arrow2.setAlignment(QtCore.Qt.AlignCenter)
+        flow_diagram_layout.addWidget(arrow2)
+        
+        # 3. Final decision
+        decision_group = QtWidgets.QGroupBox("Final Decision")
+        decision_layout = QtWidgets.QVBoxLayout(decision_group)
+        
+        self.decision_output = QtWidgets.QLabel("exploring")
+        self.decision_output.setAlignment(QtCore.Qt.AlignCenter)
+        self.decision_output.setStyleSheet("font-size: 24px; font-weight: bold;")  # Bigger text
+        decision_layout.addWidget(self.decision_output)
+        
+        self.decision_confidence = QtWidgets.QProgressBar()
+        self.decision_confidence.setRange(0, 100)
+        self.decision_confidence.setValue(60)
+        self.decision_confidence.setFixedHeight(16)  # Set height to 16px
+        decision_layout.addWidget(QtWidgets.QLabel("Confidence:"))
+        decision_layout.addWidget(self.decision_confidence)
+        
+        self.decision_explanation = QtWidgets.QLabel("Chosen due to high curiosity")
+        self.decision_explanation.setWordWrap(True)
+        decision_layout.addWidget(self.decision_explanation)
+        
+        flow_diagram_layout.addWidget(decision_group)
+        
+        # Add the flow diagram to the layout
+        flow_layout.addWidget(flow_diagram)
+        
+        # Add the flow widget to the splitter
+        main_splitter.addWidget(self.flow_widget)
 
-        # Logging button
+        # Bottom section: Thought log
+        self.log_widget = QtWidgets.QWidget()
+        log_layout = QtWidgets.QVBoxLayout(self.log_widget)
+        log_layout.setContentsMargins(0, 0, 0, 0)  # Remove padding
+        
+        log_title = QtWidgets.QLabel("<h2>Decision Log</h2>")
+        log_title.setAlignment(QtCore.Qt.AlignCenter)
+        log_layout.addWidget(log_title)
+        
+        # Thought log
+        self.thought_log_text = QtWidgets.QTextEdit()
+        self.thought_log_text.setReadOnly(True)
+        # Set default text
+        self.thought_log_text.setHtml("<p style='color: gray;'>Start logging by clicking the green button "
+                "and perform some actions with your squid to generate logs <br> Then use the 'view logs' button</p>")
+        log_layout.addWidget(self.thought_log_text)
+        
+        # Controls
+        controls_layout = QtWidgets.QHBoxLayout()
+        
         self.logging_button = QtWidgets.QPushButton("Start Logging")
+        self.logging_button.setCheckable(True)
+        # Initially set to green
+        self.logging_button.setStyleSheet("""
+            background-color: green; 
+            color: white; 
+            font-weight: bold;
+        """)
         self.logging_button.clicked.connect(self.toggle_logging)
-        self.thought_process_layout.addWidget(self.logging_button)
+        controls_layout.addWidget(self.logging_button)
+        
+        # NEW: Add View Logs button
+        self.view_logs_button = QtWidgets.QPushButton("View Logs")
+        self.view_logs_button.clicked.connect(self.view_thought_logs)
+        controls_layout.addWidget(self.view_logs_button)
+        
+        log_layout.addLayout(controls_layout)
+        
+        # Add the log widget to the splitter
+        main_splitter.addWidget(self.log_widget)
+        
+        # Set initial splitter sizes
+        main_splitter.setSizes([250, 300, 200])
+        
+        # Set up the initial visualization
+        self.initialize_weights_visualization()
+        
+        # Add the tab
+        self.tabs.addTab(self.thought_process_tab, "Decisions")
+        
+        # Initialize state
+        self.is_logging = False
+        self.thought_log = []
 
-        # Button to display recent thoughts
-        self.view_thoughts_button = QtWidgets.QPushButton("View Recent Logs")
-        self.view_thoughts_button.clicked.connect(self.show_recent_thoughts)
-        self.thought_process_layout.addWidget(self.view_thoughts_button)
+    def view_thought_logs(self):
+        """Open a window to view captured decision logs"""
+        # Check if there are any thought logs
+        if not self.thought_log:
+            # Display a friendly message if no logs exist
+            QtWidgets.QMessageBox.information(
+                self, 
+                "No Logs Available", 
+                "No decision logs have been captured yet.\n\n"
+                "Start logging by clicking the 'Start Logging' button "
+                "and perform some actions with your squid to generate logs!"
+            )
+            return
 
-        self.tabs.addTab(self.thought_process_tab, "Thinking")
+        # Open the RecentThoughtsDialog with the captured logs
+        log_viewer = RecentThoughtsDialog(self.thought_log, self)
+        log_viewer.exec_()
 
     def toggle_logging(self):
+        """Toggle decision logging on/off"""
+        # Don't allow enabling logging if simulation is paused
+        if not self.is_logging and hasattr(self, 'is_paused') and self.is_paused:
+            self.logging_button.setChecked(False)  # Reset the button state
+            return  # Exit without changing logging state
+
         self.is_logging = not self.is_logging
+        
         if self.is_logging:
+            # Red when logging is active
+            self.logging_button.setStyleSheet("""
+                background-color: red; 
+                color: white; 
+                font-weight: bold;
+            """)
             self.logging_button.setText("Stop Logging")
+            # Clear the default text
+            self.thought_log_text.clear()
+            self.thought_log_text.append("<b>--- Logging started ---</b>")
         else:
+            # Green when logging is inactive
+            self.logging_button.setStyleSheet("""
+                background-color: green; 
+                color: white; 
+                font-weight: bold;
+            """)
             self.logging_button.setText("Start Logging")
+            self.thought_log_text.append("<b>--- Logging stopped ---</b>")
+            
+            # If no logs were added, revert to default text
+            if not self.thought_log:
+                self.thought_log_text.setHtml("<p style='color: gray;'>Logging has not been started</p>")
+        
+        self.logging_button.setChecked(self.is_logging)
+
+    def initialize_weights_visualization(self):
+        """Initialize the decision weights visualization"""
+        # Clear the scene
+        self.weights_scene.clear()
+        
+        # Add a white background
+        self.weights_scene.addRect(0, 0, 700, 180, 
+                                QtGui.QPen(QtCore.Qt.NoPen),
+                                QtGui.QBrush(QtGui.QColor(255, 255, 255)))
+        
+        # Add title and legend
+        title = self.weights_scene.addText("Decision Action Weights")
+        title.setPos(250, 10)
+        
+        # Add legend items
+        self.weights_scene.addRect(580, 30, 20, 10, QtGui.QPen(QtCore.Qt.black), 
+                                QtGui.QBrush(QtGui.QColor(120, 180, 255)))
+        normal_legend = self.weights_scene.addText("Base Weight")
+        normal_legend.setPos(605, 25)
+        
+        self.weights_scene.addRect(580, 50, 20, 10, QtGui.QPen(QtCore.Qt.black), 
+                                QtGui.QBrush(QtGui.QColor(255, 120, 120)))
+        adjusted_legend = self.weights_scene.addText("After Personality")
+        adjusted_legend.setPos(605, 45)
+        
+        # Add initial bars (we'll update these later)
+        self.weight_bars = {}
+        self.weight_labels = {}
+        self.weight_values = {}
+        
+        actions = ["exploring", "eating", "approaching_rock", 
+                "throwing_rock", "avoiding_threat", "organizing"]
+        
+        for i, action in enumerate(actions):
+            x = 50
+            y = 40 + i * 22
+            width = 200  # Initial width, will be updated
+            height = 15
+            
+            # Add label
+            label = self.weights_scene.addText(action)
+            label.setPos(x - 120, y - 5)
+            self.weight_labels[action] = label
+            
+            # Add base weight bar (blue)
+            base_bar = self.weights_scene.addRect(x, y, width, height, 
+                                                QtGui.QPen(QtCore.Qt.black),
+                                                QtGui.QBrush(QtGui.QColor(120, 180, 255)))
+            
+            # Add adjusted weight bar (red) - starts at same size
+            adjusted_bar = self.weights_scene.addRect(x, y, width, height, 
+                                                    QtGui.QPen(QtCore.Qt.black),
+                                                    QtGui.QBrush(QtGui.QColor(255, 120, 120)))
+            
+            # Add value text
+            value_text = self.weights_scene.addText("0.0")
+            value_text.setPos(x + width + 10, y - 5)
+            self.weight_values[action] = value_text
+            
+            # Store references
+            self.weight_bars[action] = {
+                "base": base_bar,
+                "adjusted": adjusted_bar
+            }
+        
+        # Add highlight for selected decision (initially hidden)
+        self.selected_decision_highlight = self.weights_scene.addRect(0, 0, 0, 0, 
+                                                                    QtGui.QPen(QtGui.QColor(0, 200, 0), 2),
+                                                                    QtGui.QBrush(QtCore.Qt.NoBrush))
+        self.selected_decision_highlight.setVisible(False)
+        
+        # Make sure scene is properly sized
+        self.weights_scene.setSceneRect(self.weights_scene.itemsBoundingRect())
+
+    def export_thought_log(self):
+        """Export the thought log to a file"""
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Export Thought Log", "", "Text Files (*.txt);;HTML Files (*.html)"
+        )
+        
+        if file_name:
+            try:
+                if file_name.endswith('.html'):
+                    with open(file_name, 'w') as f:
+                        f.write("<html><body>\n")
+                        f.write(self.thought_log_text.toHtml())
+                        f.write("</body></html>")
+                else:
+                    with open(file_name, 'w') as f:
+                        f.write(self.thought_log_text.toPlainText())
+                
+                QtWidgets.QMessageBox.information(self, "Export Successful", f"Thought log exported to {file_name}")
+            except Exception as e:
+                QtWidgets.QMessageBox.critical(self, "Export Error", f"Error exporting log: {str(e)}")
 
     def show_recent_thoughts(self):
-        dialog = RecentThoughtsDialog(self.thought_log, self)
+        """Show the recent thoughts dialog"""
+        dialog = RecentThoughtsDialog(self.thought_log, self.window)
         dialog.exec_()
 
     def update_thought_process(self, decision_data):
-        self.decision_scene.clear()
-
-        # Format the inputs to show only rounded numbers
-        formatted_inputs = "\n".join(f"{k}: {int(v)}" for k, v in decision_data['inputs'].items())
-
-        nodes = {
-            'input': f"Senses:\n{formatted_inputs}",
-            'memories': "Memories:\n" + '\n'.join(decision_data['active_memories'][:3]),
-            'options': "Possible Actions:\n" + '\n'.join(decision_data['possible_actions']),
-            'decision': f"Chosen Action:\n{decision_data['final_decision']}"
-        }
-
-        positions = {
-            'input': (0, 0),
-            'memories': (0, 200),  # Adjust position for better spacing
-            'options': (350, 100),  # Center options node
-            'decision': (700, 0)    # Move decision node to the right
-        }
-
-        for name, text in nodes.items():
-            node = self.create_thought_node(text)
-            node.setPos(*positions[name])
-            self.decision_scene.addItem(node)
-
-        self.draw_connection(positions['input'], positions['options'], "Considers")
-        self.draw_connection(positions['memories'], positions['options'], "Recalls")
-        self.draw_connection(positions['options'], positions['decision'], "Selects")
-
-        # Log the thought process if logging is enabled
+        """Update the thinking tab visualizations with new decision data"""
+        if not hasattr(self, 'weight_bars') or not self.weight_bars:
+            self.initialize_weights_visualization()
+        
+        # If simulation is paused, override confidence to 0
+        if self.is_paused:
+            decision_data['confidence'] = 0.0
+        
+        # Extract the key data from decision_data
+        inputs = decision_data.get('inputs', {})
+        personality = decision_data.get('personality_influence', 'unknown')
+        decision = decision_data.get('final_decision', 'exploring')
+        confidence = decision_data.get('confidence', 0.5)
+        weights = decision_data.get('weights', {})
+        adjusted_weights = decision_data.get('adjusted_weights', {})
+        active_memories = decision_data.get('active_memories', [])
+        
+        # 1. Update the weights visualization
+        self.update_weights_visualization(weights, adjusted_weights, decision)
+        
+        # 2. Update the inputs table
+        self.update_inputs_table(inputs)
+        
+        # 3. Update memory influences
+        self.update_memory_list(active_memories)
+        
+        # 4. Update decision output
+        self.update_decision_output(decision, confidence, weights, adjusted_weights)
+        
+        # 5. Add to thought log if logging is enabled
         if self.is_logging:
-            log_entry = {
-                'timestamp': decision_data['timestamp'],
-                'inputs': decision_data['inputs'],
-                'active_memories': decision_data['active_memories'],
-                'possible_actions': decision_data['possible_actions'],
-                'final_decision': decision_data['final_decision'],
-                'confidence': decision_data['confidence'],
-                'processing_time': decision_data['processing_time']
-            }
-            self.thought_log.append(log_entry)
+            self.add_to_thought_log(decision_data)
 
-        self.thought_process_text.setText(
-            f"Decision Process:\n"
-            f"Time: {decision_data['timestamp']}\n"
-            f"Personality Factors: {decision_data['personality_influence']}\n"
-            f"Emotional State: {decision_data['emotions']}\n"
-            f"Learning History: {decision_data['learning_history']}"
+    def update_weights_visualization(self, weights, adjusted_weights, selected_decision):
+        """Update the decision weights visualization bars"""
+        max_weight = max(max(weights.values(), default=0), max(adjusted_weights.values(), default=0), 1.0)
+        scale_factor = 400 / max_weight  # Scale to fit in 400px width
+        
+        for action, bar_items in self.weight_bars.items():
+            # Get base and adjusted weights
+            base_weight = weights.get(action, 0)
+            adjusted_weight = adjusted_weights.get(action, base_weight)
+            
+            # Update the bars
+            base_width = base_weight * scale_factor
+            adjusted_width = adjusted_weight * scale_factor
+            
+            bar_items["base"].setRect(bar_items["base"].rect().x(), 
+                                    bar_items["base"].rect().y(),
+                                    base_width, 
+                                    bar_items["base"].rect().height())
+            
+            bar_items["adjusted"].setRect(bar_items["adjusted"].rect().x(), 
+                                        bar_items["adjusted"].rect().y(),
+                                        adjusted_width, 
+                                        bar_items["adjusted"].rect().height())
+            
+            # Update value text
+            self.weight_values[action].setPlainText(f"{adjusted_weight:.2f}")
+            
+            # Highlight the selected decision
+            if action == selected_decision:
+                rect = bar_items["adjusted"].rect()
+                self.selected_decision_highlight.setRect(
+                    rect.x() - 5, rect.y() - 2, rect.width() + 10, rect.height() + 4
+                )
+                self.selected_decision_highlight.setVisible(True)
+
+    def update_inputs_table(self, inputs):
+        """Update the input state table"""
+        # Keep only numerical inputs for simplicity
+        numerical_inputs = {k: v for k, v in inputs.items() 
+                        if isinstance(v, (int, float))}
+        
+        # Sort by value, highest first
+        sorted_inputs = sorted(numerical_inputs.items(), 
+                            key=lambda x: x[1], reverse=True)
+        
+        # Update table
+        self.inputs_table.setRowCount(len(sorted_inputs))
+        
+        for i, (factor, value) in enumerate(sorted_inputs):
+            # Factor name
+            name_item = QtWidgets.QTableWidgetItem(factor)
+            self.inputs_table.setItem(i, 0, name_item)
+            
+            # Value with color coding
+            value_item = QtWidgets.QTableWidgetItem(f"{int(value)}")
+            if value > 70:
+                value_item.setForeground(QtGui.QColor("darkred"))
+            elif value < 30:
+                value_item.setForeground(QtGui.QColor("blue"))
+            self.inputs_table.setItem(i, 1, value_item)
+
+    def update_decision_output(self, decision, confidence, weights, adjusted_weights):
+        """Update the final decision output"""
+        self.decision_output.setText(decision.capitalize())
+        self.decision_confidence.setValue(int(confidence * 100))
+        
+        # Generate explanation
+        weight = adjusted_weights.get(decision, 0)
+        runner_up = ""
+        runner_up_weight = 0
+        
+        for action, action_weight in adjusted_weights.items():
+            if action != decision and action_weight > runner_up_weight:
+                runner_up = action
+                runner_up_weight = action_weight
+        
+        if runner_up:
+            difference = weight - runner_up_weight
+            explanation = f"Chosen over {runner_up} by {difference:.2f} points"
+        else:
+            explanation = f"Selected with weight {weight:.2f}"
+        
+        self.decision_explanation.setText(explanation)
+
+    def update_randomness_factors(self, randomness):
+        """Update the randomness factors table"""
+        self.random_factors_table.setRowCount(len(randomness))
+        
+        for i, (action, factor) in enumerate(randomness.items()):
+            # Action name
+            action_item = QtWidgets.QTableWidgetItem(action)
+            self.random_factors_table.setItem(i, 0, action_item)
+            
+            # Random factor
+            value_item = QtWidgets.QTableWidgetItem(f"{factor:.2f}")
+            color = QtGui.QColor("darkgreen") if factor > 1.0 else QtGui.QColor("darkred")
+            value_item.setForeground(color)
+            self.random_factors_table.setItem(i, 1, value_item)
+
+    def add_to_thought_log(self, decision_data):
+        """Add the current decision process to the thought log"""
+        # Skip logging if paused
+        if hasattr(self, 'is_paused') and self.is_paused:
+            return
+            
+        if not self.is_logging:
+            return
+            
+        timestamp = time.strftime("%H:%M:%S")
+        decision = decision_data.get('final_decision', 'unknown')
+        confidence = decision_data.get('confidence', 0.0)
+        
+        # Create log entry
+        entry = f"[{timestamp}] <b>Decision: {decision}</b> (Confidence: {confidence:.2f})<br>"
+        
+        # Add more details
+        personality = decision_data.get('personality_influence', 'unknown')
+        entry += f"<i>Personality {personality} applied the following modifiers:</i><br>"
+        
+        # Show weight modifications
+        weights = decision_data.get('weights', {})
+        adjusted_weights = decision_data.get('adjusted_weights', {})
+        
+        for action, weight in weights.items():
+            adjusted = adjusted_weights.get(action, weight)
+            if abs(adjusted - weight) > 0.01:
+                direction = "+" if adjusted > weight else ""
+                entry += f"- {action}: {direction}{adjusted - weight:.2f}<br>"
+        
+        # Add memory influence
+        memories = decision_data.get('active_memories', [])
+        if memories:
+            entry += "<i>Memory influences:</i><br>"
+            for memory in memories:
+                entry += f"- {memory}<br>"
+        
+        # Add final entry to log
+        entry += "<hr>"
+        self.thought_log_text.append(entry)
+        
+        # Save to log list
+        self.thought_log.append({
+            'timestamp': timestamp,
+            'decision': decision,
+            'data': decision_data
+        })
+        
+        # Scroll to bottom
+        self.thought_log_text.verticalScrollBar().setValue(
+            self.thought_log_text.verticalScrollBar().maximum()
         )
-        self.confidence_meter.setValue(int(decision_data['confidence'] * 100))
-        self.decision_time_label.setText(f"Processing: {decision_data['processing_time']}ms")
+
+    def update_memory_list(self, memories):
+        """Update the memory influence list"""
+        self.memory_list.clear()
+        
+        if not memories:
+            self.memory_list.addItem("No active memories")
+            return
+        
+        for memory in memories:
+            item = QtWidgets.QListWidgetItem(memory)
+            
+            # Style based on content
+            if "positive" in memory.lower():
+                item.setForeground(QtGui.QColor("darkgreen"))
+            elif "negative" in memory.lower():
+                item.setForeground(QtGui.QColor("darkred"))
+            
+            self.memory_list.addItem(item)
 
     def create_thought_node(self, text):
         node = QtWidgets.QGraphicsRectItem(0, 0, 250, 150)  # Increase node size
@@ -1696,16 +2121,20 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         if not hasattr(self, 'hebbian_countdown_seconds'):
             self.hebbian_countdown_seconds = 0
 
-        # Calculate time until next learning cycle
-        if hasattr(self, 'last_hebbian_time'):
-            time_remaining = max(0, (self.last_hebbian_time + (self.config.hebbian['learning_interval'] / 1000)) - time.time())
-            self.hebbian_countdown_seconds = int(time_remaining)
-
-        # Update countdown display with larger font
-        if self.hebbian_countdown_seconds > 0:
-            countdown_text = f"Next Hebbian learning in: {self.hebbian_countdown_seconds} seconds"
+        # Show paused message if paused
+        if self.is_paused:
+            countdown_text = "Next Hebbian learning in: [ SIMULATION IS PAUSED ]"
         else:
-            countdown_text = "Next Hebbian learning in: -- seconds"
+            # Calculate time until next learning cycle
+            if hasattr(self, 'last_hebbian_time'):
+                time_remaining = max(0, (self.last_hebbian_time + (self.config.hebbian['learning_interval'] / 1000)) - time.time())
+                self.hebbian_countdown_seconds = int(time_remaining)
+                
+            # Update countdown display with larger font
+            if self.hebbian_countdown_seconds > 0:
+                countdown_text = f"Next Hebbian learning in: {self.hebbian_countdown_seconds} seconds"
+            else:
+                countdown_text = "Next Hebbian learning in: -- seconds"
 
         # Apply consistent styling
         self.countdown_label.setText(countdown_text)
@@ -1716,14 +2145,14 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.countdown_label.setFont(font)
 
         # Check if reached zero this tick
-        if self.hebbian_countdown_seconds == 0:
+        if not self.is_paused and self.hebbian_countdown_seconds == 0:
             if hasattr(self, 'on_hebbian_countdown_finished'):
                 self.on_hebbian_countdown_finished()
             else:
                 print("Warning: Countdown finished but no handler!")
 
         # Force UI update if needed
-        if not self.is_paused and self.countdown_label.isVisible():
+        if self.countdown_label.isVisible():
             self.countdown_label.repaint()
 
     def clear_learning_data(self):
@@ -1752,6 +2181,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             print(f"Learning interval updated to {seconds} seconds ({interval_ms} ms)")
 
     def perform_hebbian_learning(self):
+        if self.is_paused:
+            return
         self.last_hebbian_time = time.time()
         if self.is_paused or not hasattr(self, 'brain_widget') or not self.tamagotchi_logic or not self.tamagotchi_logic.squid:
             return
@@ -1959,13 +2390,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 self.learning_data_table.setItem(row, col, item)
         self.learning_data_table.scrollToBottom()
 
-    def set_pause_state(self, is_paused):
-        self.is_paused = is_paused
-        if is_paused:
-            self.hebbian_timer.stop()
-        else:
-            self.hebbian_timer.start(2000)
-
     def export_learning_data(self):
         # Save the weight changes text to a file
         with open("learningdata_reasons.txt", 'w') as file:
@@ -2008,29 +2432,45 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 file.write(self.associations_text.toPlainText())
             QtWidgets.QMessageBox.information(self, "Export Successful", f"Associations exported to {file_name}")
 
-    def update_personality_display(self, personality):
-        if isinstance(personality, Personality):
-            self.personality_type_label.setText(f"Squid Personality: {personality.value.capitalize()}")
-            modifier = self.get_personality_modifier(personality)
-            self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
-            description = self.get_personality_description(personality)
-            self.personality_description.setPlainText(description)
-            care_tips = self.get_care_tips(personality)
-            self.care_tips.setPlainText(care_tips)
-            modifiers = self.get_personality_modifiers(personality)
-            self.modifiers_text.setPlainText(modifiers)
-        elif isinstance(personality, str):
-            self.personality_type_label.setText(f"Squid Personality: {personality.capitalize()}")
-            modifier = self.get_personality_modifier(Personality(personality))
-            self.personality_modifier_label.setText(f"Personality Modifier: {modifier}")
-            description = self.get_personality_description(Personality(personality))
-            self.personality_description.setPlainText(description)
-            care_tips = self.get_care_tips(Personality(personality))
-            self.care_tips.setPlainText(care_tips)
-            modifiers = self.get_personality_modifiers(Personality(personality))
-            self.modifiers_text.setPlainText(modifiers)
+    def update_personality_effects(self, personality, weights, adjusted_weights):
+        """Update the personality modifier display in the thinking tab"""
+        # Convert enum to string if needed
+        personality_str = getattr(personality, 'value', str(personality))
+        
+        self.personality_label.setText(f"Personality: {personality_str.capitalize()}")
+        
+        # Generate effect text based on weight differences
+        effects_text = []
+        for action, weight in weights.items():
+            adjusted = adjusted_weights.get(action, weight)
+            if abs(adjusted - weight) > 0.01:  # If there's a significant difference
+                direction = "increases" if adjusted > weight else "decreases"
+                effect = f"{action}: {direction} by {abs(adjusted - weight):.2f}"
+                effects_text.append(effect)
+        
+        if effects_text:
+            self.personality_effects.setPlainText("\n".join(effects_text))
         else:
-            print(f"Warning: Invalid personality type: {type(personality)}")
+            self.personality_effects.setPlainText("No significant personality effects")
+
+    def update_personality_display(self, personality):
+        # Convert enum to string if needed
+        personality_str = getattr(personality, 'value', str(personality))
+        
+        # Set personality type label
+        self.personality_type_label.setText(f"Squid Personality: {personality_str.capitalize()}")
+        
+        # Set personality modifier label
+        self.personality_modifier_label.setText(f"Personality Modifier: {self.get_personality_modifier(personality)}")
+        
+        # Set description text
+        self.personality_description.setPlainText(self.get_personality_description(personality))
+        
+        # Set modifiers text
+        self.modifiers_text.setPlainText(self.get_personality_modifiers(personality))
+        
+        # Set care tips text
+        self.care_tips.setPlainText(self.get_care_tips(personality))
 
     def get_personality_description(self, personality):
         descriptions = {
@@ -2205,7 +2645,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             for memory in long_term_memories:
                 self.long_term_memory_text.append(self.format_memory_display(memory))
 
-        # Update personality display if available
+        # Update personality display if available - only update the personality tab
         if 'personality' in full_state and full_state['personality']:
             self.update_personality_display(full_state['personality'])
         else:
@@ -2233,9 +2673,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <p>github.com/ViciousSquid/Dosidicus</p>
         <p>A Tamagotchi-style digital pet with a simple neural network</p>
         <ul>
-            <li>by Rufus Pearce</li>
-            <li>Brain Tool version 1.0.6.2</li>
-            <li>Dosidicus version 1.0.400.1 (milestone 4)</li>
+            <li>by Rufus Pearce</li><br><br>
+        <br>
+        <b>Dosidicus version 1.0.400.5</b> (milestone 4)<br>
+        Brain Tool version 1.0.6.5<br>
+        Decision engine version 1.0<br>
+
         <p>This is a research project. Please suggest features.</p>
         </ul>
         """)
@@ -2355,10 +2798,131 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 else:
                     print("Warning: tamagotchi_logic is not set. Brain stimulation will not affect the squid.")
 
+
+    def update_neural_visualization(self, inputs):
+        """Update the neural network visualization with current input values"""
+        if not hasattr(self, 'neuron_items') or not self.neuron_items:
+            self.setup_neural_visualization()
+            return
+        
+        # Update neuron colors based on activation values
+        for neuron, value in inputs.items():
+            if neuron in self.neuron_items:
+                # Only update numerical values
+                if isinstance(value, (int, float)):
+                    # Update stored value
+                    self.neuron_items[neuron]["value"] = value
+                    
+                    # Calculate color based on value (0-100)
+                    intensity = int(value * 2.55)  # Scale 0-100 to 0-255
+                    
+                    if neuron in ["hunger", "sleepiness", "anxiety"]:
+                        # Red-based for "negative" neurons (more red = higher activation)
+                        color = QtGui.QColor(255, 255 - intensity, 255 - intensity)
+                    else:
+                        # Blue/green-based for "positive" neurons (more color = higher activation)
+                        color = QtGui.QColor(100, intensity, 255)
+                    
+                    # Update neuron ellipse color
+                    self.neuron_items[neuron]["shape"].setBrush(QtGui.QBrush(color))
+                    
+                    # Make neurons pulse slightly based on value
+                    scale = 1.0 + (value / 200)  # 1.0 to 1.5
+                    rect = self.neuron_items[neuron]["shape"].rect()
+                    center_x = rect.x() + rect.width()/2
+                    center_y = rect.y() + rect.height()/2
+                    new_width = 40 * scale
+                    new_height = 40 * scale
+                    self.neuron_items[neuron]["shape"].setRect(
+                        center_x - new_width/2,
+                        center_y - new_height/2,
+                        new_width,
+                        new_height
+                    )
+        
+        # Update connection line widths and colors based on neuron activations
+        for connection, items in self.connection_items.items():
+            source, target = connection
+            source_value = self.neuron_items.get(source, {}).get("value", 50)
+            target_value = self.neuron_items.get(target, {}).get("value", 50)
+            
+            # Calculate connection strength based on both neuron activations
+            # Higher when both neurons are highly activated
+            connection_strength = (source_value * target_value) / 10000  # Scale to 0-1
+            
+            # Update line width and color
+            pen_width = 1 + 3 * connection_strength
+            
+            # Get current brain connection weight if available
+            weight = items.get("weight", 0)
+            
+            # Color based on weight (green for positive, red for negative)
+            if weight > 0:
+                pen_color = QtGui.QColor(0, 150, 0, 50 + int(200 * connection_strength))
+            else:
+                pen_color = QtGui.QColor(150, 0, 0, 50 + int(200 * connection_strength))
+            
+            items["line"].setPen(QtGui.QPen(pen_color, pen_width))
+            
+            # Update the weight display
+            items["text"].setPlainText(f"{weight:.1f}")
+
+
+    def update_brain_weights(self, weights_data):
+        """Update the brain connection weights based on current neural network weights"""
+        if not hasattr(self, 'connection_items'):
+            return
+            
+        # Update connection weights
+        for (src, dst), weight in weights_data.items():
+            # Look for the connection in either direction
+            connection = (src, dst)
+            if connection in self.connection_items:
+                self.connection_items[connection]["weight"] = weight
+            else:
+                # Try the reverse connection
+                connection = (dst, src)
+                if connection in self.connection_items:
+                    self.connection_items[connection]["weight"] = weight
+                    
+
+    def animate_decision_process(self, decision_data):
+        """Animate the decision-making process with visual effects"""
+        if not hasattr(self, 'processing_animation'):
+            return
+            
+        # Get the decision information
+        decision = decision_data.get('final_decision', 'unknown')
+        processing_time = decision_data.get('processing_time', 1000)
+        
+        # Display processing text
+        self.processing_text.setText(f"Processing decision ({processing_time}ms)...")
+        
+        # Start the animation with a brief delay to show processing
+        QtCore.QTimer.singleShot(300, lambda: self.highlight_decision_in_ui(decision))
+
+
+    def highlight_decision_in_ui(self, decision):
+        """Highlight the chosen decision in the UI"""
+        # Update decision output with animation effect
+        self.decision_output.setText(decision.capitalize())
+        
+        # Flash the decision with a highlight animation
+        original_style = self.decision_output.styleSheet()
+        self.decision_output.setStyleSheet("font-size: 18px; font-weight: bold; color: white; background-color: green; padding: 5px; border-radius: 5px;")
+        
+        # Reset after brief highlight
+        QtCore.QTimer.singleShot(500, lambda: self.decision_output.setStyleSheet(original_style))
+        
+        # Update processing text
+        self.processing_text.setText(f"Decision made: {decision.capitalize()}")
+
+
+
 class RecentThoughtsDialog(QtWidgets.QDialog):
     def __init__(self, thought_log, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Recent Thoughts")
+        self.setWindowTitle("Recent Decisions")
         self.thought_log = thought_log
 
         layout = QtWidgets.QVBoxLayout()
@@ -2371,33 +2935,58 @@ class RecentThoughtsDialog(QtWidgets.QDialog):
 
         # Populate the list with summarized thought logs
         for log in self.thought_log:
-            summary = f"Time: {log['timestamp']} - Decision: {log['final_decision']}"
+            summary = f"Time: {log.get('timestamp', 'Unknown')} - Decision: {log.get('decision', 'Unknown')}"
             self.thought_list.addItem(summary)
 
+        # Button layout
+        button_layout = QtWidgets.QHBoxLayout()
+
         # Save button
-        self.save_button = QtWidgets.QPushButton("Save Selected Thoughts")
+        self.save_button = QtWidgets.QPushButton("Save Selected")
         self.save_button.clicked.connect(self.save_selected_thoughts)
-        layout.addWidget(self.save_button)
+        button_layout.addWidget(self.save_button)
+
+        # Clear button
+        self.clear_button = QtWidgets.QPushButton("Clear")
+        self.clear_button.clicked.connect(self.clear_all_logs)
+        button_layout.addWidget(self.clear_button)
+
+        layout.addLayout(button_layout)
 
     def save_selected_thoughts(self):
         selected_items = self.thought_list.selectedItems()
         if not selected_items:
-            QtWidgets.QMessageBox.information(self, "No Selection", "No thoughts selected to save.")
+            QtWidgets.QMessageBox.information(self, "No Selection", "No decisions selected to save.")
             return
 
         # Get the file name to save the selected thoughts
-        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Selected Thoughts", "", "Text Files (*.txt)")
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Selected decisions", "", "Text Files (*.txt)")
         if file_name:
             with open(file_name, 'w') as file:
                 for item in selected_items:
                     file.write(item.text() + "\n")
-            QtWidgets.QMessageBox.information(self, "Save Successful", f"Selected thoughts saved to {file_name}")
+            QtWidgets.QMessageBox.information(self, "Save Successful", f"Selected decisions saved to {file_name}")
+
+    def clear_all_logs(self):
+        # Confirm before clearing
+        reply = QtWidgets.QMessageBox.question(
+            self, 'Clear Logs', 
+            "Are you sure you want to clear all decision logs?", 
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+        )
+
+        if reply == QtWidgets.QMessageBox.Yes:
+            # Clear the logs in the parent window
+            if hasattr(self.parent(), 'thought_log'):
+                self.parent().thought_log.clear()
+                self.thought_list.clear()
+                QtWidgets.QMessageBox.information(self, "Logs Cleared", "All decision logs have been cleared.")
 
 class LogWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Learning Log")
-        self.resize(600, 400)
+        self.resize(640, 480)
 
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
@@ -2561,17 +3150,17 @@ class DiagnosticReportDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout()
         
         # Add toggle checkbox
-        self.show_history_check = QtWidgets.QCheckBox("Show historical trends")
-        self.show_history_check.toggled.connect(self.toggle_history_graph)
-        layout.addWidget(self.show_history_check)
+        #self.show_history_check = QtWidgets.QCheckBox("Show historical trends")
+        #self.show_history_check.toggled.connect(self.toggle_history_graph)
+        #layout.addWidget(self.show_history_check)
         
         # Placeholder for graph
-        self.history_graph = QtWidgets.QLabel("Graph will appear here when enabled")
-        self.history_graph.setAlignment(QtCore.Qt.AlignCenter)
-        self.history_graph.setMinimumHeight(200)
-        layout.addWidget(self.history_graph)
+        #self.history_graph = QtWidgets.QLabel("Graph will appear here when enabled")
+        #self.history_graph.setAlignment(QtCore.Qt.AlignCenter)
+        #self.history_graph.setMinimumHeight(200)
+        #layout.addWidget(self.history_graph)
         
-        group.setLayout(layout)
+        #group.setLayout(layout)
         self.layout.addWidget(group)
     
     def toggle_history_graph(self, checked):
@@ -2588,6 +3177,513 @@ class DiagnosticReportDialog(QtWidgets.QDialog):
             self.history_graph.setText(graph_text)
         else:
             self.history_graph.setText("Graph will appear here when enabled")
+
+class RecentThoughtsDialog(QtWidgets.QDialog):
+    """Dialog for displaying and analyzing recent thought logs"""
+    def __init__(self, thought_log, parent=None):
+        super().__init__(parent)
+        self.thought_log = thought_log
+        self.setWindowTitle("Recent Decisions")
+        self.setMinimumSize(640, 480)
+        
+        layout = QtWidgets.QVBoxLayout()
+        self.setLayout(layout)
+        
+        # Create tabs for different views
+        self.tab_widget = QtWidgets.QTabWidget()
+        layout.addWidget(self.tab_widget)
+        
+        # Tab 1: List of decisions
+        self.list_tab = QtWidgets.QWidget()
+        list_layout = QtWidgets.QVBoxLayout(self.list_tab)
+        
+        # Create list widget
+        self.thought_list = QtWidgets.QListWidget()
+        self.thought_list.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.thought_list.currentRowChanged.connect(self.display_selected_thought)
+        list_layout.addWidget(self.thought_list)
+        
+        # Detailed view of selected thought
+        self.thought_detail = QtWidgets.QTextEdit()
+        self.thought_detail.setReadOnly(True)
+        list_layout.addWidget(self.thought_detail)
+        
+        self.tab_widget.addTab(self.list_tab, "Decision List")
+        
+        # Tab 2: Statistics
+        self.stats_tab = QtWidgets.QWidget()
+        stats_layout = QtWidgets.QVBoxLayout(self.stats_tab)
+        
+        # Decision stats
+        decision_stats_group = QtWidgets.QGroupBox("Decision Statistics")
+        decision_stats_layout = QtWidgets.QVBoxLayout(decision_stats_group)
+        
+        self.stats_text = QtWidgets.QTextEdit()
+        self.stats_text.setReadOnly(True)
+        decision_stats_layout.addWidget(self.stats_text)
+        
+        stats_layout.addWidget(decision_stats_group)
+        
+        # Decision distribution
+        self.decision_chart = QtWidgets.QGraphicsView()
+        self.decision_scene = QtWidgets.QGraphicsScene()
+        self.decision_chart.setScene(self.decision_scene)
+        self.decision_chart.setMinimumHeight(200)
+        stats_layout.addWidget(self.decision_chart)
+        
+        self.tab_widget.addTab(self.stats_tab, "Statistics")
+        
+        # Tab 3: Timeline
+        self.timeline_tab = QtWidgets.QWidget()
+        timeline_layout = QtWidgets.QVBoxLayout(self.timeline_tab)
+        
+        self.timeline_view = QtWidgets.QGraphicsView()
+        self.timeline_scene = QtWidgets.QGraphicsScene()
+        self.timeline_view.setScene(self.timeline_scene)
+        timeline_layout.addWidget(self.timeline_view)
+        
+        self.tab_widget.addTab(self.timeline_tab, "Timeline")
+        
+        # Buttons
+        button_layout = QtWidgets.QHBoxLayout()
+        
+        self.export_button = QtWidgets.QPushButton("Export Selected")
+        self.export_button.clicked.connect(self.export_selected)
+        button_layout.addWidget(self.export_button)
+        
+        self.export_all_button = QtWidgets.QPushButton("Export All")
+        self.export_all_button.clicked.connect(self.export_all)
+        button_layout.addWidget(self.export_all_button)
+        
+        self.close_button = QtWidgets.QPushButton("Close")
+        self.close_button.clicked.connect(self.accept)
+        button_layout.addWidget(self.close_button)
+        
+        layout.addLayout(button_layout)
+        
+        # Populate the dialog
+        self.populate_thought_list()
+        self.calculate_statistics()
+        self.draw_timeline()
+    
+    def populate_thought_list(self):
+        """Populate the thought list with entries from the log"""
+        self.thought_list.clear()
+        
+        for i, entry in enumerate(self.thought_log):
+            timestamp = entry.get('timestamp', '')
+            decision = entry.get('decision', 'unknown')
+            list_item = QtWidgets.QListWidgetItem(f"{timestamp} - {decision.capitalize()}")
+            
+            # Color code different decisions
+            if decision in ["exploring", "eating", "approaching_rock", "throwing_rock", 
+                          "avoiding_threat", "organizing"]:
+                colors = {
+                    "exploring": QtGui.QColor(100, 180, 255),      # Blue
+                    "eating": QtGui.QColor(100, 255, 100),         # Green
+                    "approaching_rock": QtGui.QColor(200, 150, 100), # Brown
+                    "throwing_rock": QtGui.QColor(200, 100, 100),  # Red
+                    "avoiding_threat": QtGui.QColor(255, 100, 100), # Brighter red
+                    "organizing": QtGui.QColor(180, 180, 100)      # Yellow/brown
+                }
+                list_item.setForeground(colors.get(decision, QtGui.QColor(0, 0, 0)))
+            
+            self.thought_list.addItem(list_item)
+        
+        # Select first item if available
+        if self.thought_list.count() > 0:
+            self.thought_list.setCurrentRow(0)
+    
+    def display_selected_thought(self, row):
+        """Display detailed information about the selected thought"""
+        if row < 0 or row >= len(self.thought_log):
+            self.thought_detail.clear()
+            return
+        
+        entry = self.thought_log[row]
+        decision = entry.get('decision', 'unknown')
+        data = entry.get('data', {})
+        
+        # Format the detail text with HTML for better presentation
+        html = f"""
+        <h2>Decision: {decision.capitalize()}</h2>
+        <p><b>Time:</b> {entry.get('timestamp', 'unknown')}</p>
+        <p><b>Confidence:</b> {data.get('confidence', 0.0):.2f}</p>
+        <p><b>Processing Time:</b> {data.get('processing_time', 0)} ms</p>
+        
+        <h3>Input Factors</h3>
+        <table border="1" cellspacing="0" cellpadding="3">
+            <tr>
+                <th>Factor</th>
+                <th>Value</th>
+            </tr>
+        """
+        
+        # Add inputs
+        inputs = data.get('inputs', {})
+        for factor, value in sorted(inputs.items(), key=lambda x: x[1], reverse=True):
+            if isinstance(value, (int, float)):
+                color = ""
+                if value > 70:
+                    color = ' style="color: darkred;"'
+                elif value < 30:
+                    color = ' style="color: blue;"'
+                html += f"<tr><td>{factor}</td><td{color}>{int(value)}</td></tr>"
+        
+        html += """
+        </table>
+        
+        <h3>Decision Weights</h3>
+        <table border="1" cellspacing="0" cellpadding="3">
+            <tr>
+                <th>Action</th>
+                <th>Base Weight</th>
+                <th>Adjusted Weight</th>
+                <th>Random Factor</th>
+                <th>Final Weight</th>
+            </tr>
+        """
+        
+        # Add decision weights
+        weights = data.get('weights', {})
+        adjusted_weights = data.get('adjusted_weights', {})
+        randomness = data.get('randomness', {})
+        
+        for action, weight in sorted(adjusted_weights.items(), key=lambda x: x[1], reverse=True):
+            base = weights.get(action, 0)
+            adjusted = adjusted_weights.get(action, 0)
+            random_factor = randomness.get(action, 1.0)
+            final = adjusted * random_factor
+            
+            # Highlight the selected decision
+            row_style = ' style="background-color: #FFFFCC;"' if action == decision else ''
+            
+            html += f"""
+            <tr{row_style}>
+                <td>{action}</td>
+                <td>{base:.2f}</td>
+                <td>{adjusted:.2f}</td>
+                <td>{random_factor:.2f}</td>
+                <td><b>{final:.2f}</b></td>
+            </tr>
+            """
+        
+        html += """
+        </table>
+        
+        <h3>Active Memories</h3>
+        <ul>
+        """
+        
+        # Add memories
+        memories = data.get('active_memories', [])
+        if memories:
+            for memory in memories:
+                html += f"<li>{memory}</li>"
+        else:
+            html += "<li><i>No active memories</i></li>"
+        
+        html += "</ul>"
+        
+        self.thought_detail.setHtml(html)
+    
+    def calculate_statistics(self):
+        """Calculate and display statistics about the thought log"""
+        if not self.thought_log:
+            self.stats_text.setText("No thought data available")
+            return
+        
+        # Count decision frequencies
+        decision_counts = {}
+        for entry in self.thought_log:
+            decision = entry.get('decision', 'unknown')
+            decision_counts[decision] = decision_counts.get(decision, 0) + 1
+        
+        # Calculate average confidence per decision type
+        confidence_by_decision = {}
+        for entry in self.thought_log:
+            decision = entry.get('decision', 'unknown')
+            confidence = entry.get('data', {}).get('confidence', 0)
+            
+            if decision not in confidence_by_decision:
+                confidence_by_decision[decision] = []
+            
+            confidence_by_decision[decision].append(confidence)
+        
+        avg_confidence = {d: sum(c)/len(c) for d, c in confidence_by_decision.items()}
+        
+        # Format statistics text
+        stats_html = """
+        <h3>Decision Distribution</h3>
+        <table border="1" cellspacing="0" cellpadding="3">
+            <tr>
+                <th>Decision</th>
+                <th>Count</th>
+                <th>Percentage</th>
+                <th>Avg. Confidence</th>
+            </tr>
+        """
+        
+        total_decisions = len(self.thought_log)
+        
+        for decision, count in sorted(decision_counts.items(), key=lambda x: x[1], reverse=True):
+            percentage = (count / total_decisions) * 100
+            confidence = avg_confidence.get(decision, 0) * 100
+            
+            stats_html += f"""
+            <tr>
+                <td>{decision.capitalize()}</td>
+                <td>{count}</td>
+                <td>{percentage:.1f}%</td>
+                <td>{confidence:.1f}%</td>
+            </tr>
+            """
+        
+        stats_html += """
+        </table>
+        
+        <h3>Summary</h3>
+        """
+        
+        stats_html += f"<p>Total decisions analyzed: {total_decisions}</p>"
+        most_common = max(decision_counts.items(), key=lambda x: x[1])[0] if decision_counts else "none"
+        stats_html += f"<p>Most common decision: {most_common.capitalize()}</p>"
+        avg_overall_confidence = sum(c for cs in confidence_by_decision.values() for c in cs) / total_decisions if total_decisions > 0 else 0
+        stats_html += f"<p>Average decision confidence: {avg_overall_confidence*100:.1f}%</p>"
+        
+        self.stats_text.setHtml(stats_html)
+        
+        # Draw the bar chart
+        self.draw_decision_chart(decision_counts)
+    
+    def draw_decision_chart(self, decision_counts):
+        """Draw a bar chart of decision distribution"""
+        self.decision_scene.clear()
+        
+        if not decision_counts:
+            return
+        
+        # Setup
+        chart_width = 580
+        chart_height = 180
+        bar_width = min(60, chart_width / (len(decision_counts) * 1.5))
+        max_count = max(decision_counts.values())
+        
+        # Add background and border
+        self.decision_scene.addRect(0, 0, chart_width, chart_height, 
+                                   QtGui.QPen(QtCore.Qt.black),
+                                   QtGui.QBrush(QtGui.QColor(250, 250, 250)))
+        
+        # Colors for different decisions
+        colors = {
+            "exploring": QtGui.QColor(100, 180, 255),      # Blue
+            "eating": QtGui.QColor(100, 255, 100),         # Green
+            "approaching_rock": QtGui.QColor(200, 150, 100), # Brown
+            "throwing_rock": QtGui.QColor(200, 100, 100),  # Red
+            "avoiding_threat": QtGui.QColor(255, 100, 100), # Brighter red
+            "organizing": QtGui.QColor(180, 180, 100)      # Yellow/brown
+        }
+        
+        # Draw bars
+        x_position = 20
+        for decision, count in sorted(decision_counts.items(), key=lambda x: x[1], reverse=True):
+            # Calculate bar height proportional to count
+            bar_height = (count / max_count) * (chart_height - 40)
+            
+            # Draw the bar
+            color = colors.get(decision, QtGui.QColor(150, 150, 150))
+            self.decision_scene.addRect(
+                x_position, chart_height - 20 - bar_height, 
+                bar_width, bar_height,
+                QtGui.QPen(QtCore.Qt.black),
+                QtGui.QBrush(color)
+            )
+            
+            # Add label
+            label = self.decision_scene.addText(decision[:8])
+            label.setPos(x_position, chart_height - 15)
+            
+            # Add count
+            count_text = self.decision_scene.addText(str(count))
+            count_text.setPos(x_position + (bar_width/2) - 5, chart_height - 40 - bar_height)
+            
+            x_position += bar_width * 1.5
+    
+    def draw_timeline(self):
+        """Draw a timeline visualization of decisions over time"""
+        self.timeline_scene.clear()
+        
+        if not self.thought_log:
+            return
+        
+        # Setup
+        timeline_width = 600
+        timeline_height = 200
+        
+        # Add background and border
+        self.timeline_scene.addRect(0, 0, timeline_width, timeline_height, 
+                                    QtGui.QPen(QtCore.Qt.black),
+                                    QtGui.QBrush(QtGui.QColor(250, 250, 250)))
+        
+        # Draw timeline axis
+        self.timeline_scene.addLine(
+            50, timeline_height - 50, 
+            timeline_width - 50, timeline_height - 50,
+            QtGui.QPen(QtCore.Qt.black, 2)
+        )
+        
+        # Calculate position scale
+        time_span = len(self.thought_log)
+        x_scale = (timeline_width - 100) / time_span if time_span > 0 else 1
+        
+        # Draw data points
+        for i, entry in enumerate(self.thought_log):
+            decision = entry.get('decision', 'unknown')
+            confidence = entry.get('data', {}).get('confidence', 0.5)
+            
+            # X position based on index
+            x_pos = 50 + (i * x_scale)
+            
+            # Y position based on decision (each gets its own level)
+            decision_types = ["exploring", "eating", "approaching_rock", 
+                             "throwing_rock", "avoiding_threat", "organizing"]
+            try:
+                y_level = decision_types.index(decision)
+            except ValueError:
+                y_level = len(decision_types)  # For unknown decisions
+                
+            y_spacing = 20
+            y_pos = timeline_height - 70 - (y_level * y_spacing)
+            
+            # Draw dot with confidence-based size
+            dot_size = 4 + (confidence * 10)
+            
+            # Colors for different decisions
+            colors = {
+                "exploring": QtGui.QColor(100, 180, 255),      # Blue
+                "eating": QtGui.QColor(100, 255, 100),         # Green
+                "approaching_rock": QtGui.QColor(200, 150, 100), # Brown
+                "throwing_rock": QtGui.QColor(200, 100, 100),  # Red
+                "avoiding_threat": QtGui.QColor(255, 100, 100), # Brighter red
+                "organizing": QtGui.QColor(180, 180, 100)      # Yellow/brown
+            }
+            
+            color = colors.get(decision, QtGui.QColor(150, 150, 150))
+            
+            self.timeline_scene.addEllipse(
+                x_pos - dot_size/2, y_pos - dot_size/2, 
+                dot_size, dot_size,
+                QtGui.QPen(QtCore.Qt.black),
+                QtGui.QBrush(color)
+            )
+            
+            # Add connecting lines if more than one data point
+            if i > 0:
+                prev_decision = self.thought_log[i-1].get('decision', 'unknown')
+                try:
+                    prev_y_level = decision_types.index(prev_decision)
+                except ValueError:
+                    prev_y_level = len(decision_types)
+                    
+                prev_y_pos = timeline_height - 70 - (prev_y_level * y_spacing)
+                prev_x_pos = 50 + ((i-1) * x_scale)
+                
+                self.timeline_scene.addLine(
+                    prev_x_pos, prev_y_pos,
+                    x_pos, y_pos,
+                    QtGui.QPen(QtGui.QColor(200, 200, 200))
+                )
+        
+        # Add legend
+        legend_y = 30
+        for i, decision in enumerate(["exploring", "eating", "approaching_rock", 
+                                    "throwing_rock", "avoiding_threat", "organizing"]):
+            legend_x = 50 + (i * 90)
+            
+            # Color box
+            color = colors.get(decision, QtGui.QColor(150, 150, 150))
+            self.timeline_scene.addRect(
+                legend_x, legend_y, 
+                15, 15,
+                QtGui.QPen(QtCore.Qt.black),
+                QtGui.QBrush(color)
+            )
+            
+            # Label
+            label = self.timeline_scene.addText(decision)
+            label.setPos(legend_x + 20, legend_y - 2)
+    
+    def export_selected(self):
+        """Export the selected thought entry"""
+        selected_row = self.thought_list.currentRow()
+        if selected_row < 0 or selected_row >= len(self.thought_log):
+            QtWidgets.QMessageBox.warning(self, "No Selection", "Please select a thought to export.")
+            return
+        
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Export Selected Thought", "", "HTML Files (*.html);;Text Files (*.txt)")
+        
+        if not file_name:
+            return
+        
+        try:
+            if file_name.endswith('.html'):
+                with open(file_name, 'w') as f:
+                    f.write("<html><body>\n")
+                    f.write(self.thought_detail.toHtml())
+                    f.write("</body></html>")
+            else:
+                with open(file_name, 'w') as f:
+                    f.write(self.thought_detail.toPlainText())
+            
+            QtWidgets.QMessageBox.information(self, "Export Complete", 
+                                            f"Thought data exported to {file_name}")
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Export Error", 
+                                         f"Failed to export data: {str(e)}")
+    
+    def export_all(self):
+        """Export all thought entries"""
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Export All Thoughts", "", "HTML Files (*.html);;Text Files (*.txt)")
+        
+        if not file_name:
+            return
+        
+        try:
+            if file_name.endswith('.html'):
+                with open(file_name, 'w') as f:
+                    f.write("<html><body>\n")
+                    f.write("<h1>Squid Decision Log</h1>\n")
+                    
+                    for i, entry in enumerate(self.thought_log):
+                        f.write(f"<h2>Decision {i+1}: {entry.get('decision', 'unknown').capitalize()}</h2>\n")
+                        f.write(f"<p><b>Time:</b> {entry.get('timestamp', 'unknown')}</p>\n")
+                        
+                        # Save detailed entry
+                        self.thought_list.setCurrentRow(i)
+                        f.write(self.thought_detail.toHtml())
+                        f.write("<hr>\n")
+                    
+                    f.write("</body></html>")
+            else:
+                with open(file_name, 'w') as f:
+                    f.write("SQUID DECISION LOG\n\n")
+                    
+                    for i, entry in enumerate(self.thought_log):
+                        f.write(f"=== Decision {i+1}: {entry.get('decision', 'unknown').capitalize()} ===\n")
+                        f.write(f"Time: {entry.get('timestamp', 'unknown')}\n\n")
+                        
+                        # Save detailed entry
+                        self.thought_list.setCurrentRow(i)
+                        f.write(self.thought_detail.toPlainText())
+                        f.write("\n" + "-" * 80 + "\n\n")
+            
+            QtWidgets.QMessageBox.information(self, "Export Complete", 
+                                            f"All thought data exported to {file_name}")
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Export Error", 
+                                         f"Failed to export data: {str(e)}")
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
