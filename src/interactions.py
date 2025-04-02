@@ -54,19 +54,24 @@ class RockInteractionManager:
         self.squid.rock_hold_start_time = time.time()
         self.squid.rock_decision_made = False
         
+        offset = -50  # Both vertical and horizontal offset
+        
         # Calculate position based on squid direction
         if self.squid.squid_direction == "right":
             # Position rock near right tentacles
-            rock.setPos(self.squid.squid_width - 40, self.squid.squid_height - 30)
+            rock.setPos(self.squid.squid_width - 40 + offset, 
+                    self.squid.squid_height - 30 + offset)
         elif self.squid.squid_direction == "left":
             # Position rock near left tentacles
-            rock.setPos(10, self.squid.squid_height - 30)
+            rock.setPos(10 + offset, 
+                    self.squid.squid_height - 30 + offset)
         elif self.squid.squid_direction == "up":
             # Position rock near upper tentacles
-            rock.setPos(self.squid.squid_width//2 - 15, self.squid.squid_height - 40)
+            rock.setPos(self.squid.squid_width//2 - 15 + offset, 
+                    self.squid.squid_height - 40 + offset)
         else:  # down/default
-            # Position rock near lower tentacles
-            rock.setPos(self.squid.squid_width//2 - 15, self.squid.squid_height - 20)
+            rock.setPos(self.squid.squid_width//2 - 15 + offset, 
+                    self.squid.squid_height - 20 + offset)
         
         rock.is_being_carried = True
         self.squid.is_carrying_rock = True
@@ -74,7 +79,11 @@ class RockInteractionManager:
         rock.setZValue(self.squid.squid_item.zValue() + 1)
         
         # Scale rock to appropriate size
-        rock.setScale(1.0)  # Adjust this value as needed
+        rock.setScale(1.0)
+        
+        # Debug output
+        #print(f"Rock positioned at: {rock.pos()} (Offset: {offset})")
+        #print(f"Squid direction: {self.squid.squid_direction}")
         
         return True
     
