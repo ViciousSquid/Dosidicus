@@ -19,7 +19,7 @@ The `TamagotchiLogic` class is the core game logic controller for the Dosidicus 
 
 Initializes the game controller with references to UI, Squid, and BrainWindow components.
 
-def \_\_init\_\_(self, user\_interface, squid, brain\_window):
+`def __init__(self, user_interface, squid, brain_window):`
 
 ### Key Initialization Steps:
 
