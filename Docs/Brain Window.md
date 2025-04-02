@@ -8,7 +8,7 @@ This module implements a neural network visualization and interaction system for
 
 The main visualization widget that displays the neural network and handles interactions.
 
-###` __init__(self) `
+### ` __init__(self) `
 
 Initializes the brain widget with:
 
@@ -20,7 +20,7 @@ Initializes the brain widget with:
 
 *   Visualization settings
 
-###`update\_state(self, new\_state)`
+### `update\_state(self, new\_state)`
 
 Updates the brain's state with new values and triggers visualization updates.
 
@@ -34,7 +34,7 @@ Parameters: state (dict) - Current brain state
 
 Returns: bool - True if any neurons were created
 
-###`paintEvent(self, event)`
+### `paintEvent(self, event)`
 
 Handles all drawing operations for the widget, including:
 
@@ -43,7 +43,7 @@ Handles all drawing operations for the widget, including:
 *   Weight values
 *   Highlights for new neurons
 
-###`update_weights(self)`
+### `update_weights(self)`
 
 Randomly adjusts connection weights between neurons when not frozen.
 
@@ -51,7 +51,7 @@ Randomly adjusts connection weights between neurons when not frozen.
 
 The main application window that contains the brain visualization and various control tabs.
 
-###` __init\__(self, tamagotchi\_logic, debug\_mode=False)`
+### ` __init\__(self, tamagotchi\_logic, debug\_mode=False)`
 
 Initializes the main window with:
 
@@ -60,13 +60,13 @@ Initializes the main window with:
 *   Various timers for updates
 *   Tab-based interface
 
-`update\_brain(self, state)`
+### `update\_brain(self, state)`
 
 Main method for updating the brain visualization with new state data.
 
 Parameters: state (dict) - Complete brain state dictionary
 
-###`perform_hebbian_learning(self)`
+### `perform_hebbian_learning(self)`
 
 Implements Hebbian learning ("neurons that fire together wire together") by:
 
@@ -75,7 +75,7 @@ Implements Hebbian learning ("neurons that fire together wire together") by:
 3.  Updating their connection weights
 4.  Logging the changes
 
-###`update_connection(self, neuron1, neuron2, value1, value2)`
+### `update_connection(self, neuron1, neuron2, value1, value2)`
 
 Updates the weight between two neurons based on their activation levels.
 
@@ -106,7 +106,7 @@ The brain visualization includes:
 
 ### Interactive Features
 
-*   **Neuron dragging:** Users can reposition neurons with mouse
+*   **Neuron dragging:** Rposition neurons with mouse
 *   **Stimulation:** Manual input of state values via dialog
 *   **Training:** Capture and apply Hebbian learning
 *   **Freezing:** Temporarily stop weight changes
