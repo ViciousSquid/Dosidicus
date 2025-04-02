@@ -38,7 +38,7 @@ def \_\_init\_\_(self, user\_interface, squid, brain\_window):
 
 The main game loop that updates all systems:
 
-def update\_simulation(self):
+`def update\_simulation(self):`
 
 *   Handles object movement (food, poop)
 *   Updates squid position and state
@@ -50,7 +50,7 @@ def update\_simulation(self):
 
 Updates all squid attributes and game state:
 
-def update\_statistics(self):
+`def update\_statistics(self):`
 
 *   Adjusts hunger, happiness, cleanliness
 *   Manages sickness state
@@ -62,7 +62,7 @@ def update\_statistics(self):
 
 Packages squid state for brain visualization:
 
-def update\_squid\_brain(self):
+`def update\_squid\_brain(self):`
 
 *   Collects all squid attributes
 *   Includes position and direction
@@ -89,7 +89,7 @@ def update\_squid\_brain(self):
 
 ### Medical System
 
-def give\_medicine(self):
+`def give\_medicine(self):`
 
 Handles medicine administration with visual effects:
 
@@ -119,7 +119,7 @@ Handles medicine administration with visual effects:
 
 ### Neurogenesis Tracking
 
-def track\_neurogenesis\_triggers(self):
+`def track\_neurogenesis\_triggers(self):`
 
 Manages counters for brain development triggers:
 
@@ -131,7 +131,7 @@ Manages counters for brain development triggers:
 
 ### Save Function
 
-def save\_game(self, squid, tamagotchi\_logic, is\_autosave=False):
+`def save\_game(self, squid, tamagotchi\_logic, is\_autosave=False):`
 
 Serializes game state including:
 
@@ -143,7 +143,7 @@ Serializes game state including:
 
 ### Load Function
 
-def load\_game(self):
+`def load\_game(self):`
 
 Restores game state from save file:
 
