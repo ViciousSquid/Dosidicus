@@ -398,7 +398,7 @@ class Squid:
     def push_decoration(self, decoration, direction):
         """Push a decoration with proper animation handling"""
         try:
-            push_distance = 40  # pixels to push
+            push_distance = 60  # pixels to push
             current_pos = decoration.pos()
             new_x = current_pos.x() + (push_distance * direction)
 
