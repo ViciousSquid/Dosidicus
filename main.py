@@ -250,14 +250,29 @@ class MainWindow(QtWidgets.QMainWindow):
         self.splash.show()
 
     def start_simulation(self):
-        """Begin the simulation"""
+        """Begin the simulation and automatically open brain and decoration windows"""
         print("Starting simulation")
         self.tamagotchi_logic.set_simulation_speed(1)
         self.tamagotchi_logic.start_autosave()
 
+        # Use QTimer to delay opening windows slightly
+        QtCore.QTimer.singleShot(1000, self.open_initial_windows)
+
     def show_hatching_notification(self):
         """Display hatching message"""
         self.user_interface.show_message("Squid is hatching!")
+
+    def open_initial_windows(self):
+        """Open brain window and decorations window"""
+        # Open brain window
+        if hasattr(self, 'brain_window'):
+            self.brain_window.show()
+            self.user_interface.brain_action.setChecked(True)
+
+        # Open decorations window
+        if hasattr(self.user_interface, 'decoration_window'):
+            self.position_and_show_decoration_window()
+            self.user_interface.decorations_action.setChecked(True)
 
     
     def initialize_multiplayer_manually(self):
@@ -294,7 +309,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # Force the UI to refresh plugin menu
             self.user_interface.setup_plugin_menu(self.plugin_manager)
             
-            print("Manual multiplayer initialization complete")
+            #print("Manual multiplayer initialization complete")
             return True
             
         except Exception as e:
@@ -307,7 +322,7 @@ def main():
     """Main entry point"""
     sys.excepthook = global_exception_handler
 
-    parser = argparse.ArgumentParser(description="Dosidicus digital pet simulation")
+    parser = argparse.ArgumentParser(description="Dosidicus digital squid with a neural network")
     parser.add_argument('-p', '--personality', type=str, 
                        choices=[p.value for p in Personality], 
                        help='Specify squid personality')
