@@ -137,7 +137,8 @@ class PluginManager:
         ]
         return True
     
-    def trigger_hook(self, hook_name: str, **kwargs) -> List[Any]:
+    def trigger_hook(self, hook_name, **kwargs):
+        print(f"Attempting to trigger hook: {hook_name}")
         """
         Trigger a hook, calling all subscribed plugin callbacks.
         

@@ -3,6 +3,7 @@
 
 import os
 import random
+import time
 from datetime import datetime
 from enum import Enum
 import math
@@ -449,95 +450,142 @@ class Squid:
     
     def check_boundary_exit(self):
         """
-        Aggressive boundary exit detection for cross-window movement
+        Comprehensive boundary exit detection with robust network node handling
         """
-        print("\n!!!!! AGGRESSIVE BOUNDARY EXIT CHECK !!!!!")
-        
-        # Check if multiplayer is available and enabled
         try:
-            if not hasattr(self, 'tamagotchi_logic'):
-                print("ERROR: No tamagotchi_logic attribute")
+            # Check basic prerequisites
+            if not hasattr(self, 'tamagotchi_logic') or not self.tamagotchi_logic:
                 return False
             
-            if not hasattr(self.tamagotchi_logic, 'plugin_manager'):
-                print("ERROR: No plugin_manager in tamagotchi_logic")
-                return False
-            
+            # Check plugin manager and multiplayer status
             pm = self.tamagotchi_logic.plugin_manager
             multiplayer_enabled = 'multiplayer' in pm.get_enabled_plugins()
             
-            print(f"Multiplayer Enabled: {multiplayer_enabled}")
-            print(f"Enabled Plugins: {pm.get_enabled_plugins()}")
-        except Exception as e:
-            print(f"ERROR checking multiplayer status: {e}")
-            return False
-
-        # If multiplayer is not enabled, exit
-        if not multiplayer_enabled:
-            print("Multiplayer not enabled. Skipping boundary exit.")
-            return False
-
-        # Comprehensive boundary calculations
-        try:
-            window_width = self.ui.window_width
-            window_height = self.ui.window_height
+            if not multiplayer_enabled:
+                return False
             
-            # Detailed position logging
-            print(f"Window Dimensions: {window_width} x {window_height}")
-            print(f"Squid Position: ({self.squid_x}, {self.squid_y})")
-            print(f"Squid Dimensions: {self.squid_width} x {self.squid_height}")
-            print(f"Current Direction: {self.squid_direction}")
-
-            # Calculate extended boundary conditions
+            # Attempt to get network node with multiple fallback strategies
+            network_node = None
+            
+            # Strategy 1: Direct attribute on tamagotchi_logic
+            if hasattr(self.tamagotchi_logic, 'network_node'):
+                network_node = self.tamagotchi_logic.network_node
+            
+            # Strategy 2: Find in multiplayer plugin
+            if network_node is None:
+                try:
+                    multiplayer_plugin = pm.plugins.get('multiplayer', {}).get('instance')
+                    if multiplayer_plugin and hasattr(multiplayer_plugin, 'network_node'):
+                        network_node = multiplayer_plugin.network_node
+                        # Attempt to set on tamagotchi_logic for future use
+                        self.tamagotchi_logic.network_node = network_node
+                except Exception as plugin_error:
+                    print(f"Error finding network node in plugin: {plugin_error}")
+            
+            # If still no network node, abort
+            if network_node is None or not network_node.is_connected:
+                print("No active network node found for boundary exit")
+                return False
+            
+            # Advanced boundary detection logic
             squid_right = self.squid_x + self.squid_width
             squid_bottom = self.squid_y + self.squid_height
-
-            # Extended debug information
-            print(f"Squid Right Edge: {squid_right}")
-            print(f"Squid Bottom Edge: {squid_bottom}")
-
-            # More aggressive boundary conditions with larger trigger area
-            direction = None
             
-            # LEFT boundary exit - trigger when squid approaches left edge
-            if self.squid_x < 50 and self.squid_direction == 'left':
-                direction = 'left'
-                print("!!!!! LEFT BOUNDARY EXIT DETECTED !!!!!")
+            exit_direction = None
             
-            # RIGHT boundary exit - trigger when squid approaches right edge
-            elif squid_right > window_width - 50 and self.squid_direction == 'right':
-                direction = 'right'
-                print("!!!!! RIGHT BOUNDARY EXIT DETECTED !!!!!")
+            print("\n===== BOUNDARY EXIT ANALYSIS =====")
+            print(f"Squid Position: ({self.squid_x}, {self.squid_y})")
+            print(f"Squid Dimensions: {self.squid_width}x{self.squid_height}")
+            print(f"Window Dimensions: {self.ui.window_width}x{self.ui.window_height}")
             
-            # TOP boundary exit - trigger when squid approaches top edge
-            elif self.squid_y < 50 and self.squid_direction == 'up':
-                direction = 'up'
-                print("!!!!! TOP BOUNDARY EXIT DETECTED !!!!!")
+            # Comprehensive boundary checks
+            if self.squid_x <= 0:
+                exit_direction = 'left'
+            elif squid_right >= self.ui.window_width:
+                exit_direction = 'right'
+            elif self.squid_y <= 0:
+                exit_direction = 'up'
+            elif squid_bottom >= self.ui.window_height:
+                exit_direction = 'down'
             
-            # BOTTOM boundary exit - trigger when squid approaches bottom edge
-            elif squid_bottom > window_height - 100 and self.squid_direction == 'down':
-                direction = 'down'
-                print("!!!!! BOTTOM BOUNDARY EXIT DETECTED !!!!!")
-
-            # Attempt to notify if exit detected
-            if direction:
-                print(f"Attempting to notify boundary exit: {direction}")
+            if exit_direction:
+                print(f"Exit Direction Detected: {exit_direction}")
+                
+                # Prepare comprehensive exit data
+                exit_data = {
+                    'node_id': network_node.node_id,
+                    'direction': exit_direction,
+                    'position': {
+                        'x': self.squid_x,
+                        'y': self.squid_y
+                    },
+                    'color': self._get_squid_color(),
+                    'squid_width': self.squid_width,
+                    'squid_height': self.squid_height,
+                    'window_width': self.ui.window_width,
+                    'window_height': self.ui.window_height
+                }
+                
+                print("Exit Data Details:")
+                for key, value in exit_data.items():
+                    print(f"  {key}: {value}")
+                
+                # Broadcast exit message
                 try:
-                    self._notify_boundary_exit(direction)
-                    print("Boundary exit notification successful")
+                    network_node.send_message(
+                        'squid_exit', 
+                        {'payload': exit_data}
+                    )
+                    print("Exit message successfully broadcast")
                     return True
-                except Exception as notify_error:
-                    print(f"ERROR in boundary exit notification: {notify_error}")
+                except Exception as broadcast_error:
+                    print(f"Broadcast error: {broadcast_error}")
                     return False
-
-            print("No boundary exit detected")
+            
             return False
-
+        
         except Exception as e:
-            print(f"CRITICAL ERROR in boundary exit check: {e}")
+            print(f"Comprehensive boundary exit error: {e}")
             import traceback
             traceback.print_exc()
             return False
+        
+    def _get_squid_color(self):
+        """Generate a persistent color for this squid"""
+        if not hasattr(self, '_squid_color'):
+            # Create stable color generation based on node_id
+            import hashlib
+            
+            # Try multiple fallback methods for generating a unique source
+            try:
+                # First try network node
+                if hasattr(self.tamagotchi_logic, 'network_node') and self.tamagotchi_logic.network_node:
+                    node_id_source = self.tamagotchi_logic.network_node.node_id
+                # Next try direct node_id attribute
+                elif hasattr(self.tamagotchi_logic, 'node_id'):
+                    node_id_source = self.tamagotchi_logic.node_id
+                # Final fallback is current timestamp
+                else:
+                    node_id_source = str(time.time())
+            except Exception:
+                # Ultimate fallback
+                node_id_source = str(time.time())
+            
+            # Generate color from hash
+            hash_val = hashlib.md5(node_id_source.encode()).hexdigest()
+            
+            r = int(hash_val[:2], 16)
+            g = int(hash_val[2:4], 16)
+            b = int(hash_val[4:6], 16)
+            
+            # Ensure minimum brightness
+            self._squid_color = (
+                max(r, 100), 
+                max(g, 100), 
+                max(b, 100)
+            )
+        
+        return self._squid_color
     
     def _notify_boundary_exit(self, direction):
         """
@@ -848,7 +896,7 @@ class Squid:
         Move the squid with comprehensive debug logging and boundary check
         """
         # Debug logging for movement start
-        print("\n===== MOVE SQUID DEBUG START =====")
+        #print("\n===== MOVE SQUID DEBUG START =====")
         
         # Check if multiplayer is available and enabled
         if hasattr(self.tamagotchi_logic, 'plugin_manager'):
@@ -857,17 +905,17 @@ class Squid:
         else:
             multiplayer_enabled = False
         
-        print(f"Multiplayer Enabled: {multiplayer_enabled}")
-        print(f"Current Position: ({self.squid_x}, {self.squid_y})")
-        print(f"Window Dimensions: {self.ui.window_width} x {self.ui.window_height}")
-        print(f"Current Direction: {self.squid_direction}")
+        #print(f"Multiplayer Enabled: {multiplayer_enabled}")
+        #print(f"Current Position: ({self.squid_x}, {self.squid_y})")
+        #print(f"Window Dimensions: {self.ui.window_width} x {self.ui.window_height}")
+        #print(f"Current Direction: {self.squid_direction}")
 
         if self.animation_speed == 0:
-            print("Animation speed is 0, no movement")
+            #print("Animation speed is 0, no movement")
             return
 
         if self.is_sleeping:
-            print("Squid is sleeping, limited movement")
+            #print("Squid is sleeping, limited movement")
             if self.squid_y < self.ui.window_height - 120 - self.squid_height:
                 self.squid_y += self.base_vertical_speed * self.animation_speed
                 self.squid_item.setPos(self.squid_x, self.squid_y)
@@ -908,11 +956,11 @@ class Squid:
             squid_y_new += self.base_vertical_speed * self.animation_speed
 
         # Comprehensive boundary logging
-        print(f"New Position Calculation:")
-        print(f"  New X: {squid_x_new}")
-        print(f"  New Y: {squid_y_new}")
-        print(f"  Window Width: {self.ui.window_width}")
-        print(f"  Window Height: {self.ui.window_height}")
+        #print(f"New Position Calculation:")
+        #print(f"  New X: {squid_x_new}")
+        #print(f"  New Y: {squid_y_new}")
+        #print(f"  Window Width: {self.ui.window_width}")
+        #print(f"  Window Height: {self.ui.window_height}")
 
         # Boundary handling for single-player and multiplayer modes
         if not multiplayer_enabled:
@@ -936,10 +984,10 @@ class Squid:
             squid_right = squid_x_new + self.squid_width
             squid_bottom = squid_y_new + self.squid_height
 
-            print(f"Squid Right Edge: {squid_right}")
-            print(f"Squid Bottom Edge: {squid_bottom}")
-            print(f"Window Width: {self.ui.window_width}")
-            print(f"Window Height: {self.ui.window_height}")
+            #print(f"Squid Right Edge: {squid_right}")
+            #print(f"Squid Bottom Edge: {squid_bottom}")
+            #print(f"Window Width: {self.ui.window_width}")
+            #print(f"Window Height: {self.ui.window_height}")
 
         # Update squid position
         self.squid_x = squid_x_new
@@ -957,11 +1005,11 @@ class Squid:
 
         # Comprehensive boundary exit check in multiplayer mode
         if multiplayer_enabled:
-            print("Triggering boundary exit check in multiplayer mode")
+            #print("Triggering boundary exit check in multiplayer mode")
             exit_result = self.check_boundary_exit()
-            print(f"Boundary Exit Result: {exit_result}")
+            #print(f"Boundary Exit Result: {exit_result}")
 
-        print("===== MOVE SQUID DEBUG END =====\n")
+        #print("===== MOVE SQUID DEBUG END =====\n")
 
     def move_towards(self, x, y):
         dx = x - (self.squid_x + self.squid_width // 2)
