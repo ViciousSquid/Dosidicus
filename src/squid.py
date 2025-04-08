@@ -3,6 +3,7 @@
 
 import os
 import random
+import time
 from datetime import datetime
 from enum import Enum
 import math
@@ -18,6 +19,8 @@ class Squid:
         self.tamagotchi_logic = tamagotchi_logic
         self.memory_manager = MemoryManager()
         self.push_animation = None
+        self.startled_icon = None
+        self.startled_icon_offset = QtCore.QPointF(0, -100)
 
         # Set neurogenesis cooldown (default to 200 seconds if not specified)
         self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 200
@@ -57,8 +60,10 @@ class Squid:
 
         self.squid_item = QtWidgets.QGraphicsPixmapItem(self.current_image())
         self.squid_item.setPos(self.squid_x, self.squid_y)
+        self.squid_item.setAcceptHoverEvents(True)  # Enable hover events
+        self.squid_item.mousePressEvent = self.handle_squid_click  # Add click handler
         self.ui.scene.addItem(self.squid_item)
-
+        self.anxiety_cooldown_timer = None
         self.ui.window.resizeEvent = self.handle_window_resize
 
         self.view_cone_item = None
@@ -85,7 +90,7 @@ class Squid:
 
         # Goal neurons
         self.satisfaction = 50
-        self.anxiety = 10
+        self.anxiety = 0
         self.curiosity = 50
 
         if personality is None:
@@ -320,8 +325,31 @@ class Squid:
             "sleep1": QtGui.QPixmap(os.path.join("images", "sleep1.png")),
             "sleep2": QtGui.QPixmap(os.path.join("images", "sleep2.png")),
         }
+        # Load startled image
+        self.startled_image = QtGui.QPixmap(os.path.join("images", "startled.png"))
         self.squid_width = self.images["left1"].width()
         self.squid_height = self.images["left1"].height()
+
+    def show_startled_icon(self):
+        """Show the startled icon above the squid's head"""
+        if self.startled_icon is None:
+            self.startled_icon = QtWidgets.QGraphicsPixmapItem(self.startled_image)
+            self.ui.scene.addItem(self.startled_icon)
+        self.update_startled_icon_position()
+
+    def hide_startled_icon(self):
+        """Remove the startled icon"""
+        if self.startled_icon is not None:
+            self.ui.scene.removeItem(self.startled_icon)
+            self.startled_icon = None
+
+    def update_startled_icon_position(self):
+        """Position the startled icon above the squid"""
+        if self.startled_icon is not None:
+            self.startled_icon.setPos(
+                self.squid_x + self.squid_width // 2 - self.startled_icon.pixmap().width() // 2 + self.startled_icon_offset.x(),
+                self.squid_y + self.startled_icon_offset.y()
+            )
 
     def load_poop_images(self):
         self.poop_images = [
@@ -364,6 +392,8 @@ class Squid:
         self.squid_y = max(50, min(self.squid_y, self.ui.window_height - 120 - self.squid_height))
         self.squid_item.setPos(self.squid_x, self.squid_y)
         self.update_view_cone()
+        if self.startled_icon is not None:
+            self.update_startled_icon_position()
 
     def update_needs(self):
         # This method was moved to TamagotchiLogic 26/07/2024
@@ -377,98 +407,185 @@ class Squid:
         
         return self._decision_engine.make_decision()
     
+    def handle_squid_click(self, event):
+        """Handle mouse click on the squid"""
+        if self.is_sleeping:
+            self.startle_awake()
+        event.accept()
+
+    def startle_awake(self):
+        """Startle the squid awake with an anxiety spike"""
+        if not self.is_sleeping:
+            return
+            
+        # Wake up the squid
+        self.is_sleeping = False
+        self.sleepiness = 0
+        self.happiness = max(0, self.happiness - 15)  # Slight happiness decrease from being startled
+        self.anxiety = min(100, self.anxiety + 40)    # Large anxiety spike
+        
+        # Visual feedback
+        self.show_startled_icon()  # Show the startled icon
+        self.tamagotchi_logic.show_message("Squid was startled awake!")
+        self.status = "startled"
+        self.squid_direction = "left"  # Reset direction
+        self.update_squid_image()
+        
+        # Start timers
+        self.anxiety_cooldown_timer = QtCore.QTimer()
+        self.anxiety_cooldown_timer.timeout.connect(self.reduce_startle_anxiety)
+        self.anxiety_cooldown_timer.start(5000)  # Reduce anxiety after 5 seconds
+        
+        # Hide startled icon after 2 seconds
+        QtCore.QTimer.singleShot(2000, self.hide_startled_icon)
+
+    def reduce_startle_anxiety(self):
+        """Gradually reduce the startle anxiety"""
+        self.anxiety = max(10, self.anxiety - 15)  # Reduce anxiety but don't go below baseline
+        
+        if self.anxiety <= 25:  # When back to near-normal levels
+            if hasattr(self, 'anxiety_cooldown_timer'):
+                self.anxiety_cooldown_timer.stop()
+            self.tamagotchi_logic.show_message("Squid has calmed down")
+    
     def check_boundary_exit(self):
         """
-        Aggressive boundary exit detection for cross-window movement
+        Comprehensive boundary exit detection with robust network node handling
         """
-        print("\n!!!!! AGGRESSIVE BOUNDARY EXIT CHECK !!!!!")
-        
-        # Check if multiplayer is available and enabled
         try:
-            if not hasattr(self, 'tamagotchi_logic'):
-                print("ERROR: No tamagotchi_logic attribute")
+            # Check basic prerequisites
+            if not hasattr(self, 'tamagotchi_logic') or not self.tamagotchi_logic:
                 return False
             
-            if not hasattr(self.tamagotchi_logic, 'plugin_manager'):
-                print("ERROR: No plugin_manager in tamagotchi_logic")
-                return False
-            
+            # Check plugin manager and multiplayer status
             pm = self.tamagotchi_logic.plugin_manager
             multiplayer_enabled = 'multiplayer' in pm.get_enabled_plugins()
             
-            print(f"Multiplayer Enabled: {multiplayer_enabled}")
-            print(f"Enabled Plugins: {pm.get_enabled_plugins()}")
-        except Exception as e:
-            print(f"ERROR checking multiplayer status: {e}")
-            return False
-
-        # If multiplayer is not enabled, exit
-        if not multiplayer_enabled:
-            print("Multiplayer not enabled. Skipping boundary exit.")
-            return False
-
-        # Comprehensive boundary calculations
-        try:
-            window_width = self.ui.window_width
-            window_height = self.ui.window_height
+            if not multiplayer_enabled:
+                return False
             
-            # Detailed position logging
-            print(f"Window Dimensions: {window_width} x {window_height}")
-            print(f"Squid Position: ({self.squid_x}, {self.squid_y})")
-            print(f"Squid Dimensions: {self.squid_width} x {self.squid_height}")
-            print(f"Current Direction: {self.squid_direction}")
-
-            # Calculate extended boundary conditions
+            # Attempt to get network node with multiple fallback strategies
+            network_node = None
+            
+            # Strategy 1: Direct attribute on tamagotchi_logic
+            if hasattr(self.tamagotchi_logic, 'network_node'):
+                network_node = self.tamagotchi_logic.network_node
+            
+            # Strategy 2: Find in multiplayer plugin
+            if network_node is None:
+                try:
+                    multiplayer_plugin = pm.plugins.get('multiplayer', {}).get('instance')
+                    if multiplayer_plugin and hasattr(multiplayer_plugin, 'network_node'):
+                        network_node = multiplayer_plugin.network_node
+                        # Attempt to set on tamagotchi_logic for future use
+                        self.tamagotchi_logic.network_node = network_node
+                except Exception as plugin_error:
+                    print(f"Error finding network node in plugin: {plugin_error}")
+            
+            # If still no network node, abort
+            if network_node is None or not network_node.is_connected:
+                print("No active network node found for boundary exit")
+                return False
+            
+            # Advanced boundary detection logic
             squid_right = self.squid_x + self.squid_width
             squid_bottom = self.squid_y + self.squid_height
-
-            # Extended debug information
-            print(f"Squid Right Edge: {squid_right}")
-            print(f"Squid Bottom Edge: {squid_bottom}")
-
-            # Aggressive boundary conditions
-            direction = None
-            margin = 10  # Slightly inside the boundary to ensure clean exit
             
-            # LEFT boundary exit - exit when squid is just off the left side
-            if self.squid_x < -margin and self.squid_direction == 'left':
-                direction = 'left'
-                print("!!!!! LEFT BOUNDARY EXIT DETECTED !!!!!")
+            exit_direction = None
             
-            # RIGHT boundary exit - exit when squid is just off the right side
-            elif squid_right > window_width + margin and self.squid_direction == 'right':
-                direction = 'right'
-                print("!!!!! RIGHT BOUNDARY EXIT DETECTED !!!!!")
+            print("\n===== BOUNDARY EXIT ANALYSIS =====")
+            print(f"Squid Position: ({self.squid_x}, {self.squid_y})")
+            print(f"Squid Dimensions: {self.squid_width}x{self.squid_height}")
+            print(f"Window Dimensions: {self.ui.window_width}x{self.ui.window_height}")
             
-            # TOP boundary exit - exit when squid is just off the top
-            elif self.squid_y < -margin and self.squid_direction == 'up':
-                direction = 'up'
-                print("!!!!! TOP BOUNDARY EXIT DETECTED !!!!!")
+            # Comprehensive boundary checks
+            if self.squid_x <= 0:
+                exit_direction = 'left'
+            elif squid_right >= self.ui.window_width:
+                exit_direction = 'right'
+            elif self.squid_y <= 0:
+                exit_direction = 'up'
+            elif squid_bottom >= self.ui.window_height:
+                exit_direction = 'down'
             
-            # BOTTOM boundary exit - exit when squid is just off the bottom
-            elif squid_bottom > window_height + margin and self.squid_direction == 'down':
-                direction = 'down'
-                print("!!!!! BOTTOM BOUNDARY EXIT DETECTED !!!!!")
-
-            # Attempt to notify if exit detected
-            if direction:
-                print(f"Attempting to notify boundary exit: {direction}")
+            if exit_direction:
+                print(f"Exit Direction Detected: {exit_direction}")
+                
+                # Prepare comprehensive exit data
+                exit_data = {
+                    'node_id': network_node.node_id,
+                    'direction': exit_direction,
+                    'position': {
+                        'x': self.squid_x,
+                        'y': self.squid_y
+                    },
+                    'color': self._get_squid_color(),
+                    'squid_width': self.squid_width,
+                    'squid_height': self.squid_height,
+                    'window_width': self.ui.window_width,
+                    'window_height': self.ui.window_height
+                }
+                
+                print("Exit Data Details:")
+                for key, value in exit_data.items():
+                    print(f"  {key}: {value}")
+                
+                # Broadcast exit message
                 try:
-                    self._notify_boundary_exit(direction)
-                    print("Boundary exit notification successful")
+                    network_node.send_message(
+                        'squid_exit', 
+                        {'payload': exit_data}
+                    )
+                    print("Exit message successfully broadcast")
                     return True
-                except Exception as notify_error:
-                    print(f"ERROR in boundary exit notification: {notify_error}")
+                except Exception as broadcast_error:
+                    print(f"Broadcast error: {broadcast_error}")
                     return False
-
-            print("No boundary exit detected")
+            
             return False
-
+        
         except Exception as e:
-            print(f"CRITICAL ERROR in boundary exit check: {e}")
+            print(f"Comprehensive boundary exit error: {e}")
             import traceback
             traceback.print_exc()
             return False
+        
+    def _get_squid_color(self):
+        """Generate a persistent color for this squid"""
+        if not hasattr(self, '_squid_color'):
+            # Create stable color generation based on node_id
+            import hashlib
+            
+            # Try multiple fallback methods for generating a unique source
+            try:
+                # First try network node
+                if hasattr(self.tamagotchi_logic, 'network_node') and self.tamagotchi_logic.network_node:
+                    node_id_source = self.tamagotchi_logic.network_node.node_id
+                # Next try direct node_id attribute
+                elif hasattr(self.tamagotchi_logic, 'node_id'):
+                    node_id_source = self.tamagotchi_logic.node_id
+                # Final fallback is current timestamp
+                else:
+                    node_id_source = str(time.time())
+            except Exception:
+                # Ultimate fallback
+                node_id_source = str(time.time())
+            
+            # Generate color from hash
+            hash_val = hashlib.md5(node_id_source.encode()).hexdigest()
+            
+            r = int(hash_val[:2], 16)
+            g = int(hash_val[2:4], 16)
+            b = int(hash_val[4:6], 16)
+            
+            # Ensure minimum brightness
+            self._squid_color = (
+                max(r, 100), 
+                max(g, 100), 
+                max(b, 100)
+            )
+        
+        return self._squid_color
     
     def _notify_boundary_exit(self, direction):
         """
@@ -688,10 +805,14 @@ class Squid:
     def search_for_food(self):
         visible_food = self.get_visible_food()
         if visible_food:
+            # Only set pursuing_food to True if food is actually visible
+            self.pursuing_food = True
             closest_food = min(visible_food, key=lambda f: self.distance_to(f[0], f[1]))
             self.status = "moving to food"
             self.move_towards(closest_food[0], closest_food[1])
         else:
+            # Reset pursuing_food when no food is visible
+            self.pursuing_food = False
             self.status = "searching for food"
             self.move_randomly()
 
@@ -701,14 +822,13 @@ class Squid:
         visible_food = []
         for food_item in self.tamagotchi_logic.food_items:
             food_x, food_y = food_item.pos().x(), food_item.pos().y()
+            # Only add food if it's in the view cone
             if self.is_in_vision_cone(food_x, food_y):
                 if getattr(food_item, 'is_sushi', False):
                     visible_food.insert(0, (food_x, food_y))  # Prioritize sushi
                 else:
-                    visible_food.append((food_x, food_y))  # Add cheese to the end of the list
+                    visible_food.append((food_x, food_y))  # Add cheese to the end
         return visible_food
-
-    # Add this to squid.py in the is_in_vision_cone method
 
     def is_in_vision_cone(self, x, y):
         """
@@ -776,7 +896,7 @@ class Squid:
         Move the squid with comprehensive debug logging and boundary check
         """
         # Debug logging for movement start
-        print("\n===== MOVE SQUID DEBUG START =====")
+        #print("\n===== MOVE SQUID DEBUG START =====")
         
         # Check if multiplayer is available and enabled
         if hasattr(self.tamagotchi_logic, 'plugin_manager'):
@@ -785,17 +905,17 @@ class Squid:
         else:
             multiplayer_enabled = False
         
-        print(f"Multiplayer Enabled: {multiplayer_enabled}")
-        print(f"Current Position: ({self.squid_x}, {self.squid_y})")
-        print(f"Window Dimensions: {self.ui.window_width} x {self.ui.window_height}")
-        print(f"Current Direction: {self.squid_direction}")
+        #print(f"Multiplayer Enabled: {multiplayer_enabled}")
+        #print(f"Current Position: ({self.squid_x}, {self.squid_y})")
+        #print(f"Window Dimensions: {self.ui.window_width} x {self.ui.window_height}")
+        #print(f"Current Direction: {self.squid_direction}")
 
         if self.animation_speed == 0:
-            print("Animation speed is 0, no movement")
+            #print("Animation speed is 0, no movement")
             return
 
         if self.is_sleeping:
-            print("Squid is sleeping, limited movement")
+            #print("Squid is sleeping, limited movement")
             if self.squid_y < self.ui.window_height - 120 - self.squid_height:
                 self.squid_y += self.base_vertical_speed * self.animation_speed
                 self.squid_item.setPos(self.squid_x, self.squid_y)
@@ -836,11 +956,11 @@ class Squid:
             squid_y_new += self.base_vertical_speed * self.animation_speed
 
         # Comprehensive boundary logging
-        print(f"New Position Calculation:")
-        print(f"  New X: {squid_x_new}")
-        print(f"  New Y: {squid_y_new}")
-        print(f"  Window Width: {self.ui.window_width}")
-        print(f"  Window Height: {self.ui.window_height}")
+        #print(f"New Position Calculation:")
+        #print(f"  New X: {squid_x_new}")
+        #print(f"  New Y: {squid_y_new}")
+        #print(f"  Window Width: {self.ui.window_width}")
+        #print(f"  Window Height: {self.ui.window_height}")
 
         # Boundary handling for single-player and multiplayer modes
         if not multiplayer_enabled:
@@ -864,10 +984,10 @@ class Squid:
             squid_right = squid_x_new + self.squid_width
             squid_bottom = squid_y_new + self.squid_height
 
-            print(f"Squid Right Edge: {squid_right}")
-            print(f"Squid Bottom Edge: {squid_bottom}")
-            print(f"Window Width: {self.ui.window_width}")
-            print(f"Window Height: {self.ui.window_height}")
+            #print(f"Squid Right Edge: {squid_right}")
+            #print(f"Squid Bottom Edge: {squid_bottom}")
+            #print(f"Window Width: {self.ui.window_width}")
+            #print(f"Window Height: {self.ui.window_height}")
 
         # Update squid position
         self.squid_x = squid_x_new
@@ -885,11 +1005,11 @@ class Squid:
 
         # Comprehensive boundary exit check in multiplayer mode
         if multiplayer_enabled:
-            print("Triggering boundary exit check in multiplayer mode")
+            #print("Triggering boundary exit check in multiplayer mode")
             exit_result = self.check_boundary_exit()
-            print(f"Boundary Exit Result: {exit_result}")
+            #print(f"Boundary Exit Result: {exit_result}")
 
-        print("===== MOVE SQUID DEBUG END =====\n")
+        #print("===== MOVE SQUID DEBUG END =====\n")
 
     def move_towards(self, x, y):
         dx = x - (self.squid_x + self.squid_width // 2)
@@ -942,7 +1062,7 @@ class Squid:
                     effects=effects
                 )
         
-        # Continue with original behavior
+        self.is_eating = True
         # Apply all stat changes
         for attr, change in effects.items():
             setattr(self, attr, getattr(self, attr) + change)
@@ -965,6 +1085,7 @@ class Squid:
         self.start_poop_timer()
         self.pursuing_food = False
         self.target_food = None
+        self.is_eating = False
 
         # Personality reactions (with enhanced messages)
         if self.personality == Personality.GREEDY:
@@ -1275,7 +1396,12 @@ class Squid:
 
     def current_image(self):
         """Return the current image of the squid"""
-        # Determine base image
+        # Check if we're in startled state
+        if hasattr(self, 'status') and self.status == "startled" and not self.is_sleeping:
+            # Use the "up" frame which looks more alert
+            return self.images[f"up{self.current_frame + 1}"]
+        
+        # Normal image selection
         if self.is_sleeping:
             base_image = self.images[f"sleep{self.current_frame + 1}"]
         elif self.squid_direction == "left":
@@ -1445,11 +1571,11 @@ class Squid:
         
         return can_pick
 
-    def pick_up_rock(self, rock):
+    def pick_up_rock(self, item):
         """Delegate to interaction manager with random carry duration"""
         if not hasattr(self.tamagotchi_logic, 'rock_interaction'):
             return False
-        return self.tamagotchi_logic.rock_interaction.attach_rock_to_squid(rock)
+        return self.tamagotchi_logic.rock_interaction.attach_rock_to_squid(item)
 
     def throw_rock(self, direction):
         """Delegate to interaction manager"""
@@ -1502,7 +1628,6 @@ class Squid:
 
 
     def check_rock_interaction(self):
-        """Debug-enhanced rock interaction check"""
         if not hasattr(self, 'tamagotchi_logic') or self.tamagotchi_logic is None:
             return False
             
@@ -1511,41 +1636,33 @@ class Squid:
             
         config = self.tamagotchi_logic.config_manager.get_rock_config()
         
-        # Find nearby rocks
         decorations = self.tamagotchi_logic.get_nearby_decorations(
             self.squid_x, self.squid_y, 150)
-        rocks = [d for d in decorations if getattr(d, 'can_be_picked_up', False)]
+        interactables = [d for d in decorations if d.category in ['rock', 'poop']]
 
-        # Rock throwing
         if (self.carrying_rock 
                 and self.rock_throw_cooldown == 0 
                 and random.random() < config['throw_prob']):
-            #print("[DEBUG] Attempting to throw rock!")
             direction = random.choice(["left", "right"])
             if self.throw_rock(direction):
-                #print("[DEBUG] Rock thrown successfully!")
                 return
 
-        # Rock pickup
         if (not self.carrying_rock 
                 and self.rock_throw_cooldown == 0 
-                and rocks 
+                and interactables
                 and random.random() < config['pickup_prob']):
-            target_rock = random.choice(rocks)
-            #print(f"[DEBUG] Attempting to pick up: {getattr(target_rock, 'filename', 'unknown_rock')}")
+            target_item = random.choice(interactables)
             
-            if self.pick_up_rock(target_rock):
-                #print("[DEBUG] Pickup successful!")
-                # Debug memory entry
+            if self.pick_up_rock(target_item):
                 mem_details = {
-                    "rock": getattr(target_rock, 'filename', 'unknown'),
-                    "position": (target_rock.pos().x(), target_rock.pos().y()),
+                    "item": getattr(target_item, 'filename', f'unknown_{target_item.category}'),
+                    "position": (target_item.pos().x(), target_item.pos().y()),
                     "timestamp": datetime.now().isoformat()
                 }
                 self.memory_manager.add_short_term_memory(
-                    'interaction', 'rock_pickup', mem_details)
+                    'interaction', f'{target_item.category}_pickup', mem_details)
             else:
-                print("[DEBUG] Pickup failed")
+                print(f"[DEBUG] {target_item.category.capitalize()} pickup failed")
 
     def get_center(self):
         """Return the center position of the squid"""

@@ -1,6 +1,7 @@
 import math
 import time
 import random
+import os
 from PyQt5 import QtCore, QtWidgets, QtGui
 
 class RockInteractionManager:
@@ -29,6 +30,32 @@ class RockInteractionManager:
         # Initialize throw velocity variables
         self.throw_velocity_x = 0
         self.throw_velocity_y = 0
+
+        # Add multiplayer support
+        self.multiplayer_plugin = None
+        self.setup_multiplayer_integration()
+
+    def setup_multiplayer_integration(self):
+        """Set up hooks for multiplayer integration"""
+        if not hasattr(self.logic, 'plugin_manager'):
+            return False
+            
+        # Get multiplayer plugin
+        multiplayer_plugin = None
+        for plugin_name, plugin_data in self.logic.plugin_manager.plugins.items():
+            if plugin_name == "multiplayer_plugin":
+                # Get the actual plugin instance
+                multiplayer_plugin = plugin_data.get('instance')
+                break
+        
+        if multiplayer_plugin:
+            # Store reference
+            self.multiplayer_plugin = multiplayer_plugin
+            
+            print("[RockInteraction] Successfully integrated with multiplayer plugin")
+            return True
+        
+        return False
 
     def is_valid_rock(self, item):
         """Check if item is a valid rock"""
@@ -89,37 +116,39 @@ class RockInteractionManager:
     
     def check_rock_hold_time(self):
         """Check if holding time elapsed and make decision"""
-        if not self.carrying_rock or self.rock_decision_made:
+        if not hasattr(self.squid, 'carrying_rock') or not self.squid.carrying_rock or not hasattr(self.squid, 'rock_decision_made') or self.squid.rock_decision_made:
             return
         
         current_time = time.time()
-        if current_time - self.rock_hold_start_time >= self.rock_hold_duration:
-            self.rock_decision_made = True
+        if current_time - self.squid.rock_hold_start_time >= self.squid.rock_hold_duration:
+            self.squid.rock_decision_made = True
             self.decide_rock_action()
 
     def decide_rock_action(self):
         """Randomly decide to throw or drop the rock"""
         if random.random() < 0.7:  # 70% chance to throw
             direction = "right" if random.random() < 0.5 else "left"
-            self.tamagotchi_logic.rock_interaction.throw_rock(direction)
-            self.tamagotchi_logic.show_message("Squid threw the rock!")
+            self.throw_rock(direction)
+            if self.show_message:
+                self.show_message("Squid threw the rock!")
         else:  # 30% chance to drop
             self.drop_rock()
-            self.tamagotchi_logic.show_message("Squid dropped the rock")
+            if self.show_message:
+                self.show_message("Squid dropped the rock")
 
     def drop_rock(self):
         """Gently place the rock below the squid"""
-        if not self.carrying_rock or not self.current_rock:
+        if not hasattr(self.squid, 'carrying_rock') or not self.squid.carrying_rock or not hasattr(self.squid, 'carried_rock') or not self.squid.carried_rock:
             return
         
-        rock = self.current_rock
+        rock = self.squid.carried_rock
         rock.setParentItem(None)
         rock.setPos(
-            self.squid_x + self.squid_width//2 - rock.boundingRect().width()//2,
-            self.squid_y + self.squid_height + 10
+            self.squid.squid_x + self.squid.squid_width//2 - rock.boundingRect().width()//2,
+            self.squid.squid_y + self.squid.squid_height + 10
         )
-        self.is_carrying_rock = False
-        self.carried_rock = None
+        self.squid.is_carrying_rock = False
+        self.squid.carried_rock = None
 
     def start_rock_test(self, rock=None):
         """Start test with guaranteed clean state and random carry duration"""
@@ -129,8 +158,9 @@ class RockInteractionManager:
             rocks = [item for item in self.scene.items() 
                     if self.is_valid_rock(item) and item.isVisible()]
             if not rocks:
-                self.show_message("No available rocks!")
-                return
+                if self.show_message:
+                    self.show_message("No available rocks!")
+                return False
             rock = min(rocks, key=lambda r: math.hypot(
                 r.sceneBoundingRect().center().x() - self.squid.squid_x,
                 r.sceneBoundingRect().center().y() - self.squid.squid_y
@@ -145,6 +175,7 @@ class RockInteractionManager:
         )
         self.rock_carry_time = 0  # Reset carry timer
         self.rock_test_timer.start(100)  # 100ms updates
+        return True
 
     def highlight_rock(self, rock):
         """Visual feedback for selected rock"""
@@ -223,6 +254,13 @@ class RockInteractionManager:
             memory_details,
             importance=7
         )
+        
+        # Broadcast to network if multiplayer plugin is available
+        if hasattr(self, 'multiplayer_plugin') and self.multiplayer_plugin:
+            try:
+                self.multiplayer_plugin.throw_rock_network(rock, direction)
+            except Exception as e:
+                print(f"[RockInteraction] Error broadcasting rock throw: {e}")
         
         self.throw_animation_timer.start(50)
         return True
@@ -321,3 +359,192 @@ class RockInteractionManager:
         """Configure timer intervals"""
         self.rock_test_timer.setInterval(interval)
         self.throw_animation_timer.setInterval(50)
+
+    # === MULTIPLAYER EXTENSIONS ===
+
+    def handle_remote_rock_throw(self, source_node_id, rock_data):
+        """Handle a rock throw from a remote squid"""
+        try:
+            # Extract rock data
+            rock_filename = rock_data.get('rock_filename')
+            direction = rock_data.get('direction')
+            initial_pos = rock_data.get('initial_pos')
+            
+            # Skip if missing required data
+            if not all([rock_filename, direction, initial_pos]):
+                print(f"Incomplete remote rock throw data: {rock_data}")
+                return
+            
+            # Ensure initial_pos is a dict
+            if not isinstance(initial_pos, dict):
+                initial_pos = {'x': initial_pos[0], 'y': initial_pos[1]} if isinstance(initial_pos, (list, tuple)) else {}
+            
+            # Find existing rock or create new one
+            rock = self._find_or_create_remote_rock(rock_filename, initial_pos)
+            
+            if rock:
+                # Mark as a remote rock
+                rock.is_remote = True
+                
+                # Simulate the throw
+                self._simulate_remote_rock_throw(rock, direction)
+                
+                # Check if our squid is in the path of the thrown rock
+                self._check_rock_collision_path(rock, direction, source_node_id)
+                
+                # Show message
+                if self.show_message:
+                    self.show_message(f"Remote squid ({source_node_id[-4:]}) threw a rock {direction}!")
+            
+        except Exception as e:
+            print(f"Error handling remote rock throw: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _find_or_create_remote_rock(self, filename, pos):
+        """Find an existing rock or create a new one for remote throws"""
+        # Get position values
+        pos_x = pos.get('x', 0)
+        pos_y = pos.get('y', 0)
+        
+        # Look for existing rocks with same filename near position
+        for item in self.scene.items():
+            if (hasattr(item, 'filename') and item.filename == filename and
+                abs(item.pos().x() - pos_x) < 50 and
+                abs(item.pos().y() - pos_y) < 50):
+                return item
+        
+        # Create new rock if not found
+        try:
+            # Check if file exists
+            if not os.path.exists(filename):
+                # Try to find a default rock
+                default_rocks = [
+                    "images/decoration/rock01.png",
+                    "images/decoration/rock02.png",
+                    "images/rock.png"
+                ]
+                
+                # Use first valid file
+                for rock_file in default_rocks:
+                    if os.path.exists(rock_file):
+                        filename = rock_file
+                        break
+                else:
+                    print(f"Could not find a valid rock image file")
+                    return None
+            
+            rock_pixmap = QtGui.QPixmap(filename)
+            
+            # Create ResizablePixmapItem if available
+            ResizablePixmapItem = None
+            if hasattr(self.logic, 'user_interface') and hasattr(self.logic.user_interface, 'ResizablePixmapItem'):
+                ResizablePixmapItem = self.logic.user_interface.ResizablePixmapItem
+            
+            if ResizablePixmapItem:
+                rock = ResizablePixmapItem(rock_pixmap, filename)
+            else:
+                rock = QtWidgets.QGraphicsPixmapItem(rock_pixmap)
+                rock.filename = filename
+            
+            rock.setPos(pos_x, pos_y)
+            rock.setOpacity(0.7)  # Make it semi-transparent
+            rock.can_be_picked_up = True
+            self.scene.addItem(rock)
+            
+            # Mark as remote rock
+            rock.is_remote = True
+            
+            return rock
+        except Exception as e:
+            print(f"Error creating remote rock: {e}")
+            return None
+    
+    def _simulate_remote_rock_throw(self, rock, direction):
+        """Simulate a remote rock throw with simplified physics"""
+        # Create timer for animation
+        throw_timer = QtCore.QTimer()
+        throw_counter = [0]  # Use list for mutable counter
+        
+        # Initial velocity based on direction
+        velocity_x = 12 * (1 if direction == "right" else -1)
+        velocity_y = -10  # Initial upward
+        
+        def update_position():
+            nonlocal velocity_x, velocity_y
+            
+            # Update position
+            current_pos = rock.pos()
+            new_x = current_pos.x() + velocity_x
+            new_y = current_pos.y() + velocity_y
+            
+            # Apply gravity
+            velocity_y += 0.4
+            
+            # Check boundaries
+            scene_rect = self.scene.sceneRect()
+            rock_rect = rock.boundingRect()
+            
+            # Left/right boundaries
+            if new_x < scene_rect.left():
+                new_x = scene_rect.left()
+                velocity_x *= -0.5
+            elif new_x > scene_rect.right() - rock_rect.width():
+                new_x = scene_rect.right() - rock_rect.width()
+                velocity_x *= -0.5
+            
+            # Top/bottom boundaries
+            if new_y < scene_rect.top():
+                new_y = scene_rect.top()
+                velocity_y *= -0.5
+            elif new_y > scene_rect.bottom() - rock_rect.height():
+                new_y = scene_rect.bottom() - rock_rect.height()
+                throw_timer.stop()
+                return
+            
+            # Update position
+            rock.setPos(new_x, new_y)
+            
+            # Stop after some time
+            throw_counter[0] += 1
+            if throw_counter[0] > 100:  # Stop after 100 updates
+                throw_timer.stop()
+        
+        # Start animation
+        throw_timer.timeout.connect(update_position)
+        throw_timer.start(50)  # 50ms intervals
+    
+    def _check_rock_collision_path(self, rock, direction, source_node_id):
+        """Check if our squid is in the path of a thrown rock"""
+        # Skip if squid isn't initialized
+        if not self.squid:
+            return
+        
+        # Get rock and squid positions
+        rock_pos = rock.pos()
+        squid_rect = self.squid.squid_item.sceneBoundingRect()
+        squid_center = squid_rect.center()
+        
+        # Calculate relative positions
+        dx = squid_center.x() - rock_pos.x()
+        dy = squid_center.y() - rock_pos.y()
+        distance = math.sqrt(dx*dx + dy*dy)
+        
+        # Check if squid is in the direction of throw
+        in_path = (direction == "right" and dx > 0) or (direction == "left" and dx < 0)
+        
+        # If squid is close enough and in the throw path, react
+        if distance < 200 and in_path:
+            if hasattr(self.squid, 'react_to_rock_throw'):
+                # Use the specialized reaction method
+                self.squid.react_to_rock_throw(source_node_id, True)
+            elif hasattr(self.logic, 'startle_squid'):
+                # Fallback to generic startle
+                self.logic.startle_squid(source="incoming_rock")
+                
+                # Add memory
+                if hasattr(self.squid, 'memory_manager'):
+                    self.squid.memory_manager.add_short_term_memory(
+                        'observation', 'rock_thrown',
+                        f"Startled by rock thrown by remote squid ({source_node_id[-4:]})"
+                    )

@@ -79,13 +79,13 @@ class BrainWidget(QtWidgets.QWidget):
             "position": (0, 0)
         }
         self.original_neuron_positions = {
-            "hunger": (85, 240),
-            "happiness": (362, 122),
-            "cleanliness": (750, 116),
-            "sleepiness": (966, 175),
-            "satisfaction": (153, 592),
-            "anxiety": (543, 611),
-            "curiosity": (858, 612)
+            "hunger": (321, 118),
+            "happiness": (588, 86),
+            "cleanliness": (881, 109),
+            "sleepiness": (944, 366),
+            "satisfaction": (320, 560),
+            "anxiety": (584, 630),
+            "curiosity": (768, 564)
         }
         self.neuron_positions = self.original_neuron_positions.copy()
         self.connections = self.initialize_connections()
@@ -102,6 +102,8 @@ class BrainWidget(QtWidgets.QWidget):
         self.dragged_neuron = None
         self.drag_start_pos = None
         self.setMouseTracking(True)
+        self.show_links = True
+        self.show_weights = True
 
         # Neurogenesis configuration
         self.neurogenesis_config = config.neurogenesis if config else {
@@ -593,21 +595,43 @@ class BrainWidget(QtWidgets.QWidget):
         return self.associations[idx1][idx2]
     
     def draw_connections(self, painter, scale):
-            for conn in self.connections:
-                start = self.neuron_positions[conn[0]]
-                end = self.neuron_positions[conn[1]]
-                weight = self.weights[conn]
+        for conn in self.connections:
+            start = self.neuron_positions[conn[0]]
+            end = self.neuron_positions[conn[1]]
+            weight = self.weights[conn]
 
-                color = QtGui.QColor(0, int(255 * abs(weight)), 0) if weight > 0 else QtGui.QColor(int(255 * abs(weight)), 0, 0)
-                painter.setPen(QtGui.QPen(color, 2))
-                painter.drawLine(start[0], start[1], end[0], end[1])
+            # Only draw if links are visible
+            if not self.show_links:
+                continue
 
+            # Determine line color based on weight sign
+            color = QtGui.QColor(0, int(255 * abs(weight)), 0) if weight > 0 else QtGui.QColor(int(255 * abs(weight)), 0, 0)
+
+            # Determine line thickness and style based on weight magnitude
+            if abs(weight) < 0.1:  # Very weak connection
+                pen_style = QtCore.Qt.DotLine
+                line_width = 1 * scale
+            elif abs(weight) < 0.3:  # Weak connection
+                pen_style = QtCore.Qt.SolidLine
+                line_width = 1 * scale
+            elif abs(weight) < 0.6:  # Moderate connection
+                pen_style = QtCore.Qt.SolidLine
+                line_width = 2 * scale
+            else:  # Strong connection
+                pen_style = QtCore.Qt.SolidLine
+                line_width = 3 * scale
+
+            # Create pen with appropriate style and width
+            painter.setPen(QtGui.QPen(color, line_width, pen_style))
+            painter.drawLine(start[0], start[1], end[0], end[1])
+
+            # Add weight text with scaling and visibility threshold
+            if self.show_weights and abs(weight) > 0.1:  # Modified this line
                 midpoint = ((start[0] + end[0]) // 2, (start[1] + end[1]) // 2)
-                painter.setPen(QtGui.QColor(0, 0, 0))
 
                 # Increase the area for drawing the weights
-                text_area_width = 60
-                text_area_height = 20
+                text_area_width = 80
+                text_area_height = 22
 
                 # Adjust the font size based on the scale with a maximum font size
                 max_font_size = 12
@@ -616,7 +640,18 @@ class BrainWidget(QtWidgets.QWidget):
                 font.setPointSize(font_size)
                 painter.setFont(font)
 
-                painter.drawText(midpoint[0] - text_area_width // 2, midpoint[1] - text_area_height // 2, text_area_width, text_area_height, QtCore.Qt.AlignCenter, f"{weight:.2f}")
+                # Draw black background rectangle
+                painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0)))
+                painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
+                painter.drawRect(midpoint[0] - text_area_width // 2, midpoint[1] - text_area_height // 2,
+                                text_area_width, text_area_height)
+
+                # Draw the weight text on top of the black background
+                painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255)))  # White text color
+                painter.drawText(midpoint[0] - text_area_width // 2, midpoint[1] - text_area_height // 2,
+                                text_area_width, text_area_height,
+                                QtCore.Qt.AlignCenter, f"{weight:.2f}")
+
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
@@ -682,11 +717,27 @@ class BrainWidget(QtWidgets.QWidget):
             painter.setBrush(QtCore.Qt.NoBrush)
             painter.drawEllipse(x - 35, y - 35, 70, 70)
 
-        
-
     def draw_neurons(self, painter, scale):
-        # Original neurons
+        # Define original neurons from original_neuron_positions
         original_neurons = list(self.original_neuron_positions.keys())
+        
+        # Binary state neurons to add to far left
+        binary_neurons = {
+            'is_eating': (50, 300),
+            'pursuing_food': (50, 400),
+            'is_fleeing': (50, 500)
+        }
+        
+        # Merge positions
+        self.neuron_positions.update(binary_neurons)
+        
+        # Draw labels beside binary neurons
+        #for name, pos in binary_neurons.items():
+        #    # Draw label before drawing the neuron
+        #    label_font = painter.font()
+        #    label_font.setPointSize(int(8 * scale))
+        #    painter.setFont(label_font)
+        #    painter.drawText(pos[0] + 50, pos[1] + 10, name)
         
         # Draw all neurons that exist in current positions
         for name, pos in self.neuron_positions.items():
@@ -697,11 +748,30 @@ class BrainWidget(QtWidgets.QWidget):
                                             self.state[name], name, scale=scale)
                 else:
                     self.draw_square_neuron(painter, pos[0], pos[1], 
-                                          self.state[name], name, scale=scale)
+                                        self.state[name], name, scale=scale)
+            elif name in binary_neurons:
+                # Binary state neurons as small rectangles
+                self.draw_binary_neuron(painter, pos[0], pos[1], 
+                                        self.state.get(name, False), name, scale=scale)
             else:
                 # Neurogenesis-created neurons (triangular)
                 self.draw_triangular_neuron(painter, pos[0], pos[1], 
-                                          self.state[name], name, scale=scale)
+                                        self.state[name], name, scale=scale)
+                
+    def draw_binary_neuron(self, painter, x, y, value, label, color=(0, 255, 0), scale=1.0):
+        # Binary state: Green for True, Red for False
+        color = (0, 255, 0) if value else (255, 0, 0)
+        
+        painter.setBrush(QtGui.QBrush(QtGui.QColor(*color)))
+        
+        # Draw a smaller rectangular indicator
+        painter.drawRect(x - 15, y - 15, 30, 30)
+        
+        painter.setPen(QtGui.QColor(0, 0, 0))
+        font = painter.font()
+        font.setPointSize(int(6 * scale))  # Convert scale to integer
+        painter.setFont(font)
+        painter.drawText(x - 50, y + 30, 100, 20, QtCore.Qt.AlignCenter, label)
 
     def draw_circular_neuron(self, painter, x, y, value, label, color=(0, 255, 0), binary=False, scale=1.0):
         if binary:
@@ -790,6 +860,10 @@ class BrainWidget(QtWidgets.QWidget):
 
     def toggle_links(self, state):
         self.show_links = state == QtCore.Qt.Checked
+        self.update()
+
+    def toggle_weights(self, state):  # Add this new method
+        self.show_weights = state == QtCore.Qt.Checked
         self.update()
 
     def toggle_capture_training_data(self, state):
@@ -1104,16 +1178,16 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # First create the tab widget
         self.tabs = QtWidgets.QTabWidget()
         self.layout.addWidget(self.tabs)
-        
+
         # Set base font for all tab content
         base_font = QtGui.QFont()
         base_font.setPointSize(self.base_font_size)
         self.tabs.setFont(base_font)
-        
+
         # Create brain widget after tabs are set up
-        self.brain_widget = BrainWidget(self.config)
-        self.tabs = QtWidgets.QTabWidget()
-        self.layout.addWidget(self.tabs)
+        self.brain_widget = BrainWidget(self.config, self.debug_mode)
+        self.setWindowTitle("Brain Tool")
+        self.resize(1280, 768)
 
         # Main tab
         self.main_tab = QtWidgets.QWidget()
@@ -1131,11 +1205,26 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.brain_widget.show_links = True
         main_content_layout.addWidget(self.brain_widget, 1)  # Give it a stretch factor of 1
 
-        # Add checkbox for neuron links and weights
-        self.checkbox_links = QtWidgets.QCheckBox("Show neuron links and weights")
+        # Create checkbox layout
+        checkbox_layout = QtWidgets.QHBoxLayout()  # Define the layout here
+
+        self.checkbox_links = QtWidgets.QCheckBox("Show links")
         self.checkbox_links.setChecked(True)
         self.checkbox_links.stateChanged.connect(self.brain_widget.toggle_links)
-        main_content_layout.addWidget(self.checkbox_links)
+        checkbox_layout.addWidget(self.checkbox_links)
+
+        # Remove the spacer item to keep checkboxes close together
+        # checkbox_layout.addSpacing(2)  # Comment out or remove this line
+
+        self.checkbox_weights = QtWidgets.QCheckBox("Show weights")
+        self.checkbox_weights.setChecked(True)
+        self.checkbox_weights.stateChanged.connect(self.brain_widget.toggle_weights)
+        checkbox_layout.addWidget(self.checkbox_weights)
+
+        # Add stretch to push checkboxes to the left
+        checkbox_layout.addStretch(1)
+
+        main_content_layout.addLayout(checkbox_layout)
 
         # Create button layout
         button_layout = QtWidgets.QHBoxLayout()
@@ -2046,7 +2135,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         
         # Create and configure font for control elements
         control_font = QtGui.QFont()
-        control_font.setPointSize(8)
+        control_font.setPointSize(10)
         
         # Countdown label
         #self.countdown_label = QtWidgets.QLabel("Next Hebbian learning in: -- seconds")
@@ -2062,7 +2151,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         
         self.interval_spinbox = QtWidgets.QSpinBox()
         self.interval_spinbox.setFont(control_font)
-        self.interval_spinbox.setRange(5, 300)  # 5 sec to 5 min
+        self.interval_spinbox.setRange(10, 300)  # 10 sec to 5 min
         self.interval_spinbox.setValue(int(self.config.hebbian['learning_interval'] / 1000))
         self.interval_spinbox.valueChanged.connect(self.update_learning_interval)
         control_layout.addWidget(self.interval_spinbox)
@@ -2141,7 +2230,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Set a larger font for the countdown label
         font = QFont()
-        font.setPointSize(8)  # Set the desired font size
+        font.setPointSize(10)  # Set the desired font size
         self.countdown_label.setFont(font)
 
         # Check if reached zero this tick
@@ -2656,15 +2745,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             decision_data = self.tamagotchi_logic.get_decision_data()
             self.update_thought_process(decision_data)
 
-        # Debug output for neurogenesis
-        #if self.debug_mode:
-        #    print("\nCurrent Brain State:")
-        #    print(f"Neurons: {list(self.brain_widget.neuron_positions.keys())}")
-        #    print(f"New neurons: {self.brain_widget.neurogenesis_data.get('new_neurons', [])}")
-        #    print(f"Novelty: {full_state['novelty_exposure']}")
-        #    print(f"Stress: {full_state['sustained_stress']}")
-        #    print(f"Rewards: {full_state['recent_rewards']}\n")
-
     def init_about_tab(self):
         # Main text content using QTextEdit
         about_text = QtWidgets.QTextEdit()
@@ -2697,11 +2777,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <ul>
             <li>by Rufus Pearce</li><br><br>
         <br>
-        <b>Dosidicus version 1.0.400.5</b> (milestone 4)<br>
-        Brain Tool version 1.0.6.5<br>
+        <b>Dosidicus version 2.0.0</b> (milestone 4)<br>
+        Brain Tool version 1.1.4<br>
         Decision engine version 1.0<br><br>
         <p>This is a research project. Please suggest features.</p><br><br>
-        <b>Squid personality:</b> {personality}<br><br>
         </ul>
         """)
         
@@ -2715,33 +2794,33 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         badge_container.setFixedWidth(300)
         badge_container.setStyleSheet("""
             background-color: white;
-            border: 4px solid #FF0000;
-            border-radius: 5px;
-            padding: 10px;
+            border: 0px solid #FF0000;
+            border-radius: 0px;
+            padding: 0px;
         """)
         
         badge_inner_layout = QtWidgets.QVBoxLayout(badge_container)
-        badge_inner_layout.setSpacing(2)  # Reduced spacing to match the compact look
+        badge_inner_layout.setSpacing(2)  # Reduced spacing
         
         # "HELLO" label
         hello_label = QtWidgets.QLabel("HELLO")
         hello_label.setAlignment(QtCore.Qt.AlignCenter)
         hello_label.setStyleSheet("""
-            font-family: Arial, sans-serif;
-            font-size: 28px;
+            font-family: Verdana, sans-serif;
+            font-size: 38px;
             font-weight: bold;
             color: #FFFFFF;
             background-color: #FF0000;
-            padding: 5px;
+            padding: 0px;
         """)
         badge_inner_layout.addWidget(hello_label)
         
         # "my name is..." label with dotted effect
-        my_name_label = QtWidgets.QLabel("my name is...")
+        my_name_label = QtWidgets.QLabel("my name is")
         my_name_label.setAlignment(QtCore.Qt.AlignCenter)
         my_name_label.setStyleSheet("""
-            font-family: Arial, sans-serif;
-            font-size: 14px;
+            font-family: Verdana, sans-serif;
+            font-size: 28px;
             color: #FFFFFF;
             background-color: #FF0000;
             padding: 2px;
@@ -2752,11 +2831,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         name_label = QtWidgets.QLabel(squid_name)
         name_label.setAlignment(QtCore.Qt.AlignCenter)
         name_label.setStyleSheet("""
-            font-family: Arial, sans-serif;
-            font-size: 24px;
+            font-family: Verdana, sans-serif;
+            font-size: 40px;
             font-weight: bold;
             color: #000000;
-            background-color: white;
+            background-color: #eff1f0;
             padding: 10px;
         """)
         badge_inner_layout.addWidget(name_label)

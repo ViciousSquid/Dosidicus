@@ -11,6 +11,7 @@ from PyQt5.QtCore import QObject, pyqtProperty
 from PyQt5.QtWidgets import QGraphicsPixmapItem
 from .squid_brain_window import SquidBrainWindow
 from .statistics_window import StatisticsWindow
+from .plugin_manager_dialog import PluginManagerDialog
 
 class DecorationItem(QtWidgets.QLabel):
     def __init__(self, pixmap, filename):
@@ -35,44 +36,41 @@ class DecorationItem(QtWidgets.QLabel):
 
 
 class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
-    def __init__(self, pixmap=None, filename=None, parent=None):
-        # Initialize both parent classes properly
-        QtWidgets.QGraphicsPixmapItem.__init__(self, parent)  # Initialize QGraphicsPixmapItem first
-        QObject.__init__(self)  # Then initialize QObject
-        
-        # Set the _is_pause_message attribute explicitly to None for safer checking
+    def __init__(self, pixmap=None, filename=None, category=None, parent=None):
+        QtWidgets.QGraphicsPixmapItem.__init__(self, parent)
+        QObject.__init__(self)
+
         self._is_pause_message = None
-        
-        self.original_pixmap = pixmap  # Store original pixmap for resizing
+        self.original_pixmap = pixmap
+
         if pixmap:
-            # Set the pixmap directly on this item
             scaled_pixmap = pixmap.scaled(128, 128, 
-                                       QtCore.Qt.KeepAspectRatio, 
-                                       QtCore.Qt.SmoothTransformation)
+                                    QtCore.Qt.KeepAspectRatio, 
+                                    QtCore.Qt.SmoothTransformation)
             self.setPixmap(scaled_pixmap)
         
-        # Set all flags at once for better performance
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsMovable |
-                     QtWidgets.QGraphicsItem.ItemIsSelectable |
-                     QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
-        
+                    QtWidgets.QGraphicsItem.ItemIsSelectable |
+                    QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
+
         self.resize_handle = None
         self.filename = filename
         
-        # Initialize with default values first
         self.stat_multipliers = {'happiness': 1}
-        self.category = 'generic'
-        
-        # Then try to get decoration info if filename exists
+        self.category = category if category else 'generic'  # Use provided category or default to 'generic'
+
         if filename:
-            multipliers, category = self.get_decoration_info()
+            multipliers, detected_category = self.get_decoration_info()
             if multipliers:
                 self.stat_multipliers = multipliers
-            if category:
-                self.category = category
+            if 'rock' in filename.lower():
+                self.category = 'rock'
+            elif 'poop' in filename.lower():
+                self.category = 'poop'
+            else:
+                self.category = detected_category if detected_category else self.category
 
-        # Rock interaction attributes
-        self.can_be_picked_up = filename and 'rock' in filename.lower()
+        self.can_be_picked_up = filename and ('rock' in filename.lower() or 'poop' in filename.lower())
         self.is_being_carried = False
         self.original_scale = 1.0
 
@@ -209,17 +207,19 @@ class DecorationWindow(QtWidgets.QWidget):
         self.setFixedHeight(min((row + 1) * 148 + 40, 650))  # 148 pixels per row (138 + 10 padding), max height of 600
 
 class Ui:
-    def __init__(self, window, debug_mode=False):  # Modified signature
+    def __init__(self, window, debug_mode=False):
         self.window = window
         self.tamagotchi_logic = None
         self.debug_mode = debug_mode 
+        
+        # Initialize window properties first
         self.window.setMinimumSize(1280, 900)
         self.window_width = 1280
         self.window_height = 900
-
         self.window.setWindowTitle("Dosidicus")
         self.window.resize(self.window_width, self.window_height)
 
+        # Create scene and view before any UI elements
         self.scene = QtWidgets.QGraphicsScene()
         self.view = QtWidgets.QGraphicsView(self.scene)
         self.view.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
@@ -227,11 +227,15 @@ class Ui:
         self.view.setViewportUpdateMode(QtWidgets.QGraphicsView.FullViewportUpdate)
         self.window.setCentralWidget(self.view)
 
+        # Now setup UI elements that depend on the scene
+        self.setup_ui_elements()
+        
+        # Setup menu bar and other components
         self.setup_menu_bar()
         self.neuron_inspector = None
         self.squid_brain_window = None
 
-        # Add debug text item
+        # Add debug text item to the scene
         self.debug_text = QtWidgets.QGraphicsTextItem("Debug")
         self.debug_text.setDefaultTextColor(QtGui.QColor("#a9a9a9"))
         font = QtGui.QFont()
@@ -243,6 +247,7 @@ class Ui:
         self.debug_text.setVisible(self.debug_mode)
         self.scene.addItem(self.debug_text)
 
+        # Initialize decoration window
         self.decoration_window = DecorationWindow(self.window)
         self.decoration_window.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.Tool)
         self.decoration_window.setAttribute(QtCore.Qt.WA_QuitOnClose, False)
@@ -257,7 +262,16 @@ class Ui:
 
         self.view.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.view.keyPressEvent = self.keyPressEvent
-        self.setup_ui_elements()
+        
+        # Initialize status bar if available
+        try:
+            from status_bar_component import StatusBarComponent
+            self.status_bar = StatusBarComponent(self.window)
+        except ImportError:
+            print("Status bar component not available, skipping")
+
+        # Optimize animations
+        self.optimize_animations()
 
     def optimize_animations(self):
         self.scene.setItemIndexMethod(QtWidgets.QGraphicsScene.NoIndex)  # Better for moving items
@@ -270,6 +284,203 @@ class Ui:
             self.debug_mode = logic.debug_mode
             self.debug_action.setChecked(self.debug_mode)
             self.debug_text.setVisible(self.debug_mode)
+        
+        # Create multiplayer menu here too
+        self.create_multiplayer_menu()
+
+
+    def setup_plugin_menu(self, plugin_manager):
+        #print("DEBUG: Setting up plugin menu")
+        
+        # Create plugins menu if it doesn't exist
+        if not hasattr(self, 'plugins_menu'):
+            self.plugins_menu = self.menu_bar.addMenu('Plugins')
+        
+        # Clear existing actions to prevent duplicates
+        self.plugins_menu.clear()
+        
+        # Add plugin manager action
+        self.plugin_manager_action = QtWidgets.QAction('Plugin Manager', self.window)
+        self.plugin_manager_action.triggered.connect(
+            lambda: self.show_plugin_manager(plugin_manager)
+        )
+        self.plugins_menu.addAction(self.plugin_manager_action)
+        
+        # Add separator
+        self.plugins_menu.addSeparator()
+        
+        # Create or find Multiplayer menu
+        multiplayer_menu = None
+        multiplayer_loaded = False
+        
+        # Check if plugin manager exists
+        if plugin_manager:
+            # Check if multiplayer plugin is loaded
+            multiplayer_loaded = 'multiplayer' in plugin_manager.plugins
+            
+            # Print all loaded plugins for debugging
+            #print(f"DEBUG: Loaded plugins: {plugin_manager.get_loaded_plugins()}")
+        
+        # Look for existing Multiplayer menu
+        for action in self.menu_bar.actions():
+            if action.text() == '&Multiplayer':
+                multiplayer_menu = action.menu()
+                break
+        
+        # Create Multiplayer menu if it doesn't exist and plugin is loaded
+        if multiplayer_loaded and not multiplayer_menu:
+            #print("Creating Multiplayer menu")
+            multiplayer_menu = self.menu_bar.addMenu('&Multiplayer')
+        # Remove menu if plugin isn't loaded but menu exists
+        elif not multiplayer_loaded and multiplayer_menu:
+            #print("Removing Multiplayer menu - plugin not loaded")
+            self.menu_bar.removeAction(multiplayer_menu.menuAction())
+            multiplayer_menu = None
+        
+        # Skip further setup if multiplayer isn't loaded or menu doesn't exist
+        if not multiplayer_loaded or not multiplayer_menu:
+            print("Skipping multiplayer menu setup - plugin not loaded or menu doesn't exist")
+            return
+        
+        # Clear existing menu items
+        multiplayer_menu.clear()
+        
+        # Get multiplayer plugin instance
+        multiplayer_plugin_instance = None
+        if plugin_manager and 'multiplayer' in plugin_manager.plugins:
+            multiplayer_plugin_instance = plugin_manager.plugins['multiplayer'].get('instance')
+        
+        # Check if plugin is enabled - this is where we check the current status
+        multiplayer_enabled = 'multiplayer' in plugin_manager.get_enabled_plugins()
+        
+        # Add toggle action for enabling/disabling
+        toggle_action = QtWidgets.QAction("Enable Multiplayer", self.window)
+        toggle_action.setCheckable(True)
+        toggle_action.setChecked(multiplayer_enabled)  # Set based on actual enabled state
+        toggle_action.triggered.connect(
+            lambda checked: self.toggle_plugin('multiplayer', checked)
+        )
+        multiplayer_menu.addAction(toggle_action)
+        
+        # Add separator
+        multiplayer_menu.addSeparator()
+        
+        # Add additional menu items if plugin is enabled
+        if multiplayer_enabled and multiplayer_plugin_instance and hasattr(multiplayer_plugin_instance, 'register_menu_actions'):
+            try:
+                # Call the method to register additional actions
+                multiplayer_plugin_instance.register_menu_actions(self, multiplayer_menu)
+            except Exception as e:
+                print(f"Error registering menu actions for multiplayer: {e}")
+        
+        print("    An egg is hatching... ")
+        print("        ")
+
+    def create_multiplayer_menu(self):
+        """Create multiplayer menu only if the plugin is loaded and enabled"""
+        # This function is now handled in setup_plugin_menu
+        # Kept for backward compatibility
+        if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+            self.setup_plugin_menu(self.tamagotchi_logic.plugin_manager)
+        else:
+            print("WARNING: create_multiplayer_menu called but no plugin_manager available")
+
+    def apply_plugin_menu_registrations(self, plugin_manager):
+        """Apply menu registrations from plugins"""
+        if not hasattr(plugin_manager, 'get_menu_registrations'):
+            print("Plugin manager doesn't support menu registrations")
+            return
+        
+        # Get all menu registrations
+        registrations = plugin_manager.get_menu_registrations()
+        
+        # Process each plugin's registrations
+        for plugin_name, actions in registrations.items():
+            # Skip if plugin is not enabled
+            if plugin_name not in plugin_manager.get_enabled_plugins():
+                continue
+            
+            # Group actions by menu name
+            menus = {}
+            for action in actions:
+                menu_name = action['menu_name']
+                if menu_name not in menus:
+                    menus[menu_name] = []
+                menus[menu_name].append(action)
+            
+            # Create or find each menu and add actions
+            for menu_name, menu_actions in menus.items():
+                # Check if menu already exists
+                menu = None
+                for action in self.menu_bar.actions():
+                    if action.text() == menu_name:
+                        menu = action.menu()
+                        break
+                
+                # Create menu if it doesn't exist
+                if not menu:
+                    menu = QtWidgets.QMenu(menu_name, self.window)
+                    self.menu_bar.addMenu(menu)
+                
+                # Add actions to menu
+                for action_data in menu_actions:
+                    action = QtWidgets.QAction(action_data['action_name'], 
+                                            action_data.get('parent', self.window))
+                    callback = action_data['callback']
+                    if callback:
+                        action.triggered.connect(callback)
+                    menu.addAction(action)
+        
+        print("Applied all plugin menu registrations")
+
+    def toggle_plugin(self, plugin_name, enable):
+        """Toggle a plugin on/off"""
+        if hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'plugin_manager'):
+            pm = self.tamagotchi_logic.plugin_manager
+            if enable:
+                # Try to enable plugin - if it has a specific enable method, use that
+                if plugin_name in pm.plugins and 'instance' in pm.plugins[plugin_name]:
+                    plugin_instance = pm.plugins[plugin_name]['instance']
+                    
+                    # Make sure plugin has the plugin manager reference
+                    if plugin_instance and not hasattr(plugin_instance, 'plugin_manager') or plugin_instance.plugin_manager is None:
+                        plugin_instance.plugin_manager = pm
+                        print(f"Assigned plugin manager to {plugin_name} plugin")
+                    
+                    # Also make sure it has tamagotchi_logic reference if we have it
+                    if plugin_instance and hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+                        plugin_instance.tamagotchi_logic = self.tamagotchi_logic
+                        print(f"Assigned tamagotchi_logic to {plugin_name} plugin")
+                    
+                    if plugin_instance and hasattr(plugin_instance, 'enable'):
+                        print(f"Calling custom enable method for {plugin_name}")
+                        success = plugin_instance.enable()
+                        if success:
+                            pm.enable_plugin(plugin_name)
+                    else:
+                        success = pm.enable_plugin(plugin_name)
+                    
+                    # Show multiplayer menu if appropriate
+                    if success and plugin_name.lower() == 'multiplayer':
+                        self.setup_plugin_menu(pm)
+                else:
+                    pm.enable_plugin(plugin_name)
+            else:
+                pm.disable_plugin(plugin_name)
+                
+                # Hide multiplayer menu if appropriate
+                if plugin_name.lower() == 'multiplayer':
+                    self.setup_plugin_menu(pm)
+                
+            # Refresh the plugin menu
+            self.setup_plugin_menu(pm)
+
+    def show_plugin_manager(self, plugin_manager):
+        """Show the plugin manager dialog"""
+        dialog = PluginManagerDialog(plugin_manager, self.window)
+        dialog.exec_()
+        # Refresh the plugin menu after changes
+        self.setup_plugin_menu(plugin_manager)
 
     def setup_ui_elements(self):
         # Create the rectangle item
@@ -698,6 +909,23 @@ class Ui:
         self.debug_text.setPos(self.window_width - 60, self.window_height - 60)
 
     def show_message(self, message):
+        # Call hook if available
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                # Get modified message from plugins
+                results = self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_message_display", 
+                    ui=self,
+                    original_message=message
+                )
+                
+                # Check if any plugin modified the message
+                for result in results:
+                    if isinstance(result, str) and result:
+                        message = result
+                        break
+        
+        # Continue with original behavior
         # Remove any existing message items
         for item in self.scene.items():
             if isinstance(item, QtWidgets.QGraphicsTextItem):
@@ -925,11 +1153,11 @@ class Ui:
         self.rock_test_action = QtWidgets.QAction('Rock test (forced)', self.window)
         self.rock_test_action.triggered.connect(self.trigger_rock_test)
         #debug_menu.addAction(self.rock_test_action)
-
-        # Disabled RPS Game Action (commented out)
-        # self.rps_game_action = QtWidgets.QAction('Play Rock, Paper, Scissors', self.window)
-        # actions_menu.addAction(self.rps_game_action)
-        # self.rps_game_action.triggered.connect(self.start_rps_game)
+        
+        # Add Plugins Menu
+        self.plugins_menu = self.menu_bar.addMenu('Plugins')
+        
+        # This menu will be populated later when the plugin manager is available
 
     def set_simulation_speed(self, speed):
         """Set the simulation speed (0 = paused, 1 = normal, 2 = fast, 3 = very fast)"""

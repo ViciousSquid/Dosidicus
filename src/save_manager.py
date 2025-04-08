@@ -4,6 +4,13 @@ import zipfile
 from datetime import datetime
 import shutil
 
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles datetime objects."""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
 class SaveManager:
     def __init__(self, save_directory="saves"):
         self.save_directory = save_directory
@@ -41,7 +48,7 @@ class SaveManager:
         try:
             with zipfile.ZipFile(filepath, 'w') as zipf:
                 for key, data in save_data.items():
-                    zipf.writestr(f"{key}.json", json.dumps(data, indent=4))
+                    zipf.writestr(f"{key}.json", json.dumps(data, indent=4, cls=DateTimeEncoder))
             return filepath
         except Exception as e:
             print(f"Error saving game: {str(e)}")
