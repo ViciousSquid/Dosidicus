@@ -111,6 +111,16 @@ class ConfigManager:
             'memory_decay_rate': float(self.config['RockInteractions']['memory_decay_rate']),
             'max_rock_memories': int(self.config['RockInteractions']['max_rock_memories'])
         }
+    
+    def get_poop_config(self):
+        return {
+            'min_carry_duration': 3.0,
+            'max_carry_duration': 9.0,
+            'pickup_prob': 0.2,
+            'throw_prob': 0.3,
+            'happiness_penalty': 5,
+            'anxiety_increase': 10
+        }
 
     def get_neurogenesis_config(self):
         """Returns the complete neurogenesis configuration as a dictionary"""

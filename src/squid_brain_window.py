@@ -1,5 +1,3 @@
-
-
 import sys
 import csv
 import os
@@ -15,12 +13,26 @@ from .personality import Personality
 from .learning import LearningConfig
 
 class BrainWidget(QtWidgets.QWidget):
-    def __init__(self, config=None, debug_mode=False): 
+    def __init__(self, config=None, debug_mode=False, tamagotchi_logic=None): 
+        self.config = config if config else LearningConfig()
+        if not hasattr(self.config, 'hebbian'):
+            self.config.hebbian = {
+                'learning_interval': 30000,  # 30 seconds in milliseconds
+                'weight_decay': 0.01,
+                'active_threshold': 50  # Threshold for considering a neuron active
+            }
         super().__init__()
-        # Initialize with config
+
+        self.learning_history = []
+        
+        self.excluded_neurons = ['is_sick', 'is_eating', 'pursuing_food', 'direction', 'is_sleeping']
+        self.hebbian_countdown_seconds = 30  # Default duration
+        self.learning_active = False  # Track if learning is active
         self.config = config if config else LearningConfig()
         self.debug_mode = debug_mode  # Initialize debug_mode
         self.is_paused = False
+        self.last_hebbian_time = time.time()
+        self.tamagotchi_logic = tamagotchi_logic
         
         # Initialize neurogenesis data
         self.neurogenesis_data = {
@@ -124,6 +136,186 @@ class BrainWidget(QtWidgets.QWidget):
             'pursuing_food': (255, 229, 204),  # Pastel orange
             'direction': (229, 204, 255)  # Pastel purple
         }
+
+    def stop_hebbian_learning(self):
+        """Stop Hebbian learning immediately"""
+        self.learning_active = False
+        self.hebbian_countdown_seconds = 0
+        print("++ Hebbian learning stopped")
+
+    def start_hebbian_learning(self, duration_seconds=30):
+        """Start Hebbian learning with a specified duration"""
+        self.hebbian_countdown_seconds = duration_seconds
+        self.learning_active = True
+        self.is_paused = False
+        print(f"++ Hebbian learning started for {duration_seconds} seconds")
+
+    def get_neuron_value(self, value):
+        """
+        Convert a neuron value to a numerical format for Hebbian learning.
+
+        Args:
+            value: The value of the neuron, which can be int, float, bool, or str.
+
+        Returns:
+            float: The numerical value of the neuron.
+        """
+        if isinstance(value, (int, float)):
+            return float(value)
+        elif isinstance(value, bool):
+            return 100.0 if value else 0.0
+        elif isinstance(value, str):
+            # For string values (like 'direction'), return a default value
+            return 75.0
+        else:
+            return 0.0
+        
+    def update_connection(self, neuron1, neuron2, value1, value2):
+        """
+        Update the connection weight between two neurons based on their activation values.
+
+        Args:
+            neuron1 (str): The name of the first neuron.
+            neuron2 (str): The name of the second neuron.
+            value1 (float): The activation value of the first neuron.
+            value2 (float): The activation value of the second neuron.
+        """
+        pair = (neuron1, neuron2)
+        reverse_pair = (neuron2, neuron1)
+
+        # Check if the pair or its reverse exists in weights, if not, initialize it
+        if pair not in self.weights and reverse_pair not in self.weights:
+            self.weights[pair] = 0.0
+
+        # Use the correct pair order
+        use_pair = pair if pair in self.weights else reverse_pair
+
+        # Update the weight
+        prev_weight = self.weights[use_pair]
+        weight_change = 0.01 * (value1 / 100) * (value2 / 100)  # Normalize values to 0-1 range
+        new_weight = min(max(prev_weight + weight_change, -1), 1)  # Ensure weight stays in [-1, 1] range
+        self.weights[use_pair] = new_weight
+
+        # Store these values for potential access elsewhere
+        self.last_prev_weight = prev_weight
+        self.last_new_weight = new_weight
+
+        # Debugging statement to check if update_connection is being called correctly
+        #print(f"~~~~ Updated connection between {neuron1} and {neuron2}: {prev_weight:.4f} -> {new_weight:.4f}")
+
+    def perform_hebbian_learning(self):
+        if self.is_paused:
+            return
+
+        #print("Performing Hebbian learning...")
+        self.last_hebbian_time = time.time()
+
+        # Determine which neurons are significantly active (excluding specified neurons)
+        current_state = self.state  # Use the current state of the brain
+        active_neurons = []
+        for neuron, value in current_state.items():
+            if neuron in self.excluded_neurons:
+                continue
+            if isinstance(value, (int, float)) and value > 50:
+                active_neurons.append(neuron)
+            elif isinstance(value, bool) and value:
+                active_neurons.append(neuron)
+            elif isinstance(value, str):
+                active_neurons.append(neuron)
+
+        #print(f"Active neurons: {active_neurons}")
+
+        # Create a learning record
+        learning_record = {
+            'timestamp': time.strftime('%H:%M:%S'),
+            'active_neurons': active_neurons.copy(),
+            'updates': []
+        }
+
+        # Include decoration effects in learning
+        decoration_memories = {}
+        if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'squid') and hasattr(self.tamagotchi_logic.squid, 'memory_manager'):
+            decoration_memories = self.tamagotchi_logic.squid.memory_manager.get_all_short_term_memories('decorations')
+
+        if isinstance(decoration_memories, dict):
+            for decoration, effects in decoration_memories.items():
+                for stat, boost in effects.items():
+                    if stat in self.excluded_neurons:
+                        continue
+                    if isinstance(boost, (int, float)) and boost > 0:
+                        if stat not in active_neurons:
+                            active_neurons.append(stat)
+        elif isinstance(decoration_memories, list):
+            for memory in decoration_memories:
+                for stat, boost in memory.get('effects', {}).items():
+                    if stat in self.excluded_neurons:
+                        continue
+                    if isinstance(boost, (int, float)) and boost > 0:
+                        if stat not in active_neurons:
+                            active_neurons.append(stat)
+
+        # If less than two neurons are active, no learning occurs
+        if len(active_neurons) < 2:
+            print("Not enough active neurons for Hebbian learning")
+            return
+
+        # Perform learning for a random subset of active neuron pairs
+        sample_size = min(5, len(active_neurons) * (len(active_neurons) - 1) // 2)
+        sampled_pairs = random.sample([(i, j) for i in range(len(active_neurons)) for j in range(i + 1, len(active_neurons))], sample_size)
+        
+        print(f"Learning on {sample_size} random neuron pairs")
+
+        for i, j in sampled_pairs:
+            neuron1 = active_neurons[i]
+            neuron2 = active_neurons[j]
+            value1 = self.get_neuron_value(current_state.get(neuron1, 50))  # Default to 50 if not in current_state
+            value2 = self.get_neuron_value(current_state.get(neuron2, 50))
+            #print(f"Updating connection: {neuron1}({value1:.1f}) - {neuron2}({value2:.1f})")
+            
+            # Get the previous weight before updating
+            pair = (neuron1, neuron2)
+            reverse_pair = (neuron2, neuron1)
+            use_pair = pair if pair in self.weights else reverse_pair
+            prev_weight = self.weights.get(use_pair, 0.0)
+            
+            # Update the connection
+            self.update_connection(neuron1, neuron2, value1, value2)
+            
+            # Get the new weight after updating
+            new_weight = self.weights.get(use_pair, 0.0)
+            
+            # Add to the learning record
+            learning_record['updates'].append({
+                'neuron1': neuron1,
+                'neuron2': neuron2,
+                'value1': value1,
+                'value2': value2,
+                'prev_weight': prev_weight,
+                'new_weight': new_weight
+            })
+
+        # Add the record to the history
+        if not hasattr(self, 'learning_history'):
+            self.learning_history = []
+        self.learning_history.append(learning_record)
+        
+        # Limit history size to prevent memory issues
+        if len(self.learning_history) > 50:
+            self.learning_history = self.learning_history[-50:]
+
+        # Update the brain visualization
+        self.update()
+
+        # Reset the countdown after learning
+        if hasattr(self, 'hebbian_countdown_seconds'):
+            # Get interval from config, defaulting to 30 seconds
+            if hasattr(self, 'config') and hasattr(self.config, 'hebbian'):
+                interval_ms = self.config.hebbian.get('learning_interval', 30000)
+            else:
+                interval_ms = 30000
+            self.hebbian_countdown_seconds = int(interval_ms / 1000)
+            #print(f"Reset countdown to {self.hebbian_countdown_seconds} seconds")
+
 
     def resizeEvent(self, event):
         """Handle window resize events - startles squid and enforces minimum size"""
@@ -1030,9 +1222,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.config = config if config else LearningConfig()  # Initialize config
         self.tamagotchi_logic = tamagotchi_logic
         self.initialized = False
-        self.brain_widget = BrainWidget(self.config, self.debug_mode)
+        self.brain_widget = BrainWidget(self.config, self.debug_mode, tamagotchi_logic=tamagotchi_logic)
         self.setWindowTitle("Brain Tool")
-        self.resize(1280, 768)
+        self.resize(1280, 800)
 
         # Initialize logging variables
         self.is_logging = False
@@ -1051,10 +1243,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.init_tabs()
 
         self.hebbian_timer = QtCore.QTimer()
-        self.hebbian_timer.timeout.connect(self.perform_hebbian_learning)
+        self.hebbian_timer.timeout.connect(self.brain_widget.perform_hebbian_learning)
         self.hebbian_timer.start(self.config.hebbian.get('learning_interval', 30000))
         self.hebbian_countdown_seconds = 0
-        self.last_hebbian_time = time.time()  # Track last learning time
+        self.hebbian_countdown_seconds = int(self.config.hebbian.get('learning_interval', 30000) / 1000)
 
         # Add countdown timer
         self.countdown_timer = QtCore.QTimer()
@@ -1065,11 +1257,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Add countdown display to learning tab
         self.countdown_label = QtWidgets.QLabel()
         self.learning_tab_layout.insertWidget(0, self.countdown_label)
-        
-        self.last_hebbian_time = time.time()
-
-        # Add a last_hebbian_time tracking variable
-        self.last_hebbian_time = time.time()
 
         self.update_timer = QtCore.QTimer()
         self.update_timer.timeout.connect(self.update_associations)
@@ -1188,6 +1375,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.brain_widget = BrainWidget(self.config, self.debug_mode)
         self.setWindowTitle("Brain Tool")
         self.resize(1280, 768)
+
+        # Hebbian timers
+        self.hebbian_timer = QtCore.QTimer()
+        self.hebbian_timer.timeout.connect(self.brain_widget.perform_hebbian_learning)
+        self.hebbian_timer.start(self.config.hebbian.get('learning_interval', 30000))
 
         # Main tab
         self.main_tab = QtWidgets.QWidget()
@@ -2130,7 +2322,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
     def init_learning_tab(self):
         learning_layout = QtWidgets.QVBoxLayout()
         
-        # 1. Add countdown and interval controls at the TOP with larger fonts
+        # 1. Keep the countdown and interval controls at the TOP
         control_layout = QtWidgets.QHBoxLayout()
         
         # Create and configure font for control elements
@@ -2163,86 +2355,117 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         separator.setFrameShape(QtWidgets.QFrame.HLine)
         learning_layout.addWidget(separator)
 
-        # 3. Existing weight changes text area (keep original font size)
-        self.weight_changes_text = AutoScrollTextEdit()
-        self.weight_changes_text.setReadOnly(True)
-        self.weight_changes_text.setTextInteractionFlags(
-            QtCore.Qt.TextSelectableByMouse | QtCore.Qt.TextSelectableByKeyboard)
-        self.weight_changes_text.setAcceptRichText(True)
-        learning_layout.addWidget(self.weight_changes_text)
-
-        # 4. Learning data table (keep original font size)
-        self.learning_data_table = AutoScrollTable()
-        self.learning_data_table.setColumnCount(5)
-        self.learning_data_table.setHorizontalHeaderLabels(
-            ["Time", "Neuron 1", "Neuron 2", "Weight Change", "Direction"])
+        # 3. Learning activity display
+        activity_label = QtWidgets.QLabel("Hebbian Learning Activity:")
+        learning_layout.addWidget(activity_label)
         
-        header = self.learning_data_table.horizontalHeader()
-        header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
-        header.resizeSection(0, 150)  # Timestamp
-        header.resizeSection(1, 160)  # Neuron 1
-        header.resizeSection(2, 160)  # Neuron 2
-        header.resizeSection(3, 200)  # Weight Change
-        header.resizeSection(4, 150)  # Direction
-
-        learning_layout.addWidget(self.learning_data_table)
-
-        # 5. Button controls at bottom (keep original font size)
-        controls_layout = QtWidgets.QHBoxLayout()
+        self.learning_activity_text = QtWidgets.QTextEdit()
+        self.learning_activity_text.setReadOnly(True)
+        self.learning_activity_text.setAcceptRichText(True)
+        learning_layout.addWidget(self.learning_activity_text)
         
-        self.export_button = QtWidgets.QPushButton("Export...")
-        self.export_button.clicked.connect(self.export_learning_data)
-        controls_layout.addWidget(self.export_button)
+        # 4. Manual trigger button
+        self.force_learning_button = QtWidgets.QPushButton("Force Learning Now")
+        self.force_learning_button.clicked.connect(self.force_hebbian_learning)
+        learning_layout.addWidget(self.force_learning_button)
         
-        self.clear_button = QtWidgets.QPushButton("Clear")
-        self.clear_button.clicked.connect(self.clear_learning_data)
-        controls_layout.addWidget(self.clear_button)
-        
-        learning_layout.addLayout(controls_layout)
-
         # Set the layout to a container widget
         learning_widget = QtWidgets.QWidget()
         learning_widget.setLayout(learning_layout)
         self.learning_tab_layout.addWidget(learning_widget)
+        
+        # Set up timer to update the learning activity display
+        self.learning_display_timer = QtCore.QTimer()
+        self.learning_display_timer.timeout.connect(self.update_learning_display)
+        self.learning_display_timer.start(1000)  # Update every second
+
+    def force_hebbian_learning(self):
+        """Manual trigger for Hebbian learning"""
+        self.brain_widget.perform_hebbian_learning()
+
+    def update_learning_display(self):
+        """Update the learning activity display with recent activities"""
+        if not hasattr(self.brain_widget, 'learning_history'):
+            return
+            
+        if not self.brain_widget.learning_history:
+            self.learning_activity_text.setHtml("<i>No learning activity recorded yet.</i>")
+            return
+            
+        html = ""
+        
+        # Display the most recent learning events (last 5)
+        for record in reversed(self.brain_widget.learning_history[-5:]):
+            timestamp = record['timestamp']
+            active_neurons = record['active_neurons']
+            updates = record['updates']
+            
+            html += f"<h3>Learning at {timestamp}</h3>"
+            html += f"<p><b>Active neurons:</b> {', '.join(active_neurons)}</p>"
+            
+            html += "<table border='1' cellspacing='0' cellpadding='3' width='100%'>"
+            html += "<tr><th>Connection</th><th>Values</th><th>Previous</th><th>New</th><th>Change</th></tr>"
+            
+            for update in updates:
+                neuron1 = update['neuron1']
+                neuron2 = update['neuron2']
+                value1 = update['value1']
+                value2 = update['value2']
+                prev_weight = update['prev_weight']
+                new_weight = update['new_weight']
+                weight_change = new_weight - prev_weight
+                
+                # Determine text color for weight change
+                if weight_change > 0:
+                    change_color = "green"
+                    change_text = f"+{weight_change:.4f}"
+                elif weight_change < 0:
+                    change_color = "red"
+                    change_text = f"{weight_change:.4f}"
+                else:
+                    change_color = "black"
+                    change_text = "0"
+                    
+                html += f"<tr>"
+                html += f"<td>{neuron1} ↔ {neuron2}</td>"
+                html += f"<td>{value1:.1f}, {value2:.1f}</td>"
+                html += f"<td>{prev_weight:.4f}</td>"
+                html += f"<td>{new_weight:.4f}</td>"
+                html += f"<td style='color:{change_color};'>{change_text}</td>"
+                html += f"</tr>"
+                
+            html += "</table>"
+            html += "<hr>"
+        
+        self.learning_activity_text.setHtml(html)
 
     def update_countdown(self):
-        # Check if attribute exists (defensive programming)
-        if not hasattr(self, 'hebbian_countdown_seconds'):
+        # Calculate time until next learning cycle
+        if hasattr(self.brain_widget, 'last_hebbian_time'):
+            elapsed = time.time() - self.brain_widget.last_hebbian_time
+            interval_sec = self.config.hebbian.get('learning_interval', 30000) / 1000
+            remaining = max(0, interval_sec - elapsed)
+            self.hebbian_countdown_seconds = int(remaining)
+        else:
             self.hebbian_countdown_seconds = 0
 
         # Show paused message if paused
         if self.is_paused:
-            countdown_text = "Next Hebbian learning in: [ SIMULATION IS PAUSED ]"
+            countdown_text = "Next Hebbian learning in: [SIMULATION PAUSED]"
+        elif self.hebbian_countdown_seconds > 0:
+            countdown_text = f"Next Hebbian learning in: {self.hebbian_countdown_seconds} seconds"
         else:
-            # Calculate time until next learning cycle
-            if hasattr(self, 'last_hebbian_time'):
-                time_remaining = max(0, (self.last_hebbian_time + (self.config.hebbian['learning_interval'] / 1000)) - time.time())
-                self.hebbian_countdown_seconds = int(time_remaining)
-                
-            # Update countdown display with larger font
-            if self.hebbian_countdown_seconds > 0:
-                countdown_text = f"Next Hebbian learning in: {self.hebbian_countdown_seconds} seconds"
-            else:
-                countdown_text = "Next Hebbian learning in: -- seconds"
+            countdown_text = "Next Hebbian learning in: -- seconds"
+            # Trigger learning if countdown reached zero
+            if not self.is_paused:
+                self.brain_widget.perform_hebbian_learning()  # Make sure this is calling the BrainWidget method
 
-        # Apply consistent styling
         self.countdown_label.setText(countdown_text)
-
+        
         # Set a larger font for the countdown label
         font = QFont()
-        font.setPointSize(10)  # Set the desired font size
+        font.setPointSize(10)
         self.countdown_label.setFont(font)
-
-        # Check if reached zero this tick
-        if not self.is_paused and self.hebbian_countdown_seconds == 0:
-            if hasattr(self, 'on_hebbian_countdown_finished'):
-                self.on_hebbian_countdown_finished()
-            else:
-                print("Warning: Countdown finished but no handler!")
-
-        # Force UI update if needed
-        if self.countdown_label.isVisible():
-            self.countdown_label.repaint()
 
     def clear_learning_data(self):
         self.weight_changes_text.clear()
@@ -2269,68 +2492,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         if self.debug_mode:
             print(f"Learning interval updated to {seconds} seconds ({interval_ms} ms)")
 
-    def perform_hebbian_learning(self):
-        if self.is_paused:
-            return
-        self.last_hebbian_time = time.time()
-        if self.is_paused or not hasattr(self, 'brain_widget') or not self.tamagotchi_logic or not self.tamagotchi_logic.squid:
-            return
-
-        # Get the current state of all neurons
-        current_state = self.brain_widget.state
-
-        # Determine which neurons are significantly active (excluding specified neurons)
-        excluded_neurons = ['is_sick', 'is_eating', 'pursuing_food', 'direction']
-        active_neurons = []
-        for neuron, value in current_state.items():
-            if neuron in excluded_neurons:
-                continue
-            if isinstance(value, (int, float)) and value > 50:
-                active_neurons.append(neuron)
-            elif isinstance(value, bool) and value:
-                active_neurons.append(neuron)
-            elif isinstance(value, str):
-                # For string values (like 'direction'), we consider them active
-                # But we're excluding 'direction' via excluded_neurons
-                active_neurons.append(neuron)
-
-        # Include decoration effects in learning
-        decoration_memories = self.tamagotchi_logic.squid.memory_manager.get_all_short_term_memories('decorations')
-
-        if isinstance(decoration_memories, dict):
-            for decoration, effects in decoration_memories.items():
-                for stat, boost in effects.items():
-                    if stat in excluded_neurons:
-                        continue
-                    if isinstance(boost, (int, float)) and boost > 0:
-                        if stat not in active_neurons:
-                            active_neurons.append(stat)
-        elif isinstance(decoration_memories, list):
-            for memory in decoration_memories:
-                for stat, boost in memory.get('effects', {}).items():
-                    if stat in excluded_neurons:
-                        continue
-                    if isinstance(boost, (int, float)) and boost > 0:
-                        if stat not in active_neurons:
-                            active_neurons.append(stat)
-
-        # If less than two neurons are active, no learning occurs
-        if len(active_neurons) < 2:
-            return
-
-        # Perform learning for a random subset of active neuron pairs
-        sample_size = min(5, len(active_neurons) * (len(active_neurons) - 1) // 2)
-        sampled_pairs = random.sample([(i, j) for i in range(len(active_neurons)) for j in range(i+1, len(active_neurons))], sample_size)
-
-        for i, j in sampled_pairs:
-            neuron1 = active_neurons[i]
-            neuron2 = active_neurons[j]
-            value1 = self.get_neuron_value(current_state.get(neuron1, 50))  # Default to 50 if not in current_state
-            value2 = self.get_neuron_value(current_state.get(neuron2, 50))
-            self.update_connection(neuron1, neuron2, value1, value2)
-
-        # Update the brain visualization
-        self.brain_widget.update()
+    
 
     def deduce_weight_change_reason(self, pair, value1, value2, prev_weight, new_weight, weight_change):
         neuron1, neuron2 = pair
@@ -2389,69 +2551,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         else:
             return "Complex interaction with no clear single reason"
 
-    def update_connection(self, neuron1, neuron2, value1, value2):
-        pair = (neuron1, neuron2)
-        reverse_pair = (neuron2, neuron1)
-
-        # Check if the pair or its reverse exists in weights, if not, initialize it
-        if pair not in self.brain_widget.weights and reverse_pair not in self.brain_widget.weights:
-            self.brain_widget.weights[pair] = 0.0  # Initialize with a neutral weight
-            print(f"\033[36m** Hebbian: Initialized new weight for pair: {(neuron1, neuron2)}\033[0m")
-
-        # Use the correct pair order
-        use_pair = pair if pair in self.brain_widget.weights else reverse_pair
-
-        prev_weight = self.brain_widget.weights[use_pair]
-
-        # Hebbian learning rule: neurons that fire together, wire together
-        weight_change = 0.01 * (value1 / 100) * (value2 / 100)  # Normalize values to 0-1 range
-        new_weight = min(max(prev_weight + weight_change, -1), 1)  # Ensure weight stays in [-1, 1] range
-
-        # Update the weight
-        self.brain_widget.weights[use_pair] = new_weight
-
-        # Determine if weight increased or decreased
-        if weight_change > 0:
-            change_direction = "Increased"
-            color = QtGui.QColor("black")
-        elif weight_change < 0:
-            change_direction = "Decreased"
-            color = QtGui.QColor("black")
-        else:
-            change_direction = "No change"
-            color = QtGui.QColor("black")
-
-        # Check if enough time has passed since the last update
-        current_time = time.time()
-        if current_time - self.last_update_time >= self.update_threshold:
-            self.update_associations()
-            self.last_update_time = current_time
-
-        # Display the weight change
-        timestamp = QtCore.QTime.currentTime().toString("hh:mm:ss")
-        self.weight_changes_text.append(f"{timestamp} - Weight changed between {neuron1.upper()} and {neuron2.upper()}")
-        self.weight_changes_text.append(f"Previous value: {prev_weight:.4f}")
-        self.weight_changes_text.append(f"New value: {new_weight:.4f}")
-
-        # Set text color for the change line
-        cursor = self.weight_changes_text.textCursor()
-        format = QtGui.QTextCharFormat()
-        format.setForeground(color)
-        cursor.insertText(f"Change: {change_direction} by {abs(weight_change):.4f}\n", format)
-
-        # Deduce and add the reason for weight change
-        reason = self.deduce_weight_change_reason(use_pair, value1, value2, prev_weight, new_weight, weight_change)
-        self.weight_changes_text.append(f"Reason: {reason}\n")
-
-        # Update learning data
-        self.learning_data.append((timestamp, neuron1, neuron2, weight_change, change_direction))
-        self.update_learning_data_table()
-        # Update associations after each connection update
-        self.update_associations()
-
-        # Update log window if open
-        if self.log_window and self.log_window.isVisible():
-            self.log_window.update_log(self.weight_changes_text.toPlainText())
 
     def get_neuron_value(self, value):
         if isinstance(value, (int, float)):

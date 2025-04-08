@@ -1,4 +1,4 @@
-# Decision engine version 1.0   April 2025
+# Decision engine version 2.0   April 2025
 
 import random
 from .personality import Personality
@@ -22,7 +22,9 @@ class DecisionEngine:
             "is_sleeping": self.squid.is_sleeping,
             "has_food_visible": bool(self.squid.get_visible_food()),
             "carrying_rock": self.squid.carrying_rock,
-            "rock_throw_cooldown": getattr(self.squid, 'rock_throw_cooldown', 0)
+            "carrying_poop": self.squid.carrying_poop,
+            "rock_throw_cooldown": getattr(self.squid, 'rock_throw_cooldown', 0),
+            "poop_throw_cooldown": getattr(self.squid, 'poop_throw_cooldown', 0)
         }
         
         # Get brain network state - this provides the emergent behavior
@@ -58,6 +60,8 @@ class DecisionEngine:
             "eating": brain_state.get("hunger", 50) * 1.2 if self.squid.get_visible_food() else 0,
             "approaching_rock": brain_state.get("curiosity", 50) * 0.7 if not self.squid.carrying_rock else 0,
             "throwing_rock": brain_state.get("satisfaction", 50) * 0.7 if self.squid.carrying_rock else 0,
+            "approaching_poop": brain_state.get("curiosity", 50) * 0.7 if not self.squid.carrying_poop and len(self.squid.tamagotchi_logic.poop_items) > 0 else 0,
+            "throwing_poop": brain_state.get("satisfaction", 50) * 0.7 if self.squid.carrying_poop else 0,
             "avoiding_threat": brain_state.get("anxiety", 50) * 0.9,
             "organizing": brain_state.get("satisfaction", 50) * 0.5
         }
@@ -66,9 +70,11 @@ class DecisionEngine:
         if self.squid.personality == Personality.TIMID:
             decision_weights["avoiding_threat"] *= 1.5
             decision_weights["approaching_rock"] *= 0.7
+            decision_weights["approaching_poop"] *= 0.7
         elif self.squid.personality == Personality.ADVENTUROUS:
             decision_weights["exploring"] *= 1.3
             decision_weights["approaching_rock"] *= 1.2
+            decision_weights["approaching_poop"] *= 1.2
         elif self.squid.personality == Personality.GREEDY:
             decision_weights["eating"] *= 1.5
         
@@ -85,6 +91,7 @@ class DecisionEngine:
                             key=lambda f: self.squid.distance_to(f[0], f[1]))
             self.squid.move_towards(closest_food[0], closest_food[1])
             return "moving_to_food"
+        
         elif best_decision == "approaching_rock" and not self.squid.carrying_rock:
             nearby_rocks = [d for d in self.squid.tamagotchi_logic.get_nearby_decorations(
                 self.squid.squid_x, self.squid.squid_y, 150)
@@ -92,18 +99,33 @@ class DecisionEngine:
             if nearby_rocks:
                 self.squid.current_rock_target = random.choice(nearby_rocks)
                 return "approaching_rock"
+        
         elif best_decision == "throwing_rock" and self.squid.carrying_rock:
             direction = random.choice(["left", "right"])
             if self.squid.throw_rock(direction):
                 return "throwing_rock"
+        
+        elif best_decision == "approaching_poop" and not self.squid.carrying_poop:
+            nearby_poops = [d for d in self.squid.tamagotchi_logic.poop_items 
+                            if self.squid.distance_to(d.pos().x(), d.pos().y()) < 150]
+            if nearby_poops:
+                self.squid.current_poop_target = random.choice(nearby_poops)
+                return "approaching_poop"
+        
+        elif best_decision == "throwing_poop" and self.squid.carrying_poop:
+            direction = random.choice(["left", "right"])
+            if self.squid.throw_poop(direction):
+                return "throwing_poop"
+        
         elif best_decision == "organizing" and self.squid.should_organize_decorations():
             return self.squid.organize_decorations()
+        
         elif best_decision == "avoiding_threat" and self.squid.anxiety > 70:
             # Move away from potential threats
             if len(self.squid.tamagotchi_logic.poop_items) > 0:
                 self.squid.move_erratically()
             return "avoiding_threat"
-            
+        
         # Default to exploration with varying patterns
         exploration_style = random.choice(["normal", "slow", "erratic"])
         if exploration_style == "slow":

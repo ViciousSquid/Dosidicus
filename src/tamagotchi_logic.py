@@ -16,6 +16,7 @@ from .ui import ResizablePixmapItem
 from .squid_brain_window import SquidBrainWindow
 from .learning import HebbianLearning
 from .interactions import RockInteractionManager
+from .interactions2 import PoopInteractionManager
 from .config_manager import ConfigManager
 from .plugin_manager import PluginManager
 
@@ -620,6 +621,10 @@ class TamagotchiLogic:
             self.rock_interaction.throw_animation_timer.timeout.connect(
                 self.rock_interaction.update_throw_animation
             )
+
+        # Set up poop interaction
+        if hasattr(self, 'poop_interaction'):
+            self.poop_interaction.setup_timers(interval=100)
         
         # Start the simulation timer
         self.simulation_timer.start()
@@ -744,6 +749,7 @@ class TamagotchiLogic:
             )
 
     def create_ink_cloud(self):
+        """Create an ink cloud with proper z-value and fade-out handling"""
         ink_cloud_pixmap = QtGui.QPixmap(os.path.join("images", "inkcloud.png"))
         ink_cloud_item = QtWidgets.QGraphicsPixmapItem(ink_cloud_pixmap)
         
@@ -751,7 +757,10 @@ class TamagotchiLogic:
         squid_center_x = self.squid.squid_x + self.squid.squid_width // 2
         squid_center_y = self.squid.squid_y + self.squid.squid_height // 2
         ink_cloud_item.setPos(squid_center_x - ink_cloud_pixmap.width() // 2, 
-                              squid_center_y - ink_cloud_pixmap.height() // 2)
+                            squid_center_y - ink_cloud_pixmap.height() // 2)
+        
+        # Set a very high Z value to ensure it appears above other elements
+        ink_cloud_item.setZValue(1000)
         
         self.user_interface.scene.addItem(ink_cloud_item)
         
@@ -759,25 +768,38 @@ class TamagotchiLogic:
         opacity_effect = QtWidgets.QGraphicsOpacityEffect()
         ink_cloud_item.setGraphicsEffect(opacity_effect)
 
-        # Create a QPropertyAnimation for the opacity effect
-        self.fade_out_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
-        self.fade_out_animation.setDuration(10000)  # 10 seconds duration
-        self.fade_out_animation.setStartValue(1.0)
-        self.fade_out_animation.setEndValue(0.0)
-        self.fade_out_animation.setEasingCurve(QtCore.QEasingCurve.InQuad)
+        # Store the animation as a property of the ink cloud item itself
+        # This prevents overwriting a single animation variable
+        fade_out_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
+        fade_out_animation.setDuration(10000)  # 10 seconds duration
+        fade_out_animation.setStartValue(1.0)
+        fade_out_animation.setEndValue(0.0)
+        fade_out_animation.setEasingCurve(QtCore.QEasingCurve.InQuad)
 
-        # Connect the finished signal to remove the item
-        self.fade_out_animation.finished.connect(lambda: self.remove_ink_cloud(ink_cloud_item))
+        # Connect the finished signal to a lambda that includes the specific item
+        # This ensures the correct item is removed when its animation finishes
+        fade_out_animation.finished.connect(lambda item=ink_cloud_item: self.remove_ink_cloud(item))
+        
+        # Store the animation as an attribute of the ink cloud to prevent garbage collection
+        ink_cloud_item.fade_out_animation = fade_out_animation
 
         # Start the animation
-        self.fade_out_animation.start()
+        fade_out_animation.start()
 
     def remove_ink_cloud(self, ink_cloud_item):
+        """Safely remove an ink cloud and clean up its resources"""
         if ink_cloud_item in self.user_interface.scene.items():
+            # Clean up the graphics effect
+            if ink_cloud_item.graphicsEffect():
+                ink_cloud_item.graphicsEffect().deleteLater()
+            ink_cloud_item.setGraphicsEffect(None)
+            
+            # Remove the item from the scene
             self.user_interface.scene.removeItem(ink_cloud_item)
-        if ink_cloud_item.graphicsEffect():
-            ink_cloud_item.graphicsEffect().deleteLater()
-        ink_cloud_item.setGraphicsEffect(None)
+            
+            # Remove the animation reference to help garbage collection
+            if hasattr(ink_cloud_item, 'fade_out_animation'):
+                delattr(ink_cloud_item, 'fade_out_animation')
 
     def end_startle(self):
         if self.mental_states_enabled:
@@ -794,6 +816,9 @@ class TamagotchiLogic:
         self.move_objects()
         self.animate_poops()
         self.update_statistics()
+
+        # Add poop interaction check
+        self.check_poop_interaction()
         
         if self.squid:
             # 2. Core squid updates
@@ -1346,20 +1371,20 @@ class TamagotchiLogic:
             return
 
         # Get plugin results
-        results = self.plugin_manager.trigger_hook("on_clean", 
-                                                tamagotchi_logic=self, 
+        results = self.plugin_manager.trigger_hook("on_clean",
+                                                tamagotchi_logic=self,
                                                 squid=self.squid)
-        
+
         # Check if any plugin returned False to prevent default behavior
         if False in results:
             return
 
         self.last_clean_time = current_time
 
-        # Create a cleaning line
-        self.cleaning_line = QtWidgets.QGraphicsLineItem(self.user_interface.window_width, 0,
-                                                        self.user_interface.window_width, self.user_interface.window_height - 1000)
-        self.cleaning_line.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 10))  # Thick black line
+        # Create a cleaning line that extends beyond the window vertically
+        self.cleaning_line = QtWidgets.QGraphicsLineItem(self.user_interface.window_width, -500,
+                                                        self.user_interface.window_width, self.user_interface.window_height + 500)
+        self.cleaning_line.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 15))  # Thick black line
         self.user_interface.scene.addItem(self.cleaning_line)
 
         # Show a message that cleaning has started
@@ -1367,20 +1392,20 @@ class TamagotchiLogic:
 
         # Set up animation parameters
         self.cleaning_progress = 0
+        self.movement_rate = 200  # Movement rate in pixels per second
         self.cleaning_timer = QtCore.QTimer()
         self.cleaning_timer.timeout.connect(self.update_cleaning)
-        self.cleaning_timer.start(50)  # Update every 50 ms
+        self.cleaning_timer.start(500)  # Update every 1000 ms (1 second)
 
     def update_cleaning(self):
-        self.cleaning_progress += 1
-        if self.cleaning_progress >= 100:
+        self.cleaning_progress += self.movement_rate  # Increment progress by movement rate each second
+        if self.cleaning_progress >= self.user_interface.window_width:
             self.cleaning_timer.stop()
             self.finish_cleaning()
             return
 
-        progress = self.cleaning_progress / 100.0
-        new_x = self.user_interface.window_width * (1 - progress)
-        self.cleaning_line.setLine(new_x, 0, new_x, self.user_interface.window_height - 120)
+        new_x = self.user_interface.window_width - self.cleaning_progress
+        self.cleaning_line.setLine(new_x, -500, new_x, self.user_interface.window_height + 500)
 
         # Remove poops and food that the line has passed
         for poop_item in self.poop_items[:]:
@@ -1394,6 +1419,8 @@ class TamagotchiLogic:
 
         # Force an update of the scene
         self.user_interface.scene.update()
+
+
 
     def finish_cleaning(self):
         # Remove the cleaning line
@@ -1870,3 +1897,67 @@ class TamagotchiLogic:
                             if hasattr(plugin, 'network_node') and plugin.network_node:
                                 peers_count = len(plugin.network_node.known_nodes)
                                 self.user_interface.status_bar.update_peers_count(peers_count)
+
+    def setup_poop_interaction(self):
+        """Initialize poop interaction manager"""
+        from .interactions2 import PoopInteractionManager
+        
+        # Check if config manager has poop config
+        if not hasattr(self.config_manager, 'get_poop_config'):
+            # Create a default poop config if not available
+            def get_poop_config():
+                return {
+                    'min_carry_duration': 3.0,
+                    'max_carry_duration': 9.0,
+                    'pickup_prob': 0.2,
+                    'throw_prob': 0.3,
+                    # Optional additional config parameters
+                    'happiness_penalty': 5,
+                    'anxiety_increase': 10
+                }
+            self.config_manager.get_poop_config = get_poop_config
+        
+        # Initialize poop interaction
+        self.poop_interaction = PoopInteractionManager(
+            squid=self.squid,
+            logic=self,
+            scene=self.user_interface.scene,
+            message_callback=self.show_message,
+            config_manager=self.config_manager
+        )
+
+    def check_poop_interaction(self):
+        """Unified method for poop interaction checks"""
+        if not hasattr(self, 'poop_interaction'):
+            self.setup_poop_interaction()
+        
+        if not hasattr(self.squid, 'current_poop_target'):
+            return
+        
+        poop = self.squid.current_poop_target
+        poop_rect = poop.sceneBoundingRect()
+        squid_rect = self.squid.squid_item.sceneBoundingRect()
+        
+        # Calculate precise distance between edges
+        dx = poop_rect.center().x() - squid_rect.center().x()
+        dy = poop_rect.center().y() - squid_rect.center().y()
+        distance = math.hypot(dx, dy)
+        
+        if self.squid.status == "approaching_poop":
+            if distance < 40:  # Close enough to pick up
+                if self.squid.pick_up_poop(poop):
+                    self.squid.status = "carrying_poop"
+                    self.squid.poop_carry_timer = random.randint(30, 50)  # 3-5 seconds
+                else:
+                    self.squid.current_poop_target = None
+            else:
+                # Move toward poop at normal speed
+                self.squid.move_toward_position(poop_rect.center())
+        
+        elif self.squid.status == "carrying_poop":
+            self.squid.poop_carry_timer -= 1
+            if self.squid.poop_carry_timer <= 0:
+                direction = "left" if random.random() < 0.5 else "right"
+                if self.squid.throw_poop(direction):
+                    self.squid.status = "roaming"
+                    self.squid.current_poop_target = None

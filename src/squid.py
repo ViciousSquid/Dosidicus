@@ -1664,6 +1664,43 @@ class Squid:
             else:
                 print(f"[DEBUG] {target_item.category.capitalize()} pickup failed")
 
+    def check_poop_interaction(self):
+        """Periodic poop interaction check similar to rock interaction"""
+        if not hasattr(self.tamagotchi_logic, 'poop_interaction'):
+            return False
+            
+        config = self.tamagotchi_logic.config_manager.get_poop_config()
+        
+        decorations = self.tamagotchi_logic.get_nearby_decorations(
+            self.squid_x, self.squid_y, 150)
+        interactables = [d for d in decorations if d.category == 'poop']
+
+        # If carrying poop and cooldown is done, potentially throw
+        if (self.carrying_poop 
+                and self.poop_throw_cooldown == 0 
+                and random.random() < config['throw_prob']):
+            direction = random.choice(["left", "right"])
+            if self.throw_poop(direction):
+                return
+
+        # If not carrying poop and cooldown is done, potentially pick up
+        if (not self.carrying_poop 
+                and self.poop_throw_cooldown == 0 
+                and interactables
+                and random.random() < config['pickup_prob']):
+            target_item = random.choice(interactables)
+            
+            if self.pick_up_poop(target_item):
+                mem_details = {
+                    "item": getattr(target_item, 'filename', 'unknown_poop'),
+                    "position": (target_item.pos().x(), target_item.pos().y()),
+                    "timestamp": datetime.now().isoformat()
+                }
+                self.memory_manager.add_short_term_memory(
+                    'interaction', 'poop_pickup', mem_details)
+            else:
+                print(f"[DEBUG] Poop pickup failed")
+
     def get_center(self):
         """Return the center position of the squid"""
         return (self.squid_x + self.squid_width/2, 
