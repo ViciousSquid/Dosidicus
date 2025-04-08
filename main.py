@@ -207,21 +207,23 @@ class MainWindow(QtWidgets.QMainWindow):
             self.squid.load_state(squid_data)
             print(f"\033Loaded squid with personality:\033[0m {self.squid.personality.value}")
             
-            # Make sure tamagotchi_logic is properly initialized
-            if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
-                # Start the simulation paused
-                self.tamagotchi_logic.set_simulation_speed(0)
-                
-                # Show the pause message
-                if hasattr(self.user_interface, 'show_pause_message'):
-                    try:
-                        self.user_interface.show_pause_message(True)
-                    except Exception as e:
-                        print(f"Warning: Failed to show pause message: {e}")
+            # Show the pause message first
+            if hasattr(self.user_interface, 'show_pause_message'):
+                try:
+                    self.user_interface.show_pause_message(True)
+                except Exception as e:
+                    print(f"Warning: Failed to show pause message: {e}")
             
-            self.start_simulation()
+            # Initialize but keep paused
+            self.tamagotchi_logic.start_autosave()
+            
+            # Open windows without changing speed
+            QtCore.QTimer.singleShot(1000, self.open_initial_windows)
+            
+            # Make sure we're actually paused
+            self.tamagotchi_logic.set_simulation_speed(0)
         else:
-            print("No save data found or invalid save data. Starting new simulation")
+            print("No existing save data found - Starting new simulation")
             self.create_new_game()
 
     def load_game(self):
@@ -270,7 +272,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tamagotchi_logic.start_autosave()
 
         # Use QTimer to delay opening windows slightly
-        QtCore.QTimer.singleShot(1000, self.open_initial_windows)
+        QtCore.QTimer.singleShot(500, self.open_initial_windows)
 
     def show_hatching_notification(self):
         """Display hatching message"""
