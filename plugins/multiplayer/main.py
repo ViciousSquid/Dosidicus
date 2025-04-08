@@ -28,9 +28,9 @@ from plugins.multiplayer.status_bar_component import StatusBarComponent
 
 # Plugin Metadata
 PLUGIN_NAME = "Multiplayer"
-PLUGIN_VERSION = "1.2.0"
+PLUGIN_VERSION = "0.1.0"
 PLUGIN_AUTHOR = "ViciousSquid"
-PLUGIN_DESCRIPTION = "Enables networked multiplayer for squids including squid detection and object synchronization"
+PLUGIN_DESCRIPTION = "Enables network synchronizationr for squids and objects (Experimental)"
 PLUGIN_REQUIRES = ["network_interface"]
 
 # Network Constants 
