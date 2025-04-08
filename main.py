@@ -15,7 +15,10 @@ from src.splash_screen import SplashScreen
 from src.save_manager import SaveManager
 from src.squid_brain_window import SquidBrainWindow
 from src.learning import LearningConfig
+from src.plugin_manager import PluginManager
 
+# Enable high-DPI scaling (Qt5)
+#QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
 
 # Set up logging
 logging.basicConfig(filename='dosidicus_log.txt', level=logging.ERROR, 
@@ -59,6 +62,12 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Initialize UI with debug mode
         self.user_interface = Ui(self, debug_mode=self.debug_mode)
+
+        # Initialize plugin manager - do this before other components
+        self.plugin_manager = PluginManager()
+        print("  ")
+        print(f"Plugin manager initialized: {self.plugin_manager}")
+        print("  ")
         
         # Create SquidBrainWindow with config
         self.brain_window = SquidBrainWindow(None, self.debug_mode, self.config)
@@ -83,7 +92,17 @@ class MainWindow(QtWidgets.QMainWindow):
             # Now load from save data
             self.create_squid_from_save_data()
         else:
-            print(f"\033[92;22m >> Initialising a new simulation with {self.specified_personality.value if self.specified_personality else 'random'} squid.\033[0m")
+            print(f"  ")
+
+            print(f"#  ░▒▓███████▓▒░ ░▒▓██████▓▒░ ░▒▓███████▓▒░▒▓█▓▒░▒▓███████▓▒░░▒▓█▓▒░░▒▓██████▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓███████▓▒░ ")
+            print(f"#  ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░        ")
+            print(f"#  ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░        ")
+            print(f"#  ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░  ")
+            print(f"#  ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░ ")
+            print(f"#  ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░ ")
+            print(f"#  ░▒▓███████▓▒░ ░▒▓██████▓▒░░▒▓███████▓▒░░▒▓█▓▒░▒▓███████▓▒░░▒▓█▓▒░░▒▓██████▓▒░ ░▒▓██████▓▒░░▒▓███████▓▒░  ")
+            print(" #                                https://github.com/ViciousSquid/Dosidicus ")
+ 
             self.create_new_game(self.specified_personality)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
             
@@ -92,31 +111,30 @@ class MainWindow(QtWidgets.QMainWindow):
             self.user_interface.tamagotchi_logic = self.tamagotchi_logic
             self.brain_window.tamagotchi_logic = self.tamagotchi_logic
 
+        # Now that tamagotchi_logic is created, set it in plugin_manager
+        self.plugin_manager.tamagotchi_logic = self.tamagotchi_logic
+        self.tamagotchi_logic.plugin_manager = self.plugin_manager
+        
+        # Load and initialize plugins
+        #print("Loading all plugins...")
+        plugin_results = self.plugin_manager.load_all_plugins()
+        #print(f"Plugin loading results: {plugin_results}")
+        
+        # Update status bar with plugin information
+        if hasattr(self.user_interface, 'status_bar'):
+            self.user_interface.status_bar.update_plugins_status(self.plugin_manager)
+        
         # Connect signals
         self.user_interface.new_game_action.triggered.connect(self.start_new_game)
         self.user_interface.load_action.triggered.connect(self.load_game)
         self.user_interface.save_action.triggered.connect(self.save_game)
         self.user_interface.decorations_action.triggered.connect(self.user_interface.toggle_decoration_window)
-
-        # Initialize UI elements
-        self.brain_window.show()
-        self.brain_window.update_personality_display(self.squid.personality)
-        self.tamagotchi_logic.set_simulation_speed(0)  # Start paused
-
-        # Create but don't show brain window yet
-        self.brain_window = SquidBrainWindow(None, self.debug_mode, self.config)
-        self.user_interface.squid_brain_window = self.brain_window
-
-        # Position and show decoration window at startup
-        QtCore.QTimer.singleShot(100, self.position_and_show_decoration_window)
-
-        # Set up brain update timer
-        self.brain_update_timer = QtCore.QTimer(self)
-        self.brain_update_timer.timeout.connect(self.update_brain_window)
-        self.brain_update_timer.start(2000)
+        
+        # Initialize plugin menu - do this AFTER loading plugins
+        self.user_interface.setup_plugin_menu(self.plugin_manager)
 
         if self.debug_mode:
-            print(f"\033[91;22m DEBUG MODE ENABLED: Console output is being logged to console.txt\033[0m")
+            print(f"DEBUG MODE ENABLED: Console output is being logged to console.txt")
 
     def position_and_show_decoration_window(self):
         """Position the decoration window in the bottom right and show it"""
@@ -160,7 +178,9 @@ class MainWindow(QtWidgets.QMainWindow):
             neuro_cooldown=self.neuro_cooldown
         )
         
-        print(f"\033Squid personality:\033[0m {self.squid.personality.value}")
+        print(f"    ")
+        print(f">> Generated squid personality: {self.squid.personality.value}")
+        print(f"    ")
         if self.neuro_cooldown:
             print(f"\033Neurogenesis cooldown:\033[0m {self.neuro_cooldown}")
         
@@ -244,20 +264,79 @@ class MainWindow(QtWidgets.QMainWindow):
         self.splash.show()
 
     def start_simulation(self):
-        """Begin the simulation"""
-        print("Starting simulation")
+        """Begin the simulation and automatically open brain and decoration windows"""
+        print("  ")
         self.tamagotchi_logic.set_simulation_speed(1)
         self.tamagotchi_logic.start_autosave()
+
+        # Use QTimer to delay opening windows slightly
+        QtCore.QTimer.singleShot(1000, self.open_initial_windows)
 
     def show_hatching_notification(self):
         """Display hatching message"""
         self.user_interface.show_message("Squid is hatching!")
 
+    def open_initial_windows(self):
+        """Open brain window and decorations window"""
+        # Open brain window
+        if hasattr(self, 'brain_window'):
+            self.brain_window.show()
+            self.user_interface.brain_action.setChecked(True)
+
+        # Open decorations window
+        if hasattr(self.user_interface, 'decoration_window'):
+            self.position_and_show_decoration_window()
+            self.user_interface.decorations_action.setChecked(True)
+
+    
+    def initialize_multiplayer_manually(self):
+        """Manually initialize multiplayer plugin if needed"""
+        try:
+            # Import the plugin module directly
+            import sys
+            import os
+            plugin_path = os.path.join(os.path.dirname(__file__), 'plugins', 'multiplayer')
+            if plugin_path not in sys.path:
+                sys.path.insert(0, plugin_path)
+                
+            import main as multiplayer_main
+            
+            # Create plugin instance
+            multiplayer_plugin = multiplayer_main.MultiplayerPlugin()
+            
+            # Find it in plugin_manager and add the instance
+            for plugin_name, plugin_data in self.plugin_manager.plugins.items():
+                if plugin_name.lower() == "multiplayer":
+                    plugin_data['instance'] = multiplayer_plugin
+                    print(f"Manually added multiplayer plugin instance to {plugin_name}")
+                    
+                    # Initialize the plugin
+                    if hasattr(multiplayer_plugin, 'setup'):
+                        multiplayer_plugin.setup(self.plugin_manager)
+                    
+                    # Register menu actions
+                    if hasattr(multiplayer_plugin, 'register_menu_actions'):
+                        multiplayer_plugin.register_menu_actions()
+                    
+                    break
+                    
+            # Force the UI to refresh plugin menu
+            self.user_interface.setup_plugin_menu(self.plugin_manager)
+            
+            #print("Manual multiplayer initialization complete")
+            return True
+            
+        except Exception as e:
+            print(f"Error in manual multiplayer initialization: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
 def main():
     """Main entry point"""
     sys.excepthook = global_exception_handler
 
-    parser = argparse.ArgumentParser(description="Dosidicus digital pet simulation")
+    parser = argparse.ArgumentParser(description="Dosidicus digital squid with a neural network")
     parser.add_argument('-p', '--personality', type=str, 
                        choices=[p.value for p in Personality], 
                        help='Specify squid personality')
