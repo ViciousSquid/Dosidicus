@@ -1094,7 +1094,7 @@ class TamagotchiLogic:
             self.show_message("Squid is not sick. Medicine not needed.")
 
     def display_needle_image(self):
-        needle_pixmap = QtGui.QPixmap(os.path.join("images", "needle.jpg"))
+        needle_pixmap = QtGui.QPixmap(os.path.join("images", "medicine.png"))
         self.needle_item = QtWidgets.QGraphicsPixmapItem(needle_pixmap)
         self.needle_item.setPos(self.user_interface.window_width // 2 - needle_pixmap.width() // 2,
                                 self.user_interface.window_height // 2 - needle_pixmap.height() // 2)
