@@ -2666,9 +2666,31 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         #    print(f"Rewards: {full_state['recent_rewards']}\n")
 
     def init_about_tab(self):
+        # Main text content using QTextEdit
         about_text = QtWidgets.QTextEdit()
         about_text.setReadOnly(True)
-        about_text.setHtml("""
+        
+        # Predefined list of approved squid names
+        SQUID_NAMES = [
+            "Algernon", "Cuthbert", "Englebert", "D'Artagnan",
+            "Gaspard", "Ulysse", "Leopold", "Miroslav",
+            "Artemis", "Jacques", "Cecil", "Wilhelm", "Giskard"
+        ]
+        
+        # Randomly select and permanently set the squid name
+        squid_name = random.choice(SQUID_NAMES)
+        
+        # Get personality
+        personality = "Unknown"
+        if hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'squid'):
+            personality = str(self.tamagotchi_logic.squid.personality).split('.')[-1] if hasattr(self.tamagotchi_logic.squid, 'personality') else "Unknown"
+            
+            # Permanently set the randomly selected name
+            if hasattr(self.tamagotchi_logic.squid, 'name'):
+                self.tamagotchi_logic.squid.name = squid_name
+        
+        # Remove the badge from the QTextEdit HTML
+        about_text.setHtml(f"""
         <h1>Dosidicus electronicae</h1>
         <p>github.com/ViciousSquid/Dosidicus</p>
         <p>A Tamagotchi-style digital pet with a simple neural network</p>
@@ -2677,12 +2699,73 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         <br>
         <b>Dosidicus version 1.0.400.5</b> (milestone 4)<br>
         Brain Tool version 1.0.6.5<br>
-        Decision engine version 1.0<br>
-
-        <p>This is a research project. Please suggest features.</p>
+        Decision engine version 1.0<br><br>
+        <p>This is a research project. Please suggest features.</p><br><br>
+        <b>Squid personality:</b> {personality}<br><br>
         </ul>
         """)
+        
+        # Create a custom widget for the badge
+        badge_widget = QtWidgets.QWidget()
+        badge_layout = QtWidgets.QVBoxLayout(badge_widget)
+        badge_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Badge container
+        badge_container = QtWidgets.QWidget()
+        badge_container.setFixedWidth(300)
+        badge_container.setStyleSheet("""
+            background-color: white;
+            border: 4px solid #FF0000;
+            border-radius: 5px;
+            padding: 10px;
+        """)
+        
+        badge_inner_layout = QtWidgets.QVBoxLayout(badge_container)
+        badge_inner_layout.setSpacing(2)  # Reduced spacing to match the compact look
+        
+        # "HELLO" label
+        hello_label = QtWidgets.QLabel("HELLO")
+        hello_label.setAlignment(QtCore.Qt.AlignCenter)
+        hello_label.setStyleSheet("""
+            font-family: Arial, sans-serif;
+            font-size: 28px;
+            font-weight: bold;
+            color: #FFFFFF;
+            background-color: #FF0000;
+            padding: 5px;
+        """)
+        badge_inner_layout.addWidget(hello_label)
+        
+        # "my name is..." label with dotted effect
+        my_name_label = QtWidgets.QLabel("my name is...")
+        my_name_label.setAlignment(QtCore.Qt.AlignCenter)
+        my_name_label.setStyleSheet("""
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            color: #FFFFFF;
+            background-color: #FF0000;
+            padding: 2px;
+        """)
+        badge_inner_layout.addWidget(my_name_label)
+        
+        # Name label
+        name_label = QtWidgets.QLabel(squid_name)
+        name_label.setAlignment(QtCore.Qt.AlignCenter)
+        name_label.setStyleSheet("""
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            font-weight: bold;
+            color: #000000;
+            background-color: white;
+            padding: 10px;
+        """)
+        badge_inner_layout.addWidget(name_label)
+        
+        badge_layout.addWidget(badge_container, alignment=QtCore.Qt.AlignHCenter)
+        
+        # Add both widgets to the layout
         self.about_tab_layout.addWidget(about_text)
+        self.about_tab_layout.addWidget(badge_widget)
 
     def train_hebbian(self):
         self.brain_widget.train_hebbian()

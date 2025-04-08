@@ -17,6 +17,7 @@ from .squid_brain_window import SquidBrainWindow
 from .learning import HebbianLearning
 from .interactions import RockInteractionManager
 from .config_manager import ConfigManager
+from .plugin_manager import PluginManager
 
 class TamagotchiLogic:
     def __init__(self, user_interface, squid, brain_window):
@@ -43,6 +44,19 @@ class TamagotchiLogic:
         self.was_big = False
         self.debug_mode = False
         self.last_window_size = (1280, 900)  # Default size
+
+        # Initialize plugin manager
+        self.plugin_manager = PluginManager()
+        self.plugin_manager.load_all_plugins()
+
+        # Update status bar with plugin information
+        self.update_status_bar()
+                
+        # Trigger startup hook
+        self.plugin_manager.trigger_hook("on_startup", 
+                                        tamagotchi_logic=self,
+                                        squid=self.squid,
+                                        user_interface=self.user_interface)
 
         # Initialize core attributes first
         self.simulation_speed = 1  # Default to 1x speed
@@ -142,6 +156,8 @@ class TamagotchiLogic:
         self.curious_cooldown_max = 20
         self.curious_interaction_cooldown = 1
         self.curious_interaction_cooldown_max = 5
+
+    
 
     def set_squid(self, squid):
         self.squid = squid
@@ -538,15 +554,33 @@ class TamagotchiLogic:
             speed_menu.addAction(action)
 
     def set_simulation_speed(self, speed):
+        """Set the simulation speed and notify plugins of the change"""
+        # Store current speed before changing (default to 1 if not set)
+        previous_speed = getattr(self, 'simulation_speed', 1)
+        
+        # Apply new speed
         self.simulation_speed = speed
         self.update_timers()
         
+        # Update dependent systems
         if hasattr(self, 'squid'):
             self.squid.set_animation_speed(speed)
         
         if hasattr(self, 'brain_window'):
             self.brain_window.set_pause_state(speed == 0)
 
+        # Safety check before plugin hook
+        if not hasattr(self, 'plugin_manager'):
+            self.plugin_manager = PluginManager()  # Ensure plugin manager exists
+            
+        # Call plugin hook with both speeds
+        self.plugin_manager.trigger_hook(
+            "on_speed_change",
+            tamagotchi_logic=self,
+            old_speed=previous_speed,  # Now properly defined
+            new_speed=speed
+        )
+        
         print(f"\033[38;5;208;1m >> Simulation speed: {speed}x\033[0m")
 
 
@@ -752,6 +786,10 @@ class TamagotchiLogic:
             self.brain_window.add_thought("No longer startled")
 
     def update_simulation(self):
+        # Trigger pre-update hook
+        self.plugin_manager.trigger_hook("pre_update", 
+                                        tamagotchi_logic=self, 
+                                        squid=self.squid)
         # 1. Handle existing simulation updates
         self.move_objects()
         self.animate_poops()
@@ -806,6 +844,10 @@ class TamagotchiLogic:
         # 9. Handle RPS game state if active
         if hasattr(self, 'rps_game') and self.rps_game.game_window:
             self.rps_game.update_state()
+            # Trigger post-update hook at the end
+        self.plugin_manager.trigger_hook("post_update", 
+                                        tamagotchi_logic=self, 
+                                        squid=self.squid)
 
     def check_for_sickness(self):
         # Existing sickness logic
@@ -988,6 +1030,15 @@ class TamagotchiLogic:
         print(f"Debug: Give medicine called.")
         print(f"Debug: Squid is_sick: {self.squid.is_sick}")
         print(f"Debug: Mental state manager sick state: {self.squid.mental_state_manager.is_state_active('sick')}")
+        
+        # Get plugin results
+        results = self.plugin_manager.trigger_hook("on_medicine", 
+                                                tamagotchi_logic=self, 
+                                                squid=self.squid)
+        
+        # Check if any plugin returned False to prevent default behavior
+        if False in results:
+            return
         
         if (self.squid is not None and 
             (self.squid.is_sick or 
@@ -1249,7 +1300,16 @@ class TamagotchiLogic:
         self.last_window_size = new_size
 
     def feed_squid(self):
-        """Spawn exactly one food item per feeding"""
+        # Get plugin results
+        results = self.plugin_manager.trigger_hook("on_feed", 
+                                                tamagotchi_logic=self, 
+                                                squid=self.squid)
+        
+        # Check if any plugin returned False to prevent default behavior
+        if False in results:
+            return
+        
+        # Continue with original behavior
         if len(self.food_items) >= self.max_food:
             return
         
@@ -1285,11 +1345,20 @@ class TamagotchiLogic:
             self.show_message(f"Cleaning is on cooldown. Please wait {remaining_cooldown} seconds.")
             return
 
+        # Get plugin results
+        results = self.plugin_manager.trigger_hook("on_clean", 
+                                                tamagotchi_logic=self, 
+                                                squid=self.squid)
+        
+        # Check if any plugin returned False to prevent default behavior
+        if False in results:
+            return
+
         self.last_clean_time = current_time
 
         # Create a cleaning line
         self.cleaning_line = QtWidgets.QGraphicsLineItem(self.user_interface.window_width, 0,
-                                                         self.user_interface.window_width, self.user_interface.window_height - 400)
+                                                        self.user_interface.window_width, self.user_interface.window_height - 1000)
         self.cleaning_line.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 10))  # Thick black line
         self.user_interface.scene.addItem(self.cleaning_line)
 
@@ -1300,7 +1369,7 @@ class TamagotchiLogic:
         self.cleaning_progress = 0
         self.cleaning_timer = QtCore.QTimer()
         self.cleaning_timer.timeout.connect(self.update_cleaning)
-        self.cleaning_timer.start(30)  # Update every 30 ms
+        self.cleaning_timer.start(50)  # Update every 50 ms
 
     def update_cleaning(self):
         self.cleaning_progress += 1
@@ -1344,7 +1413,49 @@ class TamagotchiLogic:
         self.user_interface.scene.update()
 
     def show_message(self, message):
-        self.user_interface.show_message(message)
+        # Call hook if available
+        if hasattr(self, 'plugin_manager'):
+            # Get modified message from plugins
+            results = self.plugin_manager.trigger_hook(
+                "on_message_display", 
+                tamagotchi_logic=self,
+                original_message=message
+            )
+            
+            # Check if any plugin modified the message
+            for result in results:
+                if isinstance(result, str) and result:
+                    message = result
+                    break
+        
+        # Use the user_interface's scene instead of self.scene
+        if hasattr(self, 'user_interface') and hasattr(self.user_interface, 'scene'):
+            scene = self.user_interface.scene
+            # Remove any existing message items
+            for item in scene.items():
+                if isinstance(item, QtWidgets.QGraphicsTextItem):
+                    scene.removeItem(item)
+
+            # Create a new QGraphicsTextItem for the message
+            message_item = QtWidgets.QGraphicsTextItem(message)
+            message_item.setDefaultTextColor(QtGui.QColor(255, 255, 255))  # White text
+            message_item.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+            message_item.setPos(0, self.user_interface.window_height - 75)  # Position the message higher
+            message_item.setTextWidth(self.user_interface.window_width)
+            message_item.setHtml(f'<div style="text-align: center; background-color: #000000; padding: 5px;">{message}</div>')
+            message_item.setZValue(10)  # Ensure the message is on top
+            message_item.setOpacity(1)
+
+            # Add the new message item to the scene
+            scene.addItem(message_item)
+
+            # Fade out the message after 8 seconds
+            fade_out_animation = QtCore.QPropertyAnimation(message_item, b"opacity")
+            fade_out_animation.setDuration(8000)
+            fade_out_animation.setStartValue(1.0)
+            fade_out_animation.setEndValue(0.0)
+            fade_out_animation.finished.connect(lambda: scene.removeItem(message_item))
+            fade_out_animation.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
 
     def toggle_debug_mode(self):
         self.debug_mode = not self.debug_mode
@@ -1361,24 +1472,6 @@ class TamagotchiLogic:
             else:
                 opacity = 0
             self.user_interface.cleanliness_overlay.setBrush(QtGui.QBrush(QtGui.QColor(139, 69, 19, opacity)))
-
-    def spawn_food(self, is_sushi=False):
-        if len(self.food_items) < self.max_food:
-            if is_sushi:
-                food_pixmap = QtGui.QPixmap(os.path.join("images", "sushi.png"))
-                food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
-                food_item.is_sushi = True
-            else:
-                food_pixmap = QtGui.QPixmap(os.path.join("images", "cheese.png"))
-                food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
-                food_item.is_sushi = False
-
-            food_x = random.randint(50, self.user_interface.window_width - 50 - self.food_width)
-            food_y = 50  # Start at the top of the screen
-            food_item.setPos(food_x, food_y)
-
-            self.user_interface.scene.addItem(food_item)
-            self.food_items.append(food_item)
     
     def spawn_sushi(self):
         if len(self.food_items) < self.max_food:
@@ -1472,6 +1565,7 @@ class TamagotchiLogic:
 
     def load_game(self):
         save_data = self.save_manager.load_game()
+        
         if save_data is not None:
             game_state = save_data['game_state']
             squid_data = game_state['squid']
@@ -1500,6 +1594,14 @@ class TamagotchiLogic:
             self.hunger_threshold_time = tamagotchi_logic_data['hunger_threshold_time']
             self.last_clean_time = tamagotchi_logic_data['last_clean_time']
             self.points = tamagotchi_logic_data['points']
+            
+            # Load plugin data if it exists
+            if 'plugin_data' in save_data:
+                plugin_data = save_data['plugin_data']
+                self.plugin_manager.trigger_hook("on_load_game", 
+                                                tamagotchi_logic=self,
+                                                squid=self.squid,
+                                                plugin_data=plugin_data)
 
             print("Game loaded successfully")
             self.set_simulation_speed(1)  # Set simulation speed to 1x after loading
@@ -1539,6 +1641,18 @@ class TamagotchiLogic:
 
     def save_game(self, squid, tamagotchi_logic, is_autosave=False):
         try:
+            # Trigger save game hook to allow plugins to add data
+            plugin_data = {}
+            hook_results = self.plugin_manager.trigger_hook("on_save_game", 
+                                                        tamagotchi_logic=self,
+                                                        squid=self.squid)
+            
+            # Collect plugin data from results
+            for result in hook_results:
+                if isinstance(result, dict):
+                    for plugin_name, data in result.items():
+                        plugin_data[plugin_name] = data
+            
             brain_state = self.brain_window.get_brain_state()
             print("Debug: Brain State")
             print(json.dumps(brain_state, indent=2))
@@ -1578,13 +1692,14 @@ class TamagotchiLogic:
                 },
                 'brain_state': brain_state,
                 'ShortTerm': squid.memory_manager.short_term_memory,
-                'LongTerm': squid.memory_manager.long_term_memory
+                'LongTerm': squid.memory_manager.long_term_memory,
+                'plugin_data': plugin_data
             }
 
-            print("Debug: Short Term Memory")
-            print(json.dumps(save_data['ShortTerm'], indent=2))
-            print("Debug: Long Term Memory")
-            print(json.dumps(save_data['LongTerm'], indent=2))
+            #print("Debug: Short Term Memory")
+            #print(json.dumps(save_data['ShortTerm'], indent=2))
+            #print("Debug: Long Term Memory")
+            #print(json.dumps(save_data['LongTerm'], indent=2))
 
             filepath = self.save_manager.save_game(save_data, is_autosave)
             print(f"Game {'autosaved' if is_autosave else 'saved'} successfully to {filepath}")
@@ -1731,3 +1846,27 @@ class TamagotchiLogic:
         """Delegate to interaction manager"""
         if hasattr(self, 'rock_interaction'):
             self.rock_interaction.update_rock_test()
+
+    def update_status_bar(self):
+            """Update the status bar with the current plugin state"""
+            if hasattr(self.user_interface, 'status_bar'):
+                self.user_interface.status_bar.update_plugins_status(self.plugin_manager)
+                
+                # Check for multiplayer plugin specifically
+                if 'MultiplayerPlugin' in self.plugin_manager.enabled_plugins:
+                    # Try to get the plugin instance
+                    for plugin_name, plugin_data in self.plugin_manager.plugins.items():
+                        if plugin_name == 'MultiplayerPlugin' and 'instance' in plugin_data:
+                            plugin = plugin_data['instance']
+                            
+                            # Update network status if plugin has a network node
+                            if hasattr(plugin, 'network_node') and plugin.network_node:
+                                self.user_interface.status_bar.update_network_status(
+                                    plugin.network_node.is_connected,
+                                    plugin.network_node.node_id
+                                )
+                            
+                            # Update peers count
+                            if hasattr(plugin, 'network_node') and plugin.network_node:
+                                peers_count = len(plugin.network_node.known_nodes)
+                                self.user_interface.status_bar.update_peers_count(peers_count)

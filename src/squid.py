@@ -93,7 +93,6 @@ class Squid:
         else:
             self.personality = personality
 
-
     @property
     def carrying_rock(self):
         return hasattr(self, 'is_carrying_rock') and self.is_carrying_rock
@@ -110,8 +109,205 @@ class Squid:
     def current_rock(self, value):
         self.carried_rock = value
 
+    @property
+    def hunger(self):
+        return self._hunger
+
+    @hunger.setter
+    def hunger(self, value):
+        old_value = getattr(self, '_hunger', 50)
+        self._hunger = max(0, min(100, value))
+        
+        # Trigger hook if value changed and tamagotchi_logic exists
+        if old_value != self._hunger and hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_hunger_change", 
+                    squid=self, 
+                    old_value=old_value, 
+                    new_value=self._hunger
+                )
+                
+                # General state change hook
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_squid_state_change",
+                    squid=self,
+                    attribute="hunger",
+                    old_value=old_value,
+                    new_value=self._hunger
+                )
+
+    @property
+    def happiness(self):
+        return self._happiness
+
+    @happiness.setter
+    def happiness(self, value):
+        old_value = getattr(self, '_happiness', 100)
+        self._happiness = max(0, min(100, value))
+        
+        # Trigger hook if value changed and tamagotchi_logic exists
+        if old_value != self._happiness and hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_happiness_change", 
+                    squid=self, 
+                    old_value=old_value, 
+                    new_value=self._happiness
+                )
+                
+                # General state change hook
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_squid_state_change",
+                    squid=self,
+                    attribute="happiness",
+                    old_value=old_value,
+                    new_value=self._happiness
+                )
+
+    @property
+    def cleanliness(self):
+        return self._cleanliness
+
+    @cleanliness.setter
+    def cleanliness(self, value):
+        old_value = getattr(self, '_cleanliness', 100)
+        self._cleanliness = max(0, min(100, value))
+        
+        # Trigger hook if value changed and tamagotchi_logic exists
+        if old_value != self._cleanliness and hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_cleanliness_change", 
+                    squid=self, 
+                    old_value=old_value, 
+                    new_value=self._cleanliness
+                )
+                
+                # General state change hook
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_squid_state_change",
+                    squid=self,
+                    attribute="cleanliness",
+                    old_value=old_value,
+                    new_value=self._cleanliness
+                )
+
+    @property
+    def sleepiness(self):
+        return self._sleepiness
+
+    @sleepiness.setter
+    def sleepiness(self, value):
+        old_value = getattr(self, '_sleepiness', 30)
+        self._sleepiness = max(0, min(100, value))
+        
+        # Trigger hook if value changed and tamagotchi_logic exists
+        if old_value != self._sleepiness and hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_sleepiness_change", 
+                    squid=self, 
+                    old_value=old_value, 
+                    new_value=self._sleepiness
+                )
+                
+                # General state change hook
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_squid_state_change",
+                    squid=self,
+                    attribute="sleepiness",
+                    old_value=old_value,
+                    new_value=self._sleepiness
+                )
+
+    @property
+    def satisfaction(self):
+        return self._satisfaction
+
+    @satisfaction.setter
+    def satisfaction(self, value):
+        old_value = getattr(self, '_satisfaction', 50)
+        self._satisfaction = max(0, min(100, value))
+        
+        # Trigger hook if value changed and tamagotchi_logic exists
+        if old_value != self._satisfaction and hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_satisfaction_change", 
+                    squid=self, 
+                    old_value=old_value, 
+                    new_value=self._satisfaction
+                )
+                
+                # General state change hook
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_squid_state_change",
+                    squid=self,
+                    attribute="satisfaction",
+                    old_value=old_value,
+                    new_value=self._satisfaction
+                )
+
+    @property
+    def anxiety(self):
+        return self._anxiety
+
+    @anxiety.setter
+    def anxiety(self, value):
+        old_value = getattr(self, '_anxiety', 10)
+        self._anxiety = max(0, min(100, value))
+        
+        # Trigger hook if value changed and tamagotchi_logic exists
+        if old_value != self._anxiety and hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_anxiety_change", 
+                    squid=self, 
+                    old_value=old_value, 
+                    new_value=self._anxiety
+                )
+                
+                # General state change hook
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_squid_state_change",
+                    squid=self,
+                    attribute="anxiety",
+                    old_value=old_value,
+                    new_value=self._anxiety
+                )
+
+    @property
+    def curiosity(self):
+        return self._curiosity
+
+    @curiosity.setter
+    def curiosity(self, value):
+        old_value = getattr(self, '_curiosity', 50)
+        self._curiosity = max(0, min(100, value))
+        
+        # Trigger hook if value changed and tamagotchi_logic exists
+        if old_value != self._curiosity and hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_curiosity_change", 
+                    squid=self, 
+                    old_value=old_value, 
+                    new_value=self._curiosity
+                )
+                
+                # General state change hook
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_squid_state_change",
+                    squid=self,
+                    attribute="curiosity",
+                    old_value=old_value,
+                    new_value=self._curiosity
+                )
+
     def set_animation_speed(self, speed):
         self.animation_speed = speed
+
 
     def load_images(self):
         self.images = {
@@ -180,6 +376,171 @@ class Squid:
             self._decision_engine = DecisionEngine(self)
         
         return self._decision_engine.make_decision()
+    
+    def check_boundary_exit(self):
+        """
+        Aggressive boundary exit detection for cross-window movement
+        """
+        print("\n!!!!! AGGRESSIVE BOUNDARY EXIT CHECK !!!!!")
+        
+        # Check if multiplayer is available and enabled
+        try:
+            if not hasattr(self, 'tamagotchi_logic'):
+                print("ERROR: No tamagotchi_logic attribute")
+                return False
+            
+            if not hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                print("ERROR: No plugin_manager in tamagotchi_logic")
+                return False
+            
+            pm = self.tamagotchi_logic.plugin_manager
+            multiplayer_enabled = 'multiplayer' in pm.get_enabled_plugins()
+            
+            print(f"Multiplayer Enabled: {multiplayer_enabled}")
+            print(f"Enabled Plugins: {pm.get_enabled_plugins()}")
+        except Exception as e:
+            print(f"ERROR checking multiplayer status: {e}")
+            return False
+
+        # If multiplayer is not enabled, exit
+        if not multiplayer_enabled:
+            print("Multiplayer not enabled. Skipping boundary exit.")
+            return False
+
+        # Comprehensive boundary calculations
+        try:
+            window_width = self.ui.window_width
+            window_height = self.ui.window_height
+            
+            # Detailed position logging
+            print(f"Window Dimensions: {window_width} x {window_height}")
+            print(f"Squid Position: ({self.squid_x}, {self.squid_y})")
+            print(f"Squid Dimensions: {self.squid_width} x {self.squid_height}")
+            print(f"Current Direction: {self.squid_direction}")
+
+            # Calculate extended boundary conditions
+            squid_right = self.squid_x + self.squid_width
+            squid_bottom = self.squid_y + self.squid_height
+
+            # Extended debug information
+            print(f"Squid Right Edge: {squid_right}")
+            print(f"Squid Bottom Edge: {squid_bottom}")
+
+            # Aggressive boundary conditions
+            direction = None
+            margin = 10  # Slightly inside the boundary to ensure clean exit
+            
+            # LEFT boundary exit - exit when squid is just off the left side
+            if self.squid_x < -margin and self.squid_direction == 'left':
+                direction = 'left'
+                print("!!!!! LEFT BOUNDARY EXIT DETECTED !!!!!")
+            
+            # RIGHT boundary exit - exit when squid is just off the right side
+            elif squid_right > window_width + margin and self.squid_direction == 'right':
+                direction = 'right'
+                print("!!!!! RIGHT BOUNDARY EXIT DETECTED !!!!!")
+            
+            # TOP boundary exit - exit when squid is just off the top
+            elif self.squid_y < -margin and self.squid_direction == 'up':
+                direction = 'up'
+                print("!!!!! TOP BOUNDARY EXIT DETECTED !!!!!")
+            
+            # BOTTOM boundary exit - exit when squid is just off the bottom
+            elif squid_bottom > window_height + margin and self.squid_direction == 'down':
+                direction = 'down'
+                print("!!!!! BOTTOM BOUNDARY EXIT DETECTED !!!!!")
+
+            # Attempt to notify if exit detected
+            if direction:
+                print(f"Attempting to notify boundary exit: {direction}")
+                try:
+                    self._notify_boundary_exit(direction)
+                    print("Boundary exit notification successful")
+                    return True
+                except Exception as notify_error:
+                    print(f"ERROR in boundary exit notification: {notify_error}")
+                    return False
+
+            print("No boundary exit detected")
+            return False
+
+        except Exception as e:
+            print(f"CRITICAL ERROR in boundary exit check: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def _notify_boundary_exit(self, direction):
+        """
+        Enhanced notification of boundary exit with comprehensive logging
+        """
+        print("\n===== BOUNDARY EXIT NOTIFICATION =====")
+        
+        try:
+            # Get plugin manager
+            pm = self.tamagotchi_logic.plugin_manager
+            
+            # Get multiplayer plugin
+            if 'multiplayer' in pm.get_enabled_plugins():
+                plugin_instance = pm.plugins['multiplayer'].get('instance')
+                
+                if plugin_instance and hasattr(plugin_instance, 'network_node'):
+                    # Prepare exit data with precise details
+                    exit_data = {
+                        'node_id': plugin_instance.network_node.node_id if plugin_instance.network_node else 'unknown',
+                        'direction': direction,
+                        'position': {
+                            'x': self.squid_x,
+                            'y': self.squid_y
+                        },
+                        'color': plugin_instance.get_squid_color() if hasattr(plugin_instance, 'get_squid_color') else (150, 150, 255),
+                        'squid_width': self.squid_width,
+                        'squid_height': self.squid_height,
+                        'window_width': self.ui.window_width,
+                        'window_height': self.ui.window_height
+                    }
+                    
+                    print("Exit Data:")
+                    for key, value in exit_data.items():
+                        print(f"  {key}: {value}")
+                    
+                    # Broadcast exit message
+                    plugin_instance.network_node.send_message(
+                        'squid_exit', 
+                        {'payload': exit_data}
+                    )
+                    
+                    print(f"[MULTIPLAYER] Squid exiting through {direction} boundary")
+                    
+                    # Temporary opacity change
+                    self.squid_item.setOpacity(0.2)
+                    
+                    # Set a timer to restore visibility if no acknowledgment
+                    self.boundary_timer = QtCore.QTimer()
+                    self.boundary_timer.timeout.connect(self.restore_after_boundary)
+                    self.boundary_timer.setSingleShot(True)
+                    self.boundary_timer.start(3000)  # 3-second timeout
+                else:
+                    print("[ERROR] No network node or plugin instance available")
+            else:
+                print("[ERROR] Multiplayer plugin not enabled")
+        
+        except Exception as e:
+            print(f"[CRITICAL] Error in boundary exit notification:")
+            import traceback
+            traceback.print_exc()
+        
+        print("===== BOUNDARY EXIT NOTIFICATION END =====\n")
+    
+    def restore_after_boundary(self):
+        """
+        Restore squid visibility if no acknowledgment received
+        """
+        # Restore opacity
+        self.squid_item.setOpacity(1.0)
+        
+        # Optional: Additional reset logic
+        print("[Multiplayer] No boundary acknowledgment received. Resetting squid.")
     
     def determine_startle_reason(self, current_state):
         """Determine why the squid is startled based on environment"""
@@ -347,26 +708,94 @@ class Squid:
                     visible_food.append((food_x, food_y))  # Add cheese to the end of the list
         return visible_food
 
+    # Add this to squid.py in the is_in_vision_cone method
+
     def is_in_vision_cone(self, x, y):
-        dx = x - (self.squid_x + self.squid_width // 2)
-        dy = y - (self.squid_y + self.squid_height // 2)
+        """
+        Check if a point (x,y) is inside the squid's vision cone
+        
+        Args:
+            x (float): X coordinate to check
+            y (float): Y coordinate to check
+            
+        Returns:
+            bool: True if the point is in vision cone, False otherwise
+        """
+        # Get squid center position
+        squid_center_x = self.squid_x + self.squid_width // 2
+        squid_center_y = self.squid_y + self.squid_height // 2
+        
+        # Calculate vector to target
+        dx = x - squid_center_x
+        dy = y - squid_center_y
+        
+        # Calculate distance
         distance = math.sqrt(dx**2 + dy**2)
-
+        
+        # Define vision cone length
         cone_length = max(self.ui.window_width, self.ui.window_height)
-
+        
+        # If target is beyond detection range, return false
         if distance > cone_length:
             return False
-
-        angle_to_food = math.atan2(dy, dx)
-        angle_diff = abs(angle_to_food - self.current_view_angle)
-
-        return angle_diff <= self.view_cone_angle / 2 or angle_diff >= 2 * math.pi - self.view_cone_angle / 2
+        
+        # Calculate angle to target point
+        angle_to_target = math.atan2(dy, dx)
+        
+        # Get current view angle (use current_view_angle if available, otherwise derive from direction)
+        if hasattr(self, 'current_view_angle'):
+            current_angle = self.current_view_angle
+        else:
+            direction_map = {
+                'right': 0,
+                'up': math.pi * 1.5,
+                'left': math.pi,
+                'down': math.pi * 0.5
+            }
+            current_angle = direction_map.get(self.squid_direction, 0)
+        
+        # Get cone angle (half of the total view cone angle)
+        if hasattr(self, 'view_cone_angle'):
+            cone_angle = self.view_cone_angle / 2
+        else:
+            cone_angle = math.pi / 5  # Default 36-degree half-angle
+        
+        # Calculate angle difference (accounting for wrap-around)
+        angle_diff = abs(angle_to_target - current_angle)
+        while angle_diff > math.pi:
+            angle_diff = 2 * math.pi - angle_diff
+        
+        # Check if the target is within the cone angle
+        return angle_diff <= cone_angle
+    
+    def change_view_cone_direction(self):
+        self.current_view_angle = random.uniform(0, 2 * math.pi)
 
     def move_squid(self):
+        """
+        Move the squid with comprehensive debug logging and boundary check
+        """
+        # Debug logging for movement start
+        print("\n===== MOVE SQUID DEBUG START =====")
+        
+        # Check if multiplayer is available and enabled
+        if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+            pm = self.tamagotchi_logic.plugin_manager
+            multiplayer_enabled = 'multiplayer' in pm.get_enabled_plugins()
+        else:
+            multiplayer_enabled = False
+        
+        print(f"Multiplayer Enabled: {multiplayer_enabled}")
+        print(f"Current Position: ({self.squid_x}, {self.squid_y})")
+        print(f"Window Dimensions: {self.ui.window_width} x {self.ui.window_height}")
+        print(f"Current Direction: {self.squid_direction}")
+
         if self.animation_speed == 0:
+            print("Animation speed is 0, no movement")
             return
 
         if self.is_sleeping:
+            print("Squid is sleeping, limited movement")
             if self.squid_y < self.ui.window_height - 120 - self.squid_height:
                 self.squid_y += self.base_vertical_speed * self.animation_speed
                 self.squid_item.setPos(self.squid_x, self.squid_y)
@@ -393,6 +822,7 @@ class Squid:
                 self.last_view_cone_change = current_time
             self.move_randomly()
 
+        # Calculate new position
         squid_x_new = self.squid_x
         squid_y_new = self.squid_y
 
@@ -405,33 +835,61 @@ class Squid:
         elif self.squid_direction == "down":
             squid_y_new += self.base_vertical_speed * self.animation_speed
 
-        if squid_x_new < 50:
-            squid_x_new = 50
-            self.change_direction()
-        elif squid_x_new > self.ui.window_width - 50 - self.squid_width:
-            squid_x_new = self.ui.window_width - 50 - self.squid_width
-            self.change_direction()
+        # Comprehensive boundary logging
+        print(f"New Position Calculation:")
+        print(f"  New X: {squid_x_new}")
+        print(f"  New Y: {squid_y_new}")
+        print(f"  Window Width: {self.ui.window_width}")
+        print(f"  Window Height: {self.ui.window_height}")
 
-        if squid_y_new < 50:
-            squid_y_new = 50
-            self.change_direction()
-        elif squid_y_new > self.ui.window_height - 120 - self.squid_height:
-            squid_y_new = self.ui.window_height - 120 - self.squid_height
-            self.change_direction()
+        # Boundary handling for single-player and multiplayer modes
+        if not multiplayer_enabled:
+            # Original boundary restrictions for single-player mode
+            if squid_x_new < 50:
+                squid_x_new = 50
+                self.change_direction()
+            elif squid_x_new > self.ui.window_width - 50 - self.squid_width:
+                squid_x_new = self.ui.window_width - 50 - self.squid_width
+                self.change_direction()
 
+            if squid_y_new < 50:
+                squid_y_new = 50
+                self.change_direction()
+            elif squid_y_new > self.ui.window_height - 120 - self.squid_height:
+                squid_y_new = self.ui.window_height - 120 - self.squid_height
+                self.change_direction()
+        else:
+            # Extended boundary check for multiplayer
+            print("Multiplayer mode: Extended boundary check")
+            squid_right = squid_x_new + self.squid_width
+            squid_bottom = squid_y_new + self.squid_height
+
+            print(f"Squid Right Edge: {squid_right}")
+            print(f"Squid Bottom Edge: {squid_bottom}")
+            print(f"Window Width: {self.ui.window_width}")
+            print(f"Window Height: {self.ui.window_height}")
+
+        # Update squid position
         self.squid_x = squid_x_new
         self.squid_y = squid_y_new
 
+        # Update animation frame and image
         if self.squid_direction in ["left", "right", "up", "down"]:
             self.current_frame = (self.current_frame + 1) % 2
             self.squid_item.setPixmap(self.current_image())
 
+        # Set new position and update related elements
         self.squid_item.setPos(self.squid_x, self.squid_y)
         self.update_view_cone()
         self.update_sick_icon_position()
 
-    def change_view_cone_direction(self):
-        self.current_view_angle = random.uniform(0, 2 * math.pi)
+        # Comprehensive boundary exit check in multiplayer mode
+        if multiplayer_enabled:
+            print("Triggering boundary exit check in multiplayer mode")
+            exit_result = self.check_boundary_exit()
+            print(f"Boundary Exit Result: {exit_result}")
+
+        print("===== MOVE SQUID DEBUG END =====\n")
 
     def move_towards(self, x, y):
         dx = x - (self.squid_x + self.squid_width // 2)
@@ -473,6 +931,18 @@ class Squid:
             reward_points = 3  # Extra reward for favorite food
             effects['satisfaction'] = min(20, 100 - self.satisfaction)  # Even bigger boost
 
+        # Trigger hook if tamagotchi_logic exists
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                self.tamagotchi_logic.plugin_manager.trigger_hook(
+                    "on_feed", 
+                    squid=self,
+                    food_item=food_item,
+                    food_type=food_name,
+                    effects=effects
+                )
+        
+        # Continue with original behavior
         # Apply all stat changes
         for attr, change in effects.items():
             setattr(self, attr, getattr(self, attr) + change)
@@ -561,6 +1031,105 @@ class Squid:
         squid_center_y = self.squid_y + self.squid_height // 2
         distance = math.sqrt((squid_center_x - food_x)**2 + (squid_center_y - food_y)**2)
         return distance < 100  # Adjust the distance threshold as needed
+    
+    def process_squid_detection(self, remote_node_id, is_visible=True):
+        """
+        Process the detection of another squid in this squid's vision cone
+        
+        Args:
+            remote_node_id (str): ID of the detected squid
+            is_visible (bool): Whether the squid is currently visible
+        """
+        # Only react if the squid is not sleeping
+        if self.is_sleeping:
+            return
+        
+        if is_visible:
+            # Detected a new squid or is continuing to see it
+            
+            # Increase curiosity when first detected
+            if not hasattr(self, '_seen_squids') or remote_node_id not in self._seen_squids:
+                # First time seeing this squid
+                self.curiosity = min(100, self.curiosity + 15)
+                
+                # Small anxiety spike from the surprise
+                self.anxiety = min(100, self.anxiety + 10)
+                
+                # Add memory
+                self.memory_manager.add_short_term_memory(
+                    'social', 'squid_detection',
+                    f"Detected another squid (ID: {remote_node_id[-4:]})"
+                )
+                
+                # Initialize tracking of seen squids if needed
+                if not hasattr(self, '_seen_squids'):
+                    self._seen_squids = set()
+                
+                # Add to seen squids
+                self._seen_squids.add(remote_node_id)
+                
+                # Chance to get startled
+                if random.random() < 0.3:  # 30% chance
+                    # Try to use the startle function if it exists
+                    if hasattr(self.tamagotchi_logic, 'startle_squid'):
+                        self.tamagotchi_logic.startle_squid(source="detected_squid")
+            else:
+                # Already seen this squid before, smaller reaction
+                self.curiosity = min(100, self.curiosity + 5)
+        else:
+            # Lost sight of a squid
+            # Nothing special happens, just note it
+            if hasattr(self, '_seen_squids') and remote_node_id in self._seen_squids:
+                self.memory_manager.add_short_term_memory(
+                    'social', 'squid_lost',
+                    f"Lost sight of squid (ID: {remote_node_id[-4:]})"
+                )
+
+    def react_to_rock_throw(self, source_node_id, is_target=False):
+        """
+        React to a rock being thrown by another squid
+        
+        Args:
+            source_node_id (str): ID of the squid that threw the rock
+            is_target (bool): Whether this squid is the apparent target
+        """
+        # Only react if the squid is not sleeping
+        if self.is_sleeping:
+            return
+        
+        # Base reaction - increase anxiety
+        self.anxiety = min(100, self.anxiety + 5)
+        
+        # Add memory
+        self.memory_manager.add_short_term_memory(
+            'observation', 'rock_throw',
+            f"Observed squid {source_node_id[-4:]} throw a rock"
+        )
+        
+        # Strong reaction if targeted
+        if is_target:
+            # Get startled
+            if hasattr(self.tamagotchi_logic, 'startle_squid'):
+                self.tamagotchi_logic.startle_squid(source="targeted_by_rock")
+            
+            # Significantly increase anxiety
+            self.anxiety = min(100, self.anxiety + 20)
+            
+            # Decrease happiness
+            self.happiness = max(0, self.happiness - 10)
+            
+            # Add memory of being targeted
+            self.memory_manager.add_short_term_memory(
+                'social', 'targeted',
+                f"Was targeted by rock from squid {source_node_id[-4:]}"
+            )
+            
+            # Higher chance for this memory to go to long-term
+            if random.random() < 0.5:  # 50% chance
+                self.memory_manager.transfer_to_long_term_memory(
+                    'social', 'targeted'
+                )
+
 
     def investigate_food(self, food_item):
         self.status = "Investigating food"
@@ -634,6 +1203,7 @@ class Squid:
 
     def is_debug_mode(self):
         return self.tamagotchi_logic.debug_mode
+    
 
     def change_to_rps_image(self):
         self.rps_image = QtGui.QPixmap(os.path.join("images", "squid_rps_frame.png"))
@@ -680,6 +1250,15 @@ class Squid:
             self.is_sleeping = True
             self.squid_direction = "down"
             self.status = "sleeping"
+            
+            # Trigger hook if tamagotchi_logic exists
+            if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+                if hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                    self.tamagotchi_logic.plugin_manager.trigger_hook(
+                        "on_sleep", 
+                        squid=self
+                    )
+            
             self.tamagotchi_logic.show_message("Squid is sleeping...")
 
     def wake_up(self):
