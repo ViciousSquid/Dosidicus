@@ -79,13 +79,13 @@ class BrainWidget(QtWidgets.QWidget):
             "position": (0, 0)
         }
         self.original_neuron_positions = {
-            "hunger": (150, 150),
-            "happiness": (450, 150),
-            "cleanliness": (750, 150),
-            "sleepiness": (1050, 150),
-            "satisfaction": (300, 350),
-            "anxiety": (600, 350),
-            "curiosity": (900, 350)
+            "hunger": (85, 240),
+            "happiness": (362, 122),
+            "cleanliness": (750, 116),
+            "sleepiness": (966, 175),
+            "satisfaction": (153, 592),
+            "anxiety": (543, 611),
+            "curiosity": (858, 612)
         }
         self.neuron_positions = self.original_neuron_positions.copy()
         self.connections = self.initialize_connections()

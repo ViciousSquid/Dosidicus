@@ -18,6 +18,8 @@ class Squid:
         self.tamagotchi_logic = tamagotchi_logic
         self.memory_manager = MemoryManager()
         self.push_animation = None
+        self.startled_icon = None
+        self.startled_icon_offset = QtCore.QPointF(0, -100)
 
         # Set neurogenesis cooldown (default to 200 seconds if not specified)
         self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 200
@@ -57,8 +59,10 @@ class Squid:
 
         self.squid_item = QtWidgets.QGraphicsPixmapItem(self.current_image())
         self.squid_item.setPos(self.squid_x, self.squid_y)
+        self.squid_item.setAcceptHoverEvents(True)  # Enable hover events
+        self.squid_item.mousePressEvent = self.handle_squid_click  # Add click handler
         self.ui.scene.addItem(self.squid_item)
-
+        self.anxiety_cooldown_timer = None
         self.ui.window.resizeEvent = self.handle_window_resize
 
         self.view_cone_item = None
@@ -85,7 +89,7 @@ class Squid:
 
         # Goal neurons
         self.satisfaction = 50
-        self.anxiety = 10
+        self.anxiety = 0
         self.curiosity = 50
 
         if personality is None:
@@ -320,8 +324,31 @@ class Squid:
             "sleep1": QtGui.QPixmap(os.path.join("images", "sleep1.png")),
             "sleep2": QtGui.QPixmap(os.path.join("images", "sleep2.png")),
         }
+        # Load startled image
+        self.startled_image = QtGui.QPixmap(os.path.join("images", "startled.png"))
         self.squid_width = self.images["left1"].width()
         self.squid_height = self.images["left1"].height()
+
+    def show_startled_icon(self):
+        """Show the startled icon above the squid's head"""
+        if self.startled_icon is None:
+            self.startled_icon = QtWidgets.QGraphicsPixmapItem(self.startled_image)
+            self.ui.scene.addItem(self.startled_icon)
+        self.update_startled_icon_position()
+
+    def hide_startled_icon(self):
+        """Remove the startled icon"""
+        if self.startled_icon is not None:
+            self.ui.scene.removeItem(self.startled_icon)
+            self.startled_icon = None
+
+    def update_startled_icon_position(self):
+        """Position the startled icon above the squid"""
+        if self.startled_icon is not None:
+            self.startled_icon.setPos(
+                self.squid_x + self.squid_width // 2 - self.startled_icon.pixmap().width() // 2 + self.startled_icon_offset.x(),
+                self.squid_y + self.startled_icon_offset.y()
+            )
 
     def load_poop_images(self):
         self.poop_images = [
@@ -364,6 +391,8 @@ class Squid:
         self.squid_y = max(50, min(self.squid_y, self.ui.window_height - 120 - self.squid_height))
         self.squid_item.setPos(self.squid_x, self.squid_y)
         self.update_view_cone()
+        if self.startled_icon is not None:
+            self.update_startled_icon_position()
 
     def update_needs(self):
         # This method was moved to TamagotchiLogic 26/07/2024
@@ -376,6 +405,47 @@ class Squid:
             self._decision_engine = DecisionEngine(self)
         
         return self._decision_engine.make_decision()
+    
+    def handle_squid_click(self, event):
+        """Handle mouse click on the squid"""
+        if self.is_sleeping:
+            self.startle_awake()
+        event.accept()
+
+    def startle_awake(self):
+        """Startle the squid awake with an anxiety spike"""
+        if not self.is_sleeping:
+            return
+            
+        # Wake up the squid
+        self.is_sleeping = False
+        self.sleepiness = 0
+        self.happiness = max(0, self.happiness - 15)  # Slight happiness decrease from being startled
+        self.anxiety = min(100, self.anxiety + 40)    # Large anxiety spike
+        
+        # Visual feedback
+        self.show_startled_icon()  # Show the startled icon
+        self.tamagotchi_logic.show_message("Squid was startled awake!")
+        self.status = "startled"
+        self.squid_direction = "left"  # Reset direction
+        self.update_squid_image()
+        
+        # Start timers
+        self.anxiety_cooldown_timer = QtCore.QTimer()
+        self.anxiety_cooldown_timer.timeout.connect(self.reduce_startle_anxiety)
+        self.anxiety_cooldown_timer.start(5000)  # Reduce anxiety after 5 seconds
+        
+        # Hide startled icon after 2 seconds
+        QtCore.QTimer.singleShot(2000, self.hide_startled_icon)
+
+    def reduce_startle_anxiety(self):
+        """Gradually reduce the startle anxiety"""
+        self.anxiety = max(10, self.anxiety - 15)  # Reduce anxiety but don't go below baseline
+        
+        if self.anxiety <= 25:  # When back to near-normal levels
+            if hasattr(self, 'anxiety_cooldown_timer'):
+                self.anxiety_cooldown_timer.stop()
+            self.tamagotchi_logic.show_message("Squid has calmed down")
     
     def check_boundary_exit(self):
         """
@@ -426,27 +496,26 @@ class Squid:
             print(f"Squid Right Edge: {squid_right}")
             print(f"Squid Bottom Edge: {squid_bottom}")
 
-            # Aggressive boundary conditions
+            # More aggressive boundary conditions with larger trigger area
             direction = None
-            margin = 10  # Slightly inside the boundary to ensure clean exit
             
-            # LEFT boundary exit - exit when squid is just off the left side
-            if self.squid_x < -margin and self.squid_direction == 'left':
+            # LEFT boundary exit - trigger when squid approaches left edge
+            if self.squid_x < 50 and self.squid_direction == 'left':
                 direction = 'left'
                 print("!!!!! LEFT BOUNDARY EXIT DETECTED !!!!!")
             
-            # RIGHT boundary exit - exit when squid is just off the right side
-            elif squid_right > window_width + margin and self.squid_direction == 'right':
+            # RIGHT boundary exit - trigger when squid approaches right edge
+            elif squid_right > window_width - 50 and self.squid_direction == 'right':
                 direction = 'right'
                 print("!!!!! RIGHT BOUNDARY EXIT DETECTED !!!!!")
             
-            # TOP boundary exit - exit when squid is just off the top
-            elif self.squid_y < -margin and self.squid_direction == 'up':
+            # TOP boundary exit - trigger when squid approaches top edge
+            elif self.squid_y < 50 and self.squid_direction == 'up':
                 direction = 'up'
                 print("!!!!! TOP BOUNDARY EXIT DETECTED !!!!!")
             
-            # BOTTOM boundary exit - exit when squid is just off the bottom
-            elif squid_bottom > window_height + margin and self.squid_direction == 'down':
+            # BOTTOM boundary exit - trigger when squid approaches bottom edge
+            elif squid_bottom > window_height - 100 and self.squid_direction == 'down':
                 direction = 'down'
                 print("!!!!! BOTTOM BOUNDARY EXIT DETECTED !!!!!")
 
@@ -1275,7 +1344,12 @@ class Squid:
 
     def current_image(self):
         """Return the current image of the squid"""
-        # Determine base image
+        # Check if we're in startled state
+        if hasattr(self, 'status') and self.status == "startled" and not self.is_sleeping:
+            # Use the "up" frame which looks more alert
+            return self.images[f"up{self.current_frame + 1}"]
+        
+        # Normal image selection
         if self.is_sleeping:
             base_image = self.images[f"sleep{self.current_frame + 1}"]
         elif self.squid_direction == "left":
