@@ -177,7 +177,7 @@ class NetworkNode:
                 print("[Network] Cannot receive messages: socket not connected")
             time.sleep(1)  # Avoid tight loop if socket is not available
             return
-            
+                
         try:
             # Make socket non-blocking
             self.socket.setblocking(0)
@@ -202,6 +202,9 @@ class NetworkNode:
                     
                     message = json.loads(decompressed_data)
                     
+                    # Debug print ALL message types
+                    print(f"[Network] Received {message['type']} message from {addr[0]}")
+                    
                     # Ignore messages from self
                     if message['node_id'] == self.node_id:
                         return
@@ -211,9 +214,6 @@ class NetworkNode:
                     
                     # Add to incoming queue for processing
                     self.incoming_queue.put((message, addr))
-                    
-                    if self.debug_mode and message['type'] not in ['object_sync', 'heartbeat']:
-                        print(f"[Network] Received {message['type']} message from {addr[0]}")
             except ImportError:
                 # select module not available
                 if self.debug_mode:
@@ -223,38 +223,38 @@ class NetworkNode:
             # No data available, just continue
             pass
         except Exception as e:
-            if self.debug_mode:
-                print(f"Network receive error: {e}")
+            print(f"Network receive error: {e}")
+            import traceback
+            traceback.print_exc()
     
     def process_messages(self, plugin_manager):
-        """
-        Process messages in the incoming queue
-        
-        Args:
-            plugin_manager (PluginManager): Plugin manager for hook triggering
-        """
+        """Process messages in the incoming queue"""
         if not plugin_manager:
             return
-            
+                
         while not self.incoming_queue.empty():
             try:
                 message, addr = self.incoming_queue.get_nowait()
                 
+                # Debug the message type
+                print(f"Processing message type: {message['type']}")
+                
                 # Trigger appropriate hooks based on message type
+                hook_name = f"network_{message['type']}"
+                print(f"Triggering hook: {hook_name}")
+                
                 plugin_manager.trigger_hook(
-                    f"network_{message['type']}", 
+                    hook_name, 
                     node=self, 
                     message=message,
                     addr=addr
                 )
             except queue.Empty:
-                # No more messages
                 break
             except Exception as e:
-                if self.debug_mode:
-                    print(f"Error processing message: {e}")
-                    import traceback
-                    traceback.print_exc()
+                print(f"Error processing message: {e}")
+                import traceback
+                traceback.print_exc()
 
 class MultiplayerPlugin:
     def __init__(self):
@@ -479,36 +479,33 @@ class MultiplayerPlugin:
         return opposite_directions.get(direction, 'right')  # Default to right if unknown
     
     def handle_squid_exit_message(self, node, message, addr):
-        """
-        Handle squid exit from another instance with comprehensive logging and error handling.
-        
-        Args:
-            node: Network node
-            message: Message data containing exit details
-            addr: Sender address
-        """
-        print("\n===== HANDLING SQUID EXIT MESSAGE =====")
-        
-        # Validate basic requirements
+        print("\n***** SQUID EXIT HANDLER CALLED *****")
+        print(f"Message type: {message['type']}")
+        print(f"Message payload: {message.get('payload', {})}")
+
+        # Check basic requirements
         if not hasattr(self, 'tamagotchi_logic'):
-            print("[CRITICAL] No tamagotchi_logic attribute available")
+            print("ERROR: No tamagotchi_logic attribute")
             return False
-        
+
         if not hasattr(self.tamagotchi_logic, 'user_interface'):
-            print("[CRITICAL] No user_interface attribute in tamagotchi_logic")
+            print("ERROR: No user_interface")
             return False
-        
+
         ui = self.tamagotchi_logic.user_interface
-        
+
         try:
-            # Extract full payload details with robust error handling
+            # Extract payload
             payload = message.get('payload', {})
-            
+            if not payload:
+                print("ERROR: Empty payload in squid_exit message")
+                return False
+
             # Detailed logging of payload
             print("Full Payload Details:")
             for key, value in payload.items():
                 print(f"  {key}: {value}")
-            
+
             # Extract critical information with fallback values
             source_node_id = payload.get('node_id', 'unknown_node')
             direction = payload.get('direction', 'unknown')
@@ -516,29 +513,29 @@ class MultiplayerPlugin:
             color = payload.get('color', (150, 150, 255))
             squid_width = payload.get('squid_width', 200)
             squid_height = payload.get('squid_height', 150)
-            
+
             print(f"Extracted Details:")
             print(f"  Source Node ID: {source_node_id}")
             print(f"  Exit Direction: {direction}")
             print(f"  Position: {position}")
             print(f"  Color: {color}")
-            
+
             # Ensure position is valid
             if not position or 'x' not in position or 'y' not in position:
                 print("[ERROR] Invalid or missing position in payload")
                 return False
-            
+
             # Create remote squid representation
             scene = ui.scene
-            
+
             # Load remote squid image
             remote_squid_pixmap = QtGui.QPixmap(os.path.join("images", f"{direction}1.png"))
             remote_squid_item = QtWidgets.QGraphicsPixmapItem(remote_squid_pixmap)
-            
+
             # Position near an exit point based on direction
             scene_rect = scene.sceneRect()
             print(f"Scene Rectangle: {scene_rect}")
-            
+
             # Calculate entry point based on exit direction
             if direction == "left":
                 entry_x = 50  # Left edge
@@ -555,71 +552,72 @@ class MultiplayerPlugin:
             else:
                 entry_x = scene_rect.width() // 2
                 entry_y = scene_rect.height() // 2  # Default to center
-            
+
             # Set initial position with full transparency
             remote_squid_item.setPos(entry_x, entry_y)
             remote_squid_item.setOpacity(0.0)  # Start completely invisible
             remote_squid_item.setZValue(10)  # Ensure visibility
-            
+
             # Add metadata to the item
             remote_squid_item.node_id = source_node_id
             remote_squid_item.is_remote = True
-            
+
             # Add to scene
             scene.addItem(remote_squid_item)
-            
+
             # Create subtle text indicator
             status_text = scene.addText(
-                f"Remote Squid\n{source_node_id[-8:]}", 
+                f"Remote Squid\n{source_node_id[-8:]}",
                 QtGui.QFont("Arial", 10)
             )
             status_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
             status_text.setPos(entry_x, entry_y - 50)
             status_text.setOpacity(0.0)  # Start invisible
             status_text.setZValue(11)  # Slightly above squid
-            
+
             # Create fade-in animation for squid
             opacity_effect = QtWidgets.QGraphicsOpacityEffect()
             remote_squid_item.setGraphicsEffect(opacity_effect)
-            
+
             fade_in_anim = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
             fade_in_anim.setDuration(2000)  # 2-second fade-in
             fade_in_anim.setStartValue(0.0)
             fade_in_anim.setEndValue(0.7)  # Semi-transparent remote squid
             fade_in_anim.setEasingCurve(QtCore.QEasingCurve.InQuad)
-            
+
             # Create fade-in animation for text
             text_opacity_effect = QtWidgets.QGraphicsOpacityEffect()
             status_text.setGraphicsEffect(text_opacity_effect)
-            
+
             text_fade_in_anim = QtCore.QPropertyAnimation(text_opacity_effect, b"opacity")
             text_fade_in_anim.setDuration(2000)
             text_fade_in_anim.setStartValue(0.0)
             text_fade_in_anim.setEndValue(1.0)
             text_fade_in_anim.setEasingCurve(QtCore.QEasingCurve.InQuad)
-            
+
             # Create parallel animation group
             animation_group = QtCore.QParallelAnimationGroup()
             animation_group.addAnimation(fade_in_anim)
             animation_group.addAnimation(text_fade_in_anim)
-            
+
             # Connect a completion handler
             def on_animation_complete():
                 print(f"Remote squid entry animation complete for {source_node_id}")
-            
+
             animation_group.finished.connect(on_animation_complete)
-            
+
             # Start animations
             animation_group.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
-            
-            print("Successfully handled squid exit message and initiated entry animation")
+
+            print("Successfully completed squid entry animation")
             return True
-        
+
         except Exception as e:
-            print(f"[CRITICAL] Error in squid exit message handling: {e}")
+            print(f"CRITICAL ERROR in squid_exit handler: {e}")
             import traceback
             traceback.print_exc()
             return False
+
 
     def update_remote_squid(self, node_id, squid_data, is_new_arrival=False):
         """Update the visual representation of a remote squid with improved visibility for new arrivals"""
@@ -1206,7 +1204,8 @@ class MultiplayerPlugin:
             "network_player_join",
             "network_player_leave",
             "network_heartbeat",
-            "network_state_update"
+            "network_state_update",
+            "network_squid_exit"
         ]
         
         for hook in hooks:
@@ -1241,6 +1240,13 @@ class MultiplayerPlugin:
             "network_heartbeat",
             PLUGIN_NAME,
             self.handle_heartbeat
+        )
+        
+        # Add this subscription for squid exit
+        self.plugin_manager.subscribe_to_hook(
+            "network_squid_exit",
+            PLUGIN_NAME,
+            self.handle_squid_exit_message
         )
         
         # Subscribe to pre-update hook for processing network messages
@@ -1400,18 +1406,21 @@ class MultiplayerPlugin:
         """
         if not hasattr(self.tamagotchi_logic, 'user_interface'):
             return []
-            
+                
         ui = self.tamagotchi_logic.user_interface
         objects = []
         
         try:
             # Collect rocks, food, poop, decorations
             for item in ui.scene.items():
-                if hasattr(item, 'filename') and isinstance(item, ui.ResizablePixmapItem):
+                if hasattr(item, 'filename') and isinstance(item, QtWidgets.QGraphicsPixmapItem):
                     
                     # Generate a stable object ID based on position and filename
                     pos = item.pos()
                     obj_id = f"{item.filename}_{int(pos.x())}_{int(pos.y())}"
+                    
+                    # Get scale if available, default to 1.0
+                    scale = getattr(item, 'scale', lambda: 1.0)()
                     
                     objects.append({
                         'id': obj_id,
@@ -1420,11 +1429,16 @@ class MultiplayerPlugin:
                         'y': pos.y(),
                         'filename': item.filename,
                         'is_being_carried': getattr(item, 'is_being_carried', False),
-                        'scale': item.scale()
+                        'scale': scale
                     })
+                    
+                    if self.debug_mode:
+                        print(f"Adding object for sync: {obj_id}, {item.filename}, {pos.x()}, {pos.y()}")
         except Exception as e:
             if self.debug_mode:
                 print(f"Error getting object state: {e}")
+                import traceback
+                traceback.print_exc()
         
         return objects
     
@@ -1654,13 +1668,23 @@ class MultiplayerPlugin:
         remote_squid['view_cone'] = view_cone_item
     
     def process_remote_objects(self, remote_objects, source_node_id):
-        """Process objects from remote node and create/update their representation"""
+        """
+        Process objects from remote node and create/update their representation
+        
+        Args:
+            remote_objects: List of object data from remote node
+            source_node_id: ID of the source node
+        """
         # Skip processing if we don't have the UI
         if not hasattr(self.tamagotchi_logic, 'user_interface'):
+            print("No user interface available for remote objects")
             return
-            
+                
         ui = self.tamagotchi_logic.user_interface
         scene = ui.scene
+        
+        if self.debug_mode:
+            print(f"Processing {len(remote_objects)} remote objects from {source_node_id}")
         
         # Process each remote object
         for obj in remote_objects:
@@ -1669,35 +1693,51 @@ class MultiplayerPlugin:
             # Skip if no valid ID
             if not obj_id:
                 continue
-                
+                    
             # Skip if being carried (owner should handle)
             if obj.get('is_being_carried', False):
                 continue
-                
-            # Check if we already have this object
+                    
+            # Full ID includes source node to avoid collisions
             full_id = f"{source_node_id}_{obj_id}"
+            
+            if self.debug_mode:
+                print(f"Processing remote object: {full_id}")
+                print(f"Object data: {obj}")
             
             if full_id in self.remote_objects:
                 # Update existing object
                 remote_obj = self.remote_objects[full_id]
                 remote_obj['visual'].setPos(obj['x'], obj['y'])
                 remote_obj['last_update'] = time.time()
+                
+                if self.debug_mode:
+                    print(f"Updated existing remote object: {full_id}")
             else:
                 # Create new object if we can
                 try:
                     obj_type = obj.get('type', 'unknown')
                     filename = obj.get('filename')
                     
-                    # Only create if we have a valid filename
-                    if not filename or not os.path.exists(filename):
+                    # Verify filename exists
+                    if not filename:
+                        print(f"Error: No filename for remote object {full_id}")
                         continue
+                    
+                    # Check if file exists
+                    if not os.path.exists(filename):
+                        print(f"Error: File not found: {filename}")
+                        continue
+                    
+                    if self.debug_mode:
+                        print(f"Creating remote object from {filename}")
                     
                     # Create pixmap item with transparency
                     pixmap = QtGui.QPixmap(filename)
                     visual = QtWidgets.QGraphicsPixmapItem(pixmap)
                     visual.setPos(obj['x'], obj['y'])
                     visual.setScale(obj.get('scale', 1.0))
-                    visual.setOpacity(0.6)  # Make it semi-transparent to distinguish
+                    visual.setOpacity(0.7)  # Make it semi-transparent to distinguish
                     visual.setZValue(-1)  # Behind local objects
                     
                     # Add to scene
@@ -1713,16 +1753,19 @@ class MultiplayerPlugin:
                     }
                     
                     # Add a small label to indicate remote object
-                    if SHOW_REMOTE_LABELS:
-                        remote_label = scene.addText("Remote")
-                        remote_label.setDefaultTextColor(QtGui.QColor(150, 150, 150))
-                        remote_label.setPos(obj['x'], obj['y'] - 20)
-                        remote_label.setScale(0.6)
-                        self.remote_objects[full_id]['label'] = remote_label
-                        
-                except Exception as e:
+                    remote_label = scene.addText("Remote")
+                    remote_label.setDefaultTextColor(QtGui.QColor(150, 150, 150))
+                    remote_label.setPos(obj['x'], obj['y'] - 20)
+                    remote_label.setScale(0.6)
+                    self.remote_objects[full_id]['label'] = remote_label
+                    
                     if self.debug_mode:
-                        print(f"Error creating remote object: {e}")
+                        print(f"Successfully created remote object: {full_id}")
+                    
+                except Exception as e:
+                    print(f"Error creating remote object: {e}")
+                    import traceback
+                    traceback.print_exc()
     
     def handle_rock_throw(self, node, message, addr):
         """
