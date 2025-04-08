@@ -1491,7 +1491,7 @@ class TamagotchiLogic:
 
     def spawn_poop(self, x, y):
         if len(self.poop_items) < self.max_poop and self.squid is not None:
-            poop_item = QtWidgets.QGraphicsPixmapItem(self.squid.poop_images[0])
+            poop_item = ResizablePixmapItem(self.squid.poop_images[0], category='poop')
             poop_item.setPos(x - self.squid.poop_width // 2, y)
             self.user_interface.scene.addItem(poop_item)
             self.poop_items.append(poop_item)

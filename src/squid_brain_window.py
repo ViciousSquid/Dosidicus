@@ -600,7 +600,7 @@ class BrainWidget(QtWidgets.QWidget):
 
             # Determine line color based on weight sign
             color = QtGui.QColor(0, int(255 * abs(weight)), 0) if weight > 0 else QtGui.QColor(int(255 * abs(weight)), 0, 0)
-            
+
             # Determine line thickness and style based on weight magnitude
             if abs(weight) < 0.1:  # Very weak connection
                 pen_style = QtCore.Qt.DotLine
@@ -622,10 +622,10 @@ class BrainWidget(QtWidgets.QWidget):
             # Add weight text with scaling and visibility threshold
             if abs(weight) > 0.1:
                 midpoint = ((start[0] + end[0]) // 2, (start[1] + end[1]) // 2)
-                
+
                 # Increase the area for drawing the weights
-                text_area_width = 60
-                text_area_height = 20
+                text_area_width = 80
+                text_area_height = 22
 
                 # Adjust the font size based on the scale with a maximum font size
                 max_font_size = 12
@@ -634,9 +634,18 @@ class BrainWidget(QtWidgets.QWidget):
                 font.setPointSize(font_size)
                 painter.setFont(font)
 
-                painter.drawText(midpoint[0] - text_area_width // 2, midpoint[1] - text_area_height // 2, 
-                                text_area_width, text_area_height, 
+                # Draw black background rectangle
+                painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0)))
+                painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
+                painter.drawRect(midpoint[0] - text_area_width // 2, midpoint[1] - text_area_height // 2,
+                                text_area_width, text_area_height)
+
+                # Draw the weight text on top of the black background
+                painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255)))  # White text color
+                painter.drawText(midpoint[0] - text_area_width // 2, midpoint[1] - text_area_height // 2,
+                                text_area_width, text_area_height,
                                 QtCore.Qt.AlignCenter, f"{weight:.2f}")
+
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
@@ -912,7 +921,6 @@ class BrainWidget(QtWidgets.QWidget):
         self.neuron_positions = self.original_neuron_positions.copy()
         self.update()
 
-
 class StimulateDialog(QtWidgets.QDialog):
     def __init__(self, brain_widget, parent=None):
         super().__init__(parent)
@@ -1014,11 +1022,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.initialized = False
         self.brain_widget = BrainWidget(self.config, self.debug_mode)
         self.setWindowTitle("Brain Tool")
-        self.resize(1280, 800)
-        self.init_about_tab
-        self.init_heatmap_tab()
-        self.update_heatmap
-        #self.setup_menu_bar()
+        self.resize(1280, 768)
 
         # Initialize logging variables
         self.is_logging = False
@@ -1160,211 +1164,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         self.brain_widget.update()  # Trigger a redraw of the brain widget
 
-    def update_heatmap(self):
-        """Update the heatmap visualization based on selected type and color scheme"""
-        # Check if brain widget is initialized
-        if not self.brain_widget:
-            return
-        
-        # Clear existing scene
-        self.heatmap_scene.clear()
-        
-        # Get current heatmap type and color scheme
-        heatmap_type = self.heatmap_type_combo.currentText()
-        color_scheme = self.heatmap_color_combo.currentText()
-        
-        # Import time for neurogenesis impact calculations
-        import time
-        
-        # Determine data source and color mapping
-        if heatmap_type == "Neuron Activation":
-            data = self.brain_widget.state
-            min_val = min(v for v in data.values() if isinstance(v, (int, float)))
-            max_val = max(v for v in data.values() if isinstance(v, (int, float)))
-        elif heatmap_type == "Connection Weights":
-            data = self.brain_widget.weights
-            min_val = min(data.values())
-            max_val = max(data.values())
-        elif heatmap_type == "Network Connectivity":
-            # Count connections for each neuron
-            data = {}
-            for neuron in self.brain_widget.neuron_positions:
-                data[neuron] = sum(1 for conn in self.brain_widget.connections if neuron in conn)
-            min_val = min(data.values())
-            max_val = max(data.values())
-        elif heatmap_type == "Neurogenesis Impact":
-            # Use the age of newly created neurons as impact metric
-            data = {}
-            current_time = time.time()
-            for neuron in self.brain_widget.neuron_positions:
-                if neuron in self.brain_widget.neurogenesis_data.get('new_neurons', []):
-                    # Calculate time since neuron creation
-                    data[neuron] = current_time - self.brain_widget.neurogenesis_data.get('last_neuron_time', current_time)
-            
-            if not data:
-                # If no new neurons, show message
-                text_item = self.heatmap_scene.addText("No recent neurogenesis")
-                return
-            
-            min_val = min(data.values())
-            max_val = max(data.values())
-        
-        # Color mapping function
-        def get_color(value):
-            # Normalize value
-            norm_val = (value - min_val) / (max_val - min_val) if max_val != min_val else 0.5
-            
-            if color_scheme == "Blue-Red":
-                # Blue to Red transition
-                r = int(255 * norm_val)
-                b = int(255 * (1 - norm_val))
-                return QtGui.QColor(r, 0, b)
-            elif color_scheme == "Green-Red":
-                # Green to Red transition
-                r = int(255 * norm_val)
-                g = int(255 * (1 - norm_val))
-                return QtGui.QColor(r, g, 0)
-            elif color_scheme == "Rainbow":
-                # Full rainbow spectrum
-                h = norm_val * 240  # Hue from 0 (red) to 240 (blue)
-                return QtGui.QColor.fromHsv(int(h), 255, 255)
-            else:  # Grayscale
-                gray = int(255 * norm_val)
-                return QtGui.QColor(gray, gray, gray)
-        
-        # Draw heatmap rectangles
-        rect_size = 50
-        padding = 10
-        neuron_positions = self.brain_widget.neuron_positions
-        
-        # Find min and max positions to center the heatmap
-        min_x = min(pos[0] for pos in neuron_positions.values())
-        max_x = max(pos[0] for pos in neuron_positions.values())
-        min_y = min(pos[1] for pos in neuron_positions.values())
-        max_y = max(pos[1] for pos in neuron_positions.values())
-        
-        center_x = (min_x + max_x) / 2
-        center_y = (min_y + max_y) / 2
-        
-        for neuron, pos in neuron_positions.items():
-            # Get value for this neuron
-            value = data.get(neuron, 0)
-            
-            # Create rectangle item
-            rect = self.heatmap_scene.addRect(
-                pos[0] - rect_size/2, 
-                pos[1] - rect_size/2, 
-                rect_size, 
-                rect_size, 
-                QtGui.QPen(QtCore.Qt.NoPen), 
-                QtGui.QBrush(get_color(value))
-            )
-            
-            # Add neuron name text
-            text = self.heatmap_scene.addText(neuron)
-            text.setPos(pos[0] - rect_size/2, pos[1] + rect_size/2)
-            
-            # Add value text
-            value_text = self.heatmap_scene.addText(f"{value:.2f}")
-            value_text.setPos(pos[0] + rect_size/2, pos[1] + rect_size/2)
-        
-        # Fit the scene to its contents and update view
-        self.heatmap_scene.setSceneRect(self.heatmap_scene.itemsBoundingRect())
-        self.heatmap_view.fitInView(self.heatmap_scene.itemsBoundingRect(), QtCore.Qt.KeepAspectRatio)
-
-    def init_heatmap_tab(self):
-        """Initialize the heatmap visualization tab"""
-        # Create heatmap tab widget
-        self.heatmap_tab = QtWidgets.QWidget()
-        self.heatmap_tab_layout = QtWidgets.QVBoxLayout(self.heatmap_tab)
-        
-        # Add tab to tab widget if tabs exist
-        if hasattr(self, 'tabs'):
-            self.tabs.addTab(self.heatmap_tab, "Heatmap")
-        
-        # Create graphics scene and view for heatmap
-        self.heatmap_scene = QtWidgets.QGraphicsScene()
-        self.heatmap_view = QtWidgets.QGraphicsView(self.heatmap_scene)
-        self.heatmap_view.setRenderHint(QtGui.QPainter.Antialiasing)
-        self.heatmap_view.setMinimumHeight(400)
-        
-        # Add heatmap view to layout
-        self.heatmap_tab_layout.addWidget(self.heatmap_view)
-        
-        # Add controls
-        controls_layout = QtWidgets.QHBoxLayout()
-        
-        # Heatmap type selector
-        self.heatmap_type_combo = QtWidgets.QComboBox()
-        self.heatmap_type_combo.addItems([
-            "Neuron Activation", 
-            "Connection Weights", 
-            "Network Connectivity",
-            "Neurogenesis Impact"
-        ])
-        self.heatmap_type_combo.currentTextChanged.connect(self.update_heatmap)
-        controls_layout.addWidget(QtWidgets.QLabel("Heatmap Type:"))
-        controls_layout.addWidget(self.heatmap_type_combo)
-        
-        # Color scheme selector
-        self.heatmap_color_combo = QtWidgets.QComboBox()
-        self.heatmap_color_combo.addItems([
-            "Blue-Red", 
-            "Green-Red", 
-            "Rainbow", 
-            "Grayscale"
-        ])
-        self.heatmap_color_combo.currentTextChanged.connect(self.update_heatmap)
-        controls_layout.addWidget(QtWidgets.QLabel("Color Scheme:"))
-        controls_layout.addWidget(self.heatmap_color_combo)
-        
-        # Add controls to layout
-        self.heatmap_tab_layout.addLayout(controls_layout)
-        
-        # Initial update
-        self.update_heatmap()
-
-    def update_heatmap(self):
-        """Update the heatmap visualization"""
-        # Clear existing scene
-        self.heatmap_scene.clear()
-        
-        # Check if brain widget is initialized
-        if not hasattr(self, 'brain_widget'):
-            return
-        
-        # Get current heatmap type and color scheme
-        heatmap_type = self.heatmap_type_combo.currentText()
-        color_scheme = self.heatmap_color_combo.currentText()
-        
-        # Determine data source 
-        if heatmap_type == "Neuron Activation":
-            data = self.brain_widget.state
-        elif heatmap_type == "Connection Weights":
-            data = self.brain_widget.weights
-        elif heatmap_type == "Network Connectivity":
-            # Count connections for each neuron
-            data = {}
-            for neuron in self.brain_widget.neuron_positions:
-                data[neuron] = sum(1 for conn in self.brain_widget.connections if neuron in conn)
-        else:  # Neurogenesis Impact
-            data = {}
-            from time import time
-            current_time = time()
-            for neuron in self.brain_widget.neuron_positions:
-                # Use time since neuron creation as impact metric
-                data[neuron] = current_time - self.brain_widget.neurogenesis_data.get('last_neuron_time', current_time)
-        
-        # Add a basic placeholder visualization
-        for i, (neuron, value) in enumerate(data.items()):
-            # Create a text item to show neuron and value
-            text_item = self.heatmap_scene.addText(f"{neuron}: {value}")
-            text_item.setPos(0, i * 30)
-        
-        # Fit the scene to its contents
-        self.heatmap_scene.setSceneRect(self.heatmap_scene.itemsBoundingRect())
-        self.heatmap_view.fitInView(self.heatmap_scene.itemsBoundingRect(), QtCore.Qt.KeepAspectRatio)
-
     def init_tabs(self):
         # First create the tab widget
         self.tabs = QtWidgets.QTabWidget()
@@ -1375,10 +1174,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         base_font.setPointSize(self.base_font_size)
         self.tabs.setFont(base_font)
         
+        # Create brain widget after tabs are set up
         self.brain_widget = BrainWidget(self.config)
         self.tabs = QtWidgets.QTabWidget()
         self.layout.addWidget(self.tabs)
-        self.init_heatmap_tab()
 
         # Main tab
         self.main_tab = QtWidgets.QWidget()

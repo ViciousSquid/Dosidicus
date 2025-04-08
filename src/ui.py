@@ -36,44 +36,41 @@ class DecorationItem(QtWidgets.QLabel):
 
 
 class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
-    def __init__(self, pixmap=None, filename=None, parent=None):
-        # Initialize both parent classes properly
-        QtWidgets.QGraphicsPixmapItem.__init__(self, parent)  # Initialize QGraphicsPixmapItem first
-        QObject.__init__(self)  # Then initialize QObject
-        
-        # Set the _is_pause_message attribute explicitly to None for safer checking
+    def __init__(self, pixmap=None, filename=None, category=None, parent=None):
+        QtWidgets.QGraphicsPixmapItem.__init__(self, parent)
+        QObject.__init__(self)
+
         self._is_pause_message = None
-        
-        self.original_pixmap = pixmap  # Store original pixmap for resizing
+        self.original_pixmap = pixmap
+
         if pixmap:
-            # Set the pixmap directly on this item
             scaled_pixmap = pixmap.scaled(128, 128, 
-                                       QtCore.Qt.KeepAspectRatio, 
-                                       QtCore.Qt.SmoothTransformation)
+                                    QtCore.Qt.KeepAspectRatio, 
+                                    QtCore.Qt.SmoothTransformation)
             self.setPixmap(scaled_pixmap)
         
-        # Set all flags at once for better performance
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsMovable |
-                     QtWidgets.QGraphicsItem.ItemIsSelectable |
-                     QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
-        
+                    QtWidgets.QGraphicsItem.ItemIsSelectable |
+                    QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
+
         self.resize_handle = None
         self.filename = filename
         
-        # Initialize with default values first
         self.stat_multipliers = {'happiness': 1}
-        self.category = 'generic'
-        
-        # Then try to get decoration info if filename exists
+        self.category = category if category else 'generic'  # Use provided category or default to 'generic'
+
         if filename:
-            multipliers, category = self.get_decoration_info()
+            multipliers, detected_category = self.get_decoration_info()
             if multipliers:
                 self.stat_multipliers = multipliers
-            if category:
-                self.category = category
+            if 'rock' in filename.lower():
+                self.category = 'rock'
+            elif 'poop' in filename.lower():
+                self.category = 'poop'
+            else:
+                self.category = detected_category if detected_category else self.category
 
-        # Rock interaction attributes
-        self.can_be_picked_up = filename and 'rock' in filename.lower()
+        self.can_be_picked_up = filename and ('rock' in filename.lower() or 'poop' in filename.lower())
         self.is_being_carried = False
         self.original_scale = 1.0
 

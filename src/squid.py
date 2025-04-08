@@ -1523,11 +1523,11 @@ class Squid:
         
         return can_pick
 
-    def pick_up_rock(self, rock):
+    def pick_up_rock(self, item):
         """Delegate to interaction manager with random carry duration"""
         if not hasattr(self.tamagotchi_logic, 'rock_interaction'):
             return False
-        return self.tamagotchi_logic.rock_interaction.attach_rock_to_squid(rock)
+        return self.tamagotchi_logic.rock_interaction.attach_rock_to_squid(item)
 
     def throw_rock(self, direction):
         """Delegate to interaction manager"""
@@ -1580,7 +1580,6 @@ class Squid:
 
 
     def check_rock_interaction(self):
-        """Debug-enhanced rock interaction check"""
         if not hasattr(self, 'tamagotchi_logic') or self.tamagotchi_logic is None:
             return False
             
@@ -1589,41 +1588,33 @@ class Squid:
             
         config = self.tamagotchi_logic.config_manager.get_rock_config()
         
-        # Find nearby rocks
         decorations = self.tamagotchi_logic.get_nearby_decorations(
             self.squid_x, self.squid_y, 150)
-        rocks = [d for d in decorations if getattr(d, 'can_be_picked_up', False)]
+        interactables = [d for d in decorations if d.category in ['rock', 'poop']]
 
-        # Rock throwing
         if (self.carrying_rock 
                 and self.rock_throw_cooldown == 0 
                 and random.random() < config['throw_prob']):
-            #print("[DEBUG] Attempting to throw rock!")
             direction = random.choice(["left", "right"])
             if self.throw_rock(direction):
-                #print("[DEBUG] Rock thrown successfully!")
                 return
 
-        # Rock pickup
         if (not self.carrying_rock 
                 and self.rock_throw_cooldown == 0 
-                and rocks 
+                and interactables
                 and random.random() < config['pickup_prob']):
-            target_rock = random.choice(rocks)
-            #print(f"[DEBUG] Attempting to pick up: {getattr(target_rock, 'filename', 'unknown_rock')}")
+            target_item = random.choice(interactables)
             
-            if self.pick_up_rock(target_rock):
-                #print("[DEBUG] Pickup successful!")
-                # Debug memory entry
+            if self.pick_up_rock(target_item):
                 mem_details = {
-                    "rock": getattr(target_rock, 'filename', 'unknown'),
-                    "position": (target_rock.pos().x(), target_rock.pos().y()),
+                    "item": getattr(target_item, 'filename', f'unknown_{target_item.category}'),
+                    "position": (target_item.pos().x(), target_item.pos().y()),
                     "timestamp": datetime.now().isoformat()
                 }
                 self.memory_manager.add_short_term_memory(
-                    'interaction', 'rock_pickup', mem_details)
+                    'interaction', f'{target_item.category}_pickup', mem_details)
             else:
-                print("[DEBUG] Pickup failed")
+                print(f"[DEBUG] {target_item.category.capitalize()} pickup failed")
 
     def get_center(self):
         """Return the center position of the squid"""
