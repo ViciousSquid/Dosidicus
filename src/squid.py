@@ -757,10 +757,14 @@ class Squid:
     def search_for_food(self):
         visible_food = self.get_visible_food()
         if visible_food:
+            # Only set pursuing_food to True if food is actually visible
+            self.pursuing_food = True
             closest_food = min(visible_food, key=lambda f: self.distance_to(f[0], f[1]))
             self.status = "moving to food"
             self.move_towards(closest_food[0], closest_food[1])
         else:
+            # Reset pursuing_food when no food is visible
+            self.pursuing_food = False
             self.status = "searching for food"
             self.move_randomly()
 
@@ -770,14 +774,13 @@ class Squid:
         visible_food = []
         for food_item in self.tamagotchi_logic.food_items:
             food_x, food_y = food_item.pos().x(), food_item.pos().y()
+            # Only add food if it's in the view cone
             if self.is_in_vision_cone(food_x, food_y):
                 if getattr(food_item, 'is_sushi', False):
                     visible_food.insert(0, (food_x, food_y))  # Prioritize sushi
                 else:
-                    visible_food.append((food_x, food_y))  # Add cheese to the end of the list
+                    visible_food.append((food_x, food_y))  # Add cheese to the end
         return visible_food
-
-    # Add this to squid.py in the is_in_vision_cone method
 
     def is_in_vision_cone(self, x, y):
         """
@@ -1011,7 +1014,7 @@ class Squid:
                     effects=effects
                 )
         
-        # Continue with original behavior
+        self.is_eating = True
         # Apply all stat changes
         for attr, change in effects.items():
             setattr(self, attr, getattr(self, attr) + change)
@@ -1034,6 +1037,7 @@ class Squid:
         self.start_poop_timer()
         self.pursuing_food = False
         self.target_food = None
+        self.is_eating = False
 
         # Personality reactions (with enhanced messages)
         if self.personality == Personality.GREEDY:
