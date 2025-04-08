@@ -1271,7 +1271,6 @@ class Squid:
         self.tamagotchi_logic.show_message("Squid woke up!")
 
     def update_squid_image(self):
-        self.check_rock_hold_time()
         self.squid_item.setPixmap(self.current_image())
 
     def current_image(self):
