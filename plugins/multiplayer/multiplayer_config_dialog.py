@@ -106,6 +106,33 @@ class MultiplayerConfigDialog(QtWidgets.QDialog):
         
         layout.addWidget(visual_group)
         
+        # Add advanced settings group
+        advanced_group = QtWidgets.QGroupBox("Advanced Settings")
+        advanced_group.setFont(base_font)
+        advanced_layout = QtWidgets.QFormLayout(advanced_group)
+        
+        # Debug mode checkbox
+        self.debug_mode = QtWidgets.QCheckBox()
+        self.debug_mode.setFont(base_font)
+        self.debug_mode.setChecked(getattr(self.plugin, 'debug_mode', False))
+        advanced_layout.addRow("Debug Mode:", self.debug_mode)
+        
+        # Reconnect on failure checkbox
+        self.auto_reconnect = QtWidgets.QCheckBox()
+        self.auto_reconnect.setFont(base_font)
+        self.auto_reconnect.setChecked(getattr(self.plugin.network_node, 'auto_reconnect', True) 
+                                    if hasattr(self.plugin, 'network_node') else True)
+        advanced_layout.addRow("Auto Reconnect:", self.auto_reconnect)
+        
+        # Packet compression checkbox
+        self.use_compression = QtWidgets.QCheckBox()
+        self.use_compression.setFont(base_font)
+        self.use_compression.setChecked(getattr(self.plugin.network_node, 'use_compression', True)
+                                    if hasattr(self.plugin, 'network_node') else True)
+        advanced_layout.addRow("Use Compression:", self.use_compression)
+        
+        layout.addWidget(advanced_group)
+        
         # Connected peers list (larger font)
         peers_group = QtWidgets.QGroupBox("Connected Peers")
         peers_group.setFont(base_font)
@@ -174,6 +201,14 @@ class MultiplayerConfigDialog(QtWidgets.QDialog):
                     if 'visual' in squid_data and squid_data['visual']:
                         squid_data['visual'].setOpacity(self.plugin.REMOTE_SQUID_OPACITY)
             
+            # Update entity manager if available
+            if hasattr(self.plugin, 'entity_manager'):
+                self.plugin.entity_manager.update_settings(
+                    opacity=self.plugin.REMOTE_SQUID_OPACITY,
+                    show_labels=self.plugin.SHOW_REMOTE_LABELS,
+                    show_connections=self.plugin.SHOW_CONNECTION_LINES
+                )
+            
             # Settings that require restart
             restart_needed = False
             if (self.plugin.MULTICAST_GROUP != self.multicast_address.text() or
@@ -184,6 +219,20 @@ class MultiplayerConfigDialog(QtWidgets.QDialog):
                 self.plugin.MULTICAST_PORT = self.port.value()
                 self.plugin.SYNC_INTERVAL = self.sync_interval.value()
                 restart_needed = True
+            
+            # Save advanced settings
+            self.plugin.debug_mode = self.debug_mode.isChecked()
+            if hasattr(self.plugin, 'network_node'):
+                self.plugin.network_node.auto_reconnect = self.auto_reconnect.isChecked()
+                self.plugin.network_node.use_compression = self.use_compression.isChecked()
+                
+                # Update debug mode on related components
+                if hasattr(self.plugin, 'network_node'):
+                    self.plugin.network_node.debug_mode = self.plugin.debug_mode
+                if hasattr(self.plugin, 'entity_manager'):
+                    self.plugin.entity_manager.debug_mode = self.plugin.debug_mode
+                if hasattr(self.plugin, 'event_dispatcher'):
+                    self.plugin.event_dispatcher.debug_mode = self.plugin.debug_mode
             
             # Show message about restart if needed
             if restart_needed:

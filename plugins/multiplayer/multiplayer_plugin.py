@@ -28,7 +28,7 @@ from plugins.multiplayer.status_bar_component import StatusBarComponent
 
 # Plugin Metadata
 PLUGIN_NAME = "Multiplayer"
-PLUGIN_VERSION = "1.1.0"
+PLUGIN_VERSION = "0.1.0"
 PLUGIN_AUTHOR = "ViciousSquid"
 PLUGIN_DESCRIPTION = "Enables network synchronizationr for squids and objects (Experimental)"
 PLUGIN_REQUIRES = ["network_interface"]
@@ -43,6 +43,24 @@ REMOTE_SQUID_OPACITY = 0.8
 SHOW_REMOTE_LABELS = True 
 SHOW_CONNECTION_LINES = True
 MAX_PACKET_SIZE = 65507  # Max UDP packet size
+
+# Custom animatable graphics item
+class AnimatableGraphicsItem(QtCore.QObject, QtWidgets.QGraphicsPixmapItem):
+    """Graphics item that can be animated with QPropertyAnimation"""
+    
+    def __init__(self, pixmap=None, parent=None):
+        QtCore.QObject.__init__(self)
+        QtWidgets.QGraphicsPixmapItem.__init__(self, pixmap, parent)
+        self._scale = 1.0
+        
+    @QtCore.pyqtProperty(float)
+    def scale_factor(self):
+        return self._scale
+        
+    @scale_factor.setter
+    def scale_factor(self, value):
+        self._scale = value
+        self.setScale(value)
 
 class NetworkNode:
     def __init__(self, node_id=None):
@@ -356,7 +374,6 @@ class NetworkNode:
                 traceback.print_exc()
         
         return messages_processed
-    
 
 
 class MultiplayerPlugin:
@@ -688,7 +705,7 @@ class MultiplayerPlugin:
             squid_data = {
                 'x': entry_x,
                 'y': entry_y,
-                'direction': self._get_opposite_direction(exit_direction),
+                'direction': self.get_opposite_direction(exit_direction),
                 'color': color,
                 'status': 'ENTERING',
                 'view_cone_visible': exit_data.get('view_cone_visible', False)
@@ -789,8 +806,8 @@ class MultiplayerPlugin:
         # Save original scale
         original_scale = visual_item.scale()
         
-        # Create scale animation
-        scale_animation = QtCore.QPropertyAnimation(visual_item, b"scale")
+        # Create scale animation - using scale_factor for AnimatableGraphicsItem
+        scale_animation = QtCore.QPropertyAnimation(visual_item, b"scale_factor")
         scale_animation.setDuration(500)
         scale_animation.setStartValue(1.5)  # Start larger
         scale_animation.setEndValue(1.0)  # End at normal size
@@ -1654,7 +1671,9 @@ class MultiplayerPlugin:
                     direction = squid_data.get('direction', 'right')
                     squid_image = f"{direction}1.png"
                     squid_pixmap = QtGui.QPixmap(os.path.join("images", squid_image))
-                    remote_visual = QtWidgets.QGraphicsPixmapItem(squid_pixmap)
+                    
+                    # Create AnimatableGraphicsItem instead of QGraphicsPixmapItem
+                    remote_visual = AnimatableGraphicsItem(squid_pixmap)
                     remote_visual.setPos(squid_data['x'], squid_data['y'])
                     remote_visual.setZValue(5 if is_new_arrival else -1)  # New squids appear on top
                     remote_visual.setOpacity(0.7)
