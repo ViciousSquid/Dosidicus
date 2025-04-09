@@ -372,6 +372,9 @@ class Ui:
                 multiplayer_plugin_instance.register_menu_actions(self, multiplayer_menu)
             except Exception as e:
                 print(f"Error registering menu actions for multiplayer: {e}")
+        
+        print("    An egg is hatching... ")
+        print("        ")
 
     def create_multiplayer_menu(self):
         """Create multiplayer menu only if the plugin is loaded and enabled"""

@@ -749,7 +749,6 @@ class TamagotchiLogic:
             )
 
     def create_ink_cloud(self):
-        """Create an ink cloud with proper z-value and fade-out handling"""
         ink_cloud_pixmap = QtGui.QPixmap(os.path.join("images", "inkcloud.png"))
         ink_cloud_item = QtWidgets.QGraphicsPixmapItem(ink_cloud_pixmap)
         
@@ -757,10 +756,7 @@ class TamagotchiLogic:
         squid_center_x = self.squid.squid_x + self.squid.squid_width // 2
         squid_center_y = self.squid.squid_y + self.squid.squid_height // 2
         ink_cloud_item.setPos(squid_center_x - ink_cloud_pixmap.width() // 2, 
-                            squid_center_y - ink_cloud_pixmap.height() // 2)
-        
-        # Set a very high Z value to ensure it appears above other elements
-        ink_cloud_item.setZValue(1000)
+                              squid_center_y - ink_cloud_pixmap.height() // 2)
         
         self.user_interface.scene.addItem(ink_cloud_item)
         
@@ -768,38 +764,25 @@ class TamagotchiLogic:
         opacity_effect = QtWidgets.QGraphicsOpacityEffect()
         ink_cloud_item.setGraphicsEffect(opacity_effect)
 
-        # Store the animation as a property of the ink cloud item itself
-        # This prevents overwriting a single animation variable
-        fade_out_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
-        fade_out_animation.setDuration(10000)  # 10 seconds duration
-        fade_out_animation.setStartValue(1.0)
-        fade_out_animation.setEndValue(0.0)
-        fade_out_animation.setEasingCurve(QtCore.QEasingCurve.InQuad)
+        # Create a QPropertyAnimation for the opacity effect
+        self.fade_out_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
+        self.fade_out_animation.setDuration(10000)  # 10 seconds duration
+        self.fade_out_animation.setStartValue(1.0)
+        self.fade_out_animation.setEndValue(0.0)
+        self.fade_out_animation.setEasingCurve(QtCore.QEasingCurve.InQuad)
 
-        # Connect the finished signal to a lambda that includes the specific item
-        # This ensures the correct item is removed when its animation finishes
-        fade_out_animation.finished.connect(lambda item=ink_cloud_item: self.remove_ink_cloud(item))
-        
-        # Store the animation as an attribute of the ink cloud to prevent garbage collection
-        ink_cloud_item.fade_out_animation = fade_out_animation
+        # Connect the finished signal to remove the item
+        self.fade_out_animation.finished.connect(lambda: self.remove_ink_cloud(ink_cloud_item))
 
         # Start the animation
-        fade_out_animation.start()
+        self.fade_out_animation.start()
 
     def remove_ink_cloud(self, ink_cloud_item):
-        """Safely remove an ink cloud and clean up its resources"""
         if ink_cloud_item in self.user_interface.scene.items():
-            # Clean up the graphics effect
-            if ink_cloud_item.graphicsEffect():
-                ink_cloud_item.graphicsEffect().deleteLater()
-            ink_cloud_item.setGraphicsEffect(None)
-            
-            # Remove the item from the scene
             self.user_interface.scene.removeItem(ink_cloud_item)
-            
-            # Remove the animation reference to help garbage collection
-            if hasattr(ink_cloud_item, 'fade_out_animation'):
-                delattr(ink_cloud_item, 'fade_out_animation')
+        if ink_cloud_item.graphicsEffect():
+            ink_cloud_item.graphicsEffect().deleteLater()
+        ink_cloud_item.setGraphicsEffect(None)
 
     def end_startle(self):
         if self.mental_states_enabled:
@@ -1094,7 +1077,7 @@ class TamagotchiLogic:
             self.show_message("Squid is not sick. Medicine not needed.")
 
     def display_needle_image(self):
-        needle_pixmap = QtGui.QPixmap(os.path.join("images", "medicine.png"))
+        needle_pixmap = QtGui.QPixmap(os.path.join("images", "needle.jpg"))
         self.needle_item = QtWidgets.QGraphicsPixmapItem(needle_pixmap)
         self.needle_item.setPos(self.user_interface.window_width // 2 - needle_pixmap.width() // 2,
                                 self.user_interface.window_height // 2 - needle_pixmap.height() // 2)
