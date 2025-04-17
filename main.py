@@ -13,7 +13,7 @@ from src.tamagotchi_logic import TamagotchiLogic
 from src.squid import Squid, Personality
 from src.splash_screen import SplashScreen
 from src.save_manager import SaveManager
-from src.squid_brain_window import SquidBrainWindow
+from src.brain_tool import SquidBrainWindow
 from src.learning import LearningConfig
 from src.plugin_manager import PluginManager
 
@@ -88,6 +88,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.squid.tamagotchi_logic = self.tamagotchi_logic
             self.user_interface.tamagotchi_logic = self.tamagotchi_logic
             self.brain_window.tamagotchi_logic = self.tamagotchi_logic
+            # Add this line to propagate the reference to all tabs
+            if hasattr(self.brain_window, 'set_tamagotchi_logic'):
+                self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
             
             # Now load from save data
             self.create_squid_from_save_data()
@@ -101,6 +104,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.squid.tamagotchi_logic = self.tamagotchi_logic
             self.user_interface.tamagotchi_logic = self.tamagotchi_logic
             self.brain_window.tamagotchi_logic = self.tamagotchi_logic
+            # Add this line to propagate the reference to all tabs
+            if hasattr(self.brain_window, 'set_tamagotchi_logic'):
+                self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
 
         # Now that tamagotchi_logic is created, set it in plugin_manager
         self.plugin_manager.tamagotchi_logic = self.tamagotchi_logic
@@ -185,6 +191,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.squid.tamagotchi_logic = self.tamagotchi_logic
         self.user_interface.tamagotchi_logic = self.tamagotchi_logic
         self.brain_window.tamagotchi_logic = self.tamagotchi_logic
+        # Add this line to propagate the reference to all tabs
+        if hasattr(self.brain_window, 'set_tamagotchi_logic'):
+            self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
+        
         self.brain_window.update_personality_display(self.squid.personality)
         self.tamagotchi_logic.set_simulation_speed(0)
         self.show_splash_screen()
