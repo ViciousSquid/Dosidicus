@@ -7,7 +7,7 @@ When creating a plugin for Dosidicus, you should follow this structure:
 
 ```
 plugins/
-└── your_mod_name/
+└── plugin_name/
     ├── main.py
     └── assets/
         └── (any images or other assets)
