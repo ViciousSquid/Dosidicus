@@ -55,3 +55,56 @@ class NetworkUtilities:
     def is_node_active(last_seen_time: float, threshold: float = 10.0) -> bool:
         """Check if a node is considered active based on last seen time"""
         return time.time() - last_seen_time < threshold
+    
+import struct
+
+class BinaryProtocol:
+    """Efficient binary protocol for network messages"""
+    
+    # Message type constants
+    MSG_HEARTBEAT = 1
+    MSG_SQUID_MOVE = 2
+    MSG_OBJECT_SYNC = 3
+    MSG_PLAYER_JOIN = 4
+    
+    @staticmethod
+    def encode_squid_move(node_id, x, y, direction, timestamp):
+        """Encode squid movement into compact binary format"""
+        # Convert direction to numeric value
+        dir_map = {'right': 0, 'left': 1, 'up': 2, 'down': 3}
+        dir_value = dir_map.get(direction, 0)
+        
+        # Pack into binary: message type(1) + node_id(16) + x(4) + y(4) + direction(1) + timestamp(8)
+        return struct.pack('!B16sffBd', 
+                          BinaryProtocol.MSG_SQUID_MOVE,
+                          node_id.encode()[:16].ljust(16, b'\0'),
+                          float(x), 
+                          float(y),
+                          dir_value,
+                          timestamp)
+    
+    @staticmethod
+    def decode_message(binary_data):
+        """Decode binary message into appropriate type"""
+        if not binary_data or len(binary_data) < 2:
+            return None
+            
+        msg_type = struct.unpack('!B', binary_data[0:1])[0]
+        
+        if msg_type == BinaryProtocol.MSG_SQUID_MOVE:
+            # Unpack squid move message
+            msg_type, node_id, x, y, dir_value, timestamp = struct.unpack('!B16sffBd', binary_data)
+            
+            # Convert back to string and direction
+            node_id = node_id.rstrip(b'\0').decode()
+            dir_map = {0: 'right', 1: 'left', 2: 'up', 3: 'down'}
+            direction = dir_map.get(dir_value, 'right')
+            
+            return {
+                'type': 'squid_move',
+                'node_id': node_id,
+                'x': x,
+                'y': y,
+                'direction': direction,
+                'timestamp': timestamp
+            }

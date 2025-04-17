@@ -21,7 +21,50 @@ class AnimatableGraphicsItem(QtCore.QObject, QtWidgets.QGraphicsPixmapItem):
         self._scale = value
         self.setScale(value)
 
+class ObjectPool:
+    """Pool for reusing graphical objects to reduce allocation overhead"""
+    
+    def __init__(self, factory_func, initial_size=10):
+        """Initialize the pool
+        
+        Args:
+            factory_func: Function to create new objects
+            initial_size: Initial pool size
+        """
+        self.factory = factory_func
+        self.available = []
+        self.in_use = set()
+        
+        # Pre-populate pool
+        for _ in range(initial_size):
+            self.available.append(self.factory())
+    
+    def acquire(self):
+        """Get an object from the pool or create a new one"""
+        if self.available:
+            obj = self.available.pop()
+        else:
+            obj = self.factory()
+            
+        self.in_use.add(obj)
+        return obj
+    
+    def release(self, obj):
+        """Return an object to the pool"""
+        if obj in self.in_use:
+            self.in_use.remove(obj)
+            self.available.append(obj)
+    
+    def clear(self):
+        """Clear all objects"""
+        self.available.clear()
+        self.in_use.clear()
 
+# In RemoteEntityManager.__init__
+self.text_pool = ObjectPool(
+    lambda: self.scene.addText(""), 
+    initial_size=20
+)
 
 
 class RemoteEntityManager:
@@ -85,6 +128,7 @@ class RemoteEntityManager:
                 if 'view_cone' in remote_squid and remote_squid['view_cone'] in self.scene.items():
                     self.scene.removeItem(remote_squid['view_cone'])
                     remote_squid['view_cone'] = None
+                    
             
             # Update status text
             if 'status_text' in remote_squid:

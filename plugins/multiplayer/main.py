@@ -23,20 +23,19 @@ import math
 from typing import Dict, List, Any, Tuple
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from plugins.multiplayer.multiplayer_config_dialog import MultiplayerConfigDialog
-from plugins.multiplayer.status_bar_component import StatusBarComponent
+from .multiplayer_config_dialog import MultiplayerConfigDialog
 
 # Plugin Metadata
 PLUGIN_NAME = "Multiplayer"
-PLUGIN_VERSION = "1.1.0"
+PLUGIN_VERSION = "1.1.3"
 PLUGIN_AUTHOR = "ViciousSquid"
-PLUGIN_DESCRIPTION = "Enables network synchronizationr for squids and objects (Experimental)"
+PLUGIN_DESCRIPTION = "Enables network sync for squids and objects (Experimental)"
 PLUGIN_REQUIRES = ["network_interface"]
 
 # Network Constants 
 MULTICAST_GROUP = '224.3.29.71'  
 MULTICAST_PORT = 10000
-SYNC_INTERVAL = 0.5  # Seconds between sync broadcasts
+SYNC_INTERVAL = 1.0  # Seconds between sync broadcasts
 
 # Visual settings
 REMOTE_SQUID_OPACITY = 0.8
@@ -183,6 +182,40 @@ class NetworkNode:
         except (ImportError, Exception) as e:
             print(f"[Network] Error getting local IP: {e}")
             return '127.0.0.1'
+        
+    def send_message_batch(self, messages):
+        """Send multiple messages in a single packet
+        
+        Args:
+            messages: List of (message_type, payload) tuples
+        """
+        if not self.is_connected:
+            if self.auto_reconnect:
+                self.try_reconnect()
+            if not self.is_connected or not self.socket:
+                return False
+        
+        batch = {
+            'node_id': self.node_id,
+            'timestamp': time.time(),
+            'batch': True,
+            'messages': [
+                {
+                    'type': msg_type,
+                    'payload': payload
+                } for msg_type, payload in messages
+            ]
+        }
+        
+        # Compress and send
+        try:
+            compressed_msg = self.utils.compress_message(batch) if self.utils else json.dumps(batch).encode('utf-8')
+            self.socket.sendto(compressed_msg, (MULTICAST_GROUP, MULTICAST_PORT))
+            return True
+        except Exception as e:
+            print(f"Error sending batch: {e}")
+            self.is_connected = False
+            return False
     
     def send_message(self, message_type: str, payload: Dict[str, Any]):
         """
@@ -308,17 +341,16 @@ class NetworkNode:
         return messages
     
     def process_messages(self, plugin_manager):
-        """
-        Process received messages and trigger appropriate hooks
-        
-        Args:
-            plugin_manager: Plugin manager to trigger hooks
-        """
+        """Process received messages with prioritization"""
         messages_processed = 0
         
         try:
-            # Process up to 10 messages at a time to prevent slowdowns
-            for _ in range(10):
+            # Sort messages by priority
+            priority_messages = []
+            normal_messages = []
+            
+            # Process up to 20 messages at a time
+            for _ in range(20):
                 if self.incoming_queue.empty():
                     break
                     
@@ -328,23 +360,21 @@ class NetworkNode:
                 if message['node_id'] == self.node_id:
                     continue
                     
-                # Determine hook name based on message type
+                # Prioritize certain message types
                 message_type = message.get('type', 'unknown')
-                hook_name = f"network_{message_type}"
+                if message_type in ['squid_move', 'squid_exit', 'player_join', 'player_leave']:
+                    priority_messages.append((message, addr))
+                else:
+                    normal_messages.append((message, addr))
+            
+            # Process priority messages first
+            for message, addr in priority_messages:
+                self._process_single_message(message, addr, plugin_manager)
+                messages_processed += 1
                 
-                # Debug output if needed
-                if self.debug_mode:
-                    print(f"Triggering hook: {hook_name} for message: {message_type}")
-                    
-                # Trigger the appropriate hook with the message
-                if hasattr(plugin_manager, 'trigger_hook'):
-                    plugin_manager.trigger_hook(
-                        hook_name,
-                        node=self,
-                        message=message,
-                        addr=addr
-                    )
-                    
+            # Then process normal messages
+            for message, addr in normal_messages:
+                self._process_single_message(message, addr, plugin_manager)
                 messages_processed += 1
                     
         except Exception as e:
@@ -356,11 +386,30 @@ class NetworkNode:
                 traceback.print_exc()
         
         return messages_processed
+
+    def _process_single_message(self, message, addr, plugin_manager):
+        """Process a single message"""
+        # Determine hook name based on message type
+        message_type = message.get('type', 'unknown')
+        hook_name = f"network_{message_type}"
+        
+        # Trigger the appropriate hook with the message
+        if hasattr(plugin_manager, 'trigger_hook'):
+            plugin_manager.trigger_hook(
+                hook_name,
+                node=self,
+                message=message,
+                addr=addr
+            )
     
 
 
 class MultiplayerPlugin:
     def __init__(self):
+        
+        self.network_lock = threading.RLock()
+        self.remote_squids_lock = threading.RLock()
+        self.remote_objects_lock = threading.RLock()
         self.network_node = None
         self.plugin_manager = None
         self.tamagotchi_logic = None
@@ -373,6 +422,39 @@ class MultiplayerPlugin:
         self.status_bar = None
         self.connection_lines = {}
         self.is_setup = False
+        self.incoming_queue = queue.Queue()
+    
+        # Module Constants
+        self.MULTICAST_GROUP = MULTICAST_GROUP
+        self.MULTICAST_PORT = MULTICAST_PORT
+        self.SYNC_INTERVAL = SYNC_INTERVAL
+        self.REMOTE_SQUID_OPACITY = REMOTE_SQUID_OPACITY
+        self.SHOW_REMOTE_LABELS = SHOW_REMOTE_LABELS
+        self.SHOW_CONNECTION_LINES = SHOW_CONNECTION_LINES
+
+    def debug_autopilot_status(self):
+        """Debug the status of all autopilot controllers"""
+        if not hasattr(self, 'remote_squid_controllers'):
+            print("No remote squid controllers exist")
+            return
+        
+        print(f"\n=== AUTOPILOT DEBUG ({len(self.remote_squid_controllers)} controllers) ===")
+        
+        for node_id, controller in self.remote_squid_controllers.items():
+            print(f"Squid {node_id[-4:]}:")
+            print(f"  State: {controller.state}")
+            print(f"  Position: ({controller.squid_data['x']:.1f}, {controller.squid_data['y']:.1f})")
+            print(f"  Direction: {controller.squid_data['direction']}")
+            print(f"  Home direction: {controller.home_direction}")
+            print(f"  Time away: {controller.time_away:.1f}s / {controller.max_time_away:.1f}s")
+            print(f"  Activities: {controller.food_eaten_count} food, {controller.rock_interaction_count} rocks")
+            
+            if controller.target_object:
+                print(f"  Has target: Yes ({type(controller.target_object).__name__})")
+            else:
+                print(f"  Has target: No")
+        
+        print("=====================================\n")
 
     def enable(self):
         """Enable the multiplayer plugin"""
@@ -631,9 +713,12 @@ class MultiplayerPlugin:
         return opposite_directions.get(direction, 'right')  # Default to right if unknown
     
     def handle_squid_exit_message(self, node, message, addr):
-        """Handle squid boundary exit with validation and animation"""
+        """Handle squid boundary exit with improved transition and autopilot"""
         try:
-            # Validate message if packet validator is available
+            # Import RemoteSquidController
+            from plugins.multiplayer.squid_multiplayer_autopilot import RemoteSquidController
+            
+            # Validate message
             try:
                 from plugins.multiplayer.packet_validator import PacketValidator
                 valid, error = PacketValidator.validate_message(message)
@@ -641,7 +726,7 @@ class MultiplayerPlugin:
                     print(f"Invalid squid_exit message: {error}")
                     return False
             except ImportError:
-                # If validator not available, do basic checks
+                # Basic validation if validator unavailable
                 if 'payload' not in message:
                     print("Missing payload in squid_exit message")
                     return False
@@ -663,6 +748,9 @@ class MultiplayerPlugin:
             position = exit_data['position']
             color = exit_data['color']
             
+            # Get state data if available
+            state_data = exit_data.get('state', {})
+            
             # Determine entry point dynamically
             window_width = exit_data.get('window_width', 1280)
             window_height = exit_data.get('window_height', 900)
@@ -671,15 +759,19 @@ class MultiplayerPlugin:
             if exit_direction == 'left':
                 entry_x = window_width - 253  # Right side of window
                 entry_y = position.get('y', window_height // 2)
+                entry_direction = 'right'  # Coming from the right
             elif exit_direction == 'right':
-                entry_x = 0  # Left side of window
+                entry_x = 100  # Left side of window
                 entry_y = position.get('y', window_height // 2)
+                entry_direction = 'left'  # Coming from the left
             elif exit_direction == 'up':
                 entry_x = window_width // 2
                 entry_y = window_height - 253  # Bottom of window
+                entry_direction = 'down'  # Coming from the bottom
             elif exit_direction == 'down':
                 entry_x = window_width // 2
-                entry_y = 0  # Top of window
+                entry_y = 100  # Top of window
+                entry_direction = 'up'  # Coming from the top
             else:
                 print(f"Unknown exit direction: {exit_direction}")
                 return False
@@ -688,14 +780,22 @@ class MultiplayerPlugin:
             squid_data = {
                 'x': entry_x,
                 'y': entry_y,
-                'direction': self._get_opposite_direction(exit_direction),
+                'direction': entry_direction,
                 'color': color,
                 'status': 'ENTERING',
-                'view_cone_visible': exit_data.get('view_cone_visible', False)
+                'view_cone_visible': exit_data.get('view_cone_visible', False),
+                'carrying_rock': state_data.get('carrying_rock', False),
+                'hunger': state_data.get('hunger', 50),
+                'happiness': state_data.get('happiness', 50),
+                'is_sleeping': state_data.get('is_sleeping', False),
+                'entry_direction': entry_direction,  # Store entry direction for return trip
+                'entry_time': time.time(),
+                'window_width': self.tamagotchi_logic.user_interface.window_width,
+                'window_height': self.tamagotchi_logic.user_interface.window_height,
+                'home_direction': self.get_opposite_direction(exit_direction)
             }
             
-            # Create or update remote squid representation 
-            # Try to use entity manager if available
+            # Create or update remote squid representation
             if hasattr(self, 'entity_manager'):
                 result = self.entity_manager.update_remote_squid(
                     source_node_id, 
@@ -708,6 +808,22 @@ class MultiplayerPlugin:
                     squid_data, 
                     is_new_arrival=True
                 )
+            
+            # Store controller creation parameters to be handled in main thread
+            if not hasattr(self, 'pending_controller_creations'):
+                self.pending_controller_creations = []
+                
+            # Queue controller creation for main thread
+            self.pending_controller_creations.append({
+                'node_id': source_node_id,
+                'squid_data': squid_data,
+                'timestamp': time.time()
+            })
+            
+            # Ensure the controller creation timer is running
+            if not hasattr(self, 'controller_creation_timer') or not self.controller_creation_timer.isActive():
+                # Create the timer in the main thread
+                QtCore.QTimer.singleShot(0, self._setup_controller_creation_timer)
             
             # Broadcast acknowledgment
             if self.network_node and self.network_node.is_connected:
@@ -733,18 +849,6 @@ class MultiplayerPlugin:
                     f"🌐 Remote squid {source_node_id[-4:]} crossed from {exit_direction}"
                 )
             
-            # Dispatch event if event dispatcher is available
-            if hasattr(self, 'event_dispatcher') and self.event_dispatcher:
-                self.event_dispatcher.dispatch_event(
-                    'squid_arrived', 
-                    source_node_id, 
-                    {
-                        'direction': exit_direction,
-                        'entry_point': {'x': entry_x, 'y': entry_y},
-                        'color': color
-                    }
-                )
-            
             return result
         
         except Exception as e:
@@ -752,6 +856,67 @@ class MultiplayerPlugin:
             import traceback
             traceback.print_exc()
             return False
+        
+    def _setup_controller_creation_timer(self):
+        """Set up a timer to process pending controller creations in the main thread"""
+        self.controller_creation_timer = QtCore.QTimer()
+        self.controller_creation_timer.timeout.connect(self._process_pending_controller_creations)
+        self.controller_creation_timer.start(100)  # Check every 100ms
+        
+        if self.debug_mode:
+            print(f"Started controller creation timer")
+
+    
+    def _process_pending_controller_creations(self):
+        """Process any pending controller creations in the main thread"""
+        if not hasattr(self, 'pending_controller_creations') or not self.pending_controller_creations:
+            return
+            
+        # Process all pending creations
+        from plugins.multiplayer.squid_multiplayer_autopilot import RemoteSquidController
+        
+        for creation_data in list(self.pending_controller_creations):
+            try:
+                node_id = creation_data['node_id']
+                squid_data = creation_data['squid_data']
+                
+                # Initialize remote_squid_controllers if needed
+                if not hasattr(self, 'remote_squid_controllers'):
+                    self.remote_squid_controllers = {}
+                    
+                # Create controller
+                if self.debug_mode:
+                    print(f"Creating autopilot controller for squid {node_id[-4:]}")
+                    
+                self.remote_squid_controllers[node_id] = RemoteSquidController(
+                    squid_data=squid_data,
+                    scene=self.tamagotchi_logic.user_interface.scene,
+                    debug_mode=self.debug_mode
+                )
+                
+                if self.debug_mode:
+                    print(f"Controller created successfully in state: {self.remote_squid_controllers[node_id].state}")
+                    
+                # Remove from pending list
+                self.pending_controller_creations.remove(creation_data)
+                
+            except Exception as e:
+                print(f"Error creating remote squid controller: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                # Remove failed creation to avoid retrying endlessly
+                self.pending_controller_creations.remove(creation_data)
+        
+        # Start controller update timer if needed
+        if self.remote_squid_controllers and (not hasattr(self, 'controller_update_timer') or not self.controller_update_timer.isActive()):
+            self.controller_update_timer = QtCore.QTimer()
+            self.controller_update_timer.timeout.connect(self.update_remote_controllers)
+            self.controller_update_timer.start(50)  # 50ms update interval (20 FPS)
+            
+            if self.debug_mode:
+                print(f"Started controller update timer at 20 FPS")
+
 
     def _get_opposite_direction(self, direction):
         """
@@ -782,38 +947,219 @@ class MultiplayerPlugin:
         elif direction == 'down':
             return window_width // 2  # Enter from middle top
         return window_width // 2
+    
+    def update_remote_controllers(self):
+        """Update all remote squid controllers"""
+        if not hasattr(self, 'remote_squid_controllers'):
+            return
+            
+        # Calculate delta time
+        current_time = time.time()
+        delta_time = current_time - getattr(self, 'last_controller_update', current_time)
+        self.last_controller_update = current_time
+        
+        # Update each controller
+        for node_id, controller in list(self.remote_squid_controllers.items()):
+            try:
+                # Update controller AI
+                controller.update(delta_time)
+                
+                # Get updated squid data
+                squid_data = controller.squid_data
+                
+                # Update visual representation safely
+                if node_id in self.remote_squids:
+                    remote_squid = self.remote_squids[node_id]
+                    
+                    # Update position
+                    if 'visual' in remote_squid:
+                        remote_squid['visual'].setPos(squid_data['x'], squid_data['y'])
+                    
+                    # Update direction image
+                    if 'visual' in remote_squid and 'direction' in squid_data:
+                        self.update_remote_squid_image(remote_squid, squid_data['direction'])
+                    
+                    # Update status text
+                    if 'status_text' in remote_squid:
+                        status = squid_data.get('status', 'visiting')
+                        remote_squid['status_text'].setPlainText(status)
+                        remote_squid['status_text'].setPos(
+                            squid_data['x'],
+                            squid_data['y'] - 30
+                        )
+                else:
+                    # Remote squid visual disappeared, cleanup controller
+                    if self.debug_mode:
+                        print(f"Remote squid {node_id} visual missing, removing controller")
+                    del self.remote_squid_controllers[node_id]
+                    
+            except Exception as e:
+                print(f"Error updating controller for {node_id}: {e}")
+
+
+    def calculate_entry_position(self, direction):
+        """Calculate entry position for a returning squid"""
+        # Get window dimensions
+        width = self.tamagotchi_logic.user_interface.window_width
+        height = self.tamagotchi_logic.user_interface.window_height
+        
+        # Default to center if direction unknown
+        if not direction:
+            return (width // 2, height // 2)
+        
+        # Calculate based on direction
+        if direction == 'left':
+            return (100, height // 2)
+        elif direction == 'right':
+            return (width - 200, height // 2)
+        elif direction == 'up':
+            return (width // 2, 100)
+        elif direction == 'down':
+            return (width // 2, height - 200)
+        
+        # Default fallback
+        return (width // 2, height // 2)
+    
+    def apply_remote_experiences(self, squid, activity_summary):
+        """Apply the effects of remote activities to the returning squid"""
+        # Extract activity data
+        food_eaten = activity_summary.get('food_eaten', 0)
+        rock_interactions = activity_summary.get('rock_interactions', 0)
+        distance_traveled = activity_summary.get('distance_traveled', 0)
+        time_away = activity_summary.get('time_away', 0)
+        
+        # Apply hunger reduction from food
+        if food_eaten > 0:
+            hunger_reduction = min(15 * food_eaten, 60)  # Cap at 60 points
+            squid.hunger = max(0, squid.hunger - hunger_reduction)
+            
+            # Create memory
+            squid.memory_manager.add_short_term_memory(
+                'travel', 'remote_feeding',
+                f"Ate {food_eaten} food items while exploring another tank"
+            )
+        
+        # Apply happiness/satisfaction from rock interactions
+        if rock_interactions > 0:
+            happiness_boost = min(5 * rock_interactions, 30)  # Cap at 30 points
+            satisfaction_boost = min(10 * rock_interactions, 40)  # Cap at 40 points
+            
+            squid.happiness = min(100, squid.happiness + happiness_boost)
+            squid.satisfaction = min(100, squid.satisfaction + satisfaction_boost)
+            
+            # Create memory
+            squid.memory_manager.add_short_term_memory(
+                'travel', 'remote_rocks',
+                f"Played with {rock_interactions} rocks in another tank"
+            )
+        
+        # Apply tiredness from distance traveled
+        if distance_traveled > 0:
+            # Convert to approximate pixels
+            tiredness = distance_traveled / 1000  # One point per 1000 pixels
+            squid.sleepiness = min(100, squid.sleepiness + tiredness)
+        
+        # Apply anxiety reduction from successful journey
+        anxiety_reduction = min(20, time_away / 60 * 10)  # 10 points per minute, max 20
+        squid.anxiety = max(0, squid.anxiety - anxiety_reduction)
+        
+        # Apply curiosity reduction (satisfied from exploration)
+        curiosity_reduction = min(30, time_away / 30 * 10)  # 10 points per 30 seconds, max 30
+        squid.curiosity = max(0, squid.curiosity - curiosity_reduction)
+        
+        # Create overall journey memory with higher importance
+        minutes = int(time_away / 60)
+        seconds = int(time_away % 60)
+        
+        journey_memory = (
+            f"Completed a journey to another tank lasting {minutes}m {seconds}s. "
+            f"Ate {food_eaten} food items, interacted with {rock_interactions} rocks, "
+            f"and traveled approximately {int(distance_traveled)} pixels."
+        )
+        
+        squid.memory_manager.add_short_term_memory(
+            'travel', 'completed_journey',
+            journey_memory,
+            importance=8  # Higher importance for memorable journey
+        )
+
+
+    def handle_squid_return(self, node, message, addr):
+        """Handle a squid returning from another instance"""
+        try:
+            # Extract data
+            payload = message.get('payload', {})
+            node_id = payload.get('node_id')
+            activity_summary = payload.get('activity_summary', {})
+            return_direction = payload.get('return_direction')
+            
+            # Verify this is actually our squid
+            if node_id != getattr(self.tamagotchi_logic.network_node, 'node_id', None):
+                if self.debug_mode:
+                    print(f"Received return for node {node_id}, but we are {getattr(self.tamagotchi_logic.network_node, 'node_id', 'unknown')}")
+                return
+                
+            # Calculate entry position based on return direction
+            entry_pos = self.calculate_entry_position(return_direction)
+            
+            # Fade in the local squid
+            squid = self.tamagotchi_logic.squid
+            
+            # Set position
+            squid.squid_x = entry_pos[0]
+            squid.squid_y = entry_pos[1]
+            squid.squid_item.setPos(squid.squid_x, squid.squid_y)
+            
+            # Create fade in animation
+            fade_in = QtCore.QPropertyAnimation(squid.squid_item, b"opacity")
+            fade_in.setDuration(1000)
+            fade_in.setStartValue(0.0)
+            fade_in.setEndValue(1.0)
+            fade_in.start()
+            
+            # Update squid properties based on activities
+            self.apply_remote_experiences(squid, activity_summary)
+            
+            # Show welcome back message
+            if hasattr(self.tamagotchi_logic, 'show_message'):
+                time_away = activity_summary.get('time_away', 0)
+                minutes_away = int(time_away / 60)
+                seconds_away = int(time_away % 60)
+                
+                self.tamagotchi_logic.show_message(
+                    f"Your squid returned after {minutes_away}m {seconds_away}s in another tank!"
+                )
+                
+            # Re-enable movement
+            squid.can_move = True
+            squid.is_transitioning = False
+            
+        except Exception as e:
+            print(f"Error handling squid return: {e}")
+            import traceback
+            traceback.print_exc()
 
 
     def _create_arrival_animation(self, visual_item):
-        """Create attention-grabbing animation for newly arrived squids"""
-        # Save original scale
-        original_scale = visual_item.scale()
-        
-        # Create scale animation
-        scale_animation = QtCore.QPropertyAnimation(visual_item, b"scale")
-        scale_animation.setDuration(500)
-        scale_animation.setStartValue(1.5)  # Start larger
-        scale_animation.setEndValue(1.0)  # End at normal size
-        scale_animation.setEasingCurve(QtCore.QEasingCurve.OutBounce)
-        
-        # Create opacity animation
-        opacity_effect = QtWidgets.QGraphicsOpacityEffect()
-        visual_item.setGraphicsEffect(opacity_effect)
-        opacity_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
-        opacity_animation.setDuration(500)
-        opacity_animation.setStartValue(0.5)
-        opacity_animation.setEndValue(1.0)
-        
-        # Create animation group
-        animation_group = QtCore.QParallelAnimationGroup()
-        animation_group.addAnimation(scale_animation)
-        animation_group.addAnimation(opacity_animation)
-        
-        # Start animation
-        animation_group.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
-        
-        # Reset to normal after a delay
-        QtCore.QTimer.singleShot(5000, lambda: self._reset_remote_squid_style(visual_item))
+        """Create an attention-grabbing animation for newly arrived squids"""
+        try:
+            # Use a simple opacity effect which is safer across threads
+            opacity_effect = QtWidgets.QGraphicsOpacityEffect()
+            visual_item.setGraphicsEffect(opacity_effect)
+            
+            # Create fade in effect
+            fade_in = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
+            fade_in.setDuration(1000)
+            fade_in.setStartValue(0.3)
+            fade_in.setEndValue(self.REMOTE_SQUID_OPACITY)
+            fade_in.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
+            
+            # Schedule reset using a single-shot timer (thread-safe)
+            QtCore.QTimer.singleShot(5000, lambda: self._reset_remote_squid_style(visual_item))
+        except Exception as e:
+            print(f"Animation error: {e}")
+            # Fallback - just set the opacity directly
+            visual_item.setOpacity(0.7)
 
     def _reset_remote_squid_style(self, visual_item):
         """Reset visual style of remote squid after entry period"""
@@ -841,6 +1187,18 @@ class MultiplayerPlugin:
         try:
             # Store plugin manager reference
             self.plugin_manager = plugin_manager
+            
+            # Add these lines to ensure the settings are properly initialized
+            self.MULTICAST_GROUP = MULTICAST_GROUP
+            self.MULTICAST_PORT = MULTICAST_PORT
+            self.SYNC_INTERVAL = SYNC_INTERVAL
+            self.REMOTE_SQUID_OPACITY = REMOTE_SQUID_OPACITY 
+            self.SHOW_REMOTE_LABELS = SHOW_REMOTE_LABELS
+            self.SHOW_CONNECTION_LINES = SHOW_CONNECTION_LINES
+
+            self.message_process_timer = QtCore.QTimer()
+            self.message_process_timer.timeout.connect(self.process_queued_messages)
+            self.message_process_timer.start(50)  # Process messages every 50ms
             
             # Try to import dependencies
             try:
@@ -907,6 +1265,23 @@ class MultiplayerPlugin:
                 ui = self.tamagotchi_logic.user_interface
                 scene = ui.scene
                 
+                # Initialize RemoteSquidController collection
+                self.remote_squid_controllers = {}
+                self.last_controller_update = time.time()
+                
+                # Set up controller update timer
+                self.controller_update_timer = QtCore.QTimer()
+                self.controller_update_timer.timeout.connect(self.update_remote_controllers)
+                self.controller_update_timer.start(50)  # 20 FPS updates
+                
+                try:
+                    # Import autopilot module
+                    from plugins.multiplayer.squid_multiplayer_autopilot import RemoteSquidController
+                    print("Successfully imported RemoteSquidController")
+                except ImportError as e:
+                    print(f"Warning: RemoteSquidController module not found: {e}")
+                    print("Movement of remote squids will be limited")
+                
                 try:
                     # Try to use the dedicated entity manager if available
                     from plugins.multiplayer.remote_entity_manager import RemoteEntityManager
@@ -927,6 +1302,7 @@ class MultiplayerPlugin:
                 self.remote_squids = {}
                 self.remote_objects = {}
                 self.connection_lines = {}
+                self.remote_squid_controllers = {}
             
             # Initialize status UI component if possible
             self.initialize_status_ui()
@@ -951,21 +1327,38 @@ class MultiplayerPlugin:
             import traceback
             traceback.print_exc()
             return False
+        
+    def process_queued_messages(self):
+        """Process messages from the queue in the main thread"""
+        # Process up to 10 messages at a time to avoid blocking
+        processed = 0
+        while not self.incoming_queue.empty() and processed < 10:
+            try:
+                message, addr = self.incoming_queue.get_nowait()
+                if self.plugin_manager:
+                    message_type = message.get('type', 'unknown')
+                    hook_name = f"network_{message_type}"
+                    self.plugin_manager.trigger_hook(hook_name, node=self.network_node, message=message, addr=addr)
+                processed += 1
+            except queue.Empty:
+                break
+            except Exception as e:
+                print(f"Error processing queued message: {e}")
     
     def network_receive_loop(self):
         """Continuous loop for receiving network messages"""
         import select  # Import here to avoid global import issues
-        
         while True:
             try:
                 # Only try to receive if the node is connected
                 if self.network_node and self.network_node.is_connected:
-                    self.network_node.receive_messages()
+                    messages = self.network_node.receive_messages()
                     
-                    # Process messages if plugin_manager exists
-                    if self.plugin_manager:
-                        self.network_node.process_messages(self.plugin_manager)
-                
+                    # Instead of processing directly, queue messages for main thread processing
+                    for message in messages:
+                        # Add to queue for main thread to process
+                        self.incoming_queue.put(message)
+                    
                 # Add a small delay to prevent CPU hogging
                 time.sleep(0.01)
                 
@@ -1001,58 +1394,44 @@ class MultiplayerPlugin:
         except Exception as e:
             print(f"Error initializing status bar: {e}")
     
-    def register_menu_actions(self, ui=None, menu=None):
+    def register_menu_actions(self, ui, menu):
         """
         Register menu actions for the Multiplayer plugin
         
         Args:
-            ui: Optional user interface 
-            menu: Optional menu to add actions to
+            ui: The main user interface
+            menu: The menu to add actions to
         """
-        try:
-            # If no UI is provided, try to get it from tamagotchi_logic
-            if ui is None and hasattr(self, 'tamagotchi_logic'):
-                ui = self.tamagotchi_logic.user_interface
-            
-            # If no menu is provided, try to get the plugins menu
-            if menu is None and ui and hasattr(ui, 'plugins_menu'):
-                menu = ui.plugins_menu
-            
-            # If we still don't have a menu, print a warning and return
-            if menu is None:
-                print("No menu available for registering multiplayer actions")
-                return
-            
-            # About action
-            about_action = QtWidgets.QAction('About Multiplayer', ui.window)
-            about_action.triggered.connect(self.show_about_dialog)
-            menu.addAction(about_action)
-            
-            # Configuration action
-            config_action = QtWidgets.QAction('Network Settings', ui.window)
-            config_action.triggered.connect(self.show_config_dialog)
-            menu.addAction(config_action)
-            
-            # Refresh connections action
-            refresh_action = QtWidgets.QAction('Refresh Connections', ui.window)
-            refresh_action.triggered.connect(self.refresh_connections)
-            menu.addAction(refresh_action)
-            
-            # Toggle connection lines
-            connections_action = QtWidgets.QAction('Show Connection Lines', ui.window)
-            connections_action.setCheckable(True)
-            connections_action.setChecked(SHOW_CONNECTION_LINES)
-            connections_action.triggered.connect(
-                lambda checked: self.toggle_connection_lines(checked)
-            )
-            menu.addAction(connections_action)
-            
-            print("Multiplayer menu actions registered successfully")
+        # About action
+        about_action = QtWidgets.QAction('About Multiplayer', ui.window)
+        about_action.triggered.connect(self.show_about_dialog)
+        menu.addAction(about_action)
         
-        except Exception as e:
-            print(f"Error in register_menu_actions: {e}")
-            import traceback
-            traceback.print_exc()
+        # Configuration action
+        config_action = QtWidgets.QAction('Network Settings', ui.window)
+        config_action.triggered.connect(self.show_config_dialog)
+        menu.addAction(config_action)
+        
+        # Refresh connections action
+        refresh_action = QtWidgets.QAction('Refresh Connections', ui.window)
+        refresh_action.triggered.connect(self.refresh_connections)
+        menu.addAction(refresh_action)
+        
+        # Toggle connection lines
+        connections_action = QtWidgets.QAction('Show Connection Lines', ui.window)
+        connections_action.setCheckable(True)
+        connections_action.setChecked(self.SHOW_CONNECTION_LINES)
+        connections_action.triggered.connect(
+            lambda checked: self.toggle_connection_lines(checked)
+        )
+        menu.addAction(connections_action)
+        
+        # Only add debug action if debug mode is enabled
+        if hasattr(self, 'debug_mode') and self.debug_mode:
+            menu.addSeparator()  # Add separator before debug items
+            debug_action = QtWidgets.QAction('Debug Autopilot Status', ui.window)
+            debug_action.triggered.connect(self.debug_autopilot_status)
+            menu.addAction(debug_action)
 
     def update_menu_states(self):
         """Update menu item states when menu is about to show"""
@@ -1324,6 +1703,12 @@ class MultiplayerPlugin:
             PLUGIN_NAME,
             self.pre_update
         )
+        self.plugin_manager.register_hook("network_squid_return")
+        self.plugin_manager.subscribe_to_hook(
+            "network_squid_return",
+            PLUGIN_NAME,
+            self.handle_squid_return
+        )
 
 
     
@@ -1337,18 +1722,34 @@ class MultiplayerPlugin:
                     print(f"Error processing messages in pre_update: {e}")
     
     def start_sync_timer(self):
-        """
-        Start periodic synchronization of game state
-        """
+        """Start adaptive periodic synchronization of game state"""
         def sync_state():
             while True:
                 try:
                     if self.network_node and self.network_node.is_connected:
+                        # Calculate appropriate sync interval based on activity
+                        squid = self.tamagotchi_logic.squid
+                        is_moving = hasattr(squid, 'is_moving') and squid.is_moving
+                        
+                        # More frequent updates when moving
+                        if is_moving:
+                            sync_delay = 0.25  # 4 updates per second when active
+                        else:
+                            sync_delay = 1.0  # 1 update per second when idle
+                            
+                        # Also consider number of peers
+                        peers_count = len(getattr(self.network_node, 'known_nodes', {}))
+                        if peers_count > 10:
+                            sync_delay *= 1.5  # Reduce frequency with many peers
+                            
                         self.sync_game_state()
+                        time.sleep(sync_delay)
+                    else:
+                        time.sleep(1.0)  # Regular sleep when disconnected
                 except Exception as e:
                     if self.debug_mode:
                         print(f"Error in sync_state: {e}")
-                time.sleep(SYNC_INTERVAL)
+                    time.sleep(1.0)
         
         sync_thread = threading.Thread(
             target=sync_state, 
@@ -1599,165 +2000,247 @@ class MultiplayerPlugin:
                 self.status_bar.add_message(f"New remote squid detected: {node_id}")
     
     def update_remote_squid(self, node_id, squid_data, is_new_arrival=False):
-        """
-        Update the visual representation of a remote squid
-
-        Args:
-            node_id (str): Unique identifier for the remote squid
-            squid_data (dict): Data about the remote squid's state
-            is_new_arrival (bool, optional): Whether this is a new arrival. Defaults to False.
-        """
-        try:
-            print(f"\n***** UPDATING REMOTE SQUID: {node_id} *****")
-            print(f"Squid Data: {squid_data}")
-            print(f"Is New Arrival: {is_new_arrival}")
+        """Update or create a remote squid visualization"""
+        if not squid_data or not all(k in squid_data for k in ['x', 'y']):
+            return False
+        
+        # Check if we already have this remote squid
+        if node_id in self.remote_squids:
+            # Update existing squid
+            remote_squid = self.remote_squids[node_id]
+            remote_squid['visual'].setPos(squid_data['x'], squid_data['y'])
             
-            # Validate input data
-            if not squid_data or not all(k in squid_data for k in ['x', 'y']):
-                print("ERROR: Invalid squid data")
-                return False
-
-            ui = self.tamagotchi_logic.user_interface
+            # Update view cone if needed
+            if 'view_cone_visible' in squid_data and squid_data['view_cone_visible']:
+                self.update_remote_view_cone(node_id, squid_data)
+            else:
+                # Hide view cone if it exists
+                if 'view_cone' in remote_squid and remote_squid['view_cone'] in self.scene.items():
+                    self.scene.removeItem(remote_squid['view_cone'])
+                    remote_squid['view_cone'] = None
+                    
             
-            # Check if we already have this remote squid
-            if node_id in self.remote_squids:
-                # Update existing squid
-                remote_squid = self.remote_squids[node_id]
-                remote_squid['visual'].setPos(squid_data['x'], squid_data['y'])
+            # Update status text
+            if 'status_text' in remote_squid:
+                status = "ENTERING" if is_new_arrival else squid_data.get('status', 'unknown')
+                remote_squid['status_text'].setPlainText(f"{status}")
+                remote_squid['status_text'].setPos(
+                    squid_data['x'], 
+                    squid_data['y'] - 30
+                )
                 
-                # Update view cone if needed
+                # Make text more visible for entering squids
+                if is_new_arrival:
+                    remote_squid['status_text'].setDefaultTextColor(QtGui.QColor(255, 255, 0))
+                    remote_squid['status_text'].setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
+        else:
+            # Create new remote squid representation
+            try:
+                # Load the appropriate squid image based on direction
+                direction = squid_data.get('direction', 'right')
+                squid_image = f"{direction}1.png"
+                squid_pixmap = QtGui.QPixmap(os.path.join("images", squid_image))
+                remote_visual = QtWidgets.QGraphicsPixmapItem(squid_pixmap)
+                remote_visual.setPos(squid_data['x'], squid_data['y'])
+                
+                # Change Z-value here - increase to appear in front of background
+                remote_visual.setZValue(10)  # Changed from -1 or 5 to 10
+                
+                remote_visual.setOpacity(self.REMOTE_SQUID_OPACITY)
+                
+                # Add ID text
+                id_text = self.scene.addText(f"Remote Squid ({node_id[-4:]})")
+                id_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
+                id_text.setPos(squid_data['x'], squid_data['y'] - 45)
+                id_text.setScale(0.8)
+                
+                # Update Z-value for text as well
+                id_text.setZValue(10)  # Changed to match the squid
+                
+                id_text.setVisible(self.show_labels)
+                
+                # Add status text with emphasis on "ENTERING"
+                status_text = self.scene.addText("ENTERING" if is_new_arrival else squid_data.get('status', 'unknown'))
+                if is_new_arrival:
+                    status_text.setDefaultTextColor(QtGui.QColor(255, 255, 0))
+                    status_text.setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
+                else:
+                    status_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
+                status_text.setPos(squid_data['x'], squid_data['y'] - 30)
+                status_text.setScale(0.7)
+                
+                # Update Z-value for status text
+                status_text.setZValue(10)  # Changed to match the squid
+                
+                status_text.setVisible(self.show_labels)
+                
+                # Add to scene
+                self.scene.addItem(remote_visual)
+                
+                # Store in tracking dict
+                self.remote_squids[node_id] = {
+                    'visual': remote_visual,
+                    'id_text': id_text,
+                    'status_text': status_text,
+                    'view_cone': None,
+                    'last_update': time.time(),
+                    'data': squid_data
+                }
+                
+                # Add view cone if needed
                 if 'view_cone_visible' in squid_data and squid_data['view_cone_visible']:
                     self.update_remote_view_cone(node_id, squid_data)
-                else:
-                    # Hide view cone if it exists
-                    if 'view_cone' in remote_squid and remote_squid['view_cone'] in ui.scene.items():
-                        ui.scene.removeItem(remote_squid['view_cone'])
-                        remote_squid['view_cone'] = None
-                
-                # Update status text
-                if 'status_text' in remote_squid:
-                    status = "ENTERING" if is_new_arrival else squid_data.get('status', 'unknown')
-                    remote_squid['status_text'].setPlainText(f"{status}")
-                    remote_squid['status_text'].setPos(
-                        squid_data['x'], 
-                        squid_data['y'] - 30
-                    )
                     
-                    # Make text more visible for entering squids
-                    if is_new_arrival:
-                        remote_squid['status_text'].setDefaultTextColor(QtGui.QColor(255, 255, 0))  # Bright yellow
-                        remote_squid['status_text'].setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
-            else:
-                # Create new remote squid representation
-                try:
-                    # Load the appropriate squid image based on direction
-                    direction = squid_data.get('direction', 'right')
-                    squid_image = f"{direction}1.png"
-                    squid_pixmap = QtGui.QPixmap(os.path.join("images", squid_image))
-                    remote_visual = QtWidgets.QGraphicsPixmapItem(squid_pixmap)
-                    remote_visual.setPos(squid_data['x'], squid_data['y'])
-                    remote_visual.setZValue(5 if is_new_arrival else -1)  # New squids appear on top
-                    remote_visual.setOpacity(0.7)
-                    
-                    # Add ID text
-                    id_text = ui.scene.addText(f"Remote Squid ({node_id[-4:]})")
-                    id_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
-                    id_text.setPos(squid_data['x'], squid_data['y'] - 45)
-                    id_text.setScale(0.8)
-                    id_text.setZValue(5 if is_new_arrival else -1)
-                    id_text.setVisible(True)
-                    
-                    # Add status text with emphasis on "ENTERING"
-                    status_text = ui.scene.addText("ENTERING" if is_new_arrival else squid_data.get('status', 'unknown'))
-                    if is_new_arrival:
-                        status_text.setDefaultTextColor(QtGui.QColor(255, 255, 0))  # Bright yellow
-                        status_text.setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
-                    else:
-                        status_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
-                    status_text.setPos(squid_data['x'], squid_data['y'] - 30)
-                    status_text.setScale(0.7)
-                    status_text.setZValue(5 if is_new_arrival else -1)
-                    status_text.setVisible(True)
-                    
-                    # Add to scene
-                    ui.scene.addItem(remote_visual)
-                    
-                    # Store in tracking dict
-                    self.remote_squids[node_id] = {
-                        'visual': remote_visual,
-                        'id_text': id_text,
-                        'status_text': status_text,
-                        'view_cone': None,
-                        'last_update': time.time(),
-                        'data': squid_data
-                    }
-                    
-                    # Show notification message
-                    if hasattr(self.tamagotchi_logic, 'show_message'):
-                        if is_new_arrival:
-                            self.tamagotchi_logic.show_message(f"⚠️ Foreign squid {node_id[-4:]} entered your tank!")
-                        else:
-                            self.tamagotchi_logic.show_message(f"Remote squid {node_id[-4:]} connected!")
-                    
-                    # Add view cone if needed
-                    if 'view_cone_visible' in squid_data and squid_data['view_cone_visible']:
-                        self.update_remote_view_cone(node_id, squid_data)
-                        
-                    # Create connection line
-                    self.update_connection_lines()
-                        
-                    # Create arrival animation for new squids
-                    if is_new_arrival:
-                        self._create_arrival_animation(remote_visual)
-                
-                except Exception as e:
-                    print(f"Error creating remote squid: {e}")
-                    import traceback
-                    traceback.print_exc()
+                # Create arrival animation for new squids
+                if is_new_arrival:
+                    self._create_arrival_animation(remote_visual)
             
-            # Update last seen time
-            if node_id in self.remote_squids:
-                self.remote_squids[node_id]['last_update'] = time.time()
-                self.remote_squids[node_id]['data'] = squid_data
-            
-            return True
+            except Exception as e:
+                print(f"Error creating remote squid: {e}")
+                import traceback
+                traceback.print_exc()
+                return False
         
+        # Update last seen time
+        if node_id in self.remote_squids:
+            self.remote_squids[node_id]['last_update'] = time.time()
+            self.remote_squids[node_id]['data'] = squid_data
+        
+        return True
+            
+    def handle_remote_squid_return(self, node_id, controller):
+        """Handle a remote squid returning to its home instance"""
+        if self.debug_mode:
+            print(f"Remote squid {node_id[-4:]} returning home")
+        
+        # Get summary of activities
+        activity_summary = controller.get_summary()
+        
+        # Start fade out animation
+        remote_squid = self.remote_squids.get(node_id)
+        if not remote_squid or 'visual' not in remote_squid:
+            if self.debug_mode:
+                print(f"Cannot find visual for squid {node_id}")
+            return
+        
+        visual = remote_squid['visual']
+        
+        # Add returning status to UI
+        if 'status_text' in remote_squid:
+            remote_squid['status_text'].setPlainText("RETURNING HOME")
+            remote_squid['status_text'].setDefaultTextColor(QtGui.QColor(255, 215, 0))  # Gold color
+        
+        # Create fade out animation
+        try:
+            opacity_effect = QtWidgets.QGraphicsOpacityEffect(visual)
+            visual.setGraphicsEffect(opacity_effect)
+            
+            fade_out = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
+            fade_out.setDuration(1000)
+            fade_out.setStartValue(visual.opacity())
+            fade_out.setEndValue(0.0)
+            fade_out.finished.connect(
+                lambda: self.complete_remote_squid_return(node_id, activity_summary)
+            )
+            fade_out.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
+            
+            if self.debug_mode:
+                print(f"Started fade-out animation for {node_id}")
         except Exception as e:
-            print(f"CRITICAL ERROR in update_remote_squid: {e}")
+            print(f"Error creating fade-out animation: {e}")
+            # Call completion directly if animation fails
+            self.complete_remote_squid_return(node_id, activity_summary)
+        
+        # Show message about squid returning
+        if hasattr(self.tamagotchi_logic, 'show_message'):
+            self.tamagotchi_logic.show_message(
+                f"Remote squid {node_id[-4:]} is returning home"
+            )
+
+    def complete_remote_squid_return(self, node_id, activity_summary):
+        """Complete the return process and send data back to home instance"""
+        try:
+            # Get the remote squid's direction
+            direction = None
+            if node_id in self.remote_squid_controllers:
+                direction = self.remote_squid_controllers[node_id].home_direction
+            
+            # Remove remote squid visual
+            if node_id in self.remote_squids:
+                self.remove_remote_squid(node_id)
+            
+            # Send return message with activity summary
+            if self.network_node and self.network_node.is_connected:
+                self.network_node.send_message(
+                    'squid_return', 
+                    {
+                        'node_id': node_id,
+                        'activity_summary': activity_summary,
+                        'return_direction': direction
+                    }
+                )
+                
+                if self.debug_mode:
+                    print(f"Sent return message for {node_id} with summary: {activity_summary}")
+            
+            # Clean up controller
+            if node_id in self.remote_squid_controllers:
+                del self.remote_squid_controllers[node_id]
+                
+        except Exception as e:
+            print(f"Error completing remote squid return: {e}")
             import traceback
             traceback.print_exc()
-            return False
+
     
     def update_remote_view_cone(self, node_id, squid_data):
-        """Update or create the view cone for a remote squid"""
+        """Update view cone only when necessary"""
         if node_id not in self.remote_squids:
             return
-            
+
+        # Skip if remote squid is too far from player's view
+        local_squid = self.tamagotchi_logic.squid
+        remote_x, remote_y = squid_data['x'], squid_data['y']
+        local_x, local_y = local_squid.squid_x, local_squid.squid_y
+
+        # Calculate distance
+        distance = math.sqrt((remote_x - local_x)**2 + (remote_y - local_y)**2)
+
+        # Skip view cone updates for distant squids
+        if distance > 500:  # Arbitrary distance threshold
+            # Remove existing view cone if it exists
+            remote_squid = self.remote_squids[node_id]
+            if 'view_cone' in remote_squid and remote_squid['view_cone'] in self.tamagotchi_logic.user_interface.scene.items():
+                self.tamagotchi_logic.user_interface.scene.removeItem(remote_squid['view_cone'])
+                remote_squid['view_cone'] = None
+            return
+
         ui = self.tamagotchi_logic.user_interface
         remote_squid = self.remote_squids[node_id]
-        
+
         # Remove existing view cone if it exists
         if 'view_cone' in remote_squid and remote_squid['view_cone'] in ui.scene.items():
             ui.scene.removeItem(remote_squid['view_cone'])
-        
+
         # Get view cone parameters
         squid_x = squid_data['x']
         squid_y = squid_data['y']
+        view_cone_item.setZValue(9)
         squid_width = 60  # Default width
         squid_height = 40  # Default height
-        
+
         squid_center_x = squid_x + squid_width / 2
         squid_center_y = squid_y + squid_height / 2
-        
+
         # Get viewing direction angle - default to 0 (right)
         looking_direction = squid_data.get('looking_direction', 0)
-        
+
         # Set view cone angle
         view_cone_angle = squid_data.get('view_cone_angle', 1.0)
-        
+
         # Calculate cone length
         cone_length = max(ui.window_width, ui.window_height)
-        
+
         # Create polygon for view cone
         cone_points = [
             QtCore.QPointF(squid_center_x, squid_center_y),
@@ -1770,24 +2253,25 @@ class MultiplayerPlugin:
                 squid_center_y + math.sin(looking_direction + view_cone_angle/2) * cone_length
             )
         ]
-        
+
         cone_polygon = QtGui.QPolygonF(cone_points)
-        
+
         # Create view cone item
         view_cone_item = QtWidgets.QGraphicsPolygonItem(cone_polygon)
-        
+
         # Use squid color for the view cone
         color = squid_data.get('color', (150, 150, 255))
         view_cone_item.setPen(QtGui.QPen(QtGui.QColor(*color)))
         view_cone_item.setBrush(QtGui.QBrush(QtGui.QColor(*color, 30)))
-        
+
         view_cone_item.setZValue(-2)  # Behind the squid
-        
+
         # Add to scene
         ui.scene.addItem(view_cone_item)
-        
+
         # Store in our tracking dict
         remote_squid['view_cone'] = view_cone_item
+
     
     def process_remote_objects(self, remote_objects, source_node_id):
         """
