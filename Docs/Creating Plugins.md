@@ -1,7 +1,7 @@
 # Plugin Template Structure
 
 
-### Examine the /plugins/multiplayer directory to see how a plugin can expand the base application
+### Examine the `/plugins/multiplayer` directory for the multiplayer plugin example
 
 When creating a plugin for Dosidicus, you should follow this structure:
 
