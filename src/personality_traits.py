@@ -13,6 +13,8 @@ def register_personality(name, decision_function, attribute_modifiers):
     }
     
     # Personality-specific overrides
+
+    
     if name == Personality.ADVENTUROUS:
         base_modifiers.update({
             "organization_urgency": 1.8,

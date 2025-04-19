@@ -176,35 +176,45 @@ class MemoryTab(BrainBaseTab):
         # Basic type check
         if not isinstance(memory, dict):
             return False
-        
+
         # Ensure it has at least a category
         if 'category' not in memory:
             return False
-        
+
+        # Filter out memories with None or empty values
+        if 'value' not in memory or memory.get('value') is None or memory.get('value') == "":
+            return False
+
         # Filter out internal behavior status changes
         if memory.get('category') == 'behavior':
             value = str(memory.get('value', '')).lower()
             formatted_value = str(memory.get('formatted_value', '')).lower()
-            
+
             # Filter status transition messages
             if 'returned to' in value or 'returned to' in formatted_value:
                 return False
-            
+
             if 'status changed' in value or 'status changed' in formatted_value:
                 return False
-            
+
             if 'after fleeing' in value or 'after fleeing' in formatted_value:
                 return False
-                
+
             # Also filter status-only messages
             if len(value.split()) <= 3 and any(s in value for s in ['status', 'roaming', 'fleeing']):
                 return False
-        
+
+        # Filter out interactions with raw JSON or None items
+        if memory.get('category') == 'interaction':
+            value = str(memory.get('value', ''))
+            if '{' in value and '}' in value and 'None' in value:
+                return False
+
         # Filter out memories with timestamp values or keys
         key = memory.get('key', '')
         if isinstance(key, str) and key.replace('.', '', 1).isdigit():
             return False  # Skip timestamp-like keys
-        
+
         # Always show food and decoration memories (with timestamp filtering)
         if memory.get('category') in ['food', 'decorations', 'interaction']:
             # But filter out timestamp-named items
@@ -218,24 +228,25 @@ class MemoryTab(BrainBaseTab):
                     if any(c.isdigit() for c in filename) and '.' in filename:
                         return False
             return True
-        
+
         # Get formatted value or raw value
         formatted_value = memory.get('formatted_value', '')
         value = str(memory.get('value', ''))
-        
+
         # Filter out timestamp-containing values
         if 'timestamp' in formatted_value.lower() or 'timestamp' in value.lower():
             return False
-        
+
         # If it has a formatted_value, it's likely displayable
         if formatted_value:
             return True
-        
+
         # If it has a value field with content, it's likely displayable
         if value and not value.replace('.', '', 1).isdigit():
             return True
-        
+
         return False
+
 
     def add_test_memory(self):
         """Add a test memory to verify display mechanism"""

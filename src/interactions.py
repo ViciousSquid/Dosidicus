@@ -108,9 +108,8 @@ class RockInteractionManager:
         # Scale rock to appropriate size
         rock.setScale(1.0)
         
-        # Debug output
-        #print(f"Rock positioned at: {rock.pos()} (Offset: {offset})")
-        #print(f"Squid direction: {self.squid.squid_direction}")
+        # Update squid status
+        self.squid.status = "carrying rock"
         
         return True
     
@@ -207,9 +206,12 @@ class RockInteractionManager:
         config = self.rock_config
         rock = self.squid.carried_rock
         
-        # Set squid status to throwing rock
+        # Set squid status to throwing rock with more detail
         if hasattr(self.squid, 'status'):
-            self.squid.status = "throwing_rock"
+            if random.random() < 0.3:
+                self.squid.status = "tossing rock around"
+            else:
+                self.squid.status = "playfully throwing rock"
         
         # Detach from squid and reset parent to scene
         rock.setParentItem(None)
@@ -264,6 +266,7 @@ class RockInteractionManager:
         
         self.throw_animation_timer.start(50)
         return True
+
 
     def update_rock_test(self):
         """Handle the rock test sequence (approach, carry)"""
@@ -347,13 +350,20 @@ class RockInteractionManager:
         # Reset squid states
         self.squid.is_carrying_rock = False
         
-        # Reset status to default if it was set to "throwing_rock"
-        if hasattr(self.squid, 'status') and self.squid.status == "throwing_rock":
-            self.squid.status = "roaming"
+        # Set status based on current stats
+        if self.squid.happiness > 80:
+            self.squid.status = "playful"
+        elif self.squid.anxiety > 60:
+            self.squid.status = "anxious"
+        elif self.squid.curiosity > 60:
+            self.squid.status = "curious"
+        else:
+            self.squid.status = "exploring surroundings"
         
         self.throw_velocity_x = 0
         self.throw_velocity_y = 0
         self.cleanup()
+
 
     def setup_timers(self, interval=100):
         """Configure timer intervals"""

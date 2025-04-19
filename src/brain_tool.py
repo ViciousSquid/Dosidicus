@@ -201,11 +201,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.about_tab, "About")
         
         # Make sure all tabs have correct tamagotchi_logic reference
-        for tab_name in ['memory_tab', 'network_tab', 'learning_tab', 'decisions_tab']:
+        for tab_name in ['memory_tab', 'network_tab', 'learning_tab', 'decisions_tab', 'about_tab']:
             if hasattr(self, tab_name):
                 tab = getattr(self, tab_name)
-                if hasattr(tab, 'set_tamagotchi_logic'):
+                if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:
                     tab.set_tamagotchi_logic(self.tamagotchi_logic)
+                    print(f"Set tamagotchi_logic for {tab_name}")
 
 
     def update_randomness_factors(self, randomness):
@@ -1127,12 +1128,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Update the brain widget first
         self.brain_widget.update_state(state)
         
-        # Explicitly update memory tab on EVERY brain state update
-        if hasattr(self, 'memory_tab'):
-            self.memory_tab.update_memory_display()
+        # Explicitly update about tab when personality is available
+        if hasattr(self, 'about_tab') and 'personality' in state:
+            self.about_tab.update_from_brain_state(state)
         
         # Forward updates to each tab that has an update method
-        tabs_to_update = ['network_tab', 'learning_tab', 'memory_tab', 'decisions_tab']
+        tabs_to_update = ['network_tab', 'learning_tab', 'memory_tab', 'decisions_tab', 'about_tab']
         for tab_name in tabs_to_update:
             if hasattr(self, tab_name):
                 tab = getattr(self, tab_name)
@@ -1684,29 +1685,96 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             "Neurogenesis settings have been updated successfully."
         )
 
-    def trigger_neurogenesis(self, trigger_type='debug', force=False):
-        """Manually trigger neurogenesis with visual feedback"""
-        if not force and (time.time() - self.neurogenesis_data['last_neuron_time'] < 
-                        self.neurogenesis_config['cooldown']):
-            print("Neurogenesis cooldown active")
-            return
-        
-        # Create test neuron
-        new_neuron = self._create_neuron_internal(
-            trigger_type,
-            {'debug_force': True, 'position': self.get_center_position()}
-        )
-        
-        # Visual feedback
-        self.neurogenesis_highlight.update({
-            'neuron': new_neuron,
-            'start_time': time.time(),
-            'duration': self.neurogenesis_config['highlight_duration']
-        })
-        
-        # Update UI
-        self.update()
-        print(f"Debug neurogenesis triggered: {new_neuron}")
+    def trigger_neurogenesis(self):
+        """Trigger neurogenesis by boosting natural trigger values"""
+        try:
+            if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
+                self.show_message("Brain window not initialized")
+                print("Error: Brain window not initialized")
+                return
+                
+            brain = self.squid_brain_window.brain_widget
+            print("Brain widget found")
+            
+            # Get current neuron count to verify success
+            old_neurons = set(brain.neuron_positions.keys())
+            print(f"Current neurons: {len(old_neurons)}")
+            
+            # Get thresholds to ensure we exceed them
+            novelty_threshold = brain.neurogenesis_config.get('novelty_threshold', 3) 
+            stress_threshold = brain.neurogenesis_config.get('stress_threshold', 0.7)
+            reward_threshold = brain.neurogenesis_config.get('reward_threshold', 0.6)
+            
+            print(f"Neurogenesis thresholds - Novelty: {novelty_threshold}, Stress: {stress_threshold}, Reward: {reward_threshold}")
+            
+            # Reset cooldown to allow neurogenesis to happen
+            if hasattr(brain, 'neurogenesis_data'):
+                # Store original for restoration
+                original_time = brain.neurogenesis_data.get('last_neuron_time', 0)
+                brain.neurogenesis_data['last_neuron_time'] = 0
+                print("Neurogenesis cooldown temporarily reset")
+            
+            # Create state with all triggers boosted significantly above thresholds
+            state = {
+                # Boost all three pathways to ensure at least one succeeds
+                'novelty_exposure': novelty_threshold * 2,  # Double the threshold
+                'sustained_stress': stress_threshold * 2,
+                'recent_rewards': reward_threshold * 2,
+                
+                # Add current state values for context
+                'hunger': getattr(self.tamagotchi_logic.squid, 'hunger', 50),
+                'happiness': getattr(self.tamagotchi_logic.squid, 'happiness', 50),
+                'personality': getattr(self.tamagotchi_logic.squid, 'personality', None)
+            }
+            
+            print(f"Submitting state with trigger values: {state}")
+            
+            # Update state which will trigger natural neurogenesis
+            brain.update_state(state)
+            
+            # Verify if neurogenesis occurred
+            new_neurons = set(brain.neuron_positions.keys()) - old_neurons
+            
+            if new_neurons:
+                # Get details of the new neuron(s)
+                for new_neuron in new_neurons:
+                    # Check if connections were created
+                    connections = [k for k in brain.weights.keys() if new_neuron in k]
+                    
+                    # Generate message with details
+                    message = f"Created neuron: {new_neuron} with {len(connections)} connections"
+                    self.show_message(message)
+                    print(message)
+                    print(f"Connections: {connections[:5]}...")
+                    
+                    # Highlight the new neuron
+                    if hasattr(brain, 'neurogenesis_highlight'):
+                        brain.neurogenesis_highlight = {
+                            'neuron': new_neuron,
+                            'start_time': time.time(),
+                            'duration': 10.0  # 10 seconds highlight
+                        }
+                        brain.update()  # Force redraw
+                    
+                    # Force an immediate hebbian learning cycle to integrate the neuron
+                    if hasattr(brain, 'perform_hebbian_learning'):
+                        print("Triggering hebbian learning cycle to integrate new neuron")
+                        brain.perform_hebbian_learning()
+            else:
+                self.show_message("No new neurons created - check console for details")
+                print("WARNING: Neurogenesis was triggered but no new neurons were created")
+                print(f"State submitted: {state}")
+                print(f"Neurogenesis config: {brain.neurogenesis_config}")
+            
+            # Restore original cooldown time
+            if hasattr(brain, 'neurogenesis_data') and 'original_time' in locals():
+                brain.neurogenesis_data['last_neuron_time'] = original_time
+                print("Neurogenesis cooldown restored")
+                
+        except Exception as e:
+            self.show_message(f"Neurogenesis Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def update_heatmap(self):
         """Update the connection weight heatmap visualization"""

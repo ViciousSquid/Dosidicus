@@ -47,7 +47,7 @@ class StatisticsWindow(QtWidgets.QWidget):
         self.move(0, 0)
 
         # Set the initial dimensions (adjusted for larger text and boxes)
-        self.setFixedSize(450, 600)  # Width: 400px, Height: 600px
+        self.setFixedSize(450, 600)  # Width: 450px, Height: 600px
 
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.setSpacing(10)
@@ -90,7 +90,7 @@ class StatisticsWindow(QtWidgets.QWidget):
         # Status label
         self.status_label = QtWidgets.QLabel()
         self.status_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.status_label.setStyleSheet("font-size: 20px;")
+        self.status_label.setStyleSheet("font-size: 24px;")
         main_layout.addWidget(self.status_label)
 
         # Score label

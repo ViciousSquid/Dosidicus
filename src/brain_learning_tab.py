@@ -11,7 +11,7 @@ class LearningTab(BrainBaseTab):
         self.initialize_ui()
         
     def initialize_ui(self):
-        """Initialize learning tab"""
+        """Initialize a completely redesigned learning tab with rich, informative content"""
         # Main container layout
         learning_layout = QtWidgets.QVBoxLayout()
 
@@ -31,7 +31,7 @@ class LearningTab(BrainBaseTab):
         header_layout = QtWidgets.QHBoxLayout(header_widget)
         header_layout.setContentsMargins(10, 10, 10, 5)
 
-        # Create countdown display
+        # Create countdown display with stylish formatting
         self.countdown_frame = QtWidgets.QFrame()
         self.countdown_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.countdown_frame.setStyleSheet("""
@@ -64,7 +64,7 @@ class LearningTab(BrainBaseTab):
         header_layout.addWidget(self.countdown_frame, 2)
 
         # Add spacer
-        header_layout.addSpacing(10)
+        header_layout.addSpacing(15)
 
         # Create interval control with stylish formatting
         interval_frame = QtWidgets.QFrame()
@@ -138,7 +138,7 @@ class LearningTab(BrainBaseTab):
             color: #495057;
         """)
         self.learning_status.setAlignment(QtCore.Qt.AlignCenter)
-        learning_layout.addWidget(self.learning_status)
+        #learning_layout.addWidget(self.learning_status)
 
         # Create tab widget for detailed information
         self.learning_tabs = QtWidgets.QTabWidget()
@@ -152,27 +152,37 @@ class LearningTab(BrainBaseTab):
             }
         """)
 
-        # =====================================================================
-        # Tab 1: Neuron Connections (moved to be first)
-        # =====================================================================
+        # Tab 1: Recent Activity
+        self.recent_activity_tab = QtWidgets.QWidget()
+        recent_layout = QtWidgets.QVBoxLayout(self.recent_activity_tab)
+
+        self.activity_log = QtWidgets.QTextEdit()
+        self.activity_log.setReadOnly(True)
+        self.activity_log.setAcceptRichText(True)
+        self.activity_log.setStyleSheet("font-size: 16px;")
+        recent_layout.addWidget(self.activity_log)
+
+        #self.learning_tabs.addTab(self.recent_activity_tab, "Recent Activity")
+
+        # Tab 2: Neuron Connections
         self.connections_tab = QtWidgets.QWidget()
         connections_layout = QtWidgets.QVBoxLayout(self.connections_tab)
 
         # Add filter controls
         filter_layout = QtWidgets.QHBoxLayout()
         filter_label = QtWidgets.QLabel("Filter:")
-        filter_label.setStyleSheet("font-size: 15px;")
+        filter_label.setStyleSheet("font-size: 16px;")
         filter_layout.addWidget(filter_label)
 
         self.connection_filter = QtWidgets.QComboBox()
         self.connection_filter.addItems(["All Connections", "Strong Positive", "Strong Negative", "Weak Connections", "New Connections"])
-        self.connection_filter.setStyleSheet("font-size: 15px;")
+        self.connection_filter.setStyleSheet("font-size: 16px;")
         self.connection_filter.currentIndexChanged.connect(self.filter_connections)
         filter_layout.addWidget(self.connection_filter)
 
         self.connection_search = QtWidgets.QLineEdit()
         self.connection_search.setPlaceholderText("Search neurons...")
-        self.connection_search.setStyleSheet("font-size: 15px;")
+        self.connection_search.setStyleSheet("font-size: 16px;")
         self.connection_search.textChanged.connect(self.filter_connections)
         filter_layout.addWidget(self.connection_search)
 
@@ -186,7 +196,7 @@ class LearningTab(BrainBaseTab):
         self.connections_view.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.connections_view.setStyleSheet("""
             QTableWidget {
-                font-size: 15px;
+                font-size: 16px;
             }
             QHeaderView::section {
                 font-size: 16px;
@@ -199,20 +209,18 @@ class LearningTab(BrainBaseTab):
 
         # Add section for connection details
         connection_detail_box = QtWidgets.QGroupBox("Connection Details")
-        connection_detail_box.setStyleSheet("font-size: 15px;")
+        connection_detail_box.setStyleSheet("font-size: 16px;")
         detail_layout = QtWidgets.QVBoxLayout(connection_detail_box)
         self.connection_details = QtWidgets.QTextEdit()
         self.connection_details.setReadOnly(True)
         self.connection_details.setMaximumHeight(200)
-        self.connection_details.setStyleSheet("font-size: 15px;")
+        self.connection_details.setStyleSheet("font-size: 16px;")
         detail_layout.addWidget(self.connection_details)
         connections_layout.addWidget(connection_detail_box)
 
         self.learning_tabs.addTab(self.connections_tab, "Neuron Connections")
 
-        # =====================================================================
-        # Tab 2: Weight Heatmap (moved to be second)
-        # =====================================================================
+        # Tab 3: Weight Heatmap
         self.heatmap_tab = QtWidgets.QWidget()
         heatmap_layout = QtWidgets.QVBoxLayout(self.heatmap_tab)
 
@@ -221,7 +229,7 @@ class LearningTab(BrainBaseTab):
         self.heatmap_scene = QtWidgets.QGraphicsScene()
         self.heatmap_view.setScene(self.heatmap_scene)
         self.heatmap_view.setRenderHint(QtGui.QPainter.Antialiasing)
-        self.heatmap_view.setMinimumSize(400, 400)
+        self.heatmap_view.setMinimumSize(512, 512)
 
         # Controls layout
         controls_layout = QtWidgets.QHBoxLayout()
@@ -253,25 +261,23 @@ class LearningTab(BrainBaseTab):
         self.learning_tabs.addTab(self.heatmap_tab, "Weight Heatmap")
 
         # =====================================================================
-        # Tab 3: Statistics & Overview (remains third)
-        # =====================================================================
         self.stats_tab = QtWidgets.QWidget()
         stats_layout = QtWidgets.QVBoxLayout(self.stats_tab)
 
         # Apply larger font size to all Statistics tab components
         self.stats_tab.setStyleSheet("""
             QGroupBox {
-                font-size: 16px;
+                font-size: 20px;  /* Increase the font size for group boxes */
             }
             QGroupBox::title {
-                font-size: 18px;
+                font-size: 22px;  /* Increase the font size for group box titles */
                 font-weight: bold;
             }
             QLabel {
-                font-size: 16px;
+                font-size: 20px;  /* Increase the font size for labels */
             }
             QScrollArea {
-                font-size: 16px;
+                font-size: 20px;  /* Ensure scroll area content also has increased font size */
             }
         """)
 
@@ -286,20 +292,6 @@ class LearningTab(BrainBaseTab):
         stats_layout.addWidget(self.stats_scroll)
 
         self.learning_tabs.addTab(self.stats_tab, "Statistics")
-
-        # =====================================================================
-        # Tab 4: Recent Activity (moved to be last)
-        # =====================================================================
-        self.recent_activity_tab = QtWidgets.QWidget()
-        recent_layout = QtWidgets.QVBoxLayout(self.recent_activity_tab)
-
-        self.activity_log = QtWidgets.QTextEdit()
-        self.activity_log.setReadOnly(True)
-        self.activity_log.setAcceptRichText(True)
-        self.activity_log.setStyleSheet("font-size: 14px;")
-        recent_layout.addWidget(self.activity_log)
-
-        self.learning_tabs.addTab(self.recent_activity_tab, "Recent Activity")
 
         # Add the tabs to the main layout
         learning_layout.addWidget(self.learning_tabs, 1)
@@ -322,7 +314,7 @@ class LearningTab(BrainBaseTab):
             }
         """)
         self.force_learn_btn.clicked.connect(self.trigger_learning_cycle)
-        buttons_layout.addWidget(self.force_learn_btn)
+        #buttons_layout.addWidget(self.force_learn_btn)
 
         self.export_btn = QtWidgets.QPushButton("Export Data")
         self.export_btn.setStyleSheet("""
@@ -542,14 +534,14 @@ class LearningTab(BrainBaseTab):
             source_item = QtWidgets.QTableWidgetItem(source)
             if source in self.brain_widget.neurogenesis_data.get('new_neurons', []):
                 source_item.setBackground(QtGui.QColor(255, 255, 200))  # Light yellow for new neurons
-            source_item.setFont(QtGui.QFont("Arial", 14))  # Bigger font size
+            source_item.setFont(QtGui.QFont("Arial", 12))  # Bigger font size
             self.connections_view.setItem(row, 0, source_item)
             
             # Target neuron
             target_item = QtWidgets.QTableWidgetItem(target)
             if target in self.brain_widget.neurogenesis_data.get('new_neurons', []):
                 target_item.setBackground(QtGui.QColor(255, 255, 200))
-            target_item.setFont(QtGui.QFont("Arial", 14))  # Bigger font size
+            target_item.setFont(QtGui.QFont("Arial", 12))  # Bigger font size
             self.connections_view.setItem(row, 1, target_item)
             
             # Weight value
@@ -562,7 +554,7 @@ class LearningTab(BrainBaseTab):
                 weight_item.setForeground(QtGui.QColor(150, 0, 0))  # Dark red for mild negative
             else:
                 weight_item.setForeground(QtGui.QColor(200, 0, 0))  # Bright red for strong negative
-            weight_item.setFont(QtGui.QFont("Arial", 14))  # Bigger font size
+            weight_item.setFont(QtGui.QFont("Arial", 12))  # Bigger font size
             self.connections_view.setItem(row, 2, weight_item)
             
             # Trend indicator with emoji arrows
@@ -806,7 +798,7 @@ class LearningTab(BrainBaseTab):
                 title_layout.addWidget(icon_label)
             
             title_label = QtWidgets.QLabel(title)
-            title_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #212529;")
+            title_label.setStyleSheet("font-weight: bold; font-size: 16px; color: #212529;")
             title_layout.addWidget(title_label)
             title_layout.addStretch()
             
@@ -816,7 +808,7 @@ class LearningTab(BrainBaseTab):
             content_widget = QtWidgets.QLabel(content)
             content_widget.setTextFormat(QtCore.Qt.RichText)
             content_widget.setWordWrap(True)
-            content_widget.setStyleSheet("font-size: 13px; color: #343a40; margin: 5px;")
+            content_widget.setStyleSheet("font-size: 16px; color: #343a40; margin: 5px;")
             box_layout.addWidget(content_widget)
             
             self.stats_box_layout.addWidget(box)

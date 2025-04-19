@@ -285,7 +285,11 @@ class Ui:
             self.debug_action.setChecked(self.debug_mode)
             self.debug_text.setVisible(self.debug_mode)
         
-        # Create multiplayer menu here too
+        # Connect neurogenesis action now that tamagotchi_logic is available
+        if hasattr(self, 'neurogenesis_action'):
+            self.neurogenesis_action.triggered.connect(self.trigger_neurogenesis)
+        
+        # Create multiplayer menu
         self.create_multiplayer_menu()
 
 
@@ -643,40 +647,40 @@ class Ui:
     def trigger_neurogenesis(self):
         """Guaranteed neuron creation with validation"""
         try:
-            if not hasattr(self, 'squid_brain_window'):
+            if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
                 raise ValueError("Brain window not initialized")
-                
+
             # Get current neuron count and names
             brain = self.squid_brain_window.brain_widget
             prev_count = len(brain.neuron_positions)
             prev_neurons = set(brain.neuron_positions.keys())
-            
+
             # Create forced state with debug flag
             forced_state = {
                 "_debug_forced_neurogenesis": True,
                 "personality": getattr(self.tamagotchi_logic.squid, 'personality', None)
             }
-            
+
             # Force update - call update_state directly to ensure it runs
             brain.update_state(forced_state)
-            
+
             # Verify creation
             new_count = len(brain.neuron_positions)
             new_neurons = set(brain.neuron_positions.keys()) - prev_neurons
-            
+
             if not new_neurons:
                 # If no new neurons, try forcing it again with more debug info
                 print("First attempt failed, trying again with debug info:")
                 print(f"Before state: {brain.state}")
                 print(f"Before positions: {brain.neuron_positions}")
-                
+
                 # Force create a neuron directly
                 new_name = f"forced_{time.time()}"
                 brain.neuron_positions[new_name] = (600, 300)
                 brain.state[new_name] = 50
                 brain.state_colors[new_name] = (255, 150, 150)
                 brain.update()
-                
+
                 new_neurons = set(brain.neuron_positions.keys()) - prev_neurons
                 if not new_neurons:
                     raise RuntimeError(
@@ -687,20 +691,24 @@ class Ui:
                         f"- Position keys: {brain.neuron_positions.keys()}\n"
                         f"- Debug flag was: {forced_state['_debug_forced_neurogenesis']}"
                     )
-            
+
             neuron_name = new_neurons.pop()
             self.show_message(f"Created neuron: {neuron_name}")
             print(f"Successfully created neuron: {neuron_name}")
             print(f"New neuron state: {brain.state[neuron_name]}")
             print(f"New neuron position: {brain.neuron_positions[neuron_name]}")
-            
+
         except Exception as e:
             self.show_message(f"Neurogenesis Error: {str(e)}")
             print(f"NEUROGENESIS FAILURE:\n{traceback.format_exc()}")
-            print("CURRENT NETWORK STATE:")
-            print(f"State: {self.squid_brain_window.brain_widget.state}")
-            print(f"Positions: {self.squid_brain_window.brain_widget.neuron_positions}")
-            print(f"Weights: {list(self.squid_brain_window.brain_widget.weights.items())[:5]}...")
+
+            # Only try to access further attributes if squid_brain_window exists
+            if hasattr(self, 'squid_brain_window') and self.squid_brain_window:
+                print("CURRENT NETWORK STATE:")
+                print(f"State: {self.squid_brain_window.brain_widget.state}")
+                print(f"Positions: {self.squid_brain_window.brain_widget.neuron_positions}")
+                print(f"Weights: {list(self.squid_brain_window.brain_widget.weights.items())[:5]}...")
+
 
     def toggle_decoration_window(self, checked):
         if checked:
@@ -906,6 +914,13 @@ class Ui:
         
         # Update debug text position
         self.debug_text.setPos(self.window_width - 60, self.window_height - 60)
+        
+        # Reposition any active message
+        if hasattr(self, 'current_message_item') and self.current_message_item in self.scene.items():
+            text_height = self.current_message_item.boundingRect().height()
+            message_y = self.window_height - text_height - 20  # 20px padding from bottom
+            self.current_message_item.setPos(0, message_y)
+            self.current_message_item.setTextWidth(self.window_width)
 
     def show_message(self, message):
         # Call hook if available
@@ -924,31 +939,39 @@ class Ui:
                         message = result
                         break
         
-        # Continue with original behavior
         # Remove any existing message items
         for item in self.scene.items():
-            if isinstance(item, QtWidgets.QGraphicsTextItem):
+            if hasattr(item, '_is_message_item'):
                 self.scene.removeItem(item)
 
-        # Create a new QGraphicsTextItem for the message
-        self.message_item = QtWidgets.QGraphicsTextItem(message)
-        self.message_item.setDefaultTextColor(QtGui.QColor(255, 255, 255))  # White text
-        self.message_item.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
-        self.message_item.setPos(0, self.window_height - 75)  # Position the message higher
-        self.message_item.setTextWidth(self.window_width)
-        self.message_item.setHtml(f'<div style="text-align: center; background-color: #000000; padding: 5px;">{message}</div>')
-        self.message_item.setZValue(10)  # Ensure the message is on top
-        self.message_item.setOpacity(1)
+        # Create a new QGraphicsTextItem for the message with larger font
+        message_item = QtWidgets.QGraphicsTextItem(message)
+        message_item.setDefaultTextColor(QtGui.QColor(255, 255, 255))  # White text
+        message_item.setFont(QtGui.QFont("Verdana", 12, QtGui.QFont.Bold))
+        message_item.setTextWidth(self.window_width)
+        
+        # Calculate position - lock to bottom with some padding
+        text_height = message_item.boundingRect().height()
+        message_y = self.window_height - text_height - 40  # 40px padding from bottom
+        
+        message_item.setPos(0, message_y)
+        message_item.setHtml(f'<div style="text-align: center; background-color: #000000; padding: 0px;">{message}</div>')
+        message_item.setZValue(999)  # Ensure the message is on top
+        message_item.setOpacity(1)
+        setattr(message_item, '_is_message_item', True)  # Mark as message item
 
         # Add the new message item to the scene
-        self.scene.addItem(self.message_item)
+        self.scene.addItem(message_item)
 
-        # Fade out the message after 8 seconds
-        self.fade_out_animation = QtCore.QPropertyAnimation(self.message_item, b"opacity")
-        self.fade_out_animation.setDuration(8000)
+        # Store reference to the current message
+        self.current_message_item = message_item
+
+        # Fade out the message after 10 seconds
+        self.fade_out_animation = QtCore.QPropertyAnimation(message_item, b"opacity")
+        self.fade_out_animation.setDuration(10000)
         self.fade_out_animation.setStartValue(1.0)
         self.fade_out_animation.setEndValue(0.0)
-        self.fade_out_animation.finished.connect(lambda: self.scene.removeItem(self.message_item))
+        self.fade_out_animation.finished.connect(lambda: self.scene.removeItem(message_item))
         self.fade_out_animation.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
 
     def update_points(self, points):
@@ -975,12 +998,12 @@ class Ui:
         decoration.setPos(new_x, current_pos.y())
 
         # Create a small animation to make the movement smoother
-        #animation = QtCore.QPropertyAnimation(decoration, b"pos")
-        #animation.setDuration(300)  # 300 ms duration
-        #animation.setStartValue(current_pos)
-        #animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
-        #animation.setEasingCurve(QtCore.QEasingCurve.OutCubic)
-        #animation.start()
+        animation = QtCore.QPropertyAnimation(decoration, b"pos")
+        animation.setDuration(300)  # 300 ms duration
+        animation.setStartValue(current_pos)
+        animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
+        animation.setEasingCurve(QtCore.QEasingCurve.OutCubic)
+        animation.start()
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -1143,10 +1166,10 @@ class Ui:
 
         # Neurogenesis Action
         self.neurogenesis_action = QtWidgets.QAction('Trigger Neurogenesis', self.window)
-        self.neurogenesis_action.setEnabled(False)  # Disabled by default
+        self.neurogenesis_action.setEnabled(True)  # Disabled by default
         if hasattr(self.tamagotchi_logic, 'trigger_neurogenesis'):
             self.neurogenesis_action.triggered.connect(self.trigger_neurogenesis)
-        #debug_menu.addAction(self.neurogenesis_action)
+        debug_menu.addAction(self.neurogenesis_action)
 
         # Add to debug menu
         self.rock_test_action = QtWidgets.QAction('Rock test (forced)', self.window)
@@ -1181,8 +1204,8 @@ class Ui:
             self.show_message("Game logic not initialized!")
 
     def toggle_debug_mode(self):
-        """Toggle debug mode state"""
-        # Get current debug mode state from logic if available
+        """Toggle debug mode state with improved synchronization"""
+        # Get current debug mode state
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None:
             current_debug = self.tamagotchi_logic.debug_mode
         else:
@@ -1191,28 +1214,36 @@ class Ui:
         # Toggle the state
         new_debug_mode = not current_debug
         
-        # Update all components
-        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None:
-            self.tamagotchi_logic.debug_mode = new_debug_mode
-            if hasattr(self.tamagotchi_logic, 'statistics_window'):
-                self.tamagotchi_logic.statistics_window.set_debug_mode(new_debug_mode)
-        
-        # Update UI state
+        # First, update self
         self.debug_mode = new_debug_mode
-        self.debug_action.setChecked(new_debug_mode)
-        self.debug_text.setVisible(new_debug_mode)
         
-        # Force update the debug text visibility
+        # Update UI elements
+        if hasattr(self, 'debug_action'):
+            self.debug_action.setChecked(new_debug_mode)
+        
         if hasattr(self, 'debug_text'):
             self.debug_text.setVisible(new_debug_mode)
             self.scene.update()
         
-        # Sync with brain window if it exists
+        # Sync with tamagotchi_logic and its components
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None:
+            self.tamagotchi_logic.debug_mode = new_debug_mode
+            
+            # Update statistics window if it exists
+            if hasattr(self.tamagotchi_logic, 'statistics_window'):
+                self.tamagotchi_logic.statistics_window.set_debug_mode(new_debug_mode)
+        
+        # Sync with brain window and its components
         if hasattr(self, 'squid_brain_window'):
             self.squid_brain_window.debug_mode = new_debug_mode
+            
+            # Ensure brain_widget gets updated too
             if hasattr(self.squid_brain_window, 'brain_widget'):
                 self.squid_brain_window.brain_widget.debug_mode = new_debug_mode
+                # Force update to reflect changes
+                self.squid_brain_window.brain_widget.update()
         
+        # Print status for confirmation
         print(f"Debug mode {'enabled' if new_debug_mode else 'disabled'}")
         self.show_message(f"Debug mode {'enabled' if new_debug_mode else 'disabled'}")
 

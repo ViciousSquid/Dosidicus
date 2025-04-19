@@ -1,6 +1,3 @@
-# Dosidicus
-# Version 1.0.5.5 (milestone 4)      April 2025
-
 import os
 import random
 import time
@@ -12,6 +9,7 @@ from .mental_states import MentalStateManager
 from .memory_manager import MemoryManager
 from .personality import Personality
 from .decision_engine import DecisionEngine
+from .image_cache import ImageCache
 
 class Squid:
     def __init__(self, user_interface, tamagotchi_logic=None, personality=None, neuro_cooldown=None):
@@ -41,6 +39,10 @@ class Squid:
         self.rock_velocity_y = 0
         self.rock_throw_power = 10  # Base throw strength
         self.rock_throw_cooldown = 0
+
+        # Startle transition tracking
+        self.startled_transition = False
+        self.startled_transition_frames = 0
 
         # Rock Interactions
         self.rock_interaction_timer = QtCore.QTimer()
@@ -315,18 +317,19 @@ class Squid:
 
 
     def load_images(self):
+        """Load images with cache to reduce memory usage"""
         self.images = {
-            "left1": QtGui.QPixmap(os.path.join("images", "left1.png")),
-            "left2": QtGui.QPixmap(os.path.join("images", "left2.png")),
-            "right1": QtGui.QPixmap(os.path.join("images", "right1.png")),
-            "right2": QtGui.QPixmap(os.path.join("images", "right2.png")),
-            "up1": QtGui.QPixmap(os.path.join("images", "up1.png")),
-            "up2": QtGui.QPixmap(os.path.join("images", "up2.png")),
-            "sleep1": QtGui.QPixmap(os.path.join("images", "sleep1.png")),
-            "sleep2": QtGui.QPixmap(os.path.join("images", "sleep2.png")),
+            "left1": ImageCache.get_pixmap(os.path.join("images", "left1.png")),
+            "left2": ImageCache.get_pixmap(os.path.join("images", "left2.png")),
+            "right1": ImageCache.get_pixmap(os.path.join("images", "right1.png")),
+            "right2": ImageCache.get_pixmap(os.path.join("images", "right2.png")),
+            "up1": ImageCache.get_pixmap(os.path.join("images", "up1.png")),
+            "up2": ImageCache.get_pixmap(os.path.join("images", "up2.png")),
+            "sleep1": ImageCache.get_pixmap(os.path.join("images", "sleep1.png")),
+            "sleep2": ImageCache.get_pixmap(os.path.join("images", "sleep2.png")),
         }
         # Load startled image
-        self.startled_image = QtGui.QPixmap(os.path.join("images", "startled.png"))
+        self.startled_image = ImageCache.get_pixmap(os.path.join("images", "startled.png"))
         self.squid_width = self.images["left1"].width()
         self.squid_height = self.images["left1"].height()
 
@@ -428,8 +431,10 @@ class Squid:
         self.show_startled_icon()  # Show the startled icon
         self.tamagotchi_logic.show_message("Squid was startled awake!")
         self.status = "startled"
-        self.squid_direction = "left"  # Reset direction
-        self.update_squid_image()
+        
+        # Instead of immediately changing direction, set a transitional state
+        self.startled_transition = True
+        self.startled_transition_frames = 5  # Show startled animation for 5 frames
         
         # Start timers
         self.anxiety_cooldown_timer = QtCore.QTimer()
@@ -438,6 +443,16 @@ class Squid:
         
         # Hide startled icon after 2 seconds
         QtCore.QTimer.singleShot(2000, self.hide_startled_icon)
+        
+        # End transition after a short delay (about half a second)
+        QtCore.QTimer.singleShot(500, self.end_startled_transition)
+
+    def end_startled_transition(self):
+        """End the startled transition and set a natural direction"""
+        self.startled_transition = False
+        # Choose a random direction that makes sense for waking up
+        self.squid_direction = random.choice(["left", "right"])
+        self.update_squid_image()
 
     def reduce_startle_anxiety(self):
         """Gradually reduce the startle anxiety"""
@@ -731,12 +746,17 @@ class Squid:
         self.anxiety = state['anxiety']
         self.curiosity = state['curiosity']
         self.personality = Personality(state['personality'])
+        
+        # Load the squid's name if it exists in the saved state
+        if 'name' in state:
+            self.name = state['name']
+        
         self.squid_item.setPos(self.squid_x, self.squid_y)
 
     def push_decoration(self, decoration, direction):
         """Push a decoration with proper animation handling"""
         try:
-            push_distance = 60  # pixels to push
+            push_distance = 80  # pixels to push
             current_pos = decoration.pos()
             new_x = current_pos.x() + (push_distance * direction)
 
@@ -1396,10 +1416,16 @@ class Squid:
 
     def current_image(self):
         """Return the current image of the squid"""
+        # Check if we're in startled transition
+        if hasattr(self, 'startled_transition') and self.startled_transition:
+            # Use the startled image directly during transition
+            return self.startled_image
+        
         # Check if we're in startled state
         if hasattr(self, 'status') and self.status == "startled" and not self.is_sleeping:
-            # Use the "up" frame which looks more alert
-            return self.images[f"up{self.current_frame + 1}"]
+            # Use a side-facing frame which looks more natural after being startled
+            direction = "left" if random.random() < 0.5 else "right"
+            return self.images[f"{direction}{self.current_frame + 1}"]
         
         # Normal image selection
         if self.is_sleeping:

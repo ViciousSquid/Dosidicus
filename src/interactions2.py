@@ -185,9 +185,9 @@ class PoopInteractionManager:
         config = self.poop_config
         poop = self.squid.carried_poop
         
-        # Set squid status to throwing poop
+        # Set squid status
         if hasattr(self.squid, 'status'):
-            self.squid.status = "throwing_poop"
+            self.squid.status = "throwing poop"
         
         # Detach from squid and reset parent to scene
         poop.setParentItem(None)

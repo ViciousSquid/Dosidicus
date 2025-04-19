@@ -82,7 +82,7 @@ class TamagotchiLogic:
             self.initial_delay_timer = QtCore.QTimer()
             self.initial_delay_timer.setSingleShot(True)
             self.initial_delay_timer.timeout.connect(self.allow_initial_startle)
-            self.initial_delay_timer.start(8000)  # 8000 ms = 8 seconds
+            self.initial_delay_timer.start(60000)  # 60000 ms = 1 minute
             self.initial_startle_allowed = False
 
         # Initialize neurogenesis triggers with all required keys
@@ -158,7 +158,7 @@ class TamagotchiLogic:
         self.curious_cooldown_max = 20
         self.curious_interaction_cooldown = 1
         self.curious_interaction_cooldown_max = 5
-        self.startle_cooldown = self.startle_cooldown_max * 5
+        self.startle_cooldown = 1000
 
     
 
@@ -645,12 +645,12 @@ class TamagotchiLogic:
             interval = max(10, self.base_interval // self.simulation_speed)  # Ensure minimum interval
             self.simulation_timer.start(interval)
 
-    def check_for_startle(self):                ## Certain personalities are more easily startled than others
+    def check_for_startle(self):
         if not self.mental_states_enabled:
             return
 
-            # Only check for new startle if not currently startled
-        if self.squid.is_fleeing:
+        # Only check for new startle if not currently startled and initial startle allowed
+        if self.squid.is_fleeing or not self.initial_startle_allowed:
             return
 
         if self.startle_cooldown > 0:
@@ -671,7 +671,11 @@ class TamagotchiLogic:
     def startle_squid(self, source="unknown"):
         if not self.mental_states_enabled:
             return
-
+            
+        # Add protection against startling during initialization
+        if not getattr(self, 'initial_startle_allowed', False):
+            return
+        
         try:
             # Ensure speed attributes exist
             if not hasattr(self.squid, 'base_speed'):
@@ -683,9 +687,26 @@ class TamagotchiLogic:
             self.squid.mental_state_manager.set_state("startled", True)
             self.startle_cooldown = self.startle_cooldown_max
 
-            # Change status to fleeing
+            # Change status to more descriptive startled state
             previous_status = getattr(self.squid, 'status', "roaming")
-            self.squid.status = "fleeing"
+            
+            if source == "first_resize":
+                self.squid.status = "startled by environment change"
+            elif source == "incoming_rock":
+                self.squid.status = "startled by rock"
+            elif source == "detected_squid":
+                self.squid.status = "startled by other squid"
+            elif source == "targeted_by_rock":
+                self.squid.status = "fleeing"
+            elif source in ["environment", "decoration"]:
+                self.squid.status = "startled"
+            else:
+                # Check for personality-specific startle reactions
+                if self.squid.personality == Personality.TIMID:
+                    self.squid.status = "hiding"
+                else:
+                    self.squid.status = "startled"
+                    
             self.squid.is_fleeing = True
             self.squid.current_speed = 180  # 2x speed boost
             
@@ -711,7 +732,7 @@ class TamagotchiLogic:
             self.squid.anxiety = min(100, self.squid.anxiety + anxiety_increase)
             
             # Create memory
-            memory_value = (f"Startled! Status changed from {previous_status} to fleeing, "
+            memory_value = (f"Startled! Status changed from {previous_status} to {self.squid.status}, "
                         f"Speed {self.squid.current_speed}px, Direction {self.squid.direction}")
             self.squid.memory_manager.add_short_term_memory(
                 'behavior',
@@ -726,29 +747,48 @@ class TamagotchiLogic:
                 self.create_ink_cloud()
             
             # End flee after 3 seconds
-            QtCore.QTimer.singleShot(self.startle_cooldown_max * 100, self.end_fleeing)
+            QtCore.QTimer.singleShot(self.startle_cooldown_max * 100, lambda: self.end_fleeing(previous_status))
             
         except Exception as e:
             print(f"Error during startle: {str(e)}")
             self.show_message("The squid panicked!")
-            
+
 
     def end_fleeing(self, previous_status="roaming"):
         """Reset speed and status after fleeing ends"""
         if hasattr(self, 'squid') and self.squid:
             self.squid.is_fleeing = False
             self.squid.current_speed = self.squid.base_speed
-            self.squid.status = previous_status
+            
+            # Set more descriptive status based on anxiety level
+            if self.squid.anxiety > 80:
+                self.squid.status = "extremely anxious"
+            elif self.squid.anxiety > 60:
+                self.squid.status = "anxious" 
+            elif self.squid.anxiety > 40:
+                self.squid.status = "nervous"
+            elif self.squid.anxiety > 20:
+                self.squid.status = "recovering from startle"
+            else:
+                # Use a more specific status based on personality
+                if self.squid.personality == Personality.TIMID:
+                    self.squid.status = "cautiously exploring"
+                elif self.squid.personality == Personality.ADVENTUROUS:
+                    self.squid.status = "boldly exploring"
+                else:
+                    self.squid.status = previous_status
+                
             self.squid.mental_state_manager.set_state("startled", False)  # Explicitly clear startled state
             
             if self.debug_mode:
-                print(f"Fleeing ended - status returned to {previous_status}")
+                print(f"Fleeing ended - status returned to {self.squid.status}")
             
             self.squid.memory_manager.add_short_term_memory(
                 'behavior',
                 'calm_after_startle',
-                f"Returned to {previous_status} status after fleeing"
+                f"Returned to {self.squid.status} status after fleeing"
             )
+
 
     def create_ink_cloud(self):
         """Create an ink cloud with guaranteed fade-out after 10 seconds"""
@@ -885,11 +925,22 @@ class TamagotchiLogic:
     def check_for_sickness(self):
         # Existing sickness logic
         if (self.cleanliness_threshold_time >= 10 * self.simulation_speed and self.cleanliness_threshold_time <= 60 * self.simulation_speed) or \
-           (self.hunger_threshold_time >= 10 * self.simulation_speed and self.hunger_threshold_time <= 50 * self.simulation_speed):
+        (self.hunger_threshold_time >= 10 * self.simulation_speed and self.hunger_threshold_time <= 50 * self.simulation_speed):
             if random.random() < 0.8:
                 self.squid.mental_state_manager.set_state("sick", True)
+                
+                # Set more descriptive sick status
+                if self.squid.health < 30:
+                    self.squid.status = "suffering"
+                elif self.squid.health < 50:
+                    self.squid.status = "feeling ill"
+                else:
+                    self.squid.status = "feeling sick"
+                    
                 self.show_message("Squid is feeling sick!")
         else:
+            if self.squid.mental_state_manager.is_state_active("sick") and self.squid.health > 80:
+                self.squid.status = "recuperating"
             self.squid.mental_state_manager.set_state("sick", False)
     
     def check_for_curiosity(self):
@@ -1060,9 +1111,6 @@ class TamagotchiLogic:
         self.rps_game.start_game()
 
     def give_medicine(self):
-        print(f"Debug: Give medicine called.")
-        print(f"Debug: Squid is_sick: {self.squid.is_sick}")
-        print(f"Debug: Mental state manager sick state: {self.squid.mental_state_manager.is_state_active('sick')}")
         
         # Get plugin results
         results = self.plugin_manager.trigger_hook("on_medicine", 
@@ -1086,20 +1134,28 @@ class TamagotchiLogic:
             
             self.show_message("Medicine given. Squid didn't like that!")
             
-            # Add thoughts
+            # Add thoughts and set status
             if hasattr(self.brain_window, 'add_thought'):
                 self.brain_window.add_thought("I am grumpy and anxious because I was forced to take medicine")
-
+            
+            self.squid.status = "taking medicine"
+            
             # Hide the sick icon immediately
             self.squid.hide_sick_icon()
 
             # Put Squid to sleep
-            self.squid.go_to_sleep()
+            QtCore.QTimer.singleShot(5000, lambda: self.delayed_sleep_after_medicine())
 
             # Display the needle image
             self.display_needle_image()
         else:
             self.show_message("Squid is not sick. Medicine not needed.")
+
+    def delayed_sleep_after_medicine(self):
+        """Put squid to sleep after a delay from taking medicine"""
+        if self.squid:
+            self.squid.go_to_sleep()
+            self.squid.status = "recovering"
 
     def display_needle_image(self):
         needle_pixmap = QtGui.QPixmap(os.path.join("images", "needle.jpg"))
@@ -1289,6 +1345,7 @@ class TamagotchiLogic:
         """Allow the squid to be startled after the initial delay."""
         self.initial_startle_allowed = True
         self.is_first_instance = False  # Reset the flag after the first instance
+        print("Initial startle protection period ended")
     
     def handle_window_resize_event(self, width_change, height_change, new_size):
         """Handle window resize events with specific effects"""
@@ -1671,12 +1728,12 @@ class TamagotchiLogic:
                 "is_eating": self.squid.status == "eating",
                 "is_sleeping": self.squid.is_sleeping,
                 "pursuing_food": self.squid.pursuing_food,
+                "is_fleeing": getattr(self.squid, 'is_fleeing', False),
                 "direction": self.squid.squid_direction,
                 "position": (self.squid.squid_x, self.squid.squid_y),
                 "personality": self.squid.personality.value
             }
 
-            #print("Final brain state:", brain_state)
             self.brain_window.update_brain(brain_state)
 
     def save_game(self, squid, tamagotchi_logic, is_autosave=False):

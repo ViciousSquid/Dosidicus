@@ -13,7 +13,7 @@ class BrainBaseTab(QtWidgets.QWidget):
 
     def set_tamagotchi_logic(self, tamagotchi_logic):
         """Update the tamagotchi_logic reference"""
-        print(f"BrainBaseTab.set_tamagotchi_logic: {tamagotchi_logic is not None}")
+        #print(f"BrainBaseTab.set_tamagotchi_logic: {tamagotchi_logic is not None}")
         self.tamagotchi_logic = tamagotchi_logic
         
     def update_from_brain_state(self, state):

@@ -46,7 +46,7 @@ class MemoryManager:
 
     def save_memory(self, memory, file_path):
         if not memory:
-            print(f"Warning: Attempting to save empty memory to {file_path}. Skipping save.")
+            print(f"\x1b[31mWarning:\x1b[0m Attempting to save empty memory to {file_path}. Skipping save.")
             return
         
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -59,6 +59,7 @@ class MemoryManager:
     def add_short_term_memory(self, category, key, value, importance=1):
         timestamp = datetime.now()
 
+        # Improve formatting for different types of memories
         if category == 'decorations':
             decoration_name = os.path.basename(key)
             effects = ', '.join(
@@ -67,6 +68,20 @@ class MemoryManager:
                 if isinstance(val, (int, float)) and val != 0
             )
             formatted_value = f"Interaction with {decoration_name}: {effects}"
+        elif category == 'interaction':
+            # Handle interaction memories better, especially with None items
+            if isinstance(value, dict):
+                item_name = "unknown item"
+                if value.get('item'):
+                    if hasattr(value['item'], 'filename'):
+                        item_name = os.path.basename(value['item'].filename)
+                    else:
+                        item_name = str(value['item'])
+                        
+                position = value.get('position', (0, 0))
+                formatted_value = f"Interacted with {item_name} at position {position}"
+            else:
+                formatted_value = f"Interaction: {value}"
         else:
             formatted_value = value
 
@@ -85,7 +100,6 @@ class MemoryManager:
             self.cleanup_short_term_memory()
 
         self.save_memory(self.short_term_memory, self.short_term_file)
-        #print(f"DEBUG: Added short-term memory: {memory}")
 
 
     def cleanup_short_term_memory(self):
