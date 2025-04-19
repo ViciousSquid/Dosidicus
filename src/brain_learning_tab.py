@@ -490,26 +490,39 @@ class LearningTab(BrainBaseTab):
     def update_connection_table(self):
         """Update the connection table with current weights"""
         self.connections_view.setRowCount(0)  # Clear existing rows
-        
+
         # Get all weights
         weights = self.brain_widget.weights
         if not weights:
             return
-        
+
         # Get blacklisted neurons to exclude
         excluded_neurons = getattr(self.brain_widget, 'excluded_neurons', ['is_sick', 'is_eating', 'is_sleeping', 'pursuing_food', 'direction'])
-        
+
         # Apply current filter
         filter_text = self.connection_search.text().lower()
         filter_type = self.connection_filter.currentText()
-        
+
         # Add rows to table
         row = 0
-        for (source, target), weight in sorted(weights.items(), key=lambda x: abs(x[1]), reverse=True):
+
+        # Updated loop to handle different key formats safely
+        for key, weight in sorted(weights.items(), key=lambda x: abs(x[1]), reverse=True):
+            # Handle different key formats safely
+            if isinstance(key, tuple) and len(key) >= 2:
+                source, target = key[0], key[1]
+            elif isinstance(key, str) and '_' in key:
+                # For string keys that might have been converted from tuples
+                parts = key.split('_', 1)  # Split on first underscore only
+                source, target = parts[0], parts[1]
+            else:
+                # Skip invalid keys
+                continue
+
             # Skip connections involving blacklisted neurons
             if source in excluded_neurons or target in excluded_neurons:
                 continue
-                
+
             # Apply filters
             if filter_type == "Strong Positive" and weight <= 0.5:
                 continue
@@ -522,28 +535,28 @@ class LearningTab(BrainBaseTab):
                 if (source not in self.brain_widget.neurogenesis_data.get('new_neurons', []) and
                     target not in self.brain_widget.neurogenesis_data.get('new_neurons', [])):
                     continue
-            
+
             # Apply text search
             if filter_text and not (filter_text in source.lower() or filter_text in target.lower()):
                 continue
-                
+
             # Add the row
             self.connections_view.insertRow(row)
-            
+
             # Source neuron
             source_item = QtWidgets.QTableWidgetItem(source)
             if source in self.brain_widget.neurogenesis_data.get('new_neurons', []):
                 source_item.setBackground(QtGui.QColor(255, 255, 200))  # Light yellow for new neurons
             source_item.setFont(QtGui.QFont("Arial", 12))  # Bigger font size
             self.connections_view.setItem(row, 0, source_item)
-            
+
             # Target neuron
             target_item = QtWidgets.QTableWidgetItem(target)
             if target in self.brain_widget.neurogenesis_data.get('new_neurons', []):
                 target_item.setBackground(QtGui.QColor(255, 255, 200))
             target_item.setFont(QtGui.QFont("Arial", 12))  # Bigger font size
             self.connections_view.setItem(row, 1, target_item)
-            
+
             # Weight value
             weight_item = QtWidgets.QTableWidgetItem(f"{weight:.3f}")
             if weight > 0.5:
@@ -556,7 +569,7 @@ class LearningTab(BrainBaseTab):
                 weight_item.setForeground(QtGui.QColor(200, 0, 0))  # Bright red for strong negative
             weight_item.setFont(QtGui.QFont("Arial", 12))  # Bigger font size
             self.connections_view.setItem(row, 2, weight_item)
-            
+
             # Trend indicator with emoji arrows
             trend_item = QtWidgets.QTableWidgetItem("—")
             if hasattr(self, '_prev_weights') and (source, target) in self._prev_weights:
@@ -567,9 +580,9 @@ class LearningTab(BrainBaseTab):
                     trend_item = QtWidgets.QTableWidgetItem("⬇️")  # Down emoji arrow
             trend_item.setFont(QtGui.QFont("Arial", 14))  # Bigger font size
             self.connections_view.setItem(row, 3, trend_item)
-            
+
             row += 1
-        
+
         # Store current weights for future trend comparison
         if not hasattr(self, '_prev_weights'):
             self._prev_weights = {}
@@ -815,8 +828,23 @@ class LearningTab(BrainBaseTab):
         
         # 1. Connection Statistics
         # Filter weights to exclude connections involving blacklisted neurons
-        filtered_weights = {(src, dst): weight for (src, dst), weight in self.brain_widget.weights.items() 
-                        if src not in excluded_neurons and dst not in excluded_neurons}
+        # FIXED CODE HERE:
+        filtered_weights = {}
+        for key, weight in self.brain_widget.weights.items():
+            # Handle different key formats safely
+            if isinstance(key, tuple) and len(key) >= 2:
+                src, dst = key[0], key[1]
+            elif isinstance(key, str) and '_' in key:
+                # For string keys that might have been converted from tuples
+                parts = key.split('_', 1)  # Split on first underscore only
+                src, dst = parts[0], parts[1]
+            else:
+                # Skip invalid keys
+                continue
+                
+            # Only include pairs where neither neuron is excluded
+            if src not in excluded_neurons and dst not in excluded_neurons:
+                filtered_weights[(src, dst)] = weight
         
         positive_weights = sum(1 for w in filtered_weights.values() if w > 0)
         negative_weights = sum(1 for w in filtered_weights.values() if w < 0)

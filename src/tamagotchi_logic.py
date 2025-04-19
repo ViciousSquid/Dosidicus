@@ -565,6 +565,14 @@ class TamagotchiLogic:
         self.simulation_speed = speed
         self.update_timers()
         
+        # Clear any pause messages if unpausing
+        if previous_speed == 0 and speed > 0:
+            # Remove any existing message items
+            if hasattr(self, 'user_interface') and hasattr(self.user_interface, 'scene'):
+                for item in self.user_interface.scene.items():
+                    if isinstance(item, QtWidgets.QGraphicsTextItem):
+                        self.user_interface.scene.removeItem(item)
+        
         # Update dependent systems
         if hasattr(self, 'squid'):
             self.squid.set_animation_speed(speed)
@@ -1671,19 +1679,46 @@ class TamagotchiLogic:
             # Load brain state
             self.brain_window.set_brain_state(save_data['brain_state'])
 
-            # Load memories
-            self.squid.memory_manager.short_term_memory = save_data['ShortTerm']
-            self.squid.memory_manager.long_term_memory = save_data['LongTerm']
+            # Load memories - first try from save_data
+            if 'ShortTerm' in save_data and save_data['ShortTerm']:
+                self.squid.memory_manager.short_term_memory = save_data['ShortTerm']
+            if 'LongTerm' in save_data and save_data['LongTerm']:
+                self.squid.memory_manager.long_term_memory = save_data['LongTerm']
 
-            # Reload memory files from disk (they were just extracted by SaveManager)
-            self.squid.memory_manager.short_term_memory = self.squid.memory_manager.load_memory(self.squid.memory_manager.short_term_file)
-            self.squid.memory_manager.long_term_memory = self.squid.memory_manager.load_memory(self.squid.memory_manager.long_term_file)
+            # If empty or not in save_data, try loading from extracted files
+            if not self.squid.memory_manager.short_term_memory:
+                self.squid.memory_manager.short_term_memory = self.squid.memory_manager.load_memory(
+                    self.squid.memory_manager.short_term_file) or []
+            if not self.squid.memory_manager.long_term_memory:
+                self.squid.memory_manager.long_term_memory = self.squid.memory_manager.load_memory(
+                    self.squid.memory_manager.long_term_file) or []
+
+            # Make sure they are lists
+            if not isinstance(self.squid.memory_manager.short_term_memory, list):
+                self.squid.memory_manager.short_term_memory = []
+            if not isinstance(self.squid.memory_manager.long_term_memory, list):
+                self.squid.memory_manager.long_term_memory = []
+
+            # Save loaded memories to disk to ensure consistency
+            self.squid.memory_manager.save_memory(self.squid.memory_manager.short_term_memory, 
+                                                self.squid.memory_manager.short_term_file)
+            self.squid.memory_manager.save_memory(self.squid.memory_manager.long_term_memory, 
+                                                self.squid.memory_manager.long_term_file)
 
             print(f"\033[33;1m >>Loaded personality: {self.squid.personality.value}\033[0m")
 
-            # Load decoration data
+            # Load decoration data - ensure this runs for both manual loads and autosaves
             decorations_data = game_state.get('decorations', [])
-            self.user_interface.load_decorations_data(decorations_data)
+            if decorations_data:
+                print(f"Loading {len(decorations_data)} decorations")
+                # Clear existing decorations first to avoid duplicates
+                for item in list(self.user_interface.scene.items()):
+                    if hasattr(item, 'category') and item.category in ['rock', 'plant', 'decoration']:
+                        self.user_interface.scene.removeItem(item)
+                # Now load the decorations
+                self.user_interface.load_decorations_data(decorations_data)
+            else:
+                print("No decorations found in save data")
 
             # Load TamagotchiLogic data
             tamagotchi_logic_data = game_state['tamagotchi_logic']
@@ -1699,6 +1734,10 @@ class TamagotchiLogic:
                                                 tamagotchi_logic=self,
                                                 squid=self.squid,
                                                 plugin_data=plugin_data)
+
+            # Refresh memory tab if it exists
+            if hasattr(self.brain_window, 'memory_tab'):
+                QtCore.QTimer.singleShot(1000, self.brain_window.memory_tab.update_memory_display)
 
             print("Game loaded successfully")
             self.set_simulation_speed(1)  # Set simulation speed to 1x after loading

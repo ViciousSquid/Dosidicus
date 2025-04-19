@@ -718,63 +718,74 @@ class Ui:
             self.decoration_window.hide()
 
     def show_pause_message(self, is_paused):
-        # Remove existing pause items
+        """Show or hide the pause message overlay"""
+        # First, ensure all previous pause items are removed
+        self._remove_all_pause_elements()
+        
+        # Stop any existing redraw timer
+        if hasattr(self, 'pause_redraw_timer') and self.pause_redraw_timer:
+            self.pause_redraw_timer.stop()
+            
+        # If not paused, just return after cleanup
+        if not is_paused:
+            self.scene.update()  # Force scene update
+            return
+            
+        # If paused, display pause message
+        win_width = self.window_width
+        win_height = self.window_height
+        
+        # Background rectangle
+        background = QtWidgets.QGraphicsRectItem(
+            -200,
+            (win_height - 250) / 2,
+            win_width + 400,
+            250
+        )
+        background.setBrush(QtGui.QColor(0, 0, 0, 180))
+        background.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+        background.setZValue(1000)
+        background.original_rect = background.rect()
+        setattr(background, '_is_pause_message', True)
+        self.scene.addItem(background)
+
+        # Main pause text
+        pause_text = self.scene.addText("p a u s e d", QtGui.QFont("Arial", 24, QtGui.QFont.Bold))
+        pause_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+        pause_text.setZValue(1002)
+        setattr(pause_text, '_is_pause_message', True)
+        
+        text_rect = pause_text.boundingRect()
+        pause_text_x = (win_width - text_rect.width()) / 2
+        pause_text_y = (win_height - text_rect.height()) / 2 - 30
+        pause_text.setPos(pause_text_x, pause_text_y)
+
+        # Subtext
+        sub_text = self.scene.addText("Use 'Speed' menu to unpause", QtGui.QFont("Arial", 14))
+        sub_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
+        sub_text.setZValue(1002)
+        setattr(sub_text, '_is_pause_message', True)
+        
+        sub_rect = sub_text.boundingRect()
+        sub_text_x = (win_width - sub_rect.width()) / 2
+        sub_text_y = pause_text_y + text_rect.height() + 10
+        sub_text.setPos(sub_text_x, sub_text_y)
+        
+        # Set up redraw timer
+        self.pause_redraw_timer = QtCore.QTimer()
+        self.pause_redraw_timer.timeout.connect(self._redraw_pause_message)
+        self.pause_redraw_timer.start(500)  # Redraw every 500ms
+
+    def _remove_all_pause_elements(self):
+        """Helper method to remove all pause-related UI elements"""
+        # Stop any pause redraw timer
+        if hasattr(self, 'pause_redraw_timer') and self.pause_redraw_timer:
+            self.pause_redraw_timer.stop()
+        
+        # Remove all items marked with _is_pause_message
         for item in self.scene.items():
             if hasattr(item, '_is_pause_message'):
                 self.scene.removeItem(item)
-
-        # Get current window dimensions
-        win_width = self.window_width
-        win_height = self.window_height
-
-        if is_paused:
-            # Background rectangle 200 pixels wider than the window, 250 pixels tall
-            background = QtWidgets.QGraphicsRectItem(
-                -200,  # Start 200 pixels left of the window
-                (win_height - 250) / 2,  # Vertically center the 250-pixel tall rectangle
-                win_width + 400,  # Total width is window width + 400 (200 on each side)
-                250  # Fixed height of 250 pixels
-            )
-            background.setBrush(QtGui.QColor(0, 0, 0, 180))
-            background.setPen(QtGui.QPen(QtCore.Qt.NoPen))
-            background.setZValue(1000)
-            # Store the original rectangle dimensions to prevent resizing
-            background.original_rect = background.rect()
-            setattr(background, '_is_pause_message', True)
-            self.scene.addItem(background)
-
-            # Main pause text
-            pause_text = self.scene.addText("p a u s e d", QtGui.QFont("Arial", 24, QtGui.QFont.Bold))
-            pause_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-            pause_text.setZValue(1002)
-            setattr(pause_text, '_is_pause_message', True)
-            
-            # Center text using view coordinates
-            text_rect = pause_text.boundingRect()
-            pause_text_x = (win_width - text_rect.width()) / 2
-            pause_text_y = (win_height - text_rect.height()) / 2 - 30
-            pause_text.setPos(pause_text_x, pause_text_y)
-
-            # Subtext
-            sub_text = self.scene.addText("Use 'Speed' menu to unpause", QtGui.QFont("Arial", 14))
-            sub_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
-            sub_text.setZValue(1002)
-            setattr(sub_text, '_is_pause_message', True)
-            
-            sub_rect = sub_text.boundingRect()
-            sub_text_x = (win_width - sub_rect.width()) / 2
-            sub_text_y = pause_text_y + text_rect.height() + 10
-            sub_text.setPos(sub_text_x, sub_text_y)
-
-            # Create a timer to keep redrawing the pause message
-            self.pause_redraw_timer = QtCore.QTimer()
-            self.pause_redraw_timer.timeout.connect(self._redraw_pause_message)
-            self.pause_redraw_timer.start(500)  # Redraw every 500ms
-
-        else:
-            # Stop the redraw timer if it exists
-            if hasattr(self, 'pause_redraw_timer'):
-                self.pause_redraw_timer.stop()
 
     def _redraw_pause_message(self):
         # Check if we're still paused
@@ -1183,16 +1194,15 @@ class Ui:
 
     def set_simulation_speed(self, speed):
         """Set the simulation speed (0 = paused, 1 = normal, 2 = fast, 3 = very fast)"""
-        #print(f"DEBUG: set_simulation_speed called with speed={speed}")  # Debug print
-        
         if hasattr(self, 'tamagotchi_logic'):
-            # Show/hide pause message
-            #print(f"DEBUG: Showing pause message: {speed == 0}")  # Additional debug print
-            self.show_pause_message(speed == 0)
+            # Update pause message visibility
+            is_paused = (speed == 0)
+            self.show_pause_message(is_paused)
             
+            # Update game logic
             self.tamagotchi_logic.set_simulation_speed(speed)
             
-            # Update the menu check states
+            # Update menu actions
             self.pause_action.setChecked(speed == 0)
             self.normal_speed_action.setChecked(speed == 1)
             self.fast_speed_action.setChecked(speed == 2)

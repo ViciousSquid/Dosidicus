@@ -114,7 +114,7 @@ class ConfigManager:
     
     def get_poop_config(self):
         return {
-            'min_carry_duration': 3.0,
+            'min_carry_duration': 2.0,
             'max_carry_duration': 9.0,
             'pickup_prob': 0.2,
             'throw_prob': 0.3,

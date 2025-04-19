@@ -77,7 +77,7 @@ class RockInteractionManager:
         rock.setParentItem(self.squid.squid_item)
         
         # Set random hold duration between 3-9 seconds
-        self.squid.rock_hold_duration = random.uniform(3.0, 9.0)
+        self.squid.rock_hold_duration = random.uniform(2.0, 9.0)
         self.squid.rock_hold_start_time = time.time()
         self.squid.rock_decision_made = False
         
@@ -274,7 +274,6 @@ class RockInteractionManager:
             self.cleanup()
             return
         
-        # Let the Squid class handle the timing and decision making
         if self.rock_test_phase == 0:  # Approach phase
             rock_center = self.target_rock.sceneBoundingRect().center()
             squid_center = self.squid.squid_item.sceneBoundingRect().center()
@@ -288,6 +287,26 @@ class RockInteractionManager:
                     self.cleanup()
             else:
                 self.squid.move_toward_position(rock_center)
+                
+        elif self.rock_test_phase == 1:  # Carry phase
+            # Update the carry time
+            self.rock_carry_time += 0.1  # Since timer fires every 100ms
+            
+            # Check if carry duration has elapsed
+            if self.rock_carry_time >= self.rock_carry_duration:
+                # Time to make a decision
+                if random.random() < 0.7:  # 70% chance to throw
+                    direction = "right" if random.random() < 0.5 else "left"
+                    self.throw_rock(direction)
+                    if self.show_message:
+                        self.show_message("Squid threw the rock!")
+                else:  # 30% chance to drop
+                    self.drop_rock()
+                    if self.show_message:
+                        self.show_message("Squid dropped the rock")
+                        
+                # End the test
+                self.cleanup()
 
     def update_throw_animation(self):
         """Handles the physics update for thrown rocks"""

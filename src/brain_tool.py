@@ -93,13 +93,21 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         pass
 
     def set_pause_state(self, is_paused):
+        """Set pause state for the brain window"""
+        # Only manage internal state but don't apply visual overlay
         self.is_paused = is_paused
+        
+        # Set brain widget pause state
         if hasattr(self, 'brain_widget'):
             self.brain_widget.is_paused = is_paused
+        
+        # Manage timers based on pause state
         if is_paused:
-            self.hebbian_timer.stop()
+            if hasattr(self, 'hebbian_timer'):
+                self.hebbian_timer.stop()
         else:
-            self.hebbian_timer.start(self.config.hebbian['learning_interval'])
+            if hasattr(self, 'hebbian_timer'):
+                self.hebbian_timer.start(self.config.hebbian['learning_interval'])
 
     def init_inspector(self):
         self.inspector_action = QtWidgets.QAction("Neuron Inspector", self)
