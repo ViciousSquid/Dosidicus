@@ -2,7 +2,6 @@ import sys
 import time
 import json
 import os
-os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false'
 import traceback
 import logging
 from PyQt5 import QtWidgets, QtCore
@@ -17,8 +16,7 @@ from src.brain_tool import SquidBrainWindow
 from src.learning import LearningConfig
 from src.plugin_manager import PluginManager
 
-# Enable high-DPI scaling (Qt5)
-#QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
 
 # Set up logging
 logging.basicConfig(filename='dosidicus_log.txt', level=logging.ERROR, 
@@ -65,9 +63,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Initialize plugin manager - do this before other components
         self.plugin_manager = PluginManager()
-        print("  ")
-        print(f"Plugin manager initialized: {self.plugin_manager}")
-        print("  ")
+        print(f"> Plugin manager initialized: {self.plugin_manager}")
         
         # Create SquidBrainWindow with config
         self.brain_window = SquidBrainWindow(None, self.debug_mode, self.config)
@@ -80,7 +76,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Check for existing save data
         self.save_manager = SaveManager("saves")
         if self.save_manager.save_exists() and specified_personality is None:
-            print("Existing save data found and will be loaded")
+            print("\x1b[32mExisting save data found and will be loaded\x1b[0m")
             self.squid = Squid(self.user_interface, None, None)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
             
@@ -95,7 +91,8 @@ class MainWindow(QtWidgets.QMainWindow):
             # Now load from save data
             self.create_squid_from_save_data()
         else:
-            print(" Starting a new simulation:")
+            print(" ")
+            print("\x1b[92m---------------  STARTING A NEW SIMULATION ---------------\x1b[0m")
  
             self.create_new_game(self.specified_personality)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
@@ -179,13 +176,16 @@ class MainWindow(QtWidgets.QMainWindow):
         print(f">> Generated squid personality: {self.squid.personality.value}")
         print(f"    ")
         if self.neuro_cooldown:
-            print(f"\033Neurogenesis cooldown:\033[0m {self.neuro_cooldown}")
+            print(f"\x1b[43m Neurogenesis cooldown:\033[0m {self.neuro_cooldown}")
         
         self.squid.memory_manager.clear_all_memories()
         self.show_splash_screen()
 
     def start_new_game(self):
         """Handle new game request"""
+        # Clear existing objects first
+        self.clear_all_scene_objects()
+        
         self.create_new_game()
         self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
         self.squid.tamagotchi_logic = self.tamagotchi_logic
@@ -199,6 +199,35 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tamagotchi_logic.set_simulation_speed(0)
         self.show_splash_screen()
 
+    def clear_all_scene_objects(self):
+        """Clear all objects from the scene for a fresh start"""
+        if not hasattr(self, 'user_interface') or not self.user_interface:
+            return
+            
+        # Clear decorations (ResizablePixmapItems)
+        decorations = [item for item in self.user_interface.scene.items() 
+                    if isinstance(item, QtWidgets.QGraphicsItem)]
+        for decoration in decorations:
+            if not isinstance(decoration, QtWidgets.QGraphicsTextItem) and not decoration == self.squid.squid_item:
+                self.user_interface.scene.removeItem(decoration)
+        
+        # Clear food items if tamagotchi_logic exists
+        if hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'food_items'):
+            for food_item in self.tamagotchi_logic.food_items:
+                self.user_interface.scene.removeItem(food_item)
+            self.tamagotchi_logic.food_items.clear()
+        
+        # Clear poop items if tamagotchi_logic exists
+        if hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'poop_items'):
+            for poop_item in self.tamagotchi_logic.poop_items:
+                self.user_interface.scene.removeItem(poop_item)
+            self.tamagotchi_logic.poop_items.clear()
+        
+        # Force scene update
+        self.user_interface.scene.update()
+        
+        print("All scene objects cleared for new game")
+
     def create_squid_from_save_data(self):
         """Load squid state from save file"""
         save_data = self.save_manager.load_game()
@@ -206,7 +235,6 @@ class MainWindow(QtWidgets.QMainWindow):
             squid_data = save_data['game_state']['squid']
             personality = Personality(squid_data['personality'])
             self.squid.load_state(squid_data)
-            print(f"\033Loaded squid with personality:\033[0m {self.squid.personality.value}")
             
             # Show the pause message first
             if hasattr(self.user_interface, 'show_pause_message'):
