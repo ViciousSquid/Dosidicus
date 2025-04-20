@@ -317,8 +317,24 @@ class Squid:
 
 
     def load_images(self):
-        """Load images with cache to reduce memory usage"""
-        self.images = {
+        """Load images with cache to reduce memory usage and apply resolution scaling"""
+        from .display_scaling import DisplayScaling
+        
+        # Get current screen resolution
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_size = screen.size()
+        
+        # Determine resolution-specific scaling
+        if screen_size.width() <= 1920 and screen_size.height() <= 1080:
+            # For 1080p resolution, reduce size by 30%
+            image_scale = 0.7
+            print("Applying 70% squid size scaling for 1080p resolution")
+        else:
+            # For higher resolutions, use normal scaling
+            image_scale = 1.0
+        
+        # Load original images from cache
+        original_images = {
             "left1": ImageCache.get_pixmap(os.path.join("images", "left1.png")),
             "left2": ImageCache.get_pixmap(os.path.join("images", "left2.png")),
             "right1": ImageCache.get_pixmap(os.path.join("images", "right1.png")),
@@ -328,10 +344,40 @@ class Squid:
             "sleep1": ImageCache.get_pixmap(os.path.join("images", "sleep1.png")),
             "sleep2": ImageCache.get_pixmap(os.path.join("images", "sleep2.png")),
         }
-        # Load startled image
-        self.startled_image = ImageCache.get_pixmap(os.path.join("images", "startled.png"))
+        
+        # Store original dimensions for reference
+        self.original_width = original_images["left1"].width()
+        self.original_height = original_images["left1"].height()
+        
+        # Scale images for current resolution
+        self.images = {}
+        for name, pixmap in original_images.items():
+            # Calculate scaled size
+            scaled_width = int(pixmap.width() * image_scale)
+            scaled_height = int(pixmap.height() * image_scale)
+            
+            # Create scaled pixmap
+            self.images[name] = pixmap.scaled(
+                scaled_width, scaled_height,
+                QtCore.Qt.KeepAspectRatio, 
+                QtCore.Qt.SmoothTransformation
+            )
+        
+        # Scale startled image
+        original_startled = ImageCache.get_pixmap(os.path.join("images", "startled.png"))
+        startled_width = int(original_startled.width() * image_scale)
+        startled_height = int(original_startled.height() * image_scale)
+        self.startled_image = original_startled.scaled(
+            startled_width, startled_height,
+            QtCore.Qt.KeepAspectRatio,
+            QtCore.Qt.SmoothTransformation
+        )
+        
+        # Update squid dimensions to match scaled size
         self.squid_width = self.images["left1"].width()
         self.squid_height = self.images["left1"].height()
+        
+        print(f"Squid scaled to {self.squid_width}x{self.squid_height} pixels")
 
     def show_startled_icon(self):
         """Show the startled icon above the squid's head"""

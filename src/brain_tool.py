@@ -25,25 +25,42 @@ from .brain_decisions_tab import DecisionsTab
 class SquidBrainWindow(QtWidgets.QMainWindow):
     def __init__(self, tamagotchi_logic, debug_mode=False, config=None):
         super().__init__()
+
         # Initialize font size FIRST
-        self.base_font_size = 8
+        from .display_scaling import DisplayScaling
+
+        self.base_font_size = DisplayScaling.font_size(8)
         self.debug_mode = debug_mode
         self.config = config if config else LearningConfig()
         self.tamagotchi_logic = tamagotchi_logic
         self.initialized = False
         self.is_paused = False
-        
-        self.setWindowTitle("Brain Tool")
-        self.resize(1280, 800)
 
-        # Print debug info
-        print(f"SquidBrainWindow init: tamagotchi_logic is {tamagotchi_logic is not None}")
-        
-        # Setup the central widget and main layout
+        self.setWindowTitle("Brain Tool")
+
+        # Get screen resolution
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_size = screen.size()
+
+        # Resolution-specific sizing
+        if screen_size.width() <= 1920 and screen_size.height() <= 1080:
+            # For 1080p, use narrower width (65% of screen width)
+            width = int(screen_size.width() * 0.65)
+            height = int(screen_size.height() * 0.75)
+        else:
+            # Use standard scaling for higher resolutions
+            width = DisplayScaling.scale(1280)
+            height = DisplayScaling.scale(800)
+
+        self.resize(width, height)
+
+        # Position window properly
         screen = QtWidgets.QDesktopWidget().screenNumber(QtWidgets.QDesktopWidget().cursor().pos())
         screen_geometry = QtWidgets.QDesktopWidget().screenGeometry(screen)
-        self.move(screen_geometry.right() - 1280, screen_geometry.top())
+        self.move(screen_geometry.right() - width, screen_geometry.top())
 
+        # Continue with the rest of initialization...
+        # Setup the central widget and main layout
         self.central_widget = QtWidgets.QWidget()
         self.setCentralWidget(self.central_widget)
 
@@ -58,12 +75,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Set up timers
         self.init_timers()
-        
+
         # Initialize memory update timer if needed
         if hasattr(self, 'memory_tab'):
             self.memory_update_timer = QtCore.QTimer(self)
             self.memory_update_timer.timeout.connect(self.update_memory_tab)
             self.memory_update_timer.start(2000)  # Update every 2 secs
+
 
     def set_tamagotchi_logic(self, tamagotchi_logic):
         """Set the tamagotchi_logic reference and update all tabs"""

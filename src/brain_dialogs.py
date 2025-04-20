@@ -8,47 +8,81 @@ from PyQt5.QtGui import QPixmap, QFont
 class StimulateDialog(QtWidgets.QDialog):
     def __init__(self, brain_widget, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Stimulate Brain")
         self.brain_widget = brain_widget
+        self.current_neuron = None
         
-        self.layout = QtWidgets.QVBoxLayout()
-        self.setLayout(self.layout)
-
-        self.form_layout = QtWidgets.QFormLayout()
-        self.layout.addLayout(self.form_layout)
-
-        self.neuron_inputs = {}
-        neurons = ["hunger", "happiness", "cleanliness", "sleepiness", 
-                  "is_sick", "is_eating", "is_sleeping", "pursuing_food", "direction"]
+        from .display_scaling import DisplayScaling
         
-        # Load current values from brain widget
-        current_state = self.brain_widget.state
+        self.setWindowTitle("Neuron Inspector")
+        self.setFixedSize(DisplayScaling.scale(600), DisplayScaling.scale(500))
         
-        for neuron in neurons:
-            current_value = current_state.get(neuron, None)
-            
-            if neuron.startswith("is_"):
-                input_widget = QtWidgets.QComboBox()
-                input_widget.addItems(["False", "True"])
-                if current_value is not None:
-                    input_widget.setCurrentText(str(current_value))
-            elif neuron == "direction":
-                input_widget = QtWidgets.QComboBox()
-                input_widget.addItems(["up", "down", "left", "right"])
-                if current_value is not None:
-                    input_widget.setCurrentText(current_value)
-            else:
-                input_widget = QtWidgets.QSpinBox()
-                input_widget.setRange(0, 100)
-                if current_value is not None:
-                    input_widget.setValue(int(current_value))
-                
-                # Prevent manual entry of invalid values
-                input_widget.setKeyboardTracking(False)
-                input_widget.lineEdit().setValidator(QtGui.QIntValidator(0, 100))
-            
-            self.form_layout.addRow(neuron, input_widget)
-            self.neuron_inputs[neuron] = input_widget
+        # Main layout
+        layout = QtWidgets.QVBoxLayout()
+        self.setLayout(layout)
+        
+        # Style all text properly
+        self.setStyleSheet(f"""
+            QLabel, QComboBox, QPushButton {{
+                font-size: {DisplayScaling.font_size(12)}px;
+            }}
+            QTextEdit, QListWidget {{
+                font-size: {DisplayScaling.font_size(12)}px;
+                line-height: {DisplayScaling.scale(1.5)};
+            }}
+        """)
+        
+        # Neuron info section
+        self.info_group = QtWidgets.QGroupBox("Neuron Information")
+        self.info_layout = QtWidgets.QFormLayout()
+        self.info_group.setLayout(self.info_layout)
+        layout.addWidget(self.info_group)
+        
+        # Info fields
+        self.name_label = QtWidgets.QLabel()
+        self.state_label = QtWidgets.QLabel()
+        self.position_label = QtWidgets.QLabel()
+        self.type_label = QtWidgets.QLabel()
+        
+        self.info_layout.addRow("Name:", self.name_label)
+        self.info_layout.addRow("Current State:", self.state_label)
+        self.info_layout.addRow("Position:", self.position_label)
+        self.info_layout.addRow("Type:", self.type_label)
+        
+        # Connections table
+        self.connections_group = QtWidgets.QGroupBox("Connections")
+        self.connections_layout = QtWidgets.QVBoxLayout()
+        self.connections_group.setLayout(self.connections_layout)
+        layout.addWidget(self.connections_group)
+        
+        self.connections_table = QtWidgets.QTableWidget()
+        self.connections_table.setColumnCount(5)
+        self.connections_table.setHorizontalHeaderLabels([
+            "Neuron", "Direction", "Weight", "Strength", "State"
+        ])
+        self.connections_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        self.connections_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.connections_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.connections_layout.addWidget(self.connections_table)
+        
+        # Activity graph
+        self.activity_group = QtWidgets.QGroupBox("Activity History")
+        self.activity_layout = QtWidgets.QVBoxLayout()
+        self.activity_group.setLayout(self.activity_layout)
+        layout.addWidget(self.activity_group)
+        
+        self.activity_plot = QtWidgets.QGraphicsView()
+        self.activity_scene = QtWidgets.QGraphicsScene()
+        self.activity_plot.setScene(self.activity_scene)
+        self.activity_layout.addWidget(self.activity_plot)
+        
+        # Close button
+        self.close_button = QtWidgets.QPushButton("Close")
+        self.close_button.clicked.connect(self.close)
+        layout.addWidget(self.close_button)
+        
+        # Connect to brain widget's neuron click signal
+        if hasattr(brain_widget, 'neuronClicked'):
+            brain_widget.neuronClicked.connect(self.inspect_neuron)
 
         self.buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel

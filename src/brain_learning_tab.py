@@ -14,16 +14,18 @@ class LearningTab(BrainBaseTab):
         """Initialize a completely redesigned learning tab with rich, informative content"""
         # Main container layout
         learning_layout = QtWidgets.QVBoxLayout()
+        
+        from .display_scaling import DisplayScaling
 
-        # Increase global font size for entire tab
-        self.setStyleSheet("""
-            QLabel, QGroupBox, QTextEdit, QPushButton, QLineEdit, QComboBox, QTableWidget {
-                font-size: 14px;
-            }
+        # Increase global font size for entire tab with proper scaling
+        self.setStyleSheet(f"""
+            QLabel, QGroupBox, QTextEdit, QPushButton, QLineEdit, QComboBox, QTableWidget {{
+                font-size: {DisplayScaling.font_size(14)}px;
+            }}
 
-            QTableWidget {
+            QTableWidget {{
                 gridline-color: #d0d0d0;
-            }
+            }}
         """)
 
         # Create header with controls
@@ -34,28 +36,28 @@ class LearningTab(BrainBaseTab):
         # Create countdown display with stylish formatting
         self.countdown_frame = QtWidgets.QFrame()
         self.countdown_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self.countdown_frame.setStyleSheet("""
-            QFrame {
+        self.countdown_frame.setStyleSheet(f"""
+            QFrame {{
                 background-color: #f0f0f0;
-                border-radius: 8px;
+                border-radius: {DisplayScaling.scale(8)}px;
                 border: 1px solid #d0d0d0;
-            }
-            QLabel {
-                font-size: 16px;
-            }
+            }}
+            QLabel {{
+                font-size: {DisplayScaling.font_size(16)}px;
+            }}
         """)
         countdown_layout = QtWidgets.QVBoxLayout(self.countdown_frame)
 
         countdown_title = QtWidgets.QLabel("Next Learning Cycle")
-        countdown_title.setStyleSheet("font-weight: bold; color: #444; font-size: 16px;")
+        countdown_title.setStyleSheet(f"font-weight: bold; color: #444; font-size: {DisplayScaling.font_size(16)}px;")
         countdown_layout.addWidget(countdown_title)
 
         self.countdown_label = QtWidgets.QLabel("-- seconds")
-        self.countdown_label.setStyleSheet("""
-            font-size: 24px;
+        self.countdown_label.setStyleSheet(f"""
+            font-size: {DisplayScaling.font_size(24)}px;
             font-weight: bold;
             color: #2c3e50;
-            padding: 5px;
+            padding: {DisplayScaling.scale(5)}px;
         """)
         self.countdown_label.setAlignment(QtCore.Qt.AlignCenter)
         countdown_layout.addWidget(self.countdown_label)
@@ -69,20 +71,20 @@ class LearningTab(BrainBaseTab):
         # Create interval control with stylish formatting
         interval_frame = QtWidgets.QFrame()
         interval_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        interval_frame.setStyleSheet("""
-            QFrame {
+        interval_frame.setStyleSheet(f"""
+            QFrame {{
                 background-color: #f0f0f0;
-                border-radius: 8px;
+                border-radius: {DisplayScaling.scale(8)}px;
                 border: 1px solid #d0d0d0;
-            }
-            QLabel {
-                font-size: 16px;
-            }
+            }}
+            QLabel {{
+                font-size: {DisplayScaling.font_size(16)}px;
+            }}
         """)
         interval_layout = QtWidgets.QVBoxLayout(interval_frame)
 
         interval_title = QtWidgets.QLabel("Learning Interval")
-        interval_title.setStyleSheet("font-weight: bold; color: #444; font-size: 16px;")
+        interval_title.setStyleSheet(f"font-weight: bold; color: #444; font-size: {DisplayScaling.font_size(16)}px;")
         interval_layout.addWidget(interval_title)
 
         interval_control = QtWidgets.QHBoxLayout()
@@ -90,31 +92,31 @@ class LearningTab(BrainBaseTab):
         self.interval_spinbox.setRange(5, 300)  # 5 sec to 5 min
         self.interval_spinbox.setValue(int(self.config.hebbian.get('learning_interval', 30000) / 1000))
         self.interval_spinbox.setSuffix(" sec")
-        self.interval_spinbox.setStyleSheet("""
-            QSpinBox {
-                font-size: 18px;
-                padding: 4px;
+        self.interval_spinbox.setStyleSheet(f"""
+            QSpinBox {{
+                font-size: {DisplayScaling.font_size(18)}px;
+                padding: {DisplayScaling.scale(4)}px;
                 background-color: white;
-                border-radius: 4px;
-            }
+                border-radius: {DisplayScaling.scale(4)}px;
+            }}
         """)
         self.interval_spinbox.valueChanged.connect(self.update_learning_interval)
         interval_control.addWidget(self.interval_spinbox)
 
         # Add apply button
         apply_button = QtWidgets.QPushButton("Apply")
-        apply_button.setStyleSheet("""
-            QPushButton {
+        apply_button.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #3498db;
                 color: white;
-                border-radius: 4px;
-                padding: 5px 10px;
+                border-radius: {DisplayScaling.scale(4)}px;
+                padding: {DisplayScaling.scale(5)}px {DisplayScaling.scale(10)}px;
                 font-weight: bold;
-                font-size: 16px;
-            }
-            QPushButton:hover {
+                font-size: {DisplayScaling.font_size(16)}px;
+            }}
+            QPushButton:hover {{
                 background-color: #2980b9;
-            }
+            }}
         """)
         apply_button.clicked.connect(lambda: self.update_learning_interval(self.interval_spinbox.value()))
         interval_control.addWidget(apply_button)
@@ -129,11 +131,11 @@ class LearningTab(BrainBaseTab):
 
         # Add status indicator for learning state
         self.learning_status = QtWidgets.QLabel("Learning Status: Inactive")
-        self.learning_status.setStyleSheet("""
-            font-size: 16px;
-            padding: 5px;
+        self.learning_status.setStyleSheet(f"""
+            font-size: {DisplayScaling.font_size(16)}px;
+            padding: {DisplayScaling.scale(5)}px;
             background-color: #f8f9fa;
-            border-radius: 4px;
+            border-radius: {DisplayScaling.scale(4)}px;
             border: 1px solid #e9ecef;
             color: #495057;
         """)
@@ -144,12 +146,12 @@ class LearningTab(BrainBaseTab):
         self.learning_tabs = QtWidgets.QTabWidget()
 
         # Increase font size for tab labels to match subtab style
-        self.learning_tabs.setStyleSheet("""
-            QTabBar::tab {
-                font-size: 16px;
-                padding: 8px 16px;
-                margin-right: 2px;
-            }
+        self.learning_tabs.setStyleSheet(f"""
+            QTabBar::tab {{
+                font-size: {DisplayScaling.font_size(16)}px;
+                padding: {DisplayScaling.scale(8)}px {DisplayScaling.scale(16)}px;
+                margin-right: {DisplayScaling.scale(2)}px;
+            }}
         """)
 
         # Tab 1: Recent Activity
@@ -159,7 +161,7 @@ class LearningTab(BrainBaseTab):
         self.activity_log = QtWidgets.QTextEdit()
         self.activity_log.setReadOnly(True)
         self.activity_log.setAcceptRichText(True)
-        self.activity_log.setStyleSheet("font-size: 16px;")
+        self.activity_log.setStyleSheet(f"font-size: {DisplayScaling.font_size(16)}px;")
         recent_layout.addWidget(self.activity_log)
 
         #self.learning_tabs.addTab(self.recent_activity_tab, "Recent Activity")
@@ -171,18 +173,18 @@ class LearningTab(BrainBaseTab):
         # Add filter controls
         filter_layout = QtWidgets.QHBoxLayout()
         filter_label = QtWidgets.QLabel("Filter:")
-        filter_label.setStyleSheet("font-size: 16px;")
+        filter_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(16)}px;")
         filter_layout.addWidget(filter_label)
 
         self.connection_filter = QtWidgets.QComboBox()
         self.connection_filter.addItems(["All Connections", "Strong Positive", "Strong Negative", "Weak Connections", "New Connections"])
-        self.connection_filter.setStyleSheet("font-size: 16px;")
+        self.connection_filter.setStyleSheet(f"font-size: {DisplayScaling.font_size(16)}px;")
         self.connection_filter.currentIndexChanged.connect(self.filter_connections)
         filter_layout.addWidget(self.connection_filter)
 
         self.connection_search = QtWidgets.QLineEdit()
         self.connection_search.setPlaceholderText("Search neurons...")
-        self.connection_search.setStyleSheet("font-size: 16px;")
+        self.connection_search.setStyleSheet(f"font-size: {DisplayScaling.font_size(16)}px;")
         self.connection_search.textChanged.connect(self.filter_connections)
         filter_layout.addWidget(self.connection_search)
 
@@ -194,27 +196,27 @@ class LearningTab(BrainBaseTab):
         self.connections_view.setHorizontalHeaderLabels(["Source", "Target", "Weight", "Trend"])
         self.connections_view.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
         self.connections_view.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-        self.connections_view.setStyleSheet("""
-            QTableWidget {
-                font-size: 16px;
-            }
-            QHeaderView::section {
-                font-size: 16px;
+        self.connections_view.setStyleSheet(f"""
+            QTableWidget {{
+                font-size: {DisplayScaling.font_size(16)}px;
+            }}
+            QHeaderView::section {{
+                font-size: {DisplayScaling.font_size(16)}px;
                 font-weight: bold;
-                padding: 5px;
-            }
+                padding: {DisplayScaling.scale(5)}px;
+            }}
         """)
         self.connections_view.itemSelectionChanged.connect(self.show_connection_details)
         connections_layout.addWidget(self.connections_view)
 
         # Add section for connection details
         connection_detail_box = QtWidgets.QGroupBox("Connection Details")
-        connection_detail_box.setStyleSheet("font-size: 16px;")
+        connection_detail_box.setStyleSheet(f"font-size: {DisplayScaling.font_size(16)}px;")
         detail_layout = QtWidgets.QVBoxLayout(connection_detail_box)
         self.connection_details = QtWidgets.QTextEdit()
         self.connection_details.setReadOnly(True)
         self.connection_details.setMaximumHeight(200)
-        self.connection_details.setStyleSheet("font-size: 16px;")
+        self.connection_details.setStyleSheet(f"font-size: {DisplayScaling.font_size(16)}px;")
         detail_layout.addWidget(self.connection_details)
         connections_layout.addWidget(connection_detail_box)
 
@@ -260,25 +262,25 @@ class LearningTab(BrainBaseTab):
 
         self.learning_tabs.addTab(self.heatmap_tab, "Weight Heatmap")
 
-        # =====================================================================
+        # Statistics Tab
         self.stats_tab = QtWidgets.QWidget()
         stats_layout = QtWidgets.QVBoxLayout(self.stats_tab)
 
         # Apply larger font size to all Statistics tab components
-        self.stats_tab.setStyleSheet("""
-            QGroupBox {
-                font-size: 20px;  /* Increase the font size for group boxes */
-            }
-            QGroupBox::title {
-                font-size: 22px;  /* Increase the font size for group box titles */
+        self.stats_tab.setStyleSheet(f"""
+            QGroupBox {{
+                font-size: {DisplayScaling.font_size(20)}px;  /* Increase the font size for group boxes */
+            }}
+            QGroupBox::title {{
+                font-size: {DisplayScaling.font_size(22)}px;  /* Increase the font size for group box titles */
                 font-weight: bold;
-            }
-            QLabel {
-                font-size: 20px;  /* Increase the font size for labels */
-            }
-            QScrollArea {
-                font-size: 20px;  /* Ensure scroll area content also has increased font size */
-            }
+            }}
+            QLabel {{
+                font-size: {DisplayScaling.font_size(20)}px;  /* Increase the font size for labels */
+            }}
+            QScrollArea {{
+                font-size: {DisplayScaling.font_size(20)}px;  /* Ensure scroll area content also has increased font size */
+            }}
         """)
 
         self.stats_scroll = QtWidgets.QScrollArea()
@@ -300,52 +302,52 @@ class LearningTab(BrainBaseTab):
         buttons_layout = QtWidgets.QHBoxLayout()
 
         self.force_learn_btn = QtWidgets.QPushButton("Trigger Learning Cycle")
-        self.force_learn_btn.setStyleSheet("""
-            QPushButton {
+        self.force_learn_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #2ecc71;
                 color: white;
-                border-radius: 4px;
-                padding: 8px;
+                border-radius: {DisplayScaling.scale(4)}px;
+                padding: {DisplayScaling.scale(8)}px;
                 font-weight: bold;
-                font-size: 16px;
-            }
-            QPushButton:hover {
+                font-size: {DisplayScaling.font_size(16)}px;
+            }}
+            QPushButton:hover {{
                 background-color: #27ae60;
-            }
+            }}
         """)
         self.force_learn_btn.clicked.connect(self.trigger_learning_cycle)
         #buttons_layout.addWidget(self.force_learn_btn)
 
         self.export_btn = QtWidgets.QPushButton("Export Data")
-        self.export_btn.setStyleSheet("""
-            QPushButton {
+        self.export_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #3498db;
                 color: white;
-                border-radius: 4px;
-                padding: 8px;
+                border-radius: {DisplayScaling.scale(4)}px;
+                padding: {DisplayScaling.scale(8)}px;
                 font-weight: bold;
-                font-size: 16px;
-            }
-            QPushButton:hover {
+                font-size: {DisplayScaling.font_size(16)}px;
+            }}
+            QPushButton:hover {{
                 background-color: #2980b9;
-            }
+            }}
         """)
         self.export_btn.clicked.connect(self.export_learning_data)
         buttons_layout.addWidget(self.export_btn)
 
         self.clear_log_btn = QtWidgets.QPushButton("Clear Log")
-        self.clear_log_btn.setStyleSheet("""
-            QPushButton {
+        self.clear_log_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #e74c3c;
                 color: white;
-                border-radius: 4px;
-                padding: 8px;
+                border-radius: {DisplayScaling.scale(4)}px;
+                padding: {DisplayScaling.scale(8)}px;
                 font-weight: bold;
-                font-size: 16px;
-            }
-            QPushButton:hover {
+                font-size: {DisplayScaling.font_size(16)}px;
+            }}
+            QPushButton:hover {{
                 background-color: #c0392b;
-            }
+            }}
         """)
         self.clear_log_btn.clicked.connect(self.clear_learning_log)
         buttons_layout.addWidget(self.clear_log_btn)

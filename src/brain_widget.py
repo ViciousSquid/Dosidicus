@@ -987,12 +987,14 @@ class BrainWidget(QtWidgets.QWidget):
     def draw_neurons(self, painter, scale):
         # Define original neurons from original_neuron_positions
         original_neurons = list(self.original_neuron_positions.keys())
+        
+        from .display_scaling import DisplayScaling
 
-        # Define binary state neurons with proper positions
+        # Define binary state neurons with proper scaled positions
         binary_neurons = {
-            'is_eating': (50, 50),
-            'pursuing_food': (50, 150),
-            'is_fleeing': (50, 250)
+            'is_eating': (DisplayScaling.scale(50), DisplayScaling.scale(50)),
+            'pursuing_food': (DisplayScaling.scale(50), DisplayScaling.scale(150)),
+            'is_fleeing': (DisplayScaling.scale(50), DisplayScaling.scale(250))
         }
 
         # Add these positions to the neuron positions
@@ -1027,13 +1029,13 @@ class BrainWidget(QtWidgets.QWidget):
         painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))  # Always black border
         
         # Draw a rectangular indicator
-        x_scaled = x * scale
-        y_scaled = y * scale
-        size = 30 * scale
+        x_scaled = int(x * scale)
+        y_scaled = int(y * scale)
+        size = int(30 * scale)
         
-        # Convert to integers before calling drawRect
-        painter.drawRect(int(x_scaled - size/2), int(y_scaled - size/2), 
-                        int(size), int(size))
+        # Draw rectangle with integer coordinates
+        painter.drawRect(x_scaled - size//2, y_scaled - size//2, 
+                        size, size)
         
         # Draw label with wider container
         font = painter.font()
@@ -1041,16 +1043,22 @@ class BrainWidget(QtWidgets.QWidget):
         painter.setFont(font)
         
         # Increased width from 100 to 150 to accommodate longer labels
-        label_width = 150 * scale
-        label_height = 20 * scale
-        label_x = x_scaled - label_width/2  # Center the wider container
-        label_y = y_scaled + 30 * scale
+        label_width = int(150 * scale)
+        label_height = int(20 * scale)
+        label_x = x_scaled - label_width//2  # Center the wider container
+        label_y = y_scaled + int(30 * scale)
         
-        painter.drawText(int(label_x), int(label_y), 
-                        int(label_width), int(label_height), 
+        painter.drawText(label_x, label_y, 
+                        label_width, label_height, 
                         QtCore.Qt.AlignCenter, label)
 
     def draw_circular_neuron(self, painter, x, y, value, label, scale=1.0):
+        from .display_scaling import DisplayScaling
+        
+        # Get screen resolution
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_size = screen.size()
+        
         current_time = time.time()
         neuron_name = label
         
@@ -1058,21 +1066,47 @@ class BrainWidget(QtWidgets.QWidget):
         last_activity = self.weight_change_events.get(neuron_name, 0)
         is_active = (current_time - last_activity) < self.activity_duration
         
-        # Set color to black if active, white otherwise
+        # Set color
         color = QtGui.QColor(0, 0, 0) if is_active else QtGui.QColor(255, 255, 255)
         
         painter.setBrush(color)
         painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))  # Black border
-        painter.drawEllipse(x - 25, y - 25, 50, 50)
+        
+        # Resolution-specific size adjustment
+        if screen_size.width() <= 1920 and screen_size.height() <= 1080:
+            # Use 60% of the original size for 1080p
+            neuron_radius = int(25 * 0.6 * scale)
+        else:
+            neuron_radius = int(25 * scale)
+        
+        painter.drawEllipse(int(x - neuron_radius), int(y - neuron_radius), 
+                        int(neuron_radius * 2), int(neuron_radius * 2))
 
-        # Draw label
+        # Draw label with resolution-appropriate font
         painter.setPen(QtGui.QColor(0, 0, 0))
         font = painter.font()
-        font.setPointSize(int(8 * scale))
+        if screen_size.width() <= 1920 and screen_size.height() <= 1080:
+            font_size = max(6, int(8 * 0.75 * scale))
+        else:
+            font_size = int(8 * scale) 
+        font.setPointSize(font_size)
         painter.setFont(font)
-        painter.drawText(x - 50, y + 30, 100, 20, QtCore.Qt.AlignCenter, label)
+        
+        # Reduced label width for 1080p
+        if screen_size.width() <= 1920:
+            label_width = int(100 * 0.8)
+        else:
+            label_width = 100
+        
+        # Convert ALL arguments to integers for drawText
+        painter.drawText(int(x - label_width/2), int(y + 30*scale), 
+                        int(label_width), int(20*scale), 
+                        QtCore.Qt.AlignCenter, label)
 
     def draw_triangular_neuron(self, painter, x, y, value, label, scale=1.0):
+        # Resolution-specific size adjustment
+        base_size = 25 * self.resolution_scale * scale
+        
         # Determine color based on neuron type
         if label.startswith('defense'):
             color = QtGui.QColor(255, 150, 150)  # Light red
@@ -1085,7 +1119,7 @@ class BrainWidget(QtWidgets.QWidget):
 
         # Create triangle
         triangle = QtGui.QPolygonF()
-        size = 25 * scale
+        size = base_size
         triangle.append(QtCore.QPointF(x - size, y + size))
         triangle.append(QtCore.QPointF(x + size, y + size))
         triangle.append(QtCore.QPointF(x, y - size))
@@ -1095,11 +1129,17 @@ class BrainWidget(QtWidgets.QWidget):
         # Draw label with integer coordinates
         painter.setPen(QtGui.QColor(0, 0, 0))
         font = painter.font()
-        font.setPointSize(int(8 * scale))  # Convert to integer
+        font.setPointSize(int(8 * self.resolution_scale * scale))
         painter.setFont(font)
-        painter.drawText(int(x - 30 * scale), int(y + 40 * scale),
-                        int(60 * scale), int(20 * scale),
-                        QtCore.Qt.AlignCenter, label)
+        
+        # Calculate text dimensions
+        label_width = int(60 * self.resolution_scale * scale)
+        label_height = int(20 * self.resolution_scale * scale)
+        label_y_offset = int(40 * self.resolution_scale * scale)
+        
+        painter.drawText(int(x - label_width/2), int(y + label_y_offset), 
+                    label_width, label_height, 
+                    QtCore.Qt.AlignCenter, label)
 
     def show_diagnostic_report(self):
         """Show the diagnostic report dialog by accessing the brain widget"""
@@ -1121,6 +1161,12 @@ class BrainWidget(QtWidgets.QWidget):
                                    radius * 2, radius * 2)
 
     def draw_square_neuron(self, painter, x, y, value, label, scale=1.0):
+        from .display_scaling import DisplayScaling
+        
+        # Get screen resolution
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_size = screen.size()
+        
         current_time = time.time()
         neuron_name = label
         
@@ -1133,14 +1179,37 @@ class BrainWidget(QtWidgets.QWidget):
         
         painter.setBrush(color)
         painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))  # Black border
-        painter.drawRect(x - 25, y - 25, 50, 50)
+        
+        # Resolution-specific size adjustment
+        if screen_size.width() <= 1920 and screen_size.height() <= 1080:
+            # Use 60% of the original size for 1080p
+            neuron_size = int(25 * 0.6 * scale)
+        else:
+            neuron_size = int(25 * scale)
+        
+        painter.drawRect(int(x - neuron_size), int(y - neuron_size), 
+                        int(neuron_size * 2), int(neuron_size * 2))
 
         # Draw label
         painter.setPen(QtGui.QColor(0, 0, 0))
         font = painter.font()
-        font.setPointSize(int(8 * scale))
+        if screen_size.width() <= 1920 and screen_size.height() <= 1080:
+            font_size = max(6, int(8 * 0.75 * scale))
+        else:
+            font_size = int(8 * scale)
+        font.setPointSize(font_size)
         painter.setFont(font)
-        painter.drawText(x - 50, y + 30, 100, 20, QtCore.Qt.AlignCenter, label)
+        
+        # Reduced label width for 1080p
+        if screen_size.width() <= 1920:
+            label_width = int(100 * 0.8)
+        else:
+            label_width = 100
+        
+        # Convert ALL arguments to integers for drawText
+        painter.drawText(int(x - label_width/2), int(y + 30*scale), 
+                        int(label_width), int(20*scale), 
+                        QtCore.Qt.AlignCenter, label)
 
 
     def toggle_links(self, state):
@@ -1219,12 +1288,25 @@ class NeuronInspector(QtWidgets.QDialog):
         self.brain_widget = brain_widget
         self.current_neuron = None
         
+        from .display_scaling import DisplayScaling
+        
         self.setWindowTitle("Neuron Inspector")
-        self.resize(600, 500)
+        self.setFixedSize(DisplayScaling.scale(600), DisplayScaling.scale(500))
         
         # Main layout
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
+        
+        # Style all text properly
+        self.setStyleSheet(f"""
+            QLabel, QComboBox, QPushButton {{
+                font-size: {DisplayScaling.font_size(12)}px;
+            }}
+            QTextEdit, QListWidget {{
+                font-size: {DisplayScaling.font_size(12)}px;
+                line-height: {DisplayScaling.scale(1.5)};
+            }}
+        """)
         
         # Neuron info section
         self.info_group = QtWidgets.QGroupBox("Neuron Information")

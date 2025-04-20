@@ -16,9 +16,19 @@ from .plugin_manager_dialog import PluginManagerDialog
 class DecorationItem(QtWidgets.QLabel):
     def __init__(self, pixmap, filename):
         super().__init__()
-        self.setPixmap(pixmap.scaled(128, 128, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+        from .display_scaling import DisplayScaling
+        
+        # Use scaled size instead of hardcoded 128
+        item_size = DisplayScaling.scale(128)
+        
+        # Scale pixmap using the scaled size
+        self.setPixmap(pixmap.scaled(item_size, item_size, 
+                                     QtCore.Qt.KeepAspectRatio, 
+                                     QtCore.Qt.SmoothTransformation))
         self.filename = filename
-        self.setFixedSize(128, 128)
+        
+        # Set fixed size using the scaled value
+        self.setFixedSize(item_size, item_size)
         self.setAlignment(QtCore.Qt.AlignCenter)
         self.setToolTip(filename)
 
@@ -39,12 +49,15 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
     def __init__(self, pixmap=None, filename=None, category=None, parent=None):
         QtWidgets.QGraphicsPixmapItem.__init__(self, parent)
         QObject.__init__(self)
+        
+        from .display_scaling import DisplayScaling
 
         self._is_pause_message = None
         self.original_pixmap = pixmap
 
         if pixmap:
-            scaled_pixmap = pixmap.scaled(128, 128, 
+            # Scale initial size based on display scaling
+            scaled_pixmap = pixmap.scaled(DisplayScaling.scale(128), DisplayScaling.scale(128), 
                                     QtCore.Qt.KeepAspectRatio, 
                                     QtCore.Qt.SmoothTransformation)
             self.setPixmap(scaled_pixmap)
@@ -166,7 +179,10 @@ class DecorationWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent, QtCore.Qt.Window)
         self.setWindowTitle("Decorations")
-        self.setFixedWidth(800)  # Increased width
+        
+        # Scale window size
+        from .display_scaling import DisplayScaling
+        self.setFixedWidth(DisplayScaling.scale(800))
 
         # Create a list to store the decoration items
         self.decoration_items = []
@@ -188,34 +204,51 @@ class DecorationWindow(QtWidgets.QWidget):
 
     def load_decorations(self):
         decoration_path = "images/decoration"
-        items_per_row = 4  # Increased to 4 items per row
+        items_per_row = 4
         row, col = 0, 0
-
+        
+        from .display_scaling import DisplayScaling
+        item_size = DisplayScaling.scale(128)
+        
         for filename in os.listdir(decoration_path):
             if filename.endswith(('.png', '.jpg', '.jpeg')):
                 full_path = os.path.join(decoration_path, filename)
                 pixmap = QtGui.QPixmap(full_path)
-                item = DecorationItem(pixmap, full_path)
+                
+                # Scale item size
+                scaled_pixmap = pixmap.scaled(item_size, item_size, 
+                                        QtCore.Qt.KeepAspectRatio, 
+                                        QtCore.Qt.SmoothTransformation)
+                
+                item = DecorationItem(scaled_pixmap, full_path)
                 self.grid_layout.addWidget(item, row, col)
-
+                
                 col += 1
                 if col >= items_per_row:
                     col = 0
                     row += 1
-
-        # Set the window height based on the number of rows
-        self.setFixedHeight(min((row + 1) * 148 + 40, 650))  # 148 pixels per row (138 + 10 padding), max height of 600
+        
+        # Scale window height
+        self.setFixedHeight(min((row + 1) * (item_size + DisplayScaling.scale(20)) + DisplayScaling.scale(40), DisplayScaling.scale(650)))
 
 class Ui:
     def __init__(self, window, debug_mode=False):
         self.window = window
         self.tamagotchi_logic = None
-        self.debug_mode = debug_mode 
+        self.debug_mode = debug_mode
         
-        # Initialize window properties first
-        self.window.setMinimumSize(1280, 900)
-        self.window_width = 1280
-        self.window_height = 900
+        # Get screen size and initialize scaling
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_size = screen.size()
+        
+        # Import and initialize scaling
+        from .display_scaling import DisplayScaling
+        DisplayScaling.initialize(screen_size.width(), screen_size.height())
+        
+        # Initialize window properties with scaling
+        self.window.setMinimumSize(DisplayScaling.scale(1280), DisplayScaling.scale(900))
+        self.window_width = DisplayScaling.scale(1280)
+        self.window_height = DisplayScaling.scale(900)
         self.window.setWindowTitle("Dosidicus")
         self.window.resize(self.window_width, self.window_height)
 
@@ -239,10 +272,10 @@ class Ui:
         self.debug_text = QtWidgets.QGraphicsTextItem("Debug")
         self.debug_text.setDefaultTextColor(QtGui.QColor("#a9a9a9"))
         font = QtGui.QFont()
-        font.setPointSize(20)
+        font.setPointSize(DisplayScaling.scale(20))
         self.debug_text.setFont(font)
         self.debug_text.setRotation(-90)
-        self.debug_text.setPos(75, 75)
+        self.debug_text.setPos(DisplayScaling.scale(75), DisplayScaling.scale(75))
         self.debug_text.setZValue(100)
         self.debug_text.setVisible(self.debug_mode)
         self.scene.addItem(self.debug_text)
@@ -718,53 +751,52 @@ class Ui:
             self.decoration_window.hide()
 
     def show_pause_message(self, is_paused):
-        """Show or hide the pause message overlay"""
-        # First, ensure all previous pause items are removed
-        self._remove_all_pause_elements()
-        
-        # Stop any existing redraw timer
-        if hasattr(self, 'pause_redraw_timer') and self.pause_redraw_timer:
-            self.pause_redraw_timer.stop()
-            
-        # If not paused, just return after cleanup
-        if not is_paused:
-            self.scene.update()  # Force scene update
-            return
-            
-        # If paused, display pause message
+        # Remove existing pause items
+        for item in self.scene.items():
+            if hasattr(item, '_is_pause_message'):
+                self.scene.removeItem(item)
+
+        # Get current window dimensions
         win_width = self.window_width
         win_height = self.window_height
         
-        # Background rectangle
-        background = QtWidgets.QGraphicsRectItem(
-            -200,
-            (win_height - 250) / 2,
-            win_width + 400,
-            250
-        )
-        background.setBrush(QtGui.QColor(0, 0, 0, 180))
-        background.setPen(QtGui.QPen(QtCore.Qt.NoPen))
-        background.setZValue(1000)
-        background.original_rect = background.rect()
-        setattr(background, '_is_pause_message', True)
-        self.scene.addItem(background)
+        from .display_scaling import DisplayScaling
 
-        # Main pause text
-        pause_text = self.scene.addText("p a u s e d", QtGui.QFont("Arial", 24, QtGui.QFont.Bold))
-        pause_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
-        pause_text.setZValue(1002)
-        setattr(pause_text, '_is_pause_message', True)
-        
-        text_rect = pause_text.boundingRect()
-        pause_text_x = (win_width - text_rect.width()) / 2
-        pause_text_y = (win_height - text_rect.height()) / 2 - 30
-        pause_text.setPos(pause_text_x, pause_text_y)
+        if is_paused:
+            # Background rectangle with scaled dimensions
+            background = QtWidgets.QGraphicsRectItem(
+                -DisplayScaling.scale(200),  # Start 200 pixels left of the window
+                (win_height - DisplayScaling.scale(250)) / 2,  # Vertically center
+                win_width + DisplayScaling.scale(400),  # Total width with scaling
+                DisplayScaling.scale(250)  # Fixed height with scaling
+            )
+            background.setBrush(QtGui.QColor(0, 0, 0, 180))
+            background.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+            background.setZValue(1000)
+            # Store the original rectangle dimensions
+            background.original_rect = background.rect()
+            setattr(background, '_is_pause_message', True)
+            self.scene.addItem(background)
 
-        # Subtext
-        sub_text = self.scene.addText("Use 'Speed' menu to unpause", QtGui.QFont("Arial", 14))
-        sub_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
-        sub_text.setZValue(1002)
-        setattr(sub_text, '_is_pause_message', True)
+            # Main pause text with scaled font
+            pause_font = QtGui.QFont("Arial", DisplayScaling.font_size(24), QtGui.QFont.Bold)
+            pause_text = self.scene.addText("p a u s e d", pause_font)
+            pause_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+            pause_text.setZValue(1002)
+            setattr(pause_text, '_is_pause_message', True)
+            
+            # Center text using scaled calculations
+            text_rect = pause_text.boundingRect()
+            pause_text_x = (win_width - text_rect.width()) / 2
+            pause_text_y = (win_height - text_rect.height()) / 2 - DisplayScaling.scale(30)
+            pause_text.setPos(pause_text_x, pause_text_y)
+
+            # Subtext with scaled font
+            sub_font = QtGui.QFont("Arial", DisplayScaling.font_size(14))
+            sub_text = self.scene.addText("Use 'Speed' menu to unpause", sub_font)
+            sub_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
+            sub_text.setZValue(1002)
+            setattr(sub_text, '_is_pause_message', True)
         
         sub_rect = sub_text.boundingRect()
         sub_text_x = (win_width - sub_rect.width()) / 2
@@ -955,10 +987,15 @@ class Ui:
             if hasattr(item, '_is_message_item'):
                 self.scene.removeItem(item)
 
-        # Create a new QGraphicsTextItem for the message with larger font
+        # Create a new QGraphicsTextItem for the message with scaled font
         message_item = QtWidgets.QGraphicsTextItem(message)
-        message_item.setDefaultTextColor(QtGui.QColor(255, 255, 255))  # White text
-        message_item.setFont(QtGui.QFont("Verdana", 12, QtGui.QFont.Bold))
+        message_item.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+        
+        # Scale font size
+        from .display_scaling import DisplayScaling
+        font = QtGui.QFont("Verdana", DisplayScaling.font_size(12), QtGui.QFont.Bold)
+        message_item.setFont(font)
+        
         message_item.setTextWidth(self.window_width)
         
         # Calculate position - lock to bottom with some padding

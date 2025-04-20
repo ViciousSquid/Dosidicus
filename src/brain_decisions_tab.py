@@ -42,11 +42,7 @@ class DecisionsTab(BrainBaseTab):
         container = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(container)
         
-        # Title with proper styling
-        #title = QtWidgets.QLabel("Neural Decision Process")
-        #title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; padding: 5px;")
-        #title.setAlignment(QtCore.Qt.AlignCenter)
-        #layout.addWidget(title)
+        from .display_scaling import DisplayScaling
         
         # Main visualization area
         self.process_visualization = QtWidgets.QWidget()
@@ -55,8 +51,8 @@ class DecisionsTab(BrainBaseTab):
         # --- Neural Processing Section (Expanded) ---
         self.processing_section = QtWidgets.QGroupBox("Neural Processing")
         self.processing_section.setStyleSheet(
-            "QGroupBox { font-weight: bold; border: 2px solid #9b59b6; border-radius: 8px; margin-top: 1ex; background-color: #f8f9fa; }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; background-color: #9b59b6; color: white; }"
+            f"QGroupBox {{ font-weight: bold; border: 2px solid #9b59b6; border-radius: {DisplayScaling.scale(8)}px; margin-top: 1ex; background-color: #f8f9fa; }}"
+            f"QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 5px; background-color: #9b59b6; color: white; }}"
         )
         processing_layout = QtWidgets.QVBoxLayout(self.processing_section)
         
@@ -89,11 +85,11 @@ class DecisionsTab(BrainBaseTab):
         # Current decision (large, prominent display)
         self.decision_icon = QtWidgets.QLabel()
         self.decision_icon.setAlignment(QtCore.Qt.AlignCenter)
-        self.decision_icon.setFixedSize(64, 64)  # Fixed size for icon
+        self.decision_icon.setFixedSize(DisplayScaling.scale(64), DisplayScaling.scale(64))  # Scaled fixed size
         decision_layout.addWidget(self.decision_icon)
         
         self.decision_output = QtWidgets.QLabel("No Decision")
-        self.decision_output.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-top: 0;")  # Removed top margin
+        self.decision_output.setStyleSheet(f"font-size: {DisplayScaling.font_size(24)}px; font-weight: bold; color: #2c3e50; margin-top: 0;")
         self.decision_output.setAlignment(QtCore.Qt.AlignCenter)
         decision_layout.addWidget(self.decision_output)
         

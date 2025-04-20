@@ -80,3 +80,18 @@ class NetworkTab(BrainBaseTab):
     def show_diagnostic_report(self):
         dialog = DiagnosticReportDialog(self.brain_widget, self)
         dialog.exec_()
+
+    def create_button(self, text, callback, color):
+        """Common utility for creating consistent buttons with proper scaling"""
+        from .display_scaling import DisplayScaling
+        
+        button = QtWidgets.QPushButton(text)
+        button.clicked.connect(callback)
+        button.setStyleSheet(f"background-color: {color}; border: 1px solid black; padding: {DisplayScaling.scale(5)}px;")
+        button.setFixedSize(DisplayScaling.scale(200), DisplayScaling.scale(50))
+        
+        font = button.font()
+        font.setPointSize(DisplayScaling.font_size(10))
+        button.setFont(font)
+        
+        return button

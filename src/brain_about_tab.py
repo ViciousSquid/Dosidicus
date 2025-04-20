@@ -49,35 +49,37 @@ class AboutTab(BrainBaseTab):
     def initialize_ui(self):
         # Get version info first
         version_info = self.get_version_info()
-
+        
+        from .display_scaling import DisplayScaling
+        
         # Main text content using QTextEdit
         about_text = QtWidgets.QTextEdit()
         about_text.setReadOnly(True)
-
-        # Set font size for QTextEdit
+        
+        # Set scaled font size for QTextEdit
         font = about_text.font()
-        font.setPointSize(10)  # Further decreased the font size here
+        font.setPointSize(DisplayScaling.font_size(10))
         about_text.setFont(font)
-
+        
         # Predefined list of approved squid names
         SQUID_NAMES = [
             "Algernon", "Cuthbert", "Englebert", "D'Artagnan",
             "Gaspard", "Ulysses", "Leopold", "Miroslav",
             "Artemis", "Jacques", "Cecil", "Wilhelm", "Giskard"
         ]
-
+        
         # Determine the squid name and personality - more robust approach
         squid_name = random.choice(SQUID_NAMES)
         personality = "Unknown"
-
+        
         # Debug log
         #print("AboutTab initialize_ui:")
         #print(f"  tamagotchi_logic exists: {hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None}")
-
+        
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
             if hasattr(self.tamagotchi_logic, 'squid') and self.tamagotchi_logic.squid:
                 squid = self.tamagotchi_logic.squid
-
+                
                 # Get personality if available
                 if hasattr(squid, 'personality'):
                     personality = str(squid.personality).split('.')[-1]
@@ -85,7 +87,7 @@ class AboutTab(BrainBaseTab):
                     print(f"  Found personality: {personality}")
                 else:
                     print("  Squid has no personality attribute")
-
+                
                 # Handle name (existing or assign new)
                 if hasattr(squid, 'name'):
                     if squid.name:
@@ -98,7 +100,7 @@ class AboutTab(BrainBaseTab):
                     # Initialize name attribute
                     squid.name = squid_name
                     print(f"  Created new name attribute: {squid_name}")
-
+        
         # Build About text with version info
         about_text.setHtml(f"""
         <h1>Dosidicus electronicae</h1>
@@ -113,55 +115,55 @@ class AboutTab(BrainBaseTab):
         <p>This is a research project. Please suggest features.</p><br><br>
         </ul>
         """)
-
+        
         # Create a custom widget for the badge
         badge_widget = QtWidgets.QWidget()
         badge_layout = QtWidgets.QVBoxLayout(badge_widget)
         badge_layout.setContentsMargins(0, 0, 0, 0)  # No margins
         badge_layout.setSpacing(0)  # No spacing
-
+        
         # Badge container
         badge_container = QtWidgets.QWidget()
-        badge_container.setFixedWidth(300)
+        badge_container.setFixedWidth(DisplayScaling.scale(300))
         badge_container.setStyleSheet("""
             background-color: white;
             border: 4px solid #FF0000;
             border-radius: 5px;
         """)
-
+        
         badge_inner_layout = QtWidgets.QVBoxLayout(badge_container)
         badge_inner_layout.setContentsMargins(0, 0, 0, 0)  # No margins
         badge_inner_layout.setSpacing(0)  # No spacing
-
+        
         # "HELLO" label
         hello_label = QtWidgets.QLabel("HELLO")
         hello_label.setAlignment(QtCore.Qt.AlignCenter)
-        hello_label.setStyleSheet("""
+        hello_label.setStyleSheet(f"""
             font-family: Arial, sans-serif;
-            font-size: 38px;
+            font-size: {DisplayScaling.font_size(38)}px;
             font-weight: bold;
             color: #FFFFFF;
             background-color: #FF0000;
         """)
         badge_inner_layout.addWidget(hello_label)
-
+        
         # "my name is..." label
         my_name_label = QtWidgets.QLabel("my name is")
         my_name_label.setAlignment(QtCore.Qt.AlignCenter)
-        my_name_label.setStyleSheet("""
+        my_name_label.setStyleSheet(f"""
             font-family: Arial, sans-serif;
-            font-size: 20px;
+            font-size: {DisplayScaling.font_size(20)}px;
             color: #FFFFFF;
             background-color: #FF0000;
         """)
         badge_inner_layout.addWidget(my_name_label)
-
+        
         # Name label - editable on double-click
         self.name_label = QtWidgets.QLabel(squid_name)
         self.name_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.name_label.setStyleSheet("""
+        self.name_label.setStyleSheet(f"""
             font-family: Arial, sans-serif;
-            font-size: 38px;
+            font-size: {DisplayScaling.font_size(38)}px;
             font-weight: bold;
             color: #000000;
             background-color: white;
@@ -170,46 +172,46 @@ class AboutTab(BrainBaseTab):
         self.name_label.setToolTip("Double-click to change name")
         self.name_label.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         badge_inner_layout.addWidget(self.name_label)
-
+        
         badge_layout.addWidget(badge_container, alignment=QtCore.Qt.AlignHCenter)
-
+        
         # Add personality information below the badge
         personality_container = QtWidgets.QWidget()
         personality_layout = QtWidgets.QVBoxLayout(personality_container)
-        personality_layout.setContentsMargins(10, 20, 10, 10)
-
+        personality_layout.setContentsMargins(DisplayScaling.scale(10), DisplayScaling.scale(20), DisplayScaling.scale(10), DisplayScaling.scale(10))
+        
         # Personality label - store reference for updates
         self.personality_label = QtWidgets.QLabel(f"Personality: {personality}")
         self.personality_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.personality_label.setStyleSheet("font-size: 22px;")
+        self.personality_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(22)}px;")
         personality_layout.addWidget(self.personality_label)
-
+        
         # Button container for care tips and certificate
         button_container = QtWidgets.QWidget()
         button_layout = QtWidgets.QHBoxLayout(button_container)
-        button_layout.setContentsMargins(0, 10, 0, 0)
-
+        button_layout.setContentsMargins(0, DisplayScaling.scale(10), 0, 0)
+        
         # Add Care Tips button
         self.care_tips_button = QtWidgets.QPushButton("Show Care Tips")
         self.care_tips_button.clicked.connect(lambda: self.show_care_tips(personality))
-        self.care_tips_button.setStyleSheet("font-size: 18px; padding: 12px;")  # Further increased font size
+        self.care_tips_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px;")
         self.care_tips_button.setEnabled(personality != "Unknown")  # Disable if no personality
         button_layout.addWidget(self.care_tips_button)
-
+        
         # Add Certificate button
         certificate_button = QtWidgets.QPushButton("View Squid Certificate")
         certificate_button.clicked.connect(self.show_certificate)
-        certificate_button.setStyleSheet("font-size: 18px; padding: 12px;")  # Further increased font size
+        certificate_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px;")
         button_layout.addWidget(certificate_button)
-
+        
         # Add button container to personality layout
         personality_layout.addWidget(button_container)
-
+        
         # Add all widgets to the main layout
         self.layout.addWidget(about_text)
         self.layout.addWidget(badge_widget)
         self.layout.addWidget(personality_container)
-
+        
         print(f"AboutTab initialization complete - Personality: {personality}")
 
     def edit_name(self):
@@ -349,7 +351,7 @@ class AboutTab(BrainBaseTab):
 
         # Return tips for the specific personality, or a default message
         return tips.get(personality_type.lower(),
-                    f"No specific care tips available for {personality_type} squids.")
+                        f"No specific care tips available for {personality_type} squids.")
 
     def get_version_info(self):
         """Read version information from the version file"""
