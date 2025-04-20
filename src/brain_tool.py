@@ -21,6 +21,7 @@ from .brain_about_tab import AboutTab
 from .brain_learning_tab import LearningTab
 from .brain_memory_tab import MemoryTab
 from .brain_decisions_tab import DecisionsTab
+from .neural_network_visualizer_tab import NeuralNetworkVisualizerTab
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
     def __init__(self, tamagotchi_logic, debug_mode=False, config=None):
@@ -210,12 +211,17 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         base_font.setPointSize(self.base_font_size)
         self.tabs.setFont(base_font)
 
-        # Create and add our tabs
+        # Create and add existing tabs
         self.network_tab = NetworkTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.network_tab, "Network")
         
-        self.learning_tab = LearningTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.learning_tab, "Learning")
+        # Add our Neural Network Visualizer tab as the Learning tab (replacing the original learning tab)
+        self.nn_viz_tab = NeuralNetworkVisualizerTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
+        self.tabs.addTab(self.nn_viz_tab, "Learning")  # Use "Learning" instead of "Neural Visualizer"
+        
+        # Comment out or remove the original learning tab
+        # self.learning_tab = LearningTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
+        # self.tabs.addTab(self.learning_tab, "Learning")
         
         self.memory_tab = MemoryTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.memory_tab, "Memory")
@@ -227,7 +233,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.about_tab, "About")
         
         # Make sure all tabs have correct tamagotchi_logic reference
-        for tab_name in ['memory_tab', 'network_tab', 'learning_tab', 'decisions_tab', 'about_tab']:
+        for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'decisions_tab', 'about_tab']:
             if hasattr(self, tab_name):
                 tab = getattr(self, tab_name)
                 if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:
@@ -786,13 +792,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         else:
             self.brain_widget.hebbian_countdown_seconds = 0
 
-        # If we have the learning tab initialized, update its countdown
-        if hasattr(self, 'learning_tab') and hasattr(self.learning_tab, 'countdown_label'):
+        # If we have the neural network visualizer tab initialized, update its countdown
+        if hasattr(self, 'nn_viz_tab') and hasattr(self.nn_viz_tab, 'countdown_label'):
             # Update the formatted display
             if hasattr(self.brain_widget, 'is_paused') and self.brain_widget.is_paused:
-                self.learning_tab.countdown_label.setText("PAUSED")
+                self.nn_viz_tab.countdown_label.setText("PAUSED")
             else:
-                self.learning_tab.countdown_label.setText(f"{self.brain_widget.hebbian_countdown_seconds} seconds")
+                self.nn_viz_tab.countdown_label.setText(f"{self.brain_widget.hebbian_countdown_seconds} seconds")
             
             # If countdown reached zero and not paused, trigger learning
             if (self.brain_widget.hebbian_countdown_seconds == 0 and 
@@ -1159,7 +1165,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             self.about_tab.update_from_brain_state(state)
         
         # Forward updates to each tab that has an update method
-        tabs_to_update = ['network_tab', 'learning_tab', 'memory_tab', 'decisions_tab', 'about_tab']
+        tabs_to_update = ['network_tab', 'learning_tab', 'memory_tab', 'decisions_tab', 'about_tab', 'nn_viz_tab']
         for tab_name in tabs_to_update:
             if hasattr(self, tab_name):
                 tab = getattr(self, tab_name)

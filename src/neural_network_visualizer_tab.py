@@ -1,10 +1,10 @@
-# brain_learning_tab.py
+# neural_network_visualizer_tab.py
 import math
 import random
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 
-class LearningTab(BrainBaseTab):
+class NeuralNetworkVisualizerTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
         super().__init__(parent, tamagotchi_logic, brain_widget, config, debug_mode)
         
@@ -22,13 +22,19 @@ class LearningTab(BrainBaseTab):
         self.setup_ui()
         
     def setup_ui(self):
-        # Main layout
-        main_layout = QtWidgets.QVBoxLayout()
+        # Clear any existing widgets from the parent's layout
+        layout = self.layout  # Get the layout that was set in BrainBaseTab
+        
+        # Clear existing widgets
+        while layout.count():
+            child = layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
         
         # Title and description
         title_label = QtWidgets.QLabel("Neural Network Learning Visualization")
         title_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
-        main_layout.addWidget(title_label)
+        layout.addWidget(title_label)
         
         description = (
             "This visualization shows how the squid's neural network learns and adapts. "
@@ -37,7 +43,7 @@ class LearningTab(BrainBaseTab):
         )
         desc_label = QtWidgets.QLabel(description)
         desc_label.setWordWrap(True)
-        main_layout.addWidget(desc_label)
+        layout.addWidget(desc_label)
         
         # Learning status indicator
         status_layout = QtWidgets.QHBoxLayout()
@@ -46,14 +52,14 @@ class LearningTab(BrainBaseTab):
         status_layout.addWidget(QtWidgets.QLabel("Next learning cycle in:"))
         status_layout.addWidget(self.countdown_label)
         status_layout.addStretch()
-        main_layout.addLayout(status_layout)
+        layout.addLayout(status_layout)
         
         # Create visualization area
         self.viz_scene = QtWidgets.QGraphicsScene()
         self.viz_view = QtWidgets.QGraphicsView(self.viz_scene)
         self.viz_view.setRenderHint(QtGui.QPainter.Antialiasing)
         self.viz_view.setMinimumHeight(300)
-        main_layout.addWidget(self.viz_view)
+        layout.addWidget(self.viz_view)
         
         # Control panel
         control_panel = QtWidgets.QWidget()
@@ -82,7 +88,7 @@ class LearningTab(BrainBaseTab):
             self.trigger_button.clicked.connect(self.trigger_learning_cycle)
             control_layout.addWidget(self.trigger_button)
         
-        main_layout.addWidget(control_panel)
+        layout.addWidget(control_panel)
         
         # Educational panel with tabs
         self.edu_tabs = QtWidgets.QTabWidget()
@@ -118,23 +124,20 @@ class LearningTab(BrainBaseTab):
         self.edu_tabs.addTab(log_widget, "Activity Log")
         
         # Add educational panel to layout
-        main_layout.addWidget(self.edu_tabs)
-        
-        # Set the main layout
-        self.setLayout(main_layout)
+        layout.addWidget(self.edu_tabs)
         
         # Initialize visualization
         self.update_visualization()
-    
-    def clear_log(self):
-        """Clear the activity log"""
-        self.activity_log.setHtml("<h3>Learning Activity Log</h3><p>Recent learning events will appear here.</p>")
     
     def trigger_learning_cycle(self):
         """Trigger an immediate learning cycle"""
         if hasattr(self.parent, 'trigger_learning_cycle'):
             self.parent.trigger_learning_cycle()
             self.add_log_entry("Manual learning cycle triggered")
+            
+    def clear_log(self):
+        """Clear the activity log"""
+        self.activity_log.setHtml("<h3>Learning Activity Log</h3><p>Recent learning events will appear here.</p>")
     
     def add_log_entry(self, message):
         """Add an entry to the activity log"""
@@ -144,6 +147,17 @@ class LearningTab(BrainBaseTab):
         # Auto-scroll to bottom
         scrollbar = self.activity_log.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+    
+    def update_zoom(self, value):
+        """Handle zoom slider changes"""
+        scale = value / 100.0
+        transform = QtGui.QTransform()
+        transform.scale(scale, scale)
+        self.viz_view.setTransform(transform)
+    
+    def update_visualization_mode(self, index):
+        """Update visualization based on selected mode"""
+        self.update_visualization()
     
     def update_from_brain_state(self, state):
         """Update visualization based on current brain state"""
@@ -169,23 +183,23 @@ class LearningTab(BrainBaseTab):
         neuron_positions = self.brain_widget.neuron_positions
         weights = getattr(self.brain_widget, 'weights', {})
         
+        # Filter out hidden neurons
+        filtered_positions = {k: v for k, v in neuron_positions.items() 
+                             if k not in self.hidden_neurons}
+        
         # Scale positions to fit view
         positions = {}
         values = {}
         
-        # Filter out hidden neurons
-        filtered_neurons = {k: v for k, v in neuron_positions.items() 
-                           if k not in self.hidden_neurons}
-        
-        if not filtered_neurons:
+        if not filtered_positions:
             # No neurons to display
             return
         
         # Determine bounds
-        min_x = min(pos[0] for pos in filtered_neurons.values())
-        max_x = max(pos[0] for pos in filtered_neurons.values())
-        min_y = min(pos[1] for pos in filtered_neurons.values())
-        max_y = max(pos[1] for pos in filtered_neurons.values())
+        min_x = min(pos[0] for pos in filtered_positions.values())
+        max_x = max(pos[0] for pos in filtered_positions.values())
+        min_y = min(pos[1] for pos in filtered_positions.values())
+        max_y = max(pos[1] for pos in filtered_positions.values())
         
         width = max(1, max_x - min_x)
         height = max(1, max_y - min_y)
@@ -196,7 +210,7 @@ class LearningTab(BrainBaseTab):
         scale = min(scale_x, scale_y)
         
         # Create scaled positions and get values
-        for name, pos in filtered_neurons.items():
+        for name, pos in filtered_positions.items():
             positions[name] = (
                 (pos[0] - min_x) * scale + 50,  # Add margin
                 (pos[1] - min_y) * scale + 50   # Add margin
@@ -337,21 +351,17 @@ class LearningTab(BrainBaseTab):
         """Draw the neurons with appropriate styling"""
         # For each neuron
         for name, (x, y) in positions.items():
-            # Skip hidden neurons
-            if name in self.hidden_neurons:
-                continue
-                
             # Get value and determine color
             value = values.get(name, 50)
             
             # Calculate color based on neuron type and value
-            if name.startswith("novel_") or name.startswith("reward_") or name.startswith("defense_") or name.startswith("stress_"):
+            if name.startswith("novel_") or name.startswith("reward_") or name.startswith("defense_"):
                 # Special neurons from neurogenesis
                 if name.startswith("novel_"):
                     base_color = QtGui.QColor(255, 255, 150)  # Yellow
                 elif name.startswith("reward_"):
                     base_color = QtGui.QColor(150, 255, 150)  # Green
-                else:  # defense or stress
+                else:
                     base_color = QtGui.QColor(255, 150, 150)  # Red
             else:
                 # Regular neurons
@@ -543,18 +553,7 @@ class LearningTab(BrainBaseTab):
         self.highlighted_neurons = set()
         self.learning_in_progress = False
         self.update_visualization()
-    
-    def update_zoom(self, value):
-        """Handle zoom slider changes"""
-        scale = value / 100.0
-        transform = QtGui.QTransform()
-        transform.scale(scale, scale)
-        self.viz_view.setTransform(transform)
-    
-    def update_visualization_mode(self, index):
-        """Update visualization based on selected mode"""
-        self.update_visualization()
-    
+        
     def _get_learning_explanation_html(self):
         """Return HTML content explaining neural learning"""
         return """
