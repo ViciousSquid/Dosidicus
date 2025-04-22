@@ -156,18 +156,27 @@ class NetworkNode:
         return self.is_connected
     
     def try_reconnect(self):
-        """Attempt to reconnect if auto-reconnect is enabled"""
+        """Attempt to reconnect if auto-reconnect is enabled with better feedback"""
         if not self.auto_reconnect:
             return False
-            
+                
         current_time = time.time()
         if current_time - self.last_connection_attempt < self.connection_retry_interval:
             return False  # Too soon to retry
-            
+                
         if self.debug_mode:
             print("[Network] Attempting to reconnect...")
-            
-        return self.initialize_socket()
+                
+        success = self.initialize_socket()
+        
+        # Update status widget if available
+        if hasattr(self, 'status_widget') and self.status_widget:
+            if success:
+                self.status_widget.add_activity("Successfully reconnected to network")
+            else:
+                self.status_widget.add_activity("Failed to reconnect to network")
+        
+        return success
     
     def _get_local_ip(self):
         """Determine the local IP address with fallback to localhost"""
@@ -537,34 +546,330 @@ class MultiplayerPlugin:
         
         print("Minimal network interface created")
 
+    def update_remote_squid_image(self, remote_squid, direction):
+        """Update the remote squid's image based on its direction"""
+        if 'visual' not in remote_squid:
+            return False
+            
+        visual_item = remote_squid['visual']
+        
+        # Load the appropriate squid image based on direction
+        squid_image = f"{direction}1.png"
+        squid_pixmap = QtGui.QPixmap(os.path.join("images", squid_image))
+        
+        # Check if pixmap is valid
+        if squid_pixmap.isNull():
+            print(f"Error: Could not load squid image: {squid_image}")
+            # Try fallback images
+            for fallback in ["right1.png", "left1.png"]:
+                squid_pixmap = QtGui.QPixmap(os.path.join("images", fallback))
+                if not squid_pixmap.isNull():
+                    break
+                    
+            # If still null after fallback, return failure
+            if squid_pixmap.isNull():
+                return False
+                
+        # Update the pixmap
+        visual_item.setPixmap(squid_pixmap)
+        return True
+
+    
+    def handle_squid_interaction(self, local_squid, remote_squid_id, remote_squid_data):
+        """Handle interaction between local and remote squids"""
+        # Check if squids are close enough to interact
+        local_pos = (local_squid.squid_x, local_squid.squid_y)
+        remote_pos = (remote_squid_data['x'], remote_squid_data['y'])
+        
+        distance = math.sqrt((local_pos[0] - remote_pos[0])**2 + (local_pos[1] - remote_pos[1])**2)
+        
+        # Interact if close enough (within 100 pixels)
+        if distance < 100:
+            # Create a greeting animation
+            self.create_greeting_animation(local_pos, remote_pos)
+            
+            # Add memory of meeting
+            local_squid.memory_manager.add_short_term_memory(
+                'social',
+                'squid_meeting',
+                f"Met a squid from another tank (ID: {remote_squid_id[-4:]})",
+                importance=5
+            )
+            
+            # Exchange a random decoration if available
+            # This could lead to unique items spreading between instances
+            self.attempt_gift_exchange(local_squid, remote_squid_id)
+
+    def attempt_gift_exchange(self, local_squid, remote_squid_id):
+        """Try to exchange a decoration with a remote squid"""
+        # 20% chance of gift exchange per meeting
+        if random.random() > 0.2:
+            return False
+            
+        # Get all decorations in the tank
+        decorations = []
+        for item in self.tamagotchi_logic.user_interface.scene.items():
+            if hasattr(item, 'category') and item.category == 'decoration':
+                decorations.append(item)
+        
+        if not decorations:
+            return False
+        
+        # Select a random decoration
+        gift = random.choice(decorations)
+        
+        # Create a new decoration for the local tank (representing a gift from remote squid)
+        self.create_gift_decoration(remote_squid_id)
+        
+        # Hide the gifted decoration (as if it was taken by the remote squid)
+        gift.setVisible(False)
+        
+        # Schedule to remove it completely
+        QtCore.QTimer.singleShot(10000, lambda: self._remove_gifted_item(gift))
+        
+        # Create memory
+        local_squid.memory_manager.add_short_term_memory(
+            'social',
+            'decoration_exchange',
+            f"Exchanged decorations with a visitor squid from tank {remote_squid_id[-4:]}",
+            importance=6
+        )
+        
+        # Show message
+        if hasattr(self.tamagotchi_logic, 'show_message'):
+            self.tamagotchi_logic.show_message("Your squid exchanged decorations with a visitor!")
+        
+        return True
+
+
+    def create_stolen_rocks(self, squid, count, entry_pos):
+        """Create stolen rocks around the returned squid"""
+        if not hasattr(self.tamagotchi_logic, 'user_interface'):
+            return
+            
+        ui = self.tamagotchi_logic.user_interface
+        scene = ui.scene
+        
+        # Find available rock images
+        rock_images = []
+        base_dirs = ["images/decoration", "images"]
+        for base_dir in base_dirs:
+            if os.path.exists(base_dir):
+                for file in os.listdir(base_dir):
+                    if 'rock' in file.lower() and file.endswith(('.png', '.jpg')):
+                        rock_images.append(os.path.join(base_dir, file))
+        
+        # Use a default if none found
+        if not rock_images:
+            rock_images = ["images/rock.png"]
+        
+        # Get position
+        x, y = entry_pos
+        
+        # Create rocks in a small circle around the squid
+        for i in range(count):
+            try:
+                # Select random rock image
+                rock_file = random.choice(rock_images)
+                
+                # Calculate position (slightly randomized circle)
+                angle = i * (2 * math.pi / count) + random.uniform(-0.2, 0.2)
+                distance = random.uniform(80, 120)
+                rock_x = x + distance * math.cos(angle)
+                rock_y = y + distance * math.sin(angle)
+                
+                # Create rock
+                rock_pixmap = QtGui.QPixmap(rock_file)
+                
+                # Create appropriate item type
+                ResizablePixmapItem = None
+                if hasattr(ui, 'ResizablePixmapItem'):
+                    ResizablePixmapItem = ui.ResizablePixmapItem
+                    rock = ResizablePixmapItem(rock_pixmap, rock_file)
+                else:
+                    rock = QtWidgets.QGraphicsPixmapItem(rock_pixmap)
+                    rock.filename = rock_file
+                
+                # Set category and properties
+                rock.category = 'rock'
+                rock.can_be_picked_up = True
+                rock.is_stolen = True
+                rock.is_foreign = True  # Mark as foreign
+                
+                # Position rock
+                rock.setPos(rock_x, rock_y)
+                
+                # Add to scene
+                scene.addItem(rock)
+                
+                # Apply the foreign tint since these rocks are from another instance
+                # Even though they're stolen, they retain their foreign origin marker
+                self.apply_foreign_object_tint(rock)
+                
+                # Add highlight effect on top of the tint
+                # We need to store the existing effect first
+                existing_effect = rock.graphicsEffect()
+                
+                # Create a combined effect (this gets tricky with Qt)
+                # We'll use opacity animation instead which works with the colorize effect
+                animation = QtCore.QPropertyAnimation(rock, b"opacity")
+                animation.setDuration(1500)
+                animation.setStartValue(0.5)
+                animation.setEndValue(1.0)
+                animation.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
+                
+            except Exception as e:
+                print(f"Error creating stolen rock {i}: {e}")
+        
+        # Create memory about the stolen rocks
+        squid.memory_manager.add_short_term_memory(
+            'achievement',
+            'rock_theft',
+            f"Successfully stole {count} rocks from another squid's tank!",
+            importance=7  # High importance for this achievement
+        )
+
+    
+    def apply_foreign_object_tint(self, item):
+        """Apply a slight red tint to objects from other instances"""
+        # Create a color effect with a red tint
+        color_effect = QtWidgets.QGraphicsColorizeEffect()
+        color_effect.setColor(QtGui.QColor(255, 100, 100))  # Red tint
+        color_effect.setStrength(0.25)  # Subtle effect (25% intensity)
+        
+        # Apply to the item
+        item.setGraphicsEffect(color_effect)
+        
+        # Flag as foreign
+        item.is_foreign = True
+
+
+    def show_network_dashboard(self):
+        """Show a detailed network status dashboard"""
+        # Create the dashboard dialog
+        dashboard = QtWidgets.QDialog(self.tamagotchi_logic.user_interface.window)
+        dashboard.setWindowTitle("Multiplayer Network Dashboard")
+        dashboard.setMinimumSize(500, 400)
+        
+        # Main layout
+        layout = QtWidgets.QVBoxLayout(dashboard)
+        
+        # Connection information
+        info_group = QtWidgets.QGroupBox("Connection Information")
+        info_layout = QtWidgets.QFormLayout(info_group)
+        
+        # Node ID
+        node_id_label = QtWidgets.QLabel(self.network_node.node_id)
+        info_layout.addRow("Node ID:", node_id_label)
+        
+        # IP Address
+        ip_label = QtWidgets.QLabel(self.network_node.local_ip)
+        info_layout.addRow("IP Address:", ip_label)
+        
+        # Connection Status
+        status_label = QtWidgets.QLabel("Connected" if self.network_node.is_connected else "Disconnected")
+        status_label.setStyleSheet("color: green; font-weight: bold;" if self.network_node.is_connected else "color: red; font-weight: bold;")
+        info_layout.addRow("Status:", status_label)
+        
+        layout.addWidget(info_group)
+        
+        # Connected peers table
+        peers_group = QtWidgets.QGroupBox("Connected Peers")
+        peers_layout = QtWidgets.QVBoxLayout(peers_group)
+        
+        peers_table = QtWidgets.QTableWidget()
+        peers_table.setColumnCount(4)
+        peers_table.setHorizontalHeaderLabels(["Node ID", "IP Address", "Last Seen", "Status"])
+        peers_table.horizontalHeader().setStretchLastSection(True)
+        
+        # Add peers to table
+        row = 0
+        for node_id, (ip, last_seen, _) in self.network_node.known_nodes.items():
+            peers_table.insertRow(row)
+            
+            # Node ID
+            peers_table.setItem(row, 0, QtWidgets.QTableWidgetItem(node_id))
+            
+            # IP
+            peers_table.setItem(row, 1, QtWidgets.QTableWidgetItem(ip))
+            
+            # Last seen
+            time_ago = time.time() - last_seen
+            time_text = f"{int(time_ago)}s ago"
+            peers_table.setItem(row, 2, QtWidgets.QTableWidgetItem(time_text))
+            
+            # Status
+            status = "Active" if time_ago < 10 else "Inactive"
+            status_item = QtWidgets.QTableWidgetItem(status)
+            status_item.setForeground(QtGui.QBrush(QtGui.QColor("green" if status == "Active" else "gray")))
+            peers_table.setItem(row, 3, status_item)
+            
+            row += 1
+        
+        peers_layout.addWidget(peers_table)
+        layout.addWidget(peers_group)
+        
+        # Network stats
+        stats_group = QtWidgets.QGroupBox("Network Statistics")
+        stats_layout = QtWidgets.QFormLayout(stats_group)
+        
+        # Calculate stats
+        sent_count = getattr(self.network_node, 'messages_sent', 0)
+        received_count = getattr(self.network_node, 'messages_received', 0)
+        error_count = getattr(self.network_node, 'connection_errors', 0)
+        
+        stats_layout.addRow("Messages Sent:", QtWidgets.QLabel(str(sent_count)))
+        stats_layout.addRow("Messages Received:", QtWidgets.QLabel(str(received_count)))
+        stats_layout.addRow("Connection Errors:", QtWidgets.QLabel(str(error_count)))
+        
+        layout.addWidget(stats_group)
+        
+        # Buttons
+        button_layout = QtWidgets.QHBoxLayout()
+        
+        refresh_button = QtWidgets.QPushButton("Refresh")
+        refresh_button.clicked.connect(lambda: self.update_dashboard(dashboard, peers_table))
+        button_layout.addWidget(refresh_button)
+        
+        close_button = QtWidgets.QPushButton("Close")
+        close_button.clicked.connect(dashboard.accept)
+        button_layout.addWidget(close_button)
+        
+        layout.addLayout(button_layout)
+        
+        # Show the dashboard
+        dashboard.exec_()
+    
+
     def initialize_status_ui(self):
-        """Initialize the status UI components"""
+        """Initialize the status UI components with better error handling"""
         try:
             if not hasattr(self.tamagotchi_logic, 'user_interface'):
+                print("Warning: Cannot initialize status UI - user_interface not found")
                 return
-                
+                    
             ui = self.tamagotchi_logic.user_interface
-            
-            try:
-                # Try to use the dedicated status widget if available
-                from plugins.multiplayer.multiplayer_status_widget import MultiplayerStatusWidget
                 
+            try:
+                # Try to use the dedicated status widget
+                from plugins.multiplayer.multiplayer_status_widget import MultiplayerStatusWidget
+                    
                 # Create status widget if it doesn't exist
                 if not hasattr(ui, 'multiplayer_status'):
                     ui.multiplayer_status = MultiplayerStatusWidget(ui.window)
-                    
+                        
                     # Position in top-right corner
                     ui.multiplayer_status.move(
-                        ui.window_width - ui.multiplayer_status.width() - 10, 
+                        ui.window.width() - ui.multiplayer_status.width() - 10, 
                         10
                     )
-                    
+                        
                     # Hide by default (will be shown when enabled)
                     ui.multiplayer_status.hide()
-                
+                    
                 # Store reference
                 self.status_widget = ui.multiplayer_status
-                
+                    
                 # Update with current status
                 if self.network_node and self.network_node.is_connected:
                     self.status_widget.update_connection_status(True, self.network_node.node_id)
@@ -572,19 +877,21 @@ class MultiplayerPlugin:
                         self.status_widget.update_peers(self.network_node.known_nodes)
                 else:
                     self.status_widget.update_connection_status(False)
-                
+                    
                 # Show the widget
                 self.status_widget.show()
-                
+                    
                 print("Multiplayer status widget initialized")
-                
+                    
             except ImportError:
                 print("Could not import MultiplayerStatusWidget, using fallback status bar")
                 # Use status bar component as fallback
                 self.initialize_status_bar()
-        
+            
         except Exception as e:
             print(f"Error initializing status UI: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _find_tamagotchi_logic(self, obj, depth=0):
         """
@@ -712,34 +1019,120 @@ class MultiplayerPlugin:
         }
         return opposite_directions.get(direction, 'right')  # Default to right if unknown
     
-    def handle_squid_exit_message(self, node, message, addr):
-        """Handle squid boundary exit with improved transition and autopilot"""
+    def create_entry_effect(self, x, y, direction):
+        """Create a dramatic visual effect where squid enters"""
+        if not hasattr(self.tamagotchi_logic, 'user_interface'):
+            return
+            
+        ui = self.tamagotchi_logic.user_interface
+        scene = ui.scene
+        
+        # Create an expanding circle
+        ripple = QtWidgets.QGraphicsEllipseItem(x-10, y-10, 20, 20)
+        ripple.setPen(QtGui.QPen(QtGui.QColor(100, 200, 255, 200), 5))  # Thicker, more visible
+        ripple.setBrush(QtGui.QBrush(QtGui.QColor(100, 200, 255, 150)))
+        scene.addItem(ripple)
+        
+        # Animation group
+        animation_group = QtCore.QParallelAnimationGroup()
+        
+        # Size animation
+        size_anim = QtCore.QVariantAnimation()
+        size_anim.setStartValue(0)
+        size_anim.setEndValue(150)  # Larger effect
+        size_anim.setDuration(1000)
+        
+        def update_size(value):
+            ripple.setRect(
+                x - value/2, 
+                y - value/2,
+                value,
+                value
+            )
+        
+        size_anim.valueChanged.connect(update_size)
+        
+        # Opacity animation
+        opacity_effect = QtWidgets.QGraphicsOpacityEffect()
+        ripple.setGraphicsEffect(opacity_effect)
+        opacity_anim = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
+        opacity_anim.setStartValue(1.0)
+        opacity_anim.setEndValue(0.0)
+        opacity_anim.setDuration(1000)
+        
+        # Add animations to group
+        animation_group.addAnimation(size_anim)
+        animation_group.addAnimation(opacity_anim)
+        
+        # Connect finished signal to cleanup
+        animation_group.finished.connect(lambda: scene.removeItem(ripple))
+        
+        # Start animation
+        animation_group.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
+        
+        # Also add a temporary "NEW ARRIVAL" text that fades out
+        arrival_text = scene.addText("⬇️ NEW ARRIVAL ⬇️")
+        arrival_text.setDefaultTextColor(QtGui.QColor(255, 165, 0))  # Orange
+        arrival_text.setPos(x - 100, y - 80)
+        arrival_text.setScale(1.5)  # Larger text
+        arrival_text.setZValue(100)  # On top of everything
+        
+        # Create fade animation for text
+        text_opacity = QtWidgets.QGraphicsOpacityEffect()
+        arrival_text.setGraphicsEffect(text_opacity)
+        text_fade = QtCore.QPropertyAnimation(text_opacity, b"opacity")
+        text_fade.setDuration(5000)  # Longer duration for visibility
+        text_fade.setStartValue(1.0)
+        text_fade.setEndValue(0.0)
+        text_fade.finished.connect(lambda: scene.removeItem(arrival_text))
+        text_fade.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
+
+    def _setup_controller_immediately(self, node_id, squid_data):
+        """Immediately create controller without waiting for timer"""
         try:
-            # Import RemoteSquidController
             from plugins.multiplayer.squid_multiplayer_autopilot import RemoteSquidController
             
-            # Validate message
-            try:
-                from plugins.multiplayer.packet_validator import PacketValidator
-                valid, error = PacketValidator.validate_message(message)
-                if not valid:
-                    print(f"Invalid squid_exit message: {error}")
-                    return False
-            except ImportError:
-                # Basic validation if validator unavailable
-                if 'payload' not in message:
-                    print("Missing payload in squid_exit message")
-                    return False
+            # Initialize remote_squid_controllers if needed
+            if not hasattr(self, 'remote_squid_controllers'):
+                self.remote_squid_controllers = {}
+                
+            # Create controller
+            print(f"[MULTIPLAYER] Creating autopilot controller for squid {node_id[-4:]}")
+                
+            self.remote_squid_controllers[node_id] = RemoteSquidController(
+                squid_data=squid_data,
+                scene=self.tamagotchi_logic.user_interface.scene,
+                debug_mode=True  # Force debug mode for better tracking
+            )
             
-            # Extract critical exit information
+            print(f"[MULTIPLAYER] Controller created successfully in state: {self.remote_squid_controllers[node_id].state}")
+            
+            # Start controller update timer if needed
+            if not hasattr(self, 'controller_update_timer') or not self.controller_update_timer.isActive():
+                self.controller_update_timer = QtCore.QTimer()
+                self.controller_update_timer.timeout.connect(self.update_remote_controllers)
+                self.controller_update_timer.start(50)  # 50ms update interval (20 FPS)
+        except Exception as e:
+            print(f"[MULTIPLAYER] Error creating remote squid controller: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def handle_squid_exit_message(self, node, message, addr):
+        """Handle squid boundary exit with improved visibility and logging"""
+        try:
+            # Print detailed debug info
+            print(f"[MULTIPLAYER] Received squid_exit message from {message['node_id']}")
+            
+            # Extract payload data
             payload = message.get('payload', {})
             exit_data = payload.get('payload', payload)
             
-            # Validate required fields
+            # Validate required fields with better logging
             required_fields = ['node_id', 'direction', 'position', 'color']
-            if not all(field in exit_data for field in required_fields):
-                print(f"Missing required fields in squid exit. Need: {required_fields}")
-                print(f"Received data: {exit_data}")
+            missing_fields = [field for field in required_fields if field not in exit_data]
+            if missing_fields:
+                print(f"[MULTIPLAYER] Missing required fields in squid exit: {missing_fields}")
+                print(f"[MULTIPLAYER] Received data: {exit_data}")
                 return False
             
             # Extract data
@@ -748,35 +1141,34 @@ class MultiplayerPlugin:
             position = exit_data['position']
             color = exit_data['color']
             
-            # Get state data if available
-            state_data = exit_data.get('state', {})
-            
-            # Determine entry point dynamically
+            # Calculate entry coordinates with visible margin
             window_width = exit_data.get('window_width', 1280)
             window_height = exit_data.get('window_height', 900)
             
-            # Calculate entry coordinates based on exit direction
+            # Make sure the squid appears well within visible bounds
+            margin = 150  # Increased from boundary for visibility
+            
             if exit_direction == 'left':
-                entry_x = window_width - 253  # Right side of window
+                entry_x = window_width - margin
                 entry_y = position.get('y', window_height // 2)
-                entry_direction = 'right'  # Coming from the right
+                entry_direction = 'left'  # Coming from the right but facing left
             elif exit_direction == 'right':
-                entry_x = 100  # Left side of window
+                entry_x = margin
                 entry_y = position.get('y', window_height // 2)
-                entry_direction = 'left'  # Coming from the left
+                entry_direction = 'right'  # Coming from the left but facing right
             elif exit_direction == 'up':
                 entry_x = window_width // 2
-                entry_y = window_height - 253  # Bottom of window
-                entry_direction = 'down'  # Coming from the bottom
+                entry_y = window_height - margin
+                entry_direction = 'up'  # Coming from the bottom but facing up
             elif exit_direction == 'down':
                 entry_x = window_width // 2
-                entry_y = 100  # Top of window
-                entry_direction = 'up'  # Coming from the top
+                entry_y = margin
+                entry_direction = 'down'  # Coming from the top but facing down
             else:
-                print(f"Unknown exit direction: {exit_direction}")
+                print(f"[MULTIPLAYER] Unknown exit direction: {exit_direction}")
                 return False
             
-            # Prepare squid data for remote representation
+            # Prepare squid data with MORE VISIBLE OPACITY
             squid_data = {
                 'x': entry_x,
                 'y': entry_y,
@@ -784,75 +1176,53 @@ class MultiplayerPlugin:
                 'color': color,
                 'status': 'ENTERING',
                 'view_cone_visible': exit_data.get('view_cone_visible', False),
-                'carrying_rock': state_data.get('carrying_rock', False),
-                'hunger': state_data.get('hunger', 50),
-                'happiness': state_data.get('happiness', 50),
-                'is_sleeping': state_data.get('is_sleeping', False),
-                'entry_direction': entry_direction,  # Store entry direction for return trip
+                'carrying_rock': exit_data.get('carrying_rock', False),
+                'hunger': exit_data.get('hunger', 50),
+                'happiness': exit_data.get('happiness', 50),
+                'is_sleeping': exit_data.get('is_sleeping', False),
+                'entry_direction': entry_direction,
                 'entry_time': time.time(),
                 'window_width': self.tamagotchi_logic.user_interface.window_width,
                 'window_height': self.tamagotchi_logic.user_interface.window_height,
                 'home_direction': self.get_opposite_direction(exit_direction)
             }
             
-            # Create or update remote squid representation
-            if hasattr(self, 'entity_manager'):
-                result = self.entity_manager.update_remote_squid(
-                    source_node_id, 
-                    squid_data, 
-                    is_new_arrival=True
-                )
-            else:
-                result = self.update_remote_squid(
-                    source_node_id, 
-                    squid_data, 
-                    is_new_arrival=True
-                )
+            # Add visual effect at entry point
+            self.create_entry_effect(entry_x, entry_y, entry_direction)
             
-            # Store controller creation parameters to be handled in main thread
+            # Create or update remote squid with HIGH VISIBILITY
+            result = self.update_remote_squid(
+                source_node_id, 
+                squid_data, 
+                is_new_arrival=True,
+                high_visibility=True  # New parameter for better visibility
+            )
+            
+            print(f"[MULTIPLAYER] Remote squid created at position ({entry_x}, {entry_y}), success: {result}")
+            
+            # Queue controller creation
             if not hasattr(self, 'pending_controller_creations'):
                 self.pending_controller_creations = []
                 
-            # Queue controller creation for main thread
             self.pending_controller_creations.append({
                 'node_id': source_node_id,
                 'squid_data': squid_data,
                 'timestamp': time.time()
             })
             
-            # Ensure the controller creation timer is running
-            if not hasattr(self, 'controller_creation_timer') or not self.controller_creation_timer.isActive():
-                # Create the timer in the main thread
-                QtCore.QTimer.singleShot(0, self._setup_controller_creation_timer)
+            # Create controller immediately instead of waiting
+            self._setup_controller_immediately(source_node_id, squid_data)
             
-            # Broadcast acknowledgment
-            if self.network_node and self.network_node.is_connected:
-                self.network_node.send_message(
-                    'new_squid_arrival', 
-                    {
-                        'node_id': source_node_id,
-                        'status': 'ACKNOWLEDGED',
-                        'entry_point': {
-                            'x': entry_x,
-                            'y': entry_y
-                        }
-                    }
-                )
-            
-            # Notify local squid about remote squid presence
-            if hasattr(self.tamagotchi_logic.squid, 'process_squid_detection'):
-                self.tamagotchi_logic.squid.process_squid_detection(source_node_id, True)
-            
-            # User notification
+            # Show message with clear indication
             if hasattr(self.tamagotchi_logic, 'show_message'):
                 self.tamagotchi_logic.show_message(
-                    f"🌐 Remote squid {source_node_id[-4:]} crossed from {exit_direction}"
+                    f"🦑 Remote squid {source_node_id[-4:]} arrived from {exit_direction} direction!"
                 )
             
-            return result
-        
+            return True
+            
         except Exception as e:
-            print(f"CRITICAL ERROR in squid exit handler: {e}")
+            print(f"[MULTIPLAYER] CRITICAL ERROR in squid exit handler: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -1021,71 +1391,119 @@ class MultiplayerPlugin:
         return (width // 2, height // 2)
     
     def apply_remote_experiences(self, squid, activity_summary):
-        """Apply the effects of remote activities to the returning squid"""
+        """Apply the effects of remote activities to the returning squid with enhanced memories"""
         # Extract activity data
         food_eaten = activity_summary.get('food_eaten', 0)
         rock_interactions = activity_summary.get('rock_interactions', 0)
+        rocks_stolen = activity_summary.get('rocks_stolen', 0)
         distance_traveled = activity_summary.get('distance_traveled', 0)
         time_away = activity_summary.get('time_away', 0)
         
-        # Apply hunger reduction from food
+        # Create detailed memory of the journey
+        journey_details = f"Visited another tank for {int(time_away/60)}m {int(time_away%60)}s. "
+        
         if food_eaten > 0:
-            hunger_reduction = min(15 * food_eaten, 60)  # Cap at 60 points
-            squid.hunger = max(0, squid.hunger - hunger_reduction)
+            journey_details += f"Found and ate {food_eaten} food items. "
+            squid.hunger = max(0, squid.hunger - 15 * food_eaten)
             
-            # Create memory
+            # Create specific food memory
             squid.memory_manager.add_short_term_memory(
                 'travel', 'remote_feeding',
-                f"Ate {food_eaten} food items while exploring another tank"
+                f"Ate {food_eaten} food items while exploring another tank",
+                importance=4
             )
         
-        # Apply happiness/satisfaction from rock interactions
         if rock_interactions > 0:
-            happiness_boost = min(5 * rock_interactions, 30)  # Cap at 30 points
-            satisfaction_boost = min(10 * rock_interactions, 40)  # Cap at 40 points
+            journey_details += f"Played with {rock_interactions} rocks. "
+            squid.happiness = min(100, squid.happiness + 5 * rock_interactions)
             
-            squid.happiness = min(100, squid.happiness + happiness_boost)
-            squid.satisfaction = min(100, squid.satisfaction + satisfaction_boost)
-            
-            # Create memory
+            # Create rock interaction memory
             squid.memory_manager.add_short_term_memory(
                 'travel', 'remote_rocks',
-                f"Played with {rock_interactions} rocks in another tank"
+                f"Played with {rock_interactions} rocks in another tank",
+                importance=4
             )
         
-        # Apply tiredness from distance traveled
-        if distance_traveled > 0:
-            # Convert to approximate pixels
-            tiredness = distance_traveled / 1000  # One point per 1000 pixels
-            squid.sleepiness = min(100, squid.sleepiness + tiredness)
+        if rocks_stolen > 0:
+            journey_details += f"Successfully brought back {rocks_stolen} rocks! "
+            squid.satisfaction = min(100, squid.satisfaction + 10 * rocks_stolen)
         
-        # Apply anxiety reduction from successful journey
-        anxiety_reduction = min(20, time_away / 60 * 10)  # 10 points per minute, max 20
-        squid.anxiety = max(0, squid.anxiety - anxiety_reduction)
-        
-        # Apply curiosity reduction (satisfied from exploration)
-        curiosity_reduction = min(30, time_away / 30 * 10)  # 10 points per 30 seconds, max 30
-        squid.curiosity = max(0, squid.curiosity - curiosity_reduction)
-        
-        # Create overall journey memory with higher importance
-        minutes = int(time_away / 60)
-        seconds = int(time_away % 60)
-        
-        journey_memory = (
-            f"Completed a journey to another tank lasting {minutes}m {seconds}s. "
-            f"Ate {food_eaten} food items, interacted with {rock_interactions} rocks, "
-            f"and traveled approximately {int(distance_traveled)} pixels."
-        )
-        
+        # Add memory with high importance (8) to ensure it stays memorable
         squid.memory_manager.add_short_term_memory(
-            'travel', 'completed_journey',
-            journey_memory,
-            importance=8  # Higher importance for memorable journey
+            'travel', 
+            'remote_journey',
+            journey_details,
+            importance=8
         )
+        
+        # Apply stat changes
+        squid.curiosity = max(0, squid.curiosity - 30)  # Curiosity satisfied by exploration
+        
+        # Create positive memory of returning home if it was a good experience
+        if food_eaten > 0 or rock_interactions > 3 or rocks_stolen > 0:
+            squid.memory_manager.add_short_term_memory(
+                'emotion',
+                'homecoming',
+                "Felt comforted to be back in my own familiar tank after an exciting adventure.",
+                importance=6
+            )
+
+    def create_exit_effect(self, x, y, direction):
+        """Create a visual ripple effect at squid exit point"""
+        if not hasattr(self.tamagotchi_logic, 'user_interface'):
+            return
+            
+        ui = self.tamagotchi_logic.user_interface
+        scene = ui.scene
+        
+        # Create a circle that expands and fades
+        ripple = QtWidgets.QGraphicsEllipseItem(x-10, y-10, 20, 20)
+        ripple.setPen(QtGui.QPen(QtGui.QColor(100, 200, 255, 200), 3))
+        ripple.setBrush(QtGui.QBrush(QtGui.QColor(100, 200, 255, 100)))
+        scene.addItem(ripple)
+        
+        # Create opacity effect for fade out
+        opacity_effect = QtWidgets.QGraphicsOpacityEffect()
+        ripple.setGraphicsEffect(opacity_effect)
+        
+        # Create animation group
+        animation_group = QtCore.QParallelAnimationGroup()
+        
+        # Size animation (using QVariantAnimation)
+        size_anim = QtCore.QVariantAnimation()
+        size_anim.setStartValue(0)
+        size_anim.setEndValue(100)
+        size_anim.setDuration(1000)
+        
+        def update_size(value):
+            ripple.setRect(
+                x - value/2, 
+                y - value/2,
+                value,
+                value
+            )
+        
+        size_anim.valueChanged.connect(update_size)
+        
+        # Opacity animation
+        opacity_anim = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
+        opacity_anim.setStartValue(1.0)
+        opacity_anim.setEndValue(0.0)
+        opacity_anim.setDuration(1000)
+        
+        # Add animations to group
+        animation_group.addAnimation(size_anim)
+        animation_group.addAnimation(opacity_anim)
+        
+        # Connect finished signal to cleanup
+        animation_group.finished.connect(lambda: scene.removeItem(ripple))
+        
+        # Start animation
+        animation_group.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
 
 
     def handle_squid_return(self, node, message, addr):
-        """Handle a squid returning from another instance"""
+        """Handle a squid returning from another instance with potential stolen rocks"""
         try:
             # Extract data
             payload = message.get('payload', {})
@@ -1095,14 +1513,12 @@ class MultiplayerPlugin:
             
             # Verify this is actually our squid
             if node_id != getattr(self.tamagotchi_logic.network_node, 'node_id', None):
-                if self.debug_mode:
-                    print(f"Received return for node {node_id}, but we are {getattr(self.tamagotchi_logic.network_node, 'node_id', 'unknown')}")
                 return
-                
+                    
             # Calculate entry position based on return direction
             entry_pos = self.calculate_entry_position(return_direction)
             
-            # Fade in the local squid
+            # Get reference to the local squid
             squid = self.tamagotchi_logic.squid
             
             # Set position
@@ -1110,7 +1526,13 @@ class MultiplayerPlugin:
             squid.squid_y = entry_pos[1]
             squid.squid_item.setPos(squid.squid_x, squid.squid_y)
             
-            # Create fade in animation
+            # CHANGE: Make squid visible again
+            squid.squid_item.setVisible(True)
+            
+            # CHANGE: Reset opacity to full
+            squid.squid_item.setOpacity(1.0)
+            
+            # Create fade in animation for smoother appearance
             fade_in = QtCore.QPropertyAnimation(squid.squid_item, b"opacity")
             fade_in.setDuration(1000)
             fade_in.setStartValue(0.0)
@@ -1120,24 +1542,36 @@ class MultiplayerPlugin:
             # Update squid properties based on activities
             self.apply_remote_experiences(squid, activity_summary)
             
-            # Show welcome back message
-            if hasattr(self.tamagotchi_logic, 'show_message'):
-                time_away = activity_summary.get('time_away', 0)
-                minutes_away = int(time_away / 60)
-                seconds_away = int(time_away % 60)
-                
-                self.tamagotchi_logic.show_message(
-                    f"Your squid returned after {minutes_away}m {seconds_away}s in another tank!"
-                )
-                
-            # Re-enable movement
+            # Create any stolen rocks
+            rocks_stolen = activity_summary.get('rocks_stolen', 0)
+            if rocks_stolen > 0:
+                self.create_stolen_rocks(squid, rocks_stolen, entry_pos)
+                    
+                # Show specialized message for rock theft
+                if hasattr(self.tamagotchi_logic, 'show_message'):
+                    self.tamagotchi_logic.show_message(
+                        f"Your squid returned with {rocks_stolen} stolen rocks from another tank!"
+                    )
+            else:
+                # Show regular welcome back message
+                if hasattr(self.tamagotchi_logic, 'show_message'):
+                    time_away = activity_summary.get('time_away', 0)
+                    minutes_away = int(time_away / 60)
+                    seconds_away = int(time_away % 60)
+                    
+                    self.tamagotchi_logic.show_message(
+                        f"Your squid returned after {minutes_away}m {seconds_away}s in another tank!"
+                    )
+                        
+            # CHANGE: Re-enable movement
             squid.can_move = True
             squid.is_transitioning = False
             
+            # CHANGE: Reset status
+            squid.status = "returned from journey"
+            
         except Exception as e:
             print(f"Error handling squid return: {e}")
-            import traceback
-            traceback.print_exc()
 
 
     def _create_arrival_animation(self, visual_item):
@@ -1957,7 +2391,7 @@ class MultiplayerPlugin:
         """
         if not self.tamagotchi_logic or not hasattr(self.tamagotchi_logic, 'user_interface'):
             return
-            
+                
         ui = self.tamagotchi_logic.user_interface
         scene = ui.scene
         
@@ -1972,8 +2406,24 @@ class MultiplayerPlugin:
             # Process remote objects
             if 'objects' in message['payload']:
                 remote_objects = message['payload']['objects']
-                self.process_remote_objects(remote_objects, node_id)
                 
+                # Validate filenames for all objects before processing
+                for obj in remote_objects:
+                    # Ensure filename is valid
+                    if 'filename' not in obj or obj['filename'] is None:
+                        # Set a default filename based on object type
+                        obj_type = obj.get('type', 'unknown')
+                        if 'rock' in obj_type:
+                            obj['filename'] = "images/rock.png"
+                        elif 'food' in obj_type:
+                            obj['filename'] = "images/food.png"
+                        else:
+                            obj['filename'] = "images/decoration/unknown.png"
+                
+                # Now process objects with validated filenames
+                for obj in remote_objects:
+                    self._process_remote_object(obj, node_id)
+                    
             # Notify local squid about remote squid presence
             if hasattr(self.tamagotchi_logic.squid, 'process_squid_detection'):
                 self.tamagotchi_logic.squid.process_squid_detection(node_id, True)
@@ -1981,6 +2431,86 @@ class MultiplayerPlugin:
         except Exception as e:
             if self.debug_mode:
                 print(f"Error handling object sync: {e}")
+                traceback.print_exc()
+
+    def _process_remote_object(self, obj, source_node_id):
+        """Process a single remote object"""
+        ui = self.tamagotchi_logic.user_interface
+        scene = ui.scene
+        
+        obj_id = obj.get('id')
+        if not obj_id:
+            return
+        
+        # Full ID includes source node to avoid collisions
+        full_id = f"{source_node_id}_{obj_id}"
+        
+        if full_id in self.remote_objects:
+            # Update existing object
+            remote_obj = self.remote_objects[full_id]
+            remote_obj['visual'].setPos(obj['x'], obj['y'])
+            remote_obj['last_update'] = time.time()
+            
+            # Make sure the tint is still applied
+            if not hasattr(remote_obj['visual'], 'is_foreign'):
+                self.apply_foreign_object_tint(remote_obj['visual'])
+        else:
+            # Create new object
+            try:
+                obj_type = obj.get('type', 'unknown')
+                filename = obj.get('filename')
+                
+                # Double-check filename is valid
+                if not filename or not os.path.exists(filename):
+                    # Use default based on type
+                    if 'rock' in obj_type:
+                        filename = "images/rock.png"
+                    elif 'food' in obj_type:
+                        filename = "images/food.png"
+                    else:
+                        filename = "images/decoration/unknown.png"
+                    
+                    # Make sure file exists
+                    if not os.path.exists(filename):
+                        print(f"Cannot find valid file for remote object {obj_id}, skipping")
+                        return
+                
+                # Create visual representation
+                pixmap = QtGui.QPixmap(filename)
+                visual = QtWidgets.QGraphicsPixmapItem(pixmap)
+                visual.setPos(obj['x'], obj['y'])
+                visual.setScale(obj.get('scale', 1.0))
+                visual.setOpacity(0.7)  # Semi-transparent
+                visual.setZValue(-1)  # Behind local objects
+                
+                # Store filename for future reference
+                visual.filename = filename
+                
+                # Apply the red tint to indicate foreign origin
+                self.apply_foreign_object_tint(visual)
+                
+                # Add to scene
+                scene.addItem(visual)
+                
+                # Store in tracking dict
+                self.remote_objects[full_id] = {
+                    'visual': visual,
+                    'type': obj_type,
+                    'source_node': source_node_id,
+                    'last_update': time.time(),
+                    'data': obj
+                }
+                
+                # Add a small label to indicate remote object
+                remote_label = scene.addText("Remote")
+                remote_label.setDefaultTextColor(QtGui.QColor(150, 150, 150))
+                remote_label.setPos(obj['x'], obj['y'] - 20)
+                remote_label.setScale(0.6)
+                self.remote_objects[full_id]['label'] = remote_label
+                
+            except Exception as e:
+                print(f"Error creating remote object: {e}")
+                import traceback
                 traceback.print_exc()
     
     def handle_heartbeat(self, node, message, addr):
@@ -1999,8 +2529,8 @@ class MultiplayerPlugin:
             if node_id not in self.remote_squids:
                 self.status_bar.add_message(f"New remote squid detected: {node_id}")
     
-    def update_remote_squid(self, node_id, squid_data, is_new_arrival=False):
-        """Update or create a remote squid visualization"""
+    def update_remote_squid(self, node_id, squid_data, is_new_arrival=False, high_visibility=False):
+        """Update or create a remote squid visualization with improved visibility"""
         if not squid_data or not all(k in squid_data for k in ['x', 'y']):
             return False
         
@@ -2010,72 +2540,89 @@ class MultiplayerPlugin:
             remote_squid = self.remote_squids[node_id]
             remote_squid['visual'].setPos(squid_data['x'], squid_data['y'])
             
-            # Update view cone if needed
-            if 'view_cone_visible' in squid_data and squid_data['view_cone_visible']:
-                self.update_remote_view_cone(node_id, squid_data)
-            else:
-                # Hide view cone if it exists
-                if 'view_cone' in remote_squid and remote_squid['view_cone'] in self.scene.items():
-                    self.scene.removeItem(remote_squid['view_cone'])
-                    remote_squid['view_cone'] = None
-                    
+            # Update direction - IMPORTANT!
+            if 'direction' in squid_data:
+                # Get direction
+                direction = squid_data['direction']
+                # Update image based on direction
+                if direction in ['left', 'right', 'up', 'down']:
+                    # Load the appropriate squid image
+                    squid_image = f"{direction}1.png"
+                    squid_pixmap = QtGui.QPixmap(os.path.join("images", squid_image))
+                    remote_squid['visual'].setPixmap(squid_pixmap)
             
-            # Update status text
+            # Update status text with brighter color for visibility
             if 'status_text' in remote_squid:
-                status = "ENTERING" if is_new_arrival else squid_data.get('status', 'unknown')
+                status = "ENTERING" if is_new_arrival else squid_data.get('status', 'visiting')
                 remote_squid['status_text'].setPlainText(f"{status}")
                 remote_squid['status_text'].setPos(
                     squid_data['x'], 
                     squid_data['y'] - 30
                 )
                 
-                # Make text more visible for entering squids
-                if is_new_arrival:
-                    remote_squid['status_text'].setDefaultTextColor(QtGui.QColor(255, 255, 0))
-                    remote_squid['status_text'].setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
+                # Make text more visible
+                if is_new_arrival or high_visibility:
+                    remote_squid['status_text'].setDefaultTextColor(QtGui.QColor(255, 255, 0))  # Bright yellow
+                    remote_squid['status_text'].setFont(QtGui.QFont("Arial", 14, QtGui.QFont.Bold))
         else:
-            # Create new remote squid representation
+            # Create new remote squid representation with high visibility
             try:
                 # Load the appropriate squid image based on direction
                 direction = squid_data.get('direction', 'right')
                 squid_image = f"{direction}1.png"
                 squid_pixmap = QtGui.QPixmap(os.path.join("images", squid_image))
+                
+                if not squid_pixmap or squid_pixmap.isNull():
+                    print(f"[MULTIPLAYER] Error: Could not load squid image: {squid_image}")
+                    # Try fallback images
+                    for fallback in ["right1.png", "left1.png"]:
+                        squid_pixmap = QtGui.QPixmap(os.path.join("images", fallback))
+                        if not squid_pixmap.isNull():
+                            break
+                            
+                # If still null, create a placeholder
+                if squid_pixmap.isNull():
+                    print("[MULTIPLAYER] Creating placeholder squid image")
+                    squid_pixmap = QtGui.QPixmap(60, 40)
+                    squid_pixmap.fill(QtGui.QColor(0, 0, 255))
+                
                 remote_visual = QtWidgets.QGraphicsPixmapItem(squid_pixmap)
                 remote_visual.setPos(squid_data['x'], squid_data['y'])
                 
-                # Change Z-value here - increase to appear in front of background
-                remote_visual.setZValue(10)  # Changed from -1 or 5 to 10
-                
-                remote_visual.setOpacity(self.REMOTE_SQUID_OPACITY)
-                
-                # Add ID text
-                id_text = self.scene.addText(f"Remote Squid ({node_id[-4:]})")
-                id_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
-                id_text.setPos(squid_data['x'], squid_data['y'] - 45)
-                id_text.setScale(0.8)
-                
-                # Update Z-value for text as well
-                id_text.setZValue(10)  # Changed to match the squid
-                
-                id_text.setVisible(self.show_labels)
-                
-                # Add status text with emphasis on "ENTERING"
-                status_text = self.scene.addText("ENTERING" if is_new_arrival else squid_data.get('status', 'unknown'))
-                if is_new_arrival:
-                    status_text.setDefaultTextColor(QtGui.QColor(255, 255, 0))
-                    status_text.setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
+                # Adjust visibility based on context
+                if is_new_arrival or high_visibility:
+                    remote_visual.setZValue(100)  # Very high z-value to be on top
+                    remote_visual.setOpacity(1.0)  # Full opacity
+                    # Add a temporary glow effect
+                    glow = QtWidgets.QGraphicsDropShadowEffect()
+                    glow.setBlurRadius(20)
+                    glow.setColor(QtGui.QColor(0, 255, 255))  # Cyan glow
+                    glow.setOffset(0, 0)
+                    remote_visual.setGraphicsEffect(glow)
                 else:
-                    status_text.setDefaultTextColor(QtGui.QColor(200, 200, 200))
+                    remote_visual.setZValue(5)  # Above background, below local squid
+                    remote_visual.setOpacity(0.8)  # More visible than before
+                
+                # Add ID text with improved visibility
+                id_text = self.tamagotchi_logic.user_interface.scene.addText(f"Remote Squid ({node_id[-4:]})")
+                id_text.setDefaultTextColor(QtGui.QColor(255, 255, 0))  # Yellow for visibility
+                id_text.setPos(squid_data['x'], squid_data['y'] - 45)
+                id_text.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))  # Bold font
+                id_text.setZValue(100)  # Same high z-value
+                
+                # Add status text with clear entrance indication
+                status_text = self.tamagotchi_logic.user_interface.scene.addText("ENTERING" if is_new_arrival else squid_data.get('status', 'visiting'))
+                if is_new_arrival:
+                    status_text.setDefaultTextColor(QtGui.QColor(255, 165, 0))  # Orange
+                    status_text.setFont(QtGui.QFont("Arial", 14, QtGui.QFont.Bold))
+                else:
+                    status_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+                    status_text.setFont(QtGui.QFont("Arial", 10))
                 status_text.setPos(squid_data['x'], squid_data['y'] - 30)
-                status_text.setScale(0.7)
-                
-                # Update Z-value for status text
-                status_text.setZValue(10)  # Changed to match the squid
-                
-                status_text.setVisible(self.show_labels)
+                status_text.setZValue(100)  # Same high z-value
                 
                 # Add to scene
-                self.scene.addItem(remote_visual)
+                self.tamagotchi_logic.user_interface.scene.addItem(remote_visual)
                 
                 # Store in tracking dict
                 self.remote_squids[node_id] = {
@@ -2087,16 +2634,12 @@ class MultiplayerPlugin:
                     'data': squid_data
                 }
                 
-                # Add view cone if needed
-                if 'view_cone_visible' in squid_data and squid_data['view_cone_visible']:
-                    self.update_remote_view_cone(node_id, squid_data)
-                    
-                # Create arrival animation for new squids
+                # Add enhanced entrance animation for better visibility
                 if is_new_arrival:
-                    self._create_arrival_animation(remote_visual)
+                    self._create_enhanced_arrival_animation(remote_visual, squid_data['x'], squid_data['y'])
             
             except Exception as e:
-                print(f"Error creating remote squid: {e}")
+                print(f"[MULTIPLAYER] Error creating remote squid: {e}")
                 import traceback
                 traceback.print_exc()
                 return False
@@ -2107,6 +2650,70 @@ class MultiplayerPlugin:
             self.remote_squids[node_id]['data'] = squid_data
         
         return True
+
+    def _create_enhanced_arrival_animation(self, visual_item, x, y):
+        """Create an attention-grabbing animation for newly arrived squids"""
+        try:
+            # Create multiple visual indicators
+            scene = self.tamagotchi_logic.user_interface.scene
+            
+            # 1. Create pulsing circles around the squid
+            for i in range(3):  # Three circles
+                circle = QtWidgets.QGraphicsEllipseItem(x-30, y-30, 60, 60)
+                circle.setPen(QtGui.QPen(QtGui.QColor(0, 255, 255, 150), 2))
+                circle.setBrush(QtCore.Qt.NoBrush)
+                circle.setZValue(99)  # Just below the squid
+                scene.addItem(circle)
+                
+                # Create pulse animation
+                def create_pulse(circle_item, delay):
+                    # Scale animation
+                    anim = QtCore.QVariantAnimation()
+                    anim.setStartValue(0.5)
+                    anim.setEndValue(2.0)
+                    anim.setDuration(2000)
+                    anim.setLoopCount(3)  # Repeat 3 times
+                    
+                    # Use a delay based on index
+                    QtCore.QTimer.singleShot(delay, anim.start)
+                    
+                    def update_circle(value):
+                        circle_item.setRect(
+                            x - 30*value, 
+                            y - 30*value,
+                            60*value,
+                            60*value
+                        )
+                    
+                    anim.valueChanged.connect(update_circle)
+                    anim.finished.connect(lambda: scene.removeItem(circle_item))
+                
+                create_pulse(circle, i * 500)  # Stagger the animations
+            
+            # 2. Add "Welcome" text that fades in and out
+            welcome_text = scene.addText("👋 Visitor Arrived!")
+            welcome_text.setDefaultTextColor(QtGui.QColor(255, 255, 0))
+            welcome_text.setFont(QtGui.QFont("Arial", 14, QtGui.QFont.Bold))
+            welcome_text.setPos(x - 70, y - 80)
+            welcome_text.setZValue(101)
+            
+            # Fade animation for welcome text
+            text_effect = QtWidgets.QGraphicsOpacityEffect()
+            welcome_text.setGraphicsEffect(text_effect)
+            
+            fade_anim = QtCore.QPropertyAnimation(text_effect, b"opacity")
+            fade_anim.setDuration(5000)  # 5 seconds
+            fade_anim.setStartValue(0.0)
+            fade_anim.setKeyValueAt(0.1, 1.0)  # Quick fade in
+            fade_anim.setKeyValueAt(0.8, 1.0)  # Stay visible
+            fade_anim.setEndValue(0.0)  # Fade out
+            fade_anim.finished.connect(lambda: scene.removeItem(welcome_text))
+            fade_anim.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
+            
+        except Exception as e:
+            print(f"[MULTIPLAYER] Animation error: {e}")
+            # Fallback to simpler method if animation fails
+            visual_item.setOpacity(1.0)
             
     def handle_remote_squid_return(self, node_id, controller):
         """Handle a remote squid returning to its home instance"""
@@ -2272,106 +2879,224 @@ class MultiplayerPlugin:
         # Store in our tracking dict
         remote_squid['view_cone'] = view_cone_item
 
-    
-    def process_remote_objects(self, remote_objects, source_node_id):
-        """
-        Process objects from remote node and create/update their representation
+    def create_gift_decoration(self, source_node_id):
+        """Create a new decoration as a gift from a remote squid"""
+        if not hasattr(self.tamagotchi_logic, 'user_interface'):
+            return None
         
-        Args:
-            remote_objects: List of object data from remote node
-            source_node_id: ID of the source node
-        """
+        ui = self.tamagotchi_logic.user_interface
+        scene = ui.scene
+        
+        # Try to find decoration images
+        decoration_images = []
+        decoration_dirs = ["images/decoration", "images"]
+        for base_dir in decoration_dirs:
+            if os.path.exists(base_dir):
+                files = os.listdir(base_dir)
+                for file in files:
+                    filepath = os.path.join(base_dir, file)
+                    if file.endswith(('.png', '.jpg')) and 'decoration' in file.lower():
+                        decoration_images.append(filepath)
+        
+        # If no decoration images found, use a default placeholder
+        if not decoration_images:
+            print("No decoration images found, using plant as fallback")
+            decoration_images = ["images/plant.png"]  # Fallback to plant
+        
+        # Choose random decoration image
+        decoration_file = random.choice(decoration_images)
+        
+        try:
+            # Create decoration
+            decoration_pixmap = QtGui.QPixmap(decoration_file)
+            
+            ResizablePixmapItem = None
+            if hasattr(ui, 'ResizablePixmapItem'):
+                ResizablePixmapItem = ui.ResizablePixmapItem
+                decoration = ResizablePixmapItem(decoration_pixmap, decoration_file)
+            else:
+                decoration = QtWidgets.QGraphicsPixmapItem(decoration_pixmap)
+                decoration.filename = decoration_file
+            
+            # Set category
+            decoration.category = 'decoration'
+            decoration.is_gift = True
+            
+            # Position randomly in a vacant area
+            window_width = ui.window_width
+            window_height = ui.window_height
+            
+            # Try to find a position that doesn't overlap with existing items
+            for attempt in range(10):  # Try 10 times to find a good spot
+                # Random position within visible area
+                x = random.uniform(100, window_width - 100)
+                y = random.uniform(100, window_height - 100)
+                
+                # Check for overlap with existing items
+                position_is_clear = True
+                for item in scene.items():
+                    if isinstance(item, QtWidgets.QGraphicsPixmapItem):
+                        item_rect = item.sceneBoundingRect()
+                        if item_rect.contains(x, y):
+                            position_is_clear = False
+                            break
+                
+                if position_is_clear:
+                    break
+            
+            decoration.setPos(x, y)
+            
+            # Apply red tint to show foreign origin
+            self.apply_foreign_object_tint(decoration)
+            
+            # Add to scene
+            scene.addItem(decoration)
+            
+            # Create an entry animation (fade in)
+            decoration.setOpacity(0)
+            fade_in = QtCore.QPropertyAnimation(decoration, b"opacity")
+            fade_in.setDuration(1000)
+            fade_in.setStartValue(0)
+            fade_in.setEndValue(0.8)  # Slightly transparent
+            fade_in.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
+            
+            # Add gift label
+            gift_label = scene.addText("🎁 Gift")
+            gift_label.setDefaultTextColor(QtGui.QColor(255, 100, 100))
+            gift_label.setPos(x, y - 30)
+            
+            # Create label fade animation
+            label_fade = QtCore.QPropertyAnimation(gift_label, b"opacity")
+            label_fade.setDuration(3000)
+            label_fade.setStartValue(1.0)
+            label_fade.setEndValue(0.0)
+            label_fade.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
+            
+            return decoration
+            
+        except Exception as e:
+            print(f"Error creating gift decoration: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+        
+    def update_remote_visual(self, item, new_position):
+        """Update a remote visual item while preserving tint"""
+        # Update position
+        item.setPos(new_position['x'], new_position['y'])
+        
+        # Make sure tint is preserved
+        if hasattr(item, 'is_foreign') and item.is_foreign:
+            # If item doesn't have a graphics effect, reapply it
+            if not item.graphicsEffect():
+                self.apply_foreign_object_tint(item)
+
+    
+    def process_remote_object(self, obj_data, source_node_id):
+        """Process a remote object and apply tint"""
         # Skip processing if we don't have the UI
         if not hasattr(self.tamagotchi_logic, 'user_interface'):
-            print("No user interface available for remote objects")
+            print("No user interface available for remote object")
             return
-                
+
         ui = self.tamagotchi_logic.user_interface
         scene = ui.scene
         
         if self.debug_mode:
-            print(f"Processing {len(remote_objects)} remote objects from {source_node_id}")
+            print(f"Processing remote object from {source_node_id}")
+
+        obj_id = obj_data.get('id')
         
-        # Process each remote object
-        for obj in remote_objects:
-            obj_id = obj.get('id')
+        # Skip if no valid ID
+        if not obj_id:
+            return
+        
+        # Skip if being carried (owner should handle)
+        if obj_data.get('is_being_carried', False):
+            return
+        
+        # Full ID includes source node to avoid collisions
+        full_id = f"{source_node_id}_{obj_id}"
+        
+        if self.debug_mode:
+            print(f"Processing remote object: {full_id}")
+        
+        if full_id in self.remote_objects:
+            # Update existing object
+            remote_obj = self.remote_objects[full_id]
+            remote_obj['visual'].setPos(obj_data['x'], obj_data['y'])
+            remote_obj['last_update'] = time.time()
             
-            # Skip if no valid ID
-            if not obj_id:
-                continue
-                    
-            # Skip if being carried (owner should handle)
-            if obj.get('is_being_carried', False):
-                continue
-                    
-            # Full ID includes source node to avoid collisions
-            full_id = f"{source_node_id}_{obj_id}"
-            
+            # Make sure the tint is still applied
+            if not hasattr(remote_obj['visual'], 'is_foreign'):
+                color_effect = QtWidgets.QGraphicsColorizeEffect()
+                color_effect.setColor(QtGui.QColor(255, 100, 100))
+                color_effect.setStrength(0.25)
+                remote_obj['visual'].setGraphicsEffect(color_effect)
+                remote_obj['visual'].is_foreign = True
+                
             if self.debug_mode:
-                print(f"Processing remote object: {full_id}")
-                print(f"Object data: {obj}")
-            
-            if full_id in self.remote_objects:
-                # Update existing object
-                remote_obj = self.remote_objects[full_id]
-                remote_obj['visual'].setPos(obj['x'], obj['y'])
-                remote_obj['last_update'] = time.time()
+                print(f"Updated existing remote object: {full_id}")
+        else:
+            # Create new object if we can
+            try:
+                obj_type = obj_data.get('type', 'unknown')
+                filename = obj_data.get('filename')
+                
+                # Verify filename exists
+                if not filename:
+                    print(f"Error: No filename for remote object {full_id}")
+                    return
+                
+                # Check if file exists
+                if not os.path.exists(filename):
+                    print(f"Error: File not found: {filename}")
+                    return
                 
                 if self.debug_mode:
-                    print(f"Updated existing remote object: {full_id}")
-            else:
-                # Create new object if we can
-                try:
-                    obj_type = obj.get('type', 'unknown')
-                    filename = obj.get('filename')
+                    print(f"Creating remote object from {filename}")
+                
+                # Create pixmap item
+                pixmap = QtGui.QPixmap(filename)
+                visual = QtWidgets.QGraphicsPixmapItem(pixmap)
+                visual.setPos(obj_data['x'], obj_data['y'])
+                visual.setScale(obj_data.get('scale', 1.0))
+                visual.setOpacity(0.7)  # Semi-transparent
+                visual.setZValue(-1)  # Behind local objects
+                
+                # Apply tint to indicate foreign origin
+                color_effect = QtWidgets.QGraphicsColorizeEffect()
+                color_effect.setColor(QtGui.QColor(255, 100, 100))
+                color_effect.setStrength(0.25)
+                visual.setGraphicsEffect(color_effect)
+                visual.is_foreign = True
+                
+                # Add to scene
+                scene.addItem(visual)
+                
+                # Store in tracking dict
+                self.remote_objects[full_id] = {
+                    'visual': visual,
+                    'type': obj_type,
+                    'source_node': source_node_id,
+                    'last_update': time.time(),
+                    'data': obj_data
+                }
+                
+                # Add a small label to indicate remote object
+                remote_label = scene.addText("Remote")
+                remote_label.setDefaultTextColor(QtGui.QColor(150, 150, 150))
+                remote_label.setPos(obj_data['x'], obj_data['y'] - 20)
+                remote_label.setScale(0.6)
+                self.remote_objects[full_id]['label'] = remote_label
+                
+                if self.debug_mode:
+                    print(f"Successfully created remote object: {full_id}")
                     
-                    # Verify filename exists
-                    if not filename:
-                        print(f"Error: No filename for remote object {full_id}")
-                        continue
-                    
-                    # Check if file exists
-                    if not os.path.exists(filename):
-                        print(f"Error: File not found: {filename}")
-                        continue
-                    
-                    if self.debug_mode:
-                        print(f"Creating remote object from {filename}")
-                    
-                    # Create pixmap item with transparency
-                    pixmap = QtGui.QPixmap(filename)
-                    visual = QtWidgets.QGraphicsPixmapItem(pixmap)
-                    visual.setPos(obj['x'], obj['y'])
-                    visual.setScale(obj.get('scale', 1.0))
-                    visual.setOpacity(0.7)  # Make it semi-transparent to distinguish
-                    visual.setZValue(-1)  # Behind local objects
-                    
-                    # Add to scene
-                    scene.addItem(visual)
-                    
-                    # Store in tracking dict
-                    self.remote_objects[full_id] = {
-                        'visual': visual,
-                        'type': obj_type,
-                        'source_node': source_node_id,
-                        'last_update': time.time(),
-                        'data': obj
-                    }
-                    
-                    # Add a small label to indicate remote object
-                    remote_label = scene.addText("Remote")
-                    remote_label.setDefaultTextColor(QtGui.QColor(150, 150, 150))
-                    remote_label.setPos(obj['x'], obj['y'] - 20)
-                    remote_label.setScale(0.6)
-                    self.remote_objects[full_id]['label'] = remote_label
-                    
-                    if self.debug_mode:
-                        print(f"Successfully created remote object: {full_id}")
-                    
-                except Exception as e:
-                    print(f"Error creating remote object: {e}")
-                    import traceback
-                    traceback.print_exc()
+            except Exception as e:
+                print(f"Error creating remote object: {e}")
+                import traceback
+                traceback.print_exc()
     
     def handle_rock_throw(self, node, message, addr):
         """

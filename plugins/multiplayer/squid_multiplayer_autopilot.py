@@ -1,4 +1,3 @@
-# squid_multiplayer_autopilot.py
 import random
 import math
 import time
@@ -33,6 +32,11 @@ class RemoteSquidController:
         self.food_eaten_count = 0
         self.rock_interaction_count = 0
         self.distance_traveled = 0
+        
+        # Add rock stealing behavior
+        self.rocks_stolen = 0
+        self.max_rocks_to_steal = random.randint(1, 3)  # Limit how many rocks to steal
+        self.stealing_phase = False
         
         # Movement parameters
         self.move_speed = 5
@@ -143,7 +147,7 @@ class RemoteSquidController:
                 print(f"[AutoPilot] Ate food, food count: {self.food_eaten_count}")
     
     def interact_with_object(self):
-        """Interact with rocks or other objects"""
+        """Interact with rocks or other objects, with a chance to steal them"""
         if not self.target_object or not self.is_object_valid(self.target_object):
             # Lost target, go back to exploring
             if self.debug_mode:
@@ -161,27 +165,45 @@ class RemoteSquidController:
         distance = self.distance_between(squid_pos, target_pos)
         
         if distance < 50:  # Close enough to interact
-            self.interact_with_rock(self.target_object)
+            is_remotely_owned = getattr(self.target_object, 'is_remote', False)
+            is_local_rock = not is_remotely_owned
+            
+            # Regular interaction
             self.rock_interaction_count += 1
             
-            # 30% chance to pick up rock
-            if random.random() < 0.3 and not self.squid_data.get('carrying_rock', False):
+            # Try to steal if this is a rock and we haven't reached our limit
+            if (self.is_rock(self.target_object) and 
+                is_local_rock and 
+                self.rocks_stolen < self.max_rocks_to_steal and
+                random.random() < 0.4):  # 40% chance to try stealing
+                
+                # Set carrying state
                 self.squid_data['carrying_rock'] = True
+                self.stealing_phase = True
+                
+                # Hide the original rock
+                self.target_object.setVisible(False)
+                
+                # Increment counter
+                self.rocks_stolen += 1
+                
                 if self.debug_mode:
-                    print(f"[AutoPilot] Picked up rock")
-            
-            # If carrying rock, 20% chance to throw it
-            elif self.squid_data.get('carrying_rock', False) and random.random() < 0.2:
-                self.squid_data['carrying_rock'] = False
-                if self.debug_mode:
-                    print(f"[AutoPilot] Threw rock")
+                    print(f"[AutoPilot] Stole a rock! Total stolen: {self.rocks_stolen}")
+                
+                # Set status to indicate stealing
+                self.squid_data['status'] = "stealing rock"
+                
+                # If we've met our quota, start heading home
+                if self.rocks_stolen >= self.max_rocks_to_steal:
+                    self.state = "returning"
+                    self.determine_home_direction()
+                    if self.debug_mode:
+                        print(f"[AutoPilot] Met stealing quota, heading home")
+                    return
             
             # Move on after interacting
             self.target_object = None
             self.state = "exploring"
-            
-            if self.debug_mode:
-                print(f"[AutoPilot] Interacted with rock, count: {self.rock_interaction_count}")
     
     def return_home(self):
         """Begin returning to home instance"""
@@ -493,6 +515,14 @@ class RemoteSquidController:
         # Update squid happiness
         self.squid_data['happiness'] = min(100, self.squid_data.get('happiness', 50) + 5)
     
+    def is_rock(self, item):
+        """Determine if an item is a rock"""
+        if hasattr(item, 'category') and getattr(item, 'category', None) == 'rock':
+            return True
+        if hasattr(item, 'filename') and 'rock' in getattr(item, 'filename', '').lower():
+            return True
+        return False
+    
     def is_object_valid(self, obj):
         """Check if an object is still valid (exists in scene)"""
         return obj in self.scene.items()
@@ -547,11 +577,12 @@ class RemoteSquidController:
         return False
     
     def get_summary(self):
-        """Get a summary of the squid's activities while away"""
+        """Get a summary of the squid's activities while away, including rock stealing"""
         summary = {
             'time_away': self.time_away,
             'food_eaten': self.food_eaten_count,
             'rock_interactions': self.rock_interaction_count,
+            'rocks_stolen': self.rocks_stolen,
             'distance_traveled': self.distance_traveled,
             'final_state': self.state
         }

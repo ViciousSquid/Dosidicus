@@ -29,32 +29,36 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
         frame = QtWidgets.QFrame(self)
         frame.setStyleSheet("""
             QFrame {
-                background-color: rgba(0, 0, 0, 150);
-                border-radius: 10px;
+                background-color: rgba(0, 0, 0, 170);
+                border-radius: 12px;
                 color: white;
+                border: 1px solid rgba(255, 255, 255, 100);
             }
         """)
         frame_layout = QtWidgets.QVBoxLayout(frame)
         
-        # Status header
-        self.status_label = QtWidgets.QLabel("Multiplayer: Disconnected")
+        # Title with improved styling
+        title_label = QtWidgets.QLabel("🌐 Multiplayer")
+        title_label.setStyleSheet("color: #FFFFFF; font-weight: bold; font-size: 14px;")
+        title_label.setAlignment(QtCore.Qt.AlignCenter)
+        frame_layout.addWidget(title_label)
+        
+        # Status header with icon
+        status_layout = QtWidgets.QHBoxLayout()
+        status_icon = QtWidgets.QLabel("⚠️")  # Default to warning icon
+        self.status_icon = status_icon
+        status_layout.addWidget(status_icon)
+        
+        self.status_label = QtWidgets.QLabel("Disconnected")
         self.status_label.setStyleSheet("color: #FF6666; font-weight: bold;")
-        frame_layout.addWidget(self.status_label)
+        status_layout.addWidget(self.status_label)
+        status_layout.addStretch()
+        frame_layout.addLayout(status_layout)
         
-        # Node ID
-        self.node_id_label = QtWidgets.QLabel("Node ID: -")
-        self.node_id_label.setStyleSheet("color: #CCCCCC;")
-        frame_layout.addWidget(self.node_id_label)
-        
-        # Peers count
-        self.peers_label = QtWidgets.QLabel("Connected Peers: 0")
-        self.peers_label.setStyleSheet("color: #CCCCCC;")
-        frame_layout.addWidget(self.peers_label)
-        
-        # Active peers list
-        self.peers_list = QtWidgets.QListWidget()
-        self.peers_list.setMaximumHeight(100)
-        self.peers_list.setStyleSheet("""
+        # Add activity log
+        self.activity_log = QtWidgets.QListWidget()
+        self.activity_log.setMaximumHeight(120)
+        self.activity_log.setStyleSheet("""
             QListWidget {
                 background-color: rgba(0, 0, 0, 100);
                 border: 1px solid #444444;
@@ -64,18 +68,50 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
             QListWidget::item {
                 padding: 2px;
             }
-            QListWidget::item:selected {
-                background-color: rgba(0, 100, 200, 100);
-            }
         """)
-        frame_layout.addWidget(self.peers_list)
+        frame_layout.addWidget(self.activity_log)
         
-        # Add the frame to the main layout
+        # Add minimize/expand button
+        toggle_button = QtWidgets.QPushButton("▲")
+        toggle_button.setMaximumWidth(30)
+        toggle_button.clicked.connect(self.toggle_expanded)
+        frame_layout.addWidget(toggle_button, alignment=QtCore.Qt.AlignRight)
+        
+        # Add to main layout
         layout.addWidget(frame)
         
-        # Set size
-        self.setMinimumWidth(200)
-        self.setMaximumWidth(300)
+        # Initialize as expanded
+        self.is_expanded = True
+
+    def add_activity(self, message):
+        """Add an entry to the activity log"""
+        timestamp = QtCore.QTime.currentTime().toString("hh:mm:ss")
+        item = QtWidgets.QListWidgetItem(f"{timestamp}: {message}")
+        
+        # Add to beginning for most recent at top
+        self.activity_log.insertItem(0, item)
+        
+        # Limit size of log
+        if self.activity_log.count() > 50:
+            self.activity_log.takeItem(self.activity_log.count() - 1)
+
+    def toggle_expanded(self):
+        """Toggle between minimized and expanded view"""
+        self.is_expanded = not self.is_expanded
+        
+        # Show/hide elements based on state
+        self.activity_log.setVisible(self.is_expanded)
+        
+        # Adjust button text
+        sender = self.sender()
+        if isinstance(sender, QtWidgets.QPushButton):
+            sender.setText("▲" if not self.is_expanded else "▼")
+        
+        # Resize the widget
+        if self.is_expanded:
+            self.setMaximumHeight(1000)  # Effectively no max height
+        else:
+            self.setMaximumHeight(100)  # Just enough for status and ID
     
     def update_connection_status(self, is_connected, node_id=None):
         """Update the connection status display"""
