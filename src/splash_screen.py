@@ -15,12 +15,12 @@ class SplashScreen(QtWidgets.QWidget):
         self.frame_index = 0
         self.frames = []
         
+        # Load frames
         for i in range(1, 7):
             image_path = os.path.join("images", "egg", f"anim0{i}.jpg")
             if os.path.exists(image_path):
                 original_pixmap = QtGui.QPixmap(image_path)
                 if not original_pixmap.isNull():
-                    # Scale pixmap according to display scaling
                     scaled_size = original_pixmap.size() * DisplayScaling.get_scale_factor()
                     scaled_pixmap = original_pixmap.scaled(
                         scaled_size,
@@ -33,18 +33,22 @@ class SplashScreen(QtWidgets.QWidget):
             else:
                 print(f"Image file not found: {image_path}")
             
-            if not self.frames:
-                print("No frames were loaded successfully.")
-                self.label = QtWidgets.QLabel("No images loaded", self)
-                self.setFixedSize(256, 256)
-            else:
-                self.label = QtWidgets.QLabel(self)
-                self.label.setPixmap(self.frames[0])
-                self.setFixedSize(self.frames[0].size())
-            
-            self.timer = QtCore.QTimer(self)
-            self.timer.timeout.connect(self.next_frame)
-            self.timer.start(1500)  # 1.5 seconds between frames
+        if not self.frames:
+            print("No frames were loaded successfully.")
+            self.label = QtWidgets.QLabel("No images loaded", self)
+            self.setFixedSize(256, 256)
+        else:
+            self.label = QtWidgets.QLabel(self)
+            self.label.setPixmap(self.frames[0])
+            self.setFixedSize(self.frames[0].size())
+        
+        # Create timer but don't start it yet
+        self.timer = QtCore.QTimer(self)
+        self.timer.timeout.connect(self.next_frame)
+
+    def start_animation(self):
+        """Start the animation sequence after window is ready"""
+        self.timer.start(1500)  # 1.5 seconds between frames
 
     def next_frame(self):
         self.frame_index += 1

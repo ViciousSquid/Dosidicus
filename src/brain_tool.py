@@ -18,10 +18,9 @@ from .personality import Personality
 from .learning import LearningConfig
 from .brain_network_tab import NetworkTab
 from .brain_about_tab import AboutTab
-from .brain_learning_tab import LearningTab
+from .brain_learning_tab import NeuralNetworkVisualizerTab
 from .brain_memory_tab import MemoryTab
 from .brain_decisions_tab import DecisionsTab
-from .neural_network_visualizer_tab import NeuralNetworkVisualizerTab
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
     def __init__(self, tamagotchi_logic, debug_mode=False, config=None):
@@ -101,10 +100,21 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                     tab.set_tamagotchi_logic(tamagotchi_logic)
 
     def set_debug_mode(self, enabled):
+        """Properly set debug mode for brain window and all tabs"""
         self.debug_mode = enabled
+        
+        # Update brain widget's debug mode
         if hasattr(self, 'brain_widget'):
             self.brain_widget.debug_mode = enabled
-        self.update()
+        
+        # Update all tabs
+        for tab_name in ['network_tab', 'nn_viz_tab', 'memory_tab', 'decisions_tab', 'about_tab']:
+            if hasattr(self, tab_name):
+                tab = getattr(self, tab_name)
+                if hasattr(tab, 'debug_mode'):
+                    tab.debug_mode = enabled
+        
+        print(f"Brain window debug mode set to: {enabled}")
 
 
     def on_hebbian_countdown_finished(self):
@@ -215,13 +225,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.network_tab = NetworkTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.network_tab, "Network")
         
-        # Add our Neural Network Visualizer tab as the Learning tab (replacing the original learning tab)
+        # Add our Neural Network Visualizer tab as the Learning tab
         self.nn_viz_tab = NeuralNetworkVisualizerTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.nn_viz_tab, "Learning")  # Use "Learning" instead of "Neural Visualizer"
-        
-        # Comment out or remove the original learning tab
-        # self.learning_tab = LearningTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        # self.tabs.addTab(self.learning_tab, "Learning")
+        self.tabs.addTab(self.nn_viz_tab, "Learning")
         
         self.memory_tab = MemoryTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.memory_tab, "Memory")
@@ -239,6 +245,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:
                     tab.set_tamagotchi_logic(self.tamagotchi_logic)
                     print(f"Set tamagotchi_logic for {tab_name}")
+        
+        # Pre-load the learning tab to make it responsive on first click
+        if hasattr(self, 'nn_viz_tab'):
+            if hasattr(self.nn_viz_tab, 'pre_load_data'):
+                QtCore.QTimer.singleShot(500, self.nn_viz_tab.pre_load_data)
 
 
     def update_randomness_factors(self, randomness):
@@ -1910,28 +1921,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         return (x + random.randint(-50, 50), y + random.randint(-50, 50))
     
     def update_paused_overlay(self):
-        """Update the paused state overlay"""
-        # Check if we have is_paused attribute
-        if not hasattr(self, 'is_paused'):
-            return
-            
-        # If we already have a paused overlay label, update it
+        """Update the paused state"""
+        # Maintain pause state but don't show visual overlay
         if hasattr(self, 'paused_overlay_label'):
-            self.paused_overlay_label.setVisible(self.is_paused)
-        # Otherwise, create one if we're paused
-        elif self.is_paused:
-            self.paused_overlay_label = QtWidgets.QLabel("PAUSED", self)
-            self.paused_overlay_label.setStyleSheet("""
-                background-color: rgba(0, 0, 0, 150);
-                color: white;
-                font-size: 36px;
-                font-weight: bold;
-                padding: 20px;
-                border-radius: 10px;
-            """)
-            self.paused_overlay_label.setAlignment(QtCore.Qt.AlignCenter)
-            self.paused_overlay_label.setGeometry(self.rect())
-            self.paused_overlay_label.show()
+            self.paused_overlay_label.setVisible(False)  # Always keep it invisible
+            self.paused_overlay_label.deleteLater()
+            delattr(self, 'paused_overlay_label')
     
     def update_learning_statistics(self):
         """Update the statistics tab with comprehensive learning metrics"""
@@ -2412,3 +2407,99 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         
         if reply == QtWidgets.QMessageBox.Yes:
             self.activity_log.clear()
+
+class NeuronInspector(QtWidgets.QDialog):
+    def __init__(self, brain_window, parent=None):
+        super().__init__(parent)
+        self.brain_window = brain_window
+        self.setWindowTitle("Neuron Inspector")
+        self.setFixedSize(400, 400)
+        
+        layout = QtWidgets.QVBoxLayout()
+        self.setLayout(layout)
+        
+        # Neuron selector
+        self.neuron_combo = QtWidgets.QComboBox()
+        layout.addWidget(self.neuron_combo)
+        
+        # Info display
+        self.info_text = QtWidgets.QTextEdit()
+        self.info_text.setReadOnly(True)
+        layout.addWidget(self.info_text)
+        
+        # Connection list
+        self.connections_list = QtWidgets.QListWidget()
+        layout.addWidget(self.connections_list)
+        
+        # Refresh button
+        self.refresh_btn = QtWidgets.QPushButton("Refresh")
+        self.refresh_btn.clicked.connect(self.update_info)
+        layout.addWidget(self.refresh_btn)
+        
+        # Connect to brain widget's neuronClicked signal
+        if hasattr(brain_window.brain_widget, 'neuronClicked'):
+            brain_window.brain_widget.neuronClicked.connect(self.inspect_neuron)
+        
+        self.update_neuron_list()
+
+    def update_neuron_list(self):
+        if hasattr(self.brain_window, 'brain_widget'):
+            brain = self.brain_window.brain_widget
+            self.neuron_combo.clear()
+            self.neuron_combo.addItems(sorted(brain.neuron_positions.keys()))
+            self.neuron_combo.currentIndexChanged.connect(self.update_info)
+            self.update_info()
+
+    def inspect_neuron(self, neuron_name):
+        """Update the inspector with data for the clicked neuron"""
+        # Find the index of the neuron in the combo box
+        index = self.neuron_combo.findText(neuron_name)
+        if index >= 0:
+            self.neuron_combo.setCurrentIndex(index)
+        self.update_info()
+
+    def update_info(self):
+        """Update all display elements for current neuron"""
+        if not hasattr(self.brain_window, 'brain_widget'):
+            return
+            
+        brain = self.brain_window.brain_widget
+        neuron = self.neuron_combo.currentText()
+        
+        if not neuron or neuron not in brain.neuron_positions:
+            return
+            
+        # Get neuron details
+        pos = brain.neuron_positions[neuron]
+        state = brain.state.get(neuron, 0)
+        
+        # Determine neuron type
+        neuron_type = "Original" if neuron in getattr(brain, 'original_neuron_positions', {}) else "New"
+        
+        # Update info text
+        info_html = f"""
+        <h2>{neuron}</h2>
+        <p><strong>Position:</strong> ({pos[0]:.1f}, {pos[1]:.1f})</p>
+        <p><strong>Current Value:</strong> {state:.1f}</p>
+        <p><strong>Type:</strong> {neuron_type}</p>
+        """
+        self.info_text.setHtml(info_html)
+        
+        # Update connections list
+        self.connections_list.clear()
+        
+        # Find and display connections
+        for (src, dst), weight in brain.weights.items():
+            if src == neuron or dst == neuron:
+                connection_neuron = dst if src == neuron else src
+                direction = "→" if src == neuron else "←"
+                item_text = f"{src} {direction} {dst}: {weight:.3f}"
+                
+                # Color code based on weight
+                item = QtWidgets.QListWidgetItem(item_text)
+                if weight > 0:
+                    item.setForeground(QtGui.QColor(0, 150, 0))  # Green for positive
+                else:
+                    item.setForeground(QtGui.QColor(200, 0, 0))  # Red for negative
+                
+                self.connections_list.addItem(item)

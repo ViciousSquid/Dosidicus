@@ -15,13 +15,16 @@ from .personality import Personality
 from .learning import LearningConfig
 
 class BrainWidget(QtWidgets.QWidget):
+    # Define the signal as a class attribute here
+    neuronClicked = QtCore.pyqtSignal(str)
+    
     def __init__(self, config=None, debug_mode=False, tamagotchi_logic=None):
         self.config = config if config else LearningConfig()
         if not hasattr(self.config, 'hebbian'):
             self.config.hebbian = {
-                'learning_interval': 30000,  # 30 seconds in milliseconds
+                'learning_interval': 30000,
                 'weight_decay': 0.01,
-                'active_threshold': 50  # Threshold for considering a neuron active
+                'active_threshold': 50
             }
         super().__init__()
 
@@ -31,10 +34,10 @@ class BrainWidget(QtWidgets.QWidget):
         neuronClicked = QtCore.pyqtSignal(str)
         self.config = config if config else LearningConfig()
         self.debug_mode = debug_mode  # Initialize debug_mode
-        self.neuronClicked = QtCore.pyqtSignal(str)
         self.is_paused = False
         self.last_hebbian_time = time.time()
         self.tamagotchi_logic = tamagotchi_logic
+        self.recently_updated_neuron_pairs = []
         
         # Neural communication tracking system
         self.communication_events = {}
@@ -146,15 +149,30 @@ class BrainWidget(QtWidgets.QWidget):
         
 
     def set_debug_mode(self, enabled):
-        """Properly handle debug mode changes"""
-        old_mode = getattr(self, 'debug_mode', False)
+        """Set debug mode without causing circular callbacks"""
+        # Only proceed if there's an actual change
+        if self.debug_mode == enabled:
+            return
+            
+        # Update our own state
         self.debug_mode = enabled
         
-        # Only take action if mode has changed
-        if old_mode != enabled:
-            print(f"BrainWidget debug mode {'enabled' if enabled else 'disabled'}")
-            # Force a redraw to reflect any visual changes
-            self.update()
+        # Update brain widget
+        if hasattr(self, 'brain_widget'):
+            self.brain_widget.debug_mode = enabled
+        
+        # Update tabs
+        for tab_name in ['network_tab', 'nn_viz_tab', 'memory_tab', 'decisions_tab', 'about_tab']:
+            if hasattr(self, tab_name):
+                tab = getattr(self, tab_name)
+                if hasattr(tab, 'debug_mode'):
+                    tab.debug_mode = enabled
+        
+        # Enable/disable debug-specific UI elements
+        if hasattr(self, 'stimulate_button'):
+            self.stimulate_button.setEnabled(enabled)
+        
+        print(f"Brain window debug mode set to: {enabled}")
 
     def stop_hebbian_learning(self):
         """Stop Hebbian learning immediately"""
@@ -233,15 +251,25 @@ class BrainWidget(QtWidgets.QWidget):
 
 
     def perform_hebbian_learning(self):
+        # Add debounce mechanism - prevent multiple calls within short time frame
+        current_time = time.time()
+        min_interval = 5  # Minimum 5 seconds between learning operations
+        
+        if hasattr(self, 'last_hebbian_time') and (current_time - self.last_hebbian_time < min_interval):
+            print("Hebbian learning skipped - too soon after previous learning")
+            return
+            
         if self.is_paused:
             return
 
         print("  ")
         print("\x1b[44mPerforming Hebbian learning...\x1b[0m")
-        self.last_hebbian_time = time.time()
+        self.last_hebbian_time = current_time
+
+        # Initialize the list of updated neuron pairs
+        self.recently_updated_neuron_pairs = []
 
         # Clean up old weight change events
-        current_time = time.time()
         self.weight_change_events = {
             k: v for k, v in self.weight_change_events.items()
             if (current_time - v) < self.activity_duration
@@ -287,8 +315,8 @@ class BrainWidget(QtWidgets.QWidget):
             print("Not enough active neurons for Hebbian learning")
             return
 
-        # Perform learning for a random subset of active neuron pairs
-        sample_size = min(5, len(active_neurons) * (len(active_neurons) - 1) // 2)
+        # Select only 2 pairs for learning
+        sample_size = min(2, len(active_neurons) * (len(active_neurons) - 1) // 2)
         sampled_pairs = random.sample([(i, j) for i in range(len(active_neurons)) for j in range(i + 1, len(active_neurons))], sample_size)
         
         print(f">> Learning on {sample_size} random neuron pairs")
@@ -299,6 +327,8 @@ class BrainWidget(QtWidgets.QWidget):
             value1 = self.get_neuron_value(current_state.get(neuron1, 50))  # Default to 50 if not in current_state
             value2 = self.get_neuron_value(current_state.get(neuron2, 50))
             self.update_connection(neuron1, neuron2, value1, value2)
+            # Add the pair to recently updated neurons
+            self.recently_updated_neuron_pairs.append((neuron1, neuron2))
 
         # Update the brain visualization
         self.update()
@@ -312,6 +342,10 @@ class BrainWidget(QtWidgets.QWidget):
                 interval_ms = 40000
             self.hebbian_countdown_seconds = int(interval_ms / 1000)
             print(f"Reset countdown to {self.hebbian_countdown_seconds} seconds")
+
+    def get_recently_updated_neurons(self):
+        """Return the list of neuron pairs updated in the last learning cycle"""
+        return self.recently_updated_neuron_pairs
 
 
     def resizeEvent(self, event):
@@ -1233,12 +1267,16 @@ class BrainWidget(QtWidgets.QWidget):
         if event.button() == QtCore.Qt.LeftButton:
             for name, pos in self.neuron_positions.items():
                 if self._is_click_on_neuron(click_pos, pos, scale):
-                    self.neuronClicked.emit(name)
+                    self.neuronClicked.emit(name)  # Now this should work
                     self.dragging = True
                     self.dragged_neuron = name
                     self.drag_start_pos = click_pos
                     self.update()
                     break
+
+    def handle_neuron_clicked(self, neuron_name):
+        # Handle the neuron click event
+        print(f"Neuron clicked: {neuron_name}")
 
     def show_diagnostic_report(self):
         dialog = DiagnosticReportDialog(self, self.parent())

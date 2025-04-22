@@ -1,629 +1,539 @@
-# brain_learning_tab.py
-import math
-import random
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
+import random
+import time
 
-class LearningTab(BrainBaseTab):
+class NeuralNetworkVisualizerTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
+    
+        # Ensure brain_widget is not None
+        if brain_widget is None:
+            print("WARNING: Brain widget is None. Creating a placeholder.")
+            from .brain_widget import BrainWidget
+            brain_widget = BrainWidget()
+
+        # Call parent's __init__
         super().__init__(parent, tamagotchi_logic, brain_widget, config, debug_mode)
         
-        # Animation state tracking
-        self.animations = {}
-        self.learning_in_progress = False
-        self.highlighted_neurons = set()
-        self.current_state = {}
-        self.popup_items = []  # Track popup items
+        # Explicit attribute initialization
+        self.countdown_label = None
+        self.countdown_timer = None
+        self.activity_log = None
+        self.tab_widget = None  # Updated to use tab widget
+        self.edu_views = {}     # Dictionary to store QTextEdit for each tab
+        self.current_countdown = 30
+        self.learning_history = []
+        self.recent_pairs = []
         
-        # Neurons to hide
-        self.hidden_neurons = ['is_eating', 'pursuing_food', 'is_fleeing']
-        
-        # Setup the UI
         self.setup_ui()
+
+    def pre_load_data(self):
+        """Pre-load data and initialize UI elements to make tab responsive on first click"""
+        # Update educational content for each tab
+        if hasattr(self, 'edu_views'):
+            for tab_name, edu_view in self.edu_views.items():
+                self.update_educational_content(tab_name=tab_name)
         
+        # Pre-initialize any visualizations
+        if hasattr(self, 'activity_log'):
+            # Add placeholder entry to initialize rendering
+            self.activity_log.insertHtml(
+                '<div style="color: #555; font-style: italic; padding: 10px;">Learning system ready.</div>'
+            )
+        
+        # Pre-compute any expensive operations that would happen on first tab selection
+        if hasattr(self, 'brain_widget') and hasattr(self.brain_widget, 'weights'):
+            # Process some sample data to initialize any visualizations
+            sample_state = self.brain_widget.state.copy() if hasattr(self.brain_widget, 'state') else {}
+            self.update_from_brain_state(sample_state)
+
+    def create_custom_button(self, text, callback, color, font_size=18):
+        """Create a button with custom styling"""
+        button = QtWidgets.QPushButton(text)
+        button.clicked.connect(callback)
+        button.setStyleSheet(f"""
+            QPushButton {{
+                font-size: {font_size}px;
+                padding: 4px 12px;
+                border-radius: 6px;
+                font-weight: 500;
+                border: 2px solid {color};
+                background-color: {color};
+                color: white;
+                min-width: 120px;
+                height: 30px;
+            }}
+            QPushButton:hover {{
+                background-color: {self.darken_color(color, 20)};
+                border: 2px solid {self.darken_color(color, 20)};
+            }}
+        """)
+        button.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        return button
+
     def setup_ui(self):
-        # Main layout
+        
+        # Remove existing widgets from the layout
+        if hasattr(self, '_layout'):
+            while self.layout.count():
+                item = self.layout.takeAt(0)
+                if item.widget():
+                    widget = item.widget()
+                    self.layout.removeWidget(widget)
+                    widget.deleteLater()
+
+        # Main vertical layout
         main_layout = QtWidgets.QVBoxLayout()
+        self.layout.addLayout(main_layout)
+
+        # Splitter for main content
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        main_layout.addWidget(splitter)
+
+        # Left panel - Activity Log
+        log_container = QtWidgets.QWidget()
+        log_layout = QtWidgets.QVBoxLayout(log_container)
         
-        # Title and description
-        title_label = QtWidgets.QLabel("Neural Network Learning Visualization")
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
-        main_layout.addWidget(title_label)
-        
-        description = (
-            "This visualization shows how the squid's neural network learns and adapts. "
-            "Neurons (circles) represent different aspects of the squid's state, and "
-            "connections (lines) show how they influence each other."
-        )
-        desc_label = QtWidgets.QLabel(description)
-        desc_label.setWordWrap(True)
-        main_layout.addWidget(desc_label)
-        
-        # Learning status indicator
-        status_layout = QtWidgets.QHBoxLayout()
-        self.countdown_label = QtWidgets.QLabel("30 seconds")
-        self.countdown_label.setStyleSheet("font-weight: bold; color: #3498db;")
-        status_layout.addWidget(QtWidgets.QLabel("Next learning cycle in:"))
-        status_layout.addWidget(self.countdown_label)
-        status_layout.addStretch()
-        main_layout.addLayout(status_layout)
-        
-        # Create visualization area
-        self.viz_scene = QtWidgets.QGraphicsScene()
-        self.viz_view = QtWidgets.QGraphicsView(self.viz_scene)
-        self.viz_view.setRenderHint(QtGui.QPainter.Antialiasing)
-        self.viz_view.setMinimumHeight(300)
-        main_layout.addWidget(self.viz_view)
-        
-        # Control panel
-        control_panel = QtWidgets.QWidget()
-        control_layout = QtWidgets.QHBoxLayout(control_panel)
-        
-        # Zoom slider
-        zoom_label = QtWidgets.QLabel("Zoom:")
-        control_layout.addWidget(zoom_label)
-        
-        self.zoom_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.zoom_slider.setMinimum(50)
-        self.zoom_slider.setMaximum(150)
-        self.zoom_slider.setValue(100)
-        self.zoom_slider.valueChanged.connect(self.update_zoom)
-        control_layout.addWidget(self.zoom_slider)
-        
-        # View mode selector
-        self.mode_selector = QtWidgets.QComboBox()
-        self.mode_selector.addItems(["Standard View", "Simplified View", "Detailed View"])
-        self.mode_selector.currentIndexChanged.connect(self.update_visualization_mode)
-        control_layout.addWidget(self.mode_selector)
-        
-        # Add manual learning trigger button (only in debug mode)
-        if self.debug_mode:
-            self.trigger_button = QtWidgets.QPushButton("Trigger Learning Cycle")
-            self.trigger_button.clicked.connect(self.trigger_learning_cycle)
-            control_layout.addWidget(self.trigger_button)
-        
-        main_layout.addWidget(control_panel)
-        
-        # Educational panel with tabs
-        self.edu_tabs = QtWidgets.QTabWidget()
-        
-        # How Learning Works tab
-        learning_widget = QtWidgets.QWidget()
-        learning_layout = QtWidgets.QVBoxLayout(learning_widget)
-        learning_content = QtWidgets.QTextEdit()
-        learning_content.setReadOnly(True)
-        learning_content.setHtml(self._get_learning_explanation_html())
-        learning_layout.addWidget(learning_content)
-        self.edu_tabs.addTab(learning_widget, "How Learning Works")
-        
-        # Key Concepts tab
-        concepts_widget = QtWidgets.QWidget()
-        concepts_layout = QtWidgets.QVBoxLayout(concepts_widget)
-        concepts_content = QtWidgets.QTextEdit()
-        concepts_content.setReadOnly(True)
-        concepts_content.setHtml(self._get_key_concepts_html())
-        concepts_layout.addWidget(concepts_content)
-        self.edu_tabs.addTab(concepts_widget, "Key Concepts")
-        
-        # Add activity log tab
-        log_widget = QtWidgets.QWidget()
-        log_layout = QtWidgets.QVBoxLayout(log_widget)
         self.activity_log = QtWidgets.QTextEdit()
         self.activity_log.setReadOnly(True)
-        self.activity_log.setHtml("<h3>Learning Activity Log</h3><p>Recent learning events will appear here.</p>")
+        self.activity_log.setStyleSheet("""
+            QTextEdit {
+                background-color: #f5f7fa;
+                border: 2px solid #e1e5eb;
+                border-radius: 12px;
+                padding: 20px;
+                font-size: 18px;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+        """)
+        log_layout.addWidget(QtWidgets.QLabel(
+            "<h1 style='font-size: 28px; margin-bottom: 15px; color: #2c3e50; font-weight: 600;'>🧠 Neural Activity Log</h1>"
+        ))
         log_layout.addWidget(self.activity_log)
-        clear_button = QtWidgets.QPushButton("Clear Log")
-        clear_button.clicked.connect(self.clear_log)
-        log_layout.addWidget(clear_button, alignment=QtCore.Qt.AlignRight)
-        self.edu_tabs.addTab(log_widget, "Activity Log")
+
+        # Right panel - Educational Content with Tabs
+        edu_container = QtWidgets.QWidget()
+        edu_layout = QtWidgets.QVBoxLayout(edu_container)
         
-        # Add educational panel to layout
-        main_layout.addWidget(self.edu_tabs)
+        # Add tab widget
+        self.tab_widget = QtWidgets.QTabWidget()
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: 2px solid #e1e5eb;
+                border-radius: 12px;
+                background-color: #ffffff;
+            }
+            QTabBar::tab {
+                background: #f8f9fa;
+                border: 1px solid #e1e5eb;
+                padding: 10px 20px;
+                margin-right: 5px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                font-size: 16px;
+                color: #2c3e50;
+            }
+            QTabBar::tab:selected {
+                background: #ffffff;
+                border-bottom: none;
+                font-weight: 600;
+            }
+            QTabBar::tab:hover {
+                background: #e9ecef;
+            }
+        """)
         
-        # Set the main layout
-        self.setLayout(main_layout)
-        
-        # Initialize visualization
-        self.update_visualization()
-    
-    def clear_log(self):
-        """Clear the activity log"""
-        self.activity_log.setHtml("<h3>Learning Activity Log</h3><p>Recent learning events will appear here.</p>")
-    
-    def trigger_learning_cycle(self):
-        """Trigger an immediate learning cycle"""
-        if hasattr(self.parent, 'trigger_learning_cycle'):
-            self.parent.trigger_learning_cycle()
-            self.add_log_entry("Manual learning cycle triggered")
-    
-    def add_log_entry(self, message):
-        """Add an entry to the activity log"""
-        timestamp = QtCore.QTime.currentTime().toString("hh:mm:ss")
-        self.activity_log.append(f"<p><b>[{timestamp}]</b> {message}</p>")
-        
-        # Auto-scroll to bottom
-        scrollbar = self.activity_log.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
-    
-    def update_from_brain_state(self, state):
-        """Update visualization based on current brain state"""
-        self.current_state = state
-        self.update_visualization()
-        
-        # Check if learning is happening
-        if hasattr(self.brain_widget, 'hebbian_countdown_seconds'):
-            countdown = self.brain_widget.hebbian_countdown_seconds
-            if countdown <= 5 and not self.learning_in_progress:  # Learning is about to happen
-                self.show_learning_animation()
-    
-    def update_visualization(self):
-        """Update the network visualization"""
-        if not hasattr(self.brain_widget, 'neuron_positions') or not self.brain_widget.neuron_positions:
-            return
+        # Create tabs
+        tabs = ['Overview', 'Mechanics']
+        for tab_name in tabs:
+            tab_widget = QtWidgets.QWidget()
+            tab_layout = QtWidgets.QVBoxLayout(tab_widget)
             
-        # Clear scene
-        self.viz_scene.clear()
-        self.popup_items = []  # Clear popup items tracking
+            edu_view = QtWidgets.QTextEdit()
+            edu_view.setReadOnly(True)
+            edu_view.setStyleSheet("""
+                QTextEdit {
+                    background-color: #ffffff;
+                    border: none;
+                    padding: 25px;
+                    font-size: 18px;
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                }
+            """)
+            tab_layout.addWidget(edu_view)
+            self.edu_views[tab_name] = edu_view
+            self.tab_widget.addTab(tab_widget, tab_name)
         
-        # Get neuron data
-        neuron_positions = self.brain_widget.neuron_positions
-        weights = getattr(self.brain_widget, 'weights', {})
-        
-        # Scale positions to fit view
-        positions = {}
-        values = {}
-        
-        # Filter out hidden neurons
-        filtered_neurons = {k: v for k, v in neuron_positions.items() 
-                           if k not in self.hidden_neurons}
-        
-        if not filtered_neurons:
-            # No neurons to display
-            return
-        
-        # Determine bounds
-        min_x = min(pos[0] for pos in filtered_neurons.values())
-        max_x = max(pos[0] for pos in filtered_neurons.values())
-        min_y = min(pos[1] for pos in filtered_neurons.values())
-        max_y = max(pos[1] for pos in filtered_neurons.values())
-        
-        width = max(1, max_x - min_x)
-        height = max(1, max_y - min_y)
-        
-        # Calculate scaling factor
-        scale_x = 500 / width
-        scale_y = 300 / height
-        scale = min(scale_x, scale_y)
-        
-        # Create scaled positions and get values
-        for name, pos in filtered_neurons.items():
-            positions[name] = (
-                (pos[0] - min_x) * scale + 50,  # Add margin
-                (pos[1] - min_y) * scale + 50   # Add margin
-            )
-            
-            # Get current value (activation)
-            if hasattr(self.brain_widget, 'state') and name in self.brain_widget.state:
-                values[name] = self.brain_widget.state[name]
-            else:
-                values[name] = 50  # Default activation
-        
-        # Draw connections first (so they're behind neurons)
-        self._draw_connections(positions, weights)
-        
-        # Draw neurons
-        self._draw_neurons(positions, values)
-        
-        # Set scene size
-        self.viz_scene.setSceneRect(0, 0, 600, 400)
-    
-    def _draw_connections(self, positions, weights):
-        """Draw the neural connections with appropriate styling"""
-        # Get view mode
-        mode = self.mode_selector.currentText()
-        show_all = mode == "Detailed View"
-        
+        edu_layout.addWidget(QtWidgets.QLabel(
+            "<h1 style='font-size: 28px; margin-bottom: 15px; color: #2c3e50; font-weight: 600;'>📚 Learning Guide</h1>"
+        ))
+        edu_layout.addWidget(self.tab_widget)
+
+        # Add to splitter
+        splitter.addWidget(log_container)
+        splitter.addWidget(edu_container)
+        splitter.setSizes([600, 500])
+
+        # Bottom layout for countdown label
+        bottom_layout = QtWidgets.QHBoxLayout()
+        self.countdown_label = QtWidgets.QLabel("Next: 30s")
+        self.countdown_label.setFixedHeight(40)
+        self.countdown_label.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: 500;
+                color: #4dabf7;
+                padding: 4px 12px;
+                background-color: #f8f9fa;
+                border-radius: 6px;
+                border: 1px solid #e1e5eb;
+                margin-right: 10px;
+                min-width: 100px;
+                text-align: center;
+            }
+        """)
+        bottom_layout.addWidget(self.countdown_label)
+        bottom_layout.addStretch()  # Push countdown label to the left
+        main_layout.addLayout(bottom_layout)
+
+        # Ensure splitter takes remaining space
+        main_layout.setStretch(0, 1)  # Splitter gets all available space
+        main_layout.setStretch(1, 0)  # Bottom layout gets minimum space
+
+        # Setup countdown timer
+        self.countdown_timer = QtCore.QTimer(self)
+        self.countdown_timer.timeout.connect(self.update_countdown)
+        self.countdown_timer.start(1000)
+
+        # Set initial content
+        self.update_educational_content()
+
+
+    def setup_timer(self):
+        self.countdown_timer.timeout.connect(self.update_countdown)
+        self.countdown_timer.start(1000)
+
+    def update_countdown(self):
         try:
-            # Process connection weights
-            weight_items = []
+            # Ensure countdown_label exists
+            if not hasattr(self, 'countdown_label') or self.countdown_label is None:
+                print("Countdown label not initialized")
+                return
+
+            # Try to get countdown from brain widget
+            if hasattr(self, 'brain_widget') and hasattr(self.brain_widget, 'hebbian_countdown_seconds'):
+                self.current_countdown = self.brain_widget.hebbian_countdown_seconds
+            else:
+                # Fallback to default countdown
+                self.current_countdown = 30
             
-            # Try iterating as (src,dst):weight pairs first
-            if isinstance(weights, dict):
-                for key, weight in weights.items():
-                    if isinstance(key, tuple) and len(key) == 2:
-                        # Standard format: {(src,dst): weight}
-                        src, dst = key
-                        if src not in self.hidden_neurons and dst not in self.hidden_neurons:
-                            weight_items.append((src, dst, weight))
-                    elif isinstance(key, str) and '_' in key:
-                        # Alternative format: {f"{src}_{dst}": weight}
-                        src, dst = key.split('_', 1)
-                        if src not in self.hidden_neurons and dst not in self.hidden_neurons:
-                            weight_items.append((src, dst, weight))
+            # Update label
+            self.countdown_label.setText(f"Next: {self.current_countdown}s")
             
-            # Draw all connections
-            for src, dst, weight in weight_items:
-                # Skip weak connections in simplified view
-                if abs(weight) < 0.3 and mode == "Simplified View":
-                    continue
-                    
-                # Ensure both neurons exist in positions
-                if src not in positions or dst not in positions:
-                    continue
-                    
-                # Get positions
-                start_x, start_y = positions[src]
-                end_x, end_y = positions[dst]
-                
-                # Calculate line parameters
-                if weight > 0:
-                    color = QtGui.QColor(0, 0, 255)  # Blue for excitatory
-                    tooltip = f"Excitatory connection: {src} encourages {dst}"
-                else:
-                    color = QtGui.QColor(255, 0, 0)  # Red for inhibitory
-                    tooltip = f"Inhibitory connection: {src} inhibits {dst}"
-                
-                # Line width based on strength
-                width = abs(weight) * 3
-                
-                # Create the line
-                line = QtWidgets.QGraphicsLineItem(start_x, start_y, end_x, end_y)
-                line.setPen(QtGui.QPen(color, width))
-                line.setZValue(1)  # Ensure connections are behind neurons
-                line.setToolTip(tooltip)
-                
-                # Add to scene
-                self.viz_scene.addItem(line)
-                
-                # If learning is highlighted, add animation if this connection is changing
-                connection_pair = (src, dst)
-                if self.learning_in_progress and (
-                    connection_pair in self.highlighted_neurons or
-                    (dst, src) in self.highlighted_neurons
-                ):
-                    self._add_connection_animation(line)
-                
-                # Draw direction arrows (only in detailed mode)
-                if show_all:
-                    self._draw_direction_arrow(start_x, start_y, end_x, end_y, color)
-                    
-                    # Add weight label
-                    mid_x = (start_x + end_x) / 2
-                    mid_y = (start_y + end_y) / 2
-                    
-                    weight_text = QtWidgets.QGraphicsTextItem(f"{weight:.2f}")
-                    weight_text.setPos(mid_x, mid_y)
-                    weight_text.setDefaultTextColor(QtGui.QColor(0, 0, 0))
-                    self.viz_scene.addItem(weight_text)
-                    
+            # Color styling based on countdown
+            if self.current_countdown <= 5:
+                self.countdown_label.setStyleSheet("""
+                    QLabel {
+                        color: #e74c3c;
+                        background-color: #f8f9fa;
+                        border: 1px solid #e1e5eb;
+                        font-size: 18px;
+                        font-weight: 500;
+                        padding: 4px 12px;
+                        border-radius: 6px;
+                    }
+                """)
+            else:
+                self.countdown_label.setStyleSheet("""
+                    QLabel {
+                        color: #4dabf7;
+                        background-color: #f8f9fa;
+                        border: 1px solid #e1e5eb;
+                        font-size: 18px;
+                        font-weight: 500;
+                        padding: 4px 12px;
+                        border-radius: 6px;
+                    }
+                """)
         except Exception as e:
-            print(f"Error drawing connections: {str(e)}")
-            # Add error message to visualization
-            error_text = QtWidgets.QGraphicsTextItem("Error: Could not draw connections")
-            error_text.setDefaultTextColor(QtGui.QColor(255, 0, 0))
-            error_text.setPos(50, 50)
-            self.viz_scene.addItem(error_text)
-    
-    def _draw_direction_arrow(self, x1, y1, x2, y2, color):
-        """Draw an arrow indicating connection direction"""
-        # Calculate angle
-        angle = math.atan2(y2 - y1, x2 - x1)
-        
-        # Create arrow head
-        arrow_size = 10
-        arrow_head = QtGui.QPolygonF([
-            QtCore.QPointF(0, 0),
-            QtCore.QPointF(-arrow_size, arrow_size/2),
-            QtCore.QPointF(-arrow_size, -arrow_size/2)
-        ])
-        
-        # Create arrow item
-        arrow = QtWidgets.QGraphicsPolygonItem(arrow_head)
-        arrow.setBrush(QtGui.QBrush(color))
-        arrow.setPen(QtGui.QPen(color))
-        
-        # Position at 3/4 of the way along the line
-        pos_x = x1 + (x2 - x1) * 0.75
-        pos_y = y1 + (y2 - y1) * 0.75
-        
-        # Set position and rotation
-        arrow.setPos(pos_x, pos_y)
-        arrow.setRotation(angle * 180 / math.pi)
-        
-        # Add to scene
-        self.viz_scene.addItem(arrow)
-    
-    def _draw_neurons(self, positions, values):
-        """Draw the neurons with appropriate styling"""
-        # For each neuron
-        for name, (x, y) in positions.items():
-            # Skip hidden neurons
-            if name in self.hidden_neurons:
-                continue
-                
-            # Get value and determine color
-            value = values.get(name, 50)
-            
-            # Calculate color based on neuron type and value
-            if name.startswith("novel_") or name.startswith("reward_") or name.startswith("defense_") or name.startswith("stress_"):
-                # Special neurons from neurogenesis
-                if name.startswith("novel_"):
-                    base_color = QtGui.QColor(255, 255, 150)  # Yellow
-                elif name.startswith("reward_"):
-                    base_color = QtGui.QColor(150, 255, 150)  # Green
-                else:  # defense or stress
-                    base_color = QtGui.QColor(255, 150, 150)  # Red
-            else:
-                # Regular neurons
-                r = int(max(0, min(255, 255 - value * 2.55)))
-                g = int(max(0, min(255, value * 2.55)))
-                b = int(max(0, min(255, 255 - abs(value - 50) * 5.1)))
-                base_color = QtGui.QColor(r, g, b)
-            
-            # Create ellipse for neuron
-            radius = 20
-            if name in self.highlighted_neurons:
-                # Larger, highlighted radius for neurons being learned about
-                radius = 30
-                ellipse = QtWidgets.QGraphicsEllipseItem(x - radius, y - radius, radius * 2, radius * 2)
-                ellipse.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3))  # Yellow highlight
-            else:
-                ellipse = QtWidgets.QGraphicsEllipseItem(x - radius, y - radius, radius * 2, radius * 2)
-                ellipse.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
-            
-            ellipse.setBrush(QtGui.QBrush(base_color))
-            ellipse.setZValue(2)  # Ensure neurons are on top of connections
-            
-            # Add tooltip
-            tooltip_text = self._create_neuron_tooltip(name, value)
-            ellipse.setToolTip(tooltip_text)
-            
-            # Add to scene
-            self.viz_scene.addItem(ellipse)
-            
-            # Add neuron name
-            text = QtWidgets.QGraphicsTextItem(name)
-            text.setPos(x - radius, y + radius + 5)
-            text.setZValue(3)
-            self.viz_scene.addItem(text)
-            
-            # Add activity value
-            value_text = QtWidgets.QGraphicsTextItem(f"{value:.1f}")
-            value_text.setPos(x - 15, y - 10)
-            value_text.setDefaultTextColor(QtGui.QColor(0, 0, 0))
-            value_text.setZValue(4)
-            self.viz_scene.addItem(value_text)
-    
-    def _create_neuron_tooltip(self, neuron_name, value):
-        """Create an educational tooltip for a neuron"""
-        descriptions = {
-            "happiness": "Represents how happy the squid is. High happiness can lead to increased curiosity.",
-            "hunger": "Represents how hungry the squid is. High hunger can decrease happiness.",
-            "sleepiness": "Represents how tired the squid is. High sleepiness eventually leads to sleep.",
-            "cleanliness": "Represents how clean the environment is. Low cleanliness can lead to sickness.",
-            "curiosity": "Represents how interested the squid is in exploring. Affects exploration behavior.",
-            "anxiety": "Represents how anxious the squid is. High anxiety can trigger defensive behaviors.",
-            "satisfaction": "Represents how content the squid is with recent experiences."
+            print(f"Error in update_countdown: {e}")
+
+    def darken_color(self, hex_color, percent):
+        """Darken a hex color by specified percentage"""
+        color = QtGui.QColor(hex_color)
+        return color.darker(100 + percent).name()
+
+    def create_neuron_card(self, neuron_name, is_left=True):
+        """Create a playing card style neuron display with improved contrast"""
+        colors = {
+            "hunger": "#f39c12",
+            "happiness": "#2ecc71",
+            "cleanliness": "#3498db",
+            "sleepiness": "#9b59b6",
+            "satisfaction": "#e74c3c",
+            "anxiety": "#f1c40f",
+            "curiosity": "#1abc9c"
         }
         
-        if neuron_name.startswith("novel_"):
-            description = "A specialized neuron created from a novel experience. Helps the squid adapt to new situations."
-        elif neuron_name.startswith("reward_"):
-            description = "A specialized neuron created from positive experiences. Helps the squid seek beneficial activities."
-        elif neuron_name.startswith("defense_") or neuron_name.startswith("stress_"):
-            description = "A specialized neuron created during stressful situations. Helps the squid respond to threats."
+        base_color = colors.get(neuron_name.split('_')[0], "#4dabf7")
+        gradient = f"linear-gradient(135deg, {self.lighten_color(base_color, 20)}, {base_color})"
+        
+        return f"""
+        <div style='flex: 1; text-align: center; padding: 20px; 
+                    background: {gradient}; 
+                    border-radius: 12px; 
+                    border: 2px solid {self.darken_color(base_color, 15)};
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                    color: #2c3e50;
+                    font-size: 22px; 
+                    font-weight: 600;
+                    margin-{'right' if is_left else 'left'}: 10px;'>
+            {neuron_name}
+        </div>
+        """
+
+    def lighten_color(self, hex_color, percent):
+        """Lighten a hex color by specified percentage"""
+        color = QtGui.QColor(hex_color)
+        return color.lighter(100 + percent).name()
+
+    def add_log_entry(self, message, pair=None, weight_change=None):
+        from .display_scaling import DisplayScaling
+        
+        timestamp = QtCore.QTime.currentTime().toString("hh:mm:ss")
+        
+        if message.startswith("🟢") or message.startswith("🔴"):
+            message = message[2:].strip()
+        
+        # Base card HTML with increased margin for vertical gap
+        entry = f"""
+        <div style='margin-bottom: {DisplayScaling.scale(30)}px; border-radius: {DisplayScaling.scale(12)}px; overflow: hidden;
+                box-shadow: 0 {DisplayScaling.scale(3)}px {DisplayScaling.scale(12)}px rgba(0,0,0,0.1);'>
+        """
+        
+        # Add timestamp header
+        entry += f"""
+            <div style='background-color: #2c3e50; color: white; padding: {DisplayScaling.scale(12)}px {DisplayScaling.scale(15)}px; 
+                    font-size: {DisplayScaling.font_size(14)}px;'>
+               <br> 🕒 {timestamp} 
+            </div>
+        """
+        
+        # Add connection visualization if we have a pair
+        if pair:
+            weight = getattr(self.brain_widget, 'weights', {}).get(pair, 0)
+            is_positive = weight > 0
+            
+            # Determine colors based on connection type
+            bg_color = "#e8f5e9" if is_positive else "#ffebee"  # Pastel green or red
+            text_color = "#2e7d32" if is_positive else "#c62828"  # Darker green or red
+            icon = "🟢" if is_positive else "🔴"
+            arrow = "→" if is_positive else "⊣"
+            
+            # Main card content with requested format and scaled sizes
+            entry += f"""
+            <div style='background-color: {bg_color}; padding: {DisplayScaling.scale(15)}px; color: #333;'>
+                <div style='font-size: {DisplayScaling.font_size(20)}px; font-weight: bold; margin-bottom: {DisplayScaling.scale(12)}px;'>
+                    {icon} {message}
+                </div>
+                
+                <div style='font-size: {DisplayScaling.font_size(22)}px; font-weight: bold; text-align: center; margin: {DisplayScaling.scale(15)}px 0;'>
+                    {pair[0]} & {pair[1]}
+                </div>
+                
+                <div style='font-size: {DisplayScaling.font_size(26)}px; text-align: center; color: {text_color}; margin: {DisplayScaling.scale(12)}px 0;'>
+                    {arrow} {weight:.2f}
+                </div>
+            </div>
+            """
         else:
-            description = descriptions.get(neuron_name, f"Represents {neuron_name}")
+            # Simple message without pair
+            entry += f"""
+            <div style='background-color: #f5f5f5; padding: {DisplayScaling.scale(15)}px;'>
+                <div style='color: #2c3e50; font-size: {DisplayScaling.font_size(18)}px;'>
+                    {message}
+                </div>
+            </div>
+            """
         
-        tooltip = f"<b>{neuron_name}</b><br>Current value: {value:.1f}<br><br>{description}"
-        return tooltip
-    
-    def _add_connection_animation(self, line_item):
-        """Add a pulsing animation to a connection line to show learning"""
-        # Create animation to pulse the line width
-        anim = QtCore.QVariantAnimation()
-        anim.setStartValue(1.0)
-        anim.setEndValue(4.0)
-        anim.setDuration(1000)
-        anim.setLoopCount(3)
+        # Close the entry div
+        entry += "</div>"
         
-        # Update pen width when animation value changes
-        def update_pen(value):
-            try:
-                if line_item.scene() == self.viz_scene:
-                    current_pen = line_item.pen()
-                    new_pen = QtGui.QPen(current_pen.color(), value)
-                    line_item.setPen(new_pen)
-            except:
-                pass  # Handle case where item might have been removed
+        # Insert the formatted entry
+        self.activity_log.insertHtml(entry)
         
-        anim.valueChanged.connect(update_pen)
-        anim.start()
+        # Update tracking
+        if pair:
+            if not hasattr(self, 'learning_history'):
+                self.learning_history = []
+            if not hasattr(self, 'recent_pairs'):
+                self.recent_pairs = []
+                
+            self.learning_history.append(pair)
+            self.recent_pairs.append(pair)
+            self.update_educational_content(pair=pair)
         
-        # Store animation to prevent garbage collection
-        self.animations[line_item] = anim
-    
-    def show_learning_animation(self):
-        """Display animations when Hebbian learning occurs"""
-        if self.learning_in_progress:
-            return
-            
-        self.learning_in_progress = True
-        
-        # Select random neurons to highlight for learning
-        active_neurons = []
-        for name, value in self.current_state.items():
-            if (isinstance(value, (int, float)) and 
-                value > 60 and 
-                name not in self.hidden_neurons):
-                active_neurons.append(name)
-        
-        # If we have at least 2 active neurons, highlight a connection
-        if len(active_neurons) >= 2:
-            # Choose 2 random neurons
-            learning_pair = random.sample(active_neurons, 2)
-            self.highlighted_neurons = set(learning_pair)
-            
-            # Show a popup about learning
-            self._show_learning_popup(learning_pair[0], learning_pair[1])
-            
-            # Add to activity log
-            self.add_log_entry(f"Learning connection between <b>{learning_pair[0]}</b> and <b>{learning_pair[1]}</b>")
-            
-            # Refresh visualization to show highlights
-            self.update_visualization()
-            
-            # Clear highlights after 3 seconds
-            QtCore.QTimer.singleShot(3000, self._clear_highlights)
-    
-    def _show_learning_popup(self, neuron1, neuron2):
-        """Show an educational popup about learning"""
-        # Clear any existing popup first
-        self._clear_popup()
-        
-        # Create a semi-transparent info box
-        self.popup_box = QtWidgets.QGraphicsRectItem(50, 150, 500, 100)
-        self.popup_box.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 220, 220)))
-        self.popup_box.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 2))
-        self.popup_box.setZValue(100)
-        self.viz_scene.addItem(self.popup_box)
-        self.popup_items.append(self.popup_box)
-        
-        # Add text explaining what's happening
-        self.popup_text = QtWidgets.QGraphicsTextItem()
-        self.popup_text.setHtml(
-            f"<b>Learning in progress!</b><br>"
-            f"The connection between <b>{neuron1}</b> and <b>{neuron2}</b> is being strengthened "
-            f"because both neurons are active at the same time.<br>"
-            f"This is Hebbian learning: \"Neurons that fire together, wire together.\""
+        # Auto-scroll
+        self.activity_log.verticalScrollBar().setValue(
+            self.activity_log.verticalScrollBar().maximum()
         )
-        self.popup_text.setTextWidth(480)
-        self.popup_text.setPos(60, 160)
-        self.popup_text.setZValue(101)
-        self.viz_scene.addItem(self.popup_text)
-        self.popup_items.append(self.popup_text)
-        
-        # Create animation to fade out the popup
-        self.fade_anim = QtCore.QVariantAnimation()
-        self.fade_anim.setStartValue(1.0)
-        self.fade_anim.setEndValue(0.0)
-        self.fade_anim.setDuration(3000)
-        
-        def update_opacity(value):
-            for item in self.popup_items:
-                if item.scene() == self.viz_scene:
-                    item.setOpacity(value)
-                
-        def cleanup():
-            self._clear_popup()
+
+    def clear_log(self):
+        self.activity_log.clear()
+        self.recent_pairs = []
+        self.update_educational_content()
+        self.add_log_entry("📭 Log cleared")
+
+    def update_educational_content(self, pair=None, tab_name=None):
+        # Define content for each tab
+        tab_contents = {
+            'Overview': """
+                <div style='font-size: 18px; line-height: 1.6; color: #4a5568;'>
+                    <div style='display: flex; align-items: center; margin-bottom: 15px;'>
+                        <div style='font-size: 28px; margin-right: 15px;'>⚡</div>
+                        <div><b>"Neurons that fire together, wire together"</b></div>
+                    </div>
+                    <p style='margin-bottom: 20px;'>
+                        Hebbian learning is a simple rule used in artificial neural networks to help them learn patterns. When two neurons activate at the same time, the connection (or weight) between them gets stronger. If they activate separately, the connection weakens. This process allows the network to associate related ideas, like linking 'hunger' to 'satisfaction' when the squid is fed, without complex calculations like those used in other methods.
+                    </p>
+                    <ul style='list-style-type: none; padding-left: 0;'>
+                        <li style='display: flex; align-items: center; margin-bottom: 10px;'>
+                            <span style='font-size: 24px; margin-right: 10px;'>🟢</span>
+                            <span><b>Excitatory Connections:</b> Positive weights (0.0–1.0) make neurons more likely to activate together.</span>
+                        </li>
+                        <li style='display: flex; align-items: center; margin-bottom: 10px;'>
+                            <span style='font-size: 24px; margin-right: 10px;'>🔴</span>
+                            <span><b>Inhibitory Connections:</b> Negative weights (-1.0–0.0) reduce the chance of neurons activating together.</span>
+                        </li>
+                    </ul>
+                </div>
+            """,
+            'Mechanics': """
+                <div style='font-size: 18px; line-height: 1.6; color: #4a5568;'>
+                    <p style='margin-bottom: 20px;'>
+                        Hebbian learning updates the connection strength (weight) between neurons based on their activity. When two neurons activate together, their connection strengthens; if they activate separately, it weakens. This process helps the network learn patterns, like associating 'curiosity' with 'anxiety' in the squid's brain.
+                    </p>
+                    <h3 style='color: #2c3e50; font-size: 20px; margin: 15px 0 10px;'>The Learning Rule</h3>
+                    <p style='margin-bottom: 15px;'>
+                        The basic Hebbian rule can be written as: <b>Δw = η * x * y</b>, where:
+                    </p>
+                    <ul style='list-style-type: none; padding-left: 0;'>
+                        <li style='display: flex; align-items: center; margin-bottom: 10px;'>
+                            <span style='font-size: 24px; margin-right: 10px;'>🔢</span>
+                            <span><b>Δw</b> is the change in weight between two neurons.</span>
+                        </li>
+                        <li style='display: flex; align-items: center; margin-bottom: 10px;'>
+                            <span style='font-size: 24px; margin-right: 10px;'>⚙️</span>
+                            <span><b>η</b> (eta) is the learning rate, controlling how fast the weight changes.</span>
+                        </li>
+                        <li style='display: flex; align-items: center; margin-bottom: 10px;'>
+                            <span style='font-size: 24px; margin-right: 10px;'>🔥</span>
+                            <span><b>x</b> and <b>y</b> are the activation values of the two neurons (e.g., 1 if active, 0 if not).</span>
+                        </li>
+                    </ul>
+                    <p style='margin: 15px 0;'>
+                        <b>Example:</b> If 'hunger' and 'satisfaction' both activate (x=1, y=1) with η=0.1, the weight increases by 0.1. If only one activates (x=1, y=0), the weight doesn't change. Over time, this strengthens connections for related patterns.
+                    </p>
+                </div>
+            """
+        }
+
+        # Add recent pair visualization if provided
+        pair_html = ""
+        if pair:
+            weight = getattr(self.brain_widget, 'weights', {}).get(pair, 0)
+            weight_color = "#2ecc71" if weight > 0 else "#e74c3c"
             
-        self.fade_anim.valueChanged.connect(update_opacity)
-        self.fade_anim.finished.connect(cleanup)
-        self.fade_anim.start()
-        
-        # Store animation
-        self.animations['popup'] = self.fade_anim
-    
-    def _clear_popup(self):
-        """Clean up popup items safely"""
-        for item in self.popup_items:
-            if item.scene() == self.viz_scene:
-                self.viz_scene.removeItem(item)
-        
-        self.popup_items = []
-                
-        if hasattr(self, 'fade_anim') and self.fade_anim:
-            try:
-                self.fade_anim.stop()
-            except:
-                pass
-    
-    def _clear_highlights(self):
-        """Clear highlighted neurons and refresh"""
-        self.highlighted_neurons = set()
-        self.learning_in_progress = False
-        self.update_visualization()
-    
-    def update_zoom(self, value):
-        """Handle zoom slider changes"""
-        scale = value / 100.0
-        transform = QtGui.QTransform()
-        transform.scale(scale, scale)
-        self.viz_view.setTransform(transform)
-    
-    def update_visualization_mode(self, index):
-        """Update visualization based on selected mode"""
-        self.update_visualization()
-    
-    def _get_learning_explanation_html(self):
-        """Return HTML content explaining neural learning"""
-        return """
-        <h2>How Neural Learning Works</h2>
-        
-        <p>The squid's brain uses a simplified form of neural learning called <b>Hebbian learning</b>. 
-        The core principle is: <i>"Neurons that fire together, wire together."</i></p>
-        
-        <h3>The Learning Process:</h3>
-        
-        <ol>
-            <li><b>Activation:</b> Neurons activate based on the squid's experiences and internal state.</li>
-            <li><b>Connection Strengthening:</b> When two neurons are active at the same time, the connection between them gets stronger.</li>
-            <li><b>Adaptation:</b> Over time, this changes the network structure, allowing the squid to learn from experiences.</li>
-        </ol>
-        
-        <h3>Example:</h3>
-        <p>If the squid feels hungry (hunger neuron activates) and then eats food (satisfaction neuron activates), 
-        the connection between hunger and satisfaction strengthens. This helps the squid learn that eating reduces hunger.</p>
-        
-        <p>Similarly, if being dirty (low cleanliness) often leads to being sick, the network will strengthen this connection, 
-        helping the squid learn to avoid being dirty.</p>
-        
-        <h3>Connection Types:</h3>
-        <ul>
-            <li><span style="color:blue;font-weight:bold;">Blue connections (positive):</span> When one neuron activates, it encourages the other to activate too.</li>
-            <li><span style="color:red;font-weight:bold;">Red connections (negative):</span> When one neuron activates, it inhibits or reduces the other.</li>
-        </ul>
-        
-        <p>Watch for <span style="color:yellow;background-color:#333;padding:2px;">highlighted connections</span> in the visualization - 
-        these show learning in progress!</p>
-        """
-    
-    def _get_key_concepts_html(self):
-        """Return HTML content explaining key neural network concepts"""
-        return """
-        <h2>Key Neural Network Concepts</h2>
-        
-        <h3>Neurons</h3>
-        <p>Neurons are the basic building blocks of the network. Each neuron represents a different aspect of the squid's state or behavior:</p>
-        <ul>
-            <li><b>Core Neurons:</b> Basic states like hunger, happiness, and cleanliness.</li>
-            <li><b>Secondary Neurons:</b> More complex states like curiosity, anxiety, and satisfaction.</li>
-            <li><b>Specialized Neurons:</b> Created through neurogenesis to help the squid adapt to new situations.</li>
-        </ul>
-        
-        <h3>Neurogenesis</h3>
-        <p>When the squid has new or significant experiences, the network can create entirely new neurons through <b>neurogenesis</b>:</p>
-        <ul>
-            <li><b>Novel Neurons:</b> Created from new experiences to help the squid adapt.</li>
-            <li><b>Reward Neurons:</b> Created from positive experiences to encourage beneficial behaviors.</li>
-            <li><b>Defense/Stress Neurons:</b> Created from stressful experiences to help the squid respond to threats.</li>
-        </ul>
-        
-        <h3>Connection Weights</h3>
-        <p>The strength of connections between neurons determines how much they influence each other:</p>
-        <ul>
-            <li><b>Strong Positive:</b> Strong encouraging effect (value near +1.0)</li>
-            <li><b>Weak Positive:</b> Mild encouraging effect (value near +0.3)</li>
-            <li><b>Weak Negative:</b> Mild inhibiting effect (value near -0.3)</li>
-            <li><b>Strong Negative:</b> Strong inhibiting effect (value near -1.0)</li>
-        </ul>
-        
-        <h3>Network Adaptation</h3>
-        <p>The network continuously adapts based on the squid's experiences, forming a simple learning system that allows the squid to:</p>
-        <ul>
-            <li>Remember cause-and-effect relationships</li>
-            <li>Anticipate consequences of actions</li>
-            <li>Develop preferences and aversions</li>
-            <li>Optimize behavior for survival and well-being</li>
-        </ul>
-        """
+            pair_html = f"""
+                <div style='margin: 25px 0;'>
+                    <div style='font-size: 20px; color: #4a5568; margin-bottom: 15px;'>
+                        Current Learning Pair:
+                    </div>
+                    <div style='display: flex; justify-content: center; gap: 20px;'>
+                        {self.create_neuron_card(pair[0], True)}
+                        <div style='display: flex; flex-direction: column; justify-content: center; 
+                                    align-items: center; gap: 5px;'>
+                            <div style='font-size: 28px; color: #4dabf7;'>⇄</div>
+                            <div style='font-size: 18px; color: {weight_color}; font-weight: 600;'>
+                                {weight:.2f}
+                            </div>
+                        </div>
+                        {self.create_neuron_card(pair[1], False)}
+                    </div>
+                </div>
+            """
+
+        # Update specific tab or all tabs
+        tabs_to_update = [tab_name] if tab_name else self.edu_views.keys()
+        for tab_name in tabs_to_update:
+            edu_view = self.edu_views[tab_name]
+            html = f"""
+                <div style='margin-bottom: 30px;'>
+                    <div style='background: #ffffff; border-radius: 12px; padding: 25px; 
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.08);'>
+                        <h2 style='color: #2c3e50; margin: 0 0 20px 0; font-size: 24px; font-weight: 600;'>
+                            🧬 Hebbian Learning - {tab_name}
+                        </h2>
+                        {tab_contents[tab_name]}
+                        {pair_html}
+                    </div>
+                </div>
+            """
+            edu_view.setHtml(html)
+
+    def update_from_brain_state(self, state):
+        if hasattr(self.brain_widget, 'recently_updated_neuron_pairs'):
+            for pair in self.brain_widget.recently_updated_neuron_pairs:
+                if pair not in self.learning_history:
+                    self.learning_history.append(pair)
+                    weight = getattr(self.brain_widget, 'weights', {}).get(pair, 0)
+                    
+                    # Determine if weight increased or decreased
+                    prev_weight = self.brain_widget.weights.get(pair, 0)
+                    weight_change = None
+                    if weight > prev_weight:
+                        weight_change = "increase"
+                    elif weight < prev_weight:
+                        weight_change = "decrease"
+                    
+                    weight_type = "strengthened" if weight > 0 else "weakened"
+                    weight_icon = "🟢" if weight > 0 else "🔴"
+                    
+                    self.add_log_entry(
+                        f"{weight_icon} <b>New connection {weight_type}</b><br>"
+                        f"{weight:.2f}</span>", 
+                        pair,
+                        weight_change
+                    )
+
+    def simulate_learning(self):
+        sample_pairs = [
+            ("hunger", "satisfaction"),
+            ("curiosity", "anxiety"),
+            ("happiness", "cleanliness")
+        ]
+        for pair in sample_pairs:
+            if not hasattr(self.brain_widget, 'weights'):
+                self.brain_widget.weights = {}
+            
+            prev_weight = self.brain_widget.weights.get(pair, 0)
+            self.brain_widget.weights[pair] = random.uniform(-1, 1)
+            weight = self.brain_widget.weights[pair]
+            
+            # Determine if weight increased or decreased
+            weight_change = None
+            if weight > prev_weight:
+                weight_change = "increase"
+            elif weight < prev_weight:
+                weight_change = "decrease"
+            
+            weight_type = "strengthened" if weight > 0 else "weakened"
+            weight_icon = "🟢" if weight > 0 else "🔴"
+            
+            self.add_log_entry(
+                f"🧪 <b>Simulated learning</b> ({weight_type})<br>"
+                f"{weight:.2f}</span>", 
+                pair,
+                weight_change
+            )
+        self.update_educational_content(pair=sample_pairs[-1])

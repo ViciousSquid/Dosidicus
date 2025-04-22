@@ -1,6 +1,3 @@
-# Dosidicus - digital pet with a neural network
-# by Rufus Pearce (ViciousSquid)  |  April 2025  (milestone 5)
-# https://github.com/ViciousSquid/Dosidicus
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 import random
@@ -23,9 +20,9 @@ from .plugin_manager import PluginManager
 class TamagotchiLogic:
     def __init__(self, user_interface, squid, brain_window):
         self.config_manager = ConfigManager()
-        # Initialize other components first
+        self._propagating_debug_mode = False
         self.user_interface = user_interface
-        self.mental_states_enabled = True  # Default to enabled
+        self.mental_states_enabled = True
         self.squid = squid
         self.brain_window = brain_window
         
@@ -171,6 +168,19 @@ class TamagotchiLogic:
     def set_mental_states_enabled(self, enabled):
         self.mental_states_enabled = enabled
         self.squid.mental_state_manager.set_mental_states_enabled(enabled)
+
+    
+
+    def reset_squid_status(self):
+        """Reset squid status to default state after temporary actions"""
+        if self.squid and self.squid.status in ["eating cheese", "eating sushi"]:
+            # Choose default status based on personality
+            if self.squid.personality == Personality.TIMID:
+                self.squid.status = "cautiously exploring"
+            elif self.squid.personality == Personality.ADVENTUROUS:
+                self.squid.status = "boldly exploring"
+            else:
+                self.squid.status = "roaming"
 
 
 
@@ -466,39 +476,61 @@ class TamagotchiLogic:
         decoration.setPos(new_x, current_pos.y())
 
     def apply_decoration_effects(self, active_decorations):
+        """Apply effects from nearby decorations"""
         if not active_decorations:
             return
-
-        valid_decorations = [d for d in active_decorations if d.stat_multipliers]
-        if not valid_decorations:
-            return
-
-        strongest_decoration = max(valid_decorations, key=lambda d: max(d.stat_multipliers.values()))
         
+        # Calculate cumulative effects
         effects = {}
-        for stat, multiplier in strongest_decoration.stat_multipliers.items():
-            if hasattr(self.squid, stat):
-                current_value = getattr(self.squid, stat)
-                new_value = min(current_value * multiplier, 100)
-                boost = new_value - current_value
-                setattr(self.squid, stat, new_value)
-                effects[stat] = boost
+        strongest_effect = 0
+        strongest_decoration = None
+        
+        for decoration in active_decorations:
+            # Skip decorations without a valid filename
+            if not hasattr(decoration, 'filename') or decoration.filename is None:
+                continue
+                
+            # Skip decorations without valid stat multipliers
+            if not hasattr(decoration, 'stat_multipliers') or not decoration.stat_multipliers:
+                continue
+                
+            # Find strongest decoration
+            max_multiplier = max(decoration.stat_multipliers.values())
+            if max_multiplier > strongest_effect:
+                strongest_effect = max_multiplier
+                strongest_decoration = decoration
+        
+        # Apply effects if we found a valid decoration
+        if strongest_decoration:
+            for stat, multiplier in strongest_decoration.stat_multipliers.items():
+                if hasattr(self.squid, stat):
+                    current_value = getattr(self.squid, stat)
+                    new_value = min(current_value * multiplier, 100)
+                    boost = new_value - current_value
+                    setattr(self.squid, stat, new_value)
+                    effects[stat] = boost
 
-        # Apply category-specific effects
-        if strongest_decoration.category == 'plant':
-            old_cleanliness = self.squid.cleanliness
-            self.squid.cleanliness = min(self.squid.cleanliness + 5, 100)
-            effects['cleanliness'] = effects.get('cleanliness', 0) + (self.squid.cleanliness - old_cleanliness)
-        elif strongest_decoration.category == 'rock':
-            old_satisfaction = self.squid.satisfaction
-            self.squid.satisfaction = min(self.squid.satisfaction + 5, 100)
-            effects['satisfaction'] = effects.get('satisfaction', 0) + (self.squid.satisfaction - old_satisfaction)
-
-        # Update squid's memory
-        self.squid.memory_manager.add_short_term_memory('decorations', strongest_decoration.filename, effects)
-
-        # Trigger Hebbian learning
-        self.update_decoration_learning(effects)
+            # Apply category-specific effects
+            if strongest_decoration.category == 'plant':
+                old_cleanliness = self.squid.cleanliness
+                self.squid.cleanliness = min(self.squid.cleanliness + 5, 100)
+                effects['cleanliness'] = effects.get('cleanliness', 0) + (self.squid.cleanliness - old_cleanliness)
+            elif strongest_decoration.category == 'rock':
+                old_satisfaction = self.squid.satisfaction
+                self.squid.satisfaction = min(self.squid.satisfaction + 5, 100)
+                effects['satisfaction'] = effects.get('satisfaction', 0) + (self.squid.satisfaction - old_satisfaction)
+        
+        # If we found a valid strongest decoration, record the memory
+        if strongest_decoration and hasattr(strongest_decoration, 'filename') and strongest_decoration.filename is not None:
+            self.squid.memory_manager.add_short_term_memory('decorations', strongest_decoration.filename, effects)
+        else:
+            # Create a generic memory if we have effects but no valid decoration filename
+            if effects:
+                self.squid.memory_manager.add_short_term_memory('decorations', 'nearby_decorations', effects)
+        
+        # Trigger Hebbian learning if we have effects
+        if effects:
+            self.update_decoration_learning(effects)
 
     def check_decoration_startle(self, active_decorations):
         if not self.mental_states_enabled:
@@ -1220,6 +1252,9 @@ class TamagotchiLogic:
         # Directly check collision without redundant checks
         if self.squid and cheese_item.collidesWithItem(self.squid.squid_item):
             self.squid.eat(cheese_item)
+            
+            # Reset status after a short delay
+            QtCore.QTimer.singleShot(2000, self.reset_squid_status)
 
     def move_sushi(self, sushi_item):
         sushi_x = sushi_item.pos().x()
@@ -1563,9 +1598,36 @@ class TamagotchiLogic:
             fade_out_animation.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
 
     def toggle_debug_mode(self):
-        self.debug_mode = not self.debug_mode
-        self.statistics_window.set_debug_mode(self.debug_mode)
-        print(f"Debug mode {'enabled' if self.debug_mode else 'disabled'}")
+        """Toggle debug mode across all components without circular references"""
+        # Set the new state directly (don't toggle twice)
+        new_debug_mode = not self.debug_mode
+        self.debug_mode = new_debug_mode
+        
+        # Propagate to statistics window
+        if hasattr(self, 'statistics_window') and self.statistics_window:
+            self.statistics_window.set_debug_mode(new_debug_mode)
+        
+        # Propagate to brain window, WITHOUT triggering a callback
+        if hasattr(self, 'brain_window') and self.brain_window:
+            # Set a flag to indicate we're in the middle of propagating
+            self._propagating_debug_mode = True
+            
+            # Set brain window's debug mode
+            self.brain_window.set_debug_mode(new_debug_mode)
+            
+            # Set brain widget's debug mode directly 
+            if hasattr(self.brain_window, 'brain_widget'):
+                self.brain_window.brain_widget.debug_mode = new_debug_mode
+            
+            # Clear the propagation flag
+            self._propagating_debug_mode = False
+        
+        # User interface components
+        if hasattr(self, 'user_interface'):
+            if hasattr(self.user_interface, 'debug_mode'):
+                self.user_interface.debug_mode = new_debug_mode
+        
+        print(f"Debug mode {'enabled' if new_debug_mode else 'disabled'}")
 
     def update_cleanliness_overlay(self):
         if self.squid is not None:

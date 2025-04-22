@@ -61,7 +61,12 @@ class MemoryManager:
 
         # Improve formatting for different types of memories
         if category == 'decorations':
-            decoration_name = os.path.basename(key)
+            # Add safety check for None key
+            if key is None:
+                decoration_name = "unknown_decoration"
+            else:
+                decoration_name = os.path.basename(key)
+                
             effects = ', '.join(
                 f"{attr.capitalize()} {'+' if isinstance(val, (int, float)) and val >= 0 else ''}{val:.2f}"
                 for attr, val in value.items()

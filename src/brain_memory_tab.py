@@ -395,6 +395,9 @@ class MemoryTab(BrainBaseTab):
     
     def _update_overview_stats(self, stm, ltm):
         """Update the overview tab with statistics"""
+        # Import datetime correctly at the top of your function
+        from datetime import datetime
+        
         stats_html = """
         <style>
             .stat-box { 
@@ -440,57 +443,15 @@ class MemoryTab(BrainBaseTab):
         </div>
         """
         
-        # Short-term memory importance breakdown
-        if stm:
-            importance_levels = {
-                "High (7-10)": 0,
-                "Medium (4-6)": 0,
-                "Low (1-3)": 0
-            }
-            
-            for mem in stm:
-                imp = mem.get('importance', 1)
-                if imp >= 7:
-                    importance_levels["High (7-10)"] += 1
-                elif imp >= 4:
-                    importance_levels["Medium (4-6)"] += 1
-                else:
-                    importance_levels["Low (1-3)"] += 1
-            
-            importance_html = "\n".join(
-                f"<tr><td>{k}:</td><td style='padding-left: 20px;'>{v}</td></tr>"
-                for k, v in importance_levels.items()
-            )
-            
-            stats_html += f"""
-            <div class="stat-box">
-                <div class="stat-title">⚖️ Importance Levels (Short-term)</div>
-                <table>{importance_html}</table>
-            </div>
-            """
+        # Fix: Convert timestamp to string format for consistent comparison
+        def get_timestamp_key(memory):
+            timestamp = memory.get('timestamp', '')
+            if isinstance(timestamp, datetime):  # Corrected: Use datetime instead of datetime.datetime
+                return timestamp.isoformat()  # Convert datetime to string
+            return str(timestamp)  # Ensure string format
         
-        # Memory activity
-        recent_memories = sorted(stm, key=lambda x: x.get('timestamp', ''), reverse=True)[:5]
-        if recent_memories:
-            activity_html = "<ol>"
-            for mem in recent_memories:
-                cat = mem.get('category', 'unknown')
-                timestamp = mem.get('timestamp', '')
-                if isinstance(timestamp, str):
-                    try:
-                        timestamp = datetime.fromisoformat(timestamp).strftime("%H:%M:%S")
-                    except:
-                        timestamp = ""
-                
-                activity_html += f"<li><b>{cat}</b> at {timestamp}</li>"
-            activity_html += "</ol>"
-            
-            stats_html += f"""
-            <div class="stat-box">
-                <div class="stat-title">🕒 Recent Memory Activity</div>
-                {activity_html}
-            </div>
-            """
+        # Use the new key function for sorting
+        recent_memories = sorted(stm, key=get_timestamp_key, reverse=True)[:5]
         
         self.overview_stats.setHtml(stats_html)
 

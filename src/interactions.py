@@ -445,8 +445,8 @@ class RockInteractionManager:
         
         # Create new rock if not found
         try:
-            # Check if file exists
-            if not os.path.exists(filename):
+            # Check if file exists or if filename is None
+            if filename is None or not os.path.exists(filename):
                 # Try to find a default rock
                 default_rocks = [
                     "images/decoration/rock01.png",
@@ -483,6 +483,18 @@ class RockInteractionManager:
             
             # Mark as remote rock
             rock.is_remote = True
+            
+            # Apply red tint to show it's from another instance
+            # Check if multiplayer plugin is available
+            if hasattr(self.logic, 'multiplayer_plugin') and self.logic.multiplayer_plugin:
+                self.logic.multiplayer_plugin.apply_foreign_object_tint(rock)
+            else:
+                # Apply tint directly if plugin reference isn't available
+                color_effect = QtWidgets.QGraphicsColorizeEffect()
+                color_effect.setColor(QtGui.QColor(255, 100, 100))
+                color_effect.setStrength(0.25)
+                rock.setGraphicsEffect(color_effect)
+                rock.is_foreign = True
             
             return rock
         except Exception as e:

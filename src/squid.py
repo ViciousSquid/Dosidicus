@@ -5,6 +5,7 @@ from datetime import datetime
 from enum import Enum
 import math
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtCore import QTimer
 from .mental_states import MentalStateManager
 from .memory_manager import MemoryManager
 from .personality import Personality
@@ -43,6 +44,10 @@ class Squid:
         # Startle transition tracking
         self.startled_transition = False
         self.startled_transition_frames = 0
+
+        # Multiplayer-specific
+        self.can_move = True           # Whether the squid can move (disable when away)
+        self.is_transitioning = False  # Whether the squid is currently in transit
 
         # Rock Interactions
         self.rock_interaction_timer = QtCore.QTimer()
@@ -314,6 +319,15 @@ class Squid:
 
     def set_animation_speed(self, speed):
         self.animation_speed = speed
+
+    def finish_eating(self):
+        """Reset status after eating"""
+        if self.status == "eating":
+            self.status = "roaming"  # Or another appropriate status
+            
+        # Make sure the brain is updated
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            self.tamagotchi_logic.update_squid_brain()
 
 
     def load_images(self):
@@ -690,14 +704,21 @@ class Squid:
                     
                     print(f"[MULTIPLAYER] Squid exiting through {direction} boundary")
                     
-                    # Temporary opacity change
-                    self.squid_item.setOpacity(0.2)
+                    # CHANGE: Completely hide the squid instead of reducing opacity
+                    self.squid_item.setVisible(False)
                     
-                    # Set a timer to restore visibility if no acknowledgment
-                    self.boundary_timer = QtCore.QTimer()
-                    self.boundary_timer.timeout.connect(self.restore_after_boundary)
-                    self.boundary_timer.setSingleShot(True)
-                    self.boundary_timer.start(3000)  # 3-second timeout
+                    # CHANGE: Set flag to indicate squid is away
+                    self.is_transitioning = True
+                    
+                    # CHANGE: Disable movement while away
+                    self.can_move = False
+                    
+                    # CHANGE: Update status
+                    self.status = "visiting another tank"
+                    
+                    # Optional: Show a message about the squid leaving
+                    if hasattr(self.tamagotchi_logic, 'show_message'):
+                        self.tamagotchi_logic.show_message(f"Your squid left through the {direction} boundary!")
                 else:
                     print("[ERROR] No network node or plugin instance available")
             else:
@@ -710,15 +731,6 @@ class Squid:
         
         print("===== BOUNDARY EXIT NOTIFICATION END =====\n")
     
-    def restore_after_boundary(self):
-        """
-        Restore squid visibility if no acknowledgment received
-        """
-        # Restore opacity
-        self.squid_item.setOpacity(1.0)
-        
-        # Optional: Additional reset logic
-        print("[Multiplayer] No boundary acknowledgment received. Resetting squid.")
     
     def determine_startle_reason(self, current_state):
         """Determine why the squid is startled based on environment"""
@@ -961,8 +973,9 @@ class Squid:
         """
         Move the squid with comprehensive debug logging and boundary check
         """
-        # Debug logging for movement start
-        #print("\n===== MOVE SQUID DEBUG START =====")
+        # Check if movement is allowed
+        if not getattr(self, 'can_move', True):
+            return
         
         # Check if multiplayer is available and enabled
         if hasattr(self.tamagotchi_logic, 'plugin_manager'):
@@ -971,11 +984,6 @@ class Squid:
         else:
             multiplayer_enabled = False
         
-        #print(f"Multiplayer Enabled: {multiplayer_enabled}")
-        #print(f"Current Position: ({self.squid_x}, {self.squid_y})")
-        #print(f"Window Dimensions: {self.ui.window_width} x {self.ui.window_height}")
-        #print(f"Current Direction: {self.squid_direction}")
-
         if self.animation_speed == 0:
             #print("Animation speed is 0, no movement")
             return
@@ -1021,13 +1029,6 @@ class Squid:
         elif self.squid_direction == "down":
             squid_y_new += self.base_vertical_speed * self.animation_speed
 
-        # Comprehensive boundary logging
-        #print(f"New Position Calculation:")
-        #print(f"  New X: {squid_x_new}")
-        #print(f"  New Y: {squid_y_new}")
-        #print(f"  Window Width: {self.ui.window_width}")
-        #print(f"  Window Height: {self.ui.window_height}")
-
         # Boundary handling for single-player and multiplayer modes
         if not multiplayer_enabled:
             # Original boundary restrictions for single-player mode
@@ -1050,11 +1051,6 @@ class Squid:
             squid_right = squid_x_new + self.squid_width
             squid_bottom = squid_y_new + self.squid_height
 
-            #print(f"Squid Right Edge: {squid_right}")
-            #print(f"Squid Bottom Edge: {squid_bottom}")
-            #print(f"Window Width: {self.ui.window_width}")
-            #print(f"Window Height: {self.ui.window_height}")
-
         # Update squid position
         self.squid_x = squid_x_new
         self.squid_y = squid_y_new
@@ -1074,8 +1070,6 @@ class Squid:
             #print("Triggering boundary exit check in multiplayer mode")
             exit_result = self.check_boundary_exit()
             #print(f"Boundary Exit Result: {exit_result}")
-
-        #print("===== MOVE SQUID DEBUG END =====\n")
 
     def move_towards(self, x, y):
         dx = x - (self.squid_x + self.squid_width // 2)
@@ -1129,9 +1123,13 @@ class Squid:
                 )
         
         self.is_eating = True
+        self.status = "eating"
         # Apply all stat changes
         for attr, change in effects.items():
             setattr(self, attr, getattr(self, attr) + change)
+
+        # Start a timer to reset the status after 1 second
+        QTimer.singleShot(1000, self.finish_eating)
 
         # Memory system
         formatted_effects = ', '.join(f"{attr.capitalize()} {'+' if val >= 0 else ''}{val:.2f}" 
