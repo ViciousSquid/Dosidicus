@@ -293,6 +293,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.splash.finished.connect(self.start_simulation)
         self.splash.second_frame.connect(self.show_hatching_notification)
         self.splash.show()
+        
+        # Delay starting the animation until window is fully initialized
+        QtCore.QTimer.singleShot(2000, self.splash.start_animation)
 
     def start_simulation(self):
         """Begin the simulation and automatically open brain and decoration windows"""
