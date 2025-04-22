@@ -11,7 +11,7 @@ The environment of the other tank (available food, rocks, etc.)
 
 The flow works like this:
 
-Your squid hits a boundary and sends a squid_exit message
+Your squid hits a boundary and sends a `squid_exit` message
 The other instance receives this message and:
 
 Creates a visual representation of your squid
