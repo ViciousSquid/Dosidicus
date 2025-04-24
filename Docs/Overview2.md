@@ -46,14 +46,7 @@ Weight Dynamics
 *   **Bounded Values**: Hard-limited to \[-1, 1\] range
 *   **Frozen States**: Can pause learning with `freeze_weights()`
 
-Position Tracking
------------------
 
-    self.original_neuron_positions = {
-        "hunger": (150, 150),       # x,y coordinates
-        "happiness": (450, 150),
-        # ...other positions...
-    }
 
 Hebbian Learning System
 =======================
