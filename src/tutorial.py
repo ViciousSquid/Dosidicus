@@ -43,12 +43,12 @@ class TutorialManager:
         win_height = self.ui.window_height
         
         # Create a banner across the bottom of the screen
-        banner_height = 100
+        banner_height = 170
         
         # POSITION ADJUSTMENT: Move banner up by 40px from bottom
         # TODO: Fine-tune this offset value as needed
         banner_y_offset = 40
-        banner_y = win_height - banner_height - banner_y_offset
+        banner_y = win_height - banner_height - banner_y_offset - 100
         
         banner = QtWidgets.QGraphicsRectItem(0, banner_y, win_width, banner_height)
         banner.setBrush(QtGui.QColor(0, 0, 0, 230))  # Nearly opaque black
@@ -126,9 +126,9 @@ class TutorialManager:
             self.clear_tutorial_elements()
             win_width = self.ui.window_width
             win_height = self.ui.window_height
-            banner_height = 100
+            banner_height = 170
             banner_y_offset = 40
-            banner_y = win_height - banner_height - banner_y_offset
+            banner_y = win_height - banner_height - banner_y_offset - 100
 
             banner = QtWidgets.QGraphicsRectItem(0, banner_y, win_width, banner_height)
             banner.setBrush(QtGui.QColor(25, 25, 112, 230))
@@ -207,9 +207,9 @@ class TutorialManager:
         win_height = self.ui.window_height
         
         # Create banner (positioned higher as specified)
-        banner_height = 100
+        banner_height = 170
         banner_y_offset = 40
-        banner_y = win_height - banner_height - banner_y_offset
+        banner_y = win_height - banner_height - banner_y_offset - 100
         
         banner = QtWidgets.QGraphicsRectItem(0, banner_y, win_width, banner_height)
         banner.setBrush(QtGui.QColor(70, 25, 110, 230))  # Purple-ish, nearly opaque
@@ -296,9 +296,9 @@ class TutorialManager:
         win_height = self.ui.window_height
         
         # Create banner (positioned higher as specified)
-        banner_height = 100
+        banner_height = 170
         banner_y_offset = 40
-        banner_y = win_height - banner_height - banner_y_offset
+        banner_y = win_height - banner_height - banner_y_offset - 100
         
         banner = QtWidgets.QGraphicsRectItem(0, banner_y, win_width, banner_height)
         banner.setBrush(QtGui.QColor(0, 100, 0, 230))  # Green, nearly opaque
@@ -385,9 +385,9 @@ class TutorialManager:
         win_height = self.ui.window_height
         
         # Create banner (positioned higher as specified)
-        banner_height = 100
+        banner_height = 170
         banner_y_offset = 40
-        banner_y = win_height - banner_height - banner_y_offset
+        banner_y = win_height - banner_height - banner_y_offset - 100
         
         banner = QtWidgets.QGraphicsRectItem(0, banner_y, win_width, banner_height)
         banner.setBrush(QtGui.QColor(139, 69, 19, 230))  # Brown, nearly opaque
@@ -481,9 +481,9 @@ class TutorialManager:
         win_height = self.ui.window_height
         
         # Create banner (positioned higher as specified)
-        banner_height = 100
+        banner_height = 170
         banner_y_offset = 40
-        banner_y = win_height - banner_height - banner_y_offset
+        banner_y = win_height - banner_height - banner_y_offset - 100
         
         banner = QtWidgets.QGraphicsRectItem(0, banner_y, win_width, banner_height)
         banner.setBrush(QtGui.QColor(70, 130, 180, 230))  # Steel blue, nearly opaque
@@ -558,9 +558,9 @@ class TutorialManager:
         win_height = self.ui.window_height
         
         # Create banner (positioned higher as specified)
-        banner_height = 100
+        banner_height = 170
         banner_y_offset = 40
-        banner_y = win_height - banner_height - banner_y_offset
+        banner_y = win_height - banner_height - banner_y_offset - 100
         
         banner = QtWidgets.QGraphicsRectItem(0, banner_y, win_width, banner_height)
         banner.setBrush(QtGui.QColor(75, 0, 130, 230))  # Indigo, nearly opaque

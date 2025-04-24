@@ -186,24 +186,17 @@ class AboutTab(BrainBaseTab):
         self.personality_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(22)}px;")
         personality_layout.addWidget(self.personality_label)
         
-        # Button container for care tips and certificate
+        # Button container
         button_container = QtWidgets.QWidget()
         button_layout = QtWidgets.QHBoxLayout(button_container)
         button_layout.setContentsMargins(0, DisplayScaling.scale(10), 0, 0)
-        
-        # Add Care Tips button
-        self.care_tips_button = QtWidgets.QPushButton("Show Care Tips")
-        self.care_tips_button.clicked.connect(lambda: self.show_care_tips(personality))
-        self.care_tips_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px;")
-        self.care_tips_button.setEnabled(personality != "Unknown")  # Disable if no personality
-        button_layout.addWidget(self.care_tips_button)
-        
-        # Add Certificate button
+
+        # Add Certificate button (removed care tips button)
         certificate_button = QtWidgets.QPushButton("View Squid Certificate")
         certificate_button.clicked.connect(self.show_certificate)
         certificate_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px;")
         button_layout.addWidget(certificate_button)
-        
+
         # Add button container to personality layout
         personality_layout.addWidget(button_container)
         

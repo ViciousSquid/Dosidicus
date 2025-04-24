@@ -21,6 +21,7 @@ from .brain_about_tab import AboutTab
 from .brain_learning_tab import NeuralNetworkVisualizerTab
 from .brain_memory_tab import MemoryTab
 from .brain_decisions_tab import DecisionsTab
+from .brain_personality_tab import PersonalityTab
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
     def __init__(self, tamagotchi_logic, debug_mode=False, config=None):
@@ -235,11 +236,14 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.decisions_tab = DecisionsTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.decisions_tab, "Decisions")
         
+        self.personality_tab = PersonalityTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
+        self.tabs.addTab(self.personality_tab, "Personality")
+        
         self.about_tab = AboutTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.about_tab, "About")
         
         # Make sure all tabs have correct tamagotchi_logic reference
-        for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'decisions_tab', 'about_tab']:
+        for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'decisions_tab', 'personality_tab', 'about_tab']:
             if hasattr(self, tab_name):
                 tab = getattr(self, tab_name)
                 if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:
@@ -1109,7 +1113,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def init_personality_tab(self):
         # Common style for all text elements
-        base_font_size = 18
+        base_font_size = 11
         text_style = f"font-size: {base_font_size}px;"
         header_style = f"font-size: {base_font_size + 4}px; font-weight: bold;"
 
@@ -1171,12 +1175,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Update the brain widget first
         self.brain_widget.update_state(state)
         
-        # Explicitly update about tab when personality is available
-        if hasattr(self, 'about_tab') and 'personality' in state:
-            self.about_tab.update_from_brain_state(state)
+        # Explicitly update personality tab when personality is available
+        if hasattr(self, 'personality_tab') and 'personality' in state:
+            self.personality_tab.update_from_brain_state(state)
         
         # Forward updates to each tab that has an update method
-        tabs_to_update = ['network_tab', 'learning_tab', 'memory_tab', 'decisions_tab', 'about_tab', 'nn_viz_tab']
+        tabs_to_update = ['network_tab', 'learning_tab', 'memory_tab', 'decisions_tab', 'personality_tab', 'about_tab', 'nn_viz_tab']
         for tab_name in tabs_to_update:
             if hasattr(self, tab_name):
                 tab = getattr(self, tab_name)
