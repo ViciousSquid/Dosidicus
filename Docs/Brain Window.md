@@ -20,7 +20,7 @@ Initializes the brain widget with:
 
 *   Visualization settings
 
-### `update\_state(self, new\_state)`
+### `update_state(self, new_state)`
 
 Updates the brain's state with new values and triggers visualization updates.
 
