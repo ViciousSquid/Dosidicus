@@ -58,14 +58,37 @@
     "anxiety": -2,
     "category": "plant"
   },
+  "plant11.png": {
+    "happiness": 1,
+    "cleanliness": 2,
+    "anxiety": -2,
+    "category": "plant"
+  },
+  "sml_plant01.png": {
+    "happiness": 1,
+    "cleanliness": 2,
+    "anxiety": -3,
+    "category": "plant"
+  },
+  "sml_plant02.png": {
+    "happiness": 1,
+    "cleanliness": 2,
+    "anxiety": -3,
+    "category": "plant"
+  },
   "rock01.png": {
-    "happiness": 2,
+    "happiness": 1,
     "satisfaction": 1,
     "category": "rock"
   },
   "rock02.png": {
-    "happiness": 2,
+    "happiness": 1,
     "satisfaction": 1,
+    "category": "rock"
+  },
+  "rock03.png": {
+    "happiness": 1,
+    "satisfaction": 2,
     "category": "rock"
   }
 }

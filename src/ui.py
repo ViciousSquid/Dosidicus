@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import QGraphicsPixmapItem
 from .brain_tool import SquidBrainWindow
 from .statistics_window import StatisticsWindow
 from .plugin_manager_dialog import PluginManagerDialog
+from .tutorial import TutorialManager
 
 class DecorationItem(QtWidgets.QLabel):
     def __init__(self, pixmap, filename):
@@ -50,27 +51,21 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
         QtWidgets.QGraphicsPixmapItem.__init__(self, parent)
         QObject.__init__(self)
         
-        from .display_scaling import DisplayScaling
-
         self._is_pause_message = None
         self.original_pixmap = pixmap
+        self.resize_mode = False
+        self.last_mouse_pos = None
 
         if pixmap:
-            # Scale initial size based on display scaling
-            scaled_pixmap = pixmap.scaled(DisplayScaling.scale(128), DisplayScaling.scale(128), 
-                                    QtCore.Qt.KeepAspectRatio, 
-                                    QtCore.Qt.SmoothTransformation)
-            self.setPixmap(scaled_pixmap)
+            self.setPixmap(pixmap)
         
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsMovable |
                     QtWidgets.QGraphicsItem.ItemIsSelectable |
                     QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
 
-        self.resize_handle = None
         self.filename = filename
-        
         self.stat_multipliers = {'happiness': 1}
-        self.category = category if category else 'generic'  # Use provided category or default to 'generic'
+        self.category = category if category else 'generic'
 
         if filename:
             multipliers, detected_category = self.get_decoration_info()
@@ -86,76 +81,125 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
         self.can_be_picked_up = filename and ('rock' in filename.lower() or 'poop' in filename.lower())
         self.is_being_carried = False
         self.original_scale = 1.0
+        
+        # Print initialization info
+        print(f"Created item: {filename}, Has original pixmap: {self.original_pixmap is not None}")
 
     def boundingRect(self):
-        return super().boundingRect().adjusted(0, 0, 20, 20)
+        # Just use the original bounding rect without extra space for handles
+        return super().boundingRect()
 
-
-
-    def paint(self, painter, option, widget):
-        super().paint(painter, option, widget)
-        if self.isSelected():
-            painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 255), 2))
-            painter.drawRect(self.boundingRect())
+    def wheelEvent(self, event):
+        # Don't scale rocks
+        if self.filename and ('rock01' in self.filename.lower() or 'rock02' in self.filename.lower()):
+            return super().wheelEvent(event)
             
-            # Draw resize handle at bottom right
-            handle_pos = self.boundingRect().bottomRight() - QtCore.QPointF(20, 20)
-            handle_rect = QtCore.QRectF(handle_pos, QtCore.QSizeF(20, 20))
-            painter.fillRect(handle_rect, QtGui.QColor(0, 0, 255))
-
-
-    def mousePressEvent(self, event):
-        # Check if resize handle is clicked
-        pos = event.pos()
-        handle_rect = QtCore.QRectF(
-            self.boundingRect().bottomRight() - QtCore.QPointF(20, 20), 
-            QtCore.QSizeF(20, 20)
-        )
-        
-        if handle_rect.contains(pos):
-            # Resize mode
-            self.resize_handle = pos
-            event.accept()
-        else:
-            # Normal move mode
-            self.resize_handle = None
-            super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if self.resize_handle is not None and self.original_pixmap:
-            # Calculate new size based on mouse movement
-            start_pos = self.resize_handle
-            current_pos = event.pos()
+        # Only scale if the item is selected and we have the original pixmap
+        if self.isSelected() and self.original_pixmap:
+            # Import DisplayScaling locally
+            from .display_scaling import DisplayScaling
             
-            # Calculate width and height
-            width = abs(current_pos.x() - start_pos.x())
-            height = abs(current_pos.y() - start_pos.y())
+            # Get scaling delta from wheel event - use angleDelta() instead of delta()
+            delta = event.angleDelta().y() / 120  # Standard wheel step is 120 units
             
-            # Maintain aspect ratio
-            aspect_ratio = self.original_pixmap.width() / self.original_pixmap.height()
+            # Calculate scaling factor - increase/decrease by 10% per wheel step
+            scale_factor = 1.1 if delta > 0 else 0.9
             
-            if width / height > aspect_ratio:
-                width = height * aspect_ratio
-            else:
-                height = width / aspect_ratio
+            # Get current size
+            current_width = self.pixmap().width()
+            current_height = self.pixmap().height()
             
-            # Scale pixmap
+            # Calculate new dimensions with minimum size constraint
+            min_size = DisplayScaling.scale(64)  # Minimum size of 64x64 scaled for display
+            new_width = max(min_size, int(current_width * scale_factor))
+            new_height = max(min_size, int(current_height * scale_factor))
+            
+            # Scale the pixmap to new size
             scaled_pixmap = self.original_pixmap.scaled(
-                int(width), int(height), 
-                QtCore.Qt.KeepAspectRatio, 
+                new_width, new_height,
+                QtCore.Qt.KeepAspectRatio,
                 QtCore.Qt.SmoothTransformation
             )
             
-            # Set the scaled pixmap
+            # Update the pixmap
             self.setPixmap(scaled_pixmap)
             
             event.accept()
         else:
+            # Forward the event to parent
+            super().wheelEvent(event)
+
+    def paint(self, painter, option, widget):
+        # Always draw the item itself
+        option_copy = QtWidgets.QStyleOptionGraphicsItem(option)
+        option_copy.state &= ~QtWidgets.QStyle.State_Selected  # Remove default selection rectangle
+        super().paint(painter, option_copy, widget)
+        
+        if self.isSelected():
+            # Draw outline of the actual visible content
+            pixmap = self.pixmap()
+            if pixmap:
+                painter.save()
+                
+                # Use a blue pen for the outline
+                painter.setPen(QtGui.QPen(QtGui.QColor(30, 144, 255), 2))
+                
+                # Get the exact rect of the pixmap content
+                rect = QtCore.QRectF(0, 0, pixmap.width(), pixmap.height())
+                
+                # Draw outline around the actual pixmap content
+                painter.drawRect(rect)
+                
+                painter.restore()
+
+
+
+    def mousePressEvent(self, event):
+        # Get mouse position
+        pos = event.pos()
+        self.last_mouse_pos = pos
+        
+        # Always handle as a regular click for moving/selecting
+        self.resize_mode = False
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        current_pos = event.pos()
+        
+        if self.resize_mode and self.original_pixmap and self.last_mouse_pos:
+            # Calculate movement delta
+            delta_x = current_pos.x() - self.last_mouse_pos.x()
+            delta_y = current_pos.y() - self.last_mouse_pos.y()
+            
+            # Get current size
+            current_width = self.pixmap().width()
+            current_height = self.pixmap().height()
+            
+            # Calculate new dimensions (minimum 30x30)
+            new_width = max(30, current_width + delta_x)
+            new_height = max(30, current_height + delta_y)
+            
+            # Scale the pixmap to new size
+            scaled_pixmap = self.original_pixmap.scaled(
+                int(new_width), int(new_height),
+                QtCore.Qt.KeepAspectRatio,
+                QtCore.Qt.SmoothTransformation
+            )
+            
+            # Update the pixmap
+            self.setPixmap(scaled_pixmap)
+            
+            # Update mouse position for next move
+            self.last_mouse_pos = current_pos
+            event.accept()
+        else:
+            # Normal drag operation
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        # Reset resize handle
-        self.resize_handle = None
+        # End resize mode
+        self.resize_mode = False
+        self.last_mouse_pos = None
         super().mouseReleaseEvent(event)
 
     def get_decoration_info(self):
@@ -241,28 +285,35 @@ class Ui:
         screen = QtWidgets.QApplication.primaryScreen()
         screen_size = screen.size()
         
-        # Import and initialize scaling
         from .display_scaling import DisplayScaling
         DisplayScaling.initialize(screen_size.width(), screen_size.height())
         
-        # Initialize window properties with scaling
-        self.window.setMinimumSize(DisplayScaling.scale(1280), DisplayScaling.scale(900))
-        self.window_width = DisplayScaling.scale(1280)
-        self.window_height = DisplayScaling.scale(900)
+        # Adjust window size based on resolution
+        if screen_size.width() <= 1920:  # For 1920x1080 or lower
+            base_width = 1440
+            base_height = 960
+        else:  # For higher resolutions like 2880x1920
+            base_width = 1344  # Slightly larger than 1280 for better proportionality
+            base_height = 936
+
+        self.window.setMinimumSize(DisplayScaling.scale(base_width), DisplayScaling.scale(base_height))
+        self.window_width = DisplayScaling.scale(base_width)
+        self.window_height = DisplayScaling.scale(base_height)
         self.window.setWindowTitle("Dosidicus")
         self.window.resize(self.window_width, self.window_height)
 
-        # Create scene and view before any UI elements
+        # Create scene and view
         self.scene = QtWidgets.QGraphicsScene()
         self.view = QtWidgets.QGraphicsView(self.scene)
+        self.tutorial_manager = TutorialManager(self, window)
         self.view.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.view.setViewportUpdateMode(QtWidgets.QGraphicsView.FullViewportUpdate)
         self.window.setCentralWidget(self.view)
 
-        # Now setup UI elements that depend on the scene
+        # Setup UI elements
         self.setup_ui_elements()
-        
+
         # Setup menu bar and other components
         self.setup_menu_bar()
         self.neuron_inspector = None
@@ -324,6 +375,94 @@ class Ui:
         
         # Create multiplayer menu
         self.create_multiplayer_menu()
+
+    def show_tutorial_overlay(self):
+        """Show the tutorial using the tutorial manager"""
+        self.tutorial_manager.start_tutorial()
+
+    def remove_tutorial_overlay(self):
+        """Clean up tutorial elements and advance to next step"""
+        self.tutorial_manager.advance_to_next_step()
+
+    def show_second_tutorial_banner(self):
+        """Show the second tutorial banner about the neural network"""
+        # Get current window dimensions
+        win_width = self.window_width
+        win_height = self.window_height
+        
+        # Create a banner across the bottom of the screen
+        banner_height = 100
+        banner = QtWidgets.QGraphicsRectItem(0, win_height - banner_height, win_width, banner_height)
+        banner.setBrush(QtGui.QColor(25, 25, 112, 230))  # Midnight blue, nearly opaque
+        banner.setPen(QtGui.QPen(QtGui.QColor(135, 206, 250, 150), 1))  # Light blue outline
+        banner.setZValue(2000)
+        setattr(banner, '_is_tutorial_element', True)
+        self.scene.addItem(banner)
+        
+        # Create title with icon
+        title_text = QtWidgets.QGraphicsTextItem("🧠 NEURAL NETWORK")
+        title_text.setDefaultTextColor(QtGui.QColor(135, 206, 250))  # Light blue
+        title_text.setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Bold))
+        title_text.setPos(20, win_height - banner_height + 10)
+        title_text.setZValue(2001)
+        setattr(title_text, '_is_tutorial_element', True)
+        self.scene.addItem(title_text)
+        
+        # Create body text
+        info_text = QtWidgets.QGraphicsTextItem(
+            "This is the squid's neural network. His behaviour is driven by his needs (round neurons).\n"
+            "The network adapts and learns as the squid interacts with his environment."
+        )
+        info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+        info_text.setFont(QtGui.QFont("Arial", 11))
+        info_text.setPos(20, win_height - banner_height + 35)
+        info_text.setTextWidth(win_width - 150)
+        info_text.setZValue(2001)
+        setattr(info_text, '_is_tutorial_element', True)
+        self.scene.addItem(info_text)
+        
+        # Add a close button
+        dismiss_button = QtWidgets.QPushButton("Got it!")
+        dismiss_button.setStyleSheet("""
+            QPushButton {
+                background-color: #1E90FF;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                font-size: 14px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #4169E1;
+            }
+        """)
+        dismiss_button.clicked.connect(self.close_tutorial_completely)
+        
+        # Create a proxy widget for the button
+        dismiss_proxy = self.scene.addWidget(dismiss_button)
+        dismiss_proxy.setPos(win_width - 120, win_height - banner_height + 35)
+        dismiss_proxy.setZValue(2002)
+        setattr(dismiss_proxy, '_is_tutorial_element', True)
+        
+        # Auto-dismiss after 20 seconds
+        self.tutorial_timer = QtCore.QTimer()
+        self.tutorial_timer.timeout.connect(self.close_tutorial_completely)
+        self.tutorial_timer.setSingleShot(True)
+        self.tutorial_timer.start(20000)  # 20 seconds
+
+    def close_tutorial_completely(self):
+        """Final cleanup of all tutorial elements"""
+        # Stop any timers
+        if hasattr(self, 'tutorial_timer') and self.tutorial_timer.isActive():
+            self.tutorial_timer.stop()
+        
+        # Remove all tutorial elements
+        for item in self.scene.items():
+            if hasattr(item, '_is_tutorial_element'):
+                self.scene.removeItem(item)
+        
+        # Force scene update
+        self.scene.update()
 
 
     def setup_plugin_menu(self, plugin_manager):
@@ -521,7 +660,7 @@ class Ui:
     def setup_ui_elements(self):
         # Create the rectangle item
         self.rect_item = self.scene.addRect(50, 50, self.window_width - 100, self.window_height - 100,
-                                            QtGui.QPen(QtGui.QColor(0, 0, 0)), QtGui.QBrush(QtGui.QColor(255, 255, 255)))
+                                        QtGui.QPen(QtGui.QColor(0, 0, 0)), QtGui.QBrush(QtGui.QColor(255, 255, 255)))
 
         # Create the cleanliness overlay
         self.cleanliness_overlay = self.scene.addRect(50, 50, self.window_width - 100, self.window_height - 100,
@@ -552,9 +691,42 @@ class Ui:
         self.points_value_label.setZValue(2)
         self.scene.addItem(self.points_value_label)
 
+        # Completely disable scrolling in the main view
+        self.view.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.view.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        
+        # Make sure the scene fits exactly in the view without scrolling
+        self.view.setSceneRect(0, 0, self.window_width, self.window_height)
+        
+        # Override the wheel event to handle only decoration resizing
+        self.original_view_wheel_event = self.view.wheelEvent
+        self.view.wheelEvent = self.custom_wheel_event
+
         # Check if tamagotchi_logic exists before accessing debug_mode
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None:
             self.debug_text.setVisible(getattr(self.tamagotchi_logic, 'debug_mode', False))
+
+    def custom_wheel_event(self, event):
+        # Get selected items
+        selected_items = self.scene.selectedItems()
+        
+        # Find selected ResizablePixmapItems
+        resizable_selected = [item for item in selected_items if 
+                            isinstance(item, ResizablePixmapItem)]
+        
+        if resizable_selected:
+            # Forward the wheel event to all selected resizable items
+            for item in resizable_selected:
+                # We need to convert QWheelEvent (PyQt5) to QGraphicsSceneWheelEvent
+                # This hack allows us to use the existing wheelEvent method
+                # Without requiring a full rewrite
+                try:
+                    item.wheelEvent(event)
+                except Exception as e:
+                    print(f"Error in wheel event handling: {e}")
+        
+        # Always accept the event to prevent the view from scrolling
+        event.accept()
 
     def check_neurogenesis(self, state):
         """Handle neuron creation, with special debug mode that bypasses all checks"""
@@ -1073,38 +1245,52 @@ class Ui:
             if not pixmap.isNull():
                 filename = os.path.basename(file_path)
                 
-                # Create the item - don't set flags here since they're set in __init__
+                # Create the item with the original pixmap
                 item = ResizablePixmapItem(pixmap, file_path)
                 
-                # Handle scaling
-                if filename.lower().startswith(('rock01', 'rock02')):
-                    # For rocks, set a fixed size
-                    item.setPixmap(pixmap.scaled(
-                        100, 100, 
-                        QtCore.Qt.KeepAspectRatio, 
-                        QtCore.Qt.SmoothTransformation
-                    ))
-                elif not filename.startswith('st_'):
-                    # For other decorations, random scale
-                    scale_factor = random.uniform(0.75, 2)
-                    item.setScale(scale_factor)
-
+                # IMPORTANT: Make sure the original is preserved
+                item.original_pixmap = pixmap
+                
+                # Set initial size for non-rock items
+                if not ('rock01' in file_path.lower() or 'rock02' in file_path.lower()):
+                    from .display_scaling import DisplayScaling
+                    
+                    # Target initial maximum dimension
+                    target_max_size = DisplayScaling.scale(192)  # Adjust this value as needed
+                    
+                    # Get dimensions
+                    orig_width = pixmap.width()
+                    orig_height = pixmap.height()
+                    
+                    # Calculate scaling based on largest dimension
+                    max_dimension = max(orig_width, orig_height)
+                    if max_dimension > target_max_size:
+                        scale_factor = target_max_size / max_dimension
+                        
+                        # Apply scaling
+                        scaled_width = int(orig_width * scale_factor)
+                        scaled_height = int(orig_height * scale_factor)
+                        
+                        # Create scaled pixmap
+                        scaled_pixmap = pixmap.scaled(
+                            scaled_width, scaled_height,
+                            QtCore.Qt.KeepAspectRatio,
+                            QtCore.Qt.SmoothTransformation
+                        )
+                        
+                        # Update item pixmap
+                        item.setPixmap(scaled_pixmap)
+                
                 # Set position and add to scene
                 pos = self.view.mapToScene(event.pos())
                 item.setPos(pos)
+                
+                # Add to scene and select for immediate access
                 self.scene.addItem(item)
-                
-                # Bring to front to ensure it's clickable
-                item.setZValue(1)
-                
-                # Update scene to ensure item is visible/interactive
-                self.scene.update()
+                self.scene.clearSelection()
+                item.setSelected(True)
                 
                 event.accept()
-            else:
-                event.ignore()
-        else:
-            event.ignore()
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Delete:
