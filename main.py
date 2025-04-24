@@ -53,21 +53,28 @@ class MainWindow(QtWidgets.QMainWindow):
         if neuro_cooldown is not None:
             self.config.neurogenesis['cooldown'] = neuro_cooldown
         
+        # Add initialization tracking flag
+        self._initialization_complete = False
+        
         # Set up debugging
         self.debug_mode = debug_mode
         if self.debug_mode:
             self.setup_logging()
         
-        # Initialize UI with debug mode
+        # Initialize UI first
+        logging.debug("Initializing UI")
         self.user_interface = Ui(self, debug_mode=self.debug_mode)
 
-        # Initialize plugin manager - do this before other components
+        # Initialize SquidBrainWindow with config
+        logging.debug("Initializing SquidBrainWindow")
+        self.brain_window = SquidBrainWindow(None, self.debug_mode, self.config)
+        self.brain_window.set_tamagotchi_logic(None)  # Placeholder to ensure initialization
+        self.user_interface.squid_brain_window = self.brain_window
+        
+        # Initialize plugin manager after UI and brain window
+        logging.debug("Initializing PluginManager")
         self.plugin_manager = PluginManager()
         print(f"> Plugin manager initialized: {self.plugin_manager}")
-        
-        # Create SquidBrainWindow with config
-        self.brain_window = SquidBrainWindow(None, self.debug_mode, self.config)
-        self.user_interface.squid_brain_window = self.brain_window
         
         self.specified_personality = specified_personality
         self.neuro_cooldown = neuro_cooldown
@@ -75,44 +82,23 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Check for existing save data
         self.save_manager = SaveManager("saves")
-        if self.save_manager.save_exists() and specified_personality is None:
-            print("\x1b[32mExisting save data found and will be loaded\x1b[0m")
-            self.squid = Squid(self.user_interface, None, None)
-            self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
-            
-            # Set up connections first
-            self.squid.tamagotchi_logic = self.tamagotchi_logic
-            self.user_interface.tamagotchi_logic = self.tamagotchi_logic
-            self.brain_window.tamagotchi_logic = self.tamagotchi_logic
-            # Add this line to propagate the reference to all tabs
-            if hasattr(self.brain_window, 'set_tamagotchi_logic'):
-                self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
-            
-            # Now load from save data
-            self.create_squid_from_save_data()
-        else:
-            print(" ")
-            print("\x1b[92m---------------  STARTING A NEW SIMULATION ---------------\x1b[0m")
- 
-            self.create_new_game(self.specified_personality)
-            self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
-            
-            # Connect components
-            self.squid.tamagotchi_logic = self.tamagotchi_logic
-            self.user_interface.tamagotchi_logic = self.tamagotchi_logic
-            self.brain_window.tamagotchi_logic = self.tamagotchi_logic
-            # Add this line to propagate the reference to all tabs
-            if hasattr(self.brain_window, 'set_tamagotchi_logic'):
-                self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
-
-        # Now that tamagotchi_logic is created, set it in plugin_manager
+        
+        # Track whether we want to show tutorial
+        self.show_tutorial = False
+        
+        # Initialize the game
+        logging.debug("Initializing game")
+        self.initialize_game()
+        
+        # Now that tamagotchi_logic is created, set it in plugin_manager and brain_window
+        logging.debug("Setting tamagotchi_logic references")
         self.plugin_manager.tamagotchi_logic = self.tamagotchi_logic
         self.tamagotchi_logic.plugin_manager = self.plugin_manager
+        self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
         
-        # Load and initialize plugins
-        #print("Loading all plugins...")
+        # Load and initialize plugins after core components
+        logging.debug("Loading plugins")
         plugin_results = self.plugin_manager.load_all_plugins()
-        #print(f"Plugin loading results: {plugin_results}")
         
         # Update status bar with plugin information
         if hasattr(self.user_interface, 'status_bar'):
@@ -125,11 +111,76 @@ class MainWindow(QtWidgets.QMainWindow):
         self.user_interface.decorations_action.triggered.connect(self.user_interface.toggle_decoration_window)
         
         # Initialize plugin menu - do this AFTER loading plugins
-        self.user_interface.setup_plugin_menu(self.plugin_manager)
-
+        self.user_interface.apply_plugin_menu_registrations(self.plugin_manager)
+    
+        # Position window 300 pixels to the left of default position
+        desktop = QtWidgets.QApplication.desktop()
+        screen_rect = desktop.screenGeometry()
+        window_rect = self.geometry()
+        center_x = screen_rect.center().x()
+        window_x = center_x - (window_rect.width() // 2)  # Default centered X position
+        
+        # Move 300 pixels to the left
+        self.move(window_x - 300, self.y())
+        
         if self.debug_mode:
             print(f"DEBUG MODE ENABLED: Console output is being logged to console.txt")
 
+    def initialize_game(self):
+        """Initialize the game based on whether save data exists"""
+        if self.save_manager.save_exists() and self.specified_personality is None:
+            print("\x1b[32mExisting save data found and will be loaded\x1b[0m")
+            self.squid = Squid(self.user_interface, None, None)
+            self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
+            
+            # Set up connections
+            self.squid.tamagotchi_logic = self.tamagotchi_logic
+            self.user_interface.tamagotchi_logic = self.tamagotchi_logic
+            self.brain_window.tamagotchi_logic = self.tamagotchi_logic
+            if hasattr(self.brain_window, 'set_tamagotchi_logic'):
+                self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
+            
+            # Now load from save data
+            self.create_squid_from_save_data()
+        else:
+            print("\x1b[92m--------------  STARTING A NEW SIMULATION --------------\x1b[0m")
+            
+            # Check if tutorial should be shown (only for new games)
+            if not self.save_manager.save_exists():
+                self.check_tutorial_preference()
+            
+            self.create_new_game(self.specified_personality)
+            self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
+            
+            # Connect components
+            self.squid.tamagotchi_logic = self.tamagotchi_logic
+            self.user_interface.tamagotchi_logic = self.tamagotchi_logic
+            self.brain_window.tamagotchi_logic = self.tamagotchi_logic
+            if hasattr(self.brain_window, 'set_tamagotchi_logic'):
+                self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
+        
+        # Mark initialization as complete
+        self._initialization_complete = True
+
+    def check_tutorial_preference(self):
+        """Show a dialog asking if the user wants to see the tutorial"""
+        # Don't ask about tutorial if save data exists
+        if self.save_manager.save_exists():
+            self.show_tutorial = False
+            return
+            
+        # Ask user if they want to see the tutorial
+        reply = QtWidgets.QMessageBox.question(
+            self, 
+            "Startup",
+            "Show tutorial?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.Yes
+        )
+        
+        # Set flag based on user's choice
+        self.show_tutorial = (reply == QtWidgets.QMessageBox.Yes)
+    
     def position_and_show_decoration_window(self):
         """Position the decoration window in the bottom right and show it"""
         if hasattr(self.user_interface, 'decoration_window') and self.user_interface.decoration_window:
@@ -163,6 +214,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def create_new_game(self, personality=None):
         """Initialize a new game with specified personality"""
+        # Skip if already initialized
+        if self._initialization_complete and hasattr(self, 'squid') and self.squid is not None:
+            print("Skipping duplicate game creation - squid already exists")
+            return
+            
         personality = personality or random.choice(list(Personality))
         
         self.squid = Squid(
@@ -300,11 +356,28 @@ class MainWindow(QtWidgets.QMainWindow):
     def start_simulation(self):
         """Begin the simulation and automatically open brain and decoration windows"""
         print("  ")
+        
+        # Clean up any duplicate squids
+        self.cleanup_duplicate_squids()
+        
         self.tamagotchi_logic.set_simulation_speed(1)
         self.tamagotchi_logic.start_autosave()
 
-        # Use QTimer to delay opening windows slightly
-        QtCore.QTimer.singleShot(500, self.open_initial_windows)
+        # Show tutorial if enabled
+        if self.show_tutorial:
+            QtCore.QTimer.singleShot(1000, self.user_interface.show_tutorial_overlay)
+        else:
+            # Only open windows automatically if NOT showing tutorial
+            QtCore.QTimer.singleShot(500, self.open_initial_windows)
+
+    def show_tutorial_overlay(self):
+        """Delegate to UI layer and ensure no duplicates remain"""
+        # First do one more duplicate cleanup
+        self.cleanup_duplicate_squids()
+        
+        # Then show the tutorial via the UI
+        if hasattr(self, 'user_interface') and self.user_interface:
+            self.user_interface.show_tutorial_overlay()
 
     def show_hatching_notification(self):
         """Display hatching message"""
@@ -322,7 +395,48 @@ class MainWindow(QtWidgets.QMainWindow):
             self.position_and_show_decoration_window()
             self.user_interface.decorations_action.setChecked(True)
 
-    
+    def cleanup_duplicate_squids(self):
+        """Remove any duplicate squid items from the scene"""
+        if not hasattr(self, 'user_interface') or not self.user_interface:
+            return
+            
+        if not hasattr(self, 'squid') or not self.squid:
+            return
+            
+        try:
+            # Get the reference to our genuine squid item
+            main_squid_item = self.squid.squid_item
+            
+            # Get all items in the scene
+            all_items = self.user_interface.scene.items()
+            
+            # Track how many items we find and remove
+            found_count = 0
+            
+            # Look for graphics items that could be duplicate squids
+            for item in all_items:
+                # Skip our genuine squid item
+                if item == main_squid_item:
+                    continue
+                    
+                # Only check QGraphicsPixmapItems
+                if isinstance(item, QtWidgets.QGraphicsPixmapItem):
+                    # Check if it has the same pixmap dimensions as our squid
+                    if (hasattr(item, 'pixmap') and item.pixmap() and main_squid_item.pixmap() and
+                        item.pixmap().width() == main_squid_item.pixmap().width() and
+                        item.pixmap().height() == main_squid_item.pixmap().height()):
+                        print(f"Found potential duplicate squid item - removing")
+                        self.user_interface.scene.removeItem(item)
+                        found_count += 1
+            
+            if found_count > 0:
+                print(f"Cleaned up {found_count} duplicate squid items")
+                # Force scene update
+                self.user_interface.scene.update()
+        
+        except Exception as e:
+            print(f"Error during cleanup: {str(e)}")
+
     def initialize_multiplayer_manually(self):
         """Manually initialize multiplayer plugin if needed"""
         try:
