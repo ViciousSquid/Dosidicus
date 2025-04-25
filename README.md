@@ -11,7 +11,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 ![image](https://github.com/user-attachments/assets/6102225a-52d6-440c-adfb-a58fd800f1cd)
 
 
-
+<a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
 
 
 
