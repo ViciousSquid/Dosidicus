@@ -51,7 +51,7 @@ Randomly adjusts connection weights between neurons when not frozen.
 
 The main application window that contains the brain visualization and various control tabs.
 
-### ` __init\__(self, tamagotchi\_logic, debug\_mode=False)`
+### ` __init__(self, tamagotchi_logic, debug_mode=False)`
 
 Initializes the main window with:
 
@@ -60,7 +60,7 @@ Initializes the main window with:
 *   Various timers for updates
 *   Tab-based interface
 
-### `update\_brain(self, state)`
+### `update_brain(self, state)`
 
 Main method for updating the brain visualization with new state data.
 
@@ -111,17 +111,7 @@ The brain visualization includes:
 *   **Training:** Capture and apply Hebbian learning
 *   **Freezing:** Temporarily stop weight changes
 
-### Information Tabs
 
-The interface provides multiple tabs for different aspects:
-
-| Tab | Purpose |
-| --- | --- |
-| Network | Main brain visualization and controls |
-| Memory | Short-term and long-term memory display |
-| Personality | Personality traits and care tips |
-| Learning | Weight change history and analysis |
-| Thinking | Decision-making process visualization |
 
 ## Important Data Structures
 
@@ -131,7 +121,7 @@ The core state dictionary contains:
 
 *   `hunger`, `happiness`, `cleanliness`, `sleepiness` (0-100)
 *   `satisfaction`, `anxiety`, `curiosity` (0-100)
-*   Boolean flags: `is_sick`, `is_eating`, `is_sleeping`
+*   Boolean flags: `is_sick`, `is_eating`, `is_sleeping`, `pursuing_food`
 *   Movement: `direction`, `position`
 
 ### Neurogenesis Data
