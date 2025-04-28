@@ -169,6 +169,23 @@ class TamagotchiLogic:
         self.mental_states_enabled = enabled
         self.squid.mental_state_manager.set_mental_states_enabled(enabled)
 
+    def get_health_history(self, limit=100):
+        """
+        Returns historical health data for the squid.
+        
+        Args:
+            limit (int): Maximum number of data points to return (default: 100)
+            
+        Returns:
+            list: A list of (timestamp, health_value) tuples, newest first
+        """
+        # Initialize health history if it doesn't exist
+        if not hasattr(self, '_health_history'):
+            self._health_history = []
+        
+        # Return a copy of the history, limited to the requested number of points
+        return self._health_history[-limit:]
+
     
 
     def reset_squid_status(self):
@@ -1318,7 +1335,7 @@ class TamagotchiLogic:
 
                 # Check if squid becomes sick (80% chance)
                 if (self.cleanliness_threshold_time >= 10 * self.simulation_speed and self.cleanliness_threshold_time <= 60 * self.simulation_speed) or \
-                   (self.hunger_threshold_time >= 10 * self.simulation_speed and self.hunger_threshold_time <= 50 * self.simulation_speed):
+                (self.hunger_threshold_time >= 10 * self.simulation_speed and self.hunger_threshold_time <= 50 * self.simulation_speed):
                     if random.random() < 0.8:
                         self.squid.mental_state_manager.set_state("sick", True)
                 else:
@@ -1330,6 +1347,9 @@ class TamagotchiLogic:
                 else:
                     health_decrease = 0.1 * self.simulation_speed  # Normal decrease when sick
 
+                # Store previous health for change detection
+                previous_health = self.squid.health
+
                 if self.squid.is_sick:
                     self.squid.health = max(0, self.squid.health - health_decrease)
                     self.squid.show_sick_icon()
@@ -1338,6 +1358,21 @@ class TamagotchiLogic:
                 else:
                     self.squid.health = min(100, self.squid.health + (0.1 * self.simulation_speed))
                     self.squid.hide_sick_icon()
+                
+                # Track health history
+                if not hasattr(self, '_health_history'):
+                    self._health_history = []
+                
+                # Add current health data point with timestamp
+                # Only record if health actually changed or if we haven't recorded in a while
+                if (previous_health != self.squid.health or 
+                    not self._health_history or 
+                    time.time() - self._health_history[-1][0] > 60):  # Record at least every 60 seconds
+                    self._health_history.append((time.time(), self.squid.health))
+                    
+                    # Limit history size to prevent memory issues
+                    if len(self._health_history) > 1000:
+                        self._health_history = self._health_history[-1000:]
 
                 # Check if squid should go to sleep
                 if self.squid.sleepiness >= 100:
