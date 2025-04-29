@@ -55,6 +55,19 @@ class NetworkTab(BrainBaseTab):
         # Add the content widget to our layout
         self.layout.addWidget(main_content_widget)
 
+    def preload(self):
+        """Preload tab contents to prevent crash during tutorial step 2"""
+        # Ensure the brain widget is fully initialized
+        if hasattr(self, 'brain_widget') and self.brain_widget:
+            # Force the brain widget to update
+            self.brain_widget.update()
+            
+        # Make sure checkbox states are properly initialized    
+        if hasattr(self, 'checkbox_links'):
+            self.checkbox_links.setChecked(True)
+        if hasattr(self, 'checkbox_weights'):
+            self.checkbox_weights.setChecked(True)
+
     def stimulate_brain(self):
         dialog = StimulateDialog(self.brain_widget, self)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:

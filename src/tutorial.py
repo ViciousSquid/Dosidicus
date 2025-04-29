@@ -29,9 +29,23 @@ class TutorialManager:
         return title_font_size, body_font_size
     
     def start_tutorial(self):
-        logging.debug("Starting tutorial sequence")
-        self.current_step = 0
-        self.show_first_tutorial()
+        logging.debug("Starting tutorial")
+        try:
+            # Make sure we have all required components
+            if not hasattr(self, 'ui') or not self.ui:
+                logging.error("UI reference missing, cannot start tutorial")
+                return
+                
+            if not hasattr(self.ui, 'scene') or not self.ui.scene:
+                logging.error("Scene not initialized, cannot start tutorial")
+                return
+            
+            # Initialize the tutorial
+            self.current_step = 0
+            self.show_first_tutorial()
+        except Exception as e:
+            logging.error(f"Error starting tutorial: {str(e)}")
+            self.end_tutorial()
     
     def show_first_tutorial(self):
         """Show the initial tutorial about basic squid care"""
@@ -623,6 +637,16 @@ class TutorialManager:
         
         # Set auto-dismiss timer
         self.start_auto_dismiss_timer(15000)
+
+    def check_brain_window_ready(self):
+        if (hasattr(self.ui, 'squid_brain_window') and 
+            self.ui.squid_brain_window and 
+            hasattr(self.ui.squid_brain_window, 'tabs') and
+            self.ui.squid_brain_window.tabs):
+            self.show_second_tutorial()
+        else:
+            # Try again shortly
+            QtCore.QTimer.singleShot(500, self.check_brain_window_ready)
     
     def advance_to_next_step(self):
         logging.debug(f"Advancing to tutorial step {self.current_step + 1}")
@@ -650,8 +674,8 @@ class TutorialManager:
                 if hasattr(self.ui, 'brain_action'):
                     self.ui.brain_action.setChecked(True)
 
-                # Increase delay to 1000ms to ensure window is fully initialized
-                QtCore.QTimer.singleShot(1000, self.show_second_tutorial)
+                # Delay of 1 second for tutuorial
+                QtCore.QTimer.singleShot(1000, self.check_brain_window_ready)
             except Exception as e:
                 logging.error(f"Error showing brain window: {str(e)}")
                 self.end_tutorial()
