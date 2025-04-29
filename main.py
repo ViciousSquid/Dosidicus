@@ -68,6 +68,17 @@ class MainWindow(QtWidgets.QMainWindow):
         # Initialize SquidBrainWindow with config
         logging.debug("Initializing SquidBrainWindow")
         self.brain_window = SquidBrainWindow(None, self.debug_mode, self.config)
+        
+        # Important: Hide the window but ensure it's created
+        self.brain_window.hide()
+        
+        # Store the original window reference to prevent garbage collection
+        self._brain_window_ref = self.brain_window
+        
+        # Explicitly force creation of all tab contents
+        QtCore.QTimer.singleShot(100, self.preload_brain_window_tabs)
+        
+        # Continue with normal initialization
         self.brain_window.set_tamagotchi_logic(None)  # Placeholder to ensure initialization
         self.user_interface.squid_brain_window = self.brain_window
         
@@ -126,6 +137,61 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.debug_mode:
             print(f"DEBUG MODE ENABLED: Console output is being logged to console.txt")
 
+    def preload_brain_window_tabs(self):
+        """Force creation of all tab contents to prevent crashes during tutorial"""
+        print("Pre-loading brain window tabs...")
+        if not hasattr(self, 'brain_window') or not self.brain_window:
+            print("Brain window not initialized, cannot preload")
+            return
+            
+        try:
+            # Force the window to process events and initialize all tabs
+            if hasattr(self.brain_window, 'tabs'):
+                # Visit each tab to ensure it's loaded
+                tab_count = self.brain_window.tabs.count()
+                print(f"Pre-loading {tab_count} tabs...")
+                
+                # Initialize tabs array to prevent garbage collection
+                if not hasattr(self, '_preloaded_tabs'):
+                    self._preloaded_tabs = []
+                    
+                # Temporarily show the window off-screen to force loading
+                original_pos = self.brain_window.pos()
+                self.brain_window.move(-10000, -10000)  # Move off-screen
+                self.brain_window.show()
+                
+                # Force each tab to be displayed at least once
+                for i in range(tab_count):
+                    self.brain_window.tabs.setCurrentIndex(i)
+                    tab_name = self.brain_window.tabs.tabText(i)
+                    print(f"Pre-loading tab {i}: {tab_name}")
+                    
+                    # Get the tab widget and reference it to prevent garbage collection
+                    tab_widget = self.brain_window.tabs.widget(i)
+                    self._preloaded_tabs.append(tab_widget)
+                    
+                    # Process events to allow rendering
+                    QtWidgets.QApplication.processEvents()
+                    
+                    # Add a small delay between tab changes
+                    time.sleep(0.1)
+                
+                # Return to first tab
+                self.brain_window.tabs.setCurrentIndex(0)
+                QtWidgets.QApplication.processEvents()
+                
+                # Hide window again 
+                self.brain_window.hide()
+                self.brain_window.move(original_pos)
+                
+                print("Brain window tabs pre-loaded successfully")
+            else:
+                print("Brain window has no tabs property")
+        except Exception as e:
+            print(f"Error pre-loading brain window tabs: {e}")
+            import traceback
+            traceback.print_exc()
+
     def initialize_game(self):
         """Initialize the game based on whether save data exists"""
         if self.save_manager.save_exists() and self.specified_personality is None:
@@ -145,10 +211,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             print("\x1b[92m--------------  STARTING A NEW SIMULATION --------------\x1b[0m")
             
-            # Check if tutorial should be shown (only for new games)
-            if not self.save_manager.save_exists():
-                self.check_tutorial_preference()
-            
+            # Create the game but don't check for tutorial yet
             self.create_new_game(self.specified_personality)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
             
@@ -158,9 +221,29 @@ class MainWindow(QtWidgets.QMainWindow):
             self.brain_window.tamagotchi_logic = self.tamagotchi_logic
             if hasattr(self.brain_window, 'set_tamagotchi_logic'):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
+                
+            # Schedule tutorial check for AFTER initialization
+            if not self.save_manager.save_exists():
+                QtCore.QTimer.singleShot(500, self.delayed_tutorial_check)
         
         # Mark initialization as complete
         self._initialization_complete = True
+
+    def delayed_tutorial_check(self):
+        """Check if the user wants to see the tutorial after UI is responsive"""
+        # Process pending events to ensure UI is responsive
+        QtWidgets.QApplication.processEvents()
+        
+        # Now check tutorial preference
+        self.check_tutorial_preference()
+        
+        # If tutorial was chosen, schedule it for later
+        if self.show_tutorial:
+            # We'll show tutorial when the game starts
+            pass
+        else:
+            # Just open windows if no tutorial
+            QtCore.QTimer.singleShot(500, self.open_initial_windows)
 
     def check_tutorial_preference(self):
         """Show a dialog asking if the user wants to see the tutorial"""
