@@ -88,7 +88,7 @@ class TutorialManager:
         # Create body text
         info_text = QtWidgets.QGraphicsTextItem(
             "A squid has hatched and you must look after him!\n"
-            "• Feed him when he's hungry\n"
+            "• Feed him when he's hungry (Actions Menu)\n"
             "• Clean his tank when it gets dirty\n"
             "• Watch his behavior to learn about his personality"
         )
@@ -109,7 +109,7 @@ class TutorialManager:
                 color: white;
                 border: none;
                 padding: 8px 16px;
-                font-size: 14px;
+                font-size: 16px;
                 border-radius: 4px;
             }
             QPushButton:hover {
@@ -172,7 +172,7 @@ class TutorialManager:
             self.tutorial_elements.append(title_text)
 
             info_text = QtWidgets.QGraphicsTextItem(
-                "This is the squid's neural network. His behaviour is driven by his needs (round neurons).\n"
+                "This is the squid's neural network. His behaviour is driven by his needs (neurons).\n"
                 "The network adapts and learns as the squid interacts with his environment."
             )
             info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))

@@ -280,6 +280,7 @@ class Ui:
         self.window = window
         self.tamagotchi_logic = None
         self.debug_mode = debug_mode
+        self.setup_neurogenesis_debug_shortcut()
         
         # Get screen size and initialize scaling
         screen = QtWidgets.QApplication.primaryScreen()
@@ -356,6 +357,31 @@ class Ui:
 
         # Optimize animations
         self.optimize_animations()
+
+    def setup_neurogenesis_debug_shortcut(self):
+        # Create a shortcut for neurogenesis debug window
+        self.neurogenesis_debug_shortcut = QtWidgets.QShortcut(
+            QtGui.QKeySequence(QtCore.Qt.ALT + QtCore.Qt.Key_N), 
+            self.window
+        )
+        self.neurogenesis_debug_shortcut.activated.connect(self.show_neurogenesis_debug)
+
+    def show_neurogenesis_debug(self):
+        # Ensure brain widget exists
+        if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
+            print("Brain window not initialized")
+            return
+
+        # Create or show the debug dialog
+        if not hasattr(self, '_neurogenesis_debug_dialog'):
+            self._neurogenesis_debug_dialog = NeurogenesisDebugDialog(
+                self.squid_brain_window.brain_widget, 
+                self.window
+            )
+        
+        self._neurogenesis_debug_dialog.update_debug_info()
+        self._neurogenesis_debug_dialog.show()
+        self._neurogenesis_debug_dialog.raise_()
 
     def optimize_animations(self):
         self.scene.setItemIndexMethod(QtWidgets.QGraphicsScene.NoIndex)  # Better for moving items
@@ -850,69 +876,91 @@ class Ui:
         return new_name
     
     def trigger_neurogenesis(self):
-        """Guaranteed neuron creation with validation"""
+        """Direct neuron creation bypassing all checks"""
         try:
+            # Get brain widget
             if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
-                raise ValueError("Brain window not initialized")
-
-            # Get current neuron count and names
+                print("Brain window not found")
+                self.show_message("Brain window not initialized")
+                return
+                
             brain = self.squid_brain_window.brain_widget
-            prev_count = len(brain.neuron_positions)
+            
+            # Remember existing neurons to verify creation
+            import time
+            import random
             prev_neurons = set(brain.neuron_positions.keys())
-
-            # Create forced state with debug flag
-            forced_state = {
-                "_debug_forced_neurogenesis": True,
-                "personality": getattr(self.tamagotchi_logic.squid, 'personality', None)
-            }
-
-            # Force update - call update_state directly to ensure it runs
-            brain.update_state(forced_state)
-
-            # Verify creation
-            new_count = len(brain.neuron_positions)
+            
+            # Generate unique name
+            new_name = f"forced_{int(time.time())}"
+            
+            # Calculate position near center of existing neurons
+            if brain.neuron_positions:
+                x_values = [pos[0] for pos in brain.neuron_positions.values()]
+                y_values = [pos[1] for pos in brain.neuron_positions.values()]
+                center_x = sum(x_values) / len(x_values)
+                center_y = sum(y_values) / len(y_values)
+            else:
+                center_x, center_y = 600, 300  # Default center position
+            
+            # Add randomness
+            pos_x = center_x + random.randint(-100, 100)
+            pos_y = center_y + random.randint(-100, 100)
+            
+            # Directly add neuron to brain collections
+            print(f"Creating neuron {new_name} at ({pos_x}, {pos_y})")
+            brain.neuron_positions[new_name] = (pos_x, pos_y)
+            brain.state[new_name] = 75  # High initial activation
+            
+            # Set neuron color
+            if hasattr(brain, 'state_colors'):
+                brain.state_colors[new_name] = (150, 200, 255)  # Light blue color
+            
+            # Create connections to existing neurons
+            for existing in list(prev_neurons):
+                if existing in getattr(brain, 'excluded_neurons', []):
+                    continue  # Skip excluded neurons
+                weight = random.uniform(-0.3, 0.3)
+                brain.weights[(new_name, existing)] = weight
+                brain.weights[(existing, new_name)] = weight * 0.8
+            
+            # Update tracking data
+            if hasattr(brain, 'neurogenesis_data'):
+                if 'new_neurons' not in brain.neurogenesis_data:
+                    brain.neurogenesis_data['new_neurons'] = []
+                brain.neurogenesis_data['new_neurons'].append(new_name)
+                brain.neurogenesis_data['last_neuron_time'] = time.time()
+            
+            # Set highlight for visualization
+            if hasattr(brain, 'neurogenesis_highlight'):
+                brain.neurogenesis_highlight = {
+                    'neuron': new_name,
+                    'start_time': time.time(),
+                    'duration': 5.0
+                }
+            
+            # Force immediate update
+            brain.update()
+            
+            # Verify creation worked
             new_neurons = set(brain.neuron_positions.keys()) - prev_neurons
-
-            if not new_neurons:
-                # If no new neurons, try forcing it again with more debug info
-                print("First attempt failed, trying again with debug info:")
-                print(f"Before state: {brain.state}")
-                print(f"Before positions: {brain.neuron_positions}")
-
-                # Force create a neuron directly
-                new_name = f"forced_{time.time()}"
-                brain.neuron_positions[new_name] = (600, 300)
-                brain.state[new_name] = 50
-                brain.state_colors[new_name] = (255, 150, 150)
-                brain.update()
-
-                new_neurons = set(brain.neuron_positions.keys()) - prev_neurons
-                if not new_neurons:
-                    raise RuntimeError(
-                        "Neurogenesis completely failed. Check:\n"
-                        f"- Previous count: {prev_count}\n"
-                        f"- New count: {len(brain.neuron_positions)}\n"
-                        f"- State keys: {brain.state.keys()}\n"
-                        f"- Position keys: {brain.neuron_positions.keys()}\n"
-                        f"- Debug flag was: {forced_state['_debug_forced_neurogenesis']}"
-                    )
-
-            neuron_name = new_neurons.pop()
-            self.show_message(f"Created neuron: {neuron_name}")
-            print(f"Successfully created neuron: {neuron_name}")
-            print(f"New neuron state: {brain.state[neuron_name]}")
-            print(f"New neuron position: {brain.neuron_positions[neuron_name]}")
+            if new_neurons:
+                try:
+                    self.show_message(f"Created neuron: {new_name}")
+                except:
+                    pass
+                print(f"Successfully created neuron: {new_name}")
+            else:
+                self.show_message("Neuron creation failed!")
+                print("ERROR: Failed to create neuron")
 
         except Exception as e:
-            self.show_message(f"Neurogenesis Error: {str(e)}")
+            import traceback
             print(f"NEUROGENESIS FAILURE:\n{traceback.format_exc()}")
-
-            # Only try to access further attributes if squid_brain_window exists
-            if hasattr(self, 'squid_brain_window') and self.squid_brain_window:
-                print("CURRENT NETWORK STATE:")
-                print(f"State: {self.squid_brain_window.brain_widget.state}")
-                print(f"Positions: {self.squid_brain_window.brain_widget.neuron_positions}")
-                print(f"Weights: {list(self.squid_brain_window.brain_widget.weights.items())[:5]}...")
+            try:
+                self.show_message(f"Neurogenesis Error: {str(e)}")
+            except:
+                pass
 
 
     def toggle_decoration_window(self, checked):
@@ -1114,28 +1162,57 @@ class Ui:
                 self.pause_redraw_timer.stop()
 
     def handle_window_resize(self, event):
+        # Update UI dimensions
         self.window_width = event.size().width()
         self.window_height = event.size().height()
         self.scene.setSceneRect(0, 0, self.window_width, self.window_height)
 
+        # Update boundary rectangle
         self.rect_item.setRect(50, 50, self.window_width - 100, self.window_height - 100)
         self.cleanliness_overlay.setRect(50, 50, self.window_width - 100, self.window_height - 100)
 
+        # Update UI elements positions
         self.feeding_message.setPos(0, self.window_height - 75)
         self.feeding_message.setTextWidth(self.window_width)
-
         self.points_label.setPos(self.window_width - 265, 10)
         self.points_value_label.setPos(self.window_width - 95, 10)
-        
-        # Update debug text position
         self.debug_text.setPos(self.window_width - 60, self.window_height - 60)
         
         # Reposition any active message
         if hasattr(self, 'current_message_item') and self.current_message_item in self.scene.items():
             text_height = self.current_message_item.boundingRect().height()
-            message_y = self.window_height - text_height - 20  # 20px padding from bottom
+            message_y = self.window_height - text_height - 20
             self.current_message_item.setPos(0, message_y)
             self.current_message_item.setTextWidth(self.window_width)
+        
+        # CRITICAL FIX: Ensure squid stays within boundary after resize
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'squid') and self.tamagotchi_logic.squid:
+            squid = self.tamagotchi_logic.squid
+            
+            # Update squid's reference to window dimensions
+            squid.ui.window_width = self.window_width
+            squid.ui.window_height = self.window_height
+            
+            # Update squid's center position reference
+            squid.center_x = self.window_width // 2
+            squid.center_y = self.window_height // 2
+            
+            # Update vertical range preferences
+            if hasattr(squid, 'update_preferred_vertical_range'):
+                squid.update_preferred_vertical_range()
+            
+            # Constrain squid position to stay within boundary
+            squid.squid_x = max(50, min(squid.squid_x, self.window_width - 50 - squid.squid_width))
+            squid.squid_y = max(50, min(squid.squid_y, self.window_height - 120 - squid.squid_height))
+            squid.squid_item.setPos(squid.squid_x, squid.squid_y)
+            
+            # Update visual elements
+            if hasattr(squid, 'update_view_cone'):
+                squid.update_view_cone()
+            if hasattr(squid, 'startled_icon') and squid.startled_icon is not None:
+                squid.update_startled_icon_position()
+            if hasattr(squid, 'sick_icon_item') and squid.sick_icon_item is not None:
+                squid.update_sick_icon_position()
 
     def show_message(self, message):
         # Call hook if available
@@ -1154,10 +1231,16 @@ class Ui:
                         message = result
                         break
         
-        # Remove any existing message items
-        for item in self.scene.items():
-            if hasattr(item, '_is_message_item'):
-                self.scene.removeItem(item)
+        # Remove any existing message items - WRAPPED IN TRY-EXCEPT
+        try:
+            for item in self.scene.items():
+                try:
+                    if hasattr(item, '_is_message_item'):
+                        self.scene.removeItem(item)
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
         # Create a new QGraphicsTextItem for the message with scaled font
         message_item = QtWidgets.QGraphicsTextItem(message)
@@ -1178,7 +1261,10 @@ class Ui:
         message_item.setHtml(f'<div style="text-align: center; background-color: #000000; padding: 0px;">{message}</div>')
         message_item.setZValue(999)  # Ensure the message is on top
         message_item.setOpacity(1)
-        setattr(message_item, '_is_message_item', True)  # Mark as message item
+        try:
+            setattr(message_item, '_is_message_item', True)  # Mark as message item
+        except TypeError:
+            pass  # Skip if attribute setting fails
 
         # Add the new message item to the scene
         self.scene.addItem(message_item)
@@ -1295,6 +1381,81 @@ class Ui:
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_Delete:
             self.delete_selected_items()
+        elif event.key() == QtCore.Qt.Key_N and event.modifiers() & QtCore.Qt.ShiftModifier:  # Shift+N for Neurogenesis
+            self.direct_create_neuron()
+
+    def direct_create_neuron(self):
+        """Direct neuron creation bypassing all checks and UI methods"""
+        try:
+            # Get brain widget directly
+            if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
+                print("ERROR: Brain window not initialized")
+                return
+                
+            brain = self.squid_brain_window.brain_widget
+            
+            # Generate unique name with timestamp
+            import time
+            import random
+            new_name = f"forced_{int(time.time())}"
+            
+            # Calculate center of existing neurons
+            if brain.neuron_positions:
+                x_values = [pos[0] for pos in brain.neuron_positions.values()]
+                y_values = [pos[1] for pos in brain.neuron_positions.values()]
+                center_x = sum(x_values) / len(x_values)
+                center_y = sum(y_values) / len(y_values)
+            else:
+                center_x, center_y = 600, 300
+            
+            # Add randomness to position
+            pos_x = center_x + random.randint(-100, 100)
+            pos_y = center_y + random.randint(-100, 100)
+            
+            # DIRECTLY ADD THE NEURON - bypassing all methods
+            print(f"Creating neuron {new_name} at ({pos_x}, {pos_y})")
+            
+            # 1. Add to positions
+            brain.neuron_positions[new_name] = (pos_x, pos_y)
+            
+            # 2. Set activation
+            brain.state[new_name] = 75
+            
+            # 3. Set color
+            if hasattr(brain, 'state_colors'):
+                brain.state_colors[new_name] = (150, 200, 255)
+            
+            # 4. Create connections
+            excluded = getattr(brain, 'excluded_neurons', [])
+            for existing in list(brain.neuron_positions.keys()):
+                if existing != new_name and existing not in excluded:
+                    weight = random.uniform(-0.3, 0.3)
+                    brain.weights[(new_name, existing)] = weight
+                    brain.weights[(existing, new_name)] = weight * 0.8
+            
+            # 5. Update tracking
+            if hasattr(brain, 'neurogenesis_data'):
+                if 'new_neurons' not in brain.neurogenesis_data:
+                    brain.neurogenesis_data['new_neurons'] = []
+                brain.neurogenesis_data['new_neurons'].append(new_name)
+                brain.neurogenesis_data['last_neuron_time'] = time.time()
+            
+            # 6. Set highlight
+            if hasattr(brain, 'neurogenesis_highlight'):
+                brain.neurogenesis_highlight = {
+                    'neuron': new_name,
+                    'start_time': time.time(),
+                    'duration': 5.0
+                }
+            
+            # 7. Force update
+            brain.update()
+            
+            print(f"Successfully created neuron: {new_name}")
+            
+        except Exception as e:
+            import traceback
+            print(f"NEUROGENESIS FAILURE:\n{traceback.format_exc()}")
 
     def delete_selected_items(self):
         for item in self.scene.selectedItems():
@@ -1447,6 +1608,10 @@ class Ui:
         # Toggle the state
         new_debug_mode = not current_debug
         
+        # Set a flag to prevent circular callbacks
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None:
+            self.tamagotchi_logic._propagating_debug_mode = True
+        
         # First, update self
         self.debug_mode = new_debug_mode
         
@@ -1476,9 +1641,17 @@ class Ui:
                 # Force update to reflect changes
                 self.squid_brain_window.brain_widget.update()
         
+        # Clear propagation flag
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None:
+            self.tamagotchi_logic._propagating_debug_mode = False
+        
         # Print status for confirmation
         print(f"Debug mode {'enabled' if new_debug_mode else 'disabled'}")
-        self.show_message(f"Debug mode {'enabled' if new_debug_mode else 'disabled'}")
+        
+        try:
+            self.show_message(f"Debug mode {'enabled' if new_debug_mode else 'disabled'}")
+        except TypeError:
+            print("Note: Show message had TypeError, but debug mode was still set")
 
     def trigger_rock_test(self):
         """Trigger rock test from UI using the interaction manager"""
@@ -1699,3 +1872,97 @@ Type: {'Original' if neuron in getattr(brain, 'original_neuron_positions', {}) e
                 item = QtWidgets.QListWidgetItem(f"{src} → {dst}: {weight:.2f}")
                 item.setForeground(QtGui.QColor("green") if weight > 0 else QtGui.QColor("red"))
                 self.connections_list.addItem(item)
+
+class NeurogenesisDebugDialog(QtWidgets.QDialog):
+    def __init__(self, brain_widget, parent=None):
+        super().__init__(parent)
+        self.brain_widget = brain_widget
+        
+        self.setWindowTitle("Neurogenesis Debug Information")
+        self.resize(600, 800)
+        
+        # Main layout
+        layout = QtWidgets.QVBoxLayout()
+        self.setLayout(layout)
+        
+        # Scrollable text area
+        self.debug_text = QtWidgets.QTextEdit()
+        self.debug_text.setReadOnly(True)
+        layout.addWidget(self.debug_text)
+        
+        # Refresh button
+        refresh_button = QtWidgets.QPushButton("Refresh Data")
+        refresh_button.clicked.connect(self.update_debug_info)
+        layout.addWidget(refresh_button)
+        
+        # Update info initially
+        self.update_debug_info()
+    
+    def update_debug_info(self):
+        # Clear existing text
+        self.debug_text.clear()
+        
+        # HTML styling for better readability
+        html_template = """
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; }
+                .section { background-color: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+                .title { font-weight: bold; color: #333; font-size: 16px; }
+                .data { color: #666; }
+                .trigger { color: blue; }
+                .threshold { color: green; }
+            </style>
+        </head>
+        <body>
+        """
+        
+        # Gather neurogenesis data
+        if hasattr(self.brain_widget, 'neurogenesis_data'):
+            data = self.brain_widget.neurogenesis_data
+            config = self.brain_widget.neurogenesis_config
+            
+            html_template += f"""
+            <div class="section">
+                <div class="title">Neurogenesis Counters</div>
+                <div class="data">
+                    Novelty Counter: <span class="trigger">{data.get('novelty_counter', 0):.2f}</span><br>
+                    Stress Counter: <span class="trigger">{data.get('stress_counter', 0):.2f}</span><br>
+                    Reward Counter: <span class="trigger">{data.get('reward_counter', 0):.2f}</span>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="title">Neurogenesis Thresholds</div>
+                <div class="data">
+                    Novelty Threshold: <span class="threshold">{config.get('novelty_threshold', 3)}</span><br>
+                    Stress Threshold: <span class="threshold">{config.get('stress_threshold', 0.7)}</span><br>
+                    Reward Threshold: <span class="threshold">{config.get('reward_threshold', 0.6)}</span>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="title">Neuron Creation History</div>
+                <div class="data">
+                    Last Neuron Created: {time.ctime(data.get('last_neuron_time', 0))}<br>
+                    Time Since Last Neuron: {time.time() - data.get('last_neuron_time', 0):.2f} seconds<br>
+                    Cooldown Period: {config.get('cooldown', 300)} seconds<br>
+                    Total New Neurons: {len(data.get('new_neurons', []))}
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="title">New Neurons</div>
+                <div class="data">
+                    {', '.join(data.get('new_neurons', ['No new neurons']))}
+                </div>
+            </div>
+            """
+        else:
+            html_template += "<p>No neurogenesis data available</p>"
+        
+        html_template += "</body></html>"
+        
+        # Set the HTML content
+        self.debug_text.setHtml(html_template)

@@ -250,22 +250,52 @@ class DiagnosticReportDialog(QtWidgets.QDialog):
     
     def create_connections_tab(self):
         tab = QtWidgets.QWidget()
-        layout = QtWidgets.QVBoxLayout()
+        layout = QtWidgets.QVBoxLayout(tab)
         
-        label = QtWidgets.QLabel("<h3>Weak Connections Report</h3>")
-        layout.addWidget(label)
+        # Get the weakest connections
+        weakest = self.brain_widget.get_weakest_connections()
         
-        weakest = self.brain_widget.get_weakest_connections(5)
-        report_text = "TOP WEAK CONNECTIONS:\n\n"
-        for (a, b), weight in weakest:
-            report_text += f"{a} ↔ {b}: {weight:.2f}\n"
+        # Connections group
+        connections_group = QtWidgets.QGroupBox("Weakest Connections")
+        connections_layout = QtWidgets.QVBoxLayout()
         
-        text_edit = QtWidgets.QTextEdit()
-        text_edit.setPlainText(report_text)
-        text_edit.setReadOnly(True)
-        layout.addWidget(text_edit)
+        # Create the table
+        table = QtWidgets.QTableWidget()
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(["Source", "Target", "Weight"])
         
-        tab.setLayout(layout)
+        # Populate table with weakest connections
+        table.setRowCount(len(weakest))
+        for i, conn_data in enumerate(weakest):
+            try:
+                # Handle different possible return formats
+                if isinstance(conn_data, tuple) and len(conn_data) == 2 and isinstance(conn_data[0], tuple):
+                    # Format: ((source, target), weight)
+                    (a, b), weight = conn_data
+                elif isinstance(conn_data, tuple) and len(conn_data) == 3:
+                    # Format: (source, target, weight)
+                    a, b, weight = conn_data
+                else:
+                    # Unknown format, skip
+                    continue
+                    
+                table.setItem(i, 0, QtWidgets.QTableWidgetItem(str(a)))
+                table.setItem(i, 1, QtWidgets.QTableWidgetItem(str(b)))
+                table.setItem(i, 2, QtWidgets.QTableWidgetItem(f"{weight:.3f}"))
+                
+                # Color code based on weight
+                color = QtGui.QColor("green" if weight > 0 else "red")
+                table.item(i, 2).setForeground(color)
+                
+            except Exception as e:
+                print(f"Error processing connection: {conn_data}, Error: {e}")
+                continue
+        
+        connections_layout.addWidget(table)
+        connections_group.setLayout(connections_layout)
+        layout.addWidget(connections_group)
+        
+        # Add to tabs
         self.tabs.addTab(tab, "Connections")
     
     def create_neurons_tab(self):

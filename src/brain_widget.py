@@ -19,6 +19,7 @@ class BrainWidget(QtWidgets.QWidget):
     neuronClicked = QtCore.pyqtSignal(str)
     
     def __init__(self, config=None, debug_mode=False, tamagotchi_logic=None):
+        self.resolution_scale = 1.0  # Default resolution scale
         self.config = config if config else LearningConfig()
         if not hasattr(self.config, 'hebbian'):
             self.config.hebbian = {
@@ -449,7 +450,11 @@ class BrainWidget(QtWidgets.QWidget):
     
     def get_weakest_connections(self, n=3):
         """Return the n weakest connections by absolute weight"""
-        return sorted(self.weights.items(), key=lambda x: abs(x[1]))[:n]
+        if not hasattr(self, 'weights') or not self.weights:
+            return []
+            
+        sorted_weights = sorted(self.weights.items(), key=lambda x: abs(x[1]))
+        return sorted_weights[:n]  # Returns list of ((source, target), weight) tuples
 
     def get_extreme_neurons(self, n=3):
         """Return neurons deviating most from baseline (50)"""
@@ -715,17 +720,39 @@ class BrainWidget(QtWidgets.QWidget):
         self.update_state(filtered_update)
 
     def _create_neuron_internal(self, neuron_type, state):
-        """Internal neuron creation with guaranteed success"""
+        """
+        Create a new neuron with type-specific characteristics and connections.
+        
+        Args:
+            neuron_type (str): Type of neuron ('novelty', 'stress', 'reward')
+            state (dict): Current brain state for context
+        
+        Returns:
+            str: Name of the newly created neuron
+        """
+        # Ensure existing weights are in tuple format
+        converted_weights = {}
+        for key, weight in self.weights.items():
+            # Convert string keys to tuples
+            if isinstance(key, str) and '_' in key:
+                source, target = key.split('_')
+                converted_weights[(source, target)] = weight
+            # Keep tuple keys as they are
+            elif isinstance(key, tuple):
+                converted_weights[key] = weight
+        self.weights = converted_weights
+
         # Create descriptive neuron name
         base_name = {
             'novelty': 'novel',
-            'stress': 'stress',  # Changed from 'defense' to 'stress' for clarity
+            'stress': 'stress',
             'reward': 'reward'
         }[neuron_type]
         
+        # Ensure unique neuron name by appending a counter
         new_name = f"{base_name}_{len(self.neurogenesis_data['new_neurons'])}"
         
-        # Position near most active connected neuron (or center if none)
+        # Find a strategic position for the new neuron
         active_neurons = sorted(
             [(k, v) for k, v in self.state.items() 
             if isinstance(v, (int, float)) and k in self.neuron_positions],
@@ -733,28 +760,26 @@ class BrainWidget(QtWidgets.QWidget):
             reverse=True
         )
         
+        # Position the new neuron near the most active neuron or at a default center
         if active_neurons:
             # Place near most active neuron
             anchor_neuron = active_neurons[0][0]
             base_x, base_y = self.neuron_positions[anchor_neuron]
         else:
-            # Fallback to center of existing neurons
+            # Fallback to center if no active neurons
             neuron_xs = [pos[0] for pos in self.neuron_positions.values()]
             neuron_ys = [pos[1] for pos in self.neuron_positions.values()]
-            if neuron_xs and neuron_ys:
-                base_x = sum(neuron_xs) / len(neuron_xs)
-                base_y = sum(neuron_ys) / len(neuron_ys)
-            else:
-                base_x, base_y = 600, 300  # Default center
+            base_x = sum(neuron_xs) / len(neuron_xs) if neuron_xs else 600
+            base_y = sum(neuron_ys) / len(neuron_ys) if neuron_ys else 300
         
-        # Add random offset
+        # Add random offset to prevent overcrowding
         self.neuron_positions[new_name] = (
             base_x + random.randint(-50, 50),
             base_y + random.randint(-50, 50)
         )
         
-        # Initialize state
-        self.state[new_name] = 50  # Start at mid-level
+        # Initialize neuron state
+        self.state[new_name] = 50  # Start at mid-level activation
         
         # Set color based on neuron type
         self.state_colors[new_name] = {
@@ -763,14 +788,47 @@ class BrainWidget(QtWidgets.QWidget):
             'reward': (150, 255, 150)    # Light green
         }[neuron_type]
         
-        # Create connections to other neurons
-        for existing in list(self.neuron_positions.keys()):
-            if existing != new_name and existing not in self.excluded_neurons:
-                self.weights[(new_name, existing)] = random.uniform(-0.3, 0.3)
-                self.weights[(existing, new_name)] = random.uniform(-0.3, 0.3)
+        # Create default connections to existing neurons
+        default_connections = {
+            'novelty': {'curiosity': 0.6, 'anxiety': -0.4},
+            'stress': {'anxiety': -0.7, 'happiness': 0.3},
+            'reward': {'satisfaction': 0.8, 'happiness': 0.5}
+        }
         
-        # Update tracking
+        # Personality modifier (if available in state)
+        personality = state.get('personality', None)
+        personality_weights = {
+            Personality.TIMID: 0.8,
+            Personality.ADVENTUROUS: 1.2,
+            Personality.GREEDY: 1.5,
+            Personality.STUBBORN: 0.7
+        }.get(personality, 1.0)
+        
+        # Create connections to existing neurons
+        for existing in list(self.neuron_positions.keys()):
+            # Skip excluded system neurons
+            if existing in self.excluded_neurons:
+                continue
+            
+            # Determine default connection strength
+            default_strength = default_connections.get(neuron_type, {}).get(existing, 0)
+            
+            # Apply personality modifier
+            weight = default_strength * personality_weights
+            
+            # Add some randomness
+            weight += random.uniform(-0.1, 0.1)
+            
+            # Ensure weight stays within bounds
+            weight = max(-1, min(1, weight))
+            
+            # Create bidirectional weights as tuples
+            self.weights[(new_name, existing)] = weight
+            self.weights[(existing, new_name)] = weight * 0.5  # Slightly weaker reverse connection
+        
+        # Update neurogenesis tracking
         self.neurogenesis_data['new_neurons'].append(new_name)
+        self.neurogenesis_data['last_neuron_time'] = time.time()
         
         # Set highlight for visualization
         self.neurogenesis_highlight = {
@@ -781,6 +839,14 @@ class BrainWidget(QtWidgets.QWidget):
         
         # Force redraw
         self.update()
+        
+        # Debug print
+        if self.debug_mode:
+            print(f"Created {neuron_type} neuron: {new_name}")
+            print("Connections:")
+            for key, weight in self.weights.items():
+                if new_name in key:
+                    print(f"  {key}: {weight}")
         
         return new_name
 
@@ -896,14 +962,46 @@ class BrainWidget(QtWidgets.QWidget):
         return self.associations[idx1][idx2]
     
     def draw_connections(self, painter, scale):
-        for conn in self.connections:
-            start = self.neuron_positions[conn[0]]
-            end = self.neuron_positions[conn[1]]
-            weight = self.weights[conn]
+        # Only draw if links are visible
+        if not self.show_links:
+            return
 
-            # Only draw if links are visible
-            if not self.show_links:
+        # Use weights dictionary directly to draw connections
+        for key, weight in self.weights.items():
+            # Handle different possible key formats
+            if isinstance(key, tuple):
+                # Skip multi-part keys or keys involving 'is_fleeing'
+                if len(key) > 2 or 'is_fleeing' in key:
+                    continue
+                source, target = key
+            elif isinstance(key, str):
+                # If key is a string, try to parse it
+                try:
+                    source, target = key.split('_')
+                    # Skip if any part contains 'is_fleeing'
+                    if 'is_fleeing' in source or 'is_fleeing' in target:
+                        continue
+                except ValueError:
+                    print(f"Skipping invalid connection key: {key}")
+                    continue
+            else:
+                print(f"Skipping unrecognized connection key: {key}")
                 continue
+
+            # Skip if either neuron is not in neuron positions or is in excluded neurons
+            if (source not in self.neuron_positions or 
+                target not in self.neuron_positions or 
+                source in self.excluded_neurons or 
+                target in self.excluded_neurons):
+                continue
+
+            # Get neuron positions and ensure they are converted to integers
+            start = self.neuron_positions[source]
+            end = self.neuron_positions[target]
+
+            # Convert to QPointF to ensure compatibility
+            start_point = QtCore.QPointF(float(start[0]), float(start[1]))
+            end_point = QtCore.QPointF(float(end[0]), float(end[1]))
 
             # Determine line color based on weight sign
             color = QtGui.QColor(0, int(255 * abs(weight)), 0) if weight > 0 else QtGui.QColor(int(255 * abs(weight)), 0, 0)
@@ -924,15 +1022,20 @@ class BrainWidget(QtWidgets.QWidget):
 
             # Create pen with appropriate style and width
             painter.setPen(QtGui.QPen(color, line_width, pen_style))
-            painter.drawLine(start[0], start[1], end[0], end[1])
+            
+            # Draw the connection line using QPointF
+            painter.drawLine(start_point, end_point)
 
             # Add weight text with scaling and visibility threshold
-            if self.show_weights and abs(weight) > 0.1:  # Modified this line
-                midpoint = ((start[0] + end[0]) // 2, (start[1] + end[1]) // 2)
+            if self.show_weights and abs(weight) > 0.1:
+                midpoint = QtCore.QPointF(
+                    (start_point.x() + end_point.x()) / 2, 
+                    (start_point.y() + end_point.y()) / 2
+                )
 
                 # Increase the area for drawing the weights
-                text_area_width = 80
-                text_area_height = 22
+                text_area_width = 80.0
+                text_area_height = 22.0
 
                 # Adjust the font size based on the scale with a maximum font size
                 max_font_size = 12
@@ -941,17 +1044,26 @@ class BrainWidget(QtWidgets.QWidget):
                 font.setPointSize(font_size)
                 painter.setFont(font)
 
+                # Create QRectF for drawing
+                rect = QtCore.QRectF(
+                    midpoint.x() - text_area_width / 2, 
+                    midpoint.y() - text_area_height / 2,
+                    text_area_width, 
+                    text_area_height
+                )
+
                 # Draw black background rectangle
                 painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0)))
                 painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
-                painter.drawRect(midpoint[0] - text_area_width // 2, midpoint[1] - text_area_height // 2,
-                                text_area_width, text_area_height)
+                painter.drawRect(rect)
 
                 # Draw the weight text on top of the black background
                 painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255)))  # White text color
-                painter.drawText(midpoint[0] - text_area_width // 2, midpoint[1] - text_area_height // 2,
-                                text_area_width, text_area_height,
-                                QtCore.Qt.AlignCenter, f"{weight:.2f}")
+                painter.drawText(
+                    rect,
+                    QtCore.Qt.AlignCenter, 
+                    f"{weight:.2f}"
+                )
 
 
     def paintEvent(self, event):
@@ -1138,18 +1250,23 @@ class BrainWidget(QtWidgets.QWidget):
                         QtCore.Qt.AlignCenter, label)
 
     def draw_triangular_neuron(self, painter, x, y, value, label, scale=1.0):
-        # Resolution-specific size adjustment
-        base_size = 25 * self.resolution_scale * scale
+        # Use fixed size instead of relying on resolution_scale
+        base_size = 25 * scale
         
         # Determine color based on neuron type
-        if label.startswith('defense'):
+        if label.startswith('defense') or label.startswith('stress'):
             color = QtGui.QColor(255, 150, 150)  # Light red
         elif label.startswith('novel'):
             color = QtGui.QColor(255, 255, 150)  # Pale yellow
-        else:  # reward
+        elif label.startswith('reward'):
             color = QtGui.QColor(150, 255, 150)  # Light green
+        elif label.startswith('forced'):
+            color = QtGui.QColor(150, 200, 255)  # Light blue
+        else:
+            color = QtGui.QColor(200, 200, 200)  # Default gray
 
         painter.setBrush(color)
+        painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))  # Black border
 
         # Create triangle
         triangle = QtGui.QPolygonF()
@@ -1163,17 +1280,17 @@ class BrainWidget(QtWidgets.QWidget):
         # Draw label with integer coordinates
         painter.setPen(QtGui.QColor(0, 0, 0))
         font = painter.font()
-        font.setPointSize(int(8 * self.resolution_scale * scale))
+        font.setPointSize(int(8 * scale))
         painter.setFont(font)
         
         # Calculate text dimensions
-        label_width = int(60 * self.resolution_scale * scale)
-        label_height = int(20 * self.resolution_scale * scale)
-        label_y_offset = int(40 * self.resolution_scale * scale)
+        label_width = int(60 * scale)
+        label_height = int(20 * scale)
+        label_y_offset = int(40 * scale)
         
         painter.drawText(int(x - label_width/2), int(y + label_y_offset), 
-                    label_width, label_height, 
-                    QtCore.Qt.AlignCenter, label)
+                        label_width, label_height, 
+                        QtCore.Qt.AlignCenter, label)
 
     def show_diagnostic_report(self):
         """Show the diagnostic report dialog by accessing the brain widget"""
@@ -1188,11 +1305,18 @@ class BrainWidget(QtWidgets.QWidget):
             
             pos = self.neuron_positions.get(self.neurogenesis_highlight['neuron'])
             if pos:
-                painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3 * scale))
+                painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), int(3 * scale)))
                 painter.setBrush(QtCore.Qt.NoBrush)
-                radius = 40 * scale
-                painter.drawEllipse(pos[0] - radius, pos[1] - radius, 
-                                   radius * 2, radius * 2)
+                radius = int(40 * scale)
+                
+                # Convert all values to integers
+                x = int(pos[0] - radius)
+                y = int(pos[1] - radius)
+                width = int(radius * 2)
+                height = int(radius * 2)
+                
+                # Use integers for all arguments
+                painter.drawEllipse(x, y, width, height)
 
     def draw_square_neuron(self, painter, x, y, value, label, scale=1.0):
         from .display_scaling import DisplayScaling
