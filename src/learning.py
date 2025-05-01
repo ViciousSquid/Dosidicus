@@ -589,11 +589,11 @@ class HebbianLearning:
 
 class LearningConfig:
     def __init__(self):
-        # Hebbian learning parameters
+        # Initialize default values
         self.hebbian = {
             'base_learning_rate': 0.1,
             'threshold': 0.7,
-            'weight_decay': 0.01,  # Small decay to prevent weights from growing too large
+            'weight_decay': 0.01,
             'max_weight': 1.0,
             'min_weight': -1.0,
             'learning_interval': 30000,
@@ -604,32 +604,39 @@ class LearningConfig:
             }
         }
         
-        # Neurogenesis parameters
+        # Initialize neurogenesis with values matching config.ini
         self.neurogenesis = {
-            'novelty_threshold': 3,
-            'stress_threshold': 0.7,
-            'reward_threshold': 0.6,
-            'cooldown': 200,  # Changed from 300 to 200 seconds
+            'novelty_threshold': 2.5,  # Match config.ini value
+            'stress_threshold': 2.0,   # Match config.ini value
+            'reward_threshold': 1.8,   # Match config.ini value
+            'cooldown': 120,           # Match config.ini value
+            'decay_rate': 0.95,        # Match config.ini value
             'new_neuron_initial_weight': 0.5,
-            'max_new_neurons': 5,
-            'decay_rate': 0.95  # How quickly novelty/stress/reward counters decay
+            'max_new_neurons': 5
         }
         
-        # Combined learning parameters
-        self.combined = {
-            'neurogenesis_learning_boost': 1.1,  # Multiplier for learning rate after neurogenesis
-            'new_neuron_connection_strength': 0.3,
-            'goal_reinforcement_factor': 2.0  # How much stronger goal-oriented learning is
-        }
-    
-    def load_from_file(self, file_path):
+        # Try loading from config file if available
+        self.load_from_config()
+        
+    def load_from_config(self):
+        """Load values from config.ini if available"""
         try:
-            with open(file_path, 'r') as f:
-                config = json.load(f)
-                self.hebbian.update(config.get('hebbian', {}))
-                self.neurogenesis.update(config.get('neurogenesis', {}))
-                self.combined.update(config.get('combined', {}))
-        except FileNotFoundError:
-            print(f"Config file {file_path} not found, using defaults")
-        except json.JSONDecodeError:
-            print(f"Invalid config file {file_path}, using defaults")
+            from .config_manager import ConfigManager
+            config_manager = ConfigManager()
+            
+            # Get neurogenesis configuration
+            neuro_config = config_manager.get_neurogenesis_config()
+            
+            # Update our neurogenesis config with values from file
+            if neuro_config:
+                # Update the thresholds with values from config.ini
+                self.neurogenesis['novelty_threshold'] = neuro_config['triggers']['novelty']['threshold']
+                self.neurogenesis['stress_threshold'] = neuro_config['triggers']['stress']['threshold']
+                self.neurogenesis['reward_threshold'] = neuro_config['triggers']['reward']['threshold']
+                self.neurogenesis['cooldown'] = neuro_config['general']['cooldown']
+                self.neurogenesis['decay_rate'] = neuro_config['triggers']['novelty']['decay_rate']
+            
+            print("Configuration loaded from config.ini")
+        except Exception as e:
+            print(f"Error loading from config.ini: {e}")
+            print("Using default configuration values")

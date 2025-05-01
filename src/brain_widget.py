@@ -132,11 +132,11 @@ class BrainWidget(QtWidgets.QWidget):
 
         # Neurogenesis configuration
         self.neurogenesis_config = config.neurogenesis if config else {
-            'novelty_threshold': 3,
-            'stress_threshold': 0.7,
-            'reward_threshold': 0.6,
-            'cooldown': 300,
-            'highlight_duration': 5.0
+            'novelty_threshold': 2.5,
+            'stress_threshold': 2.0,
+            'reward_threshold': 1.8,
+            'cooldown': 120,
+            'highlight_duration': 10.0
         }
         
         # Visual state colors
@@ -532,35 +532,21 @@ class BrainWidget(QtWidgets.QWidget):
         if 'last_neuron_time' not in self.neurogenesis_data:
             self.neurogenesis_data['last_neuron_time'] = time.time() - 300  # Start with cooldown passed
 
-        # Ensure neurogenesis config exists with all required parameters
-        if not hasattr(self.config, 'neurogenesis'):
-            self.config.neurogenesis = {}
-        if 'decay_rate' not in self.config.neurogenesis:
-            self.config.neurogenesis['decay_rate'] = 0.85  # Faster decay rate (was 0.98)
-        if 'novelty_threshold' not in self.config.neurogenesis:
-            self.config.neurogenesis['novelty_threshold'] = 2.5  # Higher threshold (was 0.8)
-        if 'stress_threshold' not in self.config.neurogenesis:
-            self.config.neurogenesis['stress_threshold'] = 2.0  # Higher threshold (was 0.7)
-        if 'reward_threshold' not in self.config.neurogenesis:
-            self.config.neurogenesis['reward_threshold'] = 1.8  # Higher threshold (was 0.6)
-        if 'cooldown' not in self.config.neurogenesis:
-            self.config.neurogenesis['cooldown'] = 120  # Shorter cooldown (was 300)
-
         # Add counter increment logic based on brain state with REDUCED increments
-        # Increment novelty counter when curiosity is high (reduced from 0.5 to 0.1)
+        # Increment novelty counter when curiosity is high
         if 'curiosity' in self.state and self.state['curiosity'] > 75:
             self.neurogenesis_data['novelty_counter'] += 0.1
             if self.debug_mode:
                 print(f"Novelty counter increased by 0.1 due to high curiosity")
         
-        # Increment stress counter when anxiety is high or cleanliness is low (reduced from 0.2 to 0.05)
+        # Increment stress counter when anxiety is high or cleanliness is low
         if ('anxiety' in self.state and self.state['anxiety'] > 80) or \
         ('cleanliness' in self.state and self.state['cleanliness'] < 20):
             self.neurogenesis_data['stress_counter'] += 0.05
             if self.debug_mode:
                 print(f"Stress counter increased by 0.05 due to high anxiety or low cleanliness")
         
-        # Increment reward counter when happiness or satisfaction is high (reduced from 0.2 to 0.05)
+        # Increment reward counter when happiness or satisfaction is high
         if ('happiness' in self.state and self.state['happiness'] > 85) or \
         ('satisfaction' in self.state and self.state['satisfaction'] > 85):
             self.neurogenesis_data['reward_counter'] += 0.05
@@ -629,26 +615,28 @@ class BrainWidget(QtWidgets.QWidget):
         self.update_weights()
 
         # Check for natural neurogenesis directly without requiring hebbian_learning
-        # Check thresholds for each counter
-        if (self.neurogenesis_data['novelty_counter'] > self.config.neurogenesis['novelty_threshold'] or
-            self.neurogenesis_data['stress_counter'] > self.config.neurogenesis['stress_threshold'] or
-            self.neurogenesis_data['reward_counter'] > self.config.neurogenesis['reward_threshold']):
+        # Check thresholds for each counter using config values
+        if (self.neurogenesis_data['novelty_counter'] > self.neurogenesis_config.get('novelty_threshold', 3) or
+            self.neurogenesis_data['stress_counter'] > self.neurogenesis_config.get('stress_threshold', 0.7) or
+            self.neurogenesis_data['reward_counter'] > self.neurogenesis_config.get('reward_threshold', 0.6)):
             
             # Check cooldown
-            if current_time - self.neurogenesis_data['last_neuron_time'] > self.config.neurogenesis['cooldown']:
+            if current_time - self.neurogenesis_data['last_neuron_time'] > self.neurogenesis_config.get('cooldown', 300):
                 # Determine trigger type
                 neuron_type = None
-                if self.neurogenesis_data['novelty_counter'] > self.config.neurogenesis['novelty_threshold']:
+                if self.neurogenesis_data['novelty_counter'] > self.neurogenesis_config.get('novelty_threshold', 3):
                     neuron_type = 'novelty'
-                elif self.neurogenesis_data['stress_counter'] > self.config.neurogenesis['stress_threshold']:
+                elif self.neurogenesis_data['stress_counter'] > self.neurogenesis_config.get('stress_threshold', 0.7):
                     neuron_type = 'stress'
-                elif self.neurogenesis_data['reward_counter'] > self.config.neurogenesis['reward_threshold']:
+                elif self.neurogenesis_data['reward_counter'] > self.neurogenesis_config.get('reward_threshold', 0.6):
                     neuron_type = 'reward'
                 
                 if neuron_type:
                     # Create new neuron
                     new_neuron_name = self._create_neuron_internal(neuron_type, new_state)
-                    print(f"Natural neurogenesis occurred! Created {neuron_type} neuron: {new_neuron_name}")
+                    print(" ")
+                    print(f"\x1b[43mNeurogenesis occurred!\x1b[0m Created {neuron_type} neuron: {new_neuron_name}")
+                    print(" ")
                     
                     # Update visualization
                     self.neurogenesis_highlight = {
@@ -668,41 +656,6 @@ class BrainWidget(QtWidgets.QWidget):
                     # Force update
                     self.update()
         
-        # Legacy neurogenesis check through hebbian_learning (keep for compatibility)
-        elif hasattr(self, 'hebbian_learning') and self.hebbian_learning:
-            # Check if neurogenesis should occur
-            if self.hebbian_learning.check_neurogenesis_conditions(new_state):
-                # Determine which trigger was strongest
-                strongest_trigger = max(
-                    ['novelty', 'stress', 'reward'],
-                    key=lambda x: neurogenesis_triggers[f"{x}_exposure"] if x != 'reward' else neurogenesis_triggers['recent_rewards']
-                )
-
-                # Create new neuron
-                new_neuron_name = self.hebbian_learning.create_new_neuron(strongest_trigger, new_state)
-
-                # Update visualization
-                self.neurogenesis_highlight = {
-                    'neuron': new_neuron_name,
-                    'start_time': time.time(),
-                    'duration': self.neurogenesis_config.get('highlight_duration', 5.0)
-                }
-
-                # Add to tracking data
-                if new_neuron_name not in self.neurogenesis_data['new_neurons']:
-                    self.neurogenesis_data['new_neurons'].append(new_neuron_name)
-                    self.neurogenesis_data['last_neuron_time'] = time.time()
-
-                    # Add initial state for the new neuron
-                    self.state[new_neuron_name] = 50  # Mid-range activation
-
-                    # Add to connections
-                    neurons = list(self.neuron_positions.keys())
-                    for neuron in neurons:
-                        if neuron != new_neuron_name:
-                            self.weights[(neuron, new_neuron_name)] = random.uniform(-0.3, 0.3)
-                            self.weights[(new_neuron_name, neuron)] = random.uniform(-0.3, 0.3)
-
         # Update the visualization
         self.update()
 
@@ -711,10 +664,10 @@ class BrainWidget(QtWidgets.QWidget):
             self.capture_training_data(new_state)
 
         # Update neurogenesis counters with decay - AFTER we've checked them
-        # Using faster decay rates to prevent counter buildup
-        self.neurogenesis_data['novelty_counter'] *= self.config.neurogenesis.get('decay_rate', 0.85)  # Was 0.98
-        self.neurogenesis_data['stress_counter'] *= self.config.neurogenesis.get('decay_rate', 0.8)  # Was 0.98
-        self.neurogenesis_data['reward_counter'] *= self.config.neurogenesis.get('decay_rate', 0.75)  # Was 0.98
+        # Use decay rates from config
+        self.neurogenesis_data['novelty_counter'] *= self.neurogenesis_config.get('decay_rate', 0.95)
+        self.neurogenesis_data['stress_counter'] *= self.neurogenesis_config.get('decay_rate', 0.95)
+        self.neurogenesis_data['reward_counter'] *= self.neurogenesis_config.get('decay_rate', 0.95)
         
         # Debug output for neurogenesis triggers
         if self.debug_mode and (self.neurogenesis_data['novelty_counter'] > 0.1 or 
@@ -723,9 +676,9 @@ class BrainWidget(QtWidgets.QWidget):
             print(f"Neurogenesis counters: novelty={self.neurogenesis_data['novelty_counter']:.2f}, " + 
                 f"stress={self.neurogenesis_data['stress_counter']:.2f}, " +
                 f"reward={self.neurogenesis_data['reward_counter']:.2f}")
-            print(f"Thresholds: novelty={self.config.neurogenesis['novelty_threshold']:.2f}, " +
-                f"stress={self.config.neurogenesis['stress_threshold']:.2f}, " +
-                f"reward={self.config.neurogenesis['reward_threshold']:.2f}")
+            print(f"Thresholds: novelty={self.neurogenesis_config.get('novelty_threshold', 3):.2f}, " +
+                f"stress={self.neurogenesis_config.get('stress_threshold', 0.7):.2f}, " +
+                f"reward={self.neurogenesis_config.get('reward_threshold', 0.6):.2f}")
 
   
     def check_neurogenesis(self, state):
@@ -740,7 +693,7 @@ class BrainWidget(QtWidgets.QWidget):
             print(f"Time since last neuron: {current_time - self.neurogenesis_data.get('last_neuron_time', 0)} seconds")
             print(f"Cooldown period: {self.neurogenesis_config.get('cooldown', 300)} seconds")
         
-        # Check cooldown period (simplified structure)
+        # Check cooldown period
         cooldown = self.neurogenesis_config.get('cooldown', 300)  # Default 5 minutes
         if current_time - self.neurogenesis_data.get('last_neuron_time', 0) <= cooldown:
             if self.debug_mode:
@@ -763,7 +716,7 @@ class BrainWidget(QtWidgets.QWidget):
         # Use class method if it exists, otherwise use fallback
         personality_modifier = getattr(self, 'get_personality_modifier', get_personality_modifier)
         
-        # Simplified threshold checks - direct access to config values
+        # Get thresholds directly from neurogenesis_config
         novelty_threshold = self.neurogenesis_config.get('novelty_threshold', 3)
         stress_threshold = self.neurogenesis_config.get('stress_threshold', 0.7)
         reward_threshold = self.neurogenesis_config.get('reward_threshold', 0.6)

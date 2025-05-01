@@ -126,67 +126,67 @@ class ConfigManager:
         """Returns the complete neurogenesis configuration as a dictionary"""
         return {
             'general': {
-                'enabled': self.config.getboolean('Neurogenesis', 'enabled'),
-                'cooldown': self.config.getfloat('Neurogenesis', 'cooldown'),
-                'max_neurons': self.config.getint('Neurogenesis', 'max_neurons'),
-                'initial_neuron_count': self.config.getint('Neurogenesis', 'initial_neuron_count')
+                'enabled': self.config.getboolean('Neurogenesis', 'enabled', fallback=True),
+                'cooldown': self.config.getfloat('Neurogenesis', 'cooldown', fallback=120),
+                'max_neurons': self.config.getint('Neurogenesis', 'max_neurons', fallback=20),
+                'initial_neuron_count': self.config.getint('Neurogenesis', 'initial_neuron_count', fallback=7)
             },
             'triggers': {
                 'novelty': {
-                    'enabled': self.config.getboolean('Neurogenesis.Novelty', 'enabled'),
-                    'threshold': self.config.getfloat('Neurogenesis.Novelty', 'threshold'),
-                    'decay_rate': self.config.getfloat('Neurogenesis.Novelty', 'decay_rate'),
-                    'max_counter': self.config.getfloat('Neurogenesis.Novelty', 'max_counter'),
-                    'min_curiosity': self.config.getfloat('Neurogenesis.Novelty', 'min_curiosity'),
+                    'enabled': self.config.getboolean('Neurogenesis.Novelty', 'enabled', fallback=True),
+                    'threshold': self.config.getfloat('Neurogenesis.Novelty', 'threshold', fallback=2.5),
+                    'decay_rate': self.config.getfloat('Neurogenesis.Novelty', 'decay_rate', fallback=0.95),
+                    'max_counter': self.config.getfloat('Neurogenesis.Novelty', 'max_counter', fallback=10.0),
+                    'min_curiosity': self.config.getfloat('Neurogenesis.Novelty', 'min_curiosity', fallback=0.3),
                     'personality_modifiers': {
-                        'adventurous': self.config.getfloat('Neurogenesis.Novelty', 'adventurous_modifier'),
-                        'timid': self.config.getfloat('Neurogenesis.Novelty', 'timid_modifier')
+                        'adventurous': self.config.getfloat('Neurogenesis.Novelty', 'adventurous_modifier', fallback=1.2),
+                        'timid': self.config.getfloat('Neurogenesis.Novelty', 'timid_modifier', fallback=0.8)
                     }
                 },
                 'stress': {
-                    'enabled': self.config.getboolean('Neurogenesis.Stress', 'enabled'),
-                    'threshold': self.config.getfloat('Neurogenesis.Stress', 'threshold'),
-                    'decay_rate': self.config.getfloat('Neurogenesis.Stress', 'decay_rate'),
-                    'max_counter': self.config.getfloat('Neurogenesis.Stress', 'max_counter'),
-                    'min_anxiety': self.config.getfloat('Neurogenesis.Stress', 'min_anxiety'),
+                    'enabled': self.config.getboolean('Neurogenesis.Stress', 'enabled', fallback=True),
+                    'threshold': self.config.getfloat('Neurogenesis.Stress', 'threshold', fallback=2.0),
+                    'decay_rate': self.config.getfloat('Neurogenesis.Stress', 'decay_rate', fallback=0.9),
+                    'max_counter': self.config.getfloat('Neurogenesis.Stress', 'max_counter', fallback=10.0),
+                    'min_anxiety': self.config.getfloat('Neurogenesis.Stress', 'min_anxiety', fallback=0.4),
                     'personality_modifiers': {
-                        'timid': self.config.getfloat('Neurogenesis.Stress', 'timid_modifier'),
-                        'energetic': self.config.getfloat('Neurogenesis.Stress', 'energetic_modifier')
+                        'timid': self.config.getfloat('Neurogenesis.Stress', 'timid_modifier', fallback=1.5),
+                        'energetic': self.config.getfloat('Neurogenesis.Stress', 'energetic_modifier', fallback=0.7)
                     }
                 },
                 'reward': {
-                    'enabled': self.config.getboolean('Neurogenesis.Reward', 'enabled'),
-                    'threshold': self.config.getfloat('Neurogenesis.Reward', 'threshold'),
-                    'decay_rate': self.config.getfloat('Neurogenesis.Reward', 'decay_rate'),
-                    'max_counter': self.config.getfloat('Neurogenesis.Reward', 'max_counter'),
-                    'min_satisfaction': self.config.getfloat('Neurogenesis.Reward', 'min_satisfaction'),
-                    'boost_multiplier': self.config.getfloat('Neurogenesis.Reward', 'boost_multiplier')
+                    'enabled': self.config.getboolean('Neurogenesis.Reward', 'enabled', fallback=True),
+                    'threshold': self.config.getfloat('Neurogenesis.Reward', 'threshold', fallback=1.8),
+                    'decay_rate': self.config.getfloat('Neurogenesis.Reward', 'decay_rate', fallback=0.85),
+                    'max_counter': self.config.getfloat('Neurogenesis.Reward', 'max_counter', fallback=10.0),
+                    'min_satisfaction': self.config.getfloat('Neurogenesis.Reward', 'min_satisfaction', fallback=0.5),
+                    'boost_multiplier': self.config.getfloat('Neurogenesis.Reward', 'boost_multiplier', fallback=1.1)
                 }
             },
             'neuron_properties': {
-                'base_activation': self.config.getfloat('Neurogenesis.NeuronProperties', 'base_activation'),
-                'position_variance': self.config.getint('Neurogenesis.NeuronProperties', 'position_variance'),
-                'default_connections': self.config.getboolean('Neurogenesis.NeuronProperties', 'default_connections'),
-                'connection_strength': self.config.getfloat('Neurogenesis.NeuronProperties', 'connection_strength'),
-                'reciprocal_strength': self.config.getfloat('Neurogenesis.NeuronProperties', 'reciprocal_strength')
+                'base_activation': self.config.getfloat('Neurogenesis.NeuronProperties', 'base_activation', fallback=0.5),
+                'position_variance': self.config.getint('Neurogenesis.NeuronProperties', 'position_variance', fallback=50),
+                'default_connections': self.config.getboolean('Neurogenesis.NeuronProperties', 'default_connections', fallback=True),
+                'connection_strength': self.config.getfloat('Neurogenesis.NeuronProperties', 'connection_strength', fallback=0.3),
+                'reciprocal_strength': self.config.getfloat('Neurogenesis.NeuronProperties', 'reciprocal_strength', fallback=0.15)
             },
             'appearance': {
                 'colors': {
-                    'novelty': [int(x) for x in self.config['Neurogenesis.Appearance']['novelty_color'].split(',')],
-                    'stress': [int(x) for x in self.config['Neurogenesis.Appearance']['stress_color'].split(',')],
-                    'reward': [int(x) for x in self.config['Neurogenesis.Appearance']['reward_color'].split(',')]
+                    'novelty': [int(x) for x in self.config.get('Neurogenesis.Appearance', 'novelty_color', fallback='255,255,150').split(',')],
+                    'stress': [int(x) for x in self.config.get('Neurogenesis.Appearance', 'stress_color', fallback='255,150,150').split(',')],
+                    'reward': [int(x) for x in self.config.get('Neurogenesis.Appearance', 'reward_color', fallback='150,255,150').split(',')]
                 },
                 'shapes': {
-                    'novelty': self.config['Neurogenesis.Appearance']['novelty_shape'],
-                    'stress': self.config['Neurogenesis.Appearance']['stress_shape'],
-                    'reward': self.config['Neurogenesis.Appearance']['reward_shape']
+                    'novelty': self.config.get('Neurogenesis.Appearance', 'novelty_shape', fallback='triangle'),
+                    'stress': self.config.get('Neurogenesis.Appearance', 'stress_shape', fallback='square'),
+                    'reward': self.config.get('Neurogenesis.Appearance', 'reward_shape', fallback='circle')
                 }
             },
             'visual_effects': {
-                'highlight_duration': self.config.getfloat('Neurogenesis.VisualEffects', 'highlight_duration'),
-                'highlight_radius': self.config.getint('Neurogenesis.VisualEffects', 'highlight_radius'),
-                'pulse_effect': self.config.getboolean('Neurogenesis.VisualEffects', 'pulse_effect'),
-                'pulse_speed': self.config.getfloat('Neurogenesis.VisualEffects', 'pulse_speed')
+                'highlight_duration': self.config.getfloat('Neurogenesis.VisualEffects', 'highlight_duration', fallback=5.0),
+                'highlight_radius': self.config.getint('Neurogenesis.VisualEffects', 'highlight_radius', fallback=40),
+                'pulse_effect': self.config.getboolean('Neurogenesis.VisualEffects', 'pulse_effect', fallback=True),
+                'pulse_speed': self.config.getfloat('Neurogenesis.VisualEffects', 'pulse_speed', fallback=0.5)
             }
         }
 
