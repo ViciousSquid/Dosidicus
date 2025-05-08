@@ -31,6 +31,13 @@ class NetworkTab(BrainBaseTab):
         self.checkbox_weights.stateChanged.connect(self.brain_widget.toggle_weights)
         checkbox_layout.addWidget(self.checkbox_weights)
         
+        # Add pruning checkbox - ALWAYS VISIBLE
+        self.checkbox_pruning = QtWidgets.QCheckBox("Enable pruning")
+        self.checkbox_pruning.setChecked(True)  # Enabled by default
+        self.checkbox_pruning.stateChanged.connect(self.toggle_pruning)
+        # Removed the line that made it only visible in debug mode
+        checkbox_layout.addWidget(self.checkbox_pruning)
+        
         # Add stretch to push checkboxes to the left
         checkbox_layout.addStretch(1)
         main_content_layout.addLayout(checkbox_layout)
@@ -67,6 +74,57 @@ class NetworkTab(BrainBaseTab):
             self.checkbox_links.setChecked(True)
         if hasattr(self, 'checkbox_weights'):
             self.checkbox_weights.setChecked(True)
+
+    def toggle_pruning(self, state):
+        """Toggle pruning state in brain widget"""
+        if hasattr(self, 'brain_widget') and self.brain_widget:
+            enabled = state == QtCore.Qt.Checked
+            self.brain_widget.toggle_pruning(enabled)
+            
+            # Show warning if disabling pruning - using a safer approach
+            if not enabled:
+                # Print warning to console regardless
+                print("\033[91mWARNING: Pruning disabled - neurogenesis unconstrained!\033[0m")
+                
+                # Try multiple approaches to show a UI message
+                warning_shown = False
+                
+                # Method 1: Check if parent window has show_message
+                if hasattr(self.parent, 'show_message'):
+                    try:
+                        self.parent.show_message("WARNING: Pruning disabled - neurogenesis unconstrained!")
+                        warning_shown = True
+                    except:
+                        pass
+                        
+                # Method 2: Check if we can find the main window
+                if not warning_shown and hasattr(self, 'window'):
+                    try:
+                        if hasattr(self.window, 'show_message'):
+                            self.window.show_message("WARNING: Pruning disabled - neurogenesis unconstrained!")
+                            warning_shown = True
+                    except:
+                        pass
+                
+                # Method 3: Use a QMessageBox as fallback
+                if not warning_shown:
+                    try:
+                        from PyQt5.QtWidgets import QMessageBox
+                        msg = QMessageBox()
+                        msg.setIcon(QMessageBox.Warning)
+                        msg.setText("WARNING: Pruning disabled")
+                        msg.setInformativeText("Neurogenesis will be unconstrained and may lead to network instability.")
+                        msg.setWindowTitle("Pruning Disabled")
+                        msg.exec_()
+                    except:
+                        # If all else fails, we've already printed to console
+                        pass
+
+    def update_from_brain_state(self, state):
+        """Update tab based on brain state"""
+        # Don't change pruning checkbox visibility based on debug mode
+        # The checkbox should always be visible
+        pass
 
     def stimulate_brain(self):
         dialog = StimulateDialog(self.brain_widget, self)
