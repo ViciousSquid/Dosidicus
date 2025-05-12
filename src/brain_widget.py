@@ -260,7 +260,7 @@ class BrainWidget(QtWidgets.QWidget):
             self.update()
 
         # Debugging statement to check if update_connection is being called correctly
-        print(f"\x1b[42mUpdated connection\x1b[0m between {neuron1} and {neuron2}: \x1b[31m {prev_weight} ➡️ \x1b[32m {new_weight} \x1b[0m")
+        print(f"\x1b[42mUpdated connection\x1b[0m between {neuron1} and {neuron2}: \x1b[31m {prev_weight} -> \x1b[32m {new_weight} \x1b[0m")
 
         # Record communication time for both neurons
         current_time = time.time()
