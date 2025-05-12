@@ -18,16 +18,16 @@ class ConfigManager:
     def create_default_config(self):
         # Rock Interactions
         self.config['RockInteractions'] = {
-            'pickup_probability': '0.9',
-            'throw_probability': '0.8',
+            'pickup_probability': '0.7',
+            'throw_probability': '0.6',
             'min_carry_duration': '3.0',
             'max_carry_duration': '8.0',
-            'cooldown_after_throw': '5.0',
+            'cooldown_after_throw': '20.0',
             'happiness_boost': '15',
             'satisfaction_boost': '20',
             'anxiety_reduction': '10',
             'memory_decay_rate': '0.95',
-            'max_rock_memories': '5'
+            'max_rock_memories': '6'
         }
 
         # Neurogenesis
@@ -41,7 +41,7 @@ class ConfigManager:
         # Neurogenesis Triggers
         self.config['Neurogenesis.Novelty'] = {
             'enabled': 'True',
-            'threshold': '0.7',
+            'threshold': '3.0',
             'decay_rate': '0.95',
             'max_counter': '10.0',
             'min_curiosity': '0.3',
@@ -51,8 +51,8 @@ class ConfigManager:
 
         self.config['Neurogenesis.Stress'] = {
             'enabled': 'True',
-            'threshold': '0.8',
-            'decay_rate': '0.9',
+            'threshold': '1.2',
+            'decay_rate': '0.85',
             'max_counter': '10.0',
             'min_anxiety': '0.4',
             'timid_modifier': '1.5',
@@ -61,8 +61,8 @@ class ConfigManager:
 
         self.config['Neurogenesis.Reward'] = {
             'enabled': 'True',
-            'threshold': '0.6',
-            'decay_rate': '0.85',
+            'threshold': '1.0',
+            'decay_rate': '0.88',
             'max_counter': '10.0',
             'min_satisfaction': '0.5',
             'boost_multiplier': '1.1'
