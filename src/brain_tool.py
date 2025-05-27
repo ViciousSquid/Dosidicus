@@ -225,23 +225,23 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Create and add existing tabs
         self.network_tab = NetworkTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.network_tab, "Network")
-        
+
         # Add our Neural Network Visualizer tab as the Learning tab
         self.nn_viz_tab = NeuralNetworkVisualizerTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.nn_viz_tab, "Learning")
-        
+
         self.memory_tab = MemoryTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.memory_tab, "Memory")
-        
+
         self.decisions_tab = DecisionsTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.decisions_tab, "Decisions")
-        
+
         self.personality_tab = PersonalityTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.personality_tab, "Personality")
-        
+
         self.about_tab = AboutTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.about_tab, "About")
-        
+
         # Make sure all tabs have correct tamagotchi_logic reference
         for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'decisions_tab', 'personality_tab', 'about_tab']:
             if hasattr(self, tab_name):
@@ -249,7 +249,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:
                     tab.set_tamagotchi_logic(self.tamagotchi_logic)
                     print(f"Set tamagotchi_logic for {tab_name}")
-        
+
         # Pre-load the learning tab to make it responsive on first click
         if hasattr(self, 'nn_viz_tab'):
             if hasattr(self.nn_viz_tab, 'pre_load_data'):
@@ -1044,143 +1044,17 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         else:
             self.personality_effects.setPlainText("No significant personality effects")
 
-    def update_personality_display(self, personality):
-        # Convert enum to string if needed
-        personality_str = getattr(personality, 'value', str(personality))
-        
-        # Set personality type label
-        self.personality_type_label.setText(f"Squid Personality: {personality_str.capitalize()}")
-        
-        # Set personality modifier label
-        self.personality_modifier_label.setText(f"Personality Modifier: {self.get_personality_modifier(personality)}")
-        
-        # Set description text
-        self.personality_description.setPlainText(self.get_personality_description(personality))
-        
-        # Set modifiers text
-        self.modifiers_text.setPlainText(self.get_personality_modifiers(personality))
-        
-        # Set care tips text
-        self.care_tips.setPlainText(self.get_care_tips(personality))
-
-    def get_personality_description(self, personality):
-        descriptions = {
-            Personality.TIMID: "Your squid is Timid. It tends to be more easily startled and anxious, especially in new situations. It may prefer quiet, calm environments and might be less likely to explore on its own. However, it can form strong bonds when it feels safe and secure.",
-            Personality.ADVENTUROUS: "Your squid is Adventurous. It loves to explore and try new things. It's often the first to investigate new objects or areas in its environment. This squid thrives on novelty and might get bored more easily in unchanging surroundings.",
-            Personality.LAZY: "Your squid is Lazy. It prefers a relaxed lifestyle and may be less active than other squids. It might need extra encouragement to engage in activities but can be quite content just lounging around. This squid is great at conserving energy!",
-            Personality.ENERGETIC: "Your squid is Energetic. It's always on the move, full of life and vigor. This squid needs plenty of stimulation and activities to keep it happy. It might get restless if not given enough opportunity to burn off its excess energy.",
-            Personality.INTROVERT: "Your squid is an Introvert. It enjoys solitude and might prefer quieter, less crowded spaces. While it can interact with others, it may need time alone to 'recharge'. This squid might be more observant and thoughtful in its actions.",
-            Personality.GREEDY: "Your squid is Greedy. It has a strong focus on food and resources. This squid might be more motivated by treats and rewards than others. While it can be more demanding, it also tends to be resourceful and good at finding hidden treats!",
-            Personality.STUBBORN: "Your squid is Stubborn. It has a strong will and definite preferences. This squid might be more resistant to change and could take longer to adapt to new routines. However, its determination can also make it persistent in solving problems."
-        }
-        return descriptions.get(personality, "Unknown personality type")
-
-    def get_personality_modifier(self, personality):
-        modifiers = {
-            Personality.TIMID: "Higher chance of becoming anxious",
-            Personality.ADVENTUROUS: "Increased curiosity and exploration",
-            Personality.LAZY: "Slower movement and energy consumption",
-            Personality.ENERGETIC: "Faster movement and higher activity levels",
-            Personality.INTROVERT: "Prefers solitude and quiet environments",
-            Personality.GREEDY: "More focused on food and resources",
-            Personality.STUBBORN: "Only eats favorite food (sushi), may refuse to sleep"
-        }
-        return modifiers.get(personality, "No specific modifier")
-
-    def get_care_tips(self, personality):
-        tips = {
-            Personality.TIMID: "- Place plants in the environment to reduce anxiety\n- Keep the environment clean and calm\n- Approach slowly and avoid sudden movements",
-            Personality.ADVENTUROUS: "- Regularly introduce new objects or decorations\n- Provide diverse food options\n- Encourage exploration with strategic food placement",
-            Personality.LAZY: "- Place food closer to the squid's resting spots\n- Clean the environment more frequently\n- Use enticing food to encourage movement",
-            Personality.ENERGETIC: "- Provide a large, open space for movement\n- Offer frequent feeding opportunities\n- Introduce interactive elements or games",
-            Personality.INTROVERT: "- Create quiet, secluded areas with decorations\n- Avoid overcrowding the environment\n- Respect the squid's need for alone time",
-            Personality.GREEDY: "- Offer a variety of food types, including sushi\n- Use food as a reward for desired behaviors\n- Be cautious not to overfeed",
-            Personality.STUBBORN: "- Always have sushi available as it's their favorite food\n- Be patient when introducing changes\n- Use positive reinforcement for desired behaviors"
-        }
-        return tips.get(personality, "No specific care tips available for this personality.")
-
-    def get_personality_modifiers(self, personality):
-        modifiers = {
-            Personality.TIMID: "- Anxiety increases 50% faster\n- Curiosity increases 50% slower\n- Anxiety decreases by 50% when near plants",
-            Personality.ADVENTUROUS: "- Curiosity increases 50% faster",
-            Personality.LAZY: "- Moves slower\n- Energy consumption is lower",
-            Personality.ENERGETIC: "- Moves faster\n- Energy consumption is higher",
-            Personality.INTROVERT: "- Prefers quieter, less crowded spaces\n- May need more time alone to 'recharge'",
-            Personality.GREEDY: "- Gets 50% more anxious when hungry\n- Satisfaction increases more when eating",
-            Personality.STUBBORN: "- Only eats favorite food (sushi)\n- May refuse to sleep even when tired"
-        }
-        return modifiers.get(personality, "No specific modifiers available for this personality.")
-
-    def init_personality_tab(self):
-        # Common style for all text elements
-        base_font_size = 11
-        text_style = f"font-size: {base_font_size}px;"
-        header_style = f"font-size: {base_font_size + 4}px; font-weight: bold;"
-
-        # Personality type display
-        self.personality_tab_layout.addWidget(QtWidgets.QFrame(frameShape=QtWidgets.QFrame.HLine))
-        self.personality_type_label = QtWidgets.QLabel("Squid Personality: ")
-        self.personality_type_label.setStyleSheet(header_style)
-        self.personality_tab_layout.addWidget(self.personality_type_label)
-
-        # Personality modifier display
-        self.personality_modifier_label = QtWidgets.QLabel("Personality Modifier: ")
-        self.personality_modifier_label.setStyleSheet(text_style)
-        self.personality_tab_layout.addWidget(self.personality_modifier_label)
-
-        # Separator
-        self.personality_tab_layout.addWidget(QtWidgets.QFrame(frameShape=QtWidgets.QFrame.HLine))
-
-        # Personality description
-        description_label = QtWidgets.QLabel("Description:")
-        description_label.setStyleSheet(header_style)
-        self.personality_tab_layout.addWidget(description_label)
-
-        self.personality_description = QtWidgets.QTextEdit()
-        self.personality_description.setReadOnly(True)
-        self.personality_description.setStyleSheet(text_style)
-        self.personality_tab_layout.addWidget(self.personality_description)
-
-        # Personality modifiers
-        self.modifiers_label = QtWidgets.QLabel("Personality Modifiers:")
-        self.modifiers_label.setStyleSheet(header_style)
-        self.personality_tab_layout.addWidget(self.modifiers_label)
-
-        self.modifiers_text = QtWidgets.QTextEdit()
-        self.modifiers_text.setReadOnly(True)
-        self.modifiers_text.setStyleSheet(text_style)
-        self.personality_tab_layout.addWidget(self.modifiers_text)
-
-        # Care tips
-        self.care_tips_label = QtWidgets.QLabel("Care Tips:")
-        self.care_tips_label.setStyleSheet(header_style)
-        self.personality_tab_layout.addWidget(self.care_tips_label)
-
-        self.care_tips = QtWidgets.QTextEdit()
-        self.care_tips.setReadOnly(True)
-        self.care_tips.setStyleSheet(text_style)
-        self.personality_tab_layout.addWidget(self.care_tips)
-
-        # Note about personality generation
-        note_label = QtWidgets.QLabel("Note: Personality is randomly generated at the start of a new game")
-        note_label.setStyleSheet(text_style + "font-style: italic;")
-        self.personality_tab_layout.addWidget(note_label)
-
     def update_brain(self, state):
         """Main update method to distribute state changes to all tabs"""
         if not self.initialized:
             self.initialized = True
             return  # Skip first update
-        
+
         # Update the brain widget first
         self.brain_widget.update_state(state)
-        
-        # Explicitly update personality tab when personality is available
-        if hasattr(self, 'personality_tab') and 'personality' in state:
-            self.personality_tab.update_from_brain_state(state)
-        
+
         # Forward updates to each tab that has an update method
-        tabs_to_update = ['network_tab', 'learning_tab', 'memory_tab', 'decisions_tab', 'personality_tab', 'about_tab', 'nn_viz_tab']
+        tabs_to_update = ['network_tab', 'nn_viz_tab', 'memory_tab', 'decisions_tab', 'personality_tab', 'about_tab'] # Adjusted list
         for tab_name in tabs_to_update:
             if hasattr(self, tab_name):
                 tab = getattr(self, tab_name)

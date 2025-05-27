@@ -46,18 +46,17 @@ class DecorationItem(QtWidgets.QLabel):
             drag.exec_(QtCore.Qt.CopyAction)
 
 
-class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
+class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
     def __init__(self, pixmap=None, filename=None, category=None, parent=None):
         QtWidgets.QGraphicsPixmapItem.__init__(self, parent)
-        QObject.__init__(self)
-        
+
         self.original_pixmap = pixmap
         self.resize_mode = False
         self.last_mouse_pos = None
 
         if pixmap:
             self.setPixmap(pixmap)
-        
+
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsMovable |
                     QtWidgets.QGraphicsItem.ItemIsSelectable |
                     QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
@@ -80,7 +79,7 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
         self.can_be_picked_up = filename and ('rock' in filename.lower() or 'poop' in filename.lower())
         self.is_being_carried = False
         self.original_scale = 1.0
-        
+
         # Print initialization info
         print(f"Created item: {filename}, Has original pixmap: {self.original_pixmap is not None}")
 
