@@ -51,7 +51,6 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem, QObject):
         QtWidgets.QGraphicsPixmapItem.__init__(self, parent)
         QObject.__init__(self)
         
-        self._is_pause_message = None
         self.original_pixmap = pixmap
         self.resize_mode = False
         self.last_mouse_pos = None
