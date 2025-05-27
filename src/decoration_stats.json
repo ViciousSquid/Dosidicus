@@ -64,6 +64,12 @@
     "anxiety": -2,
     "category": "plant"
   },
+  "plant12.png": {
+    "happiness": 2,
+    "cleanliness": 2,
+    "anxiety": -2,
+    "category": "plant"
+  },
   "sml_plant01.png": {
     "happiness": 1,
     "cleanliness": 2,
