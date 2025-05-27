@@ -145,10 +145,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.debug_menu.addAction(self.inspector_action)
 
     def show_inspector(self):
-        if not hasattr(self, '_inspector') or not self._inspector:
-            self._inspector = NeuronInspector(self.brain_widget)
+        if not hasattr(self, '_inspector') or not self._inspector or not self._inspector.isVisible(): # Check if visible
+            # Pass the SquidBrainWindow instance (self) to NeuronInspector
+            self._inspector = NeuronInspector(self, self.brain_widget)
         self._inspector.show()
         self._inspector.raise_()
+        self._inspector.activateWindow() # Ensure it gets focus
 
     def debug_print(self, message):
         if self.debug_mode:
@@ -162,32 +164,105 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             self.stimulate_button.setEnabled(enabled)
 
     def get_brain_state(self):
-        weights = {}
+        # Convert weights to a list for safe JSON serialization
+        weights_list = []
         for k, v in self.brain_widget.weights.items():
-            if isinstance(k, tuple):
-                key = f"{k[0]}_{k[1]}"
+            if isinstance(k, tuple) and len(k) == 2:
+                 weights_list.append([k[0], k[1], v])
             else:
-                key = str(k)
-            weights[key] = v
+                 # Log or handle cases where k is not a 2-tuple if necessary
+                 print(f"Warning: Skipping non-standard weight key: {k}")
 
         return {
-            'weights': weights,
-            'neuron_positions': {str(k): v for k, v in self.brain_widget.neuron_positions.items()}
+            'weights_list': weights_list, # <-- Use list format
+            'neuron_positions': {str(k): v for k, v in self.brain_widget.neuron_positions.items()},
+            'neuron_states': self.brain_widget.state,
+            'neurogenesis_data': self.brain_widget.neurogenesis_data,
+            'state_colors': self.brain_widget.state_colors
         }
 
     def set_brain_state(self, state):
-        if 'weights' in state:
+        # Load weights (handle new list format and potentially old dict format)
+        if 'weights_list' in state:
+            weights = {}
+            for item in state['weights_list']:
+                if isinstance(item, list) and len(item) == 3:
+                    weights[(item[0], item[1])] = item[2]
+            self.brain_widget.weights = weights
+        elif 'weights' in state: # Fallback for old format (acknowledging its bug)
+            print("Warning: Loading old 'weights' format. May cause issues with new neurons.")
             weights = {}
             for k, v in state['weights'].items():
                 if '_' in k:
-                    key = tuple(k.split('_'))
+                    key = tuple(k.split('_')) # This is the buggy part
                 else:
                     key = k
                 weights[key] = v
             self.brain_widget.weights = weights
+        else:
+            self.brain_widget.weights = {} # Default to empty if no weights found
 
-        if 'neuron_positions' in state:
-            self.brain_widget.neuron_positions = {k: v for k, v in state['neuron_positions'].items()}
+        # Load neuron positions, defaulting to original if not found
+        self.brain_widget.neuron_positions = state.get('neuron_positions', self.brain_widget.original_neuron_positions.copy())
+
+        # Load neuron states
+        self.brain_widget.state = state.get('neuron_states', {})
+
+        # Load neurogenesis data (with robust fallback)
+        self.brain_widget.neurogenesis_data = state.get('neurogenesis_data', {
+            'novelty_counter': 0, 'stress_counter': 0, 'reward_counter': 0,
+            'new_neurons': [], 'last_neuron_time': time.time()
+        })
+        # Ensure 'new_neurons' exists even if loaded data is incomplete
+        if 'new_neurons' not in self.brain_widget.neurogenesis_data:
+            self.brain_widget.neurogenesis_data['new_neurons'] = []
+
+
+        # Load state colors (with fallback)
+        self.brain_widget.state_colors = state.get('state_colors', {
+            'is_sick': (255, 204, 204), 'is_eating': (204, 255, 204),
+            'is_sleeping': (204, 229, 255), 'pursuing_food': (255, 229, 204),
+            'direction': (229, 204, 255)
+        })
+
+        # --- Critical Step: Ensure brain_widget consistency after loading ---
+        all_neurons = list(self.brain_widget.neuron_positions.keys())
+        new_neurons_list = self.brain_widget.neurogenesis_data.get('new_neurons', [])
+
+        # Get config colors for new neurons
+        # Assuming self.config is accessible and structured as expected by ConfigManager
+        # e.g., self.config.neurogenesis['appearance']['colors']['novelty']
+        cfg_appearance = self.config.neurogenesis.get('appearance', {})
+        cfg_colors = cfg_appearance.get('colors', {})
+        default_colors = {'novelty': (255, 255, 150), 'stress': (255, 150, 150), 'reward': (150, 255, 150)}
+
+
+        for neuron in all_neurons:
+            # Ensure all neurons exist in the state dictionary
+            if neuron not in self.brain_widget.state:
+                self.brain_widget.state[neuron] = 50  # Default value
+
+            # Ensure all neurons exist in communication events (important for brain_widget)
+            if hasattr(self.brain_widget, 'communication_events') and neuron not in self.brain_widget.communication_events:
+                 self.brain_widget.communication_events[neuron] = 0
+
+            # Ensure new neurons have a color entry (USING CONFIG)
+            if neuron in new_neurons_list and neuron not in self.brain_widget.state_colors:
+                 # Re-determine color based on name prefix and config
+                 if neuron.startswith('novel'):
+                     color = tuple(cfg_colors.get('novelty', default_colors['novelty']))
+                 elif neuron.startswith('stress'):
+                     color = tuple(cfg_colors.get('stress', default_colors['stress']))
+                 elif neuron.startswith('reward'):
+                     color = tuple(cfg_colors.get('reward', default_colors['reward']))
+                 else:
+                     color = (200, 200, 200) # Default gray for safety
+                 self.brain_widget.state_colors[neuron] = color
+
+        # Ensure all core neurons have their original positions if missing
+        for name, pos in self.brain_widget.original_neuron_positions.items():
+            if name not in self.brain_widget.neuron_positions:
+                self.brain_widget.neuron_positions[name] = pos
 
         self.brain_widget.update()  # Trigger a redraw of the brain widget
 
@@ -2286,98 +2361,238 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         if reply == QtWidgets.QMessageBox.Yes:
             self.activity_log.clear()
 
+# brain_tool.py
+
+# ... (other imports at the top of brain_tool.py, ensure these are present)
+# from PyQt5 import QtCore, QtGui, QtWidgets
+# from PyQt5.QtWidgets import QSplitter, QTabWidget, QTableWidget, QTableWidgetItem, QFormLayout, QGroupBox # Explicitly ensure these
+# import time # For time.time() in neurogenesis details
+# from datetime import datetime # For formatting timestamps
+
+# ... (SquidBrainWindow class and other preceding code) ...
+
 class NeuronInspector(QtWidgets.QDialog):
-    def __init__(self, brain_window, parent=None):
-        super().__init__(parent)
-        self.brain_window = brain_window
+    def __init__(self, brain_tool_window, brain_widget_ref, parent=None): # brain_tool_window is the SquidBrainWindow instance
+        super().__init__(brain_tool_window) # Set parent to brain_tool_window
+        self.brain_tool_window = brain_tool_window 
+        self.brain_widget = brain_widget_ref 
+
         self.setWindowTitle("Neuron Inspector")
-        self.setFixedSize(400, 400)
-        
-        layout = QtWidgets.QVBoxLayout()
-        self.setLayout(layout)
-        
+        # Portrait orientation, larger size
+        self.setFixedSize(450, 700) # Width, Height
+
+        self.main_layout = QtWidgets.QVBoxLayout()
+        self.setLayout(self.main_layout)
+
         # Neuron selector
         self.neuron_combo = QtWidgets.QComboBox()
-        layout.addWidget(self.neuron_combo)
-        
-        # Info display
-        self.info_text = QtWidgets.QTextEdit()
-        self.info_text.setReadOnly(True)
-        layout.addWidget(self.info_text)
-        
-        # Connection list
-        self.connections_list = QtWidgets.QListWidget()
-        layout.addWidget(self.connections_list)
-        
-        # Refresh button
-        self.refresh_btn = QtWidgets.QPushButton("Refresh")
+        self.neuron_combo.setToolTip("Select a neuron to inspect or click one in the visualizer.")
+        self.main_layout.addWidget(self.neuron_combo)
+
+        # Tab widget
+        self.tabs = QtWidgets.QTabWidget() #
+        self.main_layout.addWidget(self.tabs)
+
+        # --- Tab 1: Overview ---
+        self.overview_tab = QtWidgets.QWidget()
+        self.overview_layout = QtWidgets.QFormLayout(self.overview_tab) 
+        self.overview_tab.setLayout(self.overview_layout)
+        self.tabs.addTab(self.overview_tab, "Overview")
+
+        self.name_label = QtWidgets.QLabel()
+        self.value_label = QtWidgets.QLabel()
+        self.position_label = QtWidgets.QLabel()
+        self.type_label = QtWidgets.QLabel() # Core or Neurogenesis
+
+        self.overview_layout.addRow("<b>Name:</b>", self.name_label)
+        self.overview_layout.addRow("<b>Current Value:</b>", self.value_label)
+        self.overview_layout.addRow("<b>Position (X,Y):</b>", self.position_label)
+        self.overview_layout.addRow("<b>Type:</b>", self.type_label)
+
+        # Placeholder for neurogenesis info
+        self.neurogenesis_group = QtWidgets.QGroupBox("Neurogenesis Details") 
+        self.neurogenesis_layout = QtWidgets.QFormLayout() 
+        self.neurogenesis_group.setLayout(self.neurogenesis_layout)
+        self.neurogenesis_group.setVisible(False) # Hidden by default
+
+        self.created_at_label = QtWidgets.QLabel()
+        self.trigger_type_label = QtWidgets.QLabel()
+        self.trigger_value_label = QtWidgets.QLabel()
+        self.associated_state_label = QtWidgets.QLabel()
+        self.associated_state_label.setWordWrap(True)
+
+        self.neurogenesis_layout.addRow("<b>Created At:</b>", self.created_at_label)
+        self.neurogenesis_layout.addRow("<b>Trigger Type:</b>", self.trigger_type_label)
+        self.neurogenesis_layout.addRow("<b>Trigger Value:</b>", self.trigger_value_label)
+        self.neurogenesis_layout.addRow("<b>Associated State:</b>", self.associated_state_label)
+        self.overview_layout.addWidget(self.neurogenesis_group)
+
+
+        # --- Tab 2: Connections ---
+        self.connections_tab = QtWidgets.QWidget()
+        self.connections_layout = QtWidgets.QVBoxLayout(self.connections_tab)
+        self.tabs.addTab(self.connections_tab, "Connections")
+
+        self.connections_table = QtWidgets.QTableWidget() 
+        self.connections_table.setColumnCount(3)
+        self.connections_table.setHorizontalHeaderLabels(["Connected To", "Weight", "Direction"])
+        self.connections_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        self.connections_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.connections_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.connections_layout.addWidget(self.connections_table)
+
+        # --- Tab 3: Activity (Placeholder) ---
+        self.activity_tab = QtWidgets.QWidget()
+        self.activity_layout = QtWidgets.QVBoxLayout(self.activity_tab)
+        self.activity_info_label = QtWidgets.QLabel("Detailed activity logging and graphing coming soon.")
+        self.activity_info_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.activity_layout.addWidget(self.activity_info_label)
+        self.tabs.addTab(self.activity_tab, "Activity")
+
+        # --- Refresh Button (optional, as it updates on click) ---
+        self.refresh_btn = QtWidgets.QPushButton("Refresh Data")
         self.refresh_btn.clicked.connect(self.update_info)
-        layout.addWidget(self.refresh_btn)
-        
+        self.main_layout.addWidget(self.refresh_btn)
+
         # Connect to brain widget's neuronClicked signal
-        if hasattr(brain_window.brain_widget, 'neuronClicked'):
-            brain_window.brain_widget.neuronClicked.connect(self.inspect_neuron)
-        
+        if hasattr(self.brain_widget, 'neuronClicked'):
+            self.brain_widget.neuronClicked.connect(self.inspect_neuron_by_name) #
+
+        self.neuron_combo.currentIndexChanged.connect(self.update_info_from_combo)
+
         self.update_neuron_list()
+        if self.neuron_combo.count() > 0:
+            self.update_info() # Initial update
 
     def update_neuron_list(self):
-        if hasattr(self.brain_window, 'brain_widget'):
-            brain = self.brain_window.brain_widget
-            self.neuron_combo.clear()
-            self.neuron_combo.addItems(sorted(brain.neuron_positions.keys()))
-            self.neuron_combo.currentIndexChanged.connect(self.update_info)
-            self.update_info()
+        if not self.brain_widget: return
+        current_selection = self.neuron_combo.currentText()
+        self.neuron_combo.clear()
+        # Sort neuron names for consistent order
+        neuron_names = sorted(self.brain_widget.neuron_positions.keys())
+        self.neuron_combo.addItems(neuron_names)
+        if current_selection in neuron_names:
+            self.neuron_combo.setCurrentText(current_selection)
+        elif neuron_names:
+            self.neuron_combo.setCurrentIndex(0)
 
-    def inspect_neuron(self, neuron_name):
-        """Update the inspector with data for the clicked neuron"""
-        # Find the index of the neuron in the combo box
+
+    def inspect_neuron_by_name(self, neuron_name):
+        """Slot to handle neuronClicked signal from BrainWidget."""
         index = self.neuron_combo.findText(neuron_name)
         if index >= 0:
+            # Block signals temporarily to prevent double update if setCurrentIndex triggers update_info
+            self.neuron_combo.blockSignals(True)
             self.neuron_combo.setCurrentIndex(index)
+            self.neuron_combo.blockSignals(False)
+            self.update_info() # Explicitly update after setting index
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+
+    def update_info_from_combo(self):
+        # This is called when combobox selection changes
         self.update_info()
 
     def update_info(self):
-        """Update all display elements for current neuron"""
-        if not hasattr(self.brain_window, 'brain_widget'):
+        """Update all display elements for the currently selected neuron."""
+        if not self.brain_widget:
+            self.name_label.setText("<N/A>")
+            # Clear other fields
+            self.value_label.setText("")
+            self.position_label.setText("")
+            self.type_label.setText("")
+            self.neurogenesis_group.setVisible(False)
+            if hasattr(self, 'connections_table'): self.connections_table.setRowCount(0)
             return
-            
-        brain = self.brain_window.brain_widget
-        neuron = self.neuron_combo.currentText()
-        
-        if not neuron or neuron not in brain.neuron_positions:
+
+        neuron_name = self.neuron_combo.currentText()
+        if not neuron_name or neuron_name not in self.brain_widget.neuron_positions:
+            # Clear all fields if no valid neuron is selected
+            self.name_label.setText("<No Neuron Selected>")
+            self.value_label.setText("")
+            self.position_label.setText("")
+            self.type_label.setText("")
+            self.neurogenesis_group.setVisible(False)
+            if hasattr(self, 'connections_table'): self.connections_table.setRowCount(0)
             return
+
+        # --- Overview Tab Data ---
+        self.name_label.setText(f"<b>{neuron_name}</b>")
+
+        value = self.brain_widget.state.get(neuron_name, "N/A")
+        self.value_label.setText(str(round(value, 2) if isinstance(value, (float, int)) else value))
+
+        pos = self.brain_widget.neuron_positions.get(neuron_name, ("N/A", "N/A"))
+        self.position_label.setText(f"({pos[0]:.1f}, {pos[1]:.1f})" if isinstance(pos, tuple) and len(pos) == 2 and all(isinstance(p, (int,float)) for p in pos) else "N/A")
+
+
+        # Check if new_neurons_details exists and then if neuron_name is in it
+        is_neurogenesis = False
+        if hasattr(self.brain_widget, 'neurogenesis_data') and \
+           'new_neurons_details' in self.brain_widget.neurogenesis_data and \
+           neuron_name in self.brain_widget.neurogenesis_data.get('new_neurons_details', {}):
+            is_neurogenesis = True
+
+        neuron_kind = "Neurogenesis" if is_neurogenesis else "Core"
+        if neuron_name in self.brain_widget.excluded_neurons: 
+            neuron_kind = "System Status"
+        self.type_label.setText(neuron_kind)
+
+        if is_neurogenesis:
+            details = self.brain_widget.neurogenesis_data['new_neurons_details'].get(neuron_name, {})
+            created_timestamp = details.get('created_at')
+            if created_timestamp:
+                # Ensure datetime is imported if not already: from datetime import datetime
+                from datetime import datetime # Local import for safety
+                self.created_at_label.setText(datetime.fromtimestamp(created_timestamp).strftime('%Y-%m-%d %H:%M:%S'))
+            else:
+                self.created_at_label.setText("Unknown")
+            self.trigger_type_label.setText(str(details.get('trigger_type', "N/A")).capitalize())
             
-        # Get neuron details
-        pos = brain.neuron_positions[neuron]
-        state = brain.state.get(neuron, 0)
-        
-        # Determine neuron type
-        neuron_type = "Original" if neuron in getattr(brain, 'original_neuron_positions', {}) else "New"
-        
-        # Update info text
-        info_html = f"""
-        <h2>{neuron}</h2>
-        <p><strong>Position:</strong> ({pos[0]:.1f}, {pos[1]:.1f})</p>
-        <p><strong>Current Value:</strong> {state:.1f}</p>
-        <p><strong>Type:</strong> {neuron_type}</p>
-        """
-        self.info_text.setHtml(info_html)
-        
-        # Update connections list
-        self.connections_list.clear()
-        
-        # Find and display connections
-        for (src, dst), weight in brain.weights.items():
-            if src == neuron or dst == neuron:
-                connection_neuron = dst if src == neuron else src
-                direction = "→" if src == neuron else "←"
-                item_text = f"{src} {direction} {dst}: {weight:.3f}"
-                
-                # Color code based on weight
-                item = QtWidgets.QListWidgetItem(item_text)
-                if weight > 0:
-                    item.setForeground(QtGui.QColor(0, 150, 0))  # Green for positive
-                else:
-                    item.setForeground(QtGui.QColor(200, 0, 0))  # Red for negative
-                
-                self.connections_list.addItem(item)
+            trigger_val = details.get('trigger_value_at_creation', "N/A")
+            self.trigger_value_label.setText(f"{trigger_val:.2f}" if isinstance(trigger_val, float) else str(trigger_val))
+
+
+            snapshot = details.get('associated_state_snapshot', {})
+            snapshot_text = ", ".join([f"{k.capitalize()}: {v}" for k, v in snapshot.items() if v is not None])
+            self.associated_state_label.setText(snapshot_text if snapshot_text else "No specific state captured.")
+            self.neurogenesis_group.setVisible(True)
+        else:
+            self.neurogenesis_group.setVisible(False)
+
+        # --- Connections Tab Data ---
+        self.connections_table.setRowCount(0) # Clear previous
+        connections_data = []
+        # Ensure brain_widget.weights exists and is a dictionary
+        if hasattr(self.brain_widget, 'weights') and isinstance(self.brain_widget.weights, dict):
+            for conn_key, weight_val in self.brain_widget.weights.items():
+                # Ensure conn_key is a tuple of two strings (neuron names)
+                if isinstance(conn_key, tuple) and len(conn_key) == 2:
+                    src, dst = conn_key
+                    if src == neuron_name:
+                        connections_data.append({'target': dst, 'weight': weight_val, 'direction': "Outgoing"})
+                    elif dst == neuron_name:
+                        connections_data.append({'target': src, 'weight': weight_val, 'direction': "Incoming"})
+                # else:
+                    # print(f"Skipping malformed weight key: {conn_key}")
+
+
+        self.connections_table.setRowCount(len(connections_data))
+        for row, conn_info in enumerate(connections_data):
+            self.connections_table.setItem(row, 0, QtWidgets.QTableWidgetItem(conn_info['target'])) #
+            item_weight = QtWidgets.QTableWidgetItem(f"{conn_info['weight']:.3f}") #
+            item_weight.setForeground(QtGui.QColor("green") if conn_info['weight'] > 0 else QtGui.QColor("red"))
+            self.connections_table.setItem(row, 1, item_weight)
+            self.connections_table.setItem(row, 2, QtWidgets.QTableWidgetItem(conn_info['direction'])) #
+
+
+        # --- Activity Tab Data (Placeholder) ---
+        # self.activity_info_label can remain for now
+
+        # Refresh neuron list only if necessary (e.g., if current neuron disappeared)
+        # This check was simplified; if it causes issues, it might need refinement.
+        # The primary update path is now through the combobox or direct neuron click.
+        if self.neuron_combo.findText(neuron_name) == -1 and neuron_name in self.brain_widget.neuron_positions :
+             self.update_neuron_list()

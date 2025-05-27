@@ -27,15 +27,16 @@ class NetworkTab(BrainBaseTab):
         checkbox_layout.addWidget(self.checkbox_links)
 
         self.checkbox_weights = QtWidgets.QCheckBox("Show weights")
-        self.checkbox_weights.setChecked(True)
+        self.checkbox_weights.setChecked(False)
         self.checkbox_weights.stateChanged.connect(self.brain_widget.toggle_weights)
         checkbox_layout.addWidget(self.checkbox_weights)
-        
+
+        checkbox_layout.addSpacing(60)  # Spacer
+
         # Add pruning checkbox - ALWAYS VISIBLE
         self.checkbox_pruning = QtWidgets.QCheckBox("Enable pruning")
         self.checkbox_pruning.setChecked(True)  # Enabled by default
         self.checkbox_pruning.stateChanged.connect(self.toggle_pruning)
-        # Removed the line that made it only visible in debug mode
         checkbox_layout.addWidget(self.checkbox_pruning)
         
         # Add stretch to push checkboxes to the left

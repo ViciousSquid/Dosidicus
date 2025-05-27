@@ -97,21 +97,34 @@ class BrainWidget(QtWidgets.QWidget):
             "is_sleeping": False,
             "pursuing_food": False,
             "direction": "up",
-            "position": (0, 0)
+            "position": (0, 0),
+            "is_startled": False,
+            "is_fleeing": False,
         }
         
         # Neuron position configuration
         self.original_neuron_positions = {
-            "hunger": (321, 118),
-            "happiness": (588, 86),
-            "cleanliness": (881, 109),
-            "sleepiness": (944, 366),
-            "satisfaction": (320, 560),
-            "anxiety": (584, 630),
-            "curiosity": (768, 564)
+            "hunger": (127, 81),
+            "happiness": (361, 81),
+            "cleanliness": (627, 81),
+            "sleepiness": (840, 81),
+            "satisfaction": (271, 380),
+            "anxiety": (491, 389),
+            "curiosity": (701, 386)
         }
         self.neuron_positions = self.original_neuron_positions.copy()
-        
+
+        # Set shapes for specific original neurons to 'square'
+        self.neuron_shapes["curiosity"] = 'square'
+        self.neuron_shapes["anxiety"] = 'square'
+        self.neuron_shapes["satisfaction"] = 'square'
+
+        # Set shapes for other original neurons (defaults to circle if not set)
+        self.neuron_shapes["hunger"] = 'circle'
+        self.neuron_shapes["happiness"] = 'circle'
+        self.neuron_shapes["cleanliness"] = 'circle'
+        self.neuron_shapes["sleepiness"] = 'circle'
+
         # Initialize communication events for all neurons
         for neuron in self.neuron_positions.keys():
             self.communication_events[neuron] = 0
@@ -132,13 +145,13 @@ class BrainWidget(QtWidgets.QWidget):
         self.drag_start_pos = None
         self.setMouseTracking(True)
         self.show_links = True
-        self.show_weights = True
+        self.show_weights = False
 
         # Neurogenesis configuration
         self.neurogenesis_config = config.neurogenesis if config else {
-            'novelty_threshold': 2.5,
-            'stress_threshold': 2.0,
-            'reward_threshold': 1.8,
+            'novelty_threshold': 3.0,
+            'stress_threshold': 1.2,
+            'reward_threshold': 3.5,
             'cooldown': 120,
             'highlight_duration': 10.0
         }
@@ -470,12 +483,14 @@ class BrainWidget(QtWidgets.QWidget):
                 self.weights[(neurons[i], neurons[j])] = random.uniform(-1, 1)
 
     def get_neuron_count(self):
-        """Returns the neuron count for display"""
-        total_neurons = len(self.neuron_positions)
-        # Always display 3 less neurons than actually exist
-        # To account for the left side state indicators
-        displayed_count = max(0, total_neurons - 3)
-        return displayed_count
+        """Returns the actual count of neurons in the network positions."""
+        # The self.neuron_positions dictionary holds the core and neurogenesis neurons
+        # that are part of the visual network.
+        # The original 7 core neurons are included here.
+        # The 'excluded_neurons' list is for neurons that are system states
+        # and are typically not added to self.neuron_positions for visualization
+        # as part of the core network graph, or are skipped during drawing if they were.
+        return len(self.neuron_positions)
     
     def get_edge_count(self):
         return len(self.connections)
@@ -530,32 +545,54 @@ class BrainWidget(QtWidgets.QWidget):
         efficiency = (reciprocal_count / len(self.connections)) * 100
         return efficiency
 
-    def log_neurogenesis_event(self, neuron_name, event_type, reason=None):
+    def log_neurogenesis_event(self, neuron_name, event_type, reason=None, details=None): # details parameter was added
         """Log neurogenesis events in the specified text format"""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S") #
         log_entry = ""
-        
+
         if event_type == "created":
-            # Get connections for the new neuron
             connections = []
-            for (src, dest), weight in self.weights.items():
-                if src == neuron_name or dest == neuron_name:
-                    other = dest if src == neuron_name else src
-                    connections.append(f"{other} {weight:+.2f}")  # + sign for explicit positivity
+            # Check if self.weights exists and is a dictionary before iterating
+            if hasattr(self, 'weights') and isinstance(self.weights, dict):
+                for (src, dest), weight in self.weights.items():
+                    # Ensure src and dest are strings before comparison
+                    if isinstance(src, str) and isinstance(dest, str):
+                        if src == neuron_name or dest == neuron_name:
+                            other_neuron = dest if src == neuron_name else src
+                            connections.append(f"{other_neuron} {weight:+.2f}") #
             
-            log_entry = f"{timestamp} Neuron created: {neuron_name}\n"
-            if connections:
-                log_entry += f"Connections: {'  |  '.join(connections)}"
-                
+            log_entry = f"{timestamp} Neuron created: {neuron_name}" #
+
+            if details: # If details about the creation are provided
+                trigger_type = details.get("trigger_type", "Unknown trigger") #
+                trigger_value = details.get("trigger_value", "N/A") #
+                context_info = details.get("context", "") # Get the pre-formatted context string
+
+                log_entry += f"\n  Trigger: {trigger_type.capitalize()} (Value at creation: {trigger_value})" #
+                if context_info: #
+                    log_entry += f"\n  Context: {context_info}" #
+            
+            log_entry += "\n" # Newline before connections or if no details/connections
+
+            if connections: #
+                log_entry += f"  Connections: {'  |  '.join(connections)}" #
+            else:
+                log_entry += "  Connections: None initially." #
+
         elif event_type == "pruned":
-            log_entry = f"{timestamp} PRUNED: {neuron_name} due to {reason}"
+            log_entry = f"{timestamp} PRUNED: {neuron_name} due to {reason if reason else 'Unknown reason'}" #
         
-        # Write to file with error handling
-        try:
-            with open('Neurogenesis_log.txt', 'a', encoding='utf-8') as f:
-                f.write(log_entry + "\n\n")  # Two newlines between entries
-        except Exception as e:
-            print(f"\x1b[31mNeurogenesis logging failed: {str(e)}\x1b[0m")
+        if log_entry: # Only write to file if there's something to log
+            try:
+                # Ensure the directory exists (optional, good practice)
+                # log_dir = os.path.dirname('Neurogenesis_log.txt') # Assuming log in current dir
+                # if log_dir and not os.path.exists(log_dir):
+                #    os.makedirs(log_dir)
+                
+                with open('neurogenesis_log.txt', 'a', encoding='utf-8') as f: #
+                    f.write(log_entry + "\n\n")  # Two newlines between entries #
+            except Exception as e:
+                print(f"\x1b[31mNeurogenesis logging failed: {str(e)}\x1b[0m") #
 
     def update_state(self, new_state):
         if self.is_paused:
@@ -1039,90 +1076,122 @@ class BrainWidget(QtWidgets.QWidget):
 
     def _create_neuron_internal(self, neuron_type, state):
         """Create a new neuron with complete state initialization"""
+        # ... (existing code for current_neuron_count, max_neurons_config, new_name, positioning logic) ...
         current_neuron_count = len(self.neuron_positions) - len(self.excluded_neurons)
-        max_neurons = self.neurogenesis_config.get('max_neurons', 15)
-
-        # Check neuron limit
-        if current_neuron_count >= max_neurons:
-            print(f"Neurogenesis blocked: maximum neuron limit ({max_neurons}) reached")
+        max_neurons_config = self.neurogenesis_config.get('max_neurons', 15)
+        if self.pruning_enabled and current_neuron_count >= max_neurons_config:
+            print(f"Neurogenesis blocked (pruning enabled): maximum neuron limit ({max_neurons_config}) reached")
             return None
 
-        # Create descriptive neuron name
-        base_name = {
-            'novelty': 'novel',
-            'stress': 'stress',
-            'reward': 'reward'
-        }[neuron_type]
+        base_name = {'novelty': 'novel', 'stress': 'stress', 'reward': 'reward'}[neuron_type]
+        new_name_index = 0
+        new_name = f"{base_name}_{new_name_index}"
+        while new_name in self.neuron_positions: 
+            new_name_index +=1
+            new_name = f"{base_name}_{new_name_index}"
 
-        # Ensure unique neuron name
-        new_name = f"{base_name}_{len(self.neurogenesis_data.get('new_neurons', []))}"
-
-        # Check for duplicates
-        if new_name in self.neuron_positions:
-            print(f"Neuron {new_name} already exists, skipping creation")
-            return None
-
-        # Find position near most active neuron
         active_neurons = sorted(
             [(k, v) for k, v in self.state.items()
-            if isinstance(v, (int, float)) and k in self.neuron_positions],
+            if isinstance(v, (int, float)) and k in self.neuron_positions and k not in self.excluded_neurons],
             key=lambda x: x[1],
             reverse=True
         )
+        if active_neurons:
+            base_x, base_y = self.neuron_positions[active_neurons[0][0]]
+        else: 
+            non_excluded_positions = [pos for name, pos in self.neuron_positions.items() if name not in self.excluded_neurons]
+            if non_excluded_positions:
+                base_x = sum(p[0] for p in non_excluded_positions) / len(non_excluded_positions)
+                base_y = sum(p[1] for p in non_excluded_positions) / len(non_excluded_positions)
+            else:
+                base_x, base_y = (600,300) 
 
-        base_x, base_y = self.neuron_positions[active_neurons[0][0]] if active_neurons else (600, 300)
-
-        # Set position with variance
         self.neuron_positions[new_name] = (
             base_x + random.randint(-50, 50),
             base_y + random.randint(-50, 50)
         )
 
-        # Initialize state with default value
-        self.state.setdefault(new_name, 50)  # Safe initialization
+        cfg_appearance = self.config.neurogenesis.get('appearance', {})
+        cfg_colors = cfg_appearance.get('colors', {})
+        cfg_shapes = cfg_appearance.get('shapes', {})
 
-        # Set color based on neuron type
-        self.state_colors[new_name] = {
-            'novelty': (255, 255, 150),  # Pale yellow
-            'stress': (255, 150, 150),   # Light red
-            'reward': (150, 255, 150)    # Light green
-        }[neuron_type]
+        self.state.setdefault(new_name, 50)
 
-        # Create default connections
+        default_colors = {'novelty': (255, 255, 150), 'stress': (255, 150, 150), 'reward': (150, 255, 150)}
+        self.state_colors[new_name] = tuple(cfg_colors.get(neuron_type, default_colors.get(neuron_type, (200,200,200))))
+
+        default_shapes = {'novelty': 'diamond', 'stress': 'square', 'reward': 'circle'}
+        self.neuron_shapes[new_name] = cfg_shapes.get(neuron_type, default_shapes.get(neuron_type, 'circle'))
+
         default_weights = {
             'novelty': {'curiosity': 0.6, 'anxiety': -0.4},
-            'stress': {'anxiety': -0.7, 'happiness': 0.3},
+            'stress': {'anxiety': -0.7, 'happiness': 0.3}, 
             'reward': {'satisfaction': 0.8, 'happiness': 0.5}
         }
+        personality = state.get('personality', None) 
+        personality_str = getattr(personality, 'value', str(personality)).lower() 
 
-        # Personality modifier
-        personality = state.get('personality', None)
-        personality_weights = {
-            'timid': 0.8,
-            'adventurous': 1.2,
-            'greedy': 1.5,
-            'stubborn': 0.7
-        }.get(str(personality).lower() if personality else 'default', 1.0)
+        personality_weight_modifier = {
+            'timid': 0.8, 'adventurous': 1.2, 'greedy': 1.1, 'stubborn': 0.9
+        }.get(personality_str, 1.0)
 
-        # Create connections
-        for target, weight in default_weights[neuron_type].items():
-            if target in self.neuron_positions:  # Only connect to existing neurons
-                self.weights[(new_name, target)] = weight * personality_weights
-                self.weights[(target, new_name)] = weight * personality_weights * 0.5
+        for target, weight in default_weights.get(neuron_type, {}).items():
+            if target in self.neuron_positions:
+                self.weights[(new_name, target)] = weight * personality_weight_modifier
+                self.weights[(target, new_name)] = (weight * personality_weight_modifier) * 0.5
+        
+        # Determine the specific trigger value and context for logging and details
+        trigger_reason_value = 0
+        trigger_context_for_log = "" # For the text log
+        current_associated_state_for_details = {} # For the inspector details
 
-        # Update neurogenesis tracking
+        if neuron_type == 'novelty':
+            trigger_reason_value = state.get('novelty_exposure', data.get('novelty_counter', 0) if 'data' in locals() else 0)
+            curiosity_val = state.get('curiosity', self.state.get('curiosity',0))
+            trigger_context_for_log = f"Curiosity at {curiosity_val:.1f}"
+            current_associated_state_for_details['curiosity'] = round(curiosity_val,1)
+        elif neuron_type == 'stress':
+            trigger_reason_value = state.get('sustained_stress', data.get('stress_counter', 0) if 'data' in locals() else 0)
+            anxiety_val = state.get('anxiety', self.state.get('anxiety',0))
+            trigger_context_for_log = f"Anxiety at {anxiety_val:.1f}"
+            current_associated_state_for_details['anxiety'] = round(anxiety_val,1)
+        elif neuron_type == 'reward':
+            trigger_reason_value = state.get('recent_rewards', data.get('reward_counter', 0) if 'data' in locals() else 0)
+            happiness_val = state.get('happiness', self.state.get('happiness',0))
+            satisfaction_val = state.get('satisfaction', self.state.get('satisfaction',0))
+            trigger_context_for_log = f"Happiness at {happiness_val:.1f}, Satisfaction at {satisfaction_val:.1f}"
+            current_associated_state_for_details['happiness'] = round(happiness_val,1)
+            current_associated_state_for_details['satisfaction'] = round(satisfaction_val,1)
+
+
+        # Store detailed neurogenesis info (for Neuron Inspector)
+        if 'new_neurons_details' not in self.neurogenesis_data:
+            self.neurogenesis_data['new_neurons_details'] = {}
+        self.neurogenesis_data['new_neurons_details'][new_name] = {
+            'created_at': time.time(),
+            'trigger_type': neuron_type,
+            'trigger_value_at_creation': round(trigger_reason_value, 2),
+            'associated_state_snapshot': current_associated_state_for_details
+        }
+
         self.neurogenesis_data.setdefault('new_neurons', []).append(new_name)
         self.neurogenesis_data['last_neuron_time'] = time.time()
 
-        # Set highlight for visualization
         self.neurogenesis_highlight = {
             'neuron': new_name,
             'start_time': time.time(),
             'duration': self.neurogenesis_config.get('highlight_duration', 5.0)
         }
 
-        print(f"Created {neuron_type} neuron: {new_name}")
-        self.log_neurogenesis_event(new_name, "created")
+        print(f"Created {neuron_type} neuron: {new_name} with shape {self.neuron_shapes[new_name]} and color {self.state_colors[new_name]}")
+        
+        # +++ Prepare details for logging +++
+        log_creation_details = {
+            "trigger_type": neuron_type,
+            "trigger_value": round(trigger_reason_value, 2),
+            "context": trigger_context_for_log 
+        }
+        self.log_neurogenesis_event(new_name, "created", details=log_creation_details) # Pass details here
         return new_name
 
 
@@ -1341,70 +1410,163 @@ class BrainWidget(QtWidgets.QWidget):
                     f"{weight:.2f}"
                 )
 
+    def _get_logical_coords(self, widget_pos):
+        """Maps widget QPoint/QPointF to logical neuron coordinates."""
+        indicator_space = 60
+        base_width_logical = 1024
+        base_height_logical = 768 - indicator_space
+
+        scale_x = self.width() / base_width_logical
+        scale_y = (self.height() - indicator_space) / base_height_logical
+        scale = min(scale_x, max(0.1, scale_y)) # Ensure scale isn't 0
+
+        translate_y = indicator_space
+
+        lx = widget_pos.x() / scale
+        ly = (widget_pos.y() - translate_y) / scale
+        return QtCore.QPointF(lx, ly)
+    
+    def get_neuron_at_pos(self, widget_pos):
+        """Finds a neuron at the given QPoint widget coordinates."""
+        logical_pos = self._get_logical_coords(widget_pos)
+        neuron_radius = 25  # Logical radius
+
+        for name, pos in self.neuron_positions.items():
+            dist_sq = (logical_pos.x() - pos[0])**2 + (logical_pos.y() - pos[1])**2
+            if dist_sq <= neuron_radius**2:
+                return name
+        return None
+
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
 
-        scale_x = self.width() / 1200
-        scale_y = self.height() / 600
-        scale = min(scale_x, scale_y)
-        painter.scale(scale, scale)
+        painter.fillRect(self.rect(), QtGui.QColor(240, 240, 240))
 
-        painter.fillRect(QtCore.QRectF(0, 0, 1024, 768), QtGui.QColor(240, 240, 240))
-
-        # Draw metrics at top
-        metrics_font = QtGui.QFont()
-        metrics_font.setPointSize(10)
+        # --- Draw metrics at top-left ---
+        metrics_font = QtGui.QFont("Arial", 10)
         metrics_font.setBold(True)
         painter.setFont(metrics_font)
-        
-        # Calculate metrics
+        painter.setPen(QtGui.QColor(0, 0, 0))
+
         neuron_count = self.get_neuron_count()
         edge_count = self.get_edge_count()
         health = self.calculate_network_health()
-        efficiency = self.calculate_network_efficiency()
-        
-        # Draw metrics in top bar
+
         metrics_text = f"Neurons: {neuron_count}    Connections: {edge_count}    Network Health: {health:.1f}%"
-        metrics_rect = QtCore.QRectF(0, 5, self.width(), 25)
+        painter.drawText(QtCore.QRectF(10, 5, self.width() - 20, 30), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, metrics_text)
 
-        # Create and configure font
-        metrics_font = painter.font()
-        metrics_font.setPointSize(8)  # Smaller font size
-        metrics_font.setBold(False)   # Remove bold
-        painter.setFont(metrics_font)
+        # --- START: Draw State Indicators (Top-Right, Max 2, Text Inside, Elided if needed) ---
+        indicator_y_position = 10
+        indicator_font = QtGui.QFont("Arial", 9, QtGui.QFont.Bold)
+        painter.setFont(indicator_font) # Set font for font_metrics
+        font_metrics = painter.fontMetrics() # Get metrics after setting font
 
-        # Draw the text
-        painter.setPen(QtGui.QColor(0, 0, 0))
-        painter.drawText(metrics_rect, QtCore.Qt.AlignCenter, metrics_text)
+        active_indicators_data = []
+        if self.state.get('is_fleeing', False):
+            active_indicators_data.append({"text": "Fleeing!", "color": QtGui.QColor(220, 20, 60)}) # Crimson
+        if self.state.get('is_startled', False):
+            active_indicators_data.append({"text": "Startled!", "color": QtGui.QColor(255, 165, 0)}) # Orange
+        if self.state.get('pursuing_food', False):
+            active_indicators_data.append({"text": "Food?", "color": QtGui.QColor(60, 179, 113)}) # MediumSeaGreen
+        # Add other states as needed, e.g., is_sleeping, is_sick
+
+        indicators_to_display = active_indicators_data[:2] # Max 2 indicators
+
+        padding_horizontal = 8
+        padding_vertical = 4
+        spacing_between_indicators = 10
+        min_left_padding = 10 # Minimum padding from the left edge of the widget
+        right_padding_from_widget_edge = 100
+
+        # Calculate min_sensible_width based on current font_metrics
+        min_sensible_width = font_metrics.horizontalAdvance("...") + (2 * padding_horizontal)
+        rect_height = font_metrics.height() + (2 * padding_vertical)
+
+        current_target_right_edge_x = self.width() - right_padding_from_widget_edge
+
+        for indicator_details in reversed(indicators_to_display):
+            indicator_text_original = indicator_details["text"]
+            indicator_bg_color = indicator_details["color"]
+
+            ideal_text_width = font_metrics.horizontalAdvance(indicator_text_original)
+            ideal_rect_width = ideal_text_width + (2 * padding_horizontal)
+
+            # Max width available for this indicator, ensuring it doesn't go past min_left_padding
+            max_possible_width_for_this_indicator = current_target_right_edge_x - min_left_padding
+            
+            if max_possible_width_for_this_indicator < min_sensible_width:
+                current_target_right_edge_x = min_left_padding - spacing_between_indicators # Stop further drawing
+                continue
+
+            render_rect_width = min(ideal_rect_width, max_possible_width_for_this_indicator)
+
+            if render_rect_width < min_sensible_width:
+                current_target_right_edge_x = min_left_padding - spacing_between_indicators
+                continue
+                
+            render_rect_start_x = current_target_right_edge_x - render_rect_width
+            
+            indicator_rect = QtCore.QRectF(render_rect_start_x, indicator_y_position, render_rect_width, rect_height)
+
+            painter.setBrush(indicator_bg_color)
+            painter.setPen(QtCore.Qt.NoPen)
+            painter.drawRoundedRect(indicator_rect, 4, 4)
+
+            available_width_for_text = render_rect_width - (2 * padding_horizontal)
+            elided_text = font_metrics.elidedText(indicator_text_original, QtCore.Qt.ElideRight, available_width_for_text)
+
+            text_color = QtCore.Qt.white if indicator_bg_color.lightnessF() < 0.5 else QtCore.Qt.black
+            painter.setPen(text_color)
+            painter.drawText(indicator_rect, QtCore.Qt.AlignCenter, elided_text)
+
+            current_target_right_edge_x = render_rect_start_x - spacing_between_indicators
+        # --- END: Draw State Indicators ---
+
+        painter.save()
+
+        # Determine fixed indicator area height consistently
+        fixed_indicator_area_height = 0
+        if indicators_to_display: # If any indicator was planned
+            # Use the already obtained rect_height if available, otherwise recalculate based on font
+            fixed_indicator_area_height = rect_height + 10 # indicator height + bottom margin
+        else:
+            fixed_indicator_area_height = 30 # Default space if no indicators but metrics are there
         
-        # Draw "Neurons" title below metrics
-        title_font = painter.font()
-        title_font.setPointSize(12)
-        painter.setFont(title_font)
-        #painter.drawText(QtCore.QRectF(0, 30, self.width(), 30), QtCore.Qt.AlignCenter, "Neurons")
+        indicator_space_at_top = indicator_y_position + fixed_indicator_area_height # Total space from top for indicators+metrics
+        
+        base_width_logical = 1024
+        # Logical height for neuron drawing area should account for space used by indicators/metrics
+        base_height_logical = 768 - indicator_space_at_top 
+        if base_height_logical <=0: base_height_logical = 1 # prevent division by zero or negative
 
-        # Draw all neurons including new ones
-        self.draw_neurons(painter, scale)
+        scale_x = self.width() / base_width_logical
+        drawable_height_for_neurons = self.height() - indicator_space_at_top
+        if drawable_height_for_neurons <= 0: drawable_height_for_neurons = 1 # prevent division by zero or negative
 
-        # Highlight dragged neuron
+        scale_y = drawable_height_for_neurons / base_height_logical
+        scale_y = max(0.01, scale_y) # Ensure scale isn't too small or zero
+        scale = min(scale_x, scale_y)
+        scale = max(0.01, scale) # Overall minimum scale
+
+        painter.translate(0, indicator_space_at_top)
+        painter.scale(scale, scale)
+
+        self.draw_neurons(painter, 1.0) # Pass 1.0 as painter is already scaled
+
         if self.dragging and self.dragged_neuron:
             pos = self.neuron_positions[self.dragged_neuron]
-            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3))
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3 / scale))
             painter.setBrush(QtCore.Qt.NoBrush)
             painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 30, 30)
-        
-        # Draw highlight for recently created neurons
-        self.draw_neurogenesis_highlights(painter, scale)
+
+        self.draw_neurogenesis_highlights(painter, 1.0) # Pass 1.0
 
         if self.show_links:
-            self.draw_connections(painter, scale)
+            self.draw_connections(painter, 1.0) # Pass 1.0
 
-        def draw_neuron_highlight(self, painter, x, y):
-            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3))
-            painter.setBrush(QtCore.Qt.NoBrush)
-            painter.drawEllipse(x - 35, y - 35, 70, 70)
+        painter.restore()
 
     def draw_neurons(self, painter, scale):
         """Draw all neurons with state validation and error handling"""
@@ -1412,19 +1574,26 @@ class BrainWidget(QtWidgets.QWidget):
             try:
                 if name in self.excluded_neurons:
                     continue
-                    
+
                 shape = self.neuron_shapes.get(name, 'circle')  # Default to circle
-                
-                # Get value from state with fallback
                 value = self.state.get(name, 50)
-                
-                if shape == 'triangle':
+                color_tuple = self.state_colors.get(name, (200, 200, 200)) # Default gray
+                color = QtGui.QColor(*color_tuple)
+
+                if shape == 'diamond':
+                    self.draw_diamond_neuron(painter, pos[0], pos[1], value, name, scale)
+                elif shape == 'triangle':
                     self.draw_triangular_neuron(painter, pos[0], pos[1], value, name, scale)
                 elif shape == 'square':
                     self.draw_square_neuron(painter, pos[0], pos[1], value, name, scale)
-                else:  # circle
-                    self.draw_circular_neuron(painter, pos[0], pos[1], value, name, scale)
-                    
+                else:  # 'circle' or default
+                    painter.setBrush(QtGui.QBrush(color))
+                    painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
+                    radius = 25 * scale
+                    painter.drawEllipse(int(pos[0] - radius), int(pos[1] - radius),
+                                        int(radius * 2), int(radius * 2))
+                    self._draw_neuron_label(painter, pos[0], pos[1], name, scale)
+
             except Exception as e:
                 print(f"Error drawing neuron {name}: {str(e)}")
 
@@ -1472,7 +1641,8 @@ class BrainWidget(QtWidgets.QWidget):
 
     def draw_triangular_neuron(self, painter, x, y, value, label, scale=1.0):
         """Draw triangular neuron for novelty"""
-        color = QtGui.QColor(255, 255, 150)  # Pale yellow
+        color_tuple = self.state_colors.get(label, (255, 255, 150)) # Use state_colors
+        color = QtGui.QColor(*color_tuple)
         self._draw_polygon_neuron(painter, x, y, 3, color, label, scale)
 
     def show_diagnostic_report(self):
@@ -1482,22 +1652,29 @@ class BrainWidget(QtWidgets.QWidget):
         else:
             print("Error: Brain widget not initialized")
 
-    def _draw_polygon_neuron(self, painter, x, y, sides, color, label, scale):
-        """Generic polygon drawing method"""
+    def _draw_polygon_neuron(self, painter, x, y, sides, color, label, scale, rotation=0):
+        """Generic polygon drawing method with rotation"""
+        painter.save() # Save the painter state
+        painter.translate(x, y) # Move origin to neuron center
+        painter.rotate(rotation) # Rotate
+
         painter.setBrush(QtGui.QBrush(color))
         painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
-        
+
         polygon = QtGui.QPolygonF()
         radius = 25 * scale
         angle_step = 360.0 / sides
-        
+
         for i in range(sides):
             angle = i * angle_step - 90  # Start from top
-            px = x + radius * math.cos(math.radians(angle))
-            py = y + radius * math.sin(math.radians(angle))
+            px = radius * math.cos(math.radians(angle)) # Relative to (0,0)
+            py = radius * math.sin(math.radians(angle)) # Relative to (0,0)
             polygon.append(QtCore.QPointF(px, py))
-            
+
         painter.drawPolygon(polygon)
+        painter.restore() # Restore painter state (removes rotation and translation)
+
+        # Draw label unrotated at original x,y
         self._draw_neuron_label(painter, x, y, label, scale)
 
     def _draw_neuron_label(self, painter, x, y, label, scale):
@@ -1535,9 +1712,19 @@ class BrainWidget(QtWidgets.QWidget):
                 painter.drawEllipse(x, y, width, height)
 
     def draw_square_neuron(self, painter, x, y, value, label, scale=1.0):
-        """Draw square neuron for stress"""
-        color = QtGui.QColor(255, 150, 150)  # Light red
-        self._draw_polygon_neuron(painter, x, y, 4, color, label, scale)
+        """Draw square neuron (by rotating the default 4-sided polygon)"""
+        color_tuple = self.state_colors.get(label, (152, 251, 152))
+        color = QtGui.QColor(*color_tuple)
+        # Call _draw_polygon_neuron with 4 sides and 45-degree rotation to get a square
+        self._draw_polygon_neuron(painter, x, y, 4, color, label, scale, rotation=45)
+
+
+    def draw_diamond_neuron(self, painter, x, y, value, label, scale=1.0):
+        """Draw diamond neuron (default 4-sided polygon)"""
+        color_tuple = self.state_colors.get(label, (152, 251, 152))
+        color = QtGui.QColor(*color_tuple)
+        # Call _draw_polygon_neuron with 4 sides and 0-degree rotation to get a diamond
+        self._draw_polygon_neuron(painter, x, y, 4, color, label, scale, rotation=0)
 
 
     def toggle_links(self, state):
@@ -1552,21 +1739,18 @@ class BrainWidget(QtWidgets.QWidget):
         self.capture_training_data_enabled = state
 
     def mousePressEvent(self, event):
-        scale_x = self.width() / 1200
-        scale_y = self.height() / 600
-        scale = min(scale_x, scale_y)
-        
-        click_pos = event.pos()
-        
+        """Handles mouse button presses for dragging or clicking."""
         if event.button() == QtCore.Qt.LeftButton:
-            for name, pos in self.neuron_positions.items():
-                if self._is_click_on_neuron(click_pos, pos, scale):
-                    self.neuronClicked.emit(name)  # Now this should work
-                    self.dragging = True
-                    self.dragged_neuron = name
-                    self.drag_start_pos = click_pos
-                    self.update()
-                    break
+            neuron = self.get_neuron_at_pos(event.pos())
+            if neuron:
+                self.dragged_neuron = neuron
+                self.dragging = True
+                self.drag_start_pos = event.pos() # Store start pos for click vs drag check
+                self.update()
+            else:
+                self.dragged_neuron = None
+                self.dragging = False
+        super().mousePressEvent(event)
 
     def handle_neuron_clicked(self, neuron_name):
         # Handle the neuron click event
@@ -1577,21 +1761,33 @@ class BrainWidget(QtWidgets.QWidget):
         dialog.exec_()
 
     def mouseMoveEvent(self, event):
+        """Handles mouse movement, updating neuron position if dragging."""
         if self.dragging and self.dragged_neuron:
-            delta = event.pos() - self.drag_start_pos
-            old_pos = self.neuron_positions[self.dragged_neuron]
-            self.neuron_positions[self.dragged_neuron] = (
-                old_pos[0] + delta.x(),
-                old_pos[1] + delta.y()
-            )
-            self.drag_start_pos = event.pos()
+            logical_pos = self._get_logical_coords(event.pos())
+            self.neuron_positions[self.dragged_neuron] = (logical_pos.x(), logical_pos.y())
             self.update()
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if event.button() == QtCore.Qt.LeftButton and self.dragging:
+        """Handles mouse button releases, ending drag or emitting click."""
+        if event.button() == QtCore.Qt.LeftButton:
+            is_click = False
+            if self.dragged_neuron and self.drag_start_pos:
+                # Check if mouse moved less than a threshold (manhattanLength is faster than sqrt)
+                distance = (event.pos() - self.drag_start_pos).manhattanLength()
+                if distance < QtWidgets.QApplication.startDragDistance():
+                    is_click = True
+
+            # If it was a click (not a drag), emit the signal for the inspector
+            if is_click:
+                self.neuronClicked.emit(self.dragged_neuron)
+
+            # Reset dragging state regardless
             self.dragging = False
             self.dragged_neuron = None
+            self.drag_start_pos = None
             self.update()
+        super().mouseReleaseEvent(event)
 
     def _is_click_on_neuron(self, point, neuron_pos, scale):
         """Check if click is within neuron bounds, accounting for scaling"""
@@ -1613,245 +1809,3 @@ class BrainWidget(QtWidgets.QWidget):
     def reset_positions(self):
         self.neuron_positions = self.original_neuron_positions.copy()
         self.update()
-
-class NeuronInspector(QtWidgets.QDialog):
-    def __init__(self, brain_widget, parent=None):
-        super().__init__(parent)
-        self.brain_widget = brain_widget
-        self.current_neuron = None
-        
-        from .display_scaling import DisplayScaling
-        
-        self.setWindowTitle("Neuron Inspector")
-        self.setFixedSize(DisplayScaling.scale(600), DisplayScaling.scale(500))
-        
-        # Main layout
-        layout = QtWidgets.QVBoxLayout()
-        self.setLayout(layout)
-        
-        # Style all text properly
-        self.setStyleSheet(f"""
-            QLabel, QComboBox, QPushButton {{
-                font-size: {DisplayScaling.font_size(12)}px;
-            }}
-            QTextEdit, QListWidget {{
-                font-size: {DisplayScaling.font_size(12)}px;
-                line-height: {DisplayScaling.scale(1.5)};
-            }}
-        """)
-        
-        # Neuron info section
-        self.info_group = QtWidgets.QGroupBox("Neuron Information")
-        self.info_layout = QtWidgets.QFormLayout()
-        self.info_group.setLayout(self.info_layout)
-        layout.addWidget(self.info_group)
-        
-        # Info fields
-        self.name_label = QtWidgets.QLabel()
-        self.state_label = QtWidgets.QLabel()
-        self.position_label = QtWidgets.QLabel()
-        self.type_label = QtWidgets.QLabel()
-        
-        self.info_layout.addRow("Name:", self.name_label)
-        self.info_layout.addRow("Current State:", self.state_label)
-        self.info_layout.addRow("Position:", self.position_label)
-        self.info_layout.addRow("Type:", self.type_label)
-        
-        # Connections table
-        self.connections_group = QtWidgets.QGroupBox("Connections")
-        self.connections_layout = QtWidgets.QVBoxLayout()
-        self.connections_group.setLayout(self.connections_layout)
-        layout.addWidget(self.connections_group)
-        
-        self.connections_table = QtWidgets.QTableWidget()
-        self.connections_table.setColumnCount(5)
-        self.connections_table.setHorizontalHeaderLabels([
-            "Neuron", "Direction", "Weight", "Strength", "State"
-        ])
-        self.connections_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
-        self.connections_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-        self.connections_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-        self.connections_layout.addWidget(self.connections_table)
-        
-        # Activity graph
-        self.activity_group = QtWidgets.QGroupBox("Activity History")
-        self.activity_layout = QtWidgets.QVBoxLayout()
-        self.activity_group.setLayout(self.activity_layout)
-        layout.addWidget(self.activity_group)
-        
-        self.activity_plot = QtWidgets.QGraphicsView()
-        self.activity_scene = QtWidgets.QGraphicsScene()
-        self.activity_plot.setScene(self.activity_scene)
-        self.activity_layout.addWidget(self.activity_plot)
-        
-        # Close button
-        self.close_button = QtWidgets.QPushButton("Close")
-        self.close_button.clicked.connect(self.close)
-        layout.addWidget(self.close_button)
-        
-        # Connect to brain widget's neuron click signal
-        if hasattr(brain_widget, 'neuronClicked'):
-            brain_widget.neuronClicked.connect(self.inspect_neuron)
-
-    def inspect_neuron(self, neuron_name):
-        """Update the inspector with data for the clicked neuron"""
-        self.current_neuron = neuron_name
-        self.update_display()
-
-    def update_display(self):
-        """Update all display elements for current neuron"""
-        if not self.current_neuron:
-            return
-            
-        neuron = self.current_neuron
-        state = self.brain_widget.state.get(neuron, 0)
-        pos = self.brain_widget.neuron_positions.get(neuron, (0, 0))
-        
-        # Update info fields
-        self.name_label.setText(neuron)
-        self.state_label.setText(f"{state:.1f}")
-        self.position_label.setText(f"({pos[0]:.1f}, {pos[1]:.1f})")
-        self.type_label.setText(self.get_neuron_type(neuron))
-        
-        # Update connections table
-        self.update_connections_table()
-        
-        # Update activity graph
-        self.update_activity_graph()
-
-    def get_neuron_type(self, neuron):
-        """Determine the type of neuron for display purposes"""
-        if neuron in self.brain_widget.original_neuron_positions:
-            return "Core Neuron"
-        elif neuron in self.brain_widget.neurogenesis_data.get('new_neurons', []):
-            return "Neurogenesis Neuron"
-        elif neuron in self.brain_widget.excluded_neurons:
-            return "System Neuron"
-        return "Unknown"
-
-    def update_connections_table(self):
-        """Populate the connections table"""
-        if not self.current_neuron:
-            return
-            
-        neuron = self.current_neuron
-        connections = []
-        
-        # Gather connection data
-        for (src, dst), weight in self.brain_widget.weights.items():
-            if src == neuron or dst == neuron:
-                other = dst if src == neuron else src
-                direction = "→" if src == neuron else "←"
-                connections.append({
-                    'neuron': other,
-                    'weight': weight,
-                    'direction': direction,
-                    'state': self.brain_widget.state.get(other, 0)
-                })
-        
-        # Sort by absolute weight
-        connections.sort(key=lambda x: abs(x['weight']), reverse=True)
-        
-        # Populate table
-        self.connections_table.setRowCount(len(connections))
-        for row, conn in enumerate(connections):
-            # Neuron name
-            neuron_item = QtWidgets.QTableWidgetItem(conn['neuron'])
-            self.connections_table.setItem(row, 0, neuron_item)
-            
-            # Direction
-            direction_item = QtWidgets.QTableWidgetItem(conn['direction'])
-            direction_item.setTextAlignment(QtCore.Qt.AlignCenter)
-            self.connections_table.setItem(row, 1, direction_item)
-            
-            # Weight
-            weight_item = QtWidgets.QTableWidgetItem(f"{conn['weight']:.3f}")
-            if conn['weight'] > 0:
-                weight_item.setForeground(QtGui.QColor(0, 150, 0))  # Green
-            else:
-                weight_item.setForeground(QtGui.QColor(200, 0, 0))  # Red
-            self.connections_table.setItem(row, 2, weight_item)
-            
-            # Strength bar
-            strength_widget = QtWidgets.QWidget()
-            strength_layout = QtWidgets.QHBoxLayout(strength_widget)
-            strength_layout.setContentsMargins(0, 0, 0, 0)
-            
-            bar = QtWidgets.QProgressBar()
-            bar.setRange(0, 100)
-            bar.setValue(abs(conn['weight']) * 100)
-            bar.setTextVisible(False)
-            bar.setStyleSheet("""
-                QProgressBar {
-                    border: 1px solid #ccc;
-                    border-radius: 3px;
-                    text-align: center;
-                }
-                QProgressBar::chunk {
-                    background-color: %s;
-                }
-            """ % ("#2ecc71" if conn['weight'] > 0 else "#e74c3c"))
-            
-            strength_layout.addWidget(bar)
-            strength_layout.addStretch()
-            self.connections_table.setCellWidget(row, 3, strength_widget)
-            
-            # State
-            state_item = QtWidgets.QTableWidgetItem(f"{conn['state']:.1f}")
-            self.connections_table.setItem(row, 4, state_item)
-
-    def update_activity_graph(self):
-        """Draw a simple activity history graph"""
-        self.activity_scene.clear()
-        
-        if not self.current_neuron:
-            return
-            
-        # Sample data - replace with real historical data if available
-        current_state = self.brain_widget.state.get(self.current_neuron, 50)
-        history = [max(0, min(100, current_state + random.randint(-10, 10))) for _ in range(10)]
-        history.append(current_state)
-        
-        # Graph parameters
-        width = self.activity_plot.width() - 20
-        height = self.activity_plot.height() - 40
-        x_step = width / (len(history) - 1)
-        
-        # Draw axes
-        self.activity_scene.addLine(10, 10, 10, height + 10, QtGui.QPen(QtCore.Qt.black))
-        self.activity_scene.addLine(10, height + 10, width + 10, height + 10, QtGui.QPen(QtCore.Qt.black))
-        
-        # Draw labels
-        font = QtGui.QFont()
-        font.setPointSize(8)
-        
-        # Y-axis labels
-        for y, val in [(10, "100"), (height/2 + 10, "50"), (height + 10, "0")]:
-            text = self.activity_scene.addText(val, font)
-            text.setPos(0, y - 8)
-        
-        # X-axis labels
-        for i in range(0, len(history), 2):
-            x = 10 + i * x_step
-            label = f"T-{len(history)-1-i}" if i < len(history)-1 else "Now"
-            text = self.activity_scene.addText(label, font)
-            text.setPos(x - 10, height + 15)
-        
-        # Draw graph
-        path = QtGui.QPainterPath()
-        path.moveTo(10, height + 10 - (history[0] / 100 * height))
-        
-        for i, val in enumerate(history):
-            x = 10 + i * x_step
-            y = height + 10 - (val / 100 * height)
-            path.lineTo(x, y)
-        
-        self.activity_scene.addPath(path, QtGui.QPen(QtGui.QColor(52, 152, 219), 2))
-        
-        # Add data points
-        for i, val in enumerate(history):
-            x = 10 + i * x_step
-            y = height + 10 - (val / 100 * height)
-            self.activity_scene.addEllipse(x - 3, y - 3, 6, 6, 
-                                         QtGui.QPen(QtCore.Qt.black),
-                                         QtGui.QBrush(QtGui.QColor(52, 152, 219)))

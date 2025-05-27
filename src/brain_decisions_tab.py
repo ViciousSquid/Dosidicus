@@ -1,8 +1,10 @@
 import time
 import math
+# import os # No longer needed
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .brain_dialogs import RecentThoughtsDialog
+from .display_scaling import DisplayScaling
 
 class DecisionsTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
@@ -12,223 +14,130 @@ class DecisionsTab(BrainBaseTab):
         self.initialize_ui()
 
     def initialize_ui(self):
-        """Initialize the thinking tab with visualization focused on the decision process"""
-        self.layout.setContentsMargins(10, 10, 10, 10)  # Add some padding
-        
-        # Use a QSplitter for resizable sections
-        self.main_splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
-        self.layout.addWidget(self.main_splitter)
-        
-        # TOP SECTION: Decision process visualization
-        self.decision_process_widget = self._create_decision_process_widget()
-        self.main_splitter.addWidget(self.decision_process_widget)
-        
-        # MIDDLE SECTION: Neural weights visualization
-        self.weights_widget = self._create_weights_visualization_widget()
-        self.main_splitter.addWidget(self.weights_widget)
-        
-        # BOTTOM SECTION: Thought log
-        self.log_widget = self._create_thought_log_widget()
-        self.main_splitter.addWidget(self.log_widget)
-        
-        # Set initial splitter sizes (40% process, 30% weights, 30% log)
-        self.main_splitter.setSizes([400, 300, 300])
-        
-        # Initial update of visualizations with empty data
+        """Initialize the decisions tab with a tabbed interface."""
+        self.layout.setContentsMargins(10, 10, 10, 10)
+
+        # Create Tab Widget
+        self.tabs = QtWidgets.QTabWidget()
+        self.layout.addWidget(self.tabs)
+
+        # Create and add tabs
+        self.current_decision_tab_widget = self._create_current_decision_tab()
+        self.tabs.addTab(self.current_decision_tab_widget, "Current Decision")
+
+        self.factors_tab_widget = self._create_factors_tab()
+        self.tabs.addTab(self.factors_tab_widget, "Decision Factors")
+
+        self.log_tab_widget = self._create_thought_log_widget() # Reuse existing log
+        self.tabs.addTab(self.log_tab_widget, "Decision Log")
+
+        # Initial update
         self.update_visualization_with_placeholder()
 
-    def _create_decision_process_widget(self):
-        """Create the decision process visualization section"""
+    def _create_current_decision_tab(self):
+        """Create the current decision visualization tab."""
         container = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(container)
-        
-        from .display_scaling import DisplayScaling
-        
-        # Main visualization area
-        self.process_visualization = QtWidgets.QWidget()
-        process_layout = QtWidgets.QHBoxLayout(self.process_visualization)
-        
-        # --- Neural Processing Section (Expanded) ---
-        self.processing_section = QtWidgets.QGroupBox("Neural Processing")
-        self.processing_section.setStyleSheet(
-            f"QGroupBox {{ font-weight: bold; border: 2px solid #9b59b6; border-radius: {DisplayScaling.scale(8)}px; margin-top: 1ex; background-color: #f8f9fa; }}"
-            f"QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 5px; background-color: #9b59b6; color: white; }}"
-        )
-        processing_layout = QtWidgets.QVBoxLayout(self.processing_section)
-        
-        # Neural network visualization widget
-        self.neural_view = QtWidgets.QGraphicsView()
-        self.neural_view.setRenderHint(QtGui.QPainter.Antialiasing)
-        self.neural_scene = QtWidgets.QGraphicsScene()
-        self.neural_view.setScene(self.neural_scene)
-        processing_layout.addWidget(self.neural_view)
-        
-        # Add processing section
-        process_layout.addWidget(self.processing_section)
-        
-        # Flow arrow
-        arrow = QtWidgets.QLabel("→")
-        arrow.setStyleSheet("font-size: 24px; font-weight: bold;")
-        arrow.setAlignment(QtCore.Qt.AlignCenter)
-        process_layout.addWidget(arrow)
-        
+        layout.setAlignment(QtCore.Qt.AlignTop)
+
         # --- Decision Output Section ---
-        self.decision_section = QtWidgets.QGroupBox("Decision Output")
-        self.decision_section.setStyleSheet(
-            "QGroupBox { font-weight: bold; border: 2px solid #2ecc71; border-radius: 8px; margin-top: 1ex; background-color: #f8f9fa; }"
+        decision_section = QtWidgets.QGroupBox("Decision Output")
+        decision_section.setStyleSheet(
+            "QGroupBox { font-weight: bold; border: 1px solid #2ecc71; border-radius: 8px; margin-top: 1ex; background-color: #f8f9fa; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; background-color: #2ecc71; color: white; }"
         )
-        decision_layout = QtWidgets.QVBoxLayout(self.decision_section)
-        decision_layout.setSpacing(5)  # Reduced spacing between widgets
-        decision_layout.setContentsMargins(8, 8, 8, 8)  # Reduced margins
-        
-        # Current decision (large, prominent display)
-        self.decision_icon = QtWidgets.QLabel()
-        self.decision_icon.setAlignment(QtCore.Qt.AlignCenter)
-        self.decision_icon.setFixedSize(DisplayScaling.scale(64), DisplayScaling.scale(64))  # Scaled fixed size
-        decision_layout.addWidget(self.decision_icon)
-        
+        decision_layout = QtWidgets.QVBoxLayout(decision_section)
+        decision_layout.setSpacing(10)
+        decision_layout.setContentsMargins(15, 15, 15, 15)
+
+        # Decision Text
         self.decision_output = QtWidgets.QLabel("No Decision")
-        self.decision_output.setStyleSheet(f"font-size: {DisplayScaling.font_size(24)}px; font-weight: bold; color: #2c3e50; margin-top: 0;")
+        self.decision_output.setStyleSheet(f"font-size: {DisplayScaling.font_size(28)}px; font-weight: bold; color: #2c3e50;")
         self.decision_output.setAlignment(QtCore.Qt.AlignCenter)
         decision_layout.addWidget(self.decision_output)
-        
-        # Decision explanation
-        explanation_label = QtWidgets.QLabel("Explanation:")
-        explanation_label.setStyleSheet("margin-top: 10px;")  # Add some space above explanation
-        decision_layout.addWidget(explanation_label)
-        
+
+        layout.addWidget(decision_section)
+
+        # --- Explanation Section ---
+        explanation_group = QtWidgets.QGroupBox("Why did the Squid do that?")
+        explanation_group.setStyleSheet(
+            "QGroupBox { font-weight: bold; border: 1px solid #3498db; border-radius: 8px; margin-top: 1ex; background-color: #f8f9fa; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; background-color: #3498db; color: white; }"
+        )
+        explanation_layout = QtWidgets.QVBoxLayout(explanation_group)
         self.decision_explanation = QtWidgets.QTextEdit()
         self.decision_explanation.setReadOnly(True)
-        self.decision_explanation.setFixedHeight(200)  # Fixed height instead of maximum
-        self.decision_explanation.setStyleSheet("background-color: #f8f9fa; border: 1px solid #ddd; margin-top: 0;")
-        decision_layout.addWidget(self.decision_explanation)
-        
-        process_layout.addWidget(self.decision_section)
-        
-        # Add the process visualization to the container
-        layout.addWidget(self.process_visualization)
-        
-        # Set stretch factors for the sections
-        process_layout.setStretch(0, 70)  # Neural Processing section (70%)
-        process_layout.setStretch(1, 5)   # Arrow (5%)
-        process_layout.setStretch(2, 25)  # Decision section (25%)
-        
+        self.decision_explanation.setStyleSheet("background-color: #ffffff; border: 1px solid #ddd; padding: 10px; font-size: 14px;")
+        explanation_layout.addWidget(self.decision_explanation)
+
+        layout.addWidget(explanation_group)
+        layout.setStretchFactor(explanation_group, 1) # Give more space to explanation
+
         return container
 
-    def _create_weights_visualization_widget(self):
-        """Create enhanced weight visualization section"""
+    def _create_factors_tab(self):
+        """Create the decision factors visualization tab."""
         container = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(container)
-        
-        # Title
-        title = QtWidgets.QLabel("Decision Action Weights")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50; padding: 5px;")
-        title.setAlignment(QtCore.Qt.AlignCenter)
-        layout.addWidget(title)
-        
-        # Two-panel layout: Radar chart and bar chart
-        charts_layout = QtWidgets.QHBoxLayout()
-        
-        # 1. Radar Chart View (for relationships between decisions)
-        self.radar_view = QtWidgets.QGraphicsView()
-        self.radar_view.setRenderHint(QtGui.QPainter.Antialiasing)
-        self.radar_scene = QtWidgets.QGraphicsScene()
-        self.radar_view.setScene(self.radar_scene)
-        
-        radar_container = QtWidgets.QGroupBox("Decision Weight Relationships")
-        radar_container.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #bdc3c7;
-                border-radius: 5px;
-                margin-top: 1ex;
-                background-color: white;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-            }
-        """)
-        radar_layout = QtWidgets.QVBoxLayout(radar_container)
-        radar_layout.addWidget(self.radar_view)
-        
-        # 2. Bar Chart (improved version of current implementation)
-        self.bar_view = QtWidgets.QGraphicsView()
-        self.bar_view.setRenderHint(QtGui.QPainter.Antialiasing)
-        self.bar_scene = QtWidgets.QGraphicsScene()
-        self.bar_view.setScene(self.bar_scene)
-        
-        bar_container = QtWidgets.QGroupBox("Action Weight Comparison")
-        bar_container.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #bdc3c7;
-                border-radius: 5px;
-                margin-top: 1ex;
-                background-color: white;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-            }
-        """)
-        bar_layout = QtWidgets.QVBoxLayout(bar_container)
-        bar_layout.addWidget(self.bar_view)
-        
-        # Add legend
-        legend_layout = QtWidgets.QHBoxLayout()
-        
-        # Base weight legend item
-        base_color = QtWidgets.QFrame()
-        base_color.setStyleSheet("background-color: #3498db; border: none;")
-        base_color.setFixedSize(15, 15)
-        legend_layout.addWidget(base_color)
-        legend_layout.addWidget(QtWidgets.QLabel("Base Weight"))
-        legend_layout.addSpacing(15)
-        
-        # Adjusted weight legend item
-        adjusted_color = QtWidgets.QFrame()
-        adjusted_color.setStyleSheet("background-color: #e74c3c; border: none;")
-        adjusted_color.setFixedSize(15, 15)
-        legend_layout.addWidget(adjusted_color)
-        legend_layout.addWidget(QtWidgets.QLabel("After Personality"))
-        legend_layout.addSpacing(15)
-        
-        # Random factor legend item
-        random_color = QtWidgets.QFrame()
-        random_color.setStyleSheet("background-color: #f39c12; border: none;")
-        random_color.setFixedSize(15, 15)
-        legend_layout.addWidget(random_color)
-        legend_layout.addWidget(QtWidgets.QLabel("Random Factor"))
-        
-        # Add stretch to push legend items to the left
-        legend_layout.addStretch()
-        
-        bar_layout.addLayout(legend_layout)
-        
-        # Add both chart containers to the layout
-        charts_layout.addWidget(radar_container)
-        charts_layout.addWidget(bar_container)
-        layout.addLayout(charts_layout)
-        
+
+        # Possible Decisions Table
+        decisions_group = QtWidgets.QGroupBox("⚡ Possible Actions & Weights")
+        decisions_layout = QtWidgets.QVBoxLayout(decisions_group)
+        self.factors_table = QtWidgets.QTableWidget()
+        self.factors_table.setColumnCount(4)
+        self.factors_table.setHorizontalHeaderLabels(["Action", "Base Weight", "Personality Adj.", "Random Factor"])
+        self.factors_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        self.factors_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.factors_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.factors_table.setAlternatingRowColors(True)
+        decisions_layout.addWidget(self.factors_table)
+        layout.addWidget(decisions_group)
+
+        # Influencing Factors Splitter
+        factors_splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+
+        # Inputs Group
+        inputs_group = QtWidgets.QGroupBox("🧠 Key Inputs")
+        inputs_layout = QtWidgets.QVBoxLayout(inputs_group)
+        self.inputs_text = QtWidgets.QTextEdit()
+        self.inputs_text.setReadOnly(True)
+        inputs_layout.addWidget(self.inputs_text)
+        factors_splitter.addWidget(inputs_group)
+
+        # Personality Group
+        personality_group = QtWidgets.QGroupBox("🎭 Personality Influence")
+        personality_layout = QtWidgets.QVBoxLayout(personality_group)
+        self.personality_text = QtWidgets.QTextEdit()
+        self.personality_text.setReadOnly(True)
+        personality_layout.addWidget(self.personality_text)
+        factors_splitter.addWidget(personality_group)
+
+        # Memories Group
+        memories_group = QtWidgets.QGroupBox("📚 Memory Influence")
+        memories_layout = QtWidgets.QVBoxLayout(memories_group)
+        self.memories_text = QtWidgets.QTextEdit()
+        self.memories_text.setReadOnly(True)
+        memories_layout.addWidget(self.memories_text)
+        factors_splitter.addWidget(memories_group)
+
+        factors_splitter.setSizes([300, 250, 250]) # Adjust initial sizes
+        layout.addWidget(factors_splitter)
+        layout.setStretchFactor(decisions_group, 1)
+        layout.setStretchFactor(factors_splitter, 1)
+
         return container
 
     def _create_thought_log_widget(self):
-        """Create improved thought log widget"""
+        """Create the thought log tab (reusing existing structure)."""
         container = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(container)
-        
-        # Header with controls
+
         header_layout = QtWidgets.QHBoxLayout()
-        
         title = QtWidgets.QLabel("Decision Log")
         title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50;")
         header_layout.addWidget(title)
-        
         header_layout.addStretch()
-        
-        # Filter dropdown
+
         self.log_filter = QtWidgets.QComboBox()
         self.log_filter.addItem("All Decisions")
         self.log_filter.addItems(["Exploring", "Eating", "Organizing", "Approaching", "Throwing", "Avoiding"])
@@ -236,70 +145,43 @@ class DecisionsTab(BrainBaseTab):
         self.log_filter.currentIndexChanged.connect(self.filter_thought_log)
         header_layout.addWidget(QtWidgets.QLabel("Filter:"))
         header_layout.addWidget(self.log_filter)
-        
-        # Logging control button
+
         self.logging_button = QtWidgets.QPushButton("Start Logging")
         self.logging_button.setCheckable(True)
-        self.logging_button.setStyleSheet("""
-            QPushButton {
-                background-color: #2ecc71;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 5px 10px;
-                font-weight: bold;
-            }
-            QPushButton:checked {
-                background-color: #e74c3c;
-            }
-        """)
+        self.logging_button.setStyleSheet(
+            "QPushButton { background-color: #2ecc71; color: white; border: none; border-radius: 5px; padding: 5px 10px; font-weight: bold; }"
+            "QPushButton:checked { background-color: #e74c3c; }"
+        )
         self.logging_button.clicked.connect(self.toggle_logging)
         header_layout.addWidget(self.logging_button)
-        
-        # View logs button
+
         self.view_logs_button = QtWidgets.QPushButton("View History")
-        self.view_logs_button.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 5px 10px;
-            }
-        """)
+        self.view_logs_button.setStyleSheet("background-color: #3498db; color: white; border: none; border-radius: 5px; padding: 5px 10px;")
         self.view_logs_button.clicked.connect(self.view_thought_logs)
         header_layout.addWidget(self.view_logs_button)
-        
         layout.addLayout(header_layout)
-        
-        # Rich text log display (styled entries with collapsible sections)
+
         self.thought_log_text = QtWidgets.QTextEdit()
         self.thought_log_text.setReadOnly(True)
-        self.thought_log_text.setStyleSheet("""
-            QTextEdit {
-                background-color: #f8f9fa;
-                border: 1px solid #bdc3c7;
-                border-radius: 5px;
-                padding: 10px;
-                font-family: Arial, sans-serif;
-            }
-        """)
+        self.thought_log_text.setStyleSheet(
+            "QTextEdit { background-color: #f8f9fa; border: 1px solid #bdc3c7; border-radius: 5px; padding: 10px; font-family: Arial, sans-serif; }"
+        )
         layout.addWidget(self.thought_log_text)
-        
         return container
 
     def update_visualization_with_placeholder(self):
-        """Initialize visualizations with placeholder data"""
-        # Draw empty neural network
-        self._draw_neural_network_placeholder()
-        
-        # Draw empty radar chart
-        self._draw_radar_chart_placeholder()
-        
-        # Draw empty bar chart
-        self._draw_bar_chart_placeholder()
-        
-        # Set placeholder text for thought log
+        """Initialize tabs with placeholder content."""
+        # Current Decision Tab
+        self.decision_output.setText("Awaiting Decision...")
+        self.decision_explanation.setHtml("<p><i>Waiting for the squid to make its next move...</i></p>")
+
+        # Factors Tab
+        self.factors_table.setRowCount(0)
+        self.inputs_text.setHtml("<p><i>Inputs will appear here.</i></p>")
+        self.personality_text.setHtml("<p><i>Personality influence will appear here.</i></p>")
+        self.memories_text.setHtml("<p><i>Memory influence will appear here.</i></p>")
+
+        # Log Tab
         self.thought_log_text.setHtml(
             "<div style='color: #7f8c8d; text-align: center; padding: 50px;'>"
             "<p>Start logging to view the squid's decision process.</p>"
@@ -307,151 +189,15 @@ class DecisionsTab(BrainBaseTab):
             "</div>"
         )
 
-    def _draw_neural_network_placeholder(self):
-        """Draw a placeholder neural network visualization"""
-        self.neural_scene.clear()
-        
-        # Background
-        self.neural_scene.setBackgroundBrush(QtGui.QBrush(QtGui.QColor("#f8f9fa")))
-        
-        # Add placeholder text
-        text = self.neural_scene.addText("Neural network visualization will appear here")
-        text.setDefaultTextColor(QtGui.QColor("#7f8c8d"))
-        text.setPos(50, 50)
-        
-        # Default nodes (faded)
-        self._draw_neural_nodes(active=False)
-
-    def _draw_neural_nodes(self, active=False):
-        """Draw neural network nodes"""
-        # Define node positions (3 layers: input, hidden, output)
-        input_nodes = [(50, 30), (50, 90), (50, 150)]
-        hidden_nodes = [(150, 30), (150, 90), (150, 150)]
-        output_nodes = [(250, 90)]
-        
-        # Node color based on active state
-        node_color = QtGui.QColor(60, 60, 60, 255 if active else 100)
-        edge_color = QtGui.QColor(100, 100, 100, 255 if active else 50)
-        
-        # Draw edges first (so they're behind nodes)
-        pen = QtGui.QPen(edge_color)
-        pen.setWidth(1)
-        
-        # Connect input to hidden layer
-        for i_pos in input_nodes:
-            for h_pos in hidden_nodes:
-                self.neural_scene.addLine(i_pos[0], i_pos[1], h_pos[0], h_pos[1], pen)
-        
-        # Connect hidden to output layer
-        for h_pos in hidden_nodes:
-            for o_pos in output_nodes:
-                self.neural_scene.addLine(h_pos[0], h_pos[1], o_pos[0], o_pos[1], pen)
-        
-        # Draw nodes
-        for pos in input_nodes + hidden_nodes + output_nodes:
-            node = self.neural_scene.addEllipse(pos[0]-10, pos[1]-10, 20, 20, 
-                                            QtGui.QPen(node_color), 
-                                            QtGui.QBrush(node_color))
-
-    def _draw_radar_chart_placeholder(self):
-        """Draw a placeholder radar chart"""
-        self.radar_scene.clear()
-        
-        # Background
-        self.radar_scene.setBackgroundBrush(QtGui.QBrush(QtGui.QColor("#f8f9fa")))
-        
-        # Add placeholder text
-        text = self.radar_scene.addText("Decision relationships will appear here")
-        text.setDefaultTextColor(QtGui.QColor("#7f8c8d"))
-        text.setPos(50, 50)
-        
-        # Basic radar chart outline
-        self._draw_radar_outline()
-
-    def _draw_radar_outline(self):
-        """Draw radar chart axes outline"""
-        # Center position
-        center_x, center_y = 150, 100
-        radius = 70
-        
-        # Axes
-        axes_pen = QtGui.QPen(QtGui.QColor("#bdc3c7"))
-        axes_pen.setWidth(1)
-        
-        # Draw 6 axes (one for each common decision type)
-        for i in range(6):
-            angle = i * 60 * (math.pi / 180)  # Convert to radians
-            x = center_x + radius * math.cos(angle)  # Use math.cos instead of QtCore.qCos
-            y = center_y + radius * math.sin(angle)  # Use math.sin instead of QtCore.qSin
-            self.radar_scene.addLine(center_x, center_y, x, y, axes_pen)
-            
-            # Add labels
-            actions = ["Exploring", "Eating", "Approach", "Throw", "Avoid", "Organize"]
-            label = self.radar_scene.addText(actions[i])
-            label.setDefaultTextColor(QtGui.QColor("#7f8c8d"))
-            # Position label at end of axis
-            label.setPos(x - 20, y - 10)
-            
-        # Draw concentric circles
-        for r in range(1, 4):
-            circle_radius = radius * r / 3
-            self.radar_scene.addEllipse(
-                center_x - circle_radius, 
-                center_y - circle_radius,
-                circle_radius * 2, 
-                circle_radius * 2,
-                axes_pen
-            )
-
-    def _draw_bar_chart_placeholder(self):
-        """Draw a placeholder bar chart"""
-        self.bar_scene.clear()
-        
-        # Background
-        self.bar_scene.setBackgroundBrush(QtGui.QBrush(QtGui.QColor("#f8f9fa")))
-        
-        # Add placeholder bars (faded)
-        self._draw_placeholder_bars()
-
-    def _draw_placeholder_bars(self):
-        """Draw placeholder bars for the weight chart"""
-        actions = ["exploring", "eating", "approaching", "throwing", "avoiding", "organizing"]
-        
-        for i, action in enumerate(actions):
-            y_pos = 30 + i * 25
-            
-            # Action label
-            label = self.bar_scene.addText(action)
-            label.setDefaultTextColor(QtGui.QColor("#7f8c8d"))
-            label.setPos(10, y_pos)
-            
-            # Bars (base and adjusted, faded)
-            base_rect = self.bar_scene.addRect(
-                100, y_pos, 100, 15,
-                QtGui.QPen(QtGui.QColor("#3498db")),
-                QtGui.QBrush(QtGui.QColor(52, 152, 219, 100))  # Faded blue
-            )
-            
-            adj_rect = self.bar_scene.addRect(
-                100, y_pos, 80, 15,  # Shorter than base
-                QtGui.QPen(QtGui.QColor("#e74c3c")),
-                QtGui.QBrush(QtGui.QColor(231, 76, 60, 100))  # Faded red
-            )
-            
-            # Value text (dummy)
-            value = self.bar_scene.addText("0.00")
-            value.setDefaultTextColor(QtGui.QColor("#7f8c8d"))
-            value.setPos(210, y_pos)
-
     def update_from_brain_state(self, state):
-        """Update decision visualization based on brain state"""
+        """Update decision visualization based on brain state."""
         if hasattr(self.tamagotchi_logic, 'get_decision_data'):
             decision_data = self.tamagotchi_logic.get_decision_data()
-            self.update_thought_process(decision_data)
+            if decision_data: # Ensure data is not None
+                self.update_thought_process(decision_data)
 
     def update_thought_process(self, decision_data):
-        """Update all visualizations with new decision data"""
-        # Extract key data
+        """Update all visualizations with new decision data."""
         inputs = decision_data.get('inputs', {})
         decision = decision_data.get('final_decision', 'exploring')
         confidence = decision_data.get('confidence', 0.5)
@@ -459,308 +205,186 @@ class DecisionsTab(BrainBaseTab):
         adjusted_weights = decision_data.get('adjusted_weights', {})
         randomness = decision_data.get('randomness', {})
         active_memories = decision_data.get('active_memories', [])
-        processing_time = decision_data.get('processing_time', 50)
-        
-        
-        # 1. Update neural network visualization
-        self._update_neural_network(inputs, decision, processing_time)
-        
-        # 2. Update decision output
-        self._update_decision_output(decision, confidence, 
-                                   self._generate_explanation(decision, weights, adjusted_weights, 
-                                                          randomness, active_memories))
-        
-        # 3. Update radar and bar charts
-        self._update_charts(weights, adjusted_weights, randomness, decision)
-        
-        # 4. Add to thought log if logging is enabled
+
+        # 1. Update Current Decision Tab
+        self._update_current_decision_tab(decision, confidence,
+                                        self._generate_explanation(decision, weights, adjusted_weights,
+                                                               randomness, active_memories, inputs))
+
+        # 2. Update Factors Tab
+        self._update_factors_tab(decision_data)
+
+        # 3. Add to thought log if logging is enabled
         if self.is_logging:
             self.add_to_thought_log(decision_data)
 
-
-
-    def _update_neural_network(self, inputs, decision, processing_time):
-        """Update the neural network visualization"""
-        self.neural_scene.clear()
-        
-        # Background
-        self.neural_scene.setBackgroundBrush(QtGui.QBrush(QtGui.QColor("#ffffff")))
-        
-        # Draw active neural network
-        self._draw_neural_nodes(active=True)
-        
-        # Add processing time indicator
-        time_text = self.neural_scene.addText(f"Processing time: {processing_time} ms")
-        time_text.setDefaultTextColor(QtGui.QColor("#7f8c8d"))
-        time_text.setPos(10, 170)
-        
-        # Add decision result at output
-        result = self.neural_scene.addText(f"Decision: {decision}")
-        result.setDefaultTextColor(QtGui.QColor("#2c3e50"))
-        result.setPos(230, 60)
-        
-        # Show active inputs at input layer
-        key_inputs = sorted([(k, v) for k, v in inputs.items() 
-                           if isinstance(v, (int, float))], 
-                          key=lambda x: x[1], reverse=True)[:3]
-        
-        for i, (factor, value) in enumerate(key_inputs):
-            input_text = self.neural_scene.addText(f"{factor}: {int(value)}")
-            input_text.setDefaultTextColor(QtGui.QColor("#2c3e50"))
-            input_text.setPos(10, 25 + i * 60)
-
-    def _update_decision_output(self, decision, confidence, explanation):
-        """Update the decision output display"""
-        # Decision text
+    def _update_current_decision_tab(self, decision, confidence, explanation):
+        """Update the current decision display tab."""
         self.decision_output.setText(decision.capitalize())
-        
-        # Decision icon
-        icon_path = self._get_decision_icon(decision)
-        if QtCore.QFile.exists(icon_path):
-            self.decision_icon.setPixmap(QtGui.QPixmap(icon_path).scaled(64, 64))
-        
-        # Decision explanation
         self.decision_explanation.setHtml(explanation)
 
-    def _get_decision_icon(self, decision):
-        """Get icon path for a decision type"""
-        # Map decisions to icon paths (use appropriate paths for your application)
-        icons = {
-            "exploring": ":/icons/exploring.png",
-            "eating": ":/icons/eating.png",
-            "approaching_rock": ":/icons/approaching.png",
-            "throwing_rock": ":/icons/throwing.png",
-            "avoiding_threat": ":/icons/avoiding.png",
-            "organizing": ":/icons/organizing.png",
-            "moving_to_food": ":/icons/eating.png",
-            "sleeping": ":/icons/sleeping.png"
-        }
-        
-        # Return default icon if not found
-        return icons.get(decision, ":/icons/default.png")
+    def _update_factors_tab(self, decision_data):
+        """Update the decision factors tab with new data."""
+        weights = decision_data.get('weights', {})
+        adjusted_weights = decision_data.get('adjusted_weights', {})
+        randomness = decision_data.get('randomness', {})
+        inputs = decision_data.get('inputs', {})
+        memories = decision_data.get('active_memories', [])
+        final_decision = decision_data.get('final_decision')
+        personality = "Unknown"
+        if self.tamagotchi_logic and self.tamagotchi_logic.squid:
+            personality = self.tamagotchi_logic.squid.personality.value.capitalize()
 
-    def _generate_explanation(self, decision, weights, adjusted_weights, randomness, memories):
-        """Generate rich HTML explanation for the decision"""
-        html = "<div style='font-family: Arial, sans-serif;'>"
-        
-        # Add specific explanation based on decision type
-        if decision == "exploring":
-            html += "<p>The squid is <b>exploring</b> its environment due to:</p>"
-        elif decision == "eating" or decision == "moving_to_food":
-            html += "<p>The squid is <b>seeking food</b> due to:</p>"
-        elif decision == "approaching_rock":
-            html += "<p>The squid is <b>approaching a rock</b> due to:</p>"
-        elif decision == "throwing_rock":
-            html += "<p>The squid is <b>throwing a rock</b> due to:</p>"
-        elif decision == "avoiding_threat":
-            html += "<p>The squid is <b>avoiding a threat</b> due to:</p>"
-        elif decision == "organizing":
-            html += "<p>The squid is <b>organizing decorations</b> due to:</p>"
-        elif decision == "sleeping":
-            html += "<p>The squid is <b>sleeping</b> due to:</p>"
-        else:
-            html += f"<p>The squid is <b>{decision}</b> due to:</p>"
-        
-        # Get the weight for this decision and top competing decisions
-        decision_weight = adjusted_weights.get(decision, 0)
-        competing = [(k, v) for k, v in adjusted_weights.items() 
-                   if k != decision and v > 0]
-        competing.sort(key=lambda x: x[1], reverse=True)
-        
-        # Factors that contributed to this decision
-        html += "<ul>"
-        
-        # Base weight
-        base = weights.get(decision, 0)
-        html += f"<li>Base neural weight: <b>{base:.2f}</b></li>"
-        
-        # Personality adjustment
-        if abs(decision_weight - base) > 0.01:
-            direction = "increased" if decision_weight > base else "decreased"
-            html += f"<li>Personality {direction} weight by: <b>{abs(decision_weight - base):.2f}</b></li>"
-        
-        # Random factor
-        if decision in randomness:
-            random_factor = randomness[decision]
-            direction = "boosted" if random_factor > 1 else "reduced"
-            html += f"<li>Random factor {direction} decision by: <b>{abs(random_factor - 1):.2f}</b></li>"
-        
-        # Relevant memories
+        # --- Update Table ---
+        self.factors_table.setRowCount(0) # Clear previous
+        all_actions = set(weights.keys()) | set(adjusted_weights.keys())
+        sorted_actions = sorted(list(all_actions), key=lambda x: adjusted_weights.get(x, 0), reverse=True)
+        self.factors_table.setRowCount(len(sorted_actions))
+
+        for i, action in enumerate(sorted_actions):
+            base = weights.get(action, 0)
+            adj = adjusted_weights.get(action, base) # Use base if no adjustment
+            rand = randomness.get(action, 1.0)
+
+            item_action = QtWidgets.QTableWidgetItem(action.capitalize())
+            item_base = QtWidgets.QTableWidgetItem(f"{base:.3f}")
+            item_adj = QtWidgets.QTableWidgetItem(f"{adj:.3f}")
+            item_rand = QtWidgets.QTableWidgetItem(f"x{rand:.2f}")
+
+            self.factors_table.setItem(i, 0, item_action)
+            self.factors_table.setItem(i, 1, item_base)
+            self.factors_table.setItem(i, 2, item_adj)
+            self.factors_table.setItem(i, 3, item_rand)
+
+            if action == final_decision:
+                font = item_action.font()
+                font.setBold(True)
+                for j in range(4):
+                    item = self.factors_table.item(i, j)
+                    item.setBackground(QtGui.QColor("#d4edda")) # Highlight green
+                    item.setFont(font)
+
+            # Color code adjustments
+            if abs(adj - base) > 0.01:
+                color = QtGui.QColor("green") if adj > base else QtGui.QColor("red")
+                self.factors_table.item(i, 2).setForeground(color)
+
+
+        # --- Update Inputs Text (HTML) ---
+        inputs_html = """
+        <style> ul { list-style-type: '⚪'; padding-left: 20px; } li { margin-bottom: 5px; } </style>
+        <p>The squid's current feelings and perceptions:</p><ul>
+        """
+        for k, v in sorted(inputs.items()):
+            if isinstance(v, (int, float)):
+                inputs_html += f"<li><b>{k.capitalize()}:</b> {v:.1f}</li>"
+            elif isinstance(v, bool):
+                inputs_html += f"<li><b>{k.capitalize()}:</b> {'<span style=\"color:green;\">Yes</span>' if v else '<span style=\"color:red;\">No</span>'}</li>"
+            else:
+                inputs_html += f"<li><b>{k.capitalize()}:</b> {v}</li>"
+        inputs_html += "</ul>"
+        self.inputs_text.setHtml(inputs_html)
+
+        # --- Update Personality Text (HTML) ---
+        personality_html = f"<h3>Current Trait: {personality}</h3>"
+        personality_html += "<p>This trait nudges the squid towards certain behaviors:</p><ul>"
+        changes = False
+        for action, base in weights.items():
+            adj = adjusted_weights.get(action, base)
+            if abs(adj - base) > 0.01:
+                diff = adj - base
+                color = "green" if diff > 0 else "red"
+                direction = "Increased" if diff > 0 else "Decreased"
+                personality_html += f"<li><b>{action.capitalize()}:</b> {direction} by <span style='color:{color}; font-weight:bold;'>{abs(diff):.2f}</span></li>"
+                changes = True
+        if not changes:
+            personality_html += "<li>No significant influence this cycle.</li>"
+        personality_html += "</ul>"
+        self.personality_text.setHtml(personality_html)
+
+        # --- Update Memories Text (HTML) ---
+        memories_html = "<p>Recent events shaping the decision:</p><ul>"
         if memories:
-            html += f"<li>Influenced by {len(memories)} active memories</li>"
-        
+            for mem in memories:
+                memories_html += f"<li>{mem}</li>"
+        else:
+            memories_html += "<li>No significant memories influencing this decision.</li>"
+        memories_html += "</ul>"
+        self.memories_text.setHtml(memories_html)
+
+    def _generate_explanation(self, decision, weights, adjusted_weights, randomness, memories, inputs):
+        """Generate rich HTML explanation for the decision."""
+        html = """
+        <style>
+            body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; }
+            h4 { color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 3px; margin-top: 15px; margin-bottom: 5px; }
+            ul { list-style-type: none; padding-left: 0; }
+            li { margin-bottom: 6px; padding: 6px; border-left: 3px solid; border-radius: 3px; }
+            .base { border-color: #3498db; background-color: #eaf5fd; }
+            .personality { border-color: #9b59b6; background-color: #f5eef8; }
+            .random { border-color: #f39c12; background-color: #fef8e7; }
+            .input { border-color: #16a085; background-color: #e8f6f3; }
+            .memory { border-color: #e67e22; background-color: #fbeee4; }
+            .competing { border-color: #c0392b; background-color: #faeaea; }
+            .final { border-color: #27ae60; background-color: #e9f7ef; font-weight: bold;}
+            b { color: #34495e; }
+        </style>
+        """
+        html += f"<p>The squid chose to <b>{decision.capitalize()}</b>. Here's a breakdown of why:</p>"
+
+        decision_weight = adjusted_weights.get(decision, 0)
+        base = weights.get(decision, 0)
+        rand = randomness.get(decision, 1.0)
+        final_score = decision_weight * rand # Approximate final score
+
+        html += "<h4>📊 Weight Calculation:</h4><ul>"
+        html += f"<li class='base'><b>Base Weight:</b> {base:.2f} (Initial urge based on core needs/desires)</li>"
+        if abs(decision_weight - base) > 0.01:
+            html += f"<li class='personality'><b>Personality Nudge:</b> {(decision_weight - base):+.2f} (How its traits influenced the urge)</li>"
+        html += f"<li class='random'><b>Randomness Factor:</b> x{rand:.2f} (A touch of unpredictability!)</li>"
+        html += f"<li class='final'><b>Resulting Likelihood:</b> ~{final_score:.2f}</li>"
         html += "</ul>"
-        
-        # Show competing decisions
-        if competing:
-            html += "<p>Competing decisions:</p><ul>"
-            for action, weight in competing[:2]:  # Show top 2 competing decisions
-                difference = decision_weight - weight
-                html += f"<li><b>{action}</b>: {weight:.2f} (difference: {difference:.2f})</li>"
+
+        html += "<h4>🧠 Key Influencing Inputs:</h4><ul>"
+        top_inputs = sorted(
+            [(k, v) for k, v in inputs.items() if (isinstance(v, (int, float)) and v > 50) or (isinstance(v, bool) and v)],
+            key=lambda x: abs(x[1]) if isinstance(x[1], (int, float)) else 0, reverse=True
+        )[:3]
+        if top_inputs:
+            for k, v_val in top_inputs:
+                formatted_v_val = ""
+                if isinstance(v_val, (int, float)):
+                    formatted_v_val = f"{v_val:.1f}"
+                elif isinstance(v_val, bool):
+                    formatted_v_val = 'Yes' if v_val else 'No'
+                else:
+                    formatted_v_val = str(v_val)
+                html += f"<li class='input'><b>{k.capitalize()}:</b> {formatted_v_val}</li>"
+        else:
+            html += "<li class='input'>No single input strongly dominated.</li>"
+        html += "</ul>"
+
+        if memories:
+            html += "<h4>📚 Memory Influence:</h4><ul>"
+            for mem in memories:
+                html += f"<li class='memory'>{mem[:80]}...</li>" # Show first 80 chars
             html += "</ul>"
-        
-        html += "</div>"
+
+        competing = sorted(
+            [(k, v * randomness.get(k, 1.0)) for k, v in adjusted_weights.items() if k != decision and v > 0],
+            key=lambda x: x[1], reverse=True
+        )
+        if competing:
+            html += "<h4>📉 Top Competing Decisions:</h4><ul>"
+            for action, weight_val in competing[:2]: # Renamed 'weight' to 'weight_val' to avoid conflict
+                html += f"<li class='competing'><b>{action.capitalize()}:</b> {weight_val:.2f}</li>"
+            html += "</ul>"
+
         return html
 
-    def _update_charts(self, weights, adjusted_weights, randomness, selected_decision):
-        """Update both the radar chart and bar chart"""
-        # 1. Update radar chart
-        self._update_radar_chart(adjusted_weights, selected_decision)
-        
-        # 2. Update bar chart
-        self._update_bar_chart(weights, adjusted_weights, randomness, selected_decision)
-
-    def _update_radar_chart(self, weights, selected_decision):
-        """Update the radar chart visualization"""
-        self.radar_scene.clear()
-        
-        # Background
-        self.radar_scene.setBackgroundBrush(QtGui.QBrush(QtGui.QColor("#ffffff")))
-        
-        # Draw radar chart outline
-        self._draw_radar_outline()
-        
-        # Center position and radius
-        center_x, center_y = 150, 100
-        radius = 70
-        
-        # Get normalized weights for radar chart
-        max_weight = max(weights.values()) if weights else 1.0
-        normalized_weights = {k: min(v / max_weight, 1.0) for k, v in weights.items()}
-        
-        # Action mapping to positions (6 axes)
-        action_mapping = {
-            "exploring": 0,
-            "eating": 1,
-            "approaching_rock": 2,
-            "throwing_rock": 3, 
-            "avoiding_threat": 4,
-            "organizing": 5
-        }
-        
-        # Create points for the radar polygon
-        points = []
-        for action, normalized in normalized_weights.items():
-            if action in action_mapping:
-                idx = action_mapping[action]
-                angle = idx * 60 * (math.pi / 180)  # Convert to radians
-                distance = normalized * radius
-                x = center_x + distance * math.cos(angle)  # Use math.cos instead of QtCore.qCos
-                y = center_y + distance * math.sin(angle)  # Use math.sin instead of QtCore.qSin
-                points.append(QtCore.QPointF(x, y))
-        
-        # Draw polygon if we have points
-        if points:
-            # Create a polygon and draw it
-            polygon = QtGui.QPolygonF(points)
-            
-            # Draw filled polygon with semi-transparency
-            self.radar_scene.addPolygon(
-                polygon,
-                QtGui.QPen(QtGui.QColor("#3498db"), 2),
-                QtGui.QBrush(QtGui.QColor(52, 152, 219, 100))  # Semi-transparent blue
-            )
-            
-            # Highlight points
-            for point in points:
-                self.radar_scene.addEllipse(
-                    point.x() - 4, point.y() - 4, 8, 8,
-                    QtGui.QPen(QtGui.QColor("#2980b9")),
-                    QtGui.QBrush(QtGui.QColor("#3498db"))
-                )
-            
-            # Highlight the selected decision on the radar
-            if selected_decision in action_mapping:
-                idx = action_mapping[selected_decision]
-                angle = idx * 60 * (math.pi / 180)
-                distance = normalized_weights.get(selected_decision, 0) * radius
-                x = center_x + distance * math.cos(angle)
-                y = center_y + distance * math.sin(angle)
-                
-                # Add highlight circle
-                self.radar_scene.addEllipse(
-                    x - 6, y - 6, 12, 12,
-                    QtGui.QPen(QtGui.QColor("#e74c3c"), 2),
-                    QtGui.QBrush(QtGui.QColor(231, 76, 60, 150))
-                )
-
-    def _update_bar_chart(self, weights, adjusted_weights, randomness, selected_decision):
-        """Update the bar chart visualization"""
-        self.bar_scene.clear()
-        
-        # Background
-        self.bar_scene.setBackgroundBrush(QtGui.QBrush(QtGui.QColor("#ffffff")))
-        
-        # Get max weight for scaling
-        all_values = list(weights.values()) + list(adjusted_weights.values())
-        max_weight = max(all_values) if all_values else 1.0
-        scale_factor = 200 / max_weight  # Scale to fit 200px width
-        
-        # Sort actions by adjusted weight
-        sorted_actions = sorted(adjusted_weights.items(), 
-                             key=lambda x: x[1], reverse=True)
-        
-        # Create color brushes
-        base_brush = QtGui.QBrush(QtGui.QColor("#3498db"))
-        adjusted_brush = QtGui.QBrush(QtGui.QColor("#e74c3c"))
-        random_brush = QtGui.QBrush(QtGui.QColor("#f39c12"))
-        
-        # Stroke pens
-        normal_pen = QtGui.QPen(QtGui.QColor(0, 0, 0, 50))
-        highlight_pen = QtGui.QPen(QtGui.QColor("#2c3e50"), 2)
-        
-        # Draw each action bar
-        for i, (action, adj_weight) in enumerate(sorted_actions):
-            y_pos = 30 + i * 30
-            
-            # Action label
-            label = self.bar_scene.addText(action)
-            label.setDefaultTextColor(QtGui.QColor("#2c3e50"))
-            label.setPos(10, y_pos)
-            
-            # Base weight bar
-            base_weight = weights.get(action, 0)
-            base_width = base_weight * scale_factor
-            
-            # Use highlight pen for selected decision
-            pen = highlight_pen if action == selected_decision else normal_pen
-            
-            base_bar = self.bar_scene.addRect(
-                100, y_pos, base_width, 15,
-                pen, base_brush
-            )
-            
-            # Adjusted weight bar
-            adj_width = adj_weight * scale_factor
-            adj_bar = self.bar_scene.addRect(
-                100, y_pos + 15, adj_width, 5,
-                pen, adjusted_brush
-            )
-            
-            # Random factor indicator (small triangle at end of bar)
-            if action in randomness:
-                random_factor = randomness[action]
-                # Draw triangle at the end of adjusted bar
-                random_x = 100 + adj_width
-                random_y = y_pos + 7.5
-                
-                triangle = QtGui.QPolygonF([
-                    QtCore.QPointF(random_x, random_y - 7.5),
-                    QtCore.QPointF(random_x + 10, random_y),
-                    QtCore.QPointF(random_x, random_y + 7.5)
-                ])
-                
-                self.bar_scene.addPolygon(triangle, pen, random_brush)
-            
-            # Value text
-            value = self.bar_scene.addText(f"{adj_weight:.2f}")
-            value.setDefaultTextColor(QtGui.QColor("#2c3e50"))
-            value.setPos(100 + adj_width + 15, y_pos)
-
     def toggle_logging(self):
-        """Toggle decision logging on/off"""
+        """Toggle decision logging on/off."""
         self.is_logging = not self.is_logging
-        
         if self.is_logging:
             self.logging_button.setText("Stop Logging")
             self.thought_log_text.clear()
@@ -768,122 +392,116 @@ class DecisionsTab(BrainBaseTab):
         else:
             self.logging_button.setText("Start Logging")
             self.thought_log_text.append("<b>--- Logging stopped ---</b>")
-        
         self.logging_button.setChecked(self.is_logging)
 
     def add_to_thought_log(self, decision_data):
-        """Add the current decision process to the thought log with rich formatting"""
+        """Add the current decision process to the thought log."""
         if not self.is_logging:
             return
-            
+
         timestamp = time.strftime("%H:%M:%S")
         decision = decision_data.get('final_decision', 'unknown')
         confidence = decision_data.get('confidence', 0.0)
-        
-        # Color coding based on decision type
+        adjusted_weights = decision_data.get('adjusted_weights', {})
+
         color_map = {
-            "exploring": "#3498db",
-            "eating": "#2ecc71", 
-            "moving_to_food": "#2ecc71",
-            "approaching_rock": "#9b59b6",
-            "throwing_rock": "#e67e22",
-            "avoiding_threat": "#e74c3c",
-            "organizing": "#f1c40f",
-            "sleeping": "#34495e"
+            "exploring": "#3498db", "eating": "#2ecc71", "moving_to_food": "#2ecc71",
+            "approaching_rock": "#9b59b6", "throwing_rock": "#e67e22",
+            "avoiding_threat": "#e74c3c", "organizing": "#f1c40f", "sleeping": "#34495e",
+            "approaching_poop": "#8B4513", "throwing_poop": "#8B4513"
         }
-        
-        decision_color = color_map.get(decision, "#7f8c8d")
-        
-        # Create HTML entry
+        decision_color = color_map.get(decision.lower().replace(" ", "_"), "#7f8c8d")
+
+        competing = sorted([(k, v) for k, v in adjusted_weights.items() if k != decision and v > 0], key=lambda x: x[1], reverse=True)
+        comp_text = ", ".join([f"{a.capitalize()} ({w:.2f})" for a, w in competing[:2]])
+
         entry = f"""
-        <div style="margin: 5px 0; padding: 8px; border-left: 4px solid {decision_color}; 
+        <div style="margin: 5px 0; padding: 8px; border-left: 4px solid {decision_color};
                    background-color: rgba({', '.join(str(int(c)) for c in QtGui.QColor(decision_color).getRgb()[:-1])}, 0.1);">
             <div style="display: flex; justify-content: space-between;">
                 <span style="font-weight: bold; color: {decision_color};">{decision.capitalize()}</span>
                 <span style="color: #7f8c8d;">{timestamp}</span>
             </div>
-            <div style="margin-top: 5px;">
-                Confidence: <span style="font-weight: bold;">{int(confidence * 100)}%</span>
+            <div style="margin-top: 3px; font-size: 0.9em; color: #555;">
+                Confidence: {int(confidence * 100)}% | Competing: {comp_text if comp_text else 'None'}
             </div>
+        </div>
         """
-        
-        # Add key details
-        weights = decision_data.get('weights', {})
-        adjusted_weights = decision_data.get('adjusted_weights', {})
-        
-        # Show top competing decisions
-        competing = [(k, v) for k, v in adjusted_weights.items() 
-                   if k != decision and v > 0]
-        competing.sort(key=lambda x: x[1], reverse=True)
-        
-        if competing:
-            entry += """
-            <div style="margin-top: 5px; font-size: 0.9em;">
-                <span style="color: #7f8c8d;">Competing options:</span>
-                <span>"""
-            
-            for i, (action, weight) in enumerate(competing[:2]):
-                if i > 0:
-                    entry += ", "
-                entry += f"{action} ({weight:.2f})"
-            
-            entry += "</span></div>"
-        
-        # Close the entry
-        entry += "</div>"
-        
-        # Add to displayed log
+        # Ensure only new entries are added to the list, not during filtering
+        if not hasattr(self, '_filtering_log') or not self._filtering_log:
+             self.thought_log.append({'timestamp': timestamp, 'decision': decision, 'data': decision_data})
+
         self.thought_log_text.append(entry)
-        
-        # Save to log list
-        self.thought_log.append({
-            'timestamp': timestamp,
-            'decision': decision,
-            'data': decision_data
-        })
-        
-        # Scroll to bottom
-        self.thought_log_text.verticalScrollBar().setValue(
-            self.thought_log_text.verticalScrollBar().maximum()
-        )
+        self.thought_log_text.verticalScrollBar().setValue(self.thought_log_text.verticalScrollBar().maximum())
+
 
     def view_thought_logs(self):
-        """Open a window to view captured decision logs"""
+        """Open a window to view captured decision logs."""
         if not self.thought_log:
-            QtWidgets.QMessageBox.information(
-                self, 
-                "No Logs Available", 
-                "No decision logs have been captured yet.\n\n"
-                "Start logging by clicking the 'Start Logging' button "
-                "and perform some actions with your squid to generate logs!"
-            )
+            QtWidgets.QMessageBox.information(self, "No Logs", "Start logging to capture decisions.")
             return
-
         log_viewer = RecentThoughtsDialog(self.thought_log, self)
         log_viewer.exec_()
 
     def filter_thought_log(self):
-        """Filter the thought log based on selected decision type"""
-        filter_text = self.log_filter.currentText()
-        
-        if filter_text == "All Decisions":
-            # Redisplay all logs
-            self.thought_log_text.clear()
-            for log_entry in self.thought_log:
-                # Re-add each entry to display
+        """Filter the thought log based on selected decision type."""
+        filter_text = self.log_filter.currentText().lower()
+        self.thought_log_text.clear()
+        self._filtering_log = True # Set flag to prevent re-adding to list
+
+        start_message = "<b>--- Logging started ---</b>"
+        stop_message = "<b>--- Logging stopped ---</b>"
+
+        # Always add the start message if logging is active or has been active
+        if self.thought_log or self.is_logging:
+            self.thought_log_text.append(start_message)
+
+        # Iterate through the stored logs and add matching ones
+        for log_entry in self.thought_log:
+            decision = log_entry['data'].get('final_decision', '').lower()
+            if filter_text == "all decisions" or filter_text in decision:
+                # Call a modified version or just format and append
+                timestamp = log_entry['timestamp']
+                decision_val = log_entry['decision']
                 decision_data = log_entry['data']
-                self.add_to_thought_log(decision_data)
-        else:
-            # Filter logs by decision type
-            self.thought_log_text.clear()
-            for log_entry in self.thought_log:
-                decision = log_entry['data'].get('final_decision', '').lower()
-                if filter_text.lower() in decision:
-                    # Re-add matching entries
-                    self.add_to_thought_log(log_entry['data'])
-                    
+                confidence = decision_data.get('confidence', 0.0)
+                adjusted_weights = decision_data.get('adjusted_weights', {})
+
+                color_map = {
+                    "exploring": "#3498db", "eating": "#2ecc71", "moving_to_food": "#2ecc71",
+                    "approaching_rock": "#9b59b6", "throwing_rock": "#e67e22",
+                    "avoiding_threat": "#e74c3c", "organizing": "#f1c40f", "sleeping": "#34495e",
+                    "approaching_poop": "#8B4513", "throwing_poop": "#8B4513"
+                }
+                decision_color = color_map.get(decision_val.lower().replace(" ", "_"), "#7f8c8d")
+                competing = sorted([(k, v) for k, v in adjusted_weights.items() if k != decision_val and v > 0], key=lambda x: x[1], reverse=True)
+                comp_text = ", ".join([f"{a.capitalize()} ({w:.2f})" for a, w in competing[:2]])
+
+                entry = f"""
+                <div style="margin: 5px 0; padding: 8px; border-left: 4px solid {decision_color};
+                           background-color: rgba({', '.join(str(int(c)) for c in QtGui.QColor(decision_color).getRgb()[:-1])}, 0.1);">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-weight: bold; color: {decision_color};">{decision_val.capitalize()}</span>
+                        <span style="color: #7f8c8d;">{timestamp}</span>
+                    </div>
+                    <div style="margin-top: 3px; font-size: 0.9em; color: #555;">
+                        Confidence: {int(confidence * 100)}% | Competing: {comp_text if comp_text else 'None'}
+                    </div>
+                </div>
+                """
+                self.thought_log_text.append(entry)
+
+
+        # Add the stop message if logging is not active
+        if not self.is_logging and self.thought_log:
+            self.thought_log_text.append(stop_message)
+
+        self._filtering_log = False # Reset flag
+        self.thought_log_text.verticalScrollBar().setValue(self.thought_log_text.verticalScrollBar().maximum())
+
+
     def _clear_layout(self, layout):
-        """Utility to clear all widgets from a layout"""
+        """Utility to clear all widgets from a layout."""
         while layout.count():
             item = layout.takeAt(0)
             widget = item.widget()

@@ -771,23 +771,31 @@ class TamagotchiLogic:
             self.squid.direction = random.choice(['up', 'down', 'left', 'right'])
 
             # First startle detection
-            is_first_startle = not hasattr(self, '_has_startled_before')
+            is_first_startle = not hasattr(self, '_has_startled_before') #
             if is_first_startle:
                 self._has_startled_before = True
 
             # Configure based on source
             if source == "first_resize":
-                anxiety_increase = 5
-                message = "The squid noticed its environment changing!"
-                produce_ink = True
+                anxiety_increase = 5 #
+                message = "The squid noticed its environment changing!" #
+                base_ink_chance = 0.6 #
             else:
-                anxiety_increase = 10
-                message = "The squid was startled!"
-                produce_ink = is_first_startle or random.random() < 0.6
+                anxiety_increase = 10 #
+                message = "The squid was startled!" #
+                base_ink_chance = 0.6 #
+
+            # Increase ink chance based on anxiety
+            ink_chance = base_ink_chance
+            if self.squid.anxiety > 60:
+                ink_chance = 0.9 # Increase to 90% if anxiety > 60
 
             # Apply anxiety
-            self.squid.anxiety = min(100, self.squid.anxiety + anxiety_increase)
+            self.squid.anxiety = min(100, self.squid.anxiety + anxiety_increase) #
             
+            # Ink cloud - Modified logic
+            produce_ink = is_first_startle or random.random() < ink_chance #
+
             # Create memory
             memory_value = (f"Startled! Status changed from {previous_status} to {self.squid.status}, "
                         f"Speed {self.squid.current_speed}px, Direction {self.squid.direction}")
@@ -1836,6 +1844,11 @@ class TamagotchiLogic:
             if hasattr(self.brain_window, 'memory_tab'):
                 QtCore.QTimer.singleShot(1000, self.brain_window.memory_tab.update_memory_display)
 
+            # Ensure the brain window is shown after loading
+            if self.brain_window:
+                self.brain_window.show()
+                self.brain_window.raise_()  # Brings the window to the front
+
             print("Game loaded successfully")
             self.set_simulation_speed(1)  # Set simulation speed to 1x after loading
         else:
@@ -1850,8 +1863,18 @@ class TamagotchiLogic:
 
             self.user_interface.update_points(self.points)
 
+
     def update_squid_brain(self):
         if self.squid and self.brain_window.isVisible():
+            is_startled_state = False
+            # Check if mental_state_manager exists and the "startled" state is active
+            if hasattr(self.squid, 'mental_state_manager') and self.squid.mental_state_manager:
+                is_startled_state = self.squid.mental_state_manager.is_state_active('startled')
+            # Fallback: Check squid status if mental_state_manager is not present or doesn't have the state
+            elif hasattr(self.squid, 'status') and self.squid.status:
+                 is_startled_state = ("startled" in self.squid.status.lower())
+
+
             brain_state = {
                 "hunger": self.squid.hunger,
                 "happiness": self.squid.happiness,
@@ -1861,10 +1884,11 @@ class TamagotchiLogic:
                 "curiosity": self.squid.curiosity,
                 "satisfaction": self.squid.satisfaction,
                 "is_sick": self.squid.is_sick,
-                "is_eating": self.squid.status == "eating",
+                "is_eating": self.squid.is_eating if hasattr(self.squid, 'is_eating') else (self.squid.status == "eating"),
                 "is_sleeping": self.squid.is_sleeping,
                 "pursuing_food": self.squid.pursuing_food,
                 "is_fleeing": getattr(self.squid, 'is_fleeing', False),
+                "is_startled": is_startled_state,  # Updated logic for is_startled
                 "direction": self.squid.squid_direction,
                 "position": (self.squid.squid_x, self.squid.squid_y),
                 "personality": self.squid.personality.value
@@ -1888,7 +1912,7 @@ class TamagotchiLogic:
             
             brain_state = self.brain_window.get_brain_state()
             print("Debug: Brain State")
-            print(json.dumps(brain_state, indent=2))
+            # print(json.dumps(brain_state, indent=2))
             
             save_data = {
                 'game_state': {

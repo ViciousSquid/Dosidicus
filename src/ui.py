@@ -11,6 +11,7 @@ from PyQt5.QtCore import QObject, pyqtProperty
 from PyQt5.QtWidgets import QGraphicsPixmapItem
 from .brain_tool import SquidBrainWindow
 from .statistics_window import StatisticsWindow
+from .brain_tool import NeuronInspector as EnhancedNeuronInspector
 from .plugin_manager_dialog import PluginManagerDialog
 from .tutorial import TutorialManager
 
@@ -317,7 +318,7 @@ class Ui:
 
         # Setup menu bar and other components
         self.setup_menu_bar()
-        self.neuron_inspector = None
+        self.enhanced_neuron_inspector_instance = None
         self.squid_brain_window = None
 
         # Add debug text item to the scene
@@ -1486,7 +1487,7 @@ class Ui:
         self.decorations_action.triggered.connect(self.toggle_decoration_window)
         view_menu.addAction(self.decorations_action)
 
-        self.brain_action = QtWidgets.QAction('Toggle Brain View', self.window)
+        self.brain_action = QtWidgets.QAction('Toggle Brain Tool', self.window)
         self.brain_action.setCheckable(True)
         self.brain_action.triggered.connect(self.toggle_brain_window)
         view_menu.addAction(self.brain_action)
@@ -1548,32 +1549,24 @@ class Ui:
         # View Cone Toggle
         self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
         self.view_cone_action.setCheckable(True)
-        if hasattr(self.tamagotchi_logic, 'connect_view_cone_action'):
+        if hasattr(self.tamagotchi_logic, 'connect_view_cone_action'): # This check is good practice
             self.view_cone_action.triggered.connect(self.tamagotchi_logic.connect_view_cone_action)
+        elif hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'squid') and hasattr(self.tamagotchi_logic.squid, 'toggle_view_cone'): # Fallback if connect_view_cone_action is not on logic
+             self.view_cone_action.triggered.connect(self.tamagotchi_logic.squid.toggle_view_cone)
         debug_menu.addAction(self.view_cone_action)
-
-        # Rock Test Action
-        self.rock_test_action = QtWidgets.QAction('Rock test (native)', self.window)
-        self.rock_test_action.setEnabled(False)  # Disabled by default
-        if hasattr(self.tamagotchi_logic, 'test_rock_interaction'):
-            self.rock_test_action.triggered.connect(self.tamagotchi_logic.test_rock_interaction)
-        #debug_menu.addAction(self.rock_test_action)
-
-        # Neurogenesis Action
-        self.neurogenesis_action = QtWidgets.QAction('Trigger Neurogenesis', self.window)
-        self.neurogenesis_action.setEnabled(True)  # Disabled by default
-        if hasattr(self.tamagotchi_logic, 'trigger_neurogenesis'):
-            self.neurogenesis_action.triggered.connect(self.trigger_neurogenesis)
-        debug_menu.addAction(self.neurogenesis_action)
+        
+        # Neurogenesis Debug Window Action
+        self.neurogenesis_debug_action = QtWidgets.QAction('Neurogenesis Debug Info', self.window)
+        self.neurogenesis_debug_action.triggered.connect(self.show_neurogenesis_debug) 
+        debug_menu.addAction(self.neurogenesis_debug_action)
 
         # Add to debug menu
         self.rock_test_action = QtWidgets.QAction('Rock test (forced)', self.window)
         self.rock_test_action.triggered.connect(self.trigger_rock_test)
-        #debug_menu.addAction(self.rock_test_action)
+        #debug_menu.addAction(self.rock_test_action) # As per your file, this was commented out
         
         # Add Plugins Menu
         self.plugins_menu = self.menu_bar.addMenu('Plugins')
-        
         # This menu will be populated later when the plugin manager is available
 
     def set_simulation_speed(self, speed):
@@ -1706,15 +1699,53 @@ class Ui:
             self.show_message("Game logic not initialized!")
 
     def show_neuron_inspector(self):
+        # Ensure SquidBrainWindow instance exists and is visible
         if not self.squid_brain_window:
-            self.squid_brain_window = SquidBrainWindow(self.tamagotchi_logic, self.debug_mode)
-            
-        if not self.neuron_inspector:
-            self.neuron_inspector = NeuronInspector(self.squid_brain_window, self.window)
-            
-        self.neuron_inspector.show()
-        self.neuron_inspector.raise_()
-        self.neuron_inspector.update_neuron_list()
+            # Try to create/get it if TamagotchiLogic is available
+            if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+                current_debug_mode = getattr(self.tamagotchi_logic, 'debug_mode', False)
+                # Assuming SquidBrainWindow is instantiated and stored in tamagotchi_logic
+                # or that tamagotchi_logic can provide it.
+                # For this example, we'll rely on it being set during initialization or toggle.
+                if hasattr(self.tamagotchi_logic, 'brain_window') and self.tamagotchi_logic.brain_window:
+                    self.squid_brain_window = self.tamagotchi_logic.brain_window
+                else: # Fallback to create if necessary (might need self.tamagotchi_logic to be passed)
+                    self.squid_brain_window = SquidBrainWindow(self.tamagotchi_logic, current_debug_mode)
+                    if hasattr(self.tamagotchi_logic, 'set_brain_window'): # If your logic sets it
+                         self.tamagotchi_logic.set_brain_window(self.squid_brain_window)
+            else:
+                self.show_message("Brain Tool is not initialized yet.")
+                return
+
+        if not self.squid_brain_window.isVisible():
+            self.squid_brain_window.show() # Show it if it's hidden
+
+        # Ensure brain_widget exists within squid_brain_window
+        if not hasattr(self.squid_brain_window, 'brain_widget') or not self.squid_brain_window.brain_widget:
+            self.show_message("Brain widget component is not ready.")
+            return
+
+        # Use or create the instance of the enhanced neuron inspector
+        if not hasattr(self, 'enhanced_neuron_inspector_instance') or \
+           not self.enhanced_neuron_inspector_instance or \
+           not self.enhanced_neuron_inspector_instance.isVisible():
+            # The EnhancedNeuronInspector from brain_tool.py expects:
+            # 1. brain_tool_window (which is self.squid_brain_window, an instance of SquidBrainWindow)
+            # 2. brain_widget_ref (which is self.squid_brain_window.brain_widget)
+            # Its QDialog parent is set internally to brain_tool_window.
+            self.enhanced_neuron_inspector_instance = EnhancedNeuronInspector(
+                brain_tool_window=self.squid_brain_window,
+                brain_widget_ref=self.squid_brain_window.brain_widget
+                # parent=self.window (Optionally, if you want the main QMainWindow as parent)
+            )
+        
+        self.enhanced_neuron_inspector_instance.show()
+        self.enhanced_neuron_inspector_instance.raise_()
+        self.enhanced_neuron_inspector_instance.activateWindow()
+        # Populate/refresh the inspector's neuron list and initial view
+        self.enhanced_neuron_inspector_instance.update_neuron_list()
+        if self.enhanced_neuron_inspector_instance.neuron_combo.count() > 0:
+            self.enhanced_neuron_inspector_instance.update_info()
 
     def toggle_statistics_window(self):
         if self.statistics_window is None:
@@ -1809,77 +1840,14 @@ class Ui:
             rock.is_being_carried = False
             self.highlight_rock(rock, False)
 
-class NeuronInspector(QtWidgets.QDialog):
-    def __init__(self, brain_window, parent=None):
-        super().__init__(parent)
-        self.brain_window = brain_window
-        self.setWindowTitle("Neuron Inspector")
-        self.setFixedSize(400, 400)
-        
-        layout = QtWidgets.QVBoxLayout()
-        self.setLayout(layout)
-        
-        # Neuron selector
-        self.neuron_combo = QtWidgets.QComboBox()
-        layout.addWidget(self.neuron_combo)
-        
-        # Info display
-        self.info_text = QtWidgets.QTextEdit()
-        self.info_text.setReadOnly(True)
-        layout.addWidget(self.info_text)
-        
-        # Connection list
-        self.connections_list = QtWidgets.QListWidget()
-        layout.addWidget(self.connections_list)
-        
-        # Refresh button
-        self.refresh_btn = QtWidgets.QPushButton("Refresh")
-        self.refresh_btn.clicked.connect(self.update_info)
-        layout.addWidget(self.refresh_btn)
-        
-        self.update_neuron_list()
-
-    def update_neuron_list(self):
-        if hasattr(self.brain_window, 'brain_widget'):
-            brain = self.brain_window.brain_widget
-            self.neuron_combo.clear()
-            self.neuron_combo.addItems(sorted(brain.neuron_positions.keys()))
-            self.update_info()
-
-    def update_info(self):
-        if not hasattr(self.brain_window, 'brain_widget'):
-            return
-            
-        brain = self.brain_window.brain_widget
-        neuron = self.neuron_combo.currentText()
-        
-        if neuron not in brain.neuron_positions:
-            return
-            
-        pos = brain.neuron_positions[neuron]
-        activation = brain.state.get(neuron, 0)
-        
-        info = f"""<b>{neuron}</b>
-Position: ({pos[0]:.1f}, {pos[1]:.1f})
-Activation: {activation:.1f}
-Type: {'Original' if neuron in getattr(brain, 'original_neuron_positions', {}) else 'New'}"""
-        
-        self.info_text.setHtml(info)
-        self.connections_list.clear()
-        
-        for (src, dst), weight in brain.weights.items():
-            if src == neuron or dst == neuron:
-                item = QtWidgets.QListWidgetItem(f"{src} → {dst}: {weight:.2f}")
-                item.setForeground(QtGui.QColor("green") if weight > 0 else QtGui.QColor("red"))
-                self.connections_list.addItem(item)
 
 class NeurogenesisDebugDialog(QtWidgets.QDialog):
     def __init__(self, brain_widget, parent=None):
         super().__init__(parent)
         self.brain_widget = brain_widget
         
-        self.setWindowTitle("Neurogenesis Debug Information")
-        self.resize(600, 800)
+        self.setWindowTitle("Neurogenesis Debug Information (Auto-Refreshes)")
+        self.resize(650, 850) # Slightly wider for more details
         
         # Main layout
         layout = QtWidgets.QVBoxLayout()
@@ -1888,16 +1856,24 @@ class NeurogenesisDebugDialog(QtWidgets.QDialog):
         # Scrollable text area
         self.debug_text = QtWidgets.QTextEdit()
         self.debug_text.setReadOnly(True)
+        # Use a monospace font for better table alignment if complex text tables are used
+        # self.debug_text.setFont(QtGui.QFont("Monospace", 9)) 
         layout.addWidget(self.debug_text)
         
-        # Refresh button
-        refresh_button = QtWidgets.QPushButton("Refresh Data")
-        refresh_button.clicked.connect(self.update_debug_info)
-        layout.addWidget(refresh_button)
+        # REMOVE Refresh button
+        # refresh_button = QtWidgets.QPushButton("Refresh Data")
+        # refresh_button.clicked.connect(self.update_debug_info)
+        # layout.addWidget(refresh_button)
         
-        # Update info initially
-        self.update_debug_info()
+        # ADD QTimer for auto-refresh
+        self.update_timer = QtCore.QTimer(self)
+        self.update_timer.timeout.connect(self.update_debug_info)
+        # Timer will be started in showEvent
+
+        self.update_debug_info() # Initial update when dialog is created
     
+    # ui.py -> class NeurogenesisDebugDialog
+
     def update_debug_info(self):
         # Clear existing text
         self.debug_text.clear()
@@ -1907,62 +1883,136 @@ class NeurogenesisDebugDialog(QtWidgets.QDialog):
         <html>
         <head>
             <style>
-                body { font-family: Arial, sans-serif; }
-                .section { background-color: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
-                .title { font-weight: bold; color: #333; font-size: 16px; }
-                .data { color: #666; }
-                .trigger { color: blue; }
-                .threshold { color: green; }
+                body {{ font-family: Arial, sans-serif; font-size: 15px; }} /* Increased base font size */
+                .section {{ background-color: #f4f4f4; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #ddd;}}
+                .title {{ font-weight: bold; color: #2c3e50; font-size: 18px; margin-bottom: 8px; border-bottom: 1px solid #bdc3c7; padding-bottom: 4px;}} /* Increased title font size */
+                .data {{ color: #34495e; line-height: 1.6; }} /* Increased line height */
+                .data table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
+                .data th, .data td {{ border: 1px solid #ccc; padding: 7px; text-align: left; vertical-align: top; }} /* Increased padding */
+                .data th {{ background-color: #e8e8e8; font-weight: bold; }}
+                .trigger {{ color: #2980b9; font-weight: bold; }}
+                .threshold {{ color: #27ae60; font-weight: bold; }}
+                .neuron-name {{ color: #8e44ad; font-weight: bold; }}
+                .small-text {{ font-size: 0.9em; color: #7f8c8d; }}
             </style>
         </head>
         <body>
         """
         
         # Gather neurogenesis data
-        if hasattr(self.brain_widget, 'neurogenesis_data'):
-            data = self.brain_widget.neurogenesis_data
-            config = self.brain_widget.neurogenesis_config
+        # Ensure brain_widget and its attributes exist before accessing
+        if hasattr(self.brain_widget, 'neurogenesis_data') and self.brain_widget.neurogenesis_data and \
+           hasattr(self.brain_widget, 'neurogenesis_config') and self.brain_widget.neurogenesis_config: #
+            data = self.brain_widget.neurogenesis_data #
+            config = self.brain_widget.neurogenesis_config #
             
             html_template += f"""
             <div class="section">
-                <div class="title">Neurogenesis Counters</div>
+                <div class="title">Neurogenesis Counters & Configured Thresholds</div>
                 <div class="data">
-                    Novelty Counter: <span class="trigger">{data.get('novelty_counter', 0):.2f}</span><br>
-                    Stress Counter: <span class="trigger">{data.get('stress_counter', 0):.2f}</span><br>
-                    Reward Counter: <span class="trigger">{data.get('reward_counter', 0):.2f}</span>
+                    <table>
+                        <tr><th>Metric</th><th>Current Value</th><th>Config Threshold</th></tr>
+                        <tr>
+                            <td>Novelty Counter</td>
+                            <td><span class="trigger">{data.get('novelty_counter', 0):.3f}</span></td>
+                            <td><span class="threshold">{config.get('novelty_threshold', 3)}</span></td>
+                        </tr>
+                        <tr>
+                            <td>Stress Counter</td>
+                            <td><span class="trigger">{data.get('stress_counter', 0):.3f}</span></td>
+                            <td><span class="threshold">{config.get('stress_threshold', 0.7)}</span></td>
+                        </tr>
+                        <tr>
+                            <td>Reward Counter</td>
+                            <td><span class="trigger">{data.get('reward_counter', 0):.3f}</span></td>
+                            <td><span class="threshold">{config.get('reward_threshold', 0.6)}</span></td>
+                        </tr>
+                    </table>
                 </div>
             </div>
             
             <div class="section">
-                <div class="title">Neurogenesis Thresholds</div>
+                <div class="title">Neuron Creation Status & Limits</div>
                 <div class="data">
-                    Novelty Threshold: <span class="threshold">{config.get('novelty_threshold', 3)}</span><br>
-                    Stress Threshold: <span class="threshold">{config.get('stress_threshold', 0.7)}</span><br>
-                    Reward Threshold: <span class="threshold">{config.get('reward_threshold', 0.6)}</span>
-                </div>
-            </div>
-            
-            <div class="section">
-                <div class="title">Neuron Creation History</div>
-                <div class="data">
-                    Last Neuron Created: {time.ctime(data.get('last_neuron_time', 0))}<br>
-                    Time Since Last Neuron: {time.time() - data.get('last_neuron_time', 0):.2f} seconds<br>
+                    Last Neuron Created At: {time.ctime(data.get('last_neuron_time', 0)) if data.get('last_neuron_time', 0) else 'N/A'}<br>
+                    Time Since Last Neuron: {(time.time() - data.get('last_neuron_time', 0)) if data.get('last_neuron_time', 0) > 0 else 'N/A':.2f} seconds<br>
                     Cooldown Period: {config.get('cooldown', 300)} seconds<br>
-                    Total New Neurons: {len(data.get('new_neurons', []))}
-                </div>
-            </div>
-            
-            <div class="section">
-                <div class="title">New Neurons</div>
-                <div class="data">
-                    {', '.join(data.get('new_neurons', ['No new neurons']))}
+                    Pruning Enabled: {self.brain_widget.pruning_enabled if hasattr(self.brain_widget, 'pruning_enabled') else 'N/A'}<br>
+                    Max Neurons (if pruning): {config.get('max_neurons', 20)}<br>
+                    Current Total Visual Neurons: {len(self.brain_widget.neuron_positions) - len(self.brain_widget.excluded_neurons) if hasattr(self.brain_widget, 'neuron_positions') and hasattr(self.brain_widget, 'excluded_neurons') else 'N/A'}<br>
+                    Count of New Neurons Created (Details): {len(data.get('new_neurons_details', {}))}
                 </div>
             </div>
             """
+            
+            # Display Detailed Neurogenesis Neuron Info
+            new_neurons_details = data.get('new_neurons_details', {}) #
+            if new_neurons_details: #
+                html_template += """
+                <div class="section">
+                    <div class="title">Details of Neurogenesis Neurons</div>
+                    <div class="data"><table>
+                        <tr>
+                            <th>Neuron Name</th>
+                            <th>Created At</th>
+                            <th>Trigger Type</th>
+                            <th>Trigger Value (at creation)</th>
+                            <th>Associated State Snapshot (at creation)</th>
+                        </tr>"""
+                # Sort by creation time, newest first
+                sorted_neuron_details = sorted(new_neurons_details.items(), key=lambda item: item[1].get('created_at', 0), reverse=True)
+
+                for name, details in sorted_neuron_details:
+                    created_at_val = details.get('created_at') #
+                    created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created_at_val)) if created_at_val else "Unknown" #
+                    trigger_type = str(details.get('trigger_type', "N/A")).capitalize() #
+                    trigger_value_raw = details.get('trigger_value_at_creation', "N/A") #
+                    trigger_value_str = f"{trigger_value_raw:.2f}" if isinstance(trigger_value_raw, float) else str(trigger_value_raw) #
+                    
+                    snapshot = details.get('associated_state_snapshot', {}) #
+                    snapshot_parts = []
+                    if snapshot: #
+                        for k, v_snap in snapshot.items(): #
+                            if v_snap is not None: #
+                                snapshot_parts.append(f"{k.capitalize()}: {v_snap}") #
+                    snapshot_str = "<br>".join(snapshot_parts) if snapshot_parts else "<span class='small-text'>N/A</span>" #
+
+                    html_template += f"""
+                        <tr>
+                            <td><span class="neuron-name">{name}</span></td>
+                            <td>{created_at_str}</td>
+                            <td>{trigger_type}</td>
+                            <td>{trigger_value_str}</td>
+                            <td>{snapshot_str}</td>
+                        </tr>"""
+                html_template += "</table></div></div>"
+            else:
+                html_template += """
+                <div class="section">
+                    <div class="title">Details of Neurogenesis Neurons</div>
+                    <div class="data"><p>No neurogenesis neurons with details found.</p></div>
+                </div>"""
         else:
-            html_template += "<p>No neurogenesis data available</p>"
+            html_template += "<p>Neurogenesis data or config not available from BrainWidget.</p>"
         
         html_template += "</body></html>"
         
         # Set the HTML content
         self.debug_text.setHtml(html_template)
+
+    def showEvent(self, event):
+        """Start the timer when the dialog is shown."""
+        if not self.update_timer.isActive():
+            self.update_timer.start(1000) # 1 second
+        self.update_debug_info() # Refresh immediately on show
+        super().showEvent(event)
+
+    def hideEvent(self, event):
+        """Stop the timer when the dialog is hidden/closed."""
+        self.update_timer.stop()
+        super().hideEvent(event)
+
+    def closeEvent(self, event):
+        """Ensure the timer stops when the dialog is explicitly closed."""
+        self.update_timer.stop()
+        super().closeEvent(event)

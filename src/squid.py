@@ -480,30 +480,30 @@ class Squid:
         """Startle the squid awake with an anxiety spike"""
         if not self.is_sleeping:
             return
-            
+
         # Wake up the squid
         self.is_sleeping = False
-        self.sleepiness = 0
-        self.happiness = max(0, self.happiness - 15)  # Slight happiness decrease from being startled
-        self.anxiety = min(100, self.anxiety + 40)    # Large anxiety spike
-        
+        # self.sleepiness = 0  # Waking up no longer removes all tiredness
+        self.happiness = max(0, self.happiness - 25)  # Increased happiness decrease
+        self.anxiety = min(100, self.anxiety + 60)    # Increased anxiety spike
+
         # Visual feedback
         self.show_startled_icon()  # Show the startled icon
-        self.tamagotchi_logic.show_message("Squid was startled awake!")
+        self.tamagotchi_logic.show_message("Squid was rudely startled awake!")
         self.status = "startled"
-        
+
         # Instead of immediately changing direction, set a transitional state
         self.startled_transition = True
         self.startled_transition_frames = 5  # Show startled animation for 5 frames
-        
+
         # Start timers
         self.anxiety_cooldown_timer = QtCore.QTimer()
         self.anxiety_cooldown_timer.timeout.connect(self.reduce_startle_anxiety)
         self.anxiety_cooldown_timer.start(5000)  # Reduce anxiety after 5 seconds
-        
+
         # Hide startled icon after 2 seconds
         QtCore.QTimer.singleShot(2000, self.hide_startled_icon)
-        
+
         # End transition after a short delay (about half a second)
         QtCore.QTimer.singleShot(500, self.end_startled_transition)
 
@@ -516,12 +516,12 @@ class Squid:
 
     def reduce_startle_anxiety(self):
         """Gradually reduce the startle anxiety"""
-        self.anxiety = max(10, self.anxiety - 15)  # Reduce anxiety but don't go below baseline
-        
-        if self.anxiety <= 25:  # When back to near-normal levels
+        self.anxiety = max(20, self.anxiety - 15)  # Reduce anxiety but don't go below a higher baseline
+
+        if self.anxiety <= 35:  # When back to near-normal levels
             if hasattr(self, 'anxiety_cooldown_timer'):
                 self.anxiety_cooldown_timer.stop()
-            self.tamagotchi_logic.show_message("Squid has calmed down")
+            self.tamagotchi_logic.show_message("Squid has calmed down... mostly.")
     
     def check_boundary_exit(self):
         """
