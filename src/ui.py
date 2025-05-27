@@ -308,6 +308,8 @@ class Ui:
         self.view.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.view.setViewportUpdateMode(QtWidgets.QGraphicsView.FullViewportUpdate)
+        self.view.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+
         self.window.setCentralWidget(self.view)
 
         # Setup UI elements
