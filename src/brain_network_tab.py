@@ -49,8 +49,8 @@ class NetworkTab(BrainBaseTab):
         self.stimulate_button = self.create_button("Stimulate", self.stimulate_brain, "#d3d3d3")
         self.stimulate_button.setEnabled(self.debug_mode)
         
-        self.save_button = self.create_button("Save State", self.save_brain_state, "#d3d3d3")
-        self.load_button = self.create_button("Load State", self.load_brain_state, "#d3d3d3")
+        self.save_button = self.create_button("Save", self.save_brain_state, "#d3d3d3")
+        self.load_button = self.create_button("Load", self.load_brain_state, "#d3d3d3")
         self.report_button = self.create_button("Network Report", self.show_diagnostic_report, "#ADD8E6")
 
         button_layout.addWidget(self.report_button)

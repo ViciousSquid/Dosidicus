@@ -1872,132 +1872,183 @@ class NeurogenesisDebugDialog(QtWidgets.QDialog):
 
         self.update_debug_info() # Initial update when dialog is created
     
-    # ui.py -> class NeurogenesisDebugDialog
 
     def update_debug_info(self):
         # Clear existing text
         self.debug_text.clear()
         
-        # HTML styling for better readability
+        # Simplified HTML styling for QTextEdit
         html_template = """
         <html>
         <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; font-size: 15px; }} /* Increased base font size */
-                .section {{ background-color: #f4f4f4; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #ddd;}}
-                .title {{ font-weight: bold; color: #2c3e50; font-size: 18px; margin-bottom: 8px; border-bottom: 1px solid #bdc3c7; padding-bottom: 4px;}} /* Increased title font size */
-                .data {{ color: #34495e; line-height: 1.6; }} /* Increased line height */
-                .data table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
-                .data th, .data td {{ border: 1px solid #ccc; padding: 7px; text-align: left; vertical-align: top; }} /* Increased padding */
-                .data th {{ background-color: #e8e8e8; font-weight: bold; }}
-                .trigger {{ color: #2980b9; font-weight: bold; }}
-                .threshold {{ color: #27ae60; font-weight: bold; }}
-                .neuron-name {{ color: #8e44ad; font-weight: bold; }}
-                .small-text {{ font-size: 0.9em; color: #7f8c8d; }}
+            <style type="text/css">
+                body { font-family: Arial, sans-serif; font-size: 10pt; /* Standard font size for Qt */ }
+                .container { padding: 5px; }
+                .section { 
+                    background-color: #f0f0f0; 
+                    padding: 8px; 
+                    margin-bottom: 8px; 
+                    border: 1px solid #cccccc;
+                }
+                .title { 
+                    font-weight: bold; 
+                    color: #00007f; /* Dark Blue */
+                    font-size: 12pt; 
+                    margin-bottom: 5px; 
+                    border-bottom: 1px solid #aaaaaa; 
+                    padding-bottom: 2px;
+                }
+                .data table { 
+                    width: 100%; 
+                    border-collapse: collapse; 
+                    margin-top: 5px; 
+                    font-size: 9pt; 
+                }
+                .data th, .data td { 
+                    border: 1px solid #bbbbbb; 
+                    padding: 4px; 
+                    text-align: left; 
+                    vertical-align: top; 
+                }
+                .data th { 
+                    background-color: #dddddd; 
+                    font-weight: bold; 
+                    color: #333333;
+                }
+                /* Alternating row colors might need to be applied via Python if :nth-child is not supported */
+                /* For simplicity, removed here. Can add <tr bgcolor="#f9f9f9"> in Python loop. */
+
+                .metric-name { font-weight: bold; color: #333333; }
+                .value-current { color: #0055aa; font-weight: bold; }
+                .value-threshold { color: #007700; font-weight: bold; }
+                .value-progress { font-size: 8pt; color: #444444; }
+                .neuron-name { color: #770077; font-weight: bold; } /* Purple */
+                .timestamp { font-size: 8pt; color: #444444; }
+                .status-ok { color: #007700; } /* Green */
+                .status-warning { color: #DD6600; } /* Orange */
+                .status-active { color: #aa0000; } /* Red */
+                .details-snapshot ul { margin-top: 2px; margin-bottom: 2px; padding-left: 15px; list-style-type: disc; }
+                .details-snapshot li { margin-bottom: 1px; }
+                .code { font-family: 'Courier New', Courier, monospace; background-color: #eeeeee; padding: 1px 2px; font-size: 8pt;}
             </style>
         </head>
-        <body>
+        <body><div class="container">
         """
         
-        # Gather neurogenesis data
-        # Ensure brain_widget and its attributes exist before accessing
+        # --- Data Gathering and HTML Construction (largely the same logic as before) ---
         if hasattr(self.brain_widget, 'neurogenesis_data') and self.brain_widget.neurogenesis_data and \
-           hasattr(self.brain_widget, 'neurogenesis_config') and self.brain_widget.neurogenesis_config: #
-            data = self.brain_widget.neurogenesis_data #
-            config = self.brain_widget.neurogenesis_config #
+           hasattr(self.brain_widget, 'neurogenesis_config') and self.brain_widget.neurogenesis_config:
+            data = self.brain_widget.neurogenesis_data
+            config = self.brain_widget.neurogenesis_config
+            
+            # Counters and Thresholds Section
+            html_template += f"""
+            <div class="section">
+                <div class="title">&#x1F9E0; Neurogenesis Counters &amp; Thresholds</div>
+                <div class="data">
+                    <table>
+                        <tr><th>Metric</th><th>Current Value</th><th>Config Threshold</th><th>Progress</th></tr>"""
+            
+            metrics = [
+                ('Novelty', data.get('novelty_counter', 0), config.get('novelty_threshold', 3)),
+                ('Stress', data.get('stress_counter', 0), config.get('stress_threshold', 0.7)),
+                ('Reward', data.get('reward_counter', 0), config.get('reward_threshold', 0.6))
+            ]
+            
+            for name, current_val, threshold_val in metrics:
+                progress_percent = (current_val / threshold_val) * 100 if threshold_val > 0 else 0
+                progress_percent = min(100, max(0, progress_percent)) # Cap at 0-100
+                html_template += f"""
+                        <tr>
+                            <td class="metric-name">{name} Counter</td>
+                            <td><span class="value-current">{current_val:.3f}</span></td>
+                            <td><span class="value-threshold">{threshold_val}</span></td>
+                            <td><span class="value-progress">{progress_percent:.1f}%</span></td>
+                        </tr>"""
+            html_template += "</table></div></div>"
+
+            # Status and Limits Section
+            last_creation_time = data.get('last_neuron_time', 0)
+            time_since_last = time.time() - last_creation_time if last_creation_time > 0 else -1
+            cooldown_period = config.get('cooldown', 300)
+            cooldown_active = time_since_last >= 0 and time_since_last < cooldown_period
+            cooldown_status_class = "status-active" if cooldown_active else "status-ok"
+            cooldown_text = f"{time_since_last:.1f}s ago (Cooldown: {'Active' if cooldown_active else 'Inactive'})" if time_since_last >=0 else "N/A"
+
+            pruning_enabled_val = self.brain_widget.pruning_enabled if hasattr(self.brain_widget, 'pruning_enabled') else 'N/A'
+            pruning_status_class = "status-ok" if pruning_enabled_val else "status-warning"
+            
+            current_neurons_val = len(self.brain_widget.neuron_positions) - len(self.brain_widget.excluded_neurons) if hasattr(self.brain_widget, 'neuron_positions') and hasattr(self.brain_widget, 'excluded_neurons') else 'N/A'
+            max_neurons_val = config.get('max_neurons', 20)
             
             html_template += f"""
             <div class="section">
-                <div class="title">Neurogenesis Counters & Configured Thresholds</div>
+                <div class="title">&#x2699;&#xFE0F; Neuron Creation Status &amp; Limits</div>
                 <div class="data">
                     <table>
-                        <tr><th>Metric</th><th>Current Value</th><th>Config Threshold</th></tr>
-                        <tr>
-                            <td>Novelty Counter</td>
-                            <td><span class="trigger">{data.get('novelty_counter', 0):.3f}</span></td>
-                            <td><span class="threshold">{config.get('novelty_threshold', 3)}</span></td>
-                        </tr>
-                        <tr>
-                            <td>Stress Counter</td>
-                            <td><span class="trigger">{data.get('stress_counter', 0):.3f}</span></td>
-                            <td><span class="threshold">{config.get('stress_threshold', 0.7)}</span></td>
-                        </tr>
-                        <tr>
-                            <td>Reward Counter</td>
-                            <td><span class="trigger">{data.get('reward_counter', 0):.3f}</span></td>
-                            <td><span class="threshold">{config.get('reward_threshold', 0.6)}</span></td>
-                        </tr>
+                        <tr><td class="metric-name">Last Neuron Created:</td><td class="timestamp">{time.ctime(last_creation_time) if last_creation_time else 'N/A'}</td></tr>
+                        <tr><td class="metric-name">Time Since Last / Cooldown:</td><td class="{cooldown_status_class}">{cooldown_text} / {cooldown_period}s</td></tr>
+                        <tr><td class="metric-name">Pruning Enabled:</td><td class="{pruning_status_class}">{pruning_enabled_val}</td></tr>
+                        <tr><td class="metric-name">Max Neurons (if pruning):</td><td>{max_neurons_val}</td></tr>
+                        <tr><td class="metric-name">Current Eligible Neurons:</td><td>{current_neurons_val}</td></tr>
+                        <tr><td class="metric-name">Neurogenesis Neurons Count:</td><td>{len(data.get('new_neurons_details', {}))}</td></tr>
                     </table>
                 </div>
-            </div>
+            </div>"""
             
-            <div class="section">
-                <div class="title">Neuron Creation Status & Limits</div>
-                <div class="data">
-                    Last Neuron Created At: {time.ctime(data.get('last_neuron_time', 0)) if data.get('last_neuron_time', 0) else 'N/A'}<br>
-                    Time Since Last Neuron: {(time.time() - data.get('last_neuron_time', 0)) if data.get('last_neuron_time', 0) > 0 else 'N/A':.2f} seconds<br>
-                    Cooldown Period: {config.get('cooldown', 300)} seconds<br>
-                    Pruning Enabled: {self.brain_widget.pruning_enabled if hasattr(self.brain_widget, 'pruning_enabled') else 'N/A'}<br>
-                    Max Neurons (if pruning): {config.get('max_neurons', 20)}<br>
-                    Current Total Visual Neurons: {len(self.brain_widget.neuron_positions) - len(self.brain_widget.excluded_neurons) if hasattr(self.brain_widget, 'neuron_positions') and hasattr(self.brain_widget, 'excluded_neurons') else 'N/A'}<br>
-                    Count of New Neurons Created (Details): {len(data.get('new_neurons_details', {}))}
-                </div>
-            </div>
-            """
-            
-            # Display Detailed Neurogenesis Neuron Info
-            new_neurons_details = data.get('new_neurons_details', {}) #
-            if new_neurons_details: #
+            # Detailed Neurogenesis Neuron Info Section
+            new_neurons_details = data.get('new_neurons_details', {})
+            if new_neurons_details:
                 html_template += """
                 <div class="section">
-                    <div class="title">Details of Neurogenesis Neurons</div>
+                    <div class="title">&#x1F4A1; Details of Neurogenesis Neurons</div>
                     <div class="data"><table>
                         <tr>
                             <th>Neuron Name</th>
                             <th>Created At</th>
                             <th>Trigger Type</th>
-                            <th>Trigger Value (at creation)</th>
-                            <th>Associated State Snapshot (at creation)</th>
+                            <th>Trigger Value</th>
+                            <th>Associated State Snapshot</th>
                         </tr>"""
-                # Sort by creation time, newest first
                 sorted_neuron_details = sorted(new_neurons_details.items(), key=lambda item: item[1].get('created_at', 0), reverse=True)
 
                 for name, details in sorted_neuron_details:
-                    created_at_val = details.get('created_at') #
-                    created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created_at_val)) if created_at_val else "Unknown" #
-                    trigger_type = str(details.get('trigger_type', "N/A")).capitalize() #
-                    trigger_value_raw = details.get('trigger_value_at_creation', "N/A") #
-                    trigger_value_str = f"{trigger_value_raw:.2f}" if isinstance(trigger_value_raw, float) else str(trigger_value_raw) #
+                    created_at_val = details.get('created_at')
+                    created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created_at_val)) if created_at_val else "Unknown"
+                    trigger_type = str(details.get('trigger_type', "N/A")).capitalize()
+                    trigger_value_raw = details.get('trigger_value_at_creation', "N/A")
+                    trigger_value_str = f"{trigger_value_raw:.2f}" if isinstance(trigger_value_raw, float) else str(trigger_value_raw)
                     
-                    snapshot = details.get('associated_state_snapshot', {}) #
-                    snapshot_parts = []
-                    if snapshot: #
-                        for k, v_snap in snapshot.items(): #
-                            if v_snap is not None: #
-                                snapshot_parts.append(f"{k.capitalize()}: {v_snap}") #
-                    snapshot_str = "<br>".join(snapshot_parts) if snapshot_parts else "<span class='small-text'>N/A</span>" #
+                    snapshot = details.get('associated_state_snapshot', {})
+                    snapshot_html = "<ul class='details-snapshot'>"
+                    if snapshot:
+                        for k, v_snap in snapshot.items():
+                            if v_snap is not None:
+                                snapshot_html += f"<li><span class='metric-name'>{k.capitalize()}:</span> <span class='code'>{v_snap}</span></li>"
+                    else:
+                        snapshot_html += "<li>N/A</li>"
+                    snapshot_html += "</ul>"
 
                     html_template += f"""
                         <tr>
                             <td><span class="neuron-name">{name}</span></td>
-                            <td>{created_at_str}</td>
+                            <td class="timestamp">{created_at_str}</td>
                             <td>{trigger_type}</td>
-                            <td>{trigger_value_str}</td>
-                            <td>{snapshot_str}</td>
+                            <td><span class="value-current">{trigger_value_str}</span></td>
+                            <td>{snapshot_html}</td>
                         </tr>"""
                 html_template += "</table></div></div>"
             else:
                 html_template += """
                 <div class="section">
-                    <div class="title">Details of Neurogenesis Neurons</div>
+                    <div class="title">&#x1F4A1; Details of Neurogenesis Neurons</div>
                     <div class="data"><p>No neurogenesis neurons with details found.</p></div>
                 </div>"""
         else:
-            html_template += "<p>Neurogenesis data or config not available from BrainWidget.</p>"
+            html_template += "<div class='section'><div class='title'>Error</div><p class='data status-active'>Neurogenesis data or configuration not available from BrainWidget.</p></div>"
         
-        html_template += "</body></html>"
+        html_template += "</div></body></html>"
         
-        # Set the HTML content
         self.debug_text.setHtml(html_template)
 
     def showEvent(self, event):
