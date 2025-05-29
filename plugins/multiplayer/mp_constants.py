@@ -6,7 +6,7 @@ PLUGIN_NAME = "Multiplayer"
 PLUGIN_VERSION = "1.0.0"
 PLUGIN_AUTHOR = "ViciousSquid"
 PLUGIN_DESCRIPTION = "Enables network sync for squids and objects (Experimental)"
-PLUGIN_REQUIRES = ["network_interface"] # Names of other plugins this one depends on
+PLUGIN_REQUIRES = [] # Names of other plugins this one depends on
 
 # --- Network Configuration ---
 # These define the network parameters for multicast communication.
