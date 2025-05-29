@@ -74,7 +74,7 @@ def initialize(plugin_manager_instance):
             'description': PLUGIN_DESCRIPTION,    # Brief description
             'requires': PLUGIN_REQUIRES,          # List of dependencies (other plugin names)
             'is_setup': False,                    # Plugin's own setup method will set this to True
-            'is_enabled_by_default': False        # Set to True if it should be enabled on start
+            'is_enabled_by_default': True        # Set to True if it should be enabled on start
         }
 
         # The plugin manager should ideally pass itself to the plugin instance,

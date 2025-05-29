@@ -69,7 +69,7 @@ class MultiplayerPlugin:
         self.status_bar: Any | None = None    # Fallback status bar component from main UI
 
         # --- Flags ---
-        self.is_setup = False
+        self.is_setup = False # This line was added in the previous recommendation to fix the AttributeError
         self.debug_mode = False # Usually set based on tamagotchi_logic.debug_mode
 
         # This queue is if the plugin itself needs to queue tasks for its main thread operations,
@@ -109,43 +109,60 @@ class MultiplayerPlugin:
         """Enables the multiplayer plugin, performing setup if necessary."""
         print("Multiplayer: Enabling plugin...")
         try:
-            if not self.is_setup:
-                if self.plugin_manager is None and self.tamagotchi_logic:
+            # MODIFIED PART:
+            # Safely check for the 'is_setup' attribute.
+            # If it doesn't exist, getattr will return False (the default value provided).
+            is_currently_setup = getattr(self, 'is_setup', False)
+
+            if not is_currently_setup:
+                # This block runs if 'is_setup' is False or doesn't exist yet.
+                if self.plugin_manager is None and hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+                    # Safely attempt to get plugin_manager from tamagotchi_logic if it exists
                     self.plugin_manager = getattr(self.tamagotchi_logic, 'plugin_manager', None)
 
                 if self.plugin_manager is None:
                     print("Multiplayer Error: Cannot enable, plugin_manager not found.")
                     return False
 
+                # Assuming 'self.setup()' is a method of your MultiplayerPlugin class
+                # that performs setup and should set 'self.is_setup = True' on success.
                 if not self.setup(self.plugin_manager): # Call setup
                     print("Multiplayer Error: Setup failed during enable.")
                     return False
-                # self.is_setup is set by setup() on success
+                # self.is_setup should be set to True by a successful self.setup() call
 
             # Ensure network node is active
-            if self.network_node and not self.network_node.is_connected:
+            # Add checks for self.network_node existence before accessing its attributes
+            if hasattr(self, 'network_node') and self.network_node and not self.network_node.is_connected:
                 print("Multiplayer: Network node not connected, attempting to initialize socket...")
                 self.network_node.initialize_socket()
 
             # Start synchronization thread if not already running
-            if not self.sync_thread or not self.sync_thread.is_alive():
-                self.start_sync_timer()
+            # Add checks for self.sync_thread existence
+            if not (hasattr(self, 'sync_thread') and self.sync_thread and self.sync_thread.is_alive()):
+                if hasattr(self, 'start_sync_timer'): # Check if method exists
+                    self.start_sync_timer()
+                else:
+                    print("Multiplayer Warning: start_sync_timer method not found.")
+
 
             # Show and update status UI
-            if self.status_widget:
+            # Add checks for self.status_widget existence
+            if hasattr(self, 'status_widget') and self.status_widget:
                 self.status_widget.show()
-                is_connected_now = self.network_node and self.network_node.is_connected
-                node_id_now = self.network_node.node_id if self.network_node else "N/A"
+                is_connected_now = hasattr(self, 'network_node') and self.network_node and self.network_node.is_connected
+                node_id_now = self.network_node.node_id if hasattr(self, 'network_node') and self.network_node else "N/A"
                 self.status_widget.update_connection_status(is_connected_now, node_id_now)
-                if self.network_node:
+                if hasattr(self, 'network_node') and self.network_node and hasattr(self.network_node, 'known_nodes'):
                     self.status_widget.update_peers(self.network_node.known_nodes)
 
             print("Multiplayer plugin enabled successfully.")
             return True
         except Exception as e:
             print(f"Multiplayer: Error enabling plugin: {e}")
-            traceback.print_exc()
+            traceback.print_exc() # This is good for debugging, prints the full error trace
             return False
+
 
     def disable(self):
         """Disables the multiplayer plugin and cleans up resources."""
@@ -167,7 +184,7 @@ class MultiplayerPlugin:
         print("Multiplayer plugin disabled.")
 
 
-    def setup(self, plugin_manager_instance):
+    def setup(self, plugin_manager_instance, tamagotchi_logic_instance):
         """
         Sets up the multiplayer plugin. Called when the plugin is first loaded or enabled.
         Args:
