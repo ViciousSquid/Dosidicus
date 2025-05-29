@@ -109,27 +109,52 @@ class MultiplayerPlugin:
         """Enables the multiplayer plugin, performing setup if necessary."""
         print("Multiplayer: Enabling plugin...")
         try:
-            # MODIFIED PART:
             # Safely check for the 'is_setup' attribute.
             # If it doesn't exist, getattr will return False (the default value provided).
             is_currently_setup = getattr(self, 'is_setup', False)
 
             if not is_currently_setup:
-                # This block runs if 'is_setup' is False or doesn't exist yet.
-                if self.plugin_manager is None and hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
-                    # Safely attempt to get plugin_manager from tamagotchi_logic if it exists
-                    self.plugin_manager = getattr(self.tamagotchi_logic, 'plugin_manager', None)
-
+                # This block runs if 'is_setup' is False.
+                
+                # 1. Ensure self.plugin_manager is available.
+                # It might be pre-set by the plugin system.
+                # If not, and self.tamagotchi_logic is somehow already set and has plugin_manager, try that.
                 if self.plugin_manager is None:
-                    print("Multiplayer Error: Cannot enable, plugin_manager not found.")
+                    if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic and \
+                       hasattr(self.tamagotchi_logic, 'plugin_manager'):
+                        self.plugin_manager = getattr(self.tamagotchi_logic, 'plugin_manager', None)
+                
+                if self.plugin_manager is None:
+                    print("Multiplayer Error: Cannot enable, plugin_manager not found (required for setup).")
                     return False
 
-                # Assuming 'self.setup()' is a method of your MultiplayerPlugin class
-                # that performs setup and should set 'self.is_setup = True' on success.
-                if not self.setup(self.plugin_manager): # Call setup
+                # 2. Obtain the tamagotchi_logic_instance required by the setup method.
+                tamagotchi_logic_ref = getattr(self, 'tamagotchi_logic', None) # Check if already on self
+
+                if tamagotchi_logic_ref is None:
+                    # If not on self, try to get it from the plugin_manager, as it might hold a reference.
+                    tamagotchi_logic_ref = getattr(self.plugin_manager, 'tamagotchi_logic', None)
+                
+                if tamagotchi_logic_ref is None:
+                    # As a more thorough fallback, use the _find_tamagotchi_logic utility.
+                    # This is useful if plugin_manager is a more complex object (e.g., the main app instance)
+                    # that contains tamagotchi_logic somewhere within its structure.
+                    print("Multiplayer: TamagotchiLogic not found directly, attempting deep search...")
+                    tamagotchi_logic_ref = self._find_tamagotchi_logic(self.plugin_manager)
+
+                if tamagotchi_logic_ref is None:
+                    print("Multiplayer Error: TamagotchiLogic instance could not be found. Setup cannot proceed.")
+                    return False
+                
+                # Now, we should have both self.plugin_manager and tamagotchi_logic_ref.
+                # Call setup with both required arguments.
+                # The setup method itself will set self.tamagotchi_logic = tamagotchi_logic_ref.
+                if not self.setup(self.plugin_manager, tamagotchi_logic_ref):
                     print("Multiplayer Error: Setup failed during enable.")
                     return False
-                # self.is_setup should be set to True by a successful self.setup() call
+                # After a successful setup, self.is_setup should be True.
+
+            # --- Post-setup actions (continue with the rest of the original enable method) ---
 
             # Ensure network node is active
             # Add checks for self.network_node existence before accessing its attributes
