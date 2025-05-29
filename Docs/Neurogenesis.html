@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Squid Brain Neurogenesis Documentation</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 960px;
+            margin: 20px auto;
+            background-color: #f9f9f9;
+        }
+        h1, h2, h3 {
+            color: #0056b3;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 5px;
+        }
+        h1 {
+            background-color: #0056b3;
+            color: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        pre {
+            background-color: #eee;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border: 1px solid #ddd;
+        }
+        code {
+            font-family: monospace;
+            background-color: #f4f4f4;
+            padding: 2px 4px;
+            border-radius: 3px;
+            color: #c7254e;
+        }
+        pre code {
+            background-color: transparent;
+            padding: 0;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .note {
+            background-color: #fff3cd;
+            border-left: 5px solid #ffeeba;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning {
+            background-color: #f8d7da;
+            border-left: 5px solid #f5c6cb;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+         table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <h1>🧠 Squid Brain Neurogenesis Documentation 🧠</h1>
+
+        <p>This document details the <strong>Neurogenesis</strong> process within the Squid Brain simulation. Neurogenesis is the mechanism by which new neurons are created and integrated into the existing neural network, allowing the squid's brain to adapt and grow based on its experiences.</p>
+
+        <hr>
+
+        <h2>1. Overview</h2>
+        <p>Neurogenesis in this system is designed to simulate brain plasticity. New neurons can be generated in response to specific triggers: <strong>novelty</strong>, <strong>stress</strong>, and <strong>reward</strong>. Once created, these neurons form connections with existing ones and participate in Hebbian learning. To maintain network stability and prevent uncontrolled growth (unless desired), a <strong>pruning</strong> mechanism can remove weak or inactive neurons. The entire process is configurable, allowing for different brain development scenarios.</p>
+
+        <hr>
+
+        <h2>2. Configuration</h2>
+        <p>Neurogenesis parameters are primarily managed within the <code>BrainWidget</code> class, drawing from the <code>LearningConfig</code> and its own defaults.</p>
+
+        <h3>Default Configuration (<code>BrainWidget.__init__</code>)</h3>
+        <p>If no specific configuration is provided, <code>BrainWidget</code> establishes a default set of neurogenesis parameters:</p>
+        <pre><code class="language-python">
+# From brain_widget.py
+self.config.neurogenesis = {
+    'decay_rate': 0.95,
+    'novelty_threshold': 3,
+    'stress_threshold': 0.7,
+    'reward_threshold': 0.6,
+    'cooldown': 300, # 5 minutes
+    'highlight_duration': 5.0, # 5 seconds
+    'max_neurons': 15 # Default limit
+}
+        </code></pre>
+
+        <h3>Appearance Configuration (<code>BrainWidget._create_neuron_internal</code>)</h3>
+        <p>The visual appearance (color and shape) of new neurons is also configurable, allowing for easy identification of their type:</p>
+        <pre><code class="language-python">
+# From brain_widget.py
+cfg_appearance = self.config.neurogenesis.get('appearance', {})
+cfg_colors = cfg_appearance.get('colors', {})
+cfg_shapes = cfg_appearance.get('shapes', {})
+
+default_colors = {'novelty': (255, 255, 150), 'stress': (255, 150, 150), 'reward': (150, 255, 150)}
+self.state_colors[new_name] = tuple(cfg_colors.get(neuron_type, default_colors.get(neuron_type, (200,200,200))))
+
+default_shapes = {'novelty': 'diamond', 'stress': 'square', 'reward': 'circle'}
+self.neuron_shapes[new_name] = cfg_shapes.get(neuron_type, default_shapes.get(neuron_type, 'circle'))
+        </code></pre>
+
+        <hr>
+
+        <h2>3. Triggering Mechanisms</h2>
+        <p>Neurogenesis is initiated when certain internal counters exceed their respective thresholds. These counters are updated within <code>BrainWidget.update_state</code>, primarily driven by the squid's emotional and sensory states.</p>
+
+        <h3>Counters & Updates (<code>BrainWidget.update_state</code>)</h3>
+        <p>Counters increase based on squid states (like curiosity, anxiety) and can also receive direct boosts (<code>novelty_exposure</code>, <code>sustained_stress</code>, <code>recent_rewards</code>). They decay over time.</p>
+        <pre><code class="language-python">
+# From brain_widget.py
+# Increment novelty counter when curiosity is high
+if 'curiosity' in self.state and self.state['curiosity'] > 75:
+    self.neurogenesis_data['novelty_counter'] += 0.1
+
+# Increment stress counter when anxiety is high or cleanliness is low
+if ('anxiety' in self.state and self.state['anxiety'] > 80) or \
+('cleanliness' in self.state and self.state['cleanliness'] < 20):
+    self.neurogenesis_data['stress_counter'] += 0.25
+
+# Increment reward counter when happiness or satisfaction is high
+if ('happiness' in self.state and self.state['happiness'] > 85) or \
+('satisfaction' in self.state and self.state['satisfaction'] > 85):
+    self.neurogenesis_data['reward_counter'] += 0.2
+
+# Handle direct state triggers
+if new_state.get('novelty_exposure', 0) > 0:
+    self.neurogenesis_data['novelty_counter'] += new_state.get('novelty_exposure', 0)
+
+# Decay
+self.neurogenesis_data['novelty_counter'] *= self.neurogenesis_config.get('decay_rate', 0.95)
+# ... (similar for stress and reward)
+        </code></pre>
+
+        <h3>Threshold Checking (<code>BrainWidget.update_state</code> & <code>BrainWidget.check_neurogenesis</code>)</h3>
+        <p>The core check happens in <code>update_state</code>. It compares the counters against <strong>adjusted thresholds</strong> (if pruning is enabled) or base thresholds. It also verifies the neuron limit and cooldown period before attempting to create a neuron.</p>
+        <pre><code class="language-python">
+# From brain_widget.py (update_state)
+novelty_threshold = self.get_adjusted_threshold(novelty_threshold_base, 'novelty')
+# ...
+if (self.neurogenesis_data['novelty_counter'] > novelty_threshold or ...):
+    max_neurons = self.neurogenesis_config.get('max_neurons', 15)
+    current_neuron_count = len(self.neuron_positions) - len(self.excluded_neurons)
+    cooldown_ok = current_time - self.neurogenesis_data['last_neuron_time'] > self.neurogenesis_config.get('cooldown', 300)
+
+    if (not self.pruning_enabled or current_neuron_count < max_neurons) and cooldown_ok:
+        # ... determine type and call _create_neuron_internal
+        </code></pre>
+
+        <h3>Adjusted Thresholds (<code>BrainWidget.get_adjusted_threshold</code>)</h3>
+        <p>To control neuron population when pruning is active, thresholds increase as the number of new neurons grows. This makes it progressively harder to create new neurons, promoting stability.</p>
+        <pre><code class="language-python">
+# From brain_widget.py
+def get_adjusted_threshold(self, base_threshold, trigger_type):
+    # ... calculates new_neuron_count ...
+    scaling_factors = {
+        'novelty': 0.25,
+        'stress': 0.1,
+        'reward': 0.08
+    }
+    scaling_factor = scaling_factors.get(trigger_type, 0.15)
+    multiplier = 1.0 + (scaling_factor * (new_neuron_count - baseline + 1))
+    return base_threshold * multiplier
+        </code></pre>
+
+        <hr>
+
+        <h2>4. Neuron Creation (<code>_create_neuron_internal</code>)</h2>
+        <p>This is the core function responsible for adding a new neuron to the network. It handles naming, positioning, visual setup, connection weighting, and logging.</p>
+
+        <h3>Key Steps:</h3>
+        <ol>
+            <li><strong>Limit Check:</strong> Verifies against <code>max_neurons</code> if pruning is enabled.</li>
+            <li><strong>Naming:</strong> Creates a unique name (e.g., <code>novel_0</code>, <code>stress_1</code>).</li>
+            <li><strong>Positioning:</strong> Places the new neuron near the most active existing neuron or a central point.</li>
+            <li><strong>Appearance:</strong> Sets the color and shape based on the trigger type and configuration.</li>
+            <li><strong>State Init:</strong> Sets the initial activation state (usually 50).</li>
+            <li><strong>Weight Init:</strong> Establishes initial connections and weights to core neurons (e.g., 'novelty' connects to 'curiosity' and 'anxiety'). These weights can be influenced by the squid's personality.</li>
+            <li><strong>Data Storage:</strong> Records detailed information about the new neuron (creation time, trigger type/value, associated state) in <code>neurogenesis_data['new_neurons_details']</code>. This is used by the Neuron Inspector.</li>
+            <li><strong>Highlighting:</strong> Sets up a visual highlight for the new neuron in the <code>BrainWidget</code>.</li>
+            <li><strong>Logging:</strong> Calls <code>log_neurogenesis_event</code> to record the creation.</li>
+        </ol>
+
+        <pre><code class="language-python">
+# From brain_widget.py (_create_neuron_internal - Snippets)
+# Naming
+base_name = {'novelty': 'novel', 'stress': 'stress', 'reward': 'reward'}[neuron_type]
+# ... loop to find unique index ...
+
+# Positioning
+# ... finds base_x, base_y ...
+self.neuron_positions[new_name] = (base_x + random.randint(-50, 50), base_y + random.randint(-50, 50))
+
+# Weight Init
+default_weights = { ... }
+personality_weight_modifier = { ... }.get(personality_str, 1.0)
+for target, weight in default_weights.get(neuron_type, {}).items():
+    self.weights[(new_name, target)] = weight * personality_weight_modifier
+    self.weights[(target, new_name)] = (weight * personality_weight_modifier) * 0.5
+
+# Data Storage
+self.neurogenesis_data['new_neurons_details'][new_name] = { ... }
+
+# Logging
+self.log_neurogenesis_event(new_name, "created", details=log_creation_details)
+return new_name
+        </code></pre>
+
+        <hr>
+
+        <h2>5. Neuron Pruning (<code>prune_weak_neurons</code>)</h2>
+        <p>Pruning is an optional mechanism (controlled via the UI) to remove less useful neurons, typically when the network approaches its maximum size. It targets newly generated neurons that are either weakly connected or show low activity.</p>
+
+        <h3>Key Steps:</h3>
+        <ol>
+            <li><strong>Check Conditions:</strong> Only runs if pruning is enabled and there are enough neurons to prune.</li>
+            <li><strong>Identify Candidates:</strong> Iterates through non-original, non-system neurons. It calculates their average connection strength and activity score. Neurons with weak connections or low activity are marked as candidates.</li>
+            <li><strong>Select & Remove:</strong> If candidates exist, the weakest one is selected and removed from:
+                <ul>
+                    <li><code>neuron_positions</code></li>
+                    <li><code>state</code></li>
+                    <li><code>weights</code> (all associated connections)</li>
+                    <li><code>neurogenesis_data['new_neurons']</code></li>
+                </ul>
+            </li>
+            <li><strong>Logging:</strong> Calls <code>log_neurogenesis_event</code> to record the pruning event.</li>
+        </ol>
+
+        <pre><code class="language-python">
+# From brain_widget.py
+def prune_weak_neurons(self):
+    # ... (skip checks) ...
+    for neuron in list(self.neuron_positions.keys()):
+        # ... (skip original/system) ...
+        connections = [abs(w) for (a, b), w in self.weights.items() if (a == neuron or b == neuron)]
+        activity = self.state.get(neuron, 0)
+        activity_score = 0 if isinstance(activity, bool) else abs(activity - 50)
+        if not connections or sum(connections) / len(connections) < 0.2:
+            candidates.append((neuron, 1))
+        elif activity_score < 10:
+            candidates.append((neuron, 2))
+
+    if candidates:
+        neuron_to_remove = candidates[0][0]
+        # ... (delete from dicts/lists) ...
+        self.log_neurogenesis_event(neuron_to_remove, "pruned", reason)
+        return True
+    return False
+        </code></pre>
+
+        <hr>
+
+        <h2>6. Visualization</h2>
+        <p>New neurons are drawn alongside core neurons in <code>BrainWidget.paintEvent</code>, which calls <code>draw_neurons</code>. Newly created neurons can be temporarily highlighted.</p>
+
+        <h3>Drawing (<code>draw_neurons</code>)</h3>
+        <p>This method iterates through <code>neuron_positions</code> and draws each neuron based on its configured shape (circle, square, diamond, etc.) and color.</p>
+
+        <h3>Highlighting (<code>draw_neurogenesis_highlights</code>)</h3>
+        <p>If a neuron is currently marked for highlight (in <code>neurogenesis_highlight</code>), this method draws a temporary yellow circle around it.</p>
+        <pre><code class="language-python">
+# From brain_widget.py
+def draw_neurogenesis_highlights(self, painter, scale):
+    if (self.neurogenesis_highlight['neuron'] and
+        time.time() - self.neurogenesis_highlight['start_time'] < self.neurogenesis_highlight['duration']):
+        pos = self.neuron_positions.get(self.neurogenesis_highlight['neuron'])
+        if pos:
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), int(3 * scale)))
+            painter.setBrush(QtCore.Qt.NoBrush)
+            radius = int(40 * scale)
+            painter.drawEllipse(int(pos[0] - radius), int(pos[1] - radius), int(radius * 2), int(radius * 2))
+        </code></pre>
+
+        <h3>Neuron Inspector</h3>
+        <p>The <code>NeuronInspector</code> class provides a detailed view of individual neurons. For neurons created via neurogenesis, it displays specific details like creation time, trigger type, and the squid's state at the time of creation, drawing data from <code>brain_widget.neurogenesis_data['new_neurons_details']</code>.</p>
+
+        <hr>
+
+        <h2>7. Logging (<code>log_neurogenesis_event</code>)</h2>
+        <p>This method writes neurogenesis events (creation and pruning) to a text file named <code>neurogenesis_log.txt</code>. This provides a persistent record of the brain's structural changes.</p>
+        <pre><code class="language-python">
+# From brain_widget.py
+def log_neurogenesis_event(self, neuron_name, event_type, reason=None, details=None):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = ""
+    if event_type == "created":
+        # ... (formats creation details and connections) ...
+        log_entry = f"{timestamp} Neuron created: {neuron_name} ... "
+    elif event_type == "pruned":
+        log_entry = f"{timestamp} PRUNED: {neuron_name} due to {reason if reason else 'Unknown reason'}"
+    
+    with open('neurogenesis_log.txt', 'a', encoding='utf-8') as f:
+        f.write(log_entry + "\\n\\n")
+        </code></pre>
+
+        <hr>
+
+        <h2>8. UI Integration (<code>NetworkTab</code>)</h2>
+        <p>The <code>NetworkTab</code> provides a user interface element to control a key aspect of neurogenesis: <strong>pruning</strong>.</p>
+
+        <h3>Pruning Checkbox</h3>
+        <p>A checkbox allows the user to enable or disable the pruning mechanism in real-time.</p>
+        <pre><code class="language-python">
+# From brain_network_tab.py
+self.checkbox_pruning = QtWidgets.QCheckBox("Enable pruning")
+self.checkbox_pruning.setChecked(True)  # Enabled by default
+self.checkbox_pruning.stateChanged.connect(self.toggle_pruning)
+checkbox_layout.addWidget(self.checkbox_pruning)
+
+def toggle_pruning(self, state):
+    if hasattr(self, 'brain_widget') and self.brain_widget:
+        enabled = state == QtCore.Qt.Checked
+        self.brain_widget.toggle_pruning(enabled)
+        # ... (shows warning if disabled) ...
+        </code></pre>
+        <div class="warning">
+            <strong>Warning:</strong> Disabling pruning allows for unconstrained neurogenesis, which can potentially lead to network instability or performance issues if the neuron count grows very large.
+        </div>
+
+    </div>
+</body>
+</html>
