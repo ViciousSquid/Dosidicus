@@ -1,6 +1,7 @@
 import random
 import math
 import time
+import os
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 class RemoteSquidController:
