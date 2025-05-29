@@ -420,37 +420,70 @@ class PluginManager:
             self.unload_plugin(plugin_name_key)
         self.logger.info("All plugins have been unloaded.")
 
-    def enable_plugin(self, plugin_name: str) -> bool:
-        """Enable a loaded plugin."""
-        plugin_name_lower = plugin_name.lower()
-        
-        if plugin_name_lower not in self.plugins:
-            self.logger.error(f"Cannot enable plugin '{plugin_name_lower}': not loaded.")
-            return False
-        
-        if plugin_name_lower in self.enabled_plugins:
-            self.logger.info(f"Plugin '{plugin_name_lower}' is already enabled.")
+    def enable_plugin(self, plugin_key: str) -> bool:
+        plugin_key_lower = plugin_key.lower() # Normalize to lowercase
+
+        if plugin_key_lower in self.enabled_plugins:
+            self.logger.info(f"Plugin '{plugin_key_lower}' is already enabled.")
             return True
-            
-        plugin_data = self.plugins[plugin_name_lower]
-        plugin_instance = plugin_data.get('instance')
-        
-        if plugin_instance and hasattr(plugin_instance, 'enable'):
+
+        plugin_data = self.plugins.get(plugin_key_lower)
+        if not plugin_data or 'instance' not in plugin_data:
+            self.logger.error(f"ERROR:PluginManager: Plugin '{plugin_key_lower}' not found or has no instance for enabling.")
+            return False
+
+        instance = plugin_data['instance']
+        if not instance:
+            self.logger.error(f"ERROR:PluginManager: Instance for plugin '{plugin_key_lower}' is None.")
+            return False
+
+        # --- Call setup() if it hasn't been run ---
+        if hasattr(instance, 'setup') and callable(instance.setup):
+            # Check the 'is_setup' flag stored by the PluginManager for this plugin.
+            # This flag is initialized to False in plugins/multiplayer/main.py's initialize().
+            if not plugin_data.get('is_setup', False): 
+                try:
+                    self.logger.info(f"INFO:PluginManager: Calling setup() for plugin '{plugin_key_lower}'.")
+                    # Pass PluginManager instance (self) and tamagotchi_logic
+                    tamagotchi_logic_ref = getattr(self, 'tamagotchi_logic', None)
+                    if tamagotchi_logic_ref:
+                        instance.setup(self, tamagotchi_logic_ref)
+                    else:
+                        self.logger.warning(f"WARNING:PluginManager: tamagotchi_logic not available in PluginManager when setting up '{plugin_key_lower}'. Passing None.")
+                        instance.setup(self, None)
+
+                    plugin_data['is_setup'] = True # Mark that setup has been run (in PluginManager's records)
+                    self.logger.info(f"INFO:PluginManager: setup() for plugin '{plugin_key_lower}' completed.")
+                except Exception as e:
+                    self.logger.error(f"ERROR:PluginManager: Exception during setup of plugin '{plugin_key_lower}': {e}", exc_info=True)
+                    return False # If setup fails, do not proceed.
+            else:
+                self.logger.info(f"INFO:PluginManager: Plugin '{plugin_key_lower}' already marked as setup by PluginManager. Skipping setup() call.")
+
+        # --- Now, call the plugin's own enable method ---
+        if hasattr(instance, 'enable') and callable(instance.enable):
             try:
-                enable_success = plugin_instance.enable()
-                if not enable_success:
-                    self.logger.error(f"Plugin '{plugin_name_lower}'.enable() returned False.")
+                self.logger.info(f"INFO:PluginManager: Calling enable() method on plugin instance '{plugin_key_lower}'.")
+                if instance.enable(): # This calls your MultiplayerPlugin.enable()
+                    self.enabled_plugins.add(plugin_key_lower)
+                    self.logger.info(f"INFO:PluginManager: Plugin '{plugin_key_lower}' successfully enabled and added to enabled set.")
+                    self.trigger_hook("on_plugin_enabled", plugin_key=plugin_key_lower)
+                    return True
+                else:
+                    self.logger.error(f"ERROR:PluginManager: Plugin '{plugin_key_lower}' enable() method returned False.")
                     return False
-                self.logger.info(f"Plugin '{plugin_name_lower}'.enable() method called successfully.")
-            except Exception as e:
-                self.logger.error(f"Error calling .enable() on plugin '{plugin_name_lower}': {e}", exc_info=True)
+            except AttributeError as ae: 
+                self.logger.error(f"ERROR:PluginManager: AttributeError during enable() of plugin '{plugin_key_lower}': {ae}. This suggests 'self.is_setup' was not initialized in the plugin's __init__.", exc_info=True)
                 return False
-        elif plugin_instance is None:
-             self.logger.warning(f"Plugin '{plugin_name_lower}' has no instance, cannot call .enable(). Enabling in manager only.")
-        
-        self.enabled_plugins.add(plugin_name_lower)
-        self.logger.info(f"Plugin '{plugin_name_lower}' enabled.")
-        return True
+            except Exception as e:
+                self.logger.error(f"ERROR:PluginManager: Exception during enable() of plugin '{plugin_key_lower}': {e}", exc_info=True)
+                return False
+        else:
+            # If the plugin has no specific enable method, just mark it as enabled in the manager
+            self.enabled_plugins.add(plugin_key_lower)
+            self.logger.info(f"INFO:PluginManager: Plugin '{plugin_key_lower}' has no custom enable() method, marked as enabled in manager.")
+            self.trigger_hook("on_plugin_enabled", plugin_key=plugin_key_lower)
+            return True
 
     def disable_plugin(self, plugin_name: str) -> bool:
         """Disable an enabled plugin."""
