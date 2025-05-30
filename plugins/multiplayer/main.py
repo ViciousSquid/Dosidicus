@@ -20,73 +20,80 @@ try:
     elif os.path.isdir(os.path.join(project_root_candidate_two_up, 'src')): # Fallback for deeper nesting
         project_root = project_root_candidate_two_up
     else:
-        print(f"Multiplayer Plugin Warning: 'src' directory not reliably found from {current_file_dir}. Imports might fail.")
+        # Using print here as logger might not be available/configured at this early stage of module loading
+        print(f"Multiplayer Plugin (main.py) Warning: 'src' directory not reliably found from {current_file_dir}. Imports might fail.")
         # Default to a common structure if unsure (e.g., plugin is in 'project_root/plugins/plugin_name/')
         project_root = project_root_candidate_one_up
 
     if project_root and project_root not in sys.path:
         sys.path.insert(0, project_root)
-        print(f"Multiplayer Plugin: Added '{project_root}' to sys.path for src imports.")
+        # Optional: print(f"Multiplayer Plugin (main.py): Added '{project_root}' to sys.path for src imports.")
     if current_file_dir not in sys.path: # Add current plugin directory to sys.path (for relative imports if run directly)
         sys.path.insert(0, current_file_dir)
 
 except Exception as e:
-    print(f"Multiplayer Plugin: Error setting up sys.path in main.py: {e}")
+    print(f"Multiplayer Plugin (main.py): Error setting up sys.path: {e}")
 # --- End Python Path Setup ---
 
 # Import after sys.path modifications
 try:
     from src.tamagotchi_logic import TamagotchiLogic
 except ImportError:
-    print("Multiplayer Plugin: TamagotchiLogic could not be imported. Ensure 'src' is in sys.path and contains tamagotchi_logic.py.")
-    TamagotchiLogic = None # Define as None if import fails, plugin should handle this.
+    # This print is important for diagnosing issues if the main application structure isn't found
+    print("Multiplayer Plugin (main.py) CRITICAL IMPORT ERROR: TamagotchiLogic could not be imported. Ensure 'src' is in sys.path and contains tamagotchi_logic.py.")
+    TamagotchiLogic = None # Define as None if import fails, plugin should handle this gracefully.
 
 # Import plugin metadata constants (defined centrally)
-from .mp_constants import (
-    PLUGIN_NAME, PLUGIN_VERSION, PLUGIN_AUTHOR,
-    PLUGIN_DESCRIPTION, PLUGIN_REQUIRES
-)
+from . import mp_constants # Use this to access PLUGIN_NAME, etc.
 
 # Import the main plugin class
 from .mp_plugin_logic import MultiplayerPlugin
 
 
 # --- Plugin Registration Function ---
-def initialize(plugin_manager_instance):
+def initialize(plugin_manager_instance): # plugin_manager_instance is the actual PluginManager object
     """
     Initializes the Multiplayer plugin and registers it with the plugin manager.
     This function is called by the plugin system.
     """
     try:
         # Create an instance of the main plugin class
-        plugin_instance = MultiplayerPlugin()
+        plugin_instance = MultiplayerPlugin() # This is MultiplayerPlugin from mp_plugin_logic.py
 
-        # Define a unique key for the plugin (e.g., based on its name)
-        plugin_key = PLUGIN_NAME.lower().replace(" ", "_") # Example: "multiplayer"
+        # --- MODIFICATION: Set plugin_manager on the instance ---
+        # Explicitly set the plugin_manager on the plugin instance here.
+        # This ensures it's available to the plugin instance's methods like enable() and particularly setup().
+        # Assumes MultiplayerPlugin.__init__ defines self.plugin_manager = None
+        plugin_instance.plugin_manager = plugin_manager_instance
+        # --- END MODIFICATION ---
+
+        # Define a unique key for the plugin (e.g., based on its name from constants)
+        plugin_key = mp_constants.PLUGIN_NAME.lower().replace(" ", "_") # Example: "multiplayer"
 
         # Register the plugin with the plugin manager
         # The plugin manager will use this information to manage the plugin
         plugin_manager_instance.plugins[plugin_key] = {
             'instance': plugin_instance,          # The actual plugin object
-            'name': PLUGIN_NAME,                  # Display name of the plugin
-            'version': PLUGIN_VERSION,            # Version number
-            'author': PLUGIN_AUTHOR,              # Author(s)
-            'description': PLUGIN_DESCRIPTION,    # Brief description
-            'requires': PLUGIN_REQUIRES,          # List of dependencies (other plugin names)
+            'name': mp_constants.PLUGIN_NAME,      # Display name of the plugin
+            'version': mp_constants.PLUGIN_VERSION,# Version number
+            'author': mp_constants.PLUGIN_AUTHOR,  # Author(s)
+            'description': mp_constants.PLUGIN_DESCRIPTION, # Brief description
+            'requires': mp_constants.PLUGIN_REQUIRES,      # List of dependencies (other plugin names)
             'is_setup': False,                    # Plugin's own setup method will set this to True
-            'is_enabled_by_default': True        # Set to True if it should be enabled on start
+            'is_enabled_by_default': True         # Set to True if it should be enabled on start
         }
 
         # The plugin manager should ideally pass itself to the plugin instance,
-        # for example, by calling a method like plugin_instance.set_plugin_manager(plugin_manager_instance)
-        # or when calling plugin_instance.setup(plugin_manager_instance).
-        # The MultiplayerPlugin.enable() method also has a fallback to find the plugin_manager.
+        # which we now do above.
+        # The MultiplayerPlugin.enable() method relies on self.plugin_manager being set.
 
-        print(f"{PLUGIN_NAME} (Version: {PLUGIN_VERSION} by {PLUGIN_AUTHOR}) has been registered with the plugin manager.")
+        # This print uses the global print function, as an instance logger isn't set up for this main.py scope.
+        print(f"{mp_constants.PLUGIN_NAME} (Version: {mp_constants.PLUGIN_VERSION} by {mp_constants.PLUGIN_AUTHOR}) has been registered with the plugin manager.")
         return True
     except Exception as e:
-        print(f"Error during {PLUGIN_NAME} plugin initialization: {e}")
-        traceback.print_exc()
+        # Use global print for errors at this very early stage if a logger isn't available/reliable
+        print(f"Error during {mp_constants.PLUGIN_NAME} plugin initialization (in plugins/multiplayer/main.py): {e}")
+        traceback.print_exc() # Print full traceback for diagnosing initialization errors
         return False
 
 # --- End of Plugin Registration ---
