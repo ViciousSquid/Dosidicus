@@ -14,13 +14,15 @@ from .mp_constants import MULTICAST_GROUP, MULTICAST_PORT, MAX_PACKET_SIZE
 
 
 class NetworkNode:
-    def __init__(self, node_id=None):
+    def __init__(self, node_id=None, logger=None): # MODIFIED: Added logger parameter
         """
         Represents a networked node in the multiplayer system.
 
         Args:
             node_id (str, optional): Unique identifier for this node.
                                      Generated if not provided.
+            logger (logging.Logger, optional): Logger instance to use.
+                                               A default one is created if not provided.
         """
         # Attempt to use NetworkUtilities if available, otherwise fallback
         try:
@@ -28,7 +30,7 @@ class NetworkNode:
             self.node_id = node_id or NetworkUtilities.generate_node_id()
             self.utils = NetworkUtilities
         except ImportError:
-            self.node_id = node_id or f"squid_{uuid.uuid4().hex[:8]}"
+            self.node_id = node_id or f"squid_{uuid.uuid4().hex[:8]}" # self.node_id is set here
             self.utils = None
 
         self.local_ip = self._get_local_ip()
@@ -49,18 +51,35 @@ class NetworkNode:
 
         self.known_nodes = {}
         self.last_sync_time = 0
-        self.debug_mode = False # Set this to True for verbose logging
+        # This NetworkNode.debug_mode is initialized to False.
+        # The calling code (MultiplayerPlugin) will set network_node.debug_mode
+        # to its own debug_mode value after initialization.
+        self.debug_mode = False 
 
-        # Logger setup
-        self.logger = getattr(self, 'logger', None)
-        if self.logger is None:
+        # MODIFIED: Logger setup block
+        if logger is not None:
+            self.logger = logger  # Use the logger passed as an argument
+        else:
+            # Fallback to creating a default logger if none was passed.
+            # This block is primarily for cases where NetworkNode might be instantiated
+            # directly without a logger, or for future flexibility.
+            # In the current usage by MultiplayerPlugin, a logger is always passed.
             import logging
-            self.logger = logging.getLogger(f"{__name__}.NetworkNode.{self.node_id[:4]}")
-            if not self.logger.handlers:
+            # self.node_id is guaranteed to be set before this point.
+            _logger_name = f"{__name__}.NetworkNode.{self.node_id[:4]}"
+            self.logger = logging.getLogger(_logger_name)
+            
+            if not self.logger.handlers: # Configure only if no handlers exist for this logger instance
                 handler = logging.StreamHandler()
                 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
                 handler.setFormatter(formatter)
                 self.logger.addHandler(handler)
+                # The level is set based on NetworkNode's self.debug_mode.
+                # If MultiplayerPlugin later sets self.debug_mode to True,
+                # and this default logger was created, its level might need
+                # adjustment if it wasn't already DEBUG. However, since
+                # MultiplayerPlugin passes its own configured logger, this
+                # default logger's level setting is less critical for that flow.
                 self.logger.setLevel(logging.DEBUG if self.debug_mode else logging.INFO)
         
         # Initialize socket structure but do not start listening yet.
