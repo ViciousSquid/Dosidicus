@@ -149,7 +149,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if hasattr(self.brain_window, 'tabs'):
                 # Visit each tab to ensure it's loaded
                 tab_count = self.brain_window.tabs.count()
-                print(f"Pre-loading {tab_count} tabs...")
+                #print(f"Pre-loading {tab_count} tabs...")
                 
                 # Initialize tabs array to prevent garbage collection
                 if not hasattr(self, '_preloaded_tabs'):
@@ -164,7 +164,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 for i in range(tab_count):
                     self.brain_window.tabs.setCurrentIndex(i)
                     tab_name = self.brain_window.tabs.tabText(i)
-                    print(f"Pre-loading tab {i}: {tab_name}")
+                    #print(f"Pre-loading tab {i}: {tab_name}")
                     
                     # Get the tab widget and reference it to prevent garbage collection
                     tab_widget = self.brain_window.tabs.widget(i)
