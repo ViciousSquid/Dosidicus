@@ -19,40 +19,45 @@ from .config_manager import ConfigManager
 from .plugin_manager import PluginManager
 
 class TamagotchiLogic:
-    def __init__(self, user_interface, squid, brain_window):
+    def __init__(self, user_interface, squid, brain_window, plugin_manager_instance): # MODIFIED: Added plugin_manager_instance
         self.config_manager = ConfigManager()
         self._propagating_debug_mode = False
         self.user_interface = user_interface
-        self.mental_states_enabled = True
+        self.mental_states_enabled = True # Default, can be changed by config or UI
         self.squid = squid
         self.brain_window = brain_window
         
         # Initialize rock interaction manager with config
         self.rock_interaction = RockInteractionManager(
             squid=self.squid,
-            logic=self,
-            scene=self.user_interface.scene,
-            message_callback=self.show_message,
-            config_manager=self.config_manager  # Add this line
+            logic=self, # Pass self (TamagotchiLogic instance)
+            scene=self.user_interface.scene, # Assuming user_interface has scene
+            message_callback=self.show_message, # Assuming show_message method exists
+            config_manager=self.config_manager 
         )
-        self.user_interface = user_interface
-        self.squid = squid
-        self.brain_window = brain_window
+        # These lines seem redundant as they are set a few lines above.
+        # self.user_interface = user_interface 
+        # self.squid = squid
+        # self.brain_window = brain_window
         self.window_resize_cooldown = 0
         self.window_resize_cooldown_max = 30  # 30 updates before another resize can startle
         self.has_been_resized = False
-        self.was_big = False
-        self.debug_mode = False
-        self.last_window_size = (1280, 900)  # Default size
+        self.was_big = False # Tracks if window was previously enlarged
+        self.debug_mode = False # Initial debug mode state
+        self.last_window_size = (1280, 900)  # Default or initial size
 
-        # Initialize plugin manager
-        self.plugin_manager = PluginManager()
-        self.plugin_manager.load_all_plugins()
+        # MODIFIED: Use the passed-in PluginManager instance
+        self.plugin_manager = plugin_manager_instance
+        # REMOVED: self.plugin_manager = PluginManager()
+        # REMOVED: self.plugin_manager.load_all_plugins() 
+        # Plugin loading and initial enabling is now handled once in main.py
 
-        # Update status bar with plugin information
-        self.update_status_bar()
+        # Update status bar with plugin information (using the shared plugin_manager)
+        # This assumes update_status_bar correctly uses self.plugin_manager
+        self.update_status_bar() 
                 
-        # Trigger startup hook
+        # Trigger startup hook using the shared plugin_manager
+        # This informs plugins that TamagotchiLogic (and other core components) are ready.
         self.plugin_manager.trigger_hook("on_startup", 
                                         tamagotchi_logic=self,
                                         squid=self.squid,
@@ -66,14 +71,14 @@ class TamagotchiLogic:
         # Initialize game objects BEFORE load_game()
         self.food_items = []
         self.max_food = 3
-        self.food_width = 64
+        self.food_width = 64 # Assuming these are class constants or set elsewhere if dynamic
         self.food_height = 64
         self.poop_items = []
         self.max_poop = 3
         self.points = 0
 
         # Flag to indicate the first instance of the application start
-        self.is_first_instance = True
+        self.is_first_instance = True # This logic might need review if TamagotchiLogic is re-init for new game vs app start
 
         # Initialize a timer for the initial delay if it's the first instance
         if self.is_first_instance:
@@ -82,6 +87,9 @@ class TamagotchiLogic:
             self.initial_delay_timer.timeout.connect(self.allow_initial_startle)
             self.initial_delay_timer.start(60000)  # 60000 ms = 1 minute
             self.initial_startle_allowed = False
+        else: # If not first instance, perhaps allow startle immediately or handle differently
+            self.initial_startle_allowed = True 
+
 
         # Initialize neurogenesis triggers with all required keys
         self.neurogenesis_triggers = {
@@ -89,61 +97,86 @@ class TamagotchiLogic:
             'high_stress_cycles': 0,
             'positive_outcomes': 0
         }
-        self.new_object_encountered = False
-        self.recent_positive_outcome = False
+        self.new_object_encountered = False # Per-frame flag
+        self.recent_positive_outcome = False # Per-frame flag
 
         # Setup timers with required arguments
-        self.setup_timers()
+        self.setup_timers() # Ensure this method doesn't conflict with simulation_speed logic
 
         # Initialize thought system
         if hasattr(self.brain_window, 'add_thought'):
             self.add_thought = self.brain_window.add_thought
         else:
-            self.thought_log = []
-            self.add_thought = self._log_thought
+            self.thought_log = [] # Fallback thought log
+            self.add_thought = self._log_thought # Fallback method
 
         # Initialize save manager
-        self.save_manager = SaveManager()
-        self.load_game()
+        self.save_manager = SaveManager() # Assuming default path or configure if needed
+        self.load_game() # Load game state after initializations
 
         # Connect menu actions
-        self.user_interface.feed_action.triggered.connect(self.feed_squid)
-        self.user_interface.clean_action.triggered.connect(self.clean_environment)
-        self.user_interface.connect_view_cone_action(self.squid.toggle_view_cone)
-        self.user_interface.medicine_action.triggered.connect(self.give_medicine)
-        self.user_interface.debug_action.triggered.connect(self.toggle_debug_mode)
+        # Ensure user_interface object and its actions are fully initialized before connecting
+        if hasattr(self.user_interface, 'feed_action'):
+            self.user_interface.feed_action.triggered.connect(self.feed_squid)
+        if hasattr(self.user_interface, 'clean_action'):
+            self.user_interface.clean_action.triggered.connect(self.clean_environment)
+        if hasattr(self.user_interface, 'connect_view_cone_action'):
+             self.user_interface.connect_view_cone_action(self.squid.toggle_view_cone)
+        if hasattr(self.user_interface, 'medicine_action'):
+            self.user_interface.medicine_action.triggered.connect(self.give_medicine)
+        if hasattr(self.user_interface, 'debug_action'):
+            self.user_interface.debug_action.triggered.connect(self.toggle_debug_mode)
+
 
         # Window setup
-        self.user_interface.window.resizeEvent = self.handle_window_resize
+        # It's generally better for the UI class to manage its own resize event if possible,
+        # but this assignment is kept as per original structure.
+        if hasattr(self.user_interface, 'window'):
+            self.user_interface.window.resizeEvent = self.handle_window_resize
+        else:
+            self.logger.warning("User interface window not found for resizeEvent hook.")
+
 
         # Initialize state tracking
-        self.last_clean_time = 0
-        self.clean_cooldown = 60
-        self.cleanliness_threshold_time = 0
-        self.hunger_threshold_time = 0
-        self.needle_item = None
-        self.lights_on = True
+        self.last_clean_time = 0 # Should probably be loaded from save_data
+        self.clean_cooldown = 60 # seconds
+        self.cleanliness_threshold_time = 0 # Accumulator, should be loaded
+        self.hunger_threshold_time = 0 # Accumulator, should be loaded
+        self.needle_item = None # For medicine visual
+        self.lights_on = True # Example state, manage as needed
 
         # Initialize statistics window
-        self.statistics_window = StatisticsWindow(squid)
-        self.statistics_window.show()
+        # Ensure squid is valid before passing
+        if self.squid:
+            self.statistics_window = StatisticsWindow(self.squid) # Pass squid instance
+            self.statistics_window.show() 
+        else:
+            self.logger.error("Squid not initialized before StatisticsWindow creation.")
+            self.statistics_window = None
 
-        # Setup additional timers
+
+        # Setup additional timers (some might be redundant if already in setup_timers)
+        # Ensure these are distinct from self.simulation_timer if they have different purposes/intervals
         self.score_update_timer = QtCore.QTimer()
         self.score_update_timer.timeout.connect(self.update_score)
-        self.score_update_timer.start(5000)
+        self.score_update_timer.start(5000) # 5 seconds
 
         self.brain_update_timer = QtCore.QTimer()
         self.brain_update_timer.timeout.connect(self.update_squid_brain)
-        self.brain_update_timer.start(1000)
+        self.brain_update_timer.start(1000) # 1 second
 
         self.autosave_timer = QtCore.QTimer()
         self.autosave_timer.timeout.connect(self.autosave)
+        # self.autosave_timer.start() # Autosave should be started explicitly, perhaps after game load or new game.
 
-        # Initialize goal neurons
-        self.squid.satisfaction = 50
-        self.squid.anxiety = 10
-        self.squid.curiosity = 55
+        # Initialize goal neurons if squid exists
+        if self.squid:
+            self.squid.satisfaction = getattr(self.squid, 'satisfaction', 50) # Load from save or default
+            self.squid.anxiety = getattr(self.squid, 'anxiety', 10)
+            self.squid.curiosity = getattr(self.squid, 'curiosity', 55)
+        else:
+            self.logger.warning("Squid not available for setting initial goal neuron values.")
+
 
         ################################
         #### MENTAL STATE COOLDOWNS ####
