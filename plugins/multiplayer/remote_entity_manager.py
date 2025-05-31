@@ -263,7 +263,7 @@ class RemoteEntityManager:
                     if squid_width and squid_height:
                         squid_pixmap = squid_pixmap.scaled(int(squid_width), int(squid_height), QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
 
-                remote_visual = AnimatableGraphicsItem(squid_pixmap) # Still use Animatable for scale property if needed elsewhere
+                remote_visual = QtWidgets.QGraphicsPixmapItem(squid_pixmap)
                 remote_visual.setPos(entry_x, entry_y) 
                 remote_visual.setZValue(5) 
                 remote_visual.setOpacity(self.remote_opacity) # MODIFIED: Set to full opacity (or self.remote_opacity which is 1.0)
