@@ -21,8 +21,8 @@ class Squid:
         self.startled_icon = None
         self.startled_icon_offset = QtCore.QPointF(0, -100)
 
-        # Set neurogenesis cooldown (default to 200 seconds if not specified)
-        self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 200
+        # Set neurogenesis cooldown (default to 180 seconds if not specified)
+        self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 180
 
         # Rock interaction system
         self.carrying_rock = False
@@ -527,6 +527,11 @@ class Squid:
         """
         Comprehensive boundary exit detection with robust network node handling
         """
+        # If squid is transitioning (e.g., moving between tanks), do nothing further.
+        if self.is_transitioning:
+            # print(f"DEBUG: {getattr(self, 'name', 'Squid')} is_transitioning is True in check_boundary_exit, returning False.")
+            return False # Do not check for exits if already transitioning
+
         try:
             # Check basic prerequisites
             if not hasattr(self, 'tamagotchi_logic') or not self.tamagotchi_logic:
@@ -553,7 +558,8 @@ class Squid:
                     if multiplayer_plugin and hasattr(multiplayer_plugin, 'network_node'):
                         network_node = multiplayer_plugin.network_node
                         # Attempt to set on tamagotchi_logic for future use
-                        self.tamagotchi_logic.network_node = network_node
+                        if hasattr(self.tamagotchi_logic, 'network_node'): # Check if attribute exists before setting
+                             self.tamagotchi_logic.network_node = network_node
                 except Exception as plugin_error:
                     print(f"Error finding network node in plugin: {plugin_error}")
             
@@ -568,56 +574,83 @@ class Squid:
             
             exit_direction = None
             
-            print("\n===== BOUNDARY EXIT ANALYSIS =====")
-            print(f"Squid Position: ({self.squid_x}, {self.squid_y})")
-            print(f"Squid Dimensions: {self.squid_width}x{self.squid_height}")
-            print(f"Window Dimensions: {self.ui.window_width}x{self.ui.window_height}")
+            # The print statements below are from your original code and are useful for debugging.
+            # print("\n===== BOUNDARY EXIT ANALYSIS =====")
+            # print(f"Squid Position: ({self.squid_x}, {self.squid_y})")
+            # print(f"Squid Dimensions: {self.squid_width}x{self.squid_height}")
+            # print(f"Window Dimensions: {self.ui.window_width}x{self.ui.window_height}")
             
             # Comprehensive boundary checks
-            if self.squid_x <= 0:
+            # Ensure these use the most up-to-date squid position (self.squid_x, self.squid_y)
+            # and dimensions. The window dimensions come from self.ui.
+            if self.squid_x <= 0: # Exiting left
                 exit_direction = 'left'
-            elif squid_right >= self.ui.window_width:
+            elif squid_right >= self.ui.window_width: # Exiting right
                 exit_direction = 'right'
-            elif self.squid_y <= 0:
+            elif self.squid_y <= 0: # Exiting up
                 exit_direction = 'up'
-            elif squid_bottom >= self.ui.window_height:
+            elif squid_bottom >= self.ui.window_height: # Exiting down
                 exit_direction = 'down'
             
             if exit_direction:
-                print(f"Exit Direction Detected: {exit_direction}")
+                # This print is from your original code, good for debugging
+                # print(f"Exit Direction Detected: {exit_direction}") 
                 
                 # Prepare comprehensive exit data
                 exit_data = {
                     'node_id': network_node.node_id,
                     'direction': exit_direction,
-                    'position': {
+                    'position': { # Position at the point of exit detection
                         'x': self.squid_x,
                         'y': self.squid_y
                     },
-                    'color': self._get_squid_color(),
+                    'color': self._get_squid_color(), # Make sure _get_squid_color works
                     'squid_width': self.squid_width,
                     'squid_height': self.squid_height,
-                    'window_width': self.ui.window_width,
-                    'window_height': self.ui.window_height
+                    'window_width': self.ui.window_width, # Window of this instance
+                    'window_height': self.ui.window_height, # Window of this instance
+                    # Add any other state needed for the remote squid representation
+                    # For example, current animation frame or facing direction if different from exit direction
+                    'current_animation_frame': None, # Placeholder, implement if needed
+                    'image_direction_key': self.squid_direction # The squid's current facing direction
                 }
                 
-                print("Exit Data Details:")
-                for key, value in exit_data.items():
-                    print(f"  {key}: {value}")
+                # This print block is from your original code, good for debugging
+                # print("Exit Data Details:")
+                # for key, value in exit_data.items():
+                #     print(f"  {key}: {value}")
                 
                 # Broadcast exit message
                 try:
                     network_node.send_message(
                         'squid_exit', 
-                        {'payload': exit_data}
+                        {'payload': exit_data} # Original code had payload nested again, ensure mp_plugin_logic handles this
                     )
-                    print("Exit message successfully broadcast")
-                    return True
+                    print("Exit message successfully broadcast") # This line is confirmed in your logs
+                    
+                    # VERIFICATION POINT: State setting occurs AFTER successful broadcast
+                    self.is_transitioning = True
+                    self.can_move = False 
+                    if hasattr(self.squid_item, 'setVisible'):
+                         self.squid_item.setVisible(False)
+                    else: # Fallback if no setVisible, e.g. if squid_item is not QGraphicsItem
+                         print(f"Warning: squid_item for {getattr(self,'name','Squid')} has no setVisible method.")
+
+                    self.status = "visiting another tank" # Or some other appropriate "exited" status
+                    
+                    # print(f"DEBUG: {getattr(self, 'name', 'Squid')} - just set is_transitioning=True, can_move=False, setInvisible.")
+
+
+                    if hasattr(self.tamagotchi_logic, 'show_message'):
+                        self.tamagotchi_logic.show_message(f"Your squid left through the {exit_direction} boundary!")
+                    return True # Exit successfully processed and broadcast
                 except Exception as broadcast_error:
-                    print(f"Broadcast error: {broadcast_error}")
+                    print(f"Broadcast error during squid_exit: {broadcast_error}")
+                    # Potentially, is_transitioning should not be set if broadcast fails,
+                    # or there should be a retry mechanism. For now, it returns False.
                     return False
             
-            return False
+            return False # No exit direction detected
         
         except Exception as e:
             print(f"Comprehensive boundary exit error: {e}")
@@ -973,8 +1006,14 @@ class Squid:
         """
         Move the squid with comprehensive debug logging and boundary check
         """
+        # If squid is transitioning (e.g., moving between tanks), do nothing further.
+        if self.is_transitioning:
+            # print(f"DEBUG: {getattr(self, 'name', 'Squid')} is_transitioning is True in move_squid, returning.")
+            return
+
         # Check if movement is allowed
         if not getattr(self, 'can_move', True):
+            # print(f"DEBUG: {getattr(self, 'name', 'Squid')} can_move is False, returning from move_squid.")
             return
         
         # Check if multiplayer is available and enabled
@@ -990,7 +1029,7 @@ class Squid:
 
         if self.is_sleeping:
             #print("Squid is sleeping, limited movement")
-            if self.squid_y < self.ui.window_height - 120 - self.squid_height:
+            if self.squid_y < self.ui.window_height - 120 - self.squid_height: # Ensure correct boundary for sleeping
                 self.squid_y += self.base_vertical_speed * self.animation_speed
                 self.squid_item.setPos(self.squid_x, self.squid_y)
             self.current_frame = (self.current_frame + 1) % 2
@@ -1004,22 +1043,23 @@ class Squid:
         if visible_food:
             closest_food = min(visible_food, key=lambda f: self.distance_to(f[0], f[1]))
             self.pursuing_food = True
-            self.target_food = closest_food
-            self.move_towards(closest_food[0], closest_food[1])
-        elif self.pursuing_food:
+            self.target_food = closest_food # Store the target food coordinates
+            self.move_towards(closest_food[0], closest_food[1]) # This sets self.squid_direction
+        elif self.pursuing_food: # Was pursuing but food is no longer visible
             self.pursuing_food = False
             self.target_food = None
-            self.move_randomly()
-        else:
+            self.move_randomly() # Sets self.squid_direction
+        else: # Not pursuing food, move randomly
             if current_time - self.last_view_cone_change > self.view_cone_change_interval:
-                self.change_view_cone_direction()
+                self.change_view_cone_direction() # This updates self.current_view_angle
                 self.last_view_cone_change = current_time
-            self.move_randomly()
+            self.move_randomly() # Sets self.squid_direction
 
-        # Calculate new position
+        # Calculate new potential position based on self.squid_direction
         squid_x_new = self.squid_x
         squid_y_new = self.squid_y
 
+        # Actual movement based on direction set by move_towards or move_randomly
         if self.squid_direction == "left":
             squid_x_new -= self.base_squid_speed * self.animation_speed
         elif self.squid_direction == "right":
@@ -1042,14 +1082,14 @@ class Squid:
             if squid_y_new < 50:
                 squid_y_new = 50
                 self.change_direction()
-            elif squid_y_new > self.ui.window_height - 120 - self.squid_height:
+            elif squid_y_new > self.ui.window_height - 120 - self.squid_height: # Ensure correct boundary check
                 squid_y_new = self.ui.window_height - 120 - self.squid_height
                 self.change_direction()
-        else:
-            # Extended boundary check for multiplayer
-            print("Multiplayer mode: Extended boundary check")
-            squid_right = squid_x_new + self.squid_width
-            squid_bottom = squid_y_new + self.squid_height
+        # else: # In multiplayer, boundary checks are handled by check_boundary_exit
+            # No explicit position clamping here for multiplayer, as exit is desired.
+            # However, if not exiting, the squid just moves to squid_x_new, squid_y_new.
+            # The check_boundary_exit will then determine if an exit occurred.
+
 
         # Update squid position
         self.squid_x = squid_x_new
@@ -1062,14 +1102,12 @@ class Squid:
 
         # Set new position and update related elements
         self.squid_item.setPos(self.squid_x, self.squid_y)
-        self.update_view_cone()
-        self.update_sick_icon_position()
+        self.update_view_cone() # Ensure this is called if view cone depends on position/direction
+        self.update_sick_icon_position() # Ensure this is called
 
         # Comprehensive boundary exit check in multiplayer mode
         if multiplayer_enabled:
-            #print("Triggering boundary exit check in multiplayer mode")
             exit_result = self.check_boundary_exit()
-            #print(f"Boundary Exit Result: {exit_result}")
 
     def move_towards(self, x, y):
         dx = x - (self.squid_x + self.squid_width // 2)
