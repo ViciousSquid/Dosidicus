@@ -330,77 +330,128 @@ class NetworkNode:
             self.logger.error(f"Error sending message batch: {e}", exc_info=self.debug_mode)
         return False
 
+
+    # In plugins/multiplayer/mp_network_node.py (inside NetworkNode class)
+
     def receive_messages(self):
         if not self.is_connected or not self.socket:
             return [] 
 
         received_messages_this_call = []
         try:
-            for _ in range(10): 
+            for _ in range(10): # Process up to 10 messages per call to avoid blocking
                 try:
                     raw_data, addr = self.socket.recvfrom(MAX_PACKET_SIZE)
                     if not raw_data:
                         continue 
 
+                    # =============== NEW PRINT STATEMENT (1/3) ===============
+                    # Log raw data reception from OTHERS (before filtering self)
+                    # We want to see if the squid_exit packet arrives here at all.
+                    # To avoid confusion with self-messages, let's initially peek at a potential node_id
+                    # This is a bit hacky for a peek, but helps for this specific debug.
+                    temp_node_id_peek = "unknown_at_raw_recv"
+                    try:
+                        # Attempt a quick, optimistic partial decode just for sender ID logging
+                        # This is VERY simplified and might fail often, but good enough for a hint
+                        if self.use_compression:
+                            try:
+                                d_peek = zlib.decompress(raw_data)
+                                j_peek = json.loads(d_peek.decode('utf-8', errors='ignore'))
+                                temp_node_id_peek = j_peek.get('node_id', 'peek_decode_fail')
+                            except: # Broad except as this is just for a debug hint
+                                temp_node_id_peek = 'peek_zlib_fail'
+                        else:
+                            try:
+                                j_peek = json.loads(raw_data.decode('utf-8', errors='ignore'))
+                                temp_node_id_peek = j_peek.get('node_id', 'peek_json_fail')
+                            except:
+                                 temp_node_id_peek = 'peek_raw_json_fail'
+                    except:
+                        pass # Ignore errors in this peek
+
+                    if temp_node_id_peek != self.node_id : # Only log if it's potentially from another node
+                        print(f"DEBUG_RAW_RECEIVE: Node {self.node_id} RAW_RECV from {addr} (potential sender: {temp_node_id_peek}). Size: {len(raw_data)}. Data[:60]: {raw_data[:60]}")
+                    # ========================================================
+
                     message_dict = None
                     decoded_successfully = False
+                    decompression_attempted = False
+                    decompression_error_details = "No decompression error."
 
                     if self.use_compression:
+                        decompression_attempted = True
                         try:
                             if self.utils and hasattr(self.utils, 'decompress_message'):
                                 message_dict = self.utils.decompress_message(raw_data)
-                            else:
+                            else: # Fallback to direct zlib
                                 decompressed_data_bytes = zlib.decompress(raw_data)
                                 message_dict = json.loads(decompressed_data_bytes.decode('utf-8'))
                             
-                            # Check if decompress_message returned a dict (it should on success)
                             if isinstance(message_dict, dict):
                                 decoded_successfully = True
-                            else: # If decompress_message returned None or an error dict
-                                if self.debug_mode: self.logger.debug(f"Decompression via self.utils did not yield a dict. Return: {message_dict}")
-                                # Fall through to try uncompressed, or handle error if message_dict indicates one
-                                if isinstance(message_dict, dict) and "error" in message_dict:
-                                     if self.debug_mode: self.logger.debug(f"Decompression error indicated by decompress_message: {message_dict.get('details')}")
-                                     # Still try uncompressed as a fallback
+                            elif message_dict is None: # Decompress_message might return None on error
+                                decompression_error_details = "utils.decompress_message returned None."
+                            elif isinstance(message_dict, dict) and "error" in message_dict:
+                                decompression_error_details = f"utils.decompress_message error: {message_dict.get('details')}"
                         
-                        except (zlib.error, json.JSONDecodeError, UnicodeDecodeError) as e: # Catch errors if self.utils.decompress isn't used or fails before returning
-                            if self.debug_mode:
-                                self.logger.debug(f"Failed compressed decoding (zlib/json direct) from {addr}: {e}. Trying uncompressed.")
+                        except (zlib.error, json.JSONDecodeError, UnicodeDecodeError) as e_comp: 
+                            decompression_error_details = f"Compressed decoding (zlib/json direct) failed: {e_comp}"
+                            # Will fall through to uncompressed
                     
-                    if not decoded_successfully:
+                    if not decoded_successfully: # Try as uncompressed if compression failed or wasn't used
                         try:
                             message_dict = json.loads(raw_data.decode('utf-8'))
                             decoded_successfully = True
-                        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                            if self.debug_mode:
-                                self.logger.debug(f"Failed uncompressed JSON decoding from {addr}: {e}. Data: {raw_data[:80]}...")
-                            continue 
+                            if decompression_attempted: # Log if we fell back from compression
+                                if self.debug_mode: self.logger.debug(f"Successfully decoded as uncompressed JSON after failed compression attempt from {addr}. Original error: {decompression_error_details}")
+                        except (json.JSONDecodeError, UnicodeDecodeError) as e_json:
+                            if self.debug_mode: self.logger.debug(f"Failed all decoding attempts from {addr}: CompError='{decompression_error_details}', UncompJSONError='{e_json}'. Data: {raw_data[:80]}...")
+                            continue # Skip this datagram if all decoding fails
                     
+                    # =============== MODIFIED PRINT STATEMENT (2/3) ===============
+                    # This is the old DEBUG_RECEIVE, now more informative
+                    log_this_decoded_message = False
+                    final_sender_node_id = "unknown_after_decode"
+
                     if not message_dict or not isinstance(message_dict, dict) or 'node_id' not in message_dict:
-                        if self.debug_mode: self.logger.debug(f"Invalid or incomplete message structure from {addr}: {message_dict}")
-                        continue
+                        if self.debug_mode: self.logger.debug(f"Invalid or incomplete message structure AFTER DECODE from {addr}: {message_dict}")
+                        continue # Skip if still malformed
                     
-                    if message_dict.get('node_id') == self.node_id:
+                    final_sender_node_id = message_dict.get('node_id')
+                    if final_sender_node_id != self.node_id: # Only log messages from OTHERS
+                        log_this_decoded_message = True
+                    
+                    if log_this_decoded_message:
+                        payload_keys_str = list(message_dict.get('payload', {}).keys()) if isinstance(message_dict.get('payload'), dict) else 'N/A_or_NotDict'
+                        print(f"DEBUG_DECODED: Node {self.node_id} DECODED message from {addr}: Type '{message_dict.get('type')}', From Node '{final_sender_node_id}', PayloadKeys: {payload_keys_str}")
+                        if message_dict.get('type') == 'squid_exit': # More detail for squid_exit
+                            print(f"DEBUG_SQUID_EXIT_PAYLOAD: {message_dict.get('payload')}")
+                    # ==============================================================
+                    
+                    if final_sender_node_id == self.node_id: # Filter out own messages AFTER logging if needed for loopback test
                         continue
 
-                    self.known_nodes[message_dict['node_id']] = (addr[0], time.time(), message_dict.get('payload', {}).get('squid', {})) # Basic presence update
+                    # Update known nodes (basic presence)
+                    self.known_nodes[message_dict['node_id']] = (addr[0], time.time(), message_dict.get('payload', {}).get('squid', {}))
                     
+                    # Put successfully decoded message from other nodes onto the queue
                     self.incoming_queue.put((message_dict, addr))
                     received_messages_this_call.append((message_dict, addr))
 
                 except socket.timeout:
                     break 
                 except socket.error as sock_err:
-                    self.logger.error(f"Socket error during receive: {sock_err}")
-                    self.is_connected = False  
-                    self._is_listening_active = False 
+                    self.logger.error(f"Socket error during specific recvfrom: {sock_err}")
+                    self.is_connected = False
+                    self._is_listening_active = False
                     break 
                 except Exception as e:
-                    self.logger.error(f"Unexpected error processing datagram: {e}", exc_info=self.debug_mode)
+                    self.logger.error(f"Unexpected error processing one datagram: {e}", exc_info=self.debug_mode)
                     continue
             
-        except Exception as e:
-            self.logger.error(f"General error in receive_messages: {e}", exc_info=self.debug_mode)
+        except Exception as e_outer:
+            self.logger.error(f"General error in receive_messages outer loop: {e_outer}", exc_info=self.debug_mode)
 
         return received_messages_this_call
 
@@ -420,27 +471,26 @@ class NetworkNode:
                     continue # Skip own messages
 
                 message_type = message_data.get('type', 'unknown_message')
-                
-                # Construct hook name, e.g., "network_squid_state", "network_boundary_exit"
+
+                # Construct hook name, e.g., "on_network_squid_state", "on_network_boundary_exit"
                 # This assumes the plugin registers handlers like "on_network_squid_state"
                 hook_name = f"on_network_{message_type}" 
 
-                if hasattr(plugin_manager_ref, 'trigger_hook'): # Check if it's the main PluginManager
-                    # This call seems incorrect if plugin_manager_ref is the MultiplayerPlugin instance.
-                    # The MultiplayerPlugin should have its own methods to handle these messages,
-                    # not necessarily using the main PluginManager's trigger_hook for its internal network message processing.
-                    # More likely, MultiplayerPlugin._process_network_message(message_data, addr) would be called.
-                    # For now, keeping original structure as per user's file context.
-                    # If plugin_manager_ref is indeed the main PluginManager:
+                # =============== ADD THIS LINE EXACTLY AS SHOWN BELOW ===============
+                print(f"DEBUG_STEP_2A: NetworkNode {self.node_id} is attempting to trigger hook: '{hook_name}' for message type '{message_type}' from node {message_data['node_id']}")
+                # =====================================================================
+
+                if hasattr(plugin_manager_ref, 'trigger_hook'): 
                      plugin_manager_ref.trigger_hook(
-                         hook_name, # This hook would need to be registered by the MultiplayerPlugin itself
-                         node=self, # Passing self (NetworkNode instance)
-                         message=message_data, # The full message dictionary
+                         hook_name, 
+                         node=self, 
+                         message=message_data, 
                          addr=addr
                      )
-                # If plugin_manager_ref is the MultiplayerPlugin instance (more likely):
-                # elif hasattr(plugin_manager_ref, '_process_network_message'):
-                #    plugin_manager_ref._process_network_message(message_data, addr)
+                elif hasattr(plugin_manager_ref, '_process_network_message'): # Fallback for direct processing
+                   plugin_manager_ref._process_network_message(message_data, addr)
+                else:
+                    if self.debug_mode: self.logger.warning(f"Plugin manager reference has no trigger_hook or _process_network_message method for hook {hook_name}")
 
 
                 messages_processed_count += 1
