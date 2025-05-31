@@ -18,6 +18,6 @@ MAX_PACKET_SIZE = 65507           # Maximum UDP packet size, to prevent fragment
 # --- Visual Settings (Defaults) ---
 # These are default visual parameters. The MultiplayerPlugin instance may override these
 # based on runtime configuration (e.g., from a settings dialog).
-REMOTE_SQUID_OPACITY = 0.8        # Default opacity for remote squids (0.0 to 1.0)
+REMOTE_SQUID_OPACITY = 1.0        # Default opacity for remote squids (0.0 to 1.0)
 SHOW_REMOTE_LABELS = True         # Default setting for showing labels on remote entities
 SHOW_CONNECTION_LINES = True      # Default setting for showing lines connecting to remote squids
