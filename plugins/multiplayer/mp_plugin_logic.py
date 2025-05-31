@@ -325,7 +325,7 @@ class MultiplayerPlugin:
         self.is_setup = True
         return True
 
-    def _process_network_node_queue(self):
+    def _process_network_node_queue(self, **kwargs):
         """Called by a QTimer to process messages from the NetworkNode's incoming_queue."""
         if not self.logger: return
         if self.network_node and self.plugin_manager:

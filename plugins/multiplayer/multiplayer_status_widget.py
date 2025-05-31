@@ -52,6 +52,11 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
         self.status_label = QtWidgets.QLabel("Disconnected")
         self.status_label.setStyleSheet("color: #FF6666; font-weight: bold;")
         status_layout.addWidget(self.status_label)
+        
+        # Node ID display
+        self.node_id_label = QtWidgets.QLabel("Node ID: Unknown")
+        self.node_id_label.setStyleSheet("color: #DDDDDD; margin-left: 10px;") # Style as needed
+        status_layout.addWidget(self.node_id_label)
         status_layout.addStretch()
         frame_layout.addLayout(status_layout)
         
@@ -70,9 +75,29 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
             }
         """)
         frame_layout.addWidget(self.activity_log)
+
+        # Peers display
+        self.peers_label = QtWidgets.QLabel("Connected Peers: 0")
+        self.peers_label.setStyleSheet("color: #DDDDDD; margin-top: 5px;")
+        frame_layout.addWidget(self.peers_label)
+
+        self.peers_list = QtWidgets.QListWidget()
+        self.peers_list.setMaximumHeight(80) # Adjust as needed
+        self.peers_list.setStyleSheet("""
+            QListWidget {
+                background-color: rgba(0, 0, 0, 80);
+                border: 1px solid #333333;
+                border-radius: 5px;
+                color: white;
+            }
+            QListWidget::item {
+                padding: 2px;
+            }
+        """)
+        frame_layout.addWidget(self.peers_list)
         
         # Add minimize/expand button
-        toggle_button = QtWidgets.QPushButton("▲")
+        toggle_button = QtWidgets.QPushButton("▼") # Initial state is expanded
         toggle_button.setMaximumWidth(30)
         toggle_button.clicked.connect(self.toggle_expanded)
         frame_layout.addWidget(toggle_button, alignment=QtCore.Qt.AlignRight)
@@ -82,6 +107,11 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
         
         # Initialize as expanded
         self.is_expanded = True
+        # Set initial visibility for expandable elements
+        self.activity_log.setVisible(self.is_expanded)
+        self.peers_label.setVisible(self.is_expanded)
+        self.peers_list.setVisible(self.is_expanded)
+
 
     def add_activity(self, message):
         """Add an entry to the activity log"""
@@ -101,18 +131,32 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
         
         # Show/hide elements based on state
         self.activity_log.setVisible(self.is_expanded)
+        self.peers_label.setVisible(self.is_expanded)
+        self.peers_list.setVisible(self.is_expanded)
         
         # Adjust button text
         sender = self.sender()
         if isinstance(sender, QtWidgets.QPushButton):
-            sender.setText("▲" if not self.is_expanded else "▼")
+            sender.setText("▼" if self.is_expanded else "▲")
         
-        # Resize the widget
+        # Resize the widget (optional, as setVisible might be enough if layouts handle it)
+        # If you rely on setMaximumHeight, ensure it accounts for all content.
+        # For simplicity, setVisible is preferred if the layout adjusts well.
         if self.is_expanded:
-            self.setMaximumHeight(1000)  # Effectively no max height
+            self.parentWidget().adjustSize() # Or self.adjustSize() if appropriate
+            self.setMaximumHeight(10000) # Effectively no max height
         else:
-            self.setMaximumHeight(100)  # Just enough for status and ID
-    
+            self.parentWidget().adjustSize() # Or self.adjustSize()
+            # Calculate a sensible minimum height or set a fixed one
+            # This might need to be dynamic based on title, status_layout
+            min_height = self.layout().itemAt(0).widget().layout().itemAt(0).widget().sizeHint().height() # Title
+            min_height += self.layout().itemAt(0).widget().layout().itemAt(1).layout().sizeHint().height() # Status layout
+            min_height += self.layout().itemAt(0).widget().layout().itemAt(4).widget().sizeHint().height() # Button
+            min_height += self.layout().itemAt(0).widget().layout().contentsMargins().top() + self.layout().itemAt(0).widget().layout().contentsMargins().bottom()
+            min_height += self.layout().contentsMargins().top() + self.layout().contentsMargins().bottom()
+            self.setMaximumHeight(min_height + 20) # Add some padding
+
+
     def update_connection_status(self, is_connected, node_id=None):
         """Update the connection status display"""
         self.connection_active = is_connected
@@ -121,17 +165,21 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
             self.node_id = node_id
         
         if is_connected:
-            self.status_label.setText("Multiplayer: Connected")
+            self.status_label.setText("Connected") # Made shorter
             self.status_label.setStyleSheet("color: #66FF66; font-weight: bold;")
+            self.status_icon.setText("✔️") # Check icon for connected
             self.node_id_label.setText(f"Node ID: {self.node_id}")
         else:
-            self.status_label.setText("Multiplayer: Disconnected")
+            self.status_label.setText("Disconnected")
             self.status_label.setStyleSheet("color: #FF6666; font-weight: bold;")
+            self.status_icon.setText("⚠️") # Warning icon
             self.node_id_label.setText("Node ID: -")
     
     def update_peers(self, peers_data):
         """Update the list of connected peers"""
         self.peers = []
+        if not hasattr(self, 'peers_list'): return # Guard if UI not fully up
+        
         self.peers_list.clear()
         
         current_time = time.time()
@@ -146,7 +194,8 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
             })
             
             # Add to the list widget
-            item = QtWidgets.QListWidgetItem(f"{node_id[-6:]} ({ip})")
+            item_text = f"{node_id[-6:]} ({ip})" # Display last 6 chars of node_id and IP
+            item = QtWidgets.QListWidgetItem(item_text)
             
             # Style based on status
             if status == "Active":
@@ -158,7 +207,8 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
         
         # Update peers count
         active_count = sum(1 for p in self.peers if p['status'] == "Active")
-        self.peers_label.setText(f"Connected Peers: {active_count}")
+        if hasattr(self, 'peers_label'):
+            self.peers_label.setText(f"Connected Peers: {active_count}")
     
     def update_display(self):
         """Update the display with current information"""
@@ -169,8 +219,12 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
             
             for peer in self.peers:
                 old_status = peer['status']
-                peer['status'] = "Active" if current_time - peer['last_seen'] < 10 else "Inactive"
-                
+                # Use a more robust check for last_seen, e.g., if it's a float
+                if isinstance(peer.get('last_seen'), (int, float)):
+                    peer['status'] = "Active" if current_time - peer['last_seen'] < 10 else "Inactive"
+                else:
+                    peer['status'] = "Unknown" # Or handle as appropriate
+
                 if old_status != peer['status']:
                     update_needed = True
             
@@ -179,13 +233,16 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
     
     def refresh_peers_list(self):
         """Refresh the peers list widget without changing the underlying data"""
+        if not hasattr(self, 'peers_list') or not hasattr(self, 'peers_label'): return # Guard
+        
         self.peers_list.clear()
         
         for peer in self.peers:
-            item = QtWidgets.QListWidgetItem(f"{peer['node_id'][-6:]} ({peer['ip']})")
+            item_text = f"{peer.get('node_id', 'N/A')[-6:]} ({peer.get('ip', 'N/A')})"
+            item = QtWidgets.QListWidgetItem(item_text)
             
             # Style based on status
-            if peer['status'] == "Active":
+            if peer.get('status') == "Active":
                 item.setForeground(QtGui.QBrush(QtGui.QColor(100, 255, 100)))
             else:
                 item.setForeground(QtGui.QBrush(QtGui.QColor(150, 150, 150)))
@@ -193,5 +250,5 @@ class MultiplayerStatusWidget(QtWidgets.QWidget):
             self.peers_list.addItem(item)
         
         # Update peers count
-        active_count = sum(1 for p in self.peers if p['status'] == "Active")
+        active_count = sum(1 for p in self.peers if p.get('status') == "Active")
         self.peers_label.setText(f"Connected Peers: {active_count}")

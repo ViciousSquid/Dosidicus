@@ -3,18 +3,19 @@
 import uuid
 import time
 import socket
-import queue
+import queue # Retaining import
 import zlib
 import json
-import traceback
+import traceback # Retaining import
 import threading
+import logging # Ensure logging is imported
 
 # Import constants
 from .mp_constants import MULTICAST_GROUP, MULTICAST_PORT, MAX_PACKET_SIZE
 
 
 class NetworkNode:
-    def __init__(self, node_id=None, logger=None): # MODIFIED: Added logger parameter
+    def __init__(self, node_id=None, logger=None):
         """
         Represents a networked node in the multiplayer system.
 
@@ -24,13 +25,12 @@ class NetworkNode:
             logger (logging.Logger, optional): Logger instance to use.
                                                A default one is created if not provided.
         """
-        # Attempt to use NetworkUtilities if available, otherwise fallback
         try:
             from plugins.multiplayer.network_utilities import NetworkUtilities
             self.node_id = node_id or NetworkUtilities.generate_node_id()
             self.utils = NetworkUtilities
         except ImportError:
-            self.node_id = node_id or f"squid_{uuid.uuid4().hex[:8]}" # self.node_id is set here
+            self.node_id = node_id or f"squid_{uuid.uuid4().hex[:8]}"
             self.utils = None
 
         self.local_ip = self._get_local_ip()
@@ -47,50 +47,34 @@ class NetworkNode:
         self.use_compression = True
 
         self.incoming_queue = queue.Queue()
-        self.outgoing_queue = queue.Queue() # Currently unused
+        # self.outgoing_queue is not used in the provided send logic for this file.
+        # If it were used by a separate sending thread, its usage would be different.
+        # Based on the provided file, messages are sent directly.
 
         self.known_nodes = {}
         self.last_sync_time = 0
-        # This NetworkNode.debug_mode is initialized to False.
-        # The calling code (MultiplayerPlugin) will set network_node.debug_mode
-        # to its own debug_mode value after initialization.
         self.debug_mode = False 
 
-        # MODIFIED: Logger setup block
         if logger is not None:
-            self.logger = logger  # Use the logger passed as an argument
+            self.logger = logger
         else:
-            # Fallback to creating a default logger if none was passed.
-            # This block is primarily for cases where NetworkNode might be instantiated
-            # directly without a logger, or for future flexibility.
-            # In the current usage by MultiplayerPlugin, a logger is always passed.
-            import logging
-            # self.node_id is guaranteed to be set before this point.
             _logger_name = f"{__name__}.NetworkNode.{self.node_id[:4]}"
             self.logger = logging.getLogger(_logger_name)
-            
-            if not self.logger.handlers: # Configure only if no handlers exist for this logger instance
+            if not self.logger.handlers:
                 handler = logging.StreamHandler()
                 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
                 handler.setFormatter(formatter)
                 self.logger.addHandler(handler)
-                # The level is set based on NetworkNode's self.debug_mode.
-                # If MultiplayerPlugin later sets self.debug_mode to True,
-                # and this default logger was created, its level might need
-                # adjustment if it wasn't already DEBUG. However, since
-                # MultiplayerPlugin passes its own configured logger, this
-                # default logger's level setting is less critical for that flow.
+                # Initial level, can be updated by MultiplayerPlugin if debug_mode changes
                 self.logger.setLevel(logging.DEBUG if self.debug_mode else logging.INFO)
         
-        # Initialize socket structure but do not start listening yet.
-        # Listening is started by calling start_listening()
         self.initialize_socket_structure()
 
     def _get_local_ip(self):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                s.settimeout(0.1) # Non-blocking
-                s.connect(("8.8.8.8", 80)) # Connect to a known address (doesn't send data)
+                s.settimeout(0.1) 
+                s.connect(("8.8.8.8", 80)) 
                 local_ip = s.getsockname()[0]
             return local_ip
         except Exception as e:
@@ -98,20 +82,19 @@ class NetworkNode:
             return '127.0.0.1'
 
     def initialize_socket_structure(self):
-        """Initializes the socket for network communication but does not start listening."""
         if self.is_connected and self.socket:
             self.logger.info("Socket structure already initialized and connected.")
             return True
             
         try:
-            if self.socket: # Close existing socket if any
+            if self.socket: 
                 try:
                     self.socket.close()
-                except Exception: pass # Ignore errors on close
+                except Exception: pass 
             
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2) # Configure TTL for multicast
+            self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
 
             max_bind_attempts = 3
             current_attempt = 0
@@ -120,7 +103,7 @@ class NetworkNode:
 
             while current_attempt < max_bind_attempts:
                 try:
-                    self.socket.bind(('', bind_port)) # Bind to all interfaces on the chosen port
+                    self.socket.bind(('', bind_port)) 
                     bind_success = True
                     self.logger.info(f"Socket bound successfully to port {bind_port}.")
                     break
@@ -132,20 +115,19 @@ class NetworkNode:
                         self.is_connected = False
                         self.initialized = False
                         return False
-                    bind_port += 1 # Try next port
+                    bind_port += 1 
 
             if not bind_success:
                 self.is_connected = False
                 self.initialized = False
                 return False
             
-            # Join the multicast group
             mreq = socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton(self.local_ip)
             self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-            self.socket.settimeout(0.1) # Non-blocking timeout for recvfrom, adjust as needed
+            self.socket.settimeout(0.1) 
 
-            self.is_connected = True  # Socket is now ready for I/O
-            self.initialized = True   # Basic initialization is complete
+            self.is_connected = True
+            self.initialized = True
             self.last_connection_attempt = time.time()
             self.logger.info(f"Socket structure initialized on {self.local_ip}:{bind_port} for multicast group {MULTICAST_GROUP}.")
             return True
@@ -161,36 +143,27 @@ class NetworkNode:
             return False
 
     def _listen_for_multicast(self):
-        """The actual listening loop run by the listener_thread."""
         self.logger.info(f"Listener thread started for node {self.node_id} on IP {self.local_ip}.")
         while self._is_listening_active:
             if not self.is_connected or not self.socket:
                 self.logger.warning("Listening loop: Socket not connected. Attempting to reconnect...")
-                if not self.try_reconnect(): # try_reconnect will attempt to re-init socket and restart listening (which includes this thread)
+                if not self.try_reconnect(): 
                     self.logger.error("Listening loop: Reconnect failed. Pausing before retry.")
-                    time.sleep(self.connection_retry_interval) # Wait before retrying connection
-                    continue # Re-check _is_listening_active and socket status
+                    time.sleep(self.connection_retry_interval) 
+                    continue 
 
-            # Call receive_messages to get data and put it on the queue
-            # receive_messages handles its own socket.timeout for non-blocking reads
             messages = self.receive_messages() 
-            if not messages and not self._is_listening_active: # if receive_messages returns empty and we should stop
+            if not messages and not self._is_listening_active:
                  break
             
-            # Small sleep to prevent high CPU usage if queue is empty and no timeout in receive_messages
-            # Adjust if receive_messages has a good timeout. If receive_messages is blocking, this isn't strictly needed.
-            # Since self.socket.settimeout(0.1) is set, receive_messages will timeout, so this sleep is less critical
-            # but can still be useful to yield control.
-            time.sleep(0.001) # Minimal sleep
+            time.sleep(0.001) 
 
         self.logger.info(f"Listener thread stopped for node {self.node_id}.")
 
     def is_listening(self):
-        """Checks if the node is actively listening for network traffic."""
         return self._is_listening_active and self.listener_thread is not None and self.listener_thread.is_alive()
 
     def start_listening(self):
-        """Starts the network listening process if not already active."""
         if self.is_listening():
             self.logger.info("Attempted to start listening, but already listening.")
             return True
@@ -203,7 +176,7 @@ class NetworkNode:
         
         self.logger.info("Starting network listener thread...")
         try:
-            self._is_listening_active = True # Set flag before starting thread
+            self._is_listening_active = True 
             self.listener_thread = threading.Thread(target=self._listen_for_multicast, daemon=True)
             self.listener_thread.setName(f"MPNodeListener-{self.node_id[:4]}")
             self.listener_thread.start()
@@ -211,20 +184,19 @@ class NetworkNode:
             return True
         except Exception as e:
             self.logger.error(f"Failed to start listener thread: {e}", exc_info=self.debug_mode)
-            self._is_listening_active = False # Reset flag on failure
+            self._is_listening_active = False 
             return False
 
     def stop_listening(self):
-        """Stops the network listening thread."""
         if not self._is_listening_active and (self.listener_thread is None or not self.listener_thread.is_alive()):
             self.logger.info("Listener already stopped or was never started.")
             return
 
         self.logger.info("Stopping listener thread...")
-        self._is_listening_active = False # Signal the thread's loop to terminate
+        self._is_listening_active = False 
         
         if self.listener_thread and self.listener_thread.is_alive():
-            self.listener_thread.join(timeout=2.0) # Wait for the thread to finish
+            self.listener_thread.join(timeout=2.0) 
             if self.listener_thread.is_alive():
                 self.logger.warning("Listener thread did not stop in time (join timeout).")
             else:
@@ -233,25 +205,22 @@ class NetworkNode:
             self.logger.info("Listener thread was not active or did not exist.")
             
         self.listener_thread = None
-        # Do not set self.is_connected = False here, as the socket might still be valid for sending.
 
     def try_reconnect(self):
-        """Attempts to re-establish the socket connection and restart listening."""
-        if self.is_listening(): # If already listening, assume connected.
+        if self.is_listening(): 
             return True
 
         current_time = time.time()
         if current_time - self.last_connection_attempt < self.connection_retry_interval:
-            return False # Too soon to retry
+            return False 
 
         self.logger.info("Attempting to reconnect...")
         self.last_connection_attempt = current_time
         
-        # Stop any existing (potentially broken) listening attempts first
         self.stop_listening() 
 
-        if self.initialize_socket_structure(): # Re-initialize socket
-            return self.start_listening()      # Start listening again
+        if self.initialize_socket_structure(): 
+            return self.start_listening()      
         else:
             self.logger.error("Reconnect failed: Could not re-initialize socket structure.")
             return False
@@ -274,28 +243,37 @@ class NetworkNode:
         }
 
         try:
-            serialized_message = json.dumps(message_data).encode('utf-8')
-            data_to_send = serialized_message
-            
+            data_to_send: bytes
+
             if self.use_compression:
                 if self.utils and hasattr(self.utils, 'compress_message'):
-                    # Assuming compress_message takes the dict and handles json.dumps itself or expects bytes
-                    # For safety, pass bytes if that's what zlib.compress expects
-                    data_to_send = self.utils.compress_message(serialized_message) # Pass bytes to align with zlib
+                    # ** THE FIX IS HERE: Pass the dictionary `message_data` **
+                    self.logger.debug(f"MPNetworkNode.send_message: Passing to self.utils.compress_message. Type: {type(message_data)}")
+                    if isinstance(message_data, dict):
+                        self.logger.debug(f"MPNetworkNode.send_message: Keys in message_data for compress_message: {list(message_data.keys())}")
+                    data_to_send = self.utils.compress_message(message_data)
                 else:
-                    data_to_send = zlib.compress(serialized_message)
+                    # Fallback to direct zlib if NetworkUtilities.compress_message is not available
+                    self.logger.debug(f"MPNetworkNode.send_message: Serializing for zlib. Type of message_data: {type(message_data)}")
+                    serialized_message_for_zlib = json.dumps(message_data).encode('utf-8')
+                    self.logger.debug(f"MPNetworkNode.send_message: Type of serialized_message_for_zlib for zlib.compress: {type(serialized_message_for_zlib)}")
+                    data_to_send = zlib.compress(serialized_message_for_zlib)
+            else: # Not using compression
+                self.logger.debug(f"MPNetworkNode.send_message: Not using compression. Serializing message_data. Type: {type(message_data)}")
+                data_to_send = json.dumps(message_data).encode('utf-8')
+
 
             if len(data_to_send) > MAX_PACKET_SIZE:
                 self.logger.warning(f"Message '{message_type}' size ({len(data_to_send)}) exceeds MAX_PACKET_SIZE. May fail.")
 
             self.socket.sendto(data_to_send, (MULTICAST_GROUP, MULTICAST_PORT))
-            if self.debug_mode and message_type not in ['object_sync', 'squid_move', 'heartbeat']: # Reduce log spam
+            if self.debug_mode and message_type not in ['object_sync', 'squid_move', 'heartbeat']: 
                 self.logger.debug(f"Sent '{message_type}' ({len(data_to_send)} bytes).")
             return True
         except socket.error as sock_err:
             self.logger.error(f"Socket error sending message '{message_type}': {sock_err}")
-            self.is_connected = False # Socket error likely means connection is broken
-            self.stop_listening() # Stop listening as connection is unreliable
+            self.is_connected = False 
+            self.stop_listening() 
         except Exception as e:
             self.logger.error(f"Error sending message '{message_type}': {e}", exc_info=self.debug_mode)
         return False
@@ -310,7 +288,7 @@ class NetworkNode:
                  self.logger.error("Send batch failed: Still not connected after reconnect check.")
                  return False
 
-        batch_data = {
+        batch_data = { # This is a dictionary
             'node_id': self.node_id,
             'timestamp': time.time(),
             'batch': True,
@@ -318,19 +296,31 @@ class NetworkNode:
         }
 
         try:
-            serialized_batch = json.dumps(batch_data).encode('utf-8')
-            data_to_send = serialized_batch
+            data_to_send: bytes
 
             if self.use_compression:
                 if self.utils and hasattr(self.utils, 'compress_message'):
-                    data_to_send = self.utils.compress_message(serialized_batch)
+                    # ** THE FIX IS HERE: Pass the dictionary `batch_data` **
+                    self.logger.debug(f"MPNetworkNode.send_message_batch: Passing to self.utils.compress_message. Type: {type(batch_data)}")
+                    if isinstance(batch_data, dict):
+                        self.logger.debug(f"MPNetworkNode.send_message_batch: Keys in batch_data for compress_message: {list(batch_data.keys())}")
+                    data_to_send = self.utils.compress_message(batch_data)
                 else:
-                    data_to_send = zlib.compress(serialized_batch)
+                    self.logger.debug(f"MPNetworkNode.send_message_batch: Serializing for zlib. Type of batch_data: {type(batch_data)}")
+                    serialized_batch_for_zlib = json.dumps(batch_data).encode('utf-8')
+                    self.logger.debug(f"MPNetworkNode.send_message_batch: Type of serialized_batch_for_zlib for zlib.compress: {type(serialized_batch_for_zlib)}")
+                    data_to_send = zlib.compress(serialized_batch_for_zlib)
+            else: # Not using compression
+                self.logger.debug(f"MPNetworkNode.send_message_batch: Not using compression. Serializing batch_data. Type: {type(batch_data)}")
+                data_to_send = json.dumps(batch_data).encode('utf-8')
+
 
             if len(data_to_send) > MAX_PACKET_SIZE:
                 self.logger.warning(f"Batch message size ({len(data_to_send)}) exceeds MAX_PACKET_SIZE. Transmission may fail.")
 
             self.socket.sendto(data_to_send, (MULTICAST_GROUP, MULTICAST_PORT))
+            if self.debug_mode:
+                self.logger.debug(f"Sent batch message ({len(data_to_send)} bytes).")
             return True
         except socket.error as sock_err:
             self.logger.error(f"Socket error sending message batch: {sock_err}")
@@ -341,41 +331,42 @@ class NetworkNode:
         return False
 
     def receive_messages(self):
-        """Receives and processes incoming datagrams, putting decoded messages onto self.incoming_queue."""
         if not self.is_connected or not self.socket:
-            # This state should ideally be caught by the _listen_for_multicast loop's reconnect logic
             return [] 
 
         received_messages_this_call = []
         try:
-            # Try to read multiple datagrams if available, but don't block indefinitely here.
-            # The _listen_for_multicast loop provides the continuous listening.
-            # The socket timeout handles the non-blocking nature.
-            for _ in range(10): # Process up to N datagrams to avoid starving other operations if traffic is heavy
+            for _ in range(10): 
                 try:
                     raw_data, addr = self.socket.recvfrom(MAX_PACKET_SIZE)
                     if not raw_data:
-                        continue # Should not happen with UDP, but good check
+                        continue 
 
                     message_dict = None
                     decoded_successfully = False
 
-                    # Attempt decompression if enabled
                     if self.use_compression:
                         try:
                             if self.utils and hasattr(self.utils, 'decompress_message'):
-                                # Assuming decompress_message returns a dict or raises error
                                 message_dict = self.utils.decompress_message(raw_data)
                             else:
                                 decompressed_data_bytes = zlib.decompress(raw_data)
                                 message_dict = json.loads(decompressed_data_bytes.decode('utf-8'))
-                            decoded_successfully = True
-                        except (zlib.error, json.JSONDecodeError, UnicodeDecodeError) as e:
+                            
+                            # Check if decompress_message returned a dict (it should on success)
+                            if isinstance(message_dict, dict):
+                                decoded_successfully = True
+                            else: # If decompress_message returned None or an error dict
+                                if self.debug_mode: self.logger.debug(f"Decompression via self.utils did not yield a dict. Return: {message_dict}")
+                                # Fall through to try uncompressed, or handle error if message_dict indicates one
+                                if isinstance(message_dict, dict) and "error" in message_dict:
+                                     if self.debug_mode: self.logger.debug(f"Decompression error indicated by decompress_message: {message_dict.get('details')}")
+                                     # Still try uncompressed as a fallback
+                        
+                        except (zlib.error, json.JSONDecodeError, UnicodeDecodeError) as e: # Catch errors if self.utils.decompress isn't used or fails before returning
                             if self.debug_mode:
-                                self.logger.debug(f"Failed compressed decoding from {addr}: {e}. Trying uncompressed.")
-                            # Fall through to try uncompressed if primary method fails
+                                self.logger.debug(f"Failed compressed decoding (zlib/json direct) from {addr}: {e}. Trying uncompressed.")
                     
-                    # If not using compression, or if compression failed, try direct JSON load
                     if not decoded_successfully:
                         try:
                             message_dict = json.loads(raw_data.decode('utf-8'))
@@ -383,47 +374,40 @@ class NetworkNode:
                         except (json.JSONDecodeError, UnicodeDecodeError) as e:
                             if self.debug_mode:
                                 self.logger.debug(f"Failed uncompressed JSON decoding from {addr}: {e}. Data: {raw_data[:80]}...")
-                            # If all decoding fails, skip this datagram
                             continue 
                     
                     if not message_dict or not isinstance(message_dict, dict) or 'node_id' not in message_dict:
-                        if self.debug_mode: self.logger.debug(f"Invalid or incomplete message structure from {addr}.")
+                        if self.debug_mode: self.logger.debug(f"Invalid or incomplete message structure from {addr}: {message_dict}")
                         continue
                     
-                    # Filter out messages from self
                     if message_dict.get('node_id') == self.node_id:
                         continue
 
-                    # Update known nodes (basic presence)
-                    self.known_nodes[message_dict['node_id']] = (addr[0], time.time(), message_dict.get('payload', {}).get('squid', {}))
+                    self.known_nodes[message_dict['node_id']] = (addr[0], time.time(), message_dict.get('payload', {}).get('squid', {})) # Basic presence update
                     
                     self.incoming_queue.put((message_dict, addr))
                     received_messages_this_call.append((message_dict, addr))
 
                 except socket.timeout:
-                    # This is expected if no data is available due to socket.settimeout()
                     break 
                 except socket.error as sock_err:
-                    # Serious socket error, connection might be lost
                     self.logger.error(f"Socket error during receive: {sock_err}")
-                    self.is_connected = False  # Mark as not connected
-                    self._is_listening_active = False # Signal listening loop to stop/reconnect
-                    # The _listen_for_multicast loop should handle this state.
-                    break # Exit receive loop for this call
+                    self.is_connected = False  
+                    self._is_listening_active = False 
+                    break 
                 except Exception as e:
                     self.logger.error(f"Unexpected error processing datagram: {e}", exc_info=self.debug_mode)
-                    # Continue to try next datagram if possible
                     continue
             
         except Exception as e:
-            # Catch-all for errors in the outer loop of receive_messages (less likely)
             self.logger.error(f"General error in receive_messages: {e}", exc_info=self.debug_mode)
 
         return received_messages_this_call
 
-    def process_messages(self, plugin_manager_ref):
+    def process_messages(self, plugin_manager_ref): # Assuming plugin_manager_ref is the MultiplayerPlugin instance
         messages_processed_count = 0
-        for _ in range(self.incoming_queue.qsize() + 5): # Process current queue + a few more
+        # Process a limited number of messages per call to avoid blocking the main thread for too long
+        for _ in range(self.incoming_queue.qsize() + 5): # Process current queue + a few more to be safe
             try:
                 message_data, addr = self.incoming_queue.get_nowait()
 
@@ -431,45 +415,58 @@ class NetworkNode:
                     if self.debug_mode: self.logger.debug(f"Discarding malformed message from queue: {message_data}")
                     continue
 
+                # Messages from self should have been filtered during receive_messages, but double check.
                 if message_data['node_id'] == self.node_id:
-                    continue
+                    continue # Skip own messages
 
                 message_type = message_data.get('type', 'unknown_message')
-                hook_name = f"network_{message_type}"
+                
+                # Construct hook name, e.g., "network_squid_state", "network_boundary_exit"
+                # This assumes the plugin registers handlers like "on_network_squid_state"
+                hook_name = f"on_network_{message_type}" 
 
-                if hasattr(plugin_manager_ref, 'trigger_hook'):
-                    plugin_manager_ref.trigger_hook(
-                        hook_name,
-                        node=self,
-                        message=message_data,
-                        addr=addr
-                    )
+                if hasattr(plugin_manager_ref, 'trigger_hook'): # Check if it's the main PluginManager
+                    # This call seems incorrect if plugin_manager_ref is the MultiplayerPlugin instance.
+                    # The MultiplayerPlugin should have its own methods to handle these messages,
+                    # not necessarily using the main PluginManager's trigger_hook for its internal network message processing.
+                    # More likely, MultiplayerPlugin._process_network_message(message_data, addr) would be called.
+                    # For now, keeping original structure as per user's file context.
+                    # If plugin_manager_ref is indeed the main PluginManager:
+                     plugin_manager_ref.trigger_hook(
+                         hook_name, # This hook would need to be registered by the MultiplayerPlugin itself
+                         node=self, # Passing self (NetworkNode instance)
+                         message=message_data, # The full message dictionary
+                         addr=addr
+                     )
+                # If plugin_manager_ref is the MultiplayerPlugin instance (more likely):
+                # elif hasattr(plugin_manager_ref, '_process_network_message'):
+                #    plugin_manager_ref._process_network_message(message_data, addr)
+
+
                 messages_processed_count += 1
             except queue.Empty:
-                break
+                break # No more messages in the queue
             except Exception as e:
                 self.logger.error(f"Error processing message from queue: {e}", exc_info=self.debug_mode)
         return messages_processed_count
 
     def close(self):
-        """Gracefully closes the network node, stops listening, and releases resources."""
         self.logger.info(f"Closing network node {self.node_id}...")
         
-        self.auto_reconnect = False # Prevent reconnection attempts during close
-        self.stop_listening()       # Stop the listening thread first
+        self.auto_reconnect = False 
+        self.stop_listening()       
 
         if self.socket:
-            socket_was_connected = self.is_connected # Check before modifying
-            self.is_connected = False # Mark as not connected immediately
+            socket_was_connected = self.is_connected 
+            self.is_connected = False 
             self.initialized = False
 
-            if socket_was_connected and self.local_ip:
+            if socket_was_connected and self.local_ip: # Only try to leave if was connected & IP known
                 try:
-                    # Attempt to leave the multicast group
                     mreq_leave = socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton(self.local_ip)
                     self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_DROP_MEMBERSHIP, mreq_leave)
                     self.logger.info("Left multicast group.")
-                except Exception as e_mcast_leave:
+                except Exception as e_mcast_leave: # Catch any error during setsockopt
                     if self.debug_mode: self.logger.debug(f"Error leaving multicast group: {e_mcast_leave}")
             
             try:

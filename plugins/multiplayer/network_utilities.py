@@ -2,9 +2,9 @@ import socket
 import time
 import uuid
 import json
-import os
 import zlib
-from typing import Dict, Any, Tuple, Optional
+import os
+from typing import Dict, Any, Tuple, Optional, Union
 
 class NetworkUtilities:
     @staticmethod
@@ -23,29 +23,79 @@ class NetworkUtilities:
     def compress_message(message: Dict[str, Any]) -> bytes:
         """Compress a message with efficient error handling"""
         try:
+            # --- Start of added debug statements ---
+            print("--- Debug: Attempting to compress message ---")
+            for key, value in message.items():
+                print(f"  Key: {key}, Type: {type(value)}")
+                if isinstance(value, dict):
+                    for sub_key, sub_value in value.items():
+                        print(f"    SubKey: {sub_key}, SubType: {type(sub_value)}")
+                        # You can add more levels of nested checks if your dictionaries are deeper
+                        # For example:
+                        # if isinstance(sub_value, dict):
+                        #     for s_sub_key, s_sub_value in sub_value.items():
+                        #         print(f"      SSubKey: {s_sub_key}, SSubType: {type(s_sub_value)}")
+                elif isinstance(value, list):
+                    print(f"    List items for key '{key}':")
+                    for i, item in enumerate(value):
+                        print(f"      Item {i}, Type: {type(item)}")
+                        if isinstance(item, dict): # If list contains dictionaries
+                            for list_dict_key, list_dict_value in item.items():
+                                print(f"        DictInList - Key: {list_dict_key}, Type: {type(list_dict_value)}")
+            print("--- End of debug statements for message content ---")
+            # --- End of added debug statements ---
+
             serialized_msg = json.dumps(message).encode('utf-8')
             try:
-                return zlib.compress(serialized_msg)
+                # Attempt compression, fallback to uncompressed if zlib is not available or fails
+                compressed_msg = zlib.compress(serialized_msg)
+                return compressed_msg
             except ImportError:
+                # zlib not available on this system, return uncompressed
+                # This case might be less likely in standard Python environments
+                print("Warning: zlib not available, sending uncompressed message.")
                 return serialized_msg
+            except zlib.error as ze:
+                # Handle potential zlib compression errors
+                print(f"Error during zlib compression: {ze}. Sending uncompressed.")
+                return serialized_msg
+
+        except TypeError as te: # Specifically catch TypeError from json.dumps
+            print(f"Error compressing message (TypeError): {te}")
+            # Log the problematic message structure for further analysis if in debug mode
+            # Be cautious about logging potentially large or sensitive data in production
+            # print(f"Problematic message structure: {message}") # Uncomment if needed for deep debug
+            return json.dumps({"error": "json_type_error", "details": str(te)}).encode('utf-8')
         except Exception as e:
-            print(f"Error compressing message: {e}")
-            # Return a minimal valid message
-            return json.dumps({"error": "compression_failure"}).encode('utf-8')
+            # Catch any other unexpected errors during serialization or compression
+            print(f"Error compressing message (General Exception): {e}")
+            return json.dumps({"error": "compression_failure", "details": str(e)}).encode('utf-8')
     
     @staticmethod
-    def decompress_message(data: bytes) -> Dict[str, Any]:
+    def decompress_message(compressed_msg: bytes) -> Union[Dict[str, Any], None]:
         """Decompress a message with efficient error handling"""
+        if not compressed_msg:
+            return None
         try:
+            # Attempt decompression, assume it might be uncompressed if zlib fails
             try:
-                decompressed_data = zlib.decompress(data).decode('utf-8')
-            except (ImportError, zlib.error):
-                decompressed_data = data.decode('utf-8')
-            
-            return json.loads(decompressed_data)
+                decompressed_msg = zlib.decompress(compressed_msg)
+            except zlib.error:
+                # If zlib decompression fails, it might be an uncompressed JSON string
+                decompressed_msg = compressed_msg # Treat as potentially uncompressed
+
+            # Now, try to load the JSON
+            message = json.loads(decompressed_msg.decode('utf-8'))
+            return message
+        except UnicodeDecodeError as ude:
+            print(f"Error decompressing message (UnicodeDecodeError): {ude}. Original data (first 50 bytes): {compressed_msg[:50]}")
+            return {"error": "unicode_decode_error", "details": str(ude)}
+        except json.JSONDecodeError as jde:
+            print(f"Error decompressing message (JSONDecodeError): {jde}. Data (first 50 bytes): {decompressed_msg[:50] if 'decompressed_msg' in locals() else compressed_msg[:50]}")
+            return {"error": "json_decode_error", "details": str(jde)}
         except Exception as e:
-            print(f"Error decompressing message: {e}")
-            return {"error": "decompression_failure"}
+            print(f"Error decompressing message (General Exception): {e}")
+            return {"error": "decompression_failure", "details": str(e)}
     
     @staticmethod
     def generate_node_id(prefix: str = "squid") -> str:
