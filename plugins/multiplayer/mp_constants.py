@@ -4,7 +4,7 @@
 # These constants describe the plugin to the system and users.
 PLUGIN_NAME = "Multiplayer"
 PLUGIN_VERSION = "1.0.0"
-PLUGIN_AUTHOR = "ViciousSquid"
+PLUGIN_AUTHOR = "Rufus Pearce"
 PLUGIN_DESCRIPTION = "Enables network sync for squids and objects (Experimental)"
 PLUGIN_REQUIRES = [] # Names of other plugins this one depends on
 
