@@ -115,89 +115,74 @@ class MultiplayerPlugin:
         self.logger.debug("=====================================\n")
 
     def enable(self):
-        """Enables the multiplayer plugin, performing setup if necessary."""
-        # Safeguard for logger initialization (as previously discussed)
-        if self.logger is None:
-            emergency_logger = logging.getLogger(f"{mp_constants.PLUGIN_NAME}_EnableEmergency")
-            if not emergency_logger.hasHandlers():
-                handler = logging.StreamHandler()
-                formatter = logging.Formatter('%(asctime)s - %(name)s - [%(levelname)s] - %(message)s')
-                handler.setFormatter(formatter)
-                emergency_logger.addHandler(handler)
-                emergency_logger.setLevel(logging.WARNING)
-            self.logger = emergency_logger
-            self.logger.warning("Logger was not initialized prior to enable() method. Using emergency logger.")
+        self.logger.info("Attempting to enable Multiplayer...")
 
-        self.logger.info(f"Attempting to enable {mp_constants.PLUGIN_NAME}...")
-        try:
-            is_currently_setup = getattr(self, 'is_setup', False)
+        # Plugin already set up?
+        if not self.is_setup:
+            self.logger.info("Multiplayer plugin is not set up. Calling setup()...")
+            # Assuming self.plugin_manager and self.tamagotchi_logic_ref are available
+            if not self.setup(self.plugin_manager, self.tamagotchi_logic_ref): # Pass necessary args
+                self.logger.error("Multiplayer setup failed during enable(). Cannot enable.")
+                return False
+        else:
+            self.logger.info("Multiplayer is already marked as set up. Re-enabling components.")
 
-            if not is_currently_setup:
-                self.logger.info(f"{mp_constants.PLUGIN_NAME} is not yet set up. Proceeding with setup.")
+        # --- BEGIN NEW/MODIFIED SECTION ---
+        # Ensure network node is ready and listening
+        if self.network_node:
+            # Ensure the socket structure is initialized (it should be by NetworkNode.__init__ or a previous setup)
+            # but a re-check or re-init if disconnected can be robust.
+            if not self.network_node.is_connected:
+                self.logger.info("NetworkNode socket not connected, attempting to initialize in enable()...")
+                if not self.network_node.initialize_socket_structure():
+                    self.logger.error("Failed to initialize NetworkNode socket in enable(). Cannot proceed with enabling multiplayer.")
+                    # Potentially set self.enabled = False or similar state management
+                    return False # Or handle error appropriately
 
-                # --- BEGIN MODIFICATION ---
-                # self.plugin_manager should have been set by main.py's initialize function.
-                if self.plugin_manager is None:
-                    # This is now a more critical error, as it indicates a failure in the
-                    # earlier plugin loading/initialization step in plugins/multiplayer/main.py.
-                    self.logger.critical("CRITICAL: self.plugin_manager attribute not set on plugin instance prior to enable/setup. Initialization in plugins/multiplayer/main.py might have failed or was skipped.")
-                    return False # Cannot proceed without plugin_manager
-                # --- END MODIFICATION ---
-
-                # Obtain the tamagotchi_logic_instance required by the setup method.
-                tamagotchi_logic_ref = getattr(self, 'tamagotchi_logic', None)
-
-                if tamagotchi_logic_ref is None:
-                    tamagotchi_logic_ref = getattr(self.plugin_manager, 'tamagotchi_logic', None)
-                
-                if tamagotchi_logic_ref is None:
-                    self.logger.info("TamagotchiLogic not found directly on plugin_manager, attempting deep search via plugin_manager attributes...")
-                    tamagotchi_logic_ref = self._find_tamagotchi_logic(self.plugin_manager)
-
-                if tamagotchi_logic_ref is None:
-                    self.logger.error("TamagotchiLogic instance could not be found even after search. Setup cannot proceed.")
-                    return False
-                
-                # Call setup. self.plugin_manager is now expected to be valid.
-                # setup() will also assign self.tamagotchi_logic = tamagotchi_logic_ref
-                # and initialize self.logger properly.
-                if not self.setup(self.plugin_manager, tamagotchi_logic_ref):
-                    self.logger.error("Setup method returned False during enable sequence.")
-                    return False
-            else:
-                self.logger.info(f"{mp_constants.PLUGIN_NAME} is already marked as set up. Re-enabling components.")
-
-            # --- Post-setup actions (continue with the rest of the original enable method) ---
-            if hasattr(self, 'network_node') and self.network_node and not self.network_node.is_connected:
-                self.logger.info("Network node not connected, attempting to initialize socket...")
-                self.network_node.initialize_socket()
-
-            if not (hasattr(self, 'sync_thread') and self.sync_thread and self.sync_thread.is_alive()):
-                if hasattr(self, 'start_sync_timer'):
-                    self.start_sync_timer() # This method should log its own status
+            # Explicitly start the listener thread if it's not already active
+            if not self.network_node.is_listening():
+                self.logger.info("NetworkNode listener not active, starting it explicitly in enable()...")
+                if not self.network_node.start_listening():
+                    self.logger.error("Failed to start NetworkNode listener in enable(). Multiplayer might not receive messages.")
+                    # Decide if this is a fatal error for enabling or just a warning
+                    # For now, let's treat it as potentially non-fatal but log an error.
+                    # Depending on requirements, you might return False here.
                 else:
-                    self.logger.warning("start_sync_timer method not found.")
+                    self.logger.info(">>>>>> NetworkNode listener started successfully!")
+            else:
+                self.logger.info("NetworkNode listener was already active.")
+        else:
+            self.logger.error("NetworkNode not found after setup in enable(). Cannot enable multiplayer fully.")
+            # Potentially set self.enabled = False
+            return False # This is likely a critical failure
+        # --- END NEW/MODIFIED SECTION ---
 
-            if hasattr(self, 'status_widget') and self.status_widget:
-                self.status_widget.show()
-                is_connected_now = hasattr(self, 'network_node') and self.network_node and self.network_node.is_connected
-                node_id_now = self.network_node.node_id if hasattr(self, 'network_node') and self.network_node else "N/A"
-                if hasattr(self.status_widget, 'update_connection_status'): # Check method existence
-                    self.status_widget.update_connection_status(is_connected_now, node_id_now)
-                if hasattr(self, 'network_node') and self.network_node and hasattr(self.network_node, 'known_nodes') and \
-                   hasattr(self.status_widget, 'update_peers'): # Check method existence
-                    self.status_widget.update_peers(self.network_node.known_nodes)
+        # Resume original enable logic:
+        # For example, re-initialize UI components, timers, etc.
+        # Ensure any components that were disabled are re-enabled.
 
-            self.logger.info(f"{mp_constants.PLUGIN_NAME} enabled successfully.")
-            return True
-        except Exception as e:
-            # Ensure logger is available before trying to use it, especially in top-level exception handlers
-            if self.logger:
-                self.logger.error(f"Unhandled error enabling {mp_constants.PLUGIN_NAME}: {e}", exc_info=True)
-            else: # Fallback if self.logger itself is None here (shouldn't happen with safeguard)
-                print(f"CRITICAL UNLOGGED ERROR in enable for {mp_constants.PLUGIN_NAME}: {e}")
-                traceback.print_exc()
-            return False
+        # Re-initialize or ensure timers are running (if they were stopped in disable)
+        if not self.message_process_timer or not self.message_process_timer.isActive():
+            if not self.message_process_timer:
+                self.message_process_timer = QtCore.QTimer()
+                self.message_process_timer.timeout.connect(self._process_network_node_queue)
+            self.message_process_timer.start(50)
+            self.logger.info("Message processing timer started/restarted.")
+
+        if not (hasattr(self, 'sync_timer') and self.sync_timer and self.sync_timer.isActive()):
+            # Assuming start_sync_timer handles creation if necessary and starts it
+            self.logger.info("Sync timer not active, starting/restarting it.")
+            self.start_sync_timer()
+        
+        # Update status widget if applicable
+        if self.status_widget:
+            self.status_widget.update_status("Enabled", True)
+            current_ip = self.network_node.local_ip if self.network_node else "N/A"
+            self.status_widget.set_ip_address(current_ip)
+
+        self.enabled = True # Mark as enabled
+        self.logger.info("Multiplayer enabled successfully.")
+        return True
 
     def disable(self):
         """Disables the multiplayer plugin and cleans up resources."""
