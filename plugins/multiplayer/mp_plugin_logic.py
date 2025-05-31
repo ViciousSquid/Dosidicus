@@ -738,106 +738,109 @@ class MultiplayerPlugin:
             self.controller_update_timer.start()
             if self.debug_mode: self.logger.debug("Restarted controller update timer.")
 
-    def handle_squid_exit_message(self, node: Any, message: Dict, addr: tuple): # Ensure NetworkNode type hint if available
-        # =============== ADD THIS LINE EXACTLY AS SHOWN BELOW ===============
-        print(f"DEBUG_STEP_1: Node {self.config_manager.get_node_id()} - handle_squid_exit_message CALLED. Message type: {message.get('type')}, Full message: {message}")
-        # =====================================================================
 
-        if not self.logger: # Basic logger safeguard
-            print("MPPluginLogic ERRA: Logger not available in handle_squid_exit_message")
-            # Consider returning False or raising an error if logger is essential
-            return False # Or appropriate error handling
+
+    def handle_squid_exit_message(self, node: Any, message: Dict, addr: tuple) -> bool: # Added return type hint
+        # DEBUG_STEP_1: Log entry into this handler
+        # Ensure self.logger exists or use a fallback print
+        current_node_id_for_log = self.network_node.node_id if self.network_node else "UnknownNode(self)"
+        # Using print for this very first debug line to ensure it appears even if logger is not fully set up
+        print(f"DEBUG_STEP_1: Node {current_node_id_for_log} - handle_squid_exit_message CALLED. Message type: {message.get('type')}. Raw Full message: {message}")
+
+        if not self.is_plugin_enabled() or not self.network_node or not hasattr(self, 'entity_manager') or not self.entity_manager:
+            if self.logger: self.logger.warning("Multiplayer plugin not fully active or entity_manager missing, ignoring squid_exit.")
+            else: print("Multiplayer plugin not fully active or entity_manager missing, ignoring squid_exit.")
+            return False
 
         try:
-            # Ensure this method is being called for the correct instance's logger
-            self.logger.info(f"MY NODE ID {self.network_node.node_id if self.network_node else 'Unknown'} - Received squid_exit message: {message} from {addr}")
+            if self.logger: self.logger.info(f"My Node ID {current_node_id_for_log} - Received squid_exit message: {message} from {addr}")
 
-            # The actual payload from squid.py is nested due to how send_message wraps it
-            # message = {'type': 'squid_exit', 'payload': {'payload': exit_data_from_squid.py}}
             exit_payload_outer = message.get('payload', {})
-            exit_payload_inner = exit_payload_outer.get('payload', None) # This is the actual exit_data
+            exit_payload_inner = exit_payload_outer.get('payload', None) 
             
-            if not exit_payload_inner:
-                self.logger.warning("squid_exit message missing a nested 'payload' key containing the actual exit data.")
+            if not exit_payload_inner or not isinstance(exit_payload_inner, dict):
+                if self.logger: self.logger.warning(f"squid_exit message missing correctly nested 'payload' dictionary. Outer payload: {exit_payload_outer}")
                 return False
 
             source_node_id = exit_payload_inner.get('node_id')
             if not source_node_id:
-                self.logger.warning("squid_exit inner payload missing 'node_id'.")
+                if self.logger: self.logger.warning(f"squid_exit inner payload missing 'node_id'. Inner payload: {exit_payload_inner}")
                 return False
 
-            if self.network_node and source_node_id == self.network_node.node_id:
-                # This instance is the one that sent the exit message. Ignore.
-                self.logger.debug(f"Ignoring own squid_exit broadcast for {source_node_id}.")
-                return False # Important: do not process self-exit as an arrival
+            if source_node_id == current_node_id_for_log:
+                if self.logger: self.logger.debug(f"Ignoring own squid_exit broadcast for {source_node_id}.")
+                return False 
 
-            self.logger.info(f"Processing squid_exit from REMOTE node {source_node_id} for potential entry.")
-            self.logger.info(f"Exit payload from remote: {exit_payload_inner}")
+            if self.logger: self.logger.info(f"Processing squid_exit from REMOTE node {source_node_id} for potential entry.")
+            if self.logger: self.logger.debug(f"Exit payload from remote ({source_node_id}): {json.dumps(exit_payload_inner, default=str, indent=2)}")
 
-            if hasattr(self, 'entity_manager') and self.entity_manager: # Ensure entity_manager is the correct attribute name
-                # update_remote_squid now expects the exit_payload_inner (actual exit_data)
-                remote_squid_visual_item = self.entity_manager.update_remote_squid(
-                    source_node_id,
-                    exit_payload_inner, 
-                    is_new_arrival=True # Signal to RemoteEntityManager that this is a new arrival
-                )
-                self.logger.info(f"Called entity_manager.update_remote_squid for {source_node_id}. Result visual item valid: {remote_squid_visual_item is not None}")
+            # Call entity_manager.update_remote_squid
+            # It now returns the visual item on new creation success, True on update success, or False/None on failure.
+            remote_squid_return_value = self.entity_manager.update_remote_squid(
+                source_node_id,
+                exit_payload_inner, 
+                is_new_arrival=True 
+            )
+            
+            # Detailed logging of the return value
+            is_valid_graphics_item = isinstance(remote_squid_return_value, QtWidgets.QGraphicsPixmapItem)
+            if self.logger: self.logger.info(f"Called entity_manager.update_remote_squid for {source_node_id}. TYPE of result: {type(remote_squid_return_value)}. Result is QGraphicsPixmapItem: {is_valid_graphics_item}. Raw Return Value: {remote_squid_return_value}")
+
+            if remote_squid_return_value and is_valid_graphics_item: # Successfully created a new visual item
+                if self.logger: self.logger.info(f"Remote squid {source_node_id} visual item IS VALID. Proceeding with autopilot setup.")
                 
-                if remote_squid_visual_item: # Assuming update_remote_squid returns the visual item or True on success
-                    # Try to get the autopilot for this remote squid or create it
-                    # This logic depends on how autopilots are stored/managed.
-                    # Let's assume autopilot is attached to the remote_squid_instance managed by entity_manager
-                    remote_squid_instance = self.entity_manager.get_remote_squid_instance_by_id(source_node_id) # Assuming this method exists
-                    
-                    if remote_squid_instance:
-                        if not hasattr(remote_squid_instance, 'autopilot') or remote_squid_instance.autopilot is None:
-                            self.logger.info(f"Creating new autopilot for remote squid {source_node_id}")
-                            # Ensure SquidMultiplayerAutopilot is imported
-                            remote_squid_instance.autopilot = SquidMultiplayerAutopilot(
+                remote_squid_instance_data = self.entity_manager.get_remote_squid_instance_by_id(source_node_id)
+                
+                if remote_squid_instance_data and remote_squid_instance_data.get('visual') == remote_squid_return_value:
+                    if not remote_squid_instance_data.get('autopilot'): # Check if autopilot already exists
+                        if self.logger: self.logger.info(f"Creating new autopilot for remote squid {source_node_id}")
+                        try:
+                            # Ensure SquidMultiplayerAutopilot is imported in mp_plugin_logic.py
+                            from .squid_multiplayer_autopilot import SquidMultiplayerAutopilot # Assuming relative import
+                            
+                            autopilot = SquidMultiplayerAutopilot(
                                 node_id=source_node_id,
                                 tamagotchi_logic=self.tamagotchi_logic,
-                                # initial_x/y for autopilot should be based on entry, not direct exit position
-                                # These might be set by the autopilot itself based on entry_details
-                                initial_state_data=exit_payload_inner, # Pass the full data
+                                initial_state_data=exit_payload_inner, 
                                 remote_entity_manager=self.entity_manager 
                             )
-                        
-                        # Give the autopilot an initial target based on calculated entry
-                        entry_details = self.entity_manager.get_last_calculated_entry_details(source_node_id)
-                        if entry_details and hasattr(remote_squid_instance, 'autopilot') and remote_squid_instance.autopilot:
-                            autopilot = remote_squid_instance.autopilot
-                            entry_pos_x, entry_pos_y = entry_details['entry_pos']
-                            entry_side = entry_details['entry_direction'] # e.g., "left", "top"
+                            remote_squid_instance_data['autopilot'] = autopilot # Store it
                             
-                            self.logger.info(f"Autopilot for {source_node_id} using entry details: {entry_details}")
+                            entry_details = self.entity_manager.get_last_calculated_entry_details(source_node_id)
+                            if entry_details:
+                                entry_pos_x, entry_pos_y = entry_details['entry_pos']
+                                entry_side = entry_details['entry_direction']
+                                if self.logger: self.logger.info(f"Autopilot for {source_node_id} using entry details: {entry_details}")
 
-                            target_x, target_y = entry_pos_x, entry_pos_y
-                            squid_w = exit_payload_inner.get('squid_width', 50) # Use inner payload
-                            squid_h = exit_payload_inner.get('squid_height', 50)
+                                target_x, target_y = entry_pos_x, entry_pos_y
+                                squid_w = float(exit_payload_inner.get('squid_width', 50))
+                                squid_h = float(exit_payload_inner.get('squid_height', 50))
+                                inward_buffer = squid_w * 1.5 
 
-                            # Define how far "inward" the squid should initially move
-                            inward_buffer = squid_w * 1.5 # e.g., move one and a half squid widths inward
-
-                            if entry_side == 'left': target_x += inward_buffer
-                            elif entry_side == 'right': target_x -= inward_buffer
-                            elif entry_side == 'top': target_y += inward_buffer # Assuming Y increases downwards
-                            elif entry_side == 'bottom': target_y -= inward_buffer
-                            
-                            self.logger.info(f"Autopilot for {source_node_id} initial target set to: ({target_x}, {target_y})")
-                            autopilot.set_movement_target(target_x, target_y, None) # Assuming autopilot has such a method
-                        else:
-                            self.logger.warning(f"Could not get entry details or autopilot for {source_node_id} to set initial target.")
+                                if entry_side == 'left': target_x += inward_buffer
+                                elif entry_side == 'right': target_x -= inward_buffer
+                                elif entry_side == 'top': target_y += inward_buffer 
+                                elif entry_side == 'bottom': target_y -= inward_buffer
+                                
+                                if self.logger: self.logger.info(f"Autopilot for {source_node_id} initial movement target set to: ({target_x:.2f}, {target_y:.2f})")
+                                autopilot.set_movement_target(target_x, target_y, None)
+                            else:
+                                if self.logger: self.logger.warning(f"Could not get entry details for {source_node_id} to set initial autopilot target.")
+                        except ImportError:
+                            if self.logger: self.logger.error("Failed to import SquidMultiplayerAutopilot. Autopilot not created.")
+                        except Exception as auto_e:
+                             if self.logger: self.logger.error(f"Error creating or setting up autopilot for {source_node_id}: {auto_e}", exc_info=True)
                     else:
-                        self.logger.warning(f"Could not get remote_squid_instance for {source_node_id} after update.")
+                        if self.logger: self.logger.info(f"Autopilot already exists or remote_squid_instance_data is None for {source_node_id}.")
                 else:
-                    self.logger.warning(f"Failed to create or update remote squid {source_node_id} in entity_manager.")
-            else:
-                self.logger.error("Remote entity manager (self.entity_manager) not found or not initialized!")
+                    if self.logger: self.logger.warning(f"Remote squid instance data not found or visual mismatch for {source_node_id} after update_remote_squid call.")
+            else: # update_remote_squid returned False or None
+                if self.logger: self.logger.warning(f"Failed to get a valid visual item for remote squid {source_node_id} from entity_manager. Autopilot not set. Return value was: {remote_squid_return_value}")
             
-            return True # Indicate successful processing attempt
+            return True
 
         except Exception as e:
-            self.logger.error(f"Error in handle_squid_exit_message: {e}", exc_info=True)
+            if self.logger: self.logger.error(f"Critical error in handle_squid_exit_message for node {source_node_id if 'source_node_id' in locals() else 'UnknownSource'}: {e}", exc_info=True)
             return False
 
     def _setup_controller_creation_timer(self):
