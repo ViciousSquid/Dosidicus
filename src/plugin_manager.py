@@ -103,9 +103,6 @@ class PluginManager:
         self._initialize_hooks()
         self._initialized = True
 
-    # --- Start of Original PluginManager Methods ---
-    # (These methods remain largely the same, only the logger setup in __init__ 
-    # and the Formatter class definition are the core changes for coloring)
 
     def _initialize_hooks(self):
         """Initialize standard hooks that plugins can register for"""
@@ -115,11 +112,13 @@ class PluginManager:
         self.register_hook("on_new_game")
         self.register_hook("on_save_game")
         self.register_hook("on_load_game")
+        self.register_hook("on_plugin_enabled")
         
         # Simulation hooks
         self.register_hook("pre_update")
         self.register_hook("post_update")
         self.register_hook("on_speed_change")
+        self.register_hook("on_update")
         
         # Squid state hooks
         self.register_hook("on_squid_state_change")
@@ -138,6 +137,8 @@ class PluginManager:
         self.register_hook("on_sleep")
         self.register_hook("on_wake")
         self.register_hook("on_startle")
+        self.register_hook("on_spawn_food")
+        self.register_hook("on_spawn_poop")
         
         # Interaction hooks
         self.register_hook("on_rock_pickup")
@@ -284,78 +285,94 @@ class PluginManager:
     def load_plugin(self, plugin_name: str) -> bool:
         """
         Load and initialize a plugin by name. Assumes plugin_name is already lowercase.
-        (Using the version from previous turns, without the 'instance' check that was causing issues)
+        Plugins loaded this way will NOT be enabled by default. They must be explicitly enabled.
         """
         plugin_name = plugin_name.lower()
 
         if plugin_name in self.plugins:
-            self.logger.info(f"Plugin '{plugin_name}' already loaded.")
-            return True
+            # This check is if the plugin's metadata (including potentially an instance) is already in self.plugins.
+            # It doesn't mean it's enabled.
+            self.logger.info(f"Plugin '{plugin_name}' metadata already present. Checking if it needs full loading/initialization or just enabling.")
+            # If it's already fully loaded and has an instance, this method might not need to re-initialize.
+            # However, the current flow re-initializes if called again.
+            # For simplicity in this revision, we'll proceed as if it might need initialization if not properly instanced.
+            # A more robust system might differentiate between "known plugin metadata" and "fully loaded and instanced plugin".
 
         if self._discovered_plugins is None:
             self.logger.error("Plugin discovery must be run before loading.")
+            # Attempt to discover plugins if not done, though ideally discovery is a separate explicit step.
             self._discovered_plugins = self.discover_plugins()
 
         if plugin_name not in self._discovered_plugins:
-            self.logger.error(f"Plugin '{plugin_name}' not found.")
+            self.logger.error(f"Plugin '{plugin_name}' not found in discovered plugins.")
             return False
 
         plugin_data = self._discovered_plugins[plugin_name]
         module = plugin_data["module"]
-        original_plugin_name_display = plugin_data.get("original_name", plugin_name)
+        original_plugin_name_display = plugin_data.get("original_name", plugin_name) # For logging
 
         self.logger.info(f"Attempting to load plugin '{original_plugin_name_display}' (key: '{plugin_name}')")
-        self.logger.info(f"Plugin '{plugin_name}': Module '{module.__name__}' found.")
+        # self.logger.info(f"Plugin '{plugin_name}': Module '{module.__name__}' found.") # This log might be redundant with the one above
 
         required_plugins = plugin_data.get("requires", [])
         if required_plugins:
             missing_plugins = []
             for required_name_lower in required_plugins:
-                if required_name_lower not in self.plugins:
+                # Check if the required plugin's metadata and instance are loaded
+                if required_name_lower not in self.plugins or not self.plugins[required_name_lower].get('instance'):
                     missing_plugins.append(required_name_lower)
             if missing_plugins:
-                self.logger.error(f"Plugin '{plugin_name}' requires missing plugin(s): {', '.join(missing_plugins)}.")
-                self.logger.error(f"Plugin '{plugin_name}': Dependency check failed.")
+                self.logger.error(f"Plugin '{original_plugin_name_display}' requires missing or not fully loaded plugin(s): {', '.join(missing_plugins)}.")
+                self.logger.error(f"Plugin '{original_plugin_name_display}': Dependency check failed.")
                 return False
-        self.logger.info(f"Plugin '{plugin_name}': Dependencies satisfied.")
+        self.logger.info(f"Plugin '{original_plugin_name_display}': Dependencies satisfied.")
 
         if not hasattr(module, "initialize"):
-            self.logger.error(f"Plugin '{plugin_name}' has no 'initialize' function.")
+            self.logger.error(f"Plugin '{original_plugin_name_display}' has no 'initialize' function.")
             return False
-        self.logger.info(f"Plugin '{plugin_name}': Found 'initialize' function. Attempting to call.")
+        self.logger.info(f"Plugin '{original_plugin_name_display}': Found 'initialize' function. Attempting to call.")
 
         try:
             initialize_func = getattr(module, "initialize")
-            success = initialize_func(self)  # Call initialize
+            # The initialize function is expected to populate self.plugins[plugin_name]
+            # with the instance and other metadata like 'is_enabled_by_default'.
+            success = initialize_func(self)
 
             if success:
-                self.logger.info(f"Plugin '{plugin_name}': 'initialize' function executed successfully.")
+                self.logger.info(f"Plugin '{original_plugin_name_display}': 'initialize' function executed successfully.")
                 
-                # Check if plugin registered itself (especially important for multiplayer's pattern)
+                # Verify that the plugin's initialize function registered the plugin's details in self.plugins
                 if plugin_name not in self.plugins:
-                     # If it didn't register itself, add the discovered data now.
-                     # This might happen for simpler plugins. If it was *supposed* to register and didn't,
-                     # it might cause issues later if an instance is expected.
-                     self.logger.info(f"Plugin '{plugin_name}' did not self-register; adding discovered data.")
-                     self.plugins[plugin_name] = plugin_data
+                     # This case should ideally not happen if initialize is well-behaved and populates self.plugins[plugin_name]
+                     self.logger.warning(f"Plugin '{original_plugin_name_display}' did not fully register itself in self.plugins via its initialize function. Using discovered data as fallback.")
+                     self.plugins[plugin_name] = plugin_data # Fallback, might lack instance or correct 'is_enabled_by_default'
 
-                # Check if an instance *is* now present in the (potentially updated) record
-                if plugin_name in self.plugins and ('instance' not in self.plugins[plugin_name] or self.plugins[plugin_name].get('instance') is None):
-                     # This is the warning that replaces the previous hard error
-                     self.logger.warning(f"Plugin '{plugin_name}': Instance was not explicitly set in manager's records by 'initialize'.")
-                elif plugin_name in self.plugins:
-                     self.logger.info(f"Plugin '{plugin_name}': Instance found/set in manager's records.")
+                # Check if an instance is now present in the plugin's record within self.plugins
+                current_plugin_record = self.plugins.get(plugin_name, {})
+                if 'instance' not in current_plugin_record or current_plugin_record.get('instance') is None:
+                     self.logger.warning(f"Plugin '{original_plugin_name_display}': Instance was not set in PluginManager's records by its 'initialize' function.")
+                else:
+                     self.logger.info(f"Plugin '{original_plugin_name_display}': Instance found/set in PluginManager's records.")
 
-                if plugin_name != "multiplayer":
-                    self.enabled_plugins.add(plugin_name)
+                # Plugins are loaded but NOT automatically enabled.
+                
+                #self.logger.info(f"Plugin '{original_plugin_name_display}' (key: {plugin_name}) is loaded. It must be enabled manually if needed.")
                 
                 return True
             else:
-                self.logger.error(f"Plugin '{plugin_name}' 'initialize' function returned False or failed.")
+                self.logger.error(f"Plugin '{original_plugin_name_display}' 'initialize' function returned False or indicated failure.")
+                # Clean up if initialize failed but partially registered?
+                if plugin_name in self.plugins and not self.plugins[plugin_name].get('instance'):
+                    self.logger.debug(f"Removing partially registered data for failed plugin '{plugin_name}'.")
+                    del self.plugins[plugin_name]
                 return False
 
         except Exception as e:
-            self.logger.error(f"Error during initialization of plugin '{plugin_name}': {str(e)}", exc_info=True)
+            self.logger.error(f"Error during initialization of plugin '{original_plugin_name_display}': {str(e)}", exc_info=True)
+            # Clean up if initialize failed due to exception
+            if plugin_name in self.plugins and not self.plugins[plugin_name].get('instance'):
+                self.logger.debug(f"Removing partially registered data for exception in plugin '{plugin_name}'.")
+                del self.plugins[plugin_name]
             return False
 
     def load_all_plugins(self) -> Dict[str, bool]:

@@ -48,9 +48,6 @@ class TamagotchiLogic:
 
         # MODIFIED: Use the passed-in PluginManager instance
         self.plugin_manager = plugin_manager_instance
-        # REMOVED: self.plugin_manager = PluginManager()
-        # REMOVED: self.plugin_manager.load_all_plugins() 
-        # Plugin loading and initial enabling is now handled once in main.py
 
         # Update status bar with plugin information (using the shared plugin_manager)
         # This assumes update_status_bar correctly uses self.plugin_manager
@@ -959,6 +956,15 @@ class TamagotchiLogic:
         self.plugin_manager.trigger_hook("pre_update", 
                                         tamagotchi_logic=self, 
                                         squid=self.squid)
+
+        # >>> TRIGGER_HOOK CALL FOR ON_UPDATE <<<
+        if hasattr(self, 'plugin_manager') and self.plugin_manager:
+            self.plugin_manager.trigger_hook(
+                "on_update",
+                tamagotchi_logic=self,
+                squid=self.squid
+            )
+
         # 1. Handle existing simulation updates
         self.move_objects()
         self.animate_poops()
@@ -1540,11 +1546,11 @@ class TamagotchiLogic:
         if is_sushi:
             food_pixmap = QtGui.QPixmap(os.path.join("images", "sushi.png"))
             food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
-            food_item.is_sushi = True
+            food_item.is_sushi = True # type: ignore 
         else:
             food_pixmap = QtGui.QPixmap(os.path.join("images", "cheese.png"))
             food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
-            food_item.is_sushi = False
+            food_item.is_sushi = False # type: ignore
 
         food_x = random.randint(50, self.user_interface.window_width - 50 - self.food_width)
         food_item.setPos(food_x, 50)
@@ -1552,6 +1558,15 @@ class TamagotchiLogic:
         # Add to scene and tracking list
         self.user_interface.scene.addItem(food_item)
         self.food_items.append(food_item)  # Single addition
+
+        # >>> ADDED TRIGGER_HOOK CALL <<<
+        if hasattr(self, 'plugin_manager') and self.plugin_manager:
+            self.plugin_manager.trigger_hook(
+                "on_spawn_food",
+                tamagotchi_logic=self,  # Pass the TamagotchiLogic instance
+                food_item=food_item     # Pass the created food_item
+            )
+        # print(f"Triggered on_spawn_food for {'sushi' if is_sushi else 'cheese'}") # Optional: for debugging
 
     def clean_environment(self):
         current_time = time.time()
@@ -1739,6 +1754,15 @@ class TamagotchiLogic:
             poop_item.setPos(x - self.squid.poop_width // 2, y)
             self.user_interface.scene.addItem(poop_item)
             self.poop_items.append(poop_item)
+
+            # >>> ADDED TRIGGER_HOOK CALL <<<
+            if hasattr(self, 'plugin_manager') and self.plugin_manager:
+                self.plugin_manager.trigger_hook(
+                    "on_spawn_poop",
+                    tamagotchi_logic=self, # Pass the TamagotchiLogic instance
+                    poop_item=poop_item    # Pass the created poop_item
+                )
+            # print(f"Triggered on_spawn_poop at ({x}, {y})") # Optional: for debugging
 
     def animate_poops(self):
         if self.squid is not None:
