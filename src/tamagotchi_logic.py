@@ -4,6 +4,7 @@ import random
 import os
 import time
 import json
+import base64
 import math
 from .statistics_window import StatisticsWindow
 from .save_manager import SaveManager
