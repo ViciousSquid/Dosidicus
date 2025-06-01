@@ -20,6 +20,7 @@ class Squid:
         self.push_animation = None
         self.startled_icon = None
         self.startled_icon_offset = QtCore.QPointF(0, -100)
+        self.name = "Squid"
 
         # Set neurogenesis cooldown (default to 180 seconds if not specified)
         self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 180
