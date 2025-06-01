@@ -985,65 +985,41 @@ class MultiplayerPlugin:
                 self.logger.debug(f"Fallback: Controller for {node_id[-6:]} already exists, skipping duplicate creation.")
 
 
+    # Inside MultiplayerPlugin class in mp_plugin_logic.py
     def update_remote_controllers(self):
         """Called by a QTimer to update RemoteSquidController instances."""
-        if not self.logger: return
+        # --- NEW TRACE PRINT ---
+        print(f"!!!!!!!! MP_PLUGIN_LOGIC: update_remote_controllers METHOD ENTERED. Num controllers: {len(self.remote_squid_controllers if hasattr(self, 'remote_squid_controllers') else {})} !!!!!!!!")
+        # --- END NEW TRACE PRINT ---
+
+        if not self.logger: 
+            print("MP_PLUGIN_LOGIC: Logger not available in update_remote_controllers.") # Fallback print
+            return
         if not hasattr(self, 'remote_squid_controllers') or not self.remote_squid_controllers:
+            # print("MP_PLUGIN_LOGIC: No remote squid controllers to update.") # Can be noisy
             return
 
         current_time = time.time()
-        delta_time = current_time - self.last_controller_update
-        if delta_time <= 0.001: return # Avoid division by zero or tiny updates
+        delta_time = current_time - self.last_controller_update # self.last_controller_update should be initialized in __init__ or setup
+        
+        # Prevent excessively small or negative delta_time if system time changes or very rapid calls
+        if delta_time <= 0.001: # Check against a small positive threshold
+            # if self.debug_mode: # Make this conditional if too verbose
+            #     print(f"MP_PLUGIN_LOGIC: Delta time too small or zero ({delta_time:.4f}), skipping controller update cycle.")
+            return 
         self.last_controller_update = current_time
+
+        # if self.debug_mode: # Optional: guard this if console is too noisy
+        #      print(f"--- MultiplayerPlugin: update_remote_controllers. Delta time: {delta_time:.3f}. Num controllers: {len(self.remote_squid_controllers)} ---")
 
         for node_id, controller in list(self.remote_squid_controllers.items()): # Iterate over a copy
             try:
-                controller.update(delta_time) # Call the controller's update method
-                updated_squid_data_from_controller = controller.squid_data # Get potentially modified data
-
-                # Update visuals if entity_manager is NOT being used or if this plugin directly manages basic visuals
-                if not self.entity_manager and node_id in self.remote_squids:
-                    remote_squid_display = self.remote_squids[node_id]
-                    visual = remote_squid_display.get('visual')
-                    status_text = remote_squid_display.get('status_text')
-
-                    if visual:
-                        visual.setPos(updated_squid_data_from_controller['x'], updated_squid_data_from_controller['y'])
-                        self.update_remote_squid_image(remote_squid_display, updated_squid_data_from_controller['direction'])
-                    
-                    if status_text:
-                        current_status_on_display = status_text.toPlainText()
-                        new_status_from_controller = updated_squid_data_from_controller.get('status', 'exploring')
-                        # Update text if it changed or if it's a special "arrival" type status
-                        if current_status_on_display.upper() != new_status_from_controller.upper() or \
-                           new_status_from_controller.upper() in ["ARRIVING", "ENTERING", "RETURNING..."]:
-                            status_text.setPlainText(new_status_from_controller)
-                        status_text.setPos(updated_squid_data_from_controller['x'], updated_squid_data_from_controller['y'] - 35) # Adjust offset
-
-                    # Handle view cone update via this plugin's method if no entity_manager
-                    if updated_squid_data_from_controller.get('view_cone_visible', False):
-                        self.update_remote_view_cone(node_id, updated_squid_data_from_controller) # This is mp_plugin_logic's method
-                    elif remote_squid_display.get('view_cone'): # If cone was visible but now isn't
-                         if self.tamagotchi_logic and hasattr(self.tamagotchi_logic.user_interface, 'scene'):
-                            cone = remote_squid_display['view_cone']
-                            if cone in self.tamagotchi_logic.user_interface.scene.items():
-                                self.tamagotchi_logic.user_interface.scene.removeItem(cone)
-                            remote_squid_display['view_cone'] = None
-                
-                elif self.entity_manager:
-                    # If entity_manager exists, it's responsible for updating the visual representation based on controller's data
-                    # The controller should ideally call entity_manager.update_remote_squid directly,
-                    # or this method needs to pass the controller's data to entity_manager.
-                    # For now, assume controller's changes might be picked up by entity_manager if it polls,
-                    # or better: controller calls entity_manager.
-                    # Let's add a call here for robustness if controller doesn't.
-                    self.entity_manager.update_remote_squid(node_id, updated_squid_data_from_controller, is_new_arrival=False)
-
-
+                # --- NEW TRACE PRINT ---
+                print(f"--- MP_PLUGIN_LOGIC: Attempting to call update() for controller {node_id[-4:]} ---")
+                # --- END NEW TRACE PRINT ---
+                controller.update(delta_time) 
             except Exception as e:
-                self.logger.error(f"Updating controller for {node_id[-6:]} failed: {e}", exc_info=True)
-                # Consider removing the controller if it consistently errors
-                # del self.remote_squid_controllers[node_id]
+                self.logger.error(f"MP_PLUGIN_LOGIC: Error updating controller for {node_id[-6:]}: {e}", exc_info=True)
 
 
     def calculate_entry_position(self, entry_side_direction: str) -> tuple:

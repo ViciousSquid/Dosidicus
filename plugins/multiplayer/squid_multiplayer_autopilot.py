@@ -103,59 +103,58 @@ class RemoteSquidController:
         return properties
 
     def update(self, delta_time=None):
-        current_time_autopilot = time.time()
+        # --- NEW UNCONDITIONAL TRACE PRINT ---
+        print(f"!!!!!!!! AUTOPILOT RemoteSquidController.update() ENTERED for {self.squid_data.get('node_id', 'UnknownNode')[-4:]} !!!!!!!!")
+        # --- END NEW UNCONDITIONAL TRACE PRINT ---
+
+        current_time_autopilot = time.time() 
         
         if delta_time is None:
-            delta_time = current_time_autopilot - self.last_update_time 
+            delta_time = current_time_autopilot - getattr(self, 'last_update_time', current_time_autopilot)
         self.last_update_time = current_time_autopilot
 
         self.time_away += delta_time
 
-        short_node_id = self.squid_data.get('node_id', 'Unk')[-4:]
-        # if self.debug_mode: # Make trace prints conditional on debug_mode
-        #     print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] CT: {current_time_autopilot:.2f}, NDT: {self.next_decision_time:.2f}, Cond: {current_time_autopilot < self.next_decision_time}, State: {self.state}, Status: {self.squid_data.get('status')}")
+        short_node_id = self.squid_data.get('node_id', 'Unknown')[-4:]
+        
+        if self.debug_mode:
+            print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] CurrentTime: {current_time_autopilot:.3f}, NextDecisionTime: {self.next_decision_time:.3f}, Condition (CT < NDT): {current_time_autopilot < self.next_decision_time}, Current State: {self.state}, Display Status: {self.squid_data.get('status')}")
 
         if current_time_autopilot < self.next_decision_time:
-            # if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] In IF (decision HOLD), moving: {self.squid_data.get('direction')}. Return early.")
+            if self.debug_mode:
+                print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] In IF block (decision HOLD), moving direction: {self.squid_data.get('direction')}. Returning early.")
+            
             self.move_in_direction(self.squid_data['direction'])
             if self.remote_entity_manager:
                 self.remote_entity_manager.update_remote_squid(self.squid_data['node_id'], self.squid_data, is_new_arrival=False)
             return
 
-        # if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] PASSED IF. NDT was {self.next_decision_time:.2f}. Processing state machine. State: {self.state}")
+        if self.debug_mode:
+            print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] PASSED IF block. NextDecisionTime was {self.next_decision_time:.3f}. Processing state machine. Current State: {self.state}")
         
         self.next_decision_time = current_time_autopilot + self.decision_interval
         
-        # if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] New NDT: {self.next_decision_time:.2f}")
+        if self.debug_mode:
+            print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] New NextDecisionTime set to: {self.next_decision_time:.3f} (current + {self.decision_interval})")
 
-        # Check for forced return due to time BEFORE executing state logic for this cycle
-        if self.time_away > self.max_time_away and self.state != "returning":
-            if self.debug_mode:
-                print(f"[AutoPilot] Squid {short_node_id} time to go home: {self.time_away:.1f}s/{self.max_time_away:.1f}s")
-            old_state = self.state
-            self.state = "returning"
-            self.squid_data['status'] = "returning home" # Set status
-            self._log_decision(f"StateChange: {old_state} -> {self.state}. Status: {self.squid_data['status']}. Reason: Max time away ({self.time_away:.1f}s / {self.max_time_away:.1f}s).")
-            # No return here, let return_home() be called if this condition met
-
-        # Main state machine
+        # State machine
         if self.state == "exploring":
-            # if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling explore().")
+            if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling explore().")
             self.explore()
         elif self.state == "feeding":
-            # if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling seek_food().")
+            if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling seek_food().")
             self.seek_food()
         elif self.state == "interacting":
-            # if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling interact_with_object().")
+            if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling interact_with_object().")
             self.interact_with_object()
-        elif self.state == "returning": # Should be called if state was just set to returning too
-            # if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling return_home().")
+        elif self.state == "returning":
+            if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling return_home().")
             self.return_home()
-        elif self.state == "exited": # If already exited, do nothing further
-            # if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] State is 'exited'. Doing nothing.")
+        elif self.state == "exited":
+            if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] State is 'exited'. Doing nothing.")
             return
 
-        if self.remote_entity_manager and self.state != "exited": # Don't update if exited
+        if self.remote_entity_manager and self.state != "exited":
             self.remote_entity_manager.update_remote_squid(self.squid_data['node_id'], self.squid_data, is_new_arrival=False)
 
     def explore(self):

@@ -178,10 +178,6 @@ class NetworkNode:
 
             try:
                 raw_data, addr = self.socket.recvfrom(MAX_PACKET_SIZE)
-                
-                # --- UNCONDITIONAL DEBUG LINE FOR RAW PACKET RECEPTION ---
-                print(f"DEBUG_VERY_RAW_RECV (Node {self.node_id}) from {addr}: {raw_data[:100]}")
-                # -------------------------------------------------------
 
                 if raw_data:
                     # Use the thread-safe queue for passing data to the main thread
