@@ -43,7 +43,7 @@ class TamagotchiLogic:
         self.window_resize_cooldown_max = 30  # 30 updates before another resize can startle
         self.has_been_resized = False
         self.was_big = False # Tracks if window was previously enlarged
-        self.debug_mode = False # Initial debug mode state
+        self.debug_mode = True          # DEBUG TOGGLE
         self.last_window_size = (1280, 900)  # Default or initial size
 
         # MODIFIED: Use the passed-in PluginManager instance
