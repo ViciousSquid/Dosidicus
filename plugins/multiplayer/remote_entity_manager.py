@@ -6,12 +6,13 @@ from typing import Dict, Any, Optional, List
 import logging
 import base64
 
-class AnimatableGraphicsItem(QtCore.QObject, QtWidgets.QGraphicsPixmapItem):
+# Corrected AnimatableGraphicsItem class
+class AnimatableGraphicsItem(QtWidgets.QGraphicsPixmapItem, QtCore.QObject): # Swapped order of base classes
     """Graphics item that can be animated with QPropertyAnimation"""
     
-    def __init__(self, pixmap=None, parent=None):
-        QtCore.QObject.__init__(self)
-        QtWidgets.QGraphicsPixmapItem.__init__(self, pixmap, parent)
+    def __init__(self, pixmap=None, parent=None): # 'parent' is for QGraphicsPixmapItem's parent
+        QtWidgets.QGraphicsPixmapItem.__init__(self, pixmap, parent) # Initialize QGraphicsPixmapItem first
+        QtCore.QObject.__init__(self) # Then initialize QObject
         self._scale = 1.0
         
     @QtCore.pyqtProperty(float)
@@ -294,7 +295,7 @@ class RemoteEntityManager:
                             QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation
                         )
                 
-                remote_visual = AnimatableGraphicsItem(squid_pixmap)
+                remote_visual = AnimatableGraphicsItem(squid_pixmap) # This is line 297 from traceback
                 
                 remote_visual.setPos(entry_x, entry_y) 
                 remote_visual.setZValue(5) 
