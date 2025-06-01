@@ -24,10 +24,14 @@ class Squid:
         # Set neurogenesis cooldown (default to 180 seconds if not specified)
         self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 180
 
-        # Rock interaction system
+        # Object interactions
         self.carrying_rock = False
         self.current_rock = None  # Currently held rock
         self.rock_being_thrown = None  # Rock in mid-flight
+        self.is_carrying = False    
+        self.carrying_item_visual = None
+        self.carried_item_offset_x = 30 # X offset for carried items
+        self.carried_item_offset_y = 0  # Y offset for carried items
 
         # Hoarding preferences
         self.hoard_corner = {
@@ -329,6 +333,121 @@ class Squid:
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
             self.tamagotchi_logic.update_squid_brain()
 
+    # Inside the Squid class in src/squid.py
+    def start_carrying_item(self, item_visual: QtWidgets.QGraphicsPixmapItem):
+        if not isinstance(item_visual, QtWidgets.QGraphicsPixmapItem):
+            print(f"Error: item_visual passed to start_carrying_item is not a QGraphicsPixmapItem.")
+            return
+
+        self.is_carrying = True
+        self.carrying_item_visual = item_visual
+        
+        item_filename = getattr(self.carrying_item_visual, 'filename', 'item')
+        if isinstance(item_filename, str):
+            item_filename = os.path.basename(item_filename)
+
+        # print(f"Squid '{getattr(self, 'name', 'Squid')}' started carrying: {item_filename}") # Or use self.logger
+
+        if self.carrying_item_visual:
+            self.carrying_item_visual.setVisible(True) # Ensure it's visible
+            self.carrying_item_visual.setOpacity(1.0)   # Ensure it's fully opaque
+            self._update_carried_item_position()      # Position it correctly relative to the squid immediately
+            self.status = f"carrying {item_filename}"
+
+            # Auto-drop after a few seconds (for testing)
+            drop_delay_ms = 5000  # Drop after 5 seconds (example)
+            QtCore.QTimer.singleShot(drop_delay_ms, self.place_carried_item)
+            
+            # Use print for now, or self.logger if you implement one in Squid class
+            print(f"Squid '{getattr(self, 'name', 'Squid')}' will auto-drop '{item_filename}' in {drop_delay_ms / 1000} seconds.")
+        else:
+            print(f"Error: carrying_item_visual is None in start_carrying_item for Squid '{getattr(self, 'name', 'Squid')}'")
+            self.is_carrying = False # Reset if item is invalid
+
+    def _update_carried_item_position(self):
+        if self.is_carrying and self.carrying_item_visual and self.squid_item:
+            # Calculate base offset
+            current_offset_x = self.carried_item_offset_x 
+            current_offset_y = self.carried_item_offset_y
+
+            squid_width = self.squid_item.boundingRect().width() * self.squid_item.scale()
+            item_width = 0
+            item_height = 0
+            if self.carrying_item_visual.pixmap(): # Check if pixmap exists
+                item_width = self.carrying_item_visual.pixmap().width() * self.carrying_item_visual.scale()
+                item_height = self.carrying_item_visual.pixmap().height() * self.carrying_item_visual.scale()
+
+            # Adjust offset based on squid's facing direction to make it look like it's "in front"
+            if self.squid_direction == "left":
+                current_offset_x = -item_width - 5 # Place item to the left of the squid, with a 5px gap
+            elif self.squid_direction == "right":
+                current_offset_x = squid_width + 5 # Place item to the right of the squid, with a 5px gap
+            elif self.squid_direction == "up":
+                # Example: Center it above the squid
+                current_offset_x = (squid_width / 2) - (item_width / 2)
+                current_offset_y = -item_height - 5 
+            elif self.squid_direction == "down":
+                # Example: Center it below the squid
+                current_offset_x = (squid_width / 2) - (item_width / 2)
+                current_offset_y = (self.squid_item.boundingRect().height() * self.squid_item.scale()) + 5
+
+            # Position the carried item relative to the squid's main visual (self.squid_item)
+            # self.squid_item.x() and y() are the top-left of the squid item
+            new_item_x = self.squid_item.x() + current_offset_x
+            new_item_y = self.squid_item.y() + current_offset_y
+            
+            self.carrying_item_visual.setPos(new_item_x, new_item_y)
+            # Ensure carried item is visually on top of or appropriately layered with the squid
+            self.carrying_item_visual.setZValue(self.squid_item.zValue() + 0.1) # Slightly above the squid
+
+
+    # Inside the Squid class in src/squid.py
+    def place_carried_item(self):
+        if self.is_carrying and self.carrying_item_visual:
+            item_filename_full_path = getattr(self.carrying_item_visual, 'filename', 'item')
+            item_filename_base = "unknown_item" # Default if os.path.basename fails
+            if isinstance(item_filename_full_path, str):
+                item_filename_base = os.path.basename(item_filename_full_path)
+            
+            # Use print for now, or self.logger if you implement one in Squid class
+            squid_name = getattr(self, 'name', 'Squid') # Get squid name if it exists
+            print(f"Squid '{squid_name}' is placing down '{item_filename_base}'.")
+
+            # The item is already in the scene.
+            # Optionally, adjust its Z-value if it was elevated while carried.
+            # original_z = getattr(self.carrying_item_visual, 'original_zValue', 0) # If you stored this
+            # self.carrying_item_visual.setZValue(original_z)
+            # Or set to a default Z for placed items, e.g., self.carrying_item_visual.setZValue(0)
+
+            # Optionally, adjust its final resting position.
+            # For now, it remains at its last position relative to the squid.
+            # You could add logic here to "nudge" it or place it more precisely.
+
+            # Log to memory manager using the correct parameters: category, key, value, importance
+            if hasattr(self, 'memory_manager') and self.memory_manager:
+                try:
+                    self.memory_manager.add_short_term_memory(
+                        category='interaction',  # Correct: first argument, or keyword 'category'
+                        key='placed_item',       # Correct: second argument, or keyword 'key'
+                        value=f"Stole {item_filename_base} from another tank!", # Correct: third argument, or keyword 'value'
+                        importance=5             # Correct: fourth argument, or keyword 'importance'
+                    )
+                except TypeError as e:
+                    print(f"ERROR calling add_short_term_memory in place_carried_item: {e}")
+                    print(f"Arguments were: category='interaction', key='placed_item', value='description string', importance=5")
+
+
+            # Update squid's state
+            self.is_carrying = False
+            self.carrying_item_visual = None # Detach the item
+            self.status = "admiring my treasure" 
+
+            if hasattr(self.tamagotchi_logic, 'show_message'):
+                self.tamagotchi_logic.show_message(f"{squid_name} placed a {item_filename_base} in the tank!")
+            
+        elif self.debug_mode if hasattr(self, 'debug_mode') else False: 
+            squid_name = getattr(self, 'name', 'Squid')
+            print(f"Squid '{squid_name}' tried to place an item, but wasn't carrying anything.")
 
     def load_images(self):
         """Load images with cache to reduce memory usage and apply resolution scaling"""
@@ -1012,16 +1131,16 @@ class Squid:
             return
 
         # Check if movement is allowed
-        if not getattr(self, 'can_move', True):
+        if not getattr(self, 'can_move', True): # Checks if 'can_move' attribute exists, defaults to True if not
             # print(f"DEBUG: {getattr(self, 'name', 'Squid')} can_move is False, returning from move_squid.")
             return
         
-        # Check if multiplayer is available and enabled
+        # Determine if multiplayer is enabled (copied from your existing logic)
         if hasattr(self.tamagotchi_logic, 'plugin_manager'):
             pm = self.tamagotchi_logic.plugin_manager
             multiplayer_enabled = 'multiplayer' in pm.get_enabled_plugins()
         else:
-            multiplayer_enabled = False
+            multiplayer_enabled = False # Default if no plugin_manager
         
         if self.animation_speed == 0:
             #print("Animation speed is 0, no movement")
@@ -1029,81 +1148,85 @@ class Squid:
 
         if self.is_sleeping:
             #print("Squid is sleeping, limited movement")
-            if self.squid_y < self.ui.window_height - 120 - self.squid_height: # Ensure correct boundary for sleeping
-                self.squid_y += self.base_vertical_speed * self.animation_speed
-                self.squid_item.setPos(self.squid_x, self.squid_y)
+            if self.squid_y < self.ui.window_height - 120 - self.squid_height: 
+                self.squid_y += self.base_vertical_speed * self.animation_speed # Ensure base_vertical_speed is defined
+                # self.squid_item.setPos(self.squid_x, self.squid_y) # Position update now centralized below
             self.current_frame = (self.current_frame + 1) % 2
-            self.update_squid_image()
-            return
+            # self.update_squid_image() # Image update now centralized below
+            # return # Movement logic continues below now
 
-        current_time = QtCore.QTime.currentTime().msecsSinceStartOfDay()
+        # This section seems to be where squid_x_new, squid_y_new are determined
+        # For brevity, I'm assuming squid_x_new and squid_y_new are calculated before this point
+        # based on your existing logic for food pursuit, random movement, etc.
+        # The important part is that self.squid_x and self.squid_y get updated.
+        
+        current_time = QtCore.QTime.currentTime().msecsSinceStartOfDay() # Assuming this is still relevant
 
         visible_food = self.get_visible_food()
 
         if visible_food:
             closest_food = min(visible_food, key=lambda f: self.distance_to(f[0], f[1]))
             self.pursuing_food = True
-            self.target_food = closest_food # Store the target food coordinates
-            self.move_towards(closest_food[0], closest_food[1]) # This sets self.squid_direction
-        elif self.pursuing_food: # Was pursuing but food is no longer visible
+            self.target_food = closest_food 
+            self.move_towards(closest_food[0], closest_food[1]) 
+        elif self.pursuing_food: 
             self.pursuing_food = False
             self.target_food = None
-            self.move_randomly() # Sets self.squid_direction
-        else: # Not pursuing food, move randomly
+            self.move_randomly() 
+        else: 
             if current_time - self.last_view_cone_change > self.view_cone_change_interval:
-                self.change_view_cone_direction() # This updates self.current_view_angle
+                self.change_view_cone_direction() 
                 self.last_view_cone_change = current_time
-            self.move_randomly() # Sets self.squid_direction
+            self.move_randomly()
 
-        # Calculate new potential position based on self.squid_direction
-        squid_x_new = self.squid_x
-        squid_y_new = self.squid_y
+        squid_x_new = self.squid_x # Will be modified by logic below
+        squid_y_new = self.squid_y # Will be modified by logic below
 
-        # Actual movement based on direction set by move_towards or move_randomly
         if self.squid_direction == "left":
             squid_x_new -= self.base_squid_speed * self.animation_speed
         elif self.squid_direction == "right":
             squid_x_new += self.base_squid_speed * self.animation_speed
         elif self.squid_direction == "up":
-            squid_y_new -= self.base_vertical_speed * self.animation_speed
+            squid_y_new -= self.base_vertical_speed * self.animation_speed # Ensure base_vertical_speed defined
         elif self.squid_direction == "down":
-            squid_y_new += self.base_vertical_speed * self.animation_speed
+            squid_y_new += self.base_vertical_speed * self.animation_speed # Ensure base_vertical_speed defined
 
-        # Boundary handling for single-player and multiplayer modes
         if not multiplayer_enabled:
-            # Original boundary restrictions for single-player mode
             if squid_x_new < 50:
-                squid_x_new = 50
-                self.change_direction()
+                squid_x_new = 50; self.change_direction()
             elif squid_x_new > self.ui.window_width - 50 - self.squid_width:
-                squid_x_new = self.ui.window_width - 50 - self.squid_width
-                self.change_direction()
-
+                squid_x_new = self.ui.window_width - 50 - self.squid_width; self.change_direction()
             if squid_y_new < 50:
-                squid_y_new = 50
-                self.change_direction()
-            elif squid_y_new > self.ui.window_height - 120 - self.squid_height: # Ensure correct boundary check
-                squid_y_new = self.ui.window_height - 120 - self.squid_height
-                self.change_direction()
-        # else: # In multiplayer, boundary checks are handled by check_boundary_exit
-            # No explicit position clamping here for multiplayer, as exit is desired.
-            # However, if not exiting, the squid just moves to squid_x_new, squid_y_new.
-            # The check_boundary_exit will then determine if an exit occurred.
-
-
-        # Update squid position
+                squid_y_new = 50; self.change_direction()
+            elif squid_y_new > self.ui.window_height - 120 - self.squid_height:
+                squid_y_new = self.ui.window_height - 120 - self.squid_height; self.change_direction()
+        
         self.squid_x = squid_x_new
         self.squid_y = squid_y_new
+        
+        # Centralized visual update for the squid itself
+        if self.squid_item:
+            if self.is_sleeping: # Handle sleeping image update here
+                 self.current_frame = (self.current_frame + 1) % 2
+                 self.squid_item.setPixmap(self.current_image())
+                 if self.squid_y < self.ui.window_height - 120 - self.squid_height: # Sleeping drift boundary
+                    pass # Position already updated if it drifted
+                 else: # Hit bottom boundary while sleeping
+                    self.squid_y = self.ui.window_height - 120 - self.squid_height
+            elif self.squid_direction in ["left", "right", "up", "down"]: # Handle active movement images
+                self.current_frame = (self.current_frame + 1) % 2
+                self.squid_item.setPixmap(self.current_image())
 
-        # Update animation frame and image
-        if self.squid_direction in ["left", "right", "up", "down"]:
-            self.current_frame = (self.current_frame + 1) % 2
-            self.squid_item.setPixmap(self.current_image())
+            # Set new position for the squid itself
+            self.squid_item.setPos(self.squid_x, self.squid_y)
 
-        # Set new position and update related elements
-        self.squid_item.setPos(self.squid_x, self.squid_y)
-        self.update_view_cone() # Ensure this is called if view cone depends on position/direction
-        self.update_sick_icon_position() # Ensure this is called
+            # --- INTEGRATION OF CARRIED ITEM UPDATE ---
+            if self.is_carrying and self.carrying_item_visual:
+                self._update_carried_item_position() # Call the method to update carried item's pos
+            # --- END INTEGRATION ---
+
+            self.update_view_cone() 
+            self.update_sick_icon_position() # Ensure this is called
 
         # Comprehensive boundary exit check in multiplayer mode
         if multiplayer_enabled:
