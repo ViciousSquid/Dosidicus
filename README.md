@@ -5,6 +5,7 @@
 *Multiple log files will be created:
 
 * `console.txt`
+* `dosidicus_log.txt`
 * `autopilot_decisions.tct` (when multiplayer mode is enabled)
 
   Recommended launch arguments are `-c -d`   (example:  main.py -c -d)
