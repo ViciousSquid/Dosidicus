@@ -1130,54 +1130,190 @@ class MultiplayerPlugin:
             returning_node_id = return_payload.get('node_id')
 
             if not self.network_node or returning_node_id != self.network_node.node_id:
-                # Message is not for this squid, or network_node is not initialized
                 if self.debug_mode:
                     expected_id = self.network_node.node_id if self.network_node else "N/A"
                     self.logger.debug(f"Squid_return message ignored. Expected node '{expected_id}', got '{returning_node_id}'.")
                 return
 
             local_squid = self.tamagotchi_logic.squid
-            if not local_squid or not local_squid.squid_item: # Check if local squid and its visual exist
+            if not local_squid or not local_squid.squid_item:
                 if self.debug_mode: self.logger.debug("Local squid or its visual item not found for return.")
                 return
 
             activity_summary = return_payload.get('activity_summary', {})
-            entry_side = return_payload.get('return_direction', 'left') # Direction from which it enters THIS screen
-            entry_coords = self.calculate_entry_position(entry_side) # Calculate where it appears
+            entry_side = return_payload.get('return_direction', 'left') 
+            entry_coords = self.calculate_entry_position(entry_side)
 
-            # Update local squid's position and make it visible
             local_squid.squid_x, local_squid.squid_y = entry_coords[0], entry_coords[1]
             local_squid.squid_item.setPos(local_squid.squid_x, local_squid.squid_y)
             local_squid.squid_item.setVisible(True)
-            
-            # MODIFIED: No fade-in animation, just ensure full opacity
-            local_squid.squid_item.setOpacity(1.0) 
-            if local_squid.squid_item.graphicsEffect(): # Remove any existing effect
-                local_squid.squid_item.graphicsEffect().setEnabled(False) # Or set to None
+            local_squid.squid_item.setOpacity(1.0)
+            if local_squid.squid_item.graphicsEffect():
+                local_squid.squid_item.graphicsEffect().setEnabled(False)
                 local_squid.squid_item.setGraphicsEffect(None)
 
+            self.apply_remote_experiences(local_squid, activity_summary)
 
-            self.apply_remote_experiences(local_squid, activity_summary) # Apply changes based on journey
+            # --- MODIFICATION FOR DETAILED ITEM RECREATION ---
+            carried_items_details_list = activity_summary.get('carried_items_details', [])
+            num_items_brought_back = len(carried_items_details_list) # Or use 'rocks_stolen' if it reliably matches the list length
 
-            num_stolen_rocks = activity_summary.get('rocks_stolen', 0)
-            if num_stolen_rocks > 0:
-                self.create_stolen_rocks(local_squid, num_stolen_rocks, entry_coords)
+            if num_items_brought_back > 0:
+                self.logger.info(f"Local squid returned carrying {num_items_brought_back} item(s). Details: {carried_items_details_list}")
+                # We'll create/modify this method in the next step:
+                self.recreate_carried_items_in_tank(local_squid, carried_items_details_list, entry_coords)
+                
                 if hasattr(self.tamagotchi_logic, 'show_message'):
-                    self.tamagotchi_logic.show_message(f"🎉 Your squid returned with {num_stolen_rocks} souvenir rocks!")
+                    self.tamagotchi_logic.show_message(f"Your squid returned with {num_items_brought_back} item(s) from its adventure!")
             else:
+                # ... (existing message for no items stolen) ...
                 if hasattr(self.tamagotchi_logic, 'show_message'):
                     journey_time_sec = activity_summary.get('time_away', 0)
                     time_str = f"{int(journey_time_sec/60)}m {int(journey_time_sec%60)}s"
-                    self.tamagotchi_logic.show_message(f"🦑 Welcome back! Your squid explored for {time_str}.")
+                    self.tamagotchi_logic.show_message(f"Welcome back! Your squid explored for {time_str}.")
             
-            local_squid.can_move = True # Allow movement again
+            local_squid.can_move = True
             if hasattr(local_squid, 'is_transitioning'): local_squid.is_transitioning = False
-            local_squid.status = "just returned home" # Update status
+            local_squid.status = "just returned home"
 
-            if self.debug_mode: self.logger.debug(f"Local squid '{local_squid.name if hasattr(local_squid,'name') else ''}' returned to position {entry_coords} from {entry_side}.")
+            if self.debug_mode: self.logger.debug(f"Local squid '{getattr(local_squid,'name','')}' returned to {entry_coords} from {entry_side}. Brought back {num_items_brought_back} items.")
 
         except Exception as e:
             self.logger.error(f"Handling local squid's return failed: {e}", exc_info=True)
+
+    def recreate_carried_items_in_tank(self, local_squid, carried_items_data_list: List[Dict], entry_position: tuple):
+        """
+        Recreates items in the local scene based on detailed data brought back by the squid.
+        The first item is given to the squid to carry; subsequent items are placed in the tank.
+        """
+        if not self.logger:
+            print("MPPluginLogic ERRA: Logger not available in recreate_carried_items_in_tank")
+            return
+        if not self.tamagotchi_logic or not hasattr(self.tamagotchi_logic, 'user_interface') or not carried_items_data_list:
+            self.logger.warning("Cannot recreate carried items: TamagotchiLogic, UI, or item data missing.")
+            return
+        
+        ui = self.tamagotchi_logic.user_interface
+        scene = ui.scene
+        entry_x, entry_y = entry_position
+
+        self.logger.info(f"Recreating {len(carried_items_data_list)} item(s) brought back by squid {local_squid.name if hasattr(local_squid, 'name') else 'N/A'}.")
+
+        item_successfully_given_to_squid_to_carry = False
+
+        for i, item_data in enumerate(carried_items_data_list):
+            try:
+                original_filename = item_data.get('original_filename')
+                original_category = item_data.get('original_category', 'decoration') # Default if not specified
+                item_scale = item_data.get('scale', 1.0)
+                # Use original_zValue if provided, otherwise default (e.g. for decorations)
+                # Add a small positive bias if it's going to be carried to appear above squid if at same base Z
+                item_z_value = item_data.get('zValue', 0) 
+
+
+                if not original_filename:
+                    self.logger.warning(f"Skipping item recreation: 'original_filename' missing in item data: {item_data}")
+                    continue
+
+                # --- Asset Path Resolution ---
+                # This logic attempts to find the image based on the original_filename.
+                # It assumes original_filename might be a base name or include a subfolder like "decoration/".
+                possible_paths = [
+                    os.path.join("images", original_filename), 
+                    os.path.join("images", "decoration", os.path.basename(original_filename)),
+                    os.path.join("images", "items", os.path.basename(original_filename)),
+                    os.path.join("images", "food", os.path.basename(original_filename)), # If food can be carried
+                    os.path.join("images", "rocks", os.path.basename(original_filename)), # If rocks are in subfolder
+                    original_filename # If original_filename was already a relative path like "images/foo.png"
+                ]
+                
+                item_image_path = None
+                for p_path in possible_paths:
+                    # Normalize path for consistent checking
+                    normalized_path = os.path.normpath(p_path)
+                    if os.path.exists(normalized_path):
+                        item_image_path = normalized_path
+                        break
+                
+                if not item_image_path:
+                    self.logger.warning(f"Could not find local image asset for '{original_filename}'. Attempting fallback to default rock/item.")
+                    # Fallback to a generic rock image if specific image not found
+                    item_image_path = os.path.join("images", "rock.png") # Default fallback
+                    if not os.path.exists(item_image_path):
+                        self.logger.error(f"Default fallback image 'images/rock.png' also not found. Cannot recreate item.")
+                        continue # Skip this item
+                    original_category = 'rock' # Override category if using fallback rock
+
+                self.logger.info(f"Attempting to recreate item {i+1}: Path='{item_image_path}', Category='{original_category}', Scale={item_scale:.2f}")
+
+                pixmap = QtGui.QPixmap(item_image_path)
+                if pixmap.isNull():
+                    self.logger.error(f"Failed to load QPixmap for item image: '{item_image_path}'")
+                    continue
+
+                # --- Item Creation ---
+                created_item_visual = None
+                if hasattr(ui, 'ResizablePixmapItem'):
+                    created_item_visual = ui.ResizablePixmapItem(pixmap, item_image_path)
+                else:
+                    created_item_visual = QtWidgets.QGraphicsPixmapItem(pixmap)
+                    setattr(created_item_visual, 'filename', item_image_path)
+                
+                setattr(created_item_visual, 'category', original_category)
+                created_item_visual.setScale(item_scale)
+                # ZValue for carried item will be handled by squid logic to be on top
+                # ZValue for placed items will use item_z_value
+                # setattr(created_item_visual, 'original_zValue', item_z_value) # Store for later placement
+
+                setattr(created_item_visual, 'is_stolen_from_remote', True)
+                setattr(created_item_visual, 'is_foreign', True)
+                self.apply_foreign_object_tint(created_item_visual)
+                
+                # Add to scene so it's managed by Qt, positions will be updated
+                scene.addItem(created_item_visual)
+
+                if not item_successfully_given_to_squid_to_carry and hasattr(local_squid, 'start_carrying_item'):
+                    # The first successfully created item is given to the squid to carry
+                    created_item_visual.setZValue(local_squid.squid_item.zValue() + 0.1) # Ensure it's visually above squid slightly
+                    local_squid.start_carrying_item(created_item_visual)
+                    item_successfully_given_to_squid_to_carry = True
+                    self.logger.info(f"Squid '{local_squid.name}' is now carrying '{os.path.basename(item_image_path)}'.")
+                else:
+                    # Subsequent items, or if squid can't carry, place them in the tank
+                    if not hasattr(local_squid, 'start_carrying_item'):
+                         self.logger.warning(f"Squid object does not have 'start_carrying_item' method. Placing item '{os.path.basename(item_image_path)}' near entry.")
+                    else:
+                        self.logger.info(f"Placing additional item '{os.path.basename(item_image_path)}' directly in tank.")
+
+                    created_item_visual.setZValue(item_z_value) # Use its original/default Z for placed items
+                    
+                    # Scatter these additional items around the entry point
+                    angle_offset = random.uniform(-math.pi / 2, math.pi / 2) 
+                    # Use 'i' to ensure different angle for each subsequent item
+                    angle = (i * (math.pi / max(1, len(carried_items_data_list) -1 ))) + angle_offset 
+                    dist_from_entry = random.uniform(80, 150) # Slightly further for placed items
+                    
+                    item_x = entry_x + dist_from_entry * math.cos(angle)
+                    item_y = entry_y + dist_from_entry * math.sin(angle)
+                    
+                    item_w = pixmap.width() * item_scale
+                    item_h = pixmap.height() * item_scale
+                    # Basic boundary check
+                    item_x = max(item_w/2, min(item_x, ui.window_width - item_w/2))
+                    item_y = max(item_h/2, min(item_y, ui.window_height - item_h/2))
+
+                    created_item_visual.setPos(item_x - item_w/2, item_y - item_h/2)
+                    created_item_visual.setOpacity(1.0) # Ensure visible
+
+                # Add memory for each successfully recreated item
+                if hasattr(local_squid, 'memory_manager'):
+                    local_squid.memory_manager.add_short_term_memory(
+                        'achievement', f'brought_back_{original_category}',
+                        f"Brought back a {os.path.basename(item_image_path)} from an adventure!", importance=6
+                    )
+
+            except Exception as e:
+                self.logger.error(f"Error processing and recreating a carried item from data '{item_data}': {e}", exc_info=True)
 
     def _create_arrival_animation(self, graphics_item: QtWidgets.QGraphicsPixmapItem):
         """MODIFIED: Creates a simple fade-in animation (now static) for newly arrived remote items."""
@@ -1710,50 +1846,23 @@ class MultiplayerPlugin:
 
 
     def _get_objects_state(self) -> List[Dict]:
-        """Collects and returns a list of syncable game object states."""
-        if not self.logger: return []
-        if not self.tamagotchi_logic or not hasattr(self.tamagotchi_logic, 'user_interface'):
-            return []
-
-        ui = self.tamagotchi_logic.user_interface
-        syncable_objects_list = []
-        try:
-            for item in ui.scene.items(): # Iterate through all items in the scene
-                if not isinstance(item, QtWidgets.QGraphicsPixmapItem) or not hasattr(item, 'filename'):
-                    continue # Skip non-pixmap items or items without a filename
-                
-                if not item.isVisible(): # Skip invisible items
-                    continue
-                
-                if getattr(item, 'is_remote_clone', False): # Skip clones of remote objects
-                    continue
-
-                object_type_str = self._determine_object_type(item)
-                valid_types_to_sync = ['rock', 'food', 'poop', 'decoration'] # Define what to sync
-                if object_type_str not in valid_types_to_sync:
-                    continue
-
-                item_pos = item.pos()
-                # Create a somewhat unique ID for the object based on filename and rough position
-                obj_id = f"{os.path.basename(item.filename)}_{int(item_pos.x())}_{int(item_pos.y())}"
-                
-                object_data = {
-                    'id': obj_id, 
-                    'type': object_type_str, 
-                    'x': item_pos.x(), 
-                    'y': item_pos.y(),
-                    'filename': item.filename, # Path to the image file
-                    'scale': item.scale() if hasattr(item, 'scale') else 1.0,
-                    'zValue': item.zValue(),
-                    'is_being_carried': getattr(item, 'is_being_carried', False) # If squid is carrying it
-                }
-                syncable_objects_list.append(object_data)
-        except RuntimeError: # Scene might change during iteration
-             if self.debug_mode: self.logger.warning("Runtime error while iterating scene items for sync. Skipping this cycle.")
-             return [] # Return empty or partially filled list
-        except Exception as e:
-            if self.debug_mode: self.logger.error(f"Getting object states for sync failed: {e}", exc_info=True)
-        return syncable_objects_list
+        """
+        Collects and returns a list of syncable game object states.
+        MODIFIED: Returns an empty list to prevent general mirroring of local items.
+        Items will now only transfer between instances via the explicit "stealing/carrying" mechanic.
+        """
+        if not self.logger: 
+            # This check is good practice, though an empty list is returned anyway.
+            print("MPPluginLogic ERRA: Logger not available in _get_objects_state")
+            return [] 
+        
+        # To stop broadcasting general local items like rocks, food, decorations, etc.,
+        # simply return an empty list. The 'object_sync' message will still send squid state
+        # and any other essential global state, but not these common environmental items.
+        if self.debug_mode:
+            self.logger.debug("_get_objects_state: Intentionally returning empty list to prevent general item mirroring.")
+        
+        return []   # Return an empty list (do not sync decoration items)
 
     def _determine_object_type(self, scene_item: QtWidgets.QGraphicsItem) -> str:
         """Determines a string type for a scene item based on attributes or filename."""
@@ -1840,30 +1949,71 @@ class MultiplayerPlugin:
 
 
     def process_remote_object(self, remote_obj_data: Dict, source_node_id: str, clone_id: str):
-        """Creates or updates a visual clone of a remote object in the local scene."""
-        if not self.logger: return
-        if not self.tamagotchi_logic or not hasattr(self.tamagotchi_logic, 'user_interface'): return
+        """
+        Creates or updates a visual clone of a remote object in the local scene.
+        MODIFIED: Selectively ignores common environmental items to prevent general mirroring.
+        """
+        if not self.logger: 
+            print("MPPluginLogic ERRA: Logger not available in process_remote_object") # Basic fallback print
+            return 
+
+        # --- NEW: SELECTIVE PROCESSING TO PREVENT MIRRORING OF COMMON LOCAL ITEMS ---
+        # The 'type' field in remote_obj_data is set by _determine_object_type 
+        # from _get_objects_state on the sender's side.
+        item_type_from_remote = remote_obj_data.get('type', 'unknown').lower()
+        
+        # Define types that should NOT be mirrored through general sync.
+        # These items should be local to each tank unless explicitly carried over.
+        types_to_ignore_for_mirroring = ['rock', 'urchin', 'food', 'poop', 'decoration'] 
+
+        if item_type_from_remote in types_to_ignore_for_mirroring:
+            # If a mirrored clone of this type of item already exists in our scene 
+            # (e.g., from before this filtering logic was active, or if the other client is still sending),
+            # we should remove it to enforce the non-mirroring rule.
+            if clone_id in self.remote_objects: # self.remote_objects tracks visual clones this instance created
+                if self.debug_mode:
+                    self.logger.debug(f"process_remote_object: Removing existing undesired mirrored clone '{clone_id}' (type: '{item_type_from_remote}') from node {source_node_id}.")
+                self.remove_remote_object(clone_id) # This method should handle removal from scene and self.remote_objects
+            
+            if self.debug_mode:
+                self.logger.debug(f"process_remote_object: Ignoring general sync for remote object type '{item_type_from_remote}' (Original ID: {remote_obj_data.get('id', 'N/A')}, Clone ID: {clone_id}) from node {source_node_id}. This item type should only transfer via explicit stealing/carrying.")
+            return # Stop further processing for this item, thus preventing its mirroring.
+        # --- END NEW SELECTIVE PROCESSING ---
+
+        # Original continuation of the method for item types that ARE allowed to be mirrored,
+        # or for other types of shared objects if you have any.
+        if not self.tamagotchi_logic or not hasattr(self.tamagotchi_logic, 'user_interface'): 
+            self.logger.warning("process_remote_object: TamagotchiLogic or UI not available, cannot process item further.")
+            return
         
         scene = self.tamagotchi_logic.user_interface.scene
-        base_filename = os.path.basename(remote_obj_data['filename']) # Get just the filename
         
-        # Try to find the image in common local paths
-        resolved_filename = os.path.join("images", base_filename) # Default path
+        # The rest of this method is the original logic for creating/updating clones.
+        # It will now only apply to items NOT filtered out by the block above.
+        # For example, if you had a special shared item type like 'portal' or 'shared_toy'
+        # that you *did* want mirrored, its processing would continue here.
+
+        base_filename = os.path.basename(remote_obj_data.get('filename', 'unknown_sync_item.png'))
+        
+        # Asset path resolution (same as before)
+        resolved_filename = os.path.join("images", base_filename) 
         if not os.path.exists(resolved_filename):
-            for subdir in ["decoration", "items", "food", "rocks"]: # Common subdirectories
+            for subdir in ["decoration", "items", "food", "rocks"]: # Add other relevant subdirs if needed
                 path_attempt = os.path.join("images", subdir, base_filename)
                 if os.path.exists(path_attempt):
                     resolved_filename = path_attempt
                     break
-            else: # If image not found locally
-                if self.debug_mode: self.logger.warning(f"Remote object image '{base_filename}' not found locally for {clone_id}. Skipping visual.")
+            else: 
+                if self.debug_mode: self.logger.warning(f"process_remote_object: Image for allowed sync item '{base_filename}' (type: '{item_type_from_remote}') not found locally for clone '{clone_id}'. Skipping visual.")
                 return
 
-        with self.remote_objects_lock: # Thread safety for self.remote_objects dictionary
+        # Thread safety for self.remote_objects dictionary
+        with self.remote_objects_lock: 
             if clone_id in self.remote_objects: # If clone already exists, update it
                 existing_clone_info = self.remote_objects[clone_id]
                 visual_item = existing_clone_info['visual']
                 
+                # Update existing visual item's properties
                 visual_item.setPos(remote_obj_data['x'], remote_obj_data['y'])
                 visual_item.setScale(remote_obj_data.get('scale', 1.0))
                 visual_item.setZValue(remote_obj_data.get('zValue', -5)) # Default Z for background items
@@ -1872,42 +2022,49 @@ class MultiplayerPlugin:
                 existing_clone_info['last_update'] = time.time()
                 existing_clone_info['data'] = remote_obj_data # Store latest data
                 
-                # Ensure tint is applied (might have been removed or changed)
-                if not getattr(visual_item, 'is_foreign', False):
+                # Ensure tint is applied if it's meant to be foreign (clones always are)
+                if not getattr(visual_item, 'is_foreign', False): # Should always be true for clones
                      self.apply_foreign_object_tint(visual_item)
-            else: # New clone, create it
-                if remote_obj_data.get('is_being_carried', False): # Don't create visual if it's being carried
+                if self.debug_mode:
+                    self.logger.debug(f"process_remote_object: Updated mirrored clone '{clone_id}' (type: '{item_type_from_remote}') from {source_node_id}.")
+
+            else: # New clone for an allowed item type, create it
+                if remote_obj_data.get('is_being_carried', False): # Don't create visual if it's being carried by the remote squid
+                    if self.debug_mode:
+                        self.logger.debug(f"process_remote_object: Item '{clone_id}' (type: '{item_type_from_remote}') is being carried remotely. Not creating visual clone yet.")
                     return
 
                 try:
                     pixmap = QtGui.QPixmap(resolved_filename)
                     if pixmap.isNull():
-                        if self.debug_mode: self.logger.error(f"Failed to load QPixmap for remote object '{resolved_filename}'.")
+                        if self.debug_mode: self.logger.error(f"process_remote_object: Failed to load QPixmap for allowed remote object '{resolved_filename}'.")
                         return
                     
                     cloned_visual = QtWidgets.QGraphicsPixmapItem(pixmap)
                     cloned_visual.setPos(remote_obj_data['x'], remote_obj_data['y'])
                     cloned_visual.setScale(remote_obj_data.get('scale', 1.0))
-                    # Cloned objects are less prominent than remote squids
-                    cloned_visual.setOpacity(self.REMOTE_SQUID_OPACITY * 0.65) # Slightly more transparent
-                    cloned_visual.setZValue(remote_obj_data.get('zValue', -5))
+                    # Cloned objects are typically less prominent than remote squids themselves
+                    cloned_visual.setOpacity(self.REMOTE_SQUID_OPACITY * 0.65) # Example: Slightly more transparent
+                    cloned_visual.setZValue(remote_obj_data.get('zValue', -5)) # Default Z for background items
                     
-                    setattr(cloned_visual, 'filename', resolved_filename) # Store original filename for reference
-                    setattr(cloned_visual, 'is_remote_clone', True) # Mark as a clone
-                    setattr(cloned_visual, 'original_id_from_sender', remote_obj_data['id']) # Store original ID
+                    setattr(cloned_visual, 'filename', resolved_filename) 
+                    setattr(cloned_visual, 'is_remote_clone', True) # Mark as a clone from a remote instance
+                    setattr(cloned_visual, 'original_id_from_sender', remote_obj_data['id'])
                     
                     self.apply_foreign_object_tint(cloned_visual) # Apply visual tint
                     scene.addItem(cloned_visual)
                     
                     self.remote_objects[clone_id] = {
                         'visual': cloned_visual, 
-                        'type': remote_obj_data.get('type', 'unknown_clone'),
+                        'type': item_type_from_remote, # Store the determined type
                         'source_node': source_node_id, 
                         'last_update': time.time(), 
-                        'data': remote_obj_data
+                        'data': remote_obj_data # Store all received data
                     }
+                    if self.debug_mode:
+                        self.logger.debug(f"process_remote_object: Created new mirrored clone '{clone_id}' (type: '{item_type_from_remote}') from {source_node_id}.")
                 except Exception as e_create_clone:
-                    if self.debug_mode: self.logger.error(f"Creating visual clone for '{clone_id}' failed: {e_create_clone}", exc_info=True)
+                    if self.debug_mode: self.logger.error(f"process_remote_object: Creating visual clone for allowed item '{clone_id}' failed: {e_create_clone}", exc_info=True)
 
 
     def handle_heartbeat(self, node: NetworkNode, message: Dict, addr: tuple):
