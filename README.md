@@ -1,6 +1,6 @@
 # DEV BRANCH
 
-Debug mode is enabled on all modules. 
+`self.debug_mode` is enabled on all modules. 
 
 *Multiple log files will be created:
 
