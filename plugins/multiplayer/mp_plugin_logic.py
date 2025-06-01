@@ -82,6 +82,47 @@ class MultiplayerPlugin:
         self.entity_manager: RemoteEntityManager | None = None # Added type hint
         self.config_manager = None # Placeholder, ensure this is set if used (e.g. in handle_squid_exit_message print)
 
+    def _initialize_remote_entity_manager(self):
+        """
+        Initializes the RemoteEntityManager instance.
+        This method encapsulates the logic for creating and configuring
+        the RemoteEntityManager.
+        """
+        if not self.logger:
+            # This case should ideally not happen if logger is set up in __init__ or early setup
+            print("MPPluginLogic ERRA: Logger not available for _initialize_remote_entity_manager")
+            self.entity_manager = None
+            return
+
+        if self.tamagotchi_logic and \
+           hasattr(self.tamagotchi_logic, 'user_interface') and \
+           self.tamagotchi_logic.user_interface and \
+           hasattr(self.tamagotchi_logic.user_interface, 'image_cache'): # Check for image_cache
+
+            ui = self.tamagotchi_logic.user_interface
+            try:
+                self.entity_manager = RemoteEntityManager(
+                    scene=ui.scene,
+                    window_width=ui.window_width,
+                    window_height=ui.window_height,
+                    #image_cache=ui.image_cache,  # Pass the image_cache instance
+                    debug_mode=self.debug_mode, # self.debug_mode should be set in MpPluginLogic
+                    logger=self.logger.getChild("RemoteEntityManager") # Pass a child logger
+                )
+                self.logger.info("RemoteEntityManager initialized successfully.")
+            except ImportError: # Should not happen if imports are correct at file top
+                self.logger.error("RemoteEntityManager import failed during initialization. Visuals for remote entities will be basic or non-functional.", exc_info=True)
+                self.entity_manager = None
+                # self.initialize_remote_representation() # Call your fallback if RemoteEntityManager fails
+            except Exception as e_rem:
+                self.logger.error(f"Error initializing RemoteEntityManager: {e_rem}", exc_info=True)
+                self.entity_manager = None
+                # self.initialize_remote_representation() # Call your fallback
+        else:
+            self.logger.warning("User interface, TamagotchiLogic, or ImageCache not available for RemoteEntityManager setup. Remote visuals may be limited or non-functional.")
+            self.entity_manager = None
+            # self.initialize_remote_representation() # Call your fallback
+
 
     def debug_autopilot_status(self):
         """Debug the status of all autopilot controllers for remote squids."""
@@ -216,7 +257,7 @@ class MultiplayerPlugin:
 
         # --- BEGIN LOGGER INITIALIZATION ---
         if hasattr(self.plugin_manager, 'logger') and self.plugin_manager.logger is not None:
-            self.logger = self.plugin_manager.logger
+            self.logger = self.plugin_manager.logger.getChild(mp_constants.PLUGIN_NAME) # Get a child logger is good practice
         else:
             logger_name = f"{mp_constants.PLUGIN_NAME}_Plugin"
             self.logger = logging.getLogger(logger_name)
@@ -268,7 +309,7 @@ class MultiplayerPlugin:
             # return False # Decided to proceed with limited functionality if UI parts are missing
         else:
             self.debug_mode = getattr(self.tamagotchi_logic, 'debug_mode', False)
-            if self.logger and hasattr(self.logger, 'setLevel'):
+            if self.logger and hasattr(self.logger, 'setLevel'): # Make sure logger has setLevel
                  self.logger.setLevel(logging.DEBUG if self.debug_mode else logging.INFO)
             self.logger.info(f"TamagotchiLogic instance found. Debug mode: {self.debug_mode}")
 
@@ -302,30 +343,42 @@ class MultiplayerPlugin:
         self.last_controller_update = time.time()
 
 
-        if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'user_interface') and self.tamagotchi_logic.user_interface:
-            ui = self.tamagotchi_logic.user_interface
-            try:
-                # RemoteEntityManager is now expected to be imported at the top
-                self.entity_manager = RemoteEntityManager(
-                    ui.scene,
-                    ui.window_width,
-                    ui.window_height,
-                    self.debug_mode,
-                    logger=self.logger # Pass logger
-                )
-                self.logger.info("Using dedicated RemoteEntityManager.")
-            except ImportError:
-                self.logger.error("RemoteEntityManager import failed. Visuals for remote entities will be basic or non-functional.", exc_info=True)
+        # === CORRECTED RemoteEntityManager Instantiation Block START ===
+        if self.tamagotchi_logic and \
+           hasattr(self.tamagotchi_logic, 'user_interface') and \
+           self.tamagotchi_logic.user_interface:
+
+            ui = self.tamagotchi_logic.user_interface # This is the GameWindow instance
+
+            if not hasattr(ui, 'image_cache'): # Ensure ImageCache is available
+                self.logger.error("ImageCache not found on user_interface (GameWindow). RemoteEntityManager cannot be initialized correctly.")
                 self.entity_manager = None
-                self.initialize_remote_representation() # Fallback basic timers
-            except Exception as e_rem:
-                self.logger.error(f"Error initializing RemoteEntityManager: {e_rem}", exc_info=True)
-                self.entity_manager = None
-                self.initialize_remote_representation() # Fallback basic timers
+                self.initialize_remote_representation() # Call your fallback
+            else:
+                try:
+                    # RemoteEntityManager should be imported at the top of mp_plugin_logic.py
+                    self.entity_manager = RemoteEntityManager(
+                        scene=ui.scene,
+                        window_width=ui.window_width,
+                        window_height=ui.window_height,
+                        image_cache=ui.image_cache,  # Correct: Pass the actual ImageCache object
+                        debug_mode=self.debug_mode, # Correct: Pass the debug_mode boolean
+                        logger=self.logger.getChild("RemoteEntityManager") # Good practice for logger
+                    )
+                    self.logger.info("RemoteEntityManager initialized.")
+                except ImportError: # Should be caught if RemoteEntityManager isn't imported
+                    self.logger.error("RemoteEntityManager class import failed. Visuals for remote entities will be basic or non-functional.", exc_info=True)
+                    self.entity_manager = None
+                    self.initialize_remote_representation() # Your fallback
+                except Exception as e_rem:
+                    self.logger.error(f"Error initializing RemoteEntityManager: {e_rem}", exc_info=True)
+                    self.entity_manager = None
+                    self.initialize_remote_representation() # Your fallback
         else:
             self.logger.warning("User interface or TamagotchiLogic not available for RemoteEntityManager setup. Remote visuals may be limited.")
             self.entity_manager = None
-            self.initialize_remote_representation() # Fallback basic timers
+            self.initialize_remote_representation() # Your fallback
+        # === CORRECTED RemoteEntityManager Instantiation Block END ===
 
         self.initialize_status_ui() # Initialize status widget or bar
 

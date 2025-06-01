@@ -2,7 +2,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import os
 import time
 import math
-from typing import Dict, Any, Optional, List # Ensure List is imported if used for type hinting
+from typing import Dict, Any, Optional, List
 import logging
 import base64
 
@@ -60,10 +60,10 @@ class ObjectPool:
         self.in_use.clear()
 
 class RemoteEntityManager:
-    def __init__(self, scene, window_width, window_height, debug_mode=False, logger=None): # Added tamagotchi_logic
+    def __init__(self, scene, window_width, window_height, debug_mode=False, logger=None):
         self.scene = scene
-        self.window_width = window_width # Current instance's window width
-        self.window_height = window_height # Current instance's window height
+        self.window_width = window_width
+        self.window_height = window_height
         self.debug_mode = debug_mode
         # self.tamagotchi_logic = tamagotchi_logic # Store if needed for other things
 
@@ -205,35 +205,35 @@ class RemoteEntityManager:
         current_x = squid_data_payload.get('x')
         current_y = squid_data_payload.get('y')
 
-        # If this is an update for an existing squid (not a new arrival), position data is essential.
-        # For new arrivals, position will be calculated by calculate_entry_position.
         if not is_new_arrival and (current_x is None or current_y is None):
             if self.debug_mode: self.logger.warning(f"Insufficient position data for remote squid update {node_id}")
             return False
+
+        # Define the robust path to your project's "images" folder
+        # This assumes remote_entity_manager.py is in project_root/plugins/multiplayer/
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.join(script_dir, '..', '..') 
+        images_folder_root_path = os.path.join(project_root, 'images')
 
         if node_id in self.remote_squids: # Existing squid: Update position and other attributes
             remote_squid_info = self.remote_squids[node_id]
             visual_item = remote_squid_info['visual']
             
-            # Use current_x, current_y directly from payload for updates
             visual_item.setPos(current_x, current_y) 
-            visual_item.setOpacity(self.remote_opacity) # Ensure full opacity (already 1.0)
+            visual_item.setOpacity(self.remote_opacity) 
             
             new_status = squid_data_payload.get('status', remote_squid_info.get('data',{}).get('status','visiting'))
             if 'status_text' in remote_squid_info and remote_squid_info['status_text']:
                 remote_squid_info['status_text'].setPlainText(f"{new_status}")
                 remote_squid_info['status_text'].setPos(current_x, current_y - 30) 
-                # Reset arrival text style if it was an arrival text
                 if remote_squid_info.get('was_arrival_text', False):
-                    remote_squid_info['status_text'].setDefaultTextColor(QtGui.QColor(200, 200, 200, 230)) # Default color
+                    remote_squid_info['status_text'].setDefaultTextColor(QtGui.QColor(200, 200, 200, 230)) 
                     remote_squid_info['status_text'].setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Normal)) 
                     remote_squid_info['was_arrival_text'] = False
 
-
-            if 'view_cone_visible' in squid_data_payload: # Check if key exists
+            if 'view_cone_visible' in squid_data_payload:
                 if squid_data_payload['view_cone_visible']:
-                    self.update_remote_view_cone(node_id, squid_data_payload) # Pass the full current payload
-                # If view_cone_visible is False, remove existing cone
+                    self.update_remote_view_cone(node_id, squid_data_payload) 
                 elif 'view_cone' in remote_squid_info and remote_squid_info['view_cone'] is not None:
                     if remote_squid_info['view_cone'].scene(): 
                         self.scene.removeItem(remote_squid_info['view_cone'])
@@ -242,12 +242,12 @@ class RemoteEntityManager:
             if 'id_text' in remote_squid_info and remote_squid_info['id_text']:
                 remote_squid_info['id_text'].setPos(current_x, current_y - 45) 
 
-            # Update image if direction changed
             if 'image_direction_key' in squid_data_payload and \
                squid_data_payload['image_direction_key'] != remote_squid_info['data'].get('image_direction_key'):
                 new_image_facing_direction = squid_data_payload['image_direction_key']
                 new_squid_image_name = f"{new_image_facing_direction.lower()}1.png"
-                new_image_path = os.path.join("images", new_squid_image_name)
+                # Use corrected path
+                new_image_path = os.path.join(images_folder_root_path, new_squid_image_name) 
                 new_pixmap = QtGui.QPixmap(new_image_path)
                 if not new_pixmap.isNull():
                     squid_width_payload = squid_data_payload.get('squid_width')
@@ -258,8 +258,7 @@ class RemoteEntityManager:
                             QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
                     visual_item.setPixmap(new_pixmap)
                 elif self.debug_mode:
-                    self.logger.warning(f"Could not load new image {new_image_path} for existing squid {node_id}")
-
+                    self.logger.warning(f"Could not load new image {new_image_path} (resolved from {images_folder_root_path}) for existing squid {node_id}")
 
         else: # New squid: Create it
             try:
@@ -271,19 +270,17 @@ class RemoteEntityManager:
                 elif entry_direction_on_this_screen == "right": 
                     image_facing_direction = "left"  
                 elif entry_direction_on_this_screen == "top": 
-                    image_facing_direction = "down" # Will attempt to load "down1.png"
-                                                    # If user added "down1.png", this will use it.
-                                                    # Otherwise, pixmap.isNull() will be true.
+                    image_facing_direction = "down" 
                 elif entry_direction_on_this_screen == "bottom": 
                     image_facing_direction = "up" 
 
-
                 squid_image_name = f"{image_facing_direction.lower()}1.png" 
-                image_path = os.path.join("images", squid_image_name)
+                # Use corrected path
+                image_path = os.path.join(images_folder_root_path, squid_image_name) 
                 
                 squid_pixmap = QtGui.QPixmap(image_path)
                 if squid_pixmap.isNull():
-                    if self.debug_mode: self.logger.error(f"Squid image not found: {image_path}. Using fallback gray rectangle.")
+                    if self.debug_mode: self.logger.error(f"Squid image not found: {image_path} (resolved from {images_folder_root_path}). Using fallback gray rectangle.")
                     squid_width_val = squid_data_payload.get('squid_width', 60)
                     squid_height_val = squid_data_payload.get('squid_height', 40)
                     squid_pixmap = QtGui.QPixmap(int(squid_width_val), int(squid_height_val))
@@ -297,9 +294,7 @@ class RemoteEntityManager:
                             QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation
                         )
                 
-                # Using AnimatableGraphicsItem as per the original file structure provided by user.
-                # If simplification to QtWidgets.QGraphicsPixmapItem is desired, change this line.
-                remote_visual = AnimatableGraphicsItem(squid_pixmap) 
+                remote_visual = AnimatableGraphicsItem(squid_pixmap)
                 
                 remote_visual.setPos(entry_x, entry_y) 
                 remote_visual.setZValue(5) 
@@ -343,10 +338,9 @@ class RemoteEntityManager:
                 }
                 self.logger.info(f"REMOTE_ENTITY_MANAGER: Created visual for new remote squid {node_id} at ({entry_x:.1f}, {entry_y:.1f}). Image: {squid_image_name}")
                 
-                if is_new_arrival: # Check the flag explicitly
+                if is_new_arrival: 
                     self._create_arrival_animation(remote_visual) 
 
-                # If view cone data is present in the initial payload, draw it
                 if 'view_cone_visible' in squid_data_payload and squid_data_payload['view_cone_visible']:
                     view_cone_data_at_entry = squid_data_payload.copy()
                     view_cone_data_at_entry['x'] = entry_x 
@@ -355,7 +349,7 @@ class RemoteEntityManager:
 
             except Exception as e:
                 self.logger.error(f"Error creating new remote squid visual for {node_id}: {e}", exc_info=True)
-                if node_id in self.remote_squids: # Cleanup if partially created
+                if node_id in self.remote_squids: 
                     items_to_check = ['visual', 'id_text', 'status_text', 'view_cone']
                     for key_item_name in items_to_check:
                         item_to_remove = self.remote_squids[node_id].get(key_item_name)
@@ -364,11 +358,11 @@ class RemoteEntityManager:
                             if hasattr(self, 'text_pool') and key_item_name in ['id_text', 'status_text']:
                                 self.text_pool.release(item_to_remove) 
                     del self.remote_squids[node_id]
-                return False # Indicate failure
+                return False 
         
         if node_id in self.remote_squids:
             self.remote_squids[node_id]['last_update'] = time.time()
-            self.remote_squids[node_id]['data'].update(squid_data_payload) # Ensure data is updated
+            self.remote_squids[node_id]['data'].update(squid_data_payload) 
         
         return True
 
