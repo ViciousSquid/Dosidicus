@@ -82,47 +82,6 @@ class MultiplayerPlugin:
         self.entity_manager: RemoteEntityManager | None = None # Added type hint
         self.config_manager = None # Placeholder, ensure this is set if used (e.g. in handle_squid_exit_message print)
 
-    def _initialize_remote_entity_manager(self):
-        """
-        Initializes the RemoteEntityManager instance.
-        This method encapsulates the logic for creating and configuring
-        the RemoteEntityManager.
-        """
-        if not self.logger:
-            # This case should ideally not happen if logger is set up in __init__ or early setup
-            print("MPPluginLogic ERRA: Logger not available for _initialize_remote_entity_manager")
-            self.entity_manager = None
-            return
-
-        if self.tamagotchi_logic and \
-           hasattr(self.tamagotchi_logic, 'user_interface') and \
-           self.tamagotchi_logic.user_interface and \
-           hasattr(self.tamagotchi_logic.user_interface, 'image_cache'): # Check for image_cache
-
-            ui = self.tamagotchi_logic.user_interface
-            try:
-                self.entity_manager = RemoteEntityManager(
-                    scene=ui.scene,
-                    window_width=ui.window_width,
-                    window_height=ui.window_height,
-                    #image_cache=ui.image_cache,  # Pass the image_cache instance
-                    debug_mode=self.debug_mode, # self.debug_mode should be set in MpPluginLogic
-                    logger=self.logger.getChild("RemoteEntityManager") # Pass a child logger
-                )
-                self.logger.info("RemoteEntityManager initialized successfully.")
-            except ImportError: # Should not happen if imports are correct at file top
-                self.logger.error("RemoteEntityManager import failed during initialization. Visuals for remote entities will be basic or non-functional.", exc_info=True)
-                self.entity_manager = None
-                # self.initialize_remote_representation() # Call your fallback if RemoteEntityManager fails
-            except Exception as e_rem:
-                self.logger.error(f"Error initializing RemoteEntityManager: {e_rem}", exc_info=True)
-                self.entity_manager = None
-                # self.initialize_remote_representation() # Call your fallback
-        else:
-            self.logger.warning("User interface, TamagotchiLogic, or ImageCache not available for RemoteEntityManager setup. Remote visuals may be limited or non-functional.")
-            self.entity_manager = None
-            # self.initialize_remote_representation() # Call your fallback
-
 
     def debug_autopilot_status(self):
         """Debug the status of all autopilot controllers for remote squids."""
@@ -156,74 +115,89 @@ class MultiplayerPlugin:
         self.logger.debug("=====================================\n")
 
     def enable(self):
-        self.logger.info("Attempting to enable Multiplayer...")
+        """Enables the multiplayer plugin, performing setup if necessary."""
+        # Safeguard for logger initialization (as previously discussed)
+        if self.logger is None:
+            emergency_logger = logging.getLogger(f"{mp_constants.PLUGIN_NAME}_EnableEmergency")
+            if not emergency_logger.hasHandlers():
+                handler = logging.StreamHandler()
+                formatter = logging.Formatter('%(asctime)s - %(name)s - [%(levelname)s] - %(message)s')
+                handler.setFormatter(formatter)
+                emergency_logger.addHandler(handler)
+                emergency_logger.setLevel(logging.WARNING)
+            self.logger = emergency_logger
+            self.logger.warning("Logger was not initialized prior to enable() method. Using emergency logger.")
 
-        # Plugin already set up?
-        if not self.is_setup:
-            self.logger.info("Multiplayer plugin is not set up. Calling setup()...")
-            # Assuming self.plugin_manager and self.tamagotchi_logic_ref are available
-            if not self.setup(self.plugin_manager, self.tamagotchi_logic_ref): # Pass necessary args
-                self.logger.error("Multiplayer setup failed during enable(). Cannot enable.")
-                return False
-        else:
-            self.logger.info("Multiplayer is already marked as set up. Re-enabling components.")
+        self.logger.info(f"Attempting to enable {mp_constants.PLUGIN_NAME}...")
+        try:
+            is_currently_setup = getattr(self, 'is_setup', False)
 
-        # --- BEGIN NEW/MODIFIED SECTION ---
-        # Ensure network node is ready and listening
-        if self.network_node:
-            # Ensure the socket structure is initialized (it should be by NetworkNode.__init__ or a previous setup)
-            # but a re-check or re-init if disconnected can be robust.
-            if not self.network_node.is_connected:
-                self.logger.info("NetworkNode socket not connected, attempting to initialize in enable()...")
-                if not self.network_node.initialize_socket_structure():
-                    self.logger.error("Failed to initialize NetworkNode socket in enable(). Cannot proceed with enabling multiplayer.")
-                    # Potentially set self.enabled = False or similar state management
-                    return False # Or handle error appropriately
+            if not is_currently_setup:
+                self.logger.info(f"{mp_constants.PLUGIN_NAME} is not yet set up. Proceeding with setup.")
 
-            # Explicitly start the listener thread if it's not already active
-            if not self.network_node.is_listening():
-                self.logger.info("NetworkNode listener not active, starting it explicitly in enable()...")
-                if not self.network_node.start_listening():
-                    self.logger.error("Failed to start NetworkNode listener in enable(). Multiplayer might not receive messages.")
-                    # Decide if this is a fatal error for enabling or just a warning
-                    # For now, let's treat it as potentially non-fatal but log an error.
-                    # Depending on requirements, you might return False here.
-                else:
-                    self.logger.info(">>>>>> NetworkNode listener started successfully!")
+                # --- BEGIN MODIFICATION ---
+                # self.plugin_manager should have been set by main.py's initialize function.
+                if self.plugin_manager is None:
+                    # This is now a more critical error, as it indicates a failure in the
+                    # earlier plugin loading/initialization step in plugins/multiplayer/main.py.
+                    self.logger.critical("CRITICAL: self.plugin_manager attribute not set on plugin instance prior to enable/setup. Initialization in plugins/multiplayer/main.py might have failed or was skipped.")
+                    return False # Cannot proceed without plugin_manager
+                # --- END MODIFICATION ---
+
+                # Obtain the tamagotchi_logic_instance required by the setup method.
+                tamagotchi_logic_ref = getattr(self, 'tamagotchi_logic', None)
+
+                if tamagotchi_logic_ref is None:
+                    tamagotchi_logic_ref = getattr(self.plugin_manager, 'tamagotchi_logic', None)
+                
+                if tamagotchi_logic_ref is None:
+                    self.logger.info("TamagotchiLogic not found directly on plugin_manager, attempting deep search via plugin_manager attributes...")
+                    tamagotchi_logic_ref = self._find_tamagotchi_logic(self.plugin_manager)
+
+                if tamagotchi_logic_ref is None:
+                    self.logger.error("TamagotchiLogic instance could not be found even after search. Setup cannot proceed.")
+                    return False
+                
+                # Call setup. self.plugin_manager is now expected to be valid.
+                # setup() will also assign self.tamagotchi_logic = tamagotchi_logic_ref
+                # and initialize self.logger properly.
+                if not self.setup(self.plugin_manager, tamagotchi_logic_ref):
+                    self.logger.error("Setup method returned False during enable sequence.")
+                    return False
             else:
-                self.logger.info("NetworkNode listener was already active.")
-        else:
-            self.logger.error("NetworkNode not found after setup in enable(). Cannot enable multiplayer fully.")
-            # Potentially set self.enabled = False
-            return False # This is likely a critical failure
-        # --- END NEW/MODIFIED SECTION ---
+                self.logger.info(f"{mp_constants.PLUGIN_NAME} is already marked as set up. Re-enabling components.")
 
-        # Resume original enable logic:
-        # For example, re-initialize UI components, timers, etc.
-        # Ensure any components that were disabled are re-enabled.
+            # --- Post-setup actions (continue with the rest of the original enable method) ---
+            if hasattr(self, 'network_node') and self.network_node and not self.network_node.is_connected:
+                self.logger.info("Network node not connected, attempting to initialize socket...")
+                self.network_node.initialize_socket()
 
-        # Re-initialize or ensure timers are running (if they were stopped in disable)
-        if not self.message_process_timer or not self.message_process_timer.isActive():
-            if not self.message_process_timer:
-                self.message_process_timer = QtCore.QTimer()
-                self.message_process_timer.timeout.connect(self._process_network_node_queue)
-            self.message_process_timer.start(50)
-            self.logger.info("Message processing timer started/restarted.")
+            if not (hasattr(self, 'sync_thread') and self.sync_thread and self.sync_thread.is_alive()):
+                if hasattr(self, 'start_sync_timer'):
+                    self.start_sync_timer() # This method should log its own status
+                else:
+                    self.logger.warning("start_sync_timer method not found.")
 
-        if not (hasattr(self, 'sync_timer') and self.sync_timer and self.sync_timer.isActive()):
-            # Assuming start_sync_timer handles creation if necessary and starts it
-            self.logger.info("Sync timer not active, starting/restarting it.")
-            self.start_sync_timer()
-        
-        # Update status widget if applicable
-        if self.status_widget:
-            self.status_widget.update_status("Enabled", True)
-            current_ip = self.network_node.local_ip if self.network_node else "N/A"
-            self.status_widget.set_ip_address(current_ip)
+            if hasattr(self, 'status_widget') and self.status_widget:
+                self.status_widget.show()
+                is_connected_now = hasattr(self, 'network_node') and self.network_node and self.network_node.is_connected
+                node_id_now = self.network_node.node_id if hasattr(self, 'network_node') and self.network_node else "N/A"
+                if hasattr(self.status_widget, 'update_connection_status'): # Check method existence
+                    self.status_widget.update_connection_status(is_connected_now, node_id_now)
+                if hasattr(self, 'network_node') and self.network_node and hasattr(self.network_node, 'known_nodes') and \
+                   hasattr(self.status_widget, 'update_peers'): # Check method existence
+                    self.status_widget.update_peers(self.network_node.known_nodes)
 
-        self.enabled = True # Mark as enabled
-        self.logger.info("Multiplayer enabled successfully.")
-        return True
+            self.logger.info(f"{mp_constants.PLUGIN_NAME} enabled successfully.")
+            return True
+        except Exception as e:
+            # Ensure logger is available before trying to use it, especially in top-level exception handlers
+            if self.logger:
+                self.logger.error(f"Unhandled error enabling {mp_constants.PLUGIN_NAME}: {e}", exc_info=True)
+            else: # Fallback if self.logger itself is None here (shouldn't happen with safeguard)
+                print(f"CRITICAL UNLOGGED ERROR in enable for {mp_constants.PLUGIN_NAME}: {e}")
+                traceback.print_exc()
+            return False
 
     def disable(self):
         """Disables the multiplayer plugin and cleans up resources."""
@@ -257,7 +231,7 @@ class MultiplayerPlugin:
 
         # --- BEGIN LOGGER INITIALIZATION ---
         if hasattr(self.plugin_manager, 'logger') and self.plugin_manager.logger is not None:
-            self.logger = self.plugin_manager.logger.getChild(mp_constants.PLUGIN_NAME) # Get a child logger is good practice
+            self.logger = self.plugin_manager.logger
         else:
             logger_name = f"{mp_constants.PLUGIN_NAME}_Plugin"
             self.logger = logging.getLogger(logger_name)
@@ -309,7 +283,7 @@ class MultiplayerPlugin:
             # return False # Decided to proceed with limited functionality if UI parts are missing
         else:
             self.debug_mode = getattr(self.tamagotchi_logic, 'debug_mode', False)
-            if self.logger and hasattr(self.logger, 'setLevel'): # Make sure logger has setLevel
+            if self.logger and hasattr(self.logger, 'setLevel'):
                  self.logger.setLevel(logging.DEBUG if self.debug_mode else logging.INFO)
             self.logger.info(f"TamagotchiLogic instance found. Debug mode: {self.debug_mode}")
 
@@ -343,38 +317,30 @@ class MultiplayerPlugin:
         self.last_controller_update = time.time()
 
 
-        # === MODIFIED RemoteEntityManager Instantiation Block START ===
-        if self.tamagotchi_logic and \
-           hasattr(self.tamagotchi_logic, 'user_interface') and \
-           self.tamagotchi_logic.user_interface:
-
-            ui = self.tamagotchi_logic.user_interface # This is the GameWindow instance
-
-            # Removed check for ui.image_cache as it's no longer passed or needed by RemoteEntityManager
+        if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'user_interface') and self.tamagotchi_logic.user_interface:
+            ui = self.tamagotchi_logic.user_interface
             try:
-                # RemoteEntityManager should be imported at the top of mp_plugin_logic.py
+                # RemoteEntityManager is now expected to be imported at the top
                 self.entity_manager = RemoteEntityManager(
-                    scene=ui.scene,
-                    window_width=ui.window_width,
-                    window_height=ui.window_height,
-                    # image_cache=ui.image_cache,  # <<< THIS LINE IS REMOVED
-                    debug_mode=self.debug_mode, # Correct: Pass the debug_mode boolean
-                    logger=self.logger.getChild("RemoteEntityManager") # Good practice for logger
+                    ui.scene,
+                    ui.window_width,
+                    ui.window_height,
+                    self.debug_mode,
+                    logger=self.logger # Pass logger
                 )
-                self.logger.info("RemoteEntityManager initialized.")
-            except ImportError: # Should be caught if RemoteEntityManager isn't imported
-                self.logger.error("RemoteEntityManager class import failed. Visuals for remote entities will be basic or non-functional.", exc_info=True)
+                self.logger.info("Using dedicated RemoteEntityManager.")
+            except ImportError:
+                self.logger.error("RemoteEntityManager import failed. Visuals for remote entities will be basic or non-functional.", exc_info=True)
                 self.entity_manager = None
-                self.initialize_remote_representation() # Your fallback
+                self.initialize_remote_representation() # Fallback basic timers
             except Exception as e_rem:
                 self.logger.error(f"Error initializing RemoteEntityManager: {e_rem}", exc_info=True)
                 self.entity_manager = None
-                self.initialize_remote_representation() # Your fallback
+                self.initialize_remote_representation() # Fallback basic timers
         else:
             self.logger.warning("User interface or TamagotchiLogic not available for RemoteEntityManager setup. Remote visuals may be limited.")
             self.entity_manager = None
-            self.initialize_remote_representation() # Your fallback
-        # === MODIFIED RemoteEntityManager Instantiation Block END ===
+            self.initialize_remote_representation() # Fallback basic timers
 
         self.initialize_status_ui() # Initialize status widget or bar
 
@@ -487,7 +453,7 @@ class MultiplayerPlugin:
                     f"Exchanged decorations with squid {remote_node_id[-6:]}!", importance=7
                 )
             if hasattr(self.tamagotchi_logic, 'show_message'):
-                self.tamagotchi_logic.show_message(f"氏 Your squid exchanged gifts with {remote_node_id[-6:]}!")
+                self.tamagotchi_logic.show_message(f"🎁 Your squid exchanged gifts with {remote_node_id[-6:]}!")
             return True
         return False
 
@@ -1122,92 +1088,62 @@ class MultiplayerPlugin:
         # travel_text_item.setVisible(True)
         # QtCore.QTimer.singleShot(2500, lambda: scene.removeItem(travel_text_item) if travel_text_item.scene() else None)
 
-    # Inside MultiplayerPlugin class in mp_plugin_logic.py
+    def handle_squid_return(self, node: NetworkNode, message: Dict, addr: tuple):
+        """Handles a 'squid_return' message for the player's own squid."""
+        if not self.logger: return
+        try:
+            return_payload = message.get('payload', {})
+            returning_node_id = return_payload.get('node_id')
 
-def handle_squid_return(self, node: NetworkNode, message: Dict, addr: tuple):
-    """Handles a 'squid_return' message for the player's own squid."""
-    if not self.logger: return
-    try:
-        return_payload = message.get('payload', {})
-        returning_node_id = return_payload.get('node_id')
+            if not self.network_node or returning_node_id != self.network_node.node_id:
+                # Message is not for this squid, or network_node is not initialized
+                if self.debug_mode:
+                    expected_id = self.network_node.node_id if self.network_node else "N/A"
+                    self.logger.debug(f"Squid_return message ignored. Expected node '{expected_id}', got '{returning_node_id}'.")
+                return
 
-        if not self.network_node or returning_node_id != self.network_node.node_id:
-            if self.debug_mode:
-                expected_id = self.network_node.node_id if self.network_node else "N/A"
-                self.logger.debug(f"Squid_return message ignored. Expected node '{expected_id}', got '{returning_node_id}'.")
-            return
+            local_squid = self.tamagotchi_logic.squid
+            if not local_squid or not local_squid.squid_item: # Check if local squid and its visual exist
+                if self.debug_mode: self.logger.debug("Local squid or its visual item not found for return.")
+                return
 
-        local_squid = self.tamagotchi_logic.squid
-        if not local_squid or not local_squid.squid_item:
-            if self.debug_mode: self.logger.debug("Local squid or its visual item not found for return.")
-            return
+            activity_summary = return_payload.get('activity_summary', {})
+            entry_side = return_payload.get('return_direction', 'left') # Direction from which it enters THIS screen
+            entry_coords = self.calculate_entry_position(entry_side) # Calculate where it appears
 
-        activity_summary = return_payload.get('activity_summary', {})
-        entry_side = return_payload.get('return_direction', 'left') 
-        entry_coords = self.calculate_entry_position(entry_side)
+            # Update local squid's position and make it visible
+            local_squid.squid_x, local_squid.squid_y = entry_coords[0], entry_coords[1]
+            local_squid.squid_item.setPos(local_squid.squid_x, local_squid.squid_y)
+            local_squid.squid_item.setVisible(True)
+            
+            # MODIFIED: No fade-in animation, just ensure full opacity
+            local_squid.squid_item.setOpacity(1.0) 
+            if local_squid.squid_item.graphicsEffect(): # Remove any existing effect
+                local_squid.squid_item.graphicsEffect().setEnabled(False) # Or set to None
+                local_squid.squid_item.setGraphicsEffect(None)
 
-        local_squid.squid_x, local_squid.squid_y = entry_coords[0], entry_coords[1]
-        local_squid.squid_item.setPos(local_squid.squid_x, local_squid.squid_y)
-        local_squid.squid_item.setVisible(True)
-        local_squid.squid_item.setOpacity(1.0) 
-        if local_squid.squid_item.graphicsEffect():
-            local_squid.squid_item.graphicsEffect().setEnabled(False)
-            local_squid.squid_item.setGraphicsEffect(None)
 
-        self.apply_remote_experiences(local_squid, activity_summary)
+            self.apply_remote_experiences(local_squid, activity_summary) # Apply changes based on journey
 
-        # --- START NEW/MODIFIED SECTION for handling stolen items ---
-        stolen_item_id = activity_summary.get('stolen_item_id')
-        stolen_item_type = activity_summary.get('stolen_item_type') # 'rock' or 'decoration'
-
-        if stolen_item_id and stolen_item_type:
-            if self.debug_mode:
-                self.logger.info(f"Squid returned with stolen item: Type={stolen_item_type}, ID/Details='{stolen_item_id}'")
-
-            # Call TamagotchiLogic to create the stolen item in the tank
-            if hasattr(self.tamagotchi_logic, 'add_stolen_item_to_tank'):
-                # Pass entry_coords so the item can appear near where the squid returned
-                created_item = self.tamagotchi_logic.add_stolen_item_to_tank(
-                    item_type=stolen_item_type,
-                    item_details=stolen_item_id, # This could be a filename or other identifier
-                    spawn_position=entry_coords 
-                )
-                if created_item: # add_stolen_item_to_tank should return the item or True
-                    self.apply_foreign_object_tint(created_item) # Ensure red tint
-                    if hasattr(self.tamagotchi_logic, 'show_message'):
-                        self.tamagotchi_logic.show_message(f"脂 Your squid returned with a souvenir {stolen_item_type}!")
-                    if hasattr(local_squid, 'memory_manager'):
-                         local_squid.memory_manager.add_short_term_memory(
-                            'achievement', f'{stolen_item_type}_heist',
-                            f"Brought back a {stolen_item_type} from an adventure!", importance=8
-                        )
-                else:
-                    if self.debug_mode: self.logger.warning(f"TamagotchiLogic.add_stolen_item_to_tank failed for {stolen_item_type}.")
+            num_stolen_rocks = activity_summary.get('rocks_stolen', 0)
+            if num_stolen_rocks > 0:
+                self.create_stolen_rocks(local_squid, num_stolen_rocks, entry_coords)
+                if hasattr(self.tamagotchi_logic, 'show_message'):
+                    self.tamagotchi_logic.show_message(f"🎉 Your squid returned with {num_stolen_rocks} souvenir rocks!")
             else:
-                if self.debug_mode: self.logger.error("TamagotchiLogic does not have 'add_stolen_item_to_tank' method.")
+                if hasattr(self.tamagotchi_logic, 'show_message'):
+                    journey_time_sec = activity_summary.get('time_away', 0)
+                    time_str = f"{int(journey_time_sec/60)}m {int(journey_time_sec%60)}s"
+                    self.tamagotchi_logic.show_message(f"🦑 Welcome back! Your squid explored for {time_str}.")
+            
+            local_squid.can_move = True # Allow movement again
+            if hasattr(local_squid, 'is_transitioning'): local_squid.is_transitioning = False
+            local_squid.status = "just returned home" # Update status
 
-        # Remove or adapt the old create_stolen_rocks if it's now redundant
-        # num_stolen_rocks = activity_summary.get('rocks_stolen', 0) # This was from the old summary key
-        # if num_stolen_rocks > 0 and not (stolen_item_type == 'rock' and stolen_item_id): # Avoid double-counting if new system handled it
-        #     self.create_stolen_rocks(local_squid, num_stolen_rocks, entry_coords) # Old method
-        #     if hasattr(self.tamagotchi_logic, 'show_message'):
-        #         self.tamagotchi_logic.show_message(f"脂 Your squid returned with {num_stolen_rocks} souvenir rocks!")
-        # --- END NEW/MODIFIED SECTION ---
+            if self.debug_mode: self.logger.debug(f"Local squid '{local_squid.name if hasattr(local_squid,'name') else ''}' returned to position {entry_coords} from {entry_side}.")
 
-        else: # No specific stolen item, just general return message
-            if hasattr(self.tamagotchi_logic, 'show_message'):
-                journey_time_sec = activity_summary.get('time_away', 0)
-                time_str = f"{int(journey_time_sec/60)}m {int(journey_time_sec%60)}s"
-                self.tamagotchi_logic.show_message(f"ｦ�Welcome back! Your squid explored for {time_str}.")
-
-        local_squid.can_move = True 
-        if hasattr(local_squid, 'is_transitioning'): local_squid.is_transitioning = False
-        local_squid.status = "just returned home"
-
-        if self.debug_mode: self.logger.debug(f"Local squid '{local_squid.name if hasattr(local_squid,'name') else ''}' returned to position {entry_coords} from {entry_side}.")
-
-    except Exception as e:
-        self.logger.error(f"Handling local squid's return failed: {e}", exc_info=True)
+        except Exception as e:
+            self.logger.error(f"Handling local squid's return failed: {e}", exc_info=True)
 
     def _create_arrival_animation(self, graphics_item: QtWidgets.QGraphicsPixmapItem):
         """MODIFIED: Creates a simple fade-in animation (now static) for newly arrived remote items."""
@@ -2116,7 +2052,7 @@ def handle_squid_return(self, node: NetworkNode, message: Dict, addr: tuple):
                 lambda: self.complete_remote_squid_return(remote_node_id, activity_summary_data, home_direction_for_exit)
             )
             if hasattr(self.tamagotchi_logic, 'show_message'):
-                 self.tamagotchi_logic.show_message(f"窓 Visitor squid {remote_node_id[-6:]} is heading back home!")
+                 self.tamagotchi_logic.show_message(f"👋 Visitor squid {remote_node_id[-6:]} is heading back home!")
             return
 
         # Fallback: Basic immediate removal or simple fade if no entity_manager animation
@@ -2138,7 +2074,7 @@ def handle_squid_return(self, node: NetworkNode, message: Dict, addr: tuple):
         self.complete_remote_squid_return(remote_node_id, activity_summary_data, home_direction_for_exit)
         
         if hasattr(self.tamagotchi_logic, 'show_message'):
-            self.tamagotchi_logic.show_message(f"窓 Visitor squid {remote_node_id[-6:]} is heading back home!")
+            self.tamagotchi_logic.show_message(f"👋 Visitor squid {remote_node_id[-6:]} is heading back home!")
 
 
     def complete_remote_squid_return(self, remote_node_id: str, activity_summary: Dict, exit_direction: str):
@@ -2320,8 +2256,8 @@ def handle_squid_return(self, node: NetworkNode, message: Dict, addr: tuple):
             gift_item.setOpacity(1.0)
 
 
-            # Optional: Add a temporary "氏 Gift!" text label above it
-            gift_indicator_label = scene.addText("氏 Gift!")
+            # Optional: Add a temporary "🎁 Gift!" text label above it
+            gift_indicator_label = scene.addText("🎁 Gift!")
             label_font = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
             gift_indicator_label.setFont(label_font)
             gift_indicator_label.setDefaultTextColor(QtGui.QColor(255, 100, 100)) # Bright color
