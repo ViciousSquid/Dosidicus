@@ -2,23 +2,23 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import os
 import time
 import math
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List # Retained from your provided file
 import logging
-import base64
+import base64 # Retained from your provided file
 
 # Corrected AnimatableGraphicsItem class
 class AnimatableGraphicsItem(QtWidgets.QGraphicsPixmapItem, QtCore.QObject): # Swapped order of base classes
     """Graphics item that can be animated with QPropertyAnimation"""
-    
+
     def __init__(self, pixmap=None, parent=None): # 'parent' is for QGraphicsPixmapItem's parent
         QtWidgets.QGraphicsPixmapItem.__init__(self, pixmap, parent) # Initialize QGraphicsPixmapItem first
         QtCore.QObject.__init__(self) # Then initialize QObject
         self._scale = 1.0
-        
+
     @QtCore.pyqtProperty(float)
     def scale_factor(self):
         return self._scale
-        
+
     @scale_factor.setter
     def scale_factor(self, value):
         self._scale = value
@@ -26,14 +26,14 @@ class AnimatableGraphicsItem(QtWidgets.QGraphicsPixmapItem, QtCore.QObject): # S
 
 class ObjectPool:
     """Pool for reusing graphical objects to reduce allocation overhead"""
-    
+
     def __init__(self, factory_func, initial_size=10):
         self.factory = factory_func
         self.available = []
         self.in_use = set()
         for _ in range(initial_size):
             self.available.append(self.factory())
-    
+
     def acquire(self):
         if self.available:
             obj = self.available.pop()
@@ -41,12 +41,12 @@ class ObjectPool:
             obj = self.factory()
         self.in_use.add(obj)
         return obj
-    
+
     def release(self, obj):
         if obj in self.in_use:
             self.in_use.remove(obj)
             self.available.append(obj)
-    
+
     def clear(self):
         # Proper cleanup for QGraphicsItems in a pool would involve
         # ensuring they are removed from the scene if they were added.
@@ -72,18 +72,18 @@ class RemoteEntityManager:
             self.logger = logger
         else:
             self.logger = logging.getLogger(__name__ + ".RemoteEntityManager")
-            if not self.logger.hasHandlers(): 
+            if not self.logger.hasHandlers():
                 handler = logging.StreamHandler()
                 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
                 handler.setFormatter(formatter)
                 self.logger.addHandler(handler)
                 self.logger.setLevel(logging.DEBUG if self.debug_mode else logging.INFO)
-        
+
         self.remote_squids = {}
         self.remote_objects = {}
         self.connection_lines = {}
         self._last_calculated_entry_details = {} # To store entry details for autopilot
-        
+
         self.remote_opacity = 1.0 # Changed from 0.7 for full visibility
         self.show_labels = True
         self.show_connections = True
@@ -112,7 +112,7 @@ class RemoteEntityManager:
         original_exit_direction = exit_data.get('direction')
         original_exit_pos_x = exit_data.get('position', {}).get('x', 0)
         original_exit_pos_y = exit_data.get('position', {}).get('y', 0)
-        
+
         squid_width = exit_data.get('squid_width', 50)
         squid_height = exit_data.get('squid_height', 50)
 
@@ -150,22 +150,22 @@ class RemoteEntityManager:
         # Useful if original_exit_pos_y is from a screen of different height
         if original_exit_direction in ['right', 'left']: # Horizontal exit/entry
             entry_y = max(0, min(entry_y, current_window_height - squid_height))
-        
+
         # Clamp entry_x similarly for vertical exits/entries
         if original_exit_direction in ['up', 'down']: # Vertical exit/entry
             entry_x = max(0, min(entry_x, current_window_width - squid_width))
-        
+
         if self.debug_mode:
             self.logger.debug(f"Calculated entry: original_exit_dir={original_exit_direction} (from {original_exit_pos_x},{original_exit_pos_y})"
                               f" -> entry_pos=({entry_x:.2f}, {entry_y:.2f}) on this screen (size {current_window_width}x{current_window_height}), "
                               f"squid_size=({squid_width},{squid_height}), entry_side='{entry_direction_on_this_screen}'")
-        
+
         # Store for potential use by autopilot's initial movement
         node_id = exit_data.get('node_id')
         if node_id:
             self._last_calculated_entry_details[node_id] = {
                 'entry_pos': (entry_x, entry_y),
-                'entry_direction': entry_direction_on_this_screen 
+                'entry_direction': entry_direction_on_this_screen
             }
         return entry_x, entry_y, entry_direction_on_this_screen
 
@@ -175,7 +175,7 @@ class RemoteEntityManager:
     def update_settings(self, opacity=None, show_labels=None, show_connections=None):
         if opacity is not None:
             # For testing static image, we'll force opacity to 1.0 if not specified otherwise
-            self.remote_opacity = opacity 
+            self.remote_opacity = opacity
         # Ensure all squids adhere to the new static full opacity if opacity is not being set by this call
         # Or, if it IS being set, ensure they adopt it.
         current_target_opacity = opacity if opacity is not None else self.remote_opacity # self.remote_opacity is 1.0 now
@@ -183,7 +183,7 @@ class RemoteEntityManager:
         for squid_data in self.remote_squids.values():
             if 'visual' in squid_data and squid_data['visual']:
                 squid_data['visual'].setOpacity(current_target_opacity) # Use the determined opacity
-        
+
         if show_labels is not None:
             self.show_labels = show_labels
             for squid_data in self.remote_squids.values():
@@ -191,212 +191,267 @@ class RemoteEntityManager:
                     squid_data['id_text'].setVisible(show_labels)
                 if 'status_text' in squid_data and squid_data['status_text']: # check not None
                     squid_data['status_text'].setVisible(show_labels)
-        
+
         if show_connections is not None:
             self.show_connections = show_connections
             for line in self.connection_lines.values():
                 if line in self.scene.items(): # Check if still in scene
                     line.setVisible(show_connections)
-    
-    def update_remote_squid(self, node_id, squid_data_payload, is_new_arrival=False): # squid_data_payload is the exit_data or update_data
+
+    def update_remote_squid(self, node_id, squid_data_payload, is_new_arrival=False):
         if not squid_data_payload:
             if self.debug_mode: self.logger.warning(f"No data provided for remote squid {node_id}")
             return False
 
-        current_x = squid_data_payload.get('x')
-        current_y = squid_data_payload.get('y')
-
-        if not is_new_arrival and (current_x is None or current_y is None):
-            if self.debug_mode: self.logger.warning(f"Insufficient position data for remote squid update {node_id}")
-            return False
-
         # Define the robust path to your project's "images" folder
-        # This assumes remote_entity_manager.py is in project_root/plugins/multiplayer/
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.join(script_dir, '..', '..') 
+        project_root = os.path.join(script_dir, '..', '..')
         images_folder_root_path = os.path.join(project_root, 'images')
 
-        if node_id in self.remote_squids: # Existing squid: Update position and other attributes
-            remote_squid_info = self.remote_squids[node_id]
-            visual_item = remote_squid_info['visual']
-            
-            visual_item.setPos(current_x, current_y) 
-            visual_item.setOpacity(self.remote_opacity) 
-            
-            new_status = squid_data_payload.get('status', remote_squid_info.get('data',{}).get('status','visiting'))
-            if 'status_text' in remote_squid_info and remote_squid_info['status_text']:
-                remote_squid_info['status_text'].setPlainText(f"{new_status}")
-                remote_squid_info['status_text'].setPos(current_x, current_y - 30) 
-                if remote_squid_info.get('was_arrival_text', False):
-                    remote_squid_info['status_text'].setDefaultTextColor(QtGui.QColor(200, 200, 200, 230)) 
-                    remote_squid_info['status_text'].setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Normal)) 
-                    remote_squid_info['was_arrival_text'] = False
-
-            if 'view_cone_visible' in squid_data_payload:
-                if squid_data_payload['view_cone_visible']:
-                    self.update_remote_view_cone(node_id, squid_data_payload) 
-                elif 'view_cone' in remote_squid_info and remote_squid_info['view_cone'] is not None:
-                    if remote_squid_info['view_cone'].scene(): 
-                        self.scene.removeItem(remote_squid_info['view_cone'])
-                    remote_squid_info['view_cone'] = None
-            
-            if 'id_text' in remote_squid_info and remote_squid_info['id_text']:
-                remote_squid_info['id_text'].setPos(current_x, current_y - 45) 
-
-            if 'image_direction_key' in squid_data_payload and \
-               squid_data_payload['image_direction_key'] != remote_squid_info['data'].get('image_direction_key'):
-                new_image_facing_direction = squid_data_payload['image_direction_key']
-                new_squid_image_name = f"{new_image_facing_direction.lower()}1.png"
-                # Use corrected path
-                new_image_path = os.path.join(images_folder_root_path, new_squid_image_name) 
-                new_pixmap = QtGui.QPixmap(new_image_path)
-                if not new_pixmap.isNull():
-                    squid_width_payload = squid_data_payload.get('squid_width')
-                    squid_height_payload = squid_data_payload.get('squid_height')
-                    if squid_width_payload and squid_height_payload:
-                        new_pixmap = new_pixmap.scaled(
-                            int(squid_width_payload), int(squid_height_payload),
-                            QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
-                    visual_item.setPixmap(new_pixmap)
-                elif self.debug_mode:
-                    self.logger.warning(f"Could not load new image {new_image_path} (resolved from {images_folder_root_path}) for existing squid {node_id}")
-
-        else: # New squid: Create it
-            try:
+        try:
+            if is_new_arrival:
                 entry_x, entry_y, entry_direction_on_this_screen = self.calculate_entry_position(squid_data_payload)
-                
-                image_facing_direction = squid_data_payload.get('image_direction_key', 'right') 
-                if entry_direction_on_this_screen == "left": 
-                    image_facing_direction = "right" 
-                elif entry_direction_on_this_screen == "right": 
-                    image_facing_direction = "left"  
-                elif entry_direction_on_this_screen == "top": 
-                    image_facing_direction = "down" 
-                elif entry_direction_on_this_screen == "bottom": 
-                    image_facing_direction = "up" 
 
-                squid_image_name = f"{image_facing_direction.lower()}1.png" 
-                # Use corrected path
-                image_path = os.path.join(images_folder_root_path, squid_image_name) 
-                
-                squid_pixmap = QtGui.QPixmap(image_path)
-                if squid_pixmap.isNull():
-                    if self.debug_mode: self.logger.error(f"Squid image not found: {image_path} (resolved from {images_folder_root_path}). Using fallback gray rectangle.")
-                    squid_width_val = squid_data_payload.get('squid_width', 60)
-                    squid_height_val = squid_data_payload.get('squid_height', 40)
-                    squid_pixmap = QtGui.QPixmap(int(squid_width_val), int(squid_height_val))
-                    squid_pixmap.fill(QtCore.Qt.gray)
-                else:
-                    squid_width_payload = squid_data_payload.get('squid_width')
-                    squid_height_payload = squid_data_payload.get('squid_height')
-                    if squid_width_payload and squid_height_payload:
+                if node_id in self.remote_squids:  # Squid is re-arriving
+                    remote_squid_info = self.remote_squids[node_id]
+                    visual_item = remote_squid_info['visual']
+
+                    visual_item.setPos(entry_x, entry_y)  # Use calculated entry position
+                    visual_item.setOpacity(self.remote_opacity)
+                    visual_item.setVisible(True)
+                    visual_item.setScale(1.0)  # Reset scale
+
+                    # Determine image facing direction based on how it enters this screen or its last known direction
+                    image_facing_direction = squid_data_payload.get('image_direction_key', 'right')
+                    if entry_direction_on_this_screen == "left": image_facing_direction = "right"
+                    elif entry_direction_on_this_screen == "right": image_facing_direction = "left"
+                    elif entry_direction_on_this_screen == "top": image_facing_direction = "down"
+                    elif entry_direction_on_this_screen == "bottom": image_facing_direction = "up"
+
+                    new_squid_image_name = f"{image_facing_direction.lower()}1.png"
+                    new_image_path = os.path.join(images_folder_root_path, new_squid_image_name)
+                    new_pixmap = QtGui.QPixmap(new_image_path)
+
+                    if not new_pixmap.isNull():
+                        original_width = remote_squid_info.get('original_width')
+                        original_height = remote_squid_info.get('original_height')
+
+                        if original_width and original_height:
+                            new_pixmap = new_pixmap.scaled(
+                                original_width, original_height,
+                                QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+                        else: # Fallback if original dimensions not stored (should not happen)
+                            current_width = int(squid_data_payload.get('squid_width', 60))
+                            current_height = int(squid_data_payload.get('squid_height', 40))
+                            new_pixmap = new_pixmap.scaled(
+                                current_width, current_height,
+                                QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+                            if self.debug_mode: self.logger.warning(f"Original dimensions not found for {node_id} on re-arrival, used current payload size.")
+                        visual_item.setPixmap(new_pixmap)
+                    elif self.debug_mode:
+                        self.logger.warning(f"Could not load image {new_image_path} for re-arriving squid {node_id}")
+
+                    # Update status text for arrival
+                    if 'status_text' in remote_squid_info and remote_squid_info['status_text']:
+                        remote_squid_info['status_text'].setPlainText("ENTERING...")
+                        remote_squid_info['status_text'].setDefaultTextColor(QtGui.QColor(255, 255, 0)) # Yellow
+                        remote_squid_info['status_text'].setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+                        remote_squid_info['status_text'].setPos(entry_x, entry_y - 30)
+                        remote_squid_info['was_arrival_text'] = True
+                    if 'id_text' in remote_squid_info and remote_squid_info['id_text']:
+                        remote_squid_info['id_text'].setPos(entry_x, entry_y - 45)
+
+                    self.logger.info(f"REMOTE_ENTITY_MANAGER: Re-initialized visual for re-arriving remote squid {node_id} at ({entry_x:.1f}, {entry_y:.1f}).")
+
+                else:  # Truly new arrival
+                    image_facing_direction = squid_data_payload.get('image_direction_key', 'right')
+                    if entry_direction_on_this_screen == "left": image_facing_direction = "right"
+                    elif entry_direction_on_this_screen == "right": image_facing_direction = "left"
+                    elif entry_direction_on_this_screen == "top": image_facing_direction = "down"
+                    elif entry_direction_on_this_screen == "bottom": image_facing_direction = "up"
+
+                    squid_image_name = f"{image_facing_direction.lower()}1.png"
+                    image_path = os.path.join(images_folder_root_path, squid_image_name)
+                    squid_pixmap = QtGui.QPixmap(image_path)
+
+                    original_width = int(squid_data_payload.get('squid_width', 60))
+                    original_height = int(squid_data_payload.get('squid_height', 40))
+
+                    if squid_pixmap.isNull():
+                        if self.debug_mode: self.logger.error(f"Squid image not found: {image_path}. Using fallback.")
+                        squid_pixmap = QtGui.QPixmap(original_width, original_height)
+                        squid_pixmap.fill(QtCore.Qt.gray)
+                    else:
                         squid_pixmap = squid_pixmap.scaled(
-                            int(squid_width_payload), int(squid_height_payload), 
-                            QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation
-                        )
-                
-                remote_visual = AnimatableGraphicsItem(squid_pixmap) # This is line 297 from traceback
-                
-                remote_visual.setPos(entry_x, entry_y) 
-                remote_visual.setZValue(5) 
-                remote_visual.setOpacity(self.remote_opacity) 
-                remote_visual.setScale(1.0) 
-                
-                id_text = self.text_pool.acquire()
-                if id_text.scene() != self.scene : 
-                    if id_text.scene(): id_text.scene().removeItem(id_text) 
-                    self.scene.addItem(id_text)
-                id_text.setPlainText(f"Remote ({node_id[-4:]})")
-                id_text.setDefaultTextColor(QtGui.QColor(200, 200, 200, 200))
-                id_text.setFont(QtGui.QFont("Arial", 8))
-                id_text.setPos(entry_x, entry_y - 45) 
-                id_text.setZValue(6) 
-                id_text.setVisible(self.show_labels)
-                
-                status_text = self.text_pool.acquire()
-                if status_text.scene() != self.scene :
-                    if status_text.scene(): status_text.scene().removeItem(status_text)
-                    self.scene.addItem(status_text)
+                            original_width, original_height,
+                            QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
 
-                status_text_content = "ENTERING..." if is_new_arrival else squid_data_payload.get('status', 'visiting')
-                status_text.setPlainText(status_text_content)
-                status_text.setDefaultTextColor(QtGui.QColor(255, 255, 0) if is_new_arrival else QtGui.QColor(200,200,200,230)) 
-                status_text.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold if is_new_arrival else QtGui.QFont.Normal))
-                status_text.setPos(entry_x, entry_y - 30) 
-                status_text.setZValue(6)
-                status_text.setVisible(self.show_labels)
-                
-                self.scene.addItem(remote_visual)
-                
-                self.remote_squids[node_id] = {
-                    'visual': remote_visual,
-                    'id_text': id_text,
-                    'status_text': status_text,
-                    'view_cone': None,
-                    'last_update': time.time(),
-                    'data': squid_data_payload, 
-                    'was_arrival_text': is_new_arrival 
-                }
-                self.logger.info(f"REMOTE_ENTITY_MANAGER: Created visual for new remote squid {node_id} at ({entry_x:.1f}, {entry_y:.1f}). Image: {squid_image_name}")
-                
-                if is_new_arrival: 
-                    self._create_arrival_animation(remote_visual) 
+                    remote_visual = AnimatableGraphicsItem(squid_pixmap)
+                    remote_visual.setPos(entry_x, entry_y)
+                    remote_visual.setZValue(5)
+                    remote_visual.setOpacity(self.remote_opacity)
+                    remote_visual.setScale(1.0)
+                    self.scene.addItem(remote_visual)
 
-                if 'view_cone_visible' in squid_data_payload and squid_data_payload['view_cone_visible']:
-                    view_cone_data_at_entry = squid_data_payload.copy()
-                    view_cone_data_at_entry['x'] = entry_x 
-                    view_cone_data_at_entry['y'] = entry_y
-                    self.update_remote_view_cone(node_id, view_cone_data_at_entry)
+                    id_text = self.text_pool.acquire()
+                    if id_text.scene() != self.scene:
+                        if id_text.scene(): id_text.scene().removeItem(id_text)
+                        self.scene.addItem(id_text)
+                    id_text.setPlainText(f"Remote ({node_id[-4:]})")
+                    id_text.setDefaultTextColor(QtGui.QColor(200, 200, 200, 200))
+                    id_text.setFont(QtGui.QFont("Arial", 8))
+                    id_text.setPos(entry_x, entry_y - 45)
+                    id_text.setZValue(6)
+                    id_text.setVisible(self.show_labels)
 
-            except Exception as e:
-                self.logger.error(f"Error creating new remote squid visual for {node_id}: {e}", exc_info=True)
-                if node_id in self.remote_squids: 
-                    items_to_check = ['visual', 'id_text', 'status_text', 'view_cone']
-                    for key_item_name in items_to_check:
-                        item_to_remove = self.remote_squids[node_id].get(key_item_name)
-                        if item_to_remove:
-                            if item_to_remove.scene(): item_to_remove.scene().removeItem(item_to_remove)
-                            if hasattr(self, 'text_pool') and key_item_name in ['id_text', 'status_text']:
-                                self.text_pool.release(item_to_remove) 
-                    del self.remote_squids[node_id]
-                return False 
-        
-        if node_id in self.remote_squids:
-            self.remote_squids[node_id]['last_update'] = time.time()
-            self.remote_squids[node_id]['data'].update(squid_data_payload) 
-        
+                    status_text = self.text_pool.acquire()
+                    if status_text.scene() != self.scene:
+                        if status_text.scene(): status_text.scene().removeItem(status_text)
+                        self.scene.addItem(status_text)
+                    status_text.setPlainText("ENTERING...")
+                    status_text.setDefaultTextColor(QtGui.QColor(255, 255, 0)) # Yellow
+                    status_text.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+                    status_text.setPos(entry_x, entry_y - 30)
+                    status_text.setZValue(6)
+                    status_text.setVisible(self.show_labels)
+
+                    self.remote_squids[node_id] = {
+                        'visual': remote_visual,
+                        'id_text': id_text,
+                        'status_text': status_text,
+                        'view_cone': None,
+                        'last_update': time.time(),
+                        'data': squid_data_payload.copy(), # Store a copy of the initial payload
+                        'original_width': original_width,   # Store original width
+                        'original_height': original_height, # Store original height
+                        'was_arrival_text': True
+                    }
+                    self.logger.info(f"REMOTE_ENTITY_MANAGER: Created visual for new remote squid {node_id} at ({entry_x:.1f}, {entry_y:.1f}). Image: {squid_image_name}")
+
+                # Common logic for all new arrivals (truly new or re-arriving)
+                if node_id in self.remote_squids: # Should always be true at this point if no exception
+                    self._create_arrival_animation(self.remote_squids[node_id]['visual'])
+                    if squid_data_payload.get('view_cone_visible', False):
+                        view_cone_data_at_entry = squid_data_payload.copy()
+                        view_cone_data_at_entry['x'] = entry_x # Use calculated entry position
+                        view_cone_data_at_entry['y'] = entry_y
+                        self.update_remote_view_cone(node_id, view_cone_data_at_entry)
+                    self.remote_squids[node_id]['data'].update(squid_data_payload) # Ensure data is latest
+                    self.remote_squids[node_id]['last_update'] = time.time()
+
+            elif node_id in self.remote_squids:  # Existing squid, regular update (NOT an arrival)
+                current_x = squid_data_payload.get('x')
+                current_y = squid_data_payload.get('y')
+
+                if current_x is None or current_y is None:
+                    if self.debug_mode: self.logger.warning(f"Insufficient position data (x or y is None) for remote squid update {node_id}. Payload: {squid_data_payload}")
+                    return False # Critical data missing for this type of update
+
+                remote_squid_info = self.remote_squids[node_id]
+                visual_item = remote_squid_info['visual']
+                visual_item.setPos(current_x, current_y)
+                visual_item.setOpacity(self.remote_opacity)
+                visual_item.setScale(1.0) # Ensure scale is 1.0
+
+                new_status = squid_data_payload.get('status', remote_squid_info.get('data',{}).get('status','visiting'))
+                if 'status_text' in remote_squid_info and remote_squid_info['status_text']:
+                    remote_squid_info['status_text'].setPlainText(f"{new_status}")
+                    remote_squid_info['status_text'].setPos(current_x, current_y - 30)
+                    if remote_squid_info.get('was_arrival_text', False): # Reset from arrival emphasis
+                        remote_squid_info['status_text'].setDefaultTextColor(QtGui.QColor(200, 200, 200, 230))
+                        remote_squid_info['status_text'].setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Normal))
+                        remote_squid_info['was_arrival_text'] = False
+                if 'id_text' in remote_squid_info and remote_squid_info['id_text']:
+                    remote_squid_info['id_text'].setPos(current_x, current_y - 45)
+
+                if 'view_cone_visible' in squid_data_payload:
+                    if squid_data_payload['view_cone_visible']:
+                        self.update_remote_view_cone(node_id, squid_data_payload)
+                    elif 'view_cone' in remote_squid_info and remote_squid_info['view_cone'] is not None:
+                        if remote_squid_info['view_cone'].scene():
+                            self.scene.removeItem(remote_squid_info['view_cone'])
+                        remote_squid_info['view_cone'] = None
+                
+                current_image_direction = remote_squid_info['data'].get('image_direction_key')
+                new_image_direction = squid_data_payload.get('image_direction_key')
+
+                if new_image_direction and new_image_direction != current_image_direction:
+                    new_squid_image_name = f"{new_image_direction.lower()}1.png"
+                    new_image_path = os.path.join(images_folder_root_path, new_squid_image_name)
+                    new_pixmap = QtGui.QPixmap(new_image_path)
+                    if not new_pixmap.isNull():
+                        original_width = remote_squid_info.get('original_width')
+                        original_height = remote_squid_info.get('original_height')
+                        if original_width and original_height:
+                            new_pixmap = new_pixmap.scaled(
+                                original_width, original_height,
+                                QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+                        else: # Fallback
+                            current_payload_width = int(squid_data_payload.get('squid_width', 60))
+                            current_payload_height = int(squid_data_payload.get('squid_height', 40))
+                            new_pixmap = new_pixmap.scaled(
+                                current_payload_width, current_payload_height,
+                                QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+                            if self.debug_mode: self.logger.warning(f"Original dimensions not found for {node_id} on image update, used current payload size.")
+                        visual_item.setPixmap(new_pixmap)
+                    elif self.debug_mode:
+                        self.logger.warning(f"Could not load new image {new_image_path} for existing squid {node_id}")
+
+                remote_squid_info['data'].update(squid_data_payload)
+                remote_squid_info['last_update'] = time.time()
+
+            else: # Squid not known and not a new arrival - this is unusual.
+                if self.debug_mode: self.logger.warning(f"Received update for unknown remote squid {node_id} that is not marked as a new arrival. Payload: {squid_data_payload}. Ignoring.")
+                return False
+
+        except Exception as e: # General exception handler for the whole update process
+            self.logger.error(f"Unhandled error in update_remote_squid for {node_id}: {e}", exc_info=True)
+            # Attempt cleanup if partial creation occurred
+            if node_id in self.remote_squids and not self.remote_squids[node_id].get('visual').scene(): # Heuristic for partial creation
+                 items_to_check = ['visual', 'id_text', 'status_text', 'view_cone']
+                 for key_item_name in items_to_check:
+                     item_to_remove = self.remote_squids[node_id].get(key_item_name)
+                     if item_to_remove:
+                         if item_to_remove.scene(): item_to_remove.scene().removeItem(item_to_remove)
+                         if hasattr(self, 'text_pool') and key_item_name in ['id_text', 'status_text']:
+                             self.text_pool.release(item_to_remove)
+                 del self.remote_squids[node_id]
+            return False
         return True
 
-    def update_remote_view_cone(self, node_id, squid_data): 
+    def update_remote_view_cone(self, node_id, squid_data):
         if node_id not in self.remote_squids:
             if self.debug_mode: self.logger.debug(f"Node {node_id} not in remote_squids for view cone update.")
             return
-        
+
         remote_squid_info = self.remote_squids[node_id]
-        visual_item = remote_squid_info.get('visual') 
-        if not visual_item: 
+        visual_item = remote_squid_info.get('visual')
+        if not visual_item:
             if self.debug_mode: self.logger.warning(f"No visual item for remote squid {node_id} to draw view cone.")
             return
 
         if 'view_cone' in remote_squid_info and remote_squid_info['view_cone'] is not None:
-            if remote_squid_info['view_cone'].scene(): 
+            if remote_squid_info['view_cone'].scene():
                 self.scene.removeItem(remote_squid_info['view_cone'])
             remote_squid_info['view_cone'] = None
-        
-        if not squid_data.get('view_cone_visible', False): 
+
+        if not squid_data.get('view_cone_visible', False):
             return
 
-        squid_visual_pos = visual_item.pos()
-        squid_bounding_rect = visual_item.boundingRect()
+        squid_visual_pos = visual_item.pos() # Use visual_item's current position
         
-        squid_center_x = squid_visual_pos.x() + squid_bounding_rect.width() / 2 * visual_item.scale()
-        squid_center_y = squid_visual_pos.y() + squid_bounding_rect.height() / 2 * visual_item.scale()
-        
-        looking_direction_rad = squid_data.get('looking_direction', 0.0) 
-        view_cone_angle_rad = squid_data.get('view_cone_angle', math.radians(50)) 
-        cone_length = squid_data.get('view_cone_length', 150) 
+        # Use original_width/height for bounding rect if available, otherwise current pixmap's
+        original_width = remote_squid_info.get('original_width', visual_item.pixmap().width())
+        original_height = remote_squid_info.get('original_height', visual_item.pixmap().height())
+
+        squid_center_x = squid_visual_pos.x() + original_width / 2 * visual_item.scale()
+        squid_center_y = squid_visual_pos.y() + original_height / 2 * visual_item.scale()
+
+        looking_direction_rad = squid_data.get('looking_direction', 0.0)
+        view_cone_angle_rad = squid_data.get('view_cone_angle', math.radians(50))
+        cone_length = squid_data.get('view_cone_length', 150)
         cone_half_angle = view_cone_angle_rad / 2.0
-        
+
         point1_origin = QtCore.QPointF(squid_center_x, squid_center_y)
         point2_edge1 = QtCore.QPointF(
             squid_center_x + cone_length * math.cos(looking_direction_rad - cone_half_angle),
@@ -406,29 +461,29 @@ class RemoteEntityManager:
             squid_center_x + cone_length * math.cos(looking_direction_rad + cone_half_angle),
             squid_center_y + cone_length * math.sin(looking_direction_rad + cone_half_angle)
         )
-        
+
         cone_polygon = QtGui.QPolygonF([point1_origin, point2_edge1, point3_edge2])
         new_cone_item = QtWidgets.QGraphicsPolygonItem(cone_polygon)
-        
-        squid_color_tuple = squid_data.get('color', (150, 150, 255)) 
+
+        squid_color_tuple = squid_data.get('color', (150, 150, 255))
         try:
-            cone_q_color = QtGui.QColor(*squid_color_tuple) 
-        except TypeError: 
-            cone_q_color = QtGui.QColor(150,150,255) 
+            cone_q_color = QtGui.QColor(*squid_color_tuple)
+        except TypeError:
+            cone_q_color = QtGui.QColor(150,150,255)
             if self.debug_mode: self.logger.warning(f"Invalid color tuple {squid_color_tuple} for view cone. Using default.")
 
-        new_cone_item.setPen(QtGui.QPen(QtGui.QColor(cone_q_color.red(), cone_q_color.green(), cone_q_color.blue(), 0))) 
-        new_cone_item.setBrush(QtGui.QBrush(QtGui.QColor(cone_q_color.red(), cone_q_color.green(), cone_q_color.blue(), 25))) 
-        new_cone_item.setZValue(visual_item.zValue() - 1) 
-        
+        new_cone_item.setPen(QtGui.QPen(QtGui.QColor(cone_q_color.red(), cone_q_color.green(), cone_q_color.blue(), 0)))
+        new_cone_item.setBrush(QtGui.QBrush(QtGui.QColor(cone_q_color.red(), cone_q_color.green(), cone_q_color.blue(), 25)))
+        new_cone_item.setZValue(visual_item.zValue() - 1)
+
         self.scene.addItem(new_cone_item)
-        remote_squid_info['view_cone'] = new_cone_item 
-    
+        remote_squid_info['view_cone'] = new_cone_item
+
     def _create_arrival_animation(self, visual_item):
         # This method now primarily ensures static properties, as complex animations were removed/simplified.
         if not isinstance(visual_item, QtWidgets.QGraphicsPixmapItem) : # Check against base class now
              if self.debug_mode: self.logger.warning("Arrival display: visual_item type might not support all operations if not QGraphicsPixmapItem.")
-        
+
         # Ensure full visibility and normal scale statically
         if hasattr(visual_item, 'setOpacity'): visual_item.setOpacity(self.remote_opacity)
         if hasattr(visual_item, 'setScale'): visual_item.setScale(1.0)
@@ -445,13 +500,13 @@ class RemoteEntityManager:
         if isinstance(visual_item_or_node_id, str):
             node_id = visual_item_or_node_id
             squid_display_data = self.remote_squids.get(node_id)
-        elif isinstance(visual_item_or_node_id, QtWidgets.QGraphicsPixmapItem): 
+        elif isinstance(visual_item_or_node_id, QtWidgets.QGraphicsPixmapItem):
             for nid, s_data in self.remote_squids.items():
                 if s_data.get('visual') == visual_item_or_node_id:
                     node_id = nid
                     squid_display_data = s_data
                     break
-        
+
         if not squid_display_data:
             if self.debug_mode: self.logger.debug(f"Could not find squid data for style reset: {visual_item_or_node_id}")
             return
@@ -460,9 +515,9 @@ class RemoteEntityManager:
         status_text_item = squid_display_data.get('status_text')
 
         if visual_item:
-            visual_item.setZValue(5) 
-            visual_item.setOpacity(self.remote_opacity) 
-            visual_item.setScale(1.0) 
+            visual_item.setZValue(5)
+            visual_item.setOpacity(self.remote_opacity)
+            visual_item.setScale(1.0)
             if visual_item.graphicsEffect() is not None:
                  visual_item.setGraphicsEffect(None)
 
@@ -471,42 +526,45 @@ class RemoteEntityManager:
             current_status = squid_display_data.get('data',{}).get('status','visiting').upper()
             # If it was an arrival text, reset it to normal status text
             if squid_display_data.get('was_arrival_text', False) and current_status not in ["ENTERING...", "ARRIVING...", squid_display_data.get('data',{}).get('status','visiting').upper()]: # Check against original status too
-                 status_text_item.setDefaultTextColor(QtGui.QColor(200, 200, 200, 230)) 
-                 status_text_item.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Normal)) 
+                 status_text_item.setDefaultTextColor(QtGui.QColor(200, 200, 200, 230))
+                 status_text_item.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Normal))
                  status_text_item.setPlainText(squid_display_data.get('data',{}).get('status','visiting'))
-                 squid_display_data['was_arrival_text'] = False 
-            status_text_item.setZValue(visual_item.zValue() + 1 if visual_item else 6) 
+                 squid_display_data['was_arrival_text'] = False
+            status_text_item.setZValue(visual_item.zValue() + 1 if visual_item else 6)
 
     def update_connection_lines(self, local_squid_pos_tuple):
         if not self.show_connections:
-            for node_id, line in list(self.connection_lines.items()): 
+            for node_id, line in list(self.connection_lines.items()):
                 if line.scene(): self.scene.removeItem(line) # Check scene before removing
-                del self.connection_lines[node_id] 
+                del self.connection_lines[node_id]
             return
-        
+
         if not local_squid_pos_tuple or len(local_squid_pos_tuple) != 2:
             if self.debug_mode: self.logger.warning("Invalid local_squid_pos for connection lines.")
             return
 
         local_center_x, local_center_y = local_squid_pos_tuple
-        active_lines_for_nodes = set() 
+        active_lines_for_nodes = set()
 
-        for node_id, squid_info in self.remote_squids.items(): 
-            visual_item = squid_info.get('visual') 
+        for node_id, squid_info in self.remote_squids.items():
+            visual_item = squid_info.get('visual')
             if not visual_item or not visual_item.isVisible() or not visual_item.scene():
-                continue 
-                
+                continue
+
             active_lines_for_nodes.add(node_id)
             remote_pos = visual_item.pos()
-            # Use boundingRect of the pixmap for more accurate centering if available
-            remote_rect = visual_item.boundingRect()
-            remote_center_x = remote_pos.x() + remote_rect.width() / 2 * visual_item.scale()
-            remote_center_y = remote_pos.y() + remote_rect.height() / 2 * visual_item.scale()
             
+            # Use original_width/height for center calculation for consistency
+            original_width = squid_info.get('original_width', visual_item.pixmap().width())
+            original_height = squid_info.get('original_height', visual_item.pixmap().height())
+
+            remote_center_x = remote_pos.x() + original_width / 2 * visual_item.scale()
+            remote_center_y = remote_pos.y() + original_height / 2 * visual_item.scale()
+
             color_tuple = squid_info.get('data', {}).get('color', (100, 100, 255))
             try:
                 q_color = QtGui.QColor(*color_tuple)
-            except TypeError: 
+            except TypeError:
                 q_color = QtGui.QColor(100,100,255)
 
             if node_id in self.connection_lines:
@@ -516,19 +574,19 @@ class RemoteEntityManager:
                 new_pen = line.pen()
                 new_pen.setColor(QtGui.QColor(q_color.red(), q_color.green(), q_color.blue(), 100))
                 line.setPen(new_pen)
-                line.setVisible(True) 
+                line.setVisible(True)
             else:
                 line = QtWidgets.QGraphicsLineItem(local_center_x, local_center_y, remote_center_x, remote_center_y)
-                pen = QtGui.QPen(QtGui.QColor(q_color.red(), q_color.green(), q_color.blue(), 100)) 
-                pen.setWidth(1) 
-                pen.setStyle(QtCore.Qt.SolidLine) 
+                pen = QtGui.QPen(QtGui.QColor(q_color.red(), q_color.green(), q_color.blue(), 100))
+                pen.setWidth(1)
+                pen.setStyle(QtCore.Qt.SolidLine)
                 line.setPen(pen)
-                line.setZValue(-10) 
-                line.setVisible(True) 
+                line.setZValue(-10)
+                line.setVisible(True)
                 self.scene.addItem(line)
                 self.connection_lines[node_id] = line
-        
-        for node_id in list(self.connection_lines.keys()): 
+
+        for node_id in list(self.connection_lines.keys()):
             if node_id not in active_lines_for_nodes:
                 line_to_remove = self.connection_lines.pop(node_id)
                 if line_to_remove.scene():
@@ -537,24 +595,24 @@ class RemoteEntityManager:
     def remove_remote_squid(self, node_id):
         if node_id not in self.remote_squids:
             if self.debug_mode: self.logger.debug(f"Attempted to remove non-existent remote squid: {node_id}")
-            return 
-        
+            return
+
         squid_data_to_remove = self.remote_squids.pop(node_id)
-        
+
         for key in ['visual', 'view_cone', 'id_text', 'status_text']:
             item = squid_data_to_remove.get(key)
             if item is not None:
-                if item.scene(): 
+                if item.scene():
                     item.scene().removeItem(item)
                 if hasattr(self, 'text_pool') and key in ['id_text', 'status_text'] and item in self.text_pool.in_use: # Check if it was from pool
-                    self.text_pool.release(item) 
+                    self.text_pool.release(item)
 
         if node_id in self.connection_lines:
             line = self.connection_lines.pop(node_id)
-            if line.scene(): 
+            if line.scene():
                 line.scene().removeItem(line)
         if self.debug_mode: self.logger.info(f"Removed remote squid {node_id} and its associated items.")
-    
+
     def cleanup_stale_entities(self, timeout=20.0):
         current_time = time.time()
         stale_squids_ids = [
@@ -564,7 +622,7 @@ class RemoteEntityManager:
         for node_id in stale_squids_ids:
             if self.debug_mode: self.logger.info(f"Cleaning up stale squid: {node_id}")
             self.remove_remote_squid(node_id)
-        
+
         stale_objects_ids = [ # Assuming remote_objects has a similar structure with 'last_update'
             obj_id for obj_id, data in self.remote_objects.items()
             if current_time - data.get('last_update', 0) > timeout
@@ -572,31 +630,31 @@ class RemoteEntityManager:
         for obj_id in stale_objects_ids:
             if self.debug_mode: self.logger.info(f"Cleaning up stale object: {obj_id}")
             self.remove_remote_object(obj_id) # Make sure remove_remote_object is defined
-        
+
         if stale_squids_ids or stale_objects_ids:
              if self.debug_mode: self.logger.debug(f"Stale entity cleanup: Removed {len(stale_squids_ids)} squids, {len(stale_objects_ids)} objects.")
         return len(stale_squids_ids), len(stale_objects_ids)
-    
+
     def remove_remote_object(self, obj_id): # Basic implementation
         if obj_id not in self.remote_objects:
             return
         obj_data = self.remote_objects.pop(obj_id)
         visual_item = obj_data.get('visual')
-        if visual_item and visual_item.scene(): 
+        if visual_item and visual_item.scene():
             visual_item.scene().removeItem(visual_item)
         # If remote objects also use pooled text labels, release them here.
         if self.debug_mode: self.logger.debug(f"Removed remote object {obj_id}")
-    
+
     def cleanup_all(self):
-        for node_id in list(self.remote_squids.keys()): 
+        for node_id in list(self.remote_squids.keys()):
             self.remove_remote_squid(node_id)
         # self.remote_squids.clear() # remove_remote_squid already pops from it
-            
-        for obj_id in list(self.remote_objects.keys()): 
+
+        for obj_id in list(self.remote_objects.keys()):
             self.remove_remote_object(obj_id)
         # self.remote_objects.clear() # remove_remote_object already pops
 
-        for node_id in list(self.connection_lines.keys()): 
+        for node_id in list(self.connection_lines.keys()):
             line = self.connection_lines.pop(node_id)
             if line.scene():
                 line.scene().removeItem(line)
@@ -605,7 +663,7 @@ class RemoteEntityManager:
         if hasattr(self, 'text_pool'):
              # Release all items currently in use from the text_pool
              for item in list(self.text_pool.in_use): # Iterate copy
-                 if item.scene(): 
+                 if item.scene():
                      item.scene().removeItem(item) # Ensure removed from scene
                  self.text_pool.release(item) # Then release from pool
              # Clear available items too (though they shouldn't be in scene)
