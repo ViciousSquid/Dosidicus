@@ -77,7 +77,7 @@ class MultiplayerPlugin:
 
         # --- Flags ---
         self.is_setup = False
-        self.debug_mode = False
+        self.debug_mode = True                                  ### DEBUG MODE TOGGLE
         self.last_controller_update = time.time() 
         self.entity_manager: RemoteEntityManager | None = None # Added type hint
         self.config_manager = None # Placeholder, ensure this is set if used (e.g. in handle_squid_exit_message print)
@@ -985,12 +985,14 @@ class MultiplayerPlugin:
                 self.logger.debug(f"Fallback: Controller for {node_id[-6:]} already exists, skipping duplicate creation.")
 
 
-    # Inside MultiplayerPlugin class in mp_plugin_logic.py
     def update_remote_controllers(self):
         """Called by a QTimer to update RemoteSquidController instances."""
         # --- NEW TRACE PRINT ---
         print(f"!!!!!!!! MP_PLUGIN_LOGIC: update_remote_controllers METHOD ENTERED. Num controllers: {len(self.remote_squid_controllers if hasattr(self, 'remote_squid_controllers') else {})} !!!!!!!!")
         # --- END NEW TRACE PRINT ---
+        # ADDED DEBUG LOGGING
+        if self.logger: # Ensure logger exists before using it
+            self.logger.info(f"DEBUG_MPL_UPDATE: At start of update_remote_controllers. Current controllers: {list(self.remote_squid_controllers.keys()) if hasattr(self, 'remote_squid_controllers') else 'N/A'}. Dict size: {len(self.remote_squid_controllers) if hasattr(self, 'remote_squid_controllers') else 'N/A'}")
 
         if not self.logger: 
             print("MP_PLUGIN_LOGIC: Logger not available in update_remote_controllers.") # Fallback print

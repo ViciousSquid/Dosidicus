@@ -49,7 +49,8 @@ class RemoteSquidController:
         self.carried_items_data = [] # Stores detailed data of items being "physically" carried
         
         self.move_speed = 4.5 # Tuned for ~90px/sec if controller updates at 20Hz (50ms interval)
-        self.direction_change_prob = 0.15 # Increased for less linear movement
+        self.direction_change_prob = 0.9 # Increased for less linear movement
+        self.direction_change_probability = 0.9
         self.next_decision_time = 0 # Initialize to 0 so first decision happens immediately
         self.decision_interval = 0.5 # Time between major decision evaluations
 
@@ -102,62 +103,46 @@ class RemoteSquidController:
         self._log_decision(f"CaptureItemSuccess: Captured properties for '{base_name}': Scale {properties['scale']:.2f}, Category '{properties['original_category']}'.")
         return properties
 
-    def update(self, delta_time=None):
-        # --- NEW UNCONDITIONAL TRACE PRINT ---
-        print(f"!!!!!!!! AUTOPILOT RemoteSquidController.update() ENTERED for {self.squid_data.get('node_id', 'UnknownNode')[-4:]} !!!!!!!!")
-        # --- END NEW UNCONDITIONAL TRACE PRINT ---
 
-        current_time_autopilot = time.time() 
-        
-        if delta_time is None:
-            delta_time = current_time_autopilot - getattr(self, 'last_update_time', current_time_autopilot)
-        self.last_update_time = current_time_autopilot
+    def update(self, delta_time):
+        print(f"!!!!!!!! AUTOPILOT RemoteSquidController.update() ENTERED for {self.squid_data.get('node_id', 'UnknownNode')[-4:]} !!!!!!!!") # [cite: 273, 275, 276, 278, 279, 281, 282, 284, 285, 287, 288, 290, 291, 293, 294, 296, 297, 299, 300, 302, 303, 305, 306, 308, 309, 311, 312, 314, 315, 317, 318, 320, 321, 323, 324, 326, 327, 329, 330, 332, 333, 335, 336, 338, 339, 341, 342, 344, 345, 347, 348, 350, 351, 353, 354, 356, 357, 359, 360, 362, 363, 365, 366, 368, 369, 371, 372, 374, 375, 377, 378, 380, 381, 383, 384, 386, 387, 389, 390, 392, 393, 395, 396, 398, 399, 401, 402, 404, 405, 407, 408, 410, 411, 413, 414, 416, 418, 419, 421, 422, 424, 425, 428, 429, 431, 432, 434, 435, 437, 438, 440, 441, 443, 444, 446, 447, 449, 450, 452, 453, 455, 456, 458, 459, 461, 462, 464, 465, 467, 468, 470, 471, 473, 474, 476, 477, 479, 480, 482, 483, 485, 486, 488, 489, 491, 492, 494, 495, 497, 498, 500, 501, 503, 504, 506, 507, 509, 510, 512, 513, 515, 516, 518, 519, 521, 522, 524, 525, 527, 528, 530, 531, 533, 534, 536, 537]
 
-        self.time_away += delta_time
+        # Simple random movement logic
+        if random.random() < 0.05: # 5% chance to change direction
+            new_direction = random.choice(['left', 'right', 'up', 'down'])
+            self.squid_data['direction'] = new_direction
+            # self.plugin_instance.logger.debug(f"Autopilot {self.squid_data['node_id'][-4:]} changed direction to {new_direction}")
 
-        short_node_id = self.squid_data.get('node_id', 'Unknown')[-4:]
-        
-        if self.debug_mode:
-            print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] CurrentTime: {current_time_autopilot:.3f}, NextDecisionTime: {self.next_decision_time:.3f}, Condition (CT < NDT): {current_time_autopilot < self.next_decision_time}, Current State: {self.state}, Display Status: {self.squid_data.get('status')}")
+        # Basic boundary avoidance
+        # Assuming self.scene and self.squid_data contain necessary info
+        # This is highly simplified
+        current_x = self.squid_data.get('x', 0)
+        current_y = self.squid_data.get('y', 0)
+        # Visuals are handled by RemoteEntityManager now based on self.squid_data
+        # No direct self.visual_item.pos()
 
-        if current_time_autopilot < self.next_decision_time:
-            if self.debug_mode:
-                print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] In IF block (decision HOLD), moving direction: {self.squid_data.get('direction')}. Returning early.")
-            
-            self.move_in_direction(self.squid_data['direction'])
-            if self.remote_entity_manager:
-                self.remote_entity_manager.update_remote_squid(self.squid_data['node_id'], self.squid_data, is_new_arrival=False)
-            return
+        speed = 50 * delta_time # Example speed
 
-        if self.debug_mode:
-            print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] PASSED IF block. NextDecisionTime was {self.next_decision_time:.3f}. Processing state machine. Current State: {self.state}")
-        
-        self.next_decision_time = current_time_autopilot + self.decision_interval
-        
-        if self.debug_mode:
-            print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] New NextDecisionTime set to: {self.next_decision_time:.3f} (current + {self.decision_interval})")
+        if self.squid_data['direction'] == 'left':
+            self.squid_data['x'] -= speed
+            if self.squid_data['x'] < 0: self.squid_data['direction'] = 'right'
+        elif self.squid_data['direction'] == 'right':
+            self.squid_data['x'] += speed
+            # Assuming scene width is available, e.g., self.scene.width() or passed in config
+            if self.squid_data['x'] > self.scene.width() - self.squid_data.get('squid_width', 50): # Rough boundary
+                self.squid_data['direction'] = 'left'
+        # Add similar for 'up' and 'down'
 
-        # State machine
-        if self.state == "exploring":
-            if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling explore().")
-            self.explore()
-        elif self.state == "feeding":
-            if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling seek_food().")
-            self.seek_food()
-        elif self.state == "interacting":
-            if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling interact_with_object().")
-            self.interact_with_object()
-        elif self.state == "returning":
-            if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] Calling return_home().")
-            self.return_home()
-        elif self.state == "exited":
-            if self.debug_mode: print(f"[AUTOPILOT_UPDATE_TRACE {short_node_id}] State is 'exited'. Doing nothing.")
-            return
+        # The RemoteEntityManager will use self.squid_data to update the visual
+        # No need to call self.remote_entity_manager.update_remote_squid() from here
+        # if mp_plugin_logic.update_remote_controllers calls it after this.
+        # However, if RemoteSquidController is the SOLE manager of its data and visuals,
+        # then it would call:
+        # if self.remote_entity_manager:
+        # self.remote_entity_manager.update_remote_squid(self.squid_data['node_id'], self.squid_data)
 
-        if self.remote_entity_manager and self.state != "exited":
-            self.remote_entity_manager.update_remote_squid(self.squid_data['node_id'], self.squid_data, is_new_arrival=False)
-
-    def explore(self):
+    def explore(self, delta_time):
+        self._log_decision(f"Explore: Method entered. Current direction: {self.squid_data.get('direction')}") # <<<< THIS IS THE CRUCIAL LOGGING LINE
         # Ensure status is correct if in this state
         if self.squid_data.get('status') != "exploring":
             self.squid_data['status'] = "exploring"
