@@ -487,7 +487,7 @@ class MultiplayerPlugin:
                     f"Exchanged decorations with squid {remote_node_id[-6:]}!", importance=7
                 )
             if hasattr(self.tamagotchi_logic, 'show_message'):
-                self.tamagotchi_logic.show_message(f"🎁 Your squid exchanged gifts with {remote_node_id[-6:]}!")
+                self.tamagotchi_logic.show_message(f"氏 Your squid exchanged gifts with {remote_node_id[-6:]}!")
             return True
         return False
 
@@ -1122,62 +1122,92 @@ class MultiplayerPlugin:
         # travel_text_item.setVisible(True)
         # QtCore.QTimer.singleShot(2500, lambda: scene.removeItem(travel_text_item) if travel_text_item.scene() else None)
 
-    def handle_squid_return(self, node: NetworkNode, message: Dict, addr: tuple):
-        """Handles a 'squid_return' message for the player's own squid."""
-        if not self.logger: return
-        try:
-            return_payload = message.get('payload', {})
-            returning_node_id = return_payload.get('node_id')
+    # Inside MultiplayerPlugin class in mp_plugin_logic.py
 
-            if not self.network_node or returning_node_id != self.network_node.node_id:
-                # Message is not for this squid, or network_node is not initialized
-                if self.debug_mode:
-                    expected_id = self.network_node.node_id if self.network_node else "N/A"
-                    self.logger.debug(f"Squid_return message ignored. Expected node '{expected_id}', got '{returning_node_id}'.")
-                return
+def handle_squid_return(self, node: NetworkNode, message: Dict, addr: tuple):
+    """Handles a 'squid_return' message for the player's own squid."""
+    if not self.logger: return
+    try:
+        return_payload = message.get('payload', {})
+        returning_node_id = return_payload.get('node_id')
 
-            local_squid = self.tamagotchi_logic.squid
-            if not local_squid or not local_squid.squid_item: # Check if local squid and its visual exist
-                if self.debug_mode: self.logger.debug("Local squid or its visual item not found for return.")
-                return
+        if not self.network_node or returning_node_id != self.network_node.node_id:
+            if self.debug_mode:
+                expected_id = self.network_node.node_id if self.network_node else "N/A"
+                self.logger.debug(f"Squid_return message ignored. Expected node '{expected_id}', got '{returning_node_id}'.")
+            return
 
-            activity_summary = return_payload.get('activity_summary', {})
-            entry_side = return_payload.get('return_direction', 'left') # Direction from which it enters THIS screen
-            entry_coords = self.calculate_entry_position(entry_side) # Calculate where it appears
+        local_squid = self.tamagotchi_logic.squid
+        if not local_squid or not local_squid.squid_item:
+            if self.debug_mode: self.logger.debug("Local squid or its visual item not found for return.")
+            return
 
-            # Update local squid's position and make it visible
-            local_squid.squid_x, local_squid.squid_y = entry_coords[0], entry_coords[1]
-            local_squid.squid_item.setPos(local_squid.squid_x, local_squid.squid_y)
-            local_squid.squid_item.setVisible(True)
-            
-            # MODIFIED: No fade-in animation, just ensure full opacity
-            local_squid.squid_item.setOpacity(1.0) 
-            if local_squid.squid_item.graphicsEffect(): # Remove any existing effect
-                local_squid.squid_item.graphicsEffect().setEnabled(False) # Or set to None
-                local_squid.squid_item.setGraphicsEffect(None)
+        activity_summary = return_payload.get('activity_summary', {})
+        entry_side = return_payload.get('return_direction', 'left') 
+        entry_coords = self.calculate_entry_position(entry_side)
 
+        local_squid.squid_x, local_squid.squid_y = entry_coords[0], entry_coords[1]
+        local_squid.squid_item.setPos(local_squid.squid_x, local_squid.squid_y)
+        local_squid.squid_item.setVisible(True)
+        local_squid.squid_item.setOpacity(1.0) 
+        if local_squid.squid_item.graphicsEffect():
+            local_squid.squid_item.graphicsEffect().setEnabled(False)
+            local_squid.squid_item.setGraphicsEffect(None)
 
-            self.apply_remote_experiences(local_squid, activity_summary) # Apply changes based on journey
+        self.apply_remote_experiences(local_squid, activity_summary)
 
-            num_stolen_rocks = activity_summary.get('rocks_stolen', 0)
-            if num_stolen_rocks > 0:
-                self.create_stolen_rocks(local_squid, num_stolen_rocks, entry_coords)
-                if hasattr(self.tamagotchi_logic, 'show_message'):
-                    self.tamagotchi_logic.show_message(f"🎉 Your squid returned with {num_stolen_rocks} souvenir rocks!")
+        # --- START NEW/MODIFIED SECTION for handling stolen items ---
+        stolen_item_id = activity_summary.get('stolen_item_id')
+        stolen_item_type = activity_summary.get('stolen_item_type') # 'rock' or 'decoration'
+
+        if stolen_item_id and stolen_item_type:
+            if self.debug_mode:
+                self.logger.info(f"Squid returned with stolen item: Type={stolen_item_type}, ID/Details='{stolen_item_id}'")
+
+            # Call TamagotchiLogic to create the stolen item in the tank
+            if hasattr(self.tamagotchi_logic, 'add_stolen_item_to_tank'):
+                # Pass entry_coords so the item can appear near where the squid returned
+                created_item = self.tamagotchi_logic.add_stolen_item_to_tank(
+                    item_type=stolen_item_type,
+                    item_details=stolen_item_id, # This could be a filename or other identifier
+                    spawn_position=entry_coords 
+                )
+                if created_item: # add_stolen_item_to_tank should return the item or True
+                    self.apply_foreign_object_tint(created_item) # Ensure red tint
+                    if hasattr(self.tamagotchi_logic, 'show_message'):
+                        self.tamagotchi_logic.show_message(f"脂 Your squid returned with a souvenir {stolen_item_type}!")
+                    if hasattr(local_squid, 'memory_manager'):
+                         local_squid.memory_manager.add_short_term_memory(
+                            'achievement', f'{stolen_item_type}_heist',
+                            f"Brought back a {stolen_item_type} from an adventure!", importance=8
+                        )
+                else:
+                    if self.debug_mode: self.logger.warning(f"TamagotchiLogic.add_stolen_item_to_tank failed for {stolen_item_type}.")
             else:
-                if hasattr(self.tamagotchi_logic, 'show_message'):
-                    journey_time_sec = activity_summary.get('time_away', 0)
-                    time_str = f"{int(journey_time_sec/60)}m {int(journey_time_sec%60)}s"
-                    self.tamagotchi_logic.show_message(f"🦑 Welcome back! Your squid explored for {time_str}.")
-            
-            local_squid.can_move = True # Allow movement again
-            if hasattr(local_squid, 'is_transitioning'): local_squid.is_transitioning = False
-            local_squid.status = "just returned home" # Update status
+                if self.debug_mode: self.logger.error("TamagotchiLogic does not have 'add_stolen_item_to_tank' method.")
 
-            if self.debug_mode: self.logger.debug(f"Local squid '{local_squid.name if hasattr(local_squid,'name') else ''}' returned to position {entry_coords} from {entry_side}.")
+        # Remove or adapt the old create_stolen_rocks if it's now redundant
+        # num_stolen_rocks = activity_summary.get('rocks_stolen', 0) # This was from the old summary key
+        # if num_stolen_rocks > 0 and not (stolen_item_type == 'rock' and stolen_item_id): # Avoid double-counting if new system handled it
+        #     self.create_stolen_rocks(local_squid, num_stolen_rocks, entry_coords) # Old method
+        #     if hasattr(self.tamagotchi_logic, 'show_message'):
+        #         self.tamagotchi_logic.show_message(f"脂 Your squid returned with {num_stolen_rocks} souvenir rocks!")
+        # --- END NEW/MODIFIED SECTION ---
 
-        except Exception as e:
-            self.logger.error(f"Handling local squid's return failed: {e}", exc_info=True)
+        else: # No specific stolen item, just general return message
+            if hasattr(self.tamagotchi_logic, 'show_message'):
+                journey_time_sec = activity_summary.get('time_away', 0)
+                time_str = f"{int(journey_time_sec/60)}m {int(journey_time_sec%60)}s"
+                self.tamagotchi_logic.show_message(f"ｦ�Welcome back! Your squid explored for {time_str}.")
+
+        local_squid.can_move = True 
+        if hasattr(local_squid, 'is_transitioning'): local_squid.is_transitioning = False
+        local_squid.status = "just returned home"
+
+        if self.debug_mode: self.logger.debug(f"Local squid '{local_squid.name if hasattr(local_squid,'name') else ''}' returned to position {entry_coords} from {entry_side}.")
+
+    except Exception as e:
+        self.logger.error(f"Handling local squid's return failed: {e}", exc_info=True)
 
     def _create_arrival_animation(self, graphics_item: QtWidgets.QGraphicsPixmapItem):
         """MODIFIED: Creates a simple fade-in animation (now static) for newly arrived remote items."""
@@ -2086,7 +2116,7 @@ class MultiplayerPlugin:
                 lambda: self.complete_remote_squid_return(remote_node_id, activity_summary_data, home_direction_for_exit)
             )
             if hasattr(self.tamagotchi_logic, 'show_message'):
-                 self.tamagotchi_logic.show_message(f"👋 Visitor squid {remote_node_id[-6:]} is heading back home!")
+                 self.tamagotchi_logic.show_message(f"窓 Visitor squid {remote_node_id[-6:]} is heading back home!")
             return
 
         # Fallback: Basic immediate removal or simple fade if no entity_manager animation
@@ -2108,7 +2138,7 @@ class MultiplayerPlugin:
         self.complete_remote_squid_return(remote_node_id, activity_summary_data, home_direction_for_exit)
         
         if hasattr(self.tamagotchi_logic, 'show_message'):
-            self.tamagotchi_logic.show_message(f"👋 Visitor squid {remote_node_id[-6:]} is heading back home!")
+            self.tamagotchi_logic.show_message(f"窓 Visitor squid {remote_node_id[-6:]} is heading back home!")
 
 
     def complete_remote_squid_return(self, remote_node_id: str, activity_summary: Dict, exit_direction: str):
@@ -2290,8 +2320,8 @@ class MultiplayerPlugin:
             gift_item.setOpacity(1.0)
 
 
-            # Optional: Add a temporary "🎁 Gift!" text label above it
-            gift_indicator_label = scene.addText("🎁 Gift!")
+            # Optional: Add a temporary "氏 Gift!" text label above it
+            gift_indicator_label = scene.addText("氏 Gift!")
             label_font = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
             gift_indicator_label.setFont(label_font)
             gift_indicator_label.setDefaultTextColor(QtGui.QColor(255, 100, 100)) # Bright color
