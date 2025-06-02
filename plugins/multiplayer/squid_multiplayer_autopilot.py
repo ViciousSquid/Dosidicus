@@ -1,5 +1,6 @@
 import random
 import math
+import sys
 import time
 import os
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -451,7 +452,7 @@ class RemoteSquidController:
         self.move_in_direction(chosen_direction)
 
     def find_nearby_food(self):
-        self._log_decision(f"FIND_NEARBY_FOOD: Entered method for {self.node_id}.") # Log entry to method
+        self._log_decision(f"FIND_NEARBY_FOOD: Entered method for {self.node_id}.")
         food_items = self.get_food_items_from_scene() 
         if not food_items:
             self._log_decision(f"FIND_NEARBY_FOOD: No food items returned by get_food_items_from_scene for {self.node_id}.")
@@ -460,42 +461,97 @@ class RemoteSquidController:
         self._log_decision(f"FIND_NEARBY_FOOD: Found {len(food_items)} potential food items for {self.node_id}.")
         
         squid_pos = (self.squid_data['x'] + self.squid_data.get('squid_width',0)/2, 
-                     self.squid_data['y'] + self.squid_data.get('squid_height',0)/2) 
+                     self.squid_data['y'] + self.squid_data.get('squid_height',0)/2)
         closest_food, min_dist = None, float('inf')
 
-        for i, food in enumerate(food_items): # Added enumerate for better logging
+        for i, food in enumerate(food_items):
             self._log_decision(f"FIND_NEARBY_FOOD: Processing item {i} for {self.node_id}. Type of self: {type(self)}")
             self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Type of food: {type(food)}, Filename: {getattr(food, 'filename', 'N/A')}")
             
-            method_to_call = None 
+            food_center_pos = None # Initialize
             try:
-                method_to_call = self.get_object_center_position
-                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Retrieved method_to_call: {method_to_call}, type: {type(method_to_call)}")
+                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Attempting INLINED get_object_center_position logic for food item...")
                 
-                if hasattr(method_to_call, '__self__'):
-                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - method_to_call.__self__ is type: {type(method_to_call.__self__)}, value: {method_to_call.__self__}")
-                    if method_to_call.__self__ is self:
-                        self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - method_to_call.__self__ IS THE SAME AS self instance.")
+                # --- Start of inlined get_object_center_position logic ---
+                if food and self.is_object_valid(food): # self.is_object_valid uses 'self' from find_nearby_food context
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Food item IS valid for inlined logic.")
+                    
+                    item_rect_local = food.boundingRect() 
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - food.boundingRect() = {item_rect_local}")
+                    
+                    item_pos_scene = food.pos()
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - food.pos() = {item_pos_scene}")
+                    
+                    # --- Break down the calculation for center_x ---
+                    pos_x_val = None
+                    rect_center_obj = None
+                    rect_center_x_val = None
+
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - About to call item_pos_scene.x()")
+                    pos_x_val = item_pos_scene.x()
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - item_pos_scene.x() result: {pos_x_val}")
+
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - About to call item_rect_local.center()")
+                    rect_center_obj = item_rect_local.center()
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - item_rect_local.center() result: {rect_center_obj}")
+
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - About to call rect_center_obj.x()")
+                    rect_center_x_val = rect_center_obj.x()
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - rect_center_obj.x() result: {rect_center_x_val}")
+                    
+                    center_x = pos_x_val + rect_center_x_val
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - center_x calculated: {center_x}")
+                    # --- End breakdown for center_x ---
+                    
+                    # --- Break down the calculation for center_y (similarly) ---
+                    pos_y_val = None
+                    # rect_center_obj is already available if center_x calculation passed and rect_center_obj is not None
+                    rect_center_y_val = None
+
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - About to call item_pos_scene.y(). item_pos_scene type: {type(item_pos_scene)}, value: {item_pos_scene}")
+                    try:
+                        pos_y_val = item_pos_scene.y() 
+                        self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - item_pos_scene.y() result: {pos_y_val}")
+                    except Exception as e_y_call: # More specific catch for the .y() call
+                        self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - *** EXCEPTION SPECIFICALLY during item_pos_scene.y() call: {type(e_y_call).__name__}: {e_y_call} ***")
+                        if hasattr(item_pos_scene, 'isNull'): # Check if it's a QPointF that might be null
+                             self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - item_pos_scene.isNull(): {item_pos_scene.isNull()}")
+                        raise 
+
+                    # rect_center_obj was already fetched for center_x
+                    if rect_center_obj is not None: 
+                        self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - About to call rect_center_obj.y()")
+                        rect_center_y_val = rect_center_obj.y()
+                        self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - rect_center_obj.y() result: {rect_center_y_val}")
                     else:
-                        self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - WARNING: method_to_call.__self__ IS DIFFERENT from self instance.")
+                        self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - rect_center_obj was None, cannot get .y()")
+                        raise ValueError("rect_center_obj became None before y calculation for inlined logic")
+
+                    # Ensure values are not None before addition if they could be
+                    if pos_y_val is None or rect_center_y_val is None:
+                        self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - pos_y_val or rect_center_y_val is None. Cannot calculate center_y.")
+                        raise ValueError("Cannot calculate center_y due to None component for inlined logic")
+
+                    center_y = pos_y_val + rect_center_y_val
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - center_y calculated: {center_y}")
+                    # --- End breakdown for center_y ---
+                    
+                    food_center_pos = (center_x, center_y)
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - INLINED logic SUCCEEDED. Result: {food_center_pos}")
                 else:
-                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - method_to_call has no __self__ attribute (it's not a bound method as expected?).")
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Food item NOT valid for inlined logic (obj was None or self.is_object_valid(food) was False).")
 
-                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Attempting to call method_to_call(food)...")
-                food_center_pos = method_to_call(food) # Call the retrieved method
-                
-                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Call to method_to_call(food) SUCCEEDED. Result: {food_center_pos}")
-
-            except TypeError as te:
-                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - *** TypeError during explicit method call: {te} ***")
-                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Details: method_to_call was {method_to_call}, food was type {type(food)}")
+            except Exception as e_inline: 
+                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - *** Outer Exception during INLINED logic: {type(e_inline).__name__}: {e_inline} ***")
+                import sys 
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                if exc_tb:
+                    fname = exc_tb.tb_frame.f_code.co_filename
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Outer Exception was at {fname}:{exc_tb.tb_lineno}")
                 raise 
-            except Exception as e_generic:
-                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - *** Exception during explicit method call: {e_generic} ***")
-                raise
-
+            
             if food_center_pos is None:
-                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - food_center_pos is None. Skipping.")
+                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - food_center_pos is None after inlined logic. Skipping.")
                 continue
 
             dist = self.distance_between(squid_pos, food_center_pos)
