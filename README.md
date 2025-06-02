@@ -10,4 +10,4 @@
 
   Recommended launch arguments are `-c -d`   (example:  main.py -c -d)
 
-This is a development branch and will likely be unstable
+This is a development branch and will likely be unstable. This branch may be deleted at any time.
