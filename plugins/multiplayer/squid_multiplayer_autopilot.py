@@ -125,8 +125,6 @@ class RemoteSquidController:
         return properties
 
     def update(self, delta_time=None):
-        # This console print was in your provided file
-        print(f"!!!!!!!! AUTOPILOT RemoteSquidController.update() ENTERED for {self.short_node_id} !!!!!!!!")
 
         current_time_autopilot = time.time() 
         
@@ -452,31 +450,71 @@ class RemoteSquidController:
         
         self.move_in_direction(chosen_direction)
 
-
     def find_nearby_food(self):
-        food_items = self.get_food_items_from_scene() # This now logs periodically
-        if not food_items: return None
+        self._log_decision(f"FIND_NEARBY_FOOD: Entered method for {self.node_id}.") # Log entry to method
+        food_items = self.get_food_items_from_scene() 
+        if not food_items:
+            self._log_decision(f"FIND_NEARBY_FOOD: No food items returned by get_food_items_from_scene for {self.node_id}.")
+            return None
+        
+        self._log_decision(f"FIND_NEARBY_FOOD: Found {len(food_items)} potential food items for {self.node_id}.")
         
         squid_pos = (self.squid_data['x'] + self.squid_data.get('squid_width',0)/2, 
-                     self.squid_data['y'] + self.squid_data.get('squid_height',0)/2) # Squid center
+                     self.squid_data['y'] + self.squid_data.get('squid_height',0)/2) 
         closest_food, min_dist = None, float('inf')
 
-        for food in food_items:
-            # is_object_valid should have been called by get_food_items_from_scene implicitly
-            food_center_pos = self.get_object_center_position(food)
-            if food_center_pos is None: continue
+        for i, food in enumerate(food_items): # Added enumerate for better logging
+            self._log_decision(f"FIND_NEARBY_FOOD: Processing item {i} for {self.node_id}. Type of self: {type(self)}")
+            self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Type of food: {type(food)}, Filename: {getattr(food, 'filename', 'N/A')}")
+            
+            method_to_call = None 
+            try:
+                method_to_call = self.get_object_center_position
+                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Retrieved method_to_call: {method_to_call}, type: {type(method_to_call)}")
+                
+                if hasattr(method_to_call, '__self__'):
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - method_to_call.__self__ is type: {type(method_to_call.__self__)}, value: {method_to_call.__self__}")
+                    if method_to_call.__self__ is self:
+                        self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - method_to_call.__self__ IS THE SAME AS self instance.")
+                    else:
+                        self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - WARNING: method_to_call.__self__ IS DIFFERENT from self instance.")
+                else:
+                    self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - method_to_call has no __self__ attribute (it's not a bound method as expected?).")
+
+                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Attempting to call method_to_call(food)...")
+                food_center_pos = method_to_call(food) # Call the retrieved method
+                
+                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Call to method_to_call(food) SUCCEEDED. Result: {food_center_pos}")
+
+            except TypeError as te:
+                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - *** TypeError during explicit method call: {te} ***")
+                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Details: method_to_call was {method_to_call}, food was type {type(food)}")
+                raise 
+            except Exception as e_generic:
+                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - *** Exception during explicit method call: {e_generic} ***")
+                raise
+
+            if food_center_pos is None:
+                self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - food_center_pos is None. Skipping.")
+                continue
 
             dist = self.distance_between(squid_pos, food_center_pos)
+            self._log_decision(f"FIND_NEARBY_FOOD: Item {i} - Distance to food: {dist:.1f}")
             if dist < min_dist: 
                 min_dist = dist
                 closest_food = food
         
         detection_radius = 300 
         chosen_food = closest_food if closest_food and min_dist < detection_radius else None
+        
         if chosen_food:
-            self._log_decision(f"FindFood: Target acquired: {os.path.basename(getattr(chosen_food, 'filename', 'N/A'))} at distance {min_dist:.1f}.")
-        elif food_items: # Log if food was seen but none chosen (e.g. too far)
-            self._log_decision(f"FindFood: Food items detected ({len(food_items)}), but none were close enough or suitable (min_dist: {min_dist:.1f if min_dist != float('inf') else 'N/A'}, detection_radius: {detection_radius}).")
+            self._log_decision(f"FindFood: Target acquired for {self.node_id}: {os.path.basename(getattr(chosen_food, 'filename', 'N/A'))} at distance {min_dist:.1f}.")
+        elif food_items: 
+            min_dist_str = f"{min_dist:.1f}" if min_dist != float('inf') else "N/A" 
+            self._log_decision(f"FindFood: Food items detected for {self.node_id} ({len(food_items)}), but none close/suitable (min_dist: {min_dist_str}, detection_radius: {detection_radius}).")
+        else: 
+            self._log_decision(f"FindFood: No food items found in scene for {self.node_id}.")
+            
         return chosen_food
 
     def find_nearby_stealable_item(self):
@@ -502,7 +540,8 @@ class RemoteSquidController:
         if chosen_item:
             self._log_decision(f"FindStealable: Target acquired: {os.path.basename(getattr(chosen_item, 'filename', 'N/A'))} at distance {min_dist:.1f}.")
         elif items:
-            self._log_decision(f"FindStealable: Stealable items detected ({len(items)}), but none close/suitable (min_dist: {min_dist:.1f if min_dist != float('inf') else 'N/A'}, detection_radius: {detection_radius}).")
+            min_dist_str = f"{min_dist:.1f}" if min_dist != float('inf') else "N/A"
+            self._log_decision(f"FindStealable: Stealable items detected ({len(items)}), but none close/suitable (min_dist: {min_dist_str}, detection_radius: {detection_radius}).")
         return chosen_item
 
     def get_food_items_from_scene(self):
