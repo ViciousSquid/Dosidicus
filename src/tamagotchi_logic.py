@@ -892,8 +892,8 @@ class TamagotchiLogic:
         ink_cloud_item = QtWidgets.QGraphicsPixmapItem(ink_cloud_pixmap)
         
         # Set the center of the ink cloud to match the center of the squid
-        squid_center_x = self.squid_x + self.squid_width // 2
-        squid_center_y = self.squid_y + self.squid_height // 2
+        squid_center_x = self.squid.squid_x + self.squid.squid_width // 2
+        squid_center_y = self.squid_y + self.squid.squid_height // 2
         ink_cloud_item.setPos(
             squid_center_x - ink_cloud_pixmap.width() // 2, 
             squid_center_y - ink_cloud_pixmap.height() // 2
