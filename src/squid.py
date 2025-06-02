@@ -106,9 +106,14 @@ class Squid:
         self.curiosity = 50
 
         if personality is None:
-            self.personality = random.choice(list(Personality))
+            available_personalities = list(Personality)
+            self.personality = random.choice(available_personalities)
         else:
             self.personality = personality
+        
+        self.has_fled_first_encounter = False
+
+        
 
     @property
     def carrying_rock(self):
@@ -1379,45 +1384,67 @@ class Squid:
         distance = math.sqrt((squid_center_x - food_x)**2 + (squid_center_y - food_y)**2)
         return distance < 100  # Adjust the distance threshold as needed
     
-    def process_squid_detection(self, remote_node_id, is_visible=True):
+    def process_squid_detection(self, remote_node_id, is_visible=True, remote_squid_props=None):
         """
         Process the detection of another squid in this squid's vision cone
         
         Args:
             remote_node_id (str): ID of the detected squid
             is_visible (bool): Whether the squid is currently visible
+            remote_squid_props (dict, optional): Properties of the remote squid (e.g., position).
         """
-        # Only react if the squid is not sleeping
         if self.is_sleeping:
             return
         
         if is_visible:
-            # Detected a new squid or is continuing to see it
-            
-            # Increase curiosity when first detected
+            # --- TIMID SQUID REACTION ---
+            if self.personality == Personality.TIMID and not self.has_fled_first_encounter:
+                # Check if it's the first time seeing this specific squid
+                is_first_sighting_of_this_squid = not hasattr(self, '_seen_squids') or remote_node_id not in self._seen_squids
+                
+                if is_first_sighting_of_this_squid:
+                    if hasattr(self.tamagotchi_logic, 'create_ink_cloud'):
+                        self.tamagotchi_logic.create_ink_cloud() # Call TamagotchiLogic's method
+                    else:
+                        # Fallback or log error if method doesn't exist
+                        print(f"LOGIC ERROR: TamagotchiLogic does not have create_ink_cloud method for {self.name}")
+
+                    self.flee_from_encounter(remote_squid_props) 
+                    self.has_fled_first_encounter = True # Ensure this one-time action
+                    
+                    if hasattr(self, 'memory_manager'):
+                        self.memory_manager.add_short_term_memory(
+                            category='reaction', 
+                            key='first_encounter_flee',
+                            value=f"Saw squid {remote_node_id[-4:]} for the first time and fled!",
+                            importance=8 
+                        )
+                    self.anxiety = min(100, self.anxiety + 40) # Significant anxiety spike
+                    
+                    # Ensure this squid is marked as seen to prevent re-triggering general "first sighting"
+                    if not hasattr(self, '_seen_squids'):
+                        self._seen_squids = set()
+                    self._seen_squids.add(remote_node_id)
+                    return # Timid squid's special action is complete for this event
+
+            # ---- General reactions (if not TIMID and fleeing, or if TIMID but already fled once) ----
             if not hasattr(self, '_seen_squids') or remote_node_id not in self._seen_squids:
-                # First time seeing this squid
+                # First time seeing this squid (general reaction)
                 self.curiosity = min(100, self.curiosity + 15)
+                self.anxiety = min(100, self.anxiety + 10) 
                 
-                # Small anxiety spike from the surprise
-                self.anxiety = min(100, self.anxiety + 10)
+                if hasattr(self, 'memory_manager'):
+                    self.memory_manager.add_short_term_memory(
+                        'social', 'squid_detection',
+                        f"Detected another squid (ID: {remote_node_id[-4:]})"
+                    )
                 
-                # Add memory
-                self.memory_manager.add_short_term_memory(
-                    'social', 'squid_detection',
-                    f"Detected another squid (ID: {remote_node_id[-4:]})"
-                )
-                
-                # Initialize tracking of seen squids if needed
                 if not hasattr(self, '_seen_squids'):
                     self._seen_squids = set()
-                
-                # Add to seen squids
                 self._seen_squids.add(remote_node_id)
                 
-                # Chance to get startled
-                if random.random() < 0.3:  # 30% chance
-                    # Try to use the startle function if it exists
+                # General startle chance
+                if random.random() < 0.3: 
                     if hasattr(self.tamagotchi_logic, 'startle_squid'):
                         self.tamagotchi_logic.startle_squid(source="detected_squid")
             else:
@@ -1425,12 +1452,113 @@ class Squid:
                 self.curiosity = min(100, self.curiosity + 5)
         else:
             # Lost sight of a squid
-            # Nothing special happens, just note it
             if hasattr(self, '_seen_squids') and remote_node_id in self._seen_squids:
+                if hasattr(self, 'memory_manager'):
+                    self.memory_manager.add_short_term_memory(
+                        'social', 'squid_lost',
+                        f"Lost sight of squid (ID: {remote_node_id[-4:]})"
+                    )
+
+    def flee_from_encounter(self, remote_squid_props=None):
+        self.status = "fleeing" # Update squid's status
+        if hasattr(self.tamagotchi_logic, 'show_message'):
+            self.tamagotchi_logic.show_message(f"{self.name} is scared and flees!")
+        self.is_fleeing = True # Set a flag to indicate fleeing state
+        
+        # Determine direction to flee
+        if remote_squid_props and 'x' in remote_squid_props and 'y' in remote_squid_props:
+            # Flee away from the detected squid's position
+            remote_x = remote_squid_props['x']
+            remote_y = remote_squid_props['y']
+            
+            dx_from_remote = self.squid_x - remote_x
+            dy_from_remote = self.squid_y - remote_y
+            
+            if abs(dx_from_remote) > abs(dy_from_remote): # Flee primarily horizontally
+                self.squid_direction = "right" if dx_from_remote > 0 else "left"
+            else: # Flee primarily vertically
+                self.squid_direction = "down" if dy_from_remote > 0 else "up"
+        else:
+            # Fallback: If remote position is unknown, flee in a random direction
+            # different from the current one.
+            possible_directions = ["left", "right", "up", "down"]
+            if self.squid_direction in possible_directions: # Avoid choosing the same direction
+                possible_directions.remove(self.squid_direction)
+            self.squid_direction = random.choice(possible_directions) if possible_directions else "left" # Default if list becomes empty
+
+        # Temporarily increase speed
+        # Assuming self.current_speed is used by your move_squid() logic.
+        # If self.base_speed is the primary speed determinant, adjust self.base_speed instead.
+        original_speed = self.current_speed 
+        self.current_speed *= 1.5 # Increase speed by 50%
+        
+        # Set a timer to stop fleeing after a few seconds
+        flee_duration_ms = 3000 # Flee for 3 seconds
+        QtCore.QTimer.singleShot(flee_duration_ms, lambda: self.stop_fleeing(original_speed))
+
+    # Inside the Squid class in src/squid.py
+
+    def flee_from_anxiety(self):
+        self.status = "panicking" # A more specific status for this type of flee
+        # The message is already shown in check_anxiety_flee
+        self.is_fleeing = True
+        
+        # Flee in a random direction (or opposite to current facing)
+        possible_directions = ["left", "right", "up", "down"]
+        if self.squid_direction in possible_directions:
+            possible_directions.remove(self.squid_direction) # Try not to continue in the same direction
+        self.squid_direction = random.choice(possible_directions) if possible_directions else "left"
+
+        original_speed = self.current_speed 
+        self.current_speed *= 1.5 # Increase speed
+        
+        flee_duration_ms = 3000 # Flee for 3 seconds (can be shorter than encounter flee)
+        QtCore.QTimer.singleShot(flee_duration_ms, lambda: self.stop_fleeing(original_speed))
+        # self.stop_fleeing is already defined and should work here.
+
+    def check_anxiety_flee(self):
+        """
+        Allows a TIMID squid to randomly create an ink cloud and flee if highly anxious.
+        This is a rare event.
+        """
+        if self.personality != Personality.TIMID:
+            return
+
+        if self.is_sleeping or self.is_fleeing or (hasattr(self, 'is_carrying') and self.is_carrying): # Don't flee if sleeping, already fleeing, or busy carrying
+            return
+
+        # Define anxiety threshold and flee chance
+        anxiety_threshold = 70  # Example: Squid must be quite anxious
+        flee_chance = 0.01     # 1% chance per check when anxious (making it rare)
+
+        if self.anxiety > anxiety_threshold and random.random() < flee_chance:
+            if hasattr(self.tamagotchi_logic, 'show_message'):
+                self.tamagotchi_logic.show_message(f"{self.name} suddenly panics from anxiety!")
+            
+            # Use TamagotchiLogic's create_ink_cloud method
+            if hasattr(self.tamagotchi_logic, 'create_ink_cloud'):
+                self.tamagotchi_logic.create_ink_cloud()
+            else:
+                print(f"LOGIC ERROR: TamagotchiLogic does not have create_ink_cloud method for {self.name}")
+            
+            self.flee_from_anxiety() # Call a new specific fleeing method
+            
+            if hasattr(self, 'memory_manager'):
                 self.memory_manager.add_short_term_memory(
-                    'social', 'squid_lost',
-                    f"Lost sight of squid (ID: {remote_node_id[-4:]})"
+                    category='reaction',
+                    key='anxiety_flee',
+                    value="Suddenly panicked and fled due to high anxiety!",
+                    importance=7
                 )
+
+    def stop_fleeing(self, original_speed):
+        self.is_fleeing = False
+        self.current_speed = original_speed # Restore normal speed
+        self.status = "roaming" # Or another default status
+        if hasattr(self.tamagotchi_logic, 'show_message'):
+            self.tamagotchi_logic.show_message(f"{self.name} calmed down a bit.")
+        # Optionally, reduce anxiety slightly after successfully fleeing
+        self.anxiety = max(0, self.anxiety - 15)
 
     def react_to_rock_throw(self, source_node_id, is_target=False):
         """

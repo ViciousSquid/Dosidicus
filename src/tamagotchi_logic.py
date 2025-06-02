@@ -951,6 +951,8 @@ class TamagotchiLogic:
             # Add thoughts
             self.brain_window.add_thought("No longer startled")
 
+    # Inside TamagotchiLogic class in src/tamagotchi_logic.py
+
     def update_simulation(self):
         # Trigger pre-update hook
         self.plugin_manager.trigger_hook("pre_update", 
@@ -968,18 +970,23 @@ class TamagotchiLogic:
         # 1. Handle existing simulation updates
         self.move_objects()
         self.animate_poops()
-        self.update_statistics()
+        self.update_statistics() # This already calls update_needs for the squid
 
-        # Add poop interaction check
-        self.check_poop_interaction()
+        # Add poop interaction check (if self.poop_interaction is initialized)
+        if hasattr(self, 'poop_interaction'):
+            self.check_poop_interaction()
         
         if self.squid:
             # 2. Core squid updates
-            self.squid.move_squid()
-            self.check_for_decoration_attraction()
-            self.check_for_sickness()
+            self.squid.move_squid() # This includes squid movement and decision making via make_decision
+            self.check_for_decoration_attraction() # Interacts with decorations
+            self.check_for_sickness() # Updates sickness state
             
-            # 3. Mental state updates
+            # New check for TIMID squid's anxiety-driven flee
+            if self.squid.personality == Personality.TIMID:
+                self.squid.check_anxiety_flee()
+
+            # 3. Mental state updates (if enabled)
             if self.mental_states_enabled:
                 self.check_for_startle()
                 self.check_for_curiosity()
@@ -988,9 +995,11 @@ class TamagotchiLogic:
             self.track_neurogenesis_triggers()
             
             # 5. Memory management
-            self.squid.memory_manager.periodic_memory_management()
+            if hasattr(self.squid, 'memory_manager') and self.squid.memory_manager:
+                self.squid.memory_manager.periodic_memory_management()
             
             # 6. Prepare brain state with neurogenesis data
+            # (This seems to be for display/external tools; actual decision uses internal state)
             brain_state = {
                 "hunger": self.squid.hunger,
                 "happiness": self.squid.happiness,
@@ -1005,24 +1014,25 @@ class TamagotchiLogic:
                 "direction": self.squid.squid_direction,
                 "position": (self.squid.squid_x, self.squid.squid_y),
                 
-                # Neurogenesis-specific additions
                 "novelty_exposure": self.neurogenesis_triggers['novel_objects'],
                 "sustained_stress": self.neurogenesis_triggers['high_stress_cycles'] / 10.0,
                 "recent_rewards": self.neurogenesis_triggers['positive_outcomes'],
                 "personality": self.squid.personality.value
             }
             
-            # 7. Update brain (will trigger neurogenesis checks)
-            self.brain_window.update_brain(brain_state)
+            # 7. Update brain window (if visible and exists)
+            if hasattr(self, 'brain_window') and self.brain_window and self.brain_window.isVisible():
+                self.brain_window.update_brain(brain_state)
             
-            # 8. Reset frame-specific flags
+            # 8. Reset frame-specific flags for neurogenesis
             self.new_object_encountered = False
             self.recent_positive_outcome = False
 
         # 9. Handle RPS game state if active
-        if hasattr(self, 'rps_game') and self.rps_game.game_window:
-            self.rps_game.update_state()
-            # Trigger post-update hook at the end
+        if hasattr(self, 'rps_game') and self.rps_game and hasattr(self.rps_game, 'game_window') and self.rps_game.game_window:
+            self.rps_game.update_state() # Assuming rps_game can be None or game_window can be None
+            
+        # Trigger post-update hook at the end
         self.plugin_manager.trigger_hook("post_update", 
                                         tamagotchi_logic=self, 
                                         squid=self.squid)
@@ -1107,15 +1117,15 @@ class TamagotchiLogic:
             )
         
         # Debug output if in debug mode
-        if self.debug_mode:
-            print(f"Neurogenesis triggers: {self.neurogenesis_triggers}")
+        #if self.debug_mode:
+        #    print(f"Neurogenesis triggers: {self.neurogenesis_triggers}")
 
     def make_squid_curious(self):
         self.squid.mental_state_manager.set_state("curious", True)
         self.curious_cooldown = self.curious_cooldown_max
         
         # Use the new add_thought method
-        self.add_thought("Experiencing extreme curiosity")
+        #self.add_thought("Experiencing extreme curiosity")
         
         # Increase curiosity
         self.squid.curiosity = min(100, self.squid.curiosity + 20)
