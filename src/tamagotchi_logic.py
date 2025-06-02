@@ -1,11 +1,12 @@
-
 from PyQt5 import QtCore, QtGui, QtWidgets
 import random
 import os
 import time
+import sys
 import json
 import base64
 import math
+import threading
 from .statistics_window import StatisticsWindow
 from .save_manager import SaveManager
 from .rps_game import RPSGame
@@ -1315,33 +1316,82 @@ class TamagotchiLogic:
                 return food_item
         return None
 
+
+
     def move_cheese(self, cheese_item):
-        cheese_x = cheese_item.pos().x()
-        cheese_y = cheese_item.pos().y() + (self.base_food_speed * self.simulation_speed)
+        # Ensure this method is called from the main GUI thread
+        current_pos_x = 0.0
+        current_pos_y = 0.0 # Default if pos() fails for some reason
 
-        if cheese_y > self.user_interface.window_height - 120 - self.food_height:
-            cheese_y = self.user_interface.window_height - 120 - self.food_height
+        try:
+            # It's safer to get both x and y before calculating new_y, 
+            # though x has been stable.
+            pos = cheese_item.pos()
+            current_pos_x = pos.x()
+            current_pos_y = pos.y() 
+        except Exception as e:
+            # Log this unexpected failure if pos() or x()/y() fails even here
+            print(f"ERROR in move_cheese getting initial position: {type(e).__name__}: {e}")
+            # Potentially try to use last known good y if available, or skip update
+            if hasattr(cheese_item, 'current_y_for_autopilot'):
+                current_pos_y = cheese_item.current_y_for_autopilot
+            # current_pos_x might also need a fallback if cheese_item.pos().x() could fail
 
-        cheese_item.setPos(cheese_x, cheese_y)
+        # Re-enable sinking logic
+        new_y = current_pos_y + (self.base_food_speed * self.simulation_speed)
 
-        # Directly check collision without redundant checks
+        # Apply boundary checks to new_y
+        if new_y > self.user_interface.window_height - 120 - self.food_height:
+            new_y = self.user_interface.window_height - 120 - self.food_height
+        elif new_y < 0: # Example top boundary
+            new_y = 0 
+            # Optionally, handle item removal if it goes off-screen at the top
+            # self.remove_food(cheese_item) 
+
+        cheese_item.setPos(current_pos_x, new_y)
+        # Store the definitive Y coordinate that was just set
+        cheese_item.current_y_for_autopilot = new_y 
+        # Add a flag to indicate this reliable attribute is available
+        cheese_item.has_current_y_for_autopilot = True
+
         if self.squid and cheese_item.collidesWithItem(self.squid.squid_item):
             self.squid.eat(cheese_item)
-            
-            # Reset status after a short delay
-            QtCore.QTimer.singleShot(2000, self.reset_squid_status)
+            # Assuming QtCore is available and self.reset_squid_status is main-thread safe
+            if 'QtCore' in sys.modules: # Check if QtCore was imported
+                QtCore.QTimer.singleShot(2000, self.reset_squid_status)
+            # self.remove_food(cheese_item) # Add if cheese should be removed upon eating
 
     def move_sushi(self, sushi_item):
-        sushi_x = sushi_item.pos().x()
-        sushi_y = sushi_item.pos().y() + (self.base_food_speed * self.simulation_speed)
+        # Ensure this method is called from the main GUI thread
+        current_pos_x = 0.0
+        current_pos_y = 0.0
 
-        if sushi_y > self.user_interface.window_height - 120 - self.food_height:
-            sushi_y = self.user_interface.window_height - 120 - self.food_height
+        try:
+            pos = sushi_item.pos()
+            current_pos_x = pos.x()
+            current_pos_y = pos.y()
+        except Exception as e:
+            print(f"ERROR in move_sushi getting initial position: {type(e).__name__}: {e}")
+            if hasattr(sushi_item, 'current_y_for_autopilot'):
+                current_pos_y = sushi_item.current_y_for_autopilot
+                
+        # Re-enable sinking logic
+        new_y = current_pos_y + (self.base_food_speed * self.simulation_speed)
 
-        sushi_item.setPos(sushi_x, sushi_y)
+        # Apply boundary checks to new_y
+        if new_y > self.user_interface.window_height - 120 - self.food_height:
+            new_y = self.user_interface.window_height - 120 - self.food_height
+        elif new_y < 0:
+            new_y = 0
+            # self.remove_food(sushi_item) 
+
+        sushi_item.setPos(current_pos_x, new_y)
+        # Store the definitive Y coordinate that was just set
+        sushi_item.current_y_for_autopilot = new_y
+        sushi_item.has_current_y_for_autopilot = True
 
         if self.squid is not None and sushi_item.collidesWithItem(self.squid.squid_item):
-            self.squid.eat(sushi_item)  # Pass the sushi_item as an argument
+            self.squid.eat(sushi_item)
             self.remove_food(sushi_item)
 
     def is_sushi(self, food_item):
