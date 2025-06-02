@@ -1919,8 +1919,9 @@ class MultiplayerPlugin:
 
             # Optional: Trigger local squid's reaction to seeing a remote squid
             if self.tamagotchi_logic.squid and hasattr(self.tamagotchi_logic.squid, 'process_squid_detection') and remote_squid_state:
+                # Pass remote_squid_state as remote_squid_props for position-based fleeing
                 self.tamagotchi_logic.squid.process_squid_detection(
-                    remote_node_id=sender_node_id, is_detected=True, remote_squid_props=remote_squid_state
+                    remote_node_id=sender_node_id, is_visible=True, remote_squid_props=remote_squid_state
                 )
         except Exception as e:
             if self.debug_mode: self.logger.error(f"Handling object_sync from {addr} failed: {e}", exc_info=True)
