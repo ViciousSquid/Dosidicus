@@ -14,25 +14,47 @@ class RemoteSquidController:
         self.debug_mode = debug_mode
         self.remote_entity_manager = remote_entity_manager
 
+        # Store node_id for convenience and consistent use
+        self.node_id = self.squid_data.get('node_id', 'UnknownRemoteNode')
+        self.short_node_id = self.node_id[-4:] # For concise console logs if needed
+
+        # Unique log file per remote squid instance
+        self.log_file_name = f"autopilot_decisions_remote_{self.node_id}.txt"
+
+        # Clear/initialize the log file for this session
+        if self.debug_mode:
+            try:
+                with open(self.log_file_name, 'w', encoding='utf-8') as f:
+                    f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Log for remote squid {self.node_id} (controller instance) started.\n")
+            except Exception as e:
+                print(f"[AutoPilotSetup] Error clearing/creating log file {self.log_file_name}: {e}")
+
         self.entry_time = squid_data.get('entry_time', time.time())
-        self.entry_position = squid_data.get('entry_position', None)
-        self.window_width = squid_data.get('window_width', 1280)
-        self.window_height = squid_data.get('window_height', 900)
+        self.entry_position = squid_data.get('entry_position', None) # Tuple (x,y) if provided
+        self.window_width = squid_data.get('window_width', 1280) # Provided by host context
+        self.window_height = squid_data.get('window_height', 900) # Provided by host context
 
         entry_dir_on_this_screen = squid_data.get('entry_direction_on_this_screen')
         if entry_dir_on_this_screen:
             opposite_map = {
                 'left': 'right', 'right': 'left',
-                'top': 'down', 'bottom': 'up',
-                'center_fallback': random.choice(['left', 'right', 'up', 'down'])
+                'up': 'down', 'down': 'up',
+                'top': 'down', 'bottom': 'up', # Aliases for clarity
+                'center_fallback': random.choice(['left', 'right', 'up', 'down']) # Should not happen if entry_dir valid
             }
-            self.home_direction = opposite_map.get(entry_dir_on_this_screen)
+            self.home_direction = opposite_map.get(entry_dir_on_this_screen.lower(), random.choice(['left', 'right', 'up', 'down']))
         else:
-            self.home_direction = squid_data.get('home_direction', random.choice(['left', 'right', 'up', 'down']))
+            # Fallback if entry_direction_on_this_screen is not provided in squid_data
+            # This will be called again in return_home if still None, using current position.
+            self.home_direction = squid_data.get('home_direction') # Use if provided directly
+            if not self.home_direction:
+                 # If still None, defer final determination to when return_home is called.
+                 # For __init__, it's okay if it's None here, as determine_home_direction() will be called.
+                 self._log_decision(f"__init__: home_direction not determined yet (entry_direction_on_this_screen missing). Will determine later.")
+
 
         self.state = "exploring"
-        # Override initial status from payload, as autopilot determines its own status
-        self.squid_data['status'] = "exploring" 
+        self.squid_data['status'] = "exploring" # Autopilot sets its own status
 
         self.target_object = None
         self.time_away = 0
@@ -48,322 +70,309 @@ class RemoteSquidController:
         
         self.carried_items_data = [] # Stores detailed data of items being "physically" carried
         
-        self.move_speed = 4.5 # Tuned for ~90px/sec if controller updates at 20Hz (50ms interval)
-        self.direction_change_prob = 0.9 # Increased for less linear movement
-        self.direction_change_probability = 0.9
-        self.next_decision_time = 0 # Initialize to 0 so first decision happens immediately
-        self.decision_interval = 0.5 # Time between major decision evaluations
+        self.move_speed = 4.5 
+        self.direction_change_prob = 0.15 
+        self.next_decision_time = 0 
+        self.decision_interval = 0.5 # Time between major decision evaluations in seconds
 
         self.last_update_time = time.time()
 
-        if self.debug_mode:
-            log_x = self.squid_data.get('x', 'N/A')
-            log_y = self.squid_data.get('y', 'N/A')
-            # This is a direct print, not using _log_decision, for immediate startup confirmation
-            print(f"[AutoPilot __init__ {self.squid_data.get('node_id', 'UnknownNode')[-4:]}] Initialized. State: {self.state}, Status: {self.squid_data['status']}")
-            print(f"[AutoPilot __init__ {self.squid_data.get('node_id', 'UnknownNode')[-4:]}] Max Time: {self.max_time_away}s. Max Carry: {self.max_rocks_to_steal}. Home Dir: {self.home_direction}")
+        # Initial console print for immediate feedback (uses short_node_id)
+        print(f"[AutoPilot __init__ {self.short_node_id}] Initialized. State: {self.state}, Status: {self.squid_data['status']}")
+        print(f"[AutoPilot __init__ {self.short_node_id}] Max Time: {self.max_time_away}s. Max Carry: {self.max_rocks_to_steal}. Home Dir: {self.home_direction if self.home_direction else 'TBD'}")
         
-        # This will attempt to write to autopilot_decisions.txt if debug_mode is True
-        self._log_decision(f"Controller Initialized. Start State: {self.state}, Start Status: {self.squid_data['status']}, Max Time: {self.max_time_away:.1f}s, Max Carry: {self.max_rocks_to_steal}, Home Dir: {self.home_direction}, Speed: {self.move_speed}, DirChangeProb: {self.direction_change_prob}")
+        # Initial log to the dedicated file
+        self._log_decision(f"Controller Initialized. Start State: {self.state}, Start Status: {self.squid_data['status']}, Max Time: {self.max_time_away:.1f}s, Max Carry: {self.max_rocks_to_steal}, Home Dir: {self.home_direction if self.home_direction else 'To be determined'}, Speed: {self.move_speed}, DirChangeProb: {self.direction_change_prob}")
 
     def _log_decision(self, decision_text: str):
         if not self.debug_mode:
             return
         
-        log_file_name = "autopilot_decisions.txt"
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        node_id_str = self.squid_data.get('node_id', 'UnknownNode') # Using full ID in log for clarity
-        
-        log_entry = f"[{timestamp}] [SquidID: {node_id_str}] {decision_text}\n"
+        log_entry = f"[{timestamp}] [SquidID: {self.node_id}] {decision_text}\n"
         
         try:
-            with open(log_file_name, 'a', encoding='utf-8') as f:
+            with open(self.log_file_name, 'a', encoding='utf-8') as f:
                 f.write(log_entry)
         except Exception as e:
-            # Fallback to console if file logging fails
-            print(f"[AutoPilotDecisionFileError] Could not write to {log_file_name} for SquidID {node_id_str}: {e}")
+            print(f"[AutoPilotDecisionFileError] Could not write to {self.log_file_name} for SquidID {self.node_id}: {e}")
             print(f"[AutoPilotDecisionFallbackLog] {log_entry.strip()}")
 
     def _capture_item_properties(self, game_item_object) -> dict | None:
         if not game_item_object or not self.is_object_valid(game_item_object):
-            self._log_decision(f"CaptureItemAttempt: FAILED - Target item is invalid or None.")
+            self._log_decision(f"CaptureItemAttempt: FAILED - Target item is invalid or None ('{getattr(game_item_object, 'filename', game_item_object)}').")
             return None
 
         item_pos = self.get_object_position(game_item_object)
+        item_filename = getattr(game_item_object, 'filename', 'unknown_item.png')
+        item_category = getattr(game_item_object, 'category', 'unknown')
+        item_scale = game_item_object.scale() if hasattr(game_item_object, 'scale') else 1.0
+        item_z_value = game_item_object.zValue() if hasattr(game_item_object, 'zValue') else 0.0
+        # item_rotation = game_item_object.rotation() if hasattr(game_item_object, 'rotation') else 0.0
+
+
         properties = {
-            'original_filename': getattr(game_item_object, 'filename', 'unknown_item.png'),
-            'original_category': getattr(game_item_object, 'category', 'unknown'),
-            'original_x': item_pos[0], # Position in the remote tank when stolen
+            'original_filename': item_filename,
+            'original_category': item_category,
+            'original_x': item_pos[0], 
             'original_y': item_pos[1],
-            'scale': game_item_object.scale() if hasattr(game_item_object, 'scale') else 1.0,
-            'zValue': game_item_object.zValue() if hasattr(game_item_object, 'zValue') else 0,
-            # 'rotation': game_item_object.rotation() if hasattr(game_item_object, 'rotation') else 0.0, 
+            'scale': item_scale,
+            'zValue': item_z_value,
+            # 'rotation': item_rotation,
         }
-        base_name = os.path.basename(properties['original_filename']) if isinstance(properties['original_filename'], str) else "unknown"
+        base_name = os.path.basename(item_filename) if isinstance(item_filename, str) else "unknown_item_name"
         self._log_decision(f"CaptureItemSuccess: Captured properties for '{base_name}': Scale {properties['scale']:.2f}, Category '{properties['original_category']}'.")
         return properties
 
+    def update(self, delta_time=None):
+        # This console print was in your provided file
+        print(f"!!!!!!!! AUTOPILOT RemoteSquidController.update() ENTERED for {self.short_node_id} !!!!!!!!")
 
-    def update(self, delta_time):
-        print(f"!!!!!!!! AUTOPILOT RemoteSquidController.update() ENTERED for {self.squid_data.get('node_id', 'UnknownNode')[-4:]} !!!!!!!!") # [cite: 273, 275, 276, 278, 279, 281, 282, 284, 285, 287, 288, 290, 291, 293, 294, 296, 297, 299, 300, 302, 303, 305, 306, 308, 309, 311, 312, 314, 315, 317, 318, 320, 321, 323, 324, 326, 327, 329, 330, 332, 333, 335, 336, 338, 339, 341, 342, 344, 345, 347, 348, 350, 351, 353, 354, 356, 357, 359, 360, 362, 363, 365, 366, 368, 369, 371, 372, 374, 375, 377, 378, 380, 381, 383, 384, 386, 387, 389, 390, 392, 393, 395, 396, 398, 399, 401, 402, 404, 405, 407, 408, 410, 411, 413, 414, 416, 418, 419, 421, 422, 424, 425, 428, 429, 431, 432, 434, 435, 437, 438, 440, 441, 443, 444, 446, 447, 449, 450, 452, 453, 455, 456, 458, 459, 461, 462, 464, 465, 467, 468, 470, 471, 473, 474, 476, 477, 479, 480, 482, 483, 485, 486, 488, 489, 491, 492, 494, 495, 497, 498, 500, 501, 503, 504, 506, 507, 509, 510, 512, 513, 515, 516, 518, 519, 521, 522, 524, 525, 527, 528, 530, 531, 533, 534, 536, 537]
+        current_time_autopilot = time.time() 
+        
+        if delta_time is None:
+            delta_time = current_time_autopilot - self.last_update_time
+        self.last_update_time = current_time_autopilot
 
-        # Simple random movement logic
-        if random.random() < 0.05: # 5% chance to change direction
-            new_direction = random.choice(['left', 'right', 'up', 'down'])
-            self.squid_data['direction'] = new_direction
-            # self.plugin_instance.logger.debug(f"Autopilot {self.squid_data['node_id'][-4:]} changed direction to {new_direction}")
+        # Ensure delta_time is non-negative and reasonable
+        delta_time = max(0, delta_time)
+        if delta_time > 1.0: # Cap delta_time to prevent huge jumps if there was a long pause
+            self._log_decision(f"Warning: Large delta_time detected: {delta_time:.2f}s. Capping to 1.0s for this update.")
+            delta_time = 1.0
 
-        # Basic boundary avoidance
-        # Assuming self.scene and self.squid_data contain necessary info
-        # This is highly simplified
-        current_x = self.squid_data.get('x', 0)
-        current_y = self.squid_data.get('y', 0)
-        # Visuals are handled by RemoteEntityManager now based on self.squid_data
-        # No direct self.visual_item.pos()
+        self.time_away += delta_time
 
-        speed = 50 * delta_time # Example speed
+        self._log_decision(f"Update Cycle Begin. State='{self.state}', Status='{self.squid_data.get('status', 'N/A')}', TimeAway={self.time_away:.1f}/{self.max_time_away:.1f}s, NextDecisionAt={self.next_decision_time:.3f}, DeltaT={delta_time:.3f}")
 
-        if self.squid_data['direction'] == 'left':
-            self.squid_data['x'] -= speed
-            if self.squid_data['x'] < 0: self.squid_data['direction'] = 'right'
-        elif self.squid_data['direction'] == 'right':
-            self.squid_data['x'] += speed
-            # Assuming scene width is available, e.g., self.scene.width() or passed in config
-            if self.squid_data['x'] > self.scene.width() - self.squid_data.get('squid_width', 50): # Rough boundary
-                self.squid_data['direction'] = 'left'
-        # Add similar for 'up' and 'down'
+        if current_time_autopilot < self.next_decision_time:
+            self.move_in_direction(self.squid_data['direction'])
+            if self.remote_entity_manager:
+                self.remote_entity_manager.update_remote_squid(self.node_id, self.squid_data, is_new_arrival=False)
+            self._log_decision(f"Update Cycle: Holding decision. Moving {self.squid_data['direction']}. Pos: ({self.squid_data['x']:.1f}, {self.squid_data['y']:.1f})")
+            return
 
-        # The RemoteEntityManager will use self.squid_data to update the visual
-        # No need to call self.remote_entity_manager.update_remote_squid() from here
-        # if mp_plugin_logic.update_remote_controllers calls it after this.
-        # However, if RemoteSquidController is the SOLE manager of its data and visuals,
-        # then it would call:
-        # if self.remote_entity_manager:
-        # self.remote_entity_manager.update_remote_squid(self.squid_data['node_id'], self.squid_data)
+        self._log_decision(f"Update Cycle: Making new decision. Old state: '{self.state}', Old status: '{self.squid_data.get('status', 'N/A')}'")
+        self.next_decision_time = current_time_autopilot + self.decision_interval
+        
+        if self.time_away > self.max_time_away and self.state != "returning" and self.state != "exited":
+            old_state_before_timeout = self.state
+            self.state = "returning"
+            self.squid_data['status'] = "returning home (timeout)"
+            self._log_decision(f"Update Cycle: Max time away ({self.max_time_away:.1f}s) EXCEEDED. Forcing state change: {old_state_before_timeout} -> {self.state}.")
 
-    def explore(self, delta_time):
-        self._log_decision(f"Explore: Method entered. Current direction: {self.squid_data.get('direction')}") # <<<< THIS IS THE CRUCIAL LOGGING LINE
-        # Ensure status is correct if in this state
-        if self.squid_data.get('status') != "exploring":
+        # State machine
+        if self.state == "exploring":
+            self.explore()
+        elif self.state == "feeding":
+            self.seek_food()
+        elif self.state == "interacting":
+            self.interact_with_object()
+        elif self.state == "returning":
+            self.return_home()
+        elif self.state == "exited":
+            self._log_decision("Update Cycle: State is 'exited'. No further action.")
+            return 
+
+        # After state logic, update visuals if not exited
+        if self.remote_entity_manager and self.state != "exited":
+            self.remote_entity_manager.update_remote_squid(self.node_id, self.squid_data, is_new_arrival=False)
+        self._log_decision(f"Update Cycle End. New State='{self.state}', New Status='{self.squid_data.get('status', 'N/A')}'")
+
+
+    def explore(self):
+        self._log_decision(f"Explore State: Current direction: {self.squid_data.get('direction')}. Time away: {self.time_away:.1f}s.")
+        
+        if self.squid_data.get('status') != "exploring": # Ensure status matches state
             self.squid_data['status'] = "exploring"
-            self._log_decision(f"Explore: Set status to '{self.squid_data['status']}'.")
+            self._log_decision(f"Explore: (Status corrected to 'exploring')")
+
+        # This check is now also in update(), but keeping it here as a safeguard for explore's logic
+        if self.time_away > self.max_time_away:
+            old_state = self.state
+            self.state = "returning"
+            self.squid_data['status'] = "returning home (explore timeout)"
+            self._log_decision(f"Explore: Max time away ({self.max_time_away:.1f}s) reached. State change: {old_state} -> {self.state}.")
+            return
 
         if random.random() < self.direction_change_prob:
             old_direction = self.squid_data.get('direction', 'N/A')
             new_direction = random.choice(['left', 'right', 'up', 'down'])
-            if self.debug_mode:
-                print(f"[AutoPilot] Squid {self.squid_data.get('node_id')[-4:]} exploring: Changed direction to {new_direction}")
+            if new_direction == old_direction: # Try to pick a different one
+                choices = list(set(['left', 'right', 'up', 'down']) - {old_direction})
+                new_direction = random.choice(choices) if choices else new_direction
             self.squid_data['direction'] = new_direction
-            self._log_decision(f"Explore: Random direction change {old_direction} -> {new_direction}.")
+            self._log_decision(f"Explore: Random direction change {old_direction} -> {new_direction} (Prob: {self.direction_change_prob:.2f}).")
+        else:
+            self._log_decision(f"Explore: No random direction change (Prob: {self.direction_change_prob:.2f}). Sticking to {self.squid_data.get('direction')}.")
         
-        self.move_in_direction(self.squid_data['direction'])
+        self.move_in_direction(self.squid_data.get('direction', 'right')) # Move first
 
-        food_check_prob = 0.1 
-        steal_check_prob = 0.25 
+        food_check_prob = 0.20 
+        steal_check_prob = 0.30 
 
         if random.random() < food_check_prob:
-            food = self.find_nearby_food()
+            food = self.find_nearby_food() # This logs internally now
             if food:
                 self.target_object = food
                 old_state = self.state
                 self.state = "feeding"
                 self.squid_data['status'] = "heading to food"
-                target_name = getattr(self.target_object, 'filename', 'UnknownFood')
-                if isinstance(target_name, str): target_name = os.path.basename(target_name)
-                self._log_decision(f"Explore: Spotted food '{target_name}'. State change: {old_state} -> {self.state}. Status: {self.squid_data['status']}.")
-            else:
-                self._log_decision(f"Explore: Checked for food (prob {food_check_prob*100:.0f}%), none found suitable/nearby.")
+                target_name = os.path.basename(getattr(self.target_object, 'filename', 'UnknownFood'))
+                self._log_decision(f"Explore: Spotted food '{target_name}'. State change: {old_state} -> {self.state}.")
+                return 
+            # else: find_nearby_food logs if nothing found
         
-        elif random.random() < steal_check_prob: 
-            if len(self.carried_items_data) < self.max_rocks_to_steal: # Only look if can carry more
-                stealable_item = self.find_nearby_stealable_item()
+        if self.state == "exploring" and random.random() < steal_check_prob: 
+            if len(self.carried_items_data) < self.max_rocks_to_steal:
+                stealable_item = self.find_nearby_stealable_item() # This logs internally now
                 if stealable_item:
                     self.target_object = stealable_item
                     old_state = self.state
                     self.state = "interacting"
                     self.squid_data['status'] = "checking item"
                     item_type = getattr(self.target_object, 'category', 'item')
-                    item_name = getattr(self.target_object, 'filename', f'Unknown{item_type.capitalize()}')
-                    if isinstance(item_name, str): item_name = os.path.basename(item_name)
-                    self._log_decision(f"Explore: Spotted stealable {item_type} '{item_name}'. State change: {old_state} -> {self.state}. Status: {self.squid_data['status']}.")
-                else:
-                    self._log_decision(f"Explore: Checked for stealable items (prob {steal_check_prob*100:.0f}%), none found suitable/nearby.")
-            else:
-                self._log_decision(f"Explore: Checked for stealable items but already carrying max ({len(self.carried_items_data)}/{self.max_rocks_to_steal}).")
-        # else: No specific action decided in this cycle beyond moving, status remains "exploring"
+                    item_name = os.path.basename(getattr(self.target_object, 'filename', f'Unknown{item_type.capitalize()}'))
+                    self._log_decision(f"Explore: Spotted stealable {item_type} '{item_name}'. State change: {old_state} -> {self.state}.")
+                    return
+            else: # Log if wanted to steal but couldn't due to carry limit
+                if len(self.carried_items_data) >= self.max_rocks_to_steal:
+                    self._log_decision(f"Explore: Considered stealing item, but already carrying max ({len(self.carried_items_data)}/{self.max_rocks_to_steal}).")
+        
+        if self.state == "exploring": # If no other action taken
+             self._log_decision(f"Explore: No new targets. Continuing exploration in direction {self.squid_data.get('direction')}.")
+
 
     def seek_food(self):
         if not self.target_object or not self.is_object_valid(self.target_object):
-            if self.debug_mode:
-                print(f"[AutoPilot] Squid {self.squid_data.get('node_id')[-4:]} lost food target, returning to exploring")
-            old_target_name = getattr(self.target_object, 'filename', 'previous target')
-            if isinstance(old_target_name, str): old_target_name = os.path.basename(old_target_name)
+            old_target_name = os.path.basename(getattr(self.target_object, 'filename', 'previous food target'))
             old_state = self.state
             self.state = "exploring"
             self.squid_data['status'] = "exploring"
-            self._log_decision(f"SeekFood: Lost target '{old_target_name}'. State change: {old_state} -> {self.state}. Status: {self.squid_data['status']}.")
+            self._log_decision(f"SeekFood: Lost or invalid food target '{old_target_name}'. State change: {old_state} -> {self.state}.")
             self.target_object = None
             return
 
-        if self.squid_data.get('status') != "heading to food": # Ensure status consistency
+        if self.squid_data.get('status') != "heading to food":
             self.squid_data['status'] = "heading to food"
-            self._log_decision(f"SeekFood: Set status to '{self.squid_data['status']}'.")
+            self._log_decision(f"SeekFood: (Status corrected to 'heading to food')")
             
         target_pos = self.get_object_position(self.target_object)
         self.move_toward(target_pos[0], target_pos[1])
 
         squid_pos = (self.squid_data['x'], self.squid_data['y'])
         distance = self.distance_between(squid_pos, target_pos)
+        food_name = os.path.basename(getattr(self.target_object, 'filename', 'UnknownFood'))
+
+        self._log_decision(f"SeekFood: Moving towards '{food_name}' at ({target_pos[0]:.1f}, {target_pos[1]:.1f}). Distance: {distance:.1f}.")
 
         if distance < 50: 
-            food_name = getattr(self.target_object, 'filename', 'UnknownFood')
-            if isinstance(food_name, str): food_name = os.path.basename(food_name)
-            
-            self.eat_food(self.target_object) # Autopilot signals to remove, updates its own stats
+            self.eat_food(self.target_object) # This method already logs "Action: Eating food"
             self.food_eaten_count += 1
-            
             old_state = self.state
             self.state = "exploring" 
-            self.squid_data['status'] = "exploring"
-            self._log_decision(f"SeekFood: Ate food '{food_name}'. Food count: {self.food_eaten_count}. State change: {old_state} -> {self.state}. Status: {self.squid_data['status']}.")
+            self.squid_data['status'] = "exploring" # Reset status after eating
+            self._log_decision(f"SeekFood: Successfully ate food '{food_name}'. Food count: {self.food_eaten_count}. State change: {old_state} -> {self.state}.")
             self.target_object = None
-            if self.debug_mode:
-                print(f"[AutoPilot] Squid {self.squid_data.get('node_id')[-4:]} ate food, food count: {self.food_eaten_count}")
+
 
     def interact_with_object(self):
         if not self.target_object or not self.is_object_valid(self.target_object):
-            if self.debug_mode:
-                print(f"[AutoPilot] Squid {self.squid_data.get('node_id')[-4:]} lost stealable item target, returning to exploring")
-            old_target_name = getattr(self.target_object, 'filename', 'previous target')
-            if isinstance(old_target_name, str): old_target_name = os.path.basename(old_target_name)
+            old_target_name = os.path.basename(getattr(self.target_object, 'filename', 'previous item target'))
             old_state = self.state
             self.state = "exploring"
             self.squid_data['status'] = "exploring"
-            self._log_decision(f"Interact: Lost target '{old_target_name}'. State change: {old_state} -> {self.state}. Status: {self.squid_data['status']}.")
+            self._log_decision(f"Interact: Lost or invalid item target '{old_target_name}'. State change: {old_state} -> {self.state}.")
             self.target_object = None
+            self.stealing_phase = False
             return
 
         current_status = self.squid_data.get('status', '')
-        if current_status != "checking item" and not current_status.startswith("carrying"):
+        if current_status != "checking item" and not self.stealing_phase: # Only set if not already in a carrying/stealing related status
             self.squid_data['status'] = "checking item"
-            self._log_decision(f"Interact: Set status to '{self.squid_data['status']}'.")
+            self._log_decision(f"Interact: (Status set to 'checking item')")
 
         target_pos = self.get_object_position(self.target_object)
         self.move_toward(target_pos[0], target_pos[1])
 
         squid_pos = (self.squid_data['x'], self.squid_data['y'])
         distance = self.distance_between(squid_pos, target_pos)
+        item_name_for_log = os.path.basename(getattr(self.target_object, 'filename', 'UnknownItem'))
+        self._log_decision(f"Interact: Moving towards '{item_name_for_log}' at ({target_pos[0]:.1f}, {target_pos[1]:.1f}). Distance: {distance:.1f}.")
 
         if distance < 50: 
-            is_remotely_owned_clone = getattr(self.target_object, 'is_remote_clone', False) 
-            is_local_item_for_stealing = not is_remotely_owned_clone # Only steal original items in the scene
-
             self.rock_interaction_count += 1
             attempt_steal_chance = 0.4
 
-            if (self.is_stealable_target(self.target_object) and # is_stealable_target already checks for remote clones
-                is_local_item_for_stealing and # Redundant if is_stealable_target is robust, but good for clarity
+            if (self.is_stealable_target(self.target_object) and
                 len(self.carried_items_data) < self.max_rocks_to_steal and
                 random.random() < attempt_steal_chance):
 
                 item_data_to_carry = self._capture_item_properties(self.target_object)
-                
                 if item_data_to_carry:
                     self.carried_items_data.append(item_data_to_carry)
                     self.rocks_stolen = len(self.carried_items_data) 
-
-                    self.squid_data['carrying_rock'] = True # Generic flag, might be useful for visuals
-                    self.stealing_phase = True # Internal flag for this action
+                    self.squid_data['carrying_rock'] = True 
+                    self.stealing_phase = True 
 
                     item_type_stolen = item_data_to_carry.get('original_category', 'item')
                     item_name_stolen = os.path.basename(item_data_to_carry.get('original_filename', f'UnknownItem'))
                     
                     self.squid_data['status'] = f"carrying {item_type_stolen.lower()}"
-                    self._log_decision(f"Interact: SUCCEEDED steal. Captured data for {item_type_stolen} '{item_name_stolen}'. Status: {self.squid_data['status']}. Carrying {self.rocks_stolen}/{self.max_rocks_to_steal} items.")
+                    self._log_decision(f"Interact: SUCCEEDED steal of {item_type_stolen} '{item_name_stolen}'. Status: {self.squid_data['status']}. Carrying {self.rocks_stolen}/{self.max_rocks_to_steal}.")
                     
-                    if self.debug_mode:
-                        print(f"[AutoPilot] Squid {self.squid_data.get('node_id')[-4:]} 'stole' and captured data for {item_type_stolen}! Total carried: {self.rocks_stolen}")
-
                     if self.remote_entity_manager and hasattr(self.remote_entity_manager, 'hide_item_temporarily'):
                         self.remote_entity_manager.hide_item_temporarily(self.target_object)
 
-                    if self.rocks_stolen >= self.max_rocks_to_steal: # Check if quota met
+                    if self.rocks_stolen >= self.max_rocks_to_steal:
                         old_state = self.state
                         self.state = "returning"
-                        self.squid_data['status'] = "returning home"
-                        self._log_decision(f"Interact: Met carrying quota ({self.rocks_stolen}/{self.max_rocks_to_steal}). State change: {old_state} -> {self.state}. Status: {self.squid_data['status']}.")
-                        if self.debug_mode:
-                            print(f"[AutoPilot] Squid {self.squid_data.get('node_id')[-4:]} met carrying quota, heading home")
+                        self.squid_data['status'] = "returning home" # Set status for returning
+                        self._log_decision(f"Interact: Met carrying quota ({self.rocks_stolen}/{self.max_rocks_to_steal}). State change: {old_state} -> {self.state}.")
                         self.target_object = None 
-                        return # Exit interact_with_object, next update will call return_home()
+                        self.stealing_phase = False # Done with stealing for now
+                        return 
                 else:
-                    self._log_decision(f"Interact: Attempted steal but FAILED to capture properties for target '{getattr(self.target_object, 'filename', 'N/A')}'. Not stolen.")
-            else: # Did not steal
+                    self._log_decision(f"Interact: Attempted steal but FAILED to capture properties for target '{item_name_for_log}'.")
+            else: 
                 reason = ""
                 if not self.is_stealable_target(self.target_object): reason = "target not stealable type"
-                elif not is_local_item_for_stealing: reason = "target is remotely owned clone"
-                elif len(self.carried_items_data) >= self.max_rocks_to_steal: reason = "carrying quota already met"
+                elif len(self.carried_items_data) >= self.max_rocks_to_steal: reason = "carrying quota met"
                 else: reason = f"failed {attempt_steal_chance*100:.0f}% steal chance"
-                
-                item_type = getattr(self.target_object, 'category', 'item')
-                item_name = getattr(self.target_object, 'filename', f'Unknown{item_type.capitalize()}')
-                if isinstance(item_name, str): item_name = os.path.basename(item_name)
-                self._log_decision(f"Interact: Interacted with {item_type} '{item_name}'. Did not steal/carry (Reason: {reason}). Total interactions: {self.rock_interaction_count}.")
+                self._log_decision(f"Interact: Interacted with '{item_name_for_log}'. Did not steal (Reason: {reason}). Total interactions: {self.rock_interaction_count}.")
             
-            # Fall through to exploring if not returning due to quota
-            old_state = self.state # Could be "interacting"
+            old_state = self.state 
             self.target_object = None
             self.state = "exploring"
-            self.squid_data['status'] = "exploring"
-            self._log_decision(f"Interact: Interaction logic complete. State change: {old_state} -> {self.state}. Status: {self.squid_data['status']}.")
+            self.squid_data['status'] = "exploring" # Reset status
+            self.stealing_phase = False # Reset stealing phase
+            self._log_decision(f"Interact: Interaction logic complete for '{item_name_for_log}'. State change: {old_state} -> {self.state}.")
+
 
     def return_home(self):
-        if self.squid_data.get('status') != "returning home": # Ensure status is set
+        if self.squid_data.get('status') != "returning home" and not self.squid_data.get('status', '').startswith("returning home"): # Check variants
             self.squid_data['status'] = "returning home"
-            self._log_decision(f"ReturnHome: Set status to '{self.squid_data['status']}'.")
+            self._log_decision(f"ReturnHome: (Status set to 'returning home')")
 
-        if not self.home_direction:
-            self.determine_home_direction() # Sets self.home_direction
-            self._log_decision(f"ReturnHome: Warning - home_direction was not set, fallback determined: {self.home_direction}.")
+        if not self.home_direction: # Should have been set by __init__ or explore timeout
+            self.determine_home_direction() # Recalculate if somehow lost
+            self._log_decision(f"ReturnHome: home_direction was None, re-determined: {self.home_direction}.")
 
-        if self.debug_mode and random.random() < 0.05:
-            print(f"[AutoPilot] Squid {self.squid_data.get('node_id')[-4:]} returning home via {self.home_direction}, position: ({self.squid_data['x']:.1f}, {self.squid_data['y']:.1f})")
-
-        self.move_in_direction(self.home_direction)
+        self.move_in_direction(self.home_direction) # This method now logs boundary hits and turns
+        self._log_decision(f"ReturnHome: Moving towards {self.home_direction}. Position: ({self.squid_data['x']:.1f}, {self.squid_data['y']:.1f}).")
 
         if self.is_at_boundary(self.home_direction):
-            summary = self.get_summary() # Get summary before state changes further
-            self._log_decision(f"ReturnHome: Reached home boundary ({self.home_direction}). Exiting. Summary: Ate {summary['food_eaten']}, Interacted {summary['rock_interactions']}, Carried {summary['rocks_stolen']} items.")
-            
-            if self.debug_mode:
-                print(f"[AutoPilot] Squid {self.squid_data.get('node_id')[-4:]} reached home boundary: {self.home_direction}")
-                print(f"[AutoPilot] Full Summary: {summary}") 
+            summary = self.get_summary() 
+            self._log_decision(f"ReturnHome: Reached home boundary ({self.home_direction}). Exiting. Summary: Ate {summary['food_eaten']}, Interacted {summary['rock_interactions']}, Stole {summary['rocks_stolen']} items.")
             
             if self.plugin_instance and hasattr(self.plugin_instance, 'handle_remote_squid_return'):
-                # This signals mp_plugin_logic that this controller (for a squid visiting this instance)
-                # has completed its journey here and wants to "return" (i.e., be removed and its summary processed).
-                self.plugin_instance.handle_remote_squid_return(self.squid_data['node_id'], self) # Pass controller
+                self.plugin_instance.handle_remote_squid_return(self.node_id, self) 
             else:
-                self._log_decision(f"ReturnHome: Error - plugin_instance or handle_remote_squid_return method missing.")
+                self._log_decision(f"ReturnHome: CRITICAL - plugin_instance or handle_remote_squid_return method missing for {self.node_id}.")
 
-            self.state = "exited" # Mark as exited to stop further autopilot updates FOR THIS INSTANCE
-            self.squid_data['status'] = "exited" # Final status for this instance
+            self.state = "exited" 
+            self.squid_data['status'] = "exited" # Final status for this controller instance
+            self._log_decision(f"ReturnHome: State set to 'exited'.")
 
-    def determine_home_direction(self):
-        entry_dir = self.squid_data.get('entry_direction_on_this_screen')
-        if entry_dir:
-            opposite_map = {'left': 'right', 'right': 'left', 'top': 'down', 'down': 'up', 'center_fallback': random.choice(['left', 'right', 'up', 'down'])}
-            self.home_direction = opposite_map.get(entry_dir, random.choice(['left', 'right', 'up', 'down']))
-        else:
-            x, y = self.squid_data['x'], self.squid_data['y']
-            width, height = self.get_window_width(), self.get_window_height()
-            left_dist, right_dist, top_dist, bottom_dist = x, width - x, y, height - y
-            min_dist = min(left_dist, right_dist, top_dist, bottom_dist)
-            if min_dist == left_dist: self.home_direction = 'left'
-            elif min_dist == right_dist: self.home_direction = 'right'
-            elif min_dist == top_dist: self.home_direction = 'up'
-            else: self.home_direction = 'down'
-        if self.debug_mode: print(f"[AutoPilot] Squid {self.squid_data.get('node_id')[-4:]} (re)determined home direction: {self.home_direction}")
 
     def move_in_direction(self, direction):
         speed = self.move_speed
@@ -374,232 +383,376 @@ class RemoteSquidController:
         win_width = self.get_window_width()
         win_height = self.get_window_height()
 
-        if direction == 'left': self.squid_data['x'] = max(0, self.squid_data['x'] - speed)
-        elif direction == 'right': self.squid_data['x'] = min(win_width - squid_width, self.squid_data['x'] + speed)
-        elif direction == 'up': self.squid_data['y'] = max(0, self.squid_data['y'] - speed)
-        elif direction == 'down': self.squid_data['y'] = min(win_height - squid_height, self.squid_data['y'] + speed)
+        new_x, new_y = self.squid_data['x'], self.squid_data['y']
+        original_direction = str(direction) # Keep a copy for logging
+        current_effective_direction = str(direction) # What direction it will actually end up going
+
+        if current_effective_direction == 'left': new_x -= speed
+        elif current_effective_direction == 'right': new_x += speed
+        elif current_effective_direction == 'up': new_y -= speed
+        elif current_effective_direction == 'down': new_y += speed
         
-        self.squid_data['direction'] = direction
-        if direction in ['left', 'right']: self.squid_data['image_direction_key'] = direction # For visual orientation
+        boundary_hit_log_message = ""
+
+        # Horizontal boundary check
+        if new_x <= 0:
+            new_x = 0
+            current_effective_direction = 'right'
+            boundary_hit_log_message = f"Hit left boundary (was going {original_direction}), turning right."
+        elif new_x + squid_width >= win_width:
+            new_x = win_width - squid_width
+            current_effective_direction = 'left'
+            boundary_hit_log_message = f"Hit right boundary (was going {original_direction}), turning left."
+        
+        # Vertical boundary check (can override horizontal turn if cornered)
+        if new_y <= 0:
+            new_y = 0
+            # If it also hit a side, the horizontal turn takes precedence for the new 'direction'
+            # but we still log the vertical hit.
+            if not boundary_hit_log_message: current_effective_direction = 'down' # Only change if not already turning from side
+            boundary_hit_log_message += (" " if boundary_hit_log_message else "") + f"Hit top boundary (was going {original_direction}), ensuring not moving further up."
+        elif new_y + squid_height >= win_height:
+            new_y = win_height - squid_height
+            if not boundary_hit_log_message: current_effective_direction = 'up'
+            boundary_hit_log_message += (" " if boundary_hit_log_message else "") + f"Hit bottom boundary (was going {original_direction}), ensuring not moving further down."
+
+        if boundary_hit_log_message and boundary_hit_log_message != "No boundary hit.": # Log if a boundary was actually hit
+             self._log_decision(f"Move: {boundary_hit_log_message} New effective direction: {current_effective_direction}. Pos: ({new_x:.1f},{new_y:.1f})")
+
+        self.squid_data['x'] = new_x
+        self.squid_data['y'] = new_y
+        self.squid_data['direction'] = current_effective_direction 
+        
+        if current_effective_direction in ['left', 'right', 'up', 'down']:
+            self.squid_data['image_direction_key'] = current_effective_direction
         
         moved_dist = math.sqrt((self.squid_data['x'] - prev_x)**2 + (self.squid_data['y'] - prev_y)**2)
         self.distance_traveled += moved_dist
 
     def move_toward(self, target_x, target_y):
-        current_x, current_y = self.squid_data['x'], self.squid_data['y']
-        # Consider squid center for more accurate dx, dy if needed, but top-left is fine for general direction
-        # current_center_x = self.squid_data['x'] + self.squid_data.get('squid_width', 50) / 2
-        # current_center_y = self.squid_data['y'] + self.squid_data.get('squid_height', 50) / 2
+        current_x = self.squid_data['x'] + self.squid_data.get('squid_width', 50) / 2
+        current_y = self.squid_data['y'] + self.squid_data.get('squid_height', 50) / 2
         
-        dx, dy = target_x - current_x, target_y - current_y # Target relative to squid's top-left
-        chosen_direction = self.squid_data.get('direction', 'right') # Default/current direction
+        dx, dy = target_x - current_x, target_y - current_y
+        chosen_direction = self.squid_data.get('direction', 'right')
 
-        # Only change direction if significantly off-axis or if the primary axis of movement changes
         if abs(dx) > self.move_speed / 2 or abs(dy) > self.move_speed / 2: 
-            if abs(dx) > abs(dy): # More horizontal movement needed
+            if abs(dx) > abs(dy) * 1.2: # Prioritize horizontal if significantly greater
                 chosen_direction = 'right' if dx > 0 else 'left'
-            else: # More vertical movement needed
+            elif abs(dy) > abs(dx) * 1.2: # Prioritize vertical if significantly greater
                 chosen_direction = 'down' if dy > 0 else 'up'
+            else: # Diagonal-ish: pick dominant or maintain current if aligned
+                if abs(dx) > abs(dy):
+                    chosen_direction = 'right' if dx > 0 else 'left'
+                else:
+                    chosen_direction = 'down' if dy > 0 else 'up'
+        
+        if chosen_direction != self.squid_data.get('direction'):
+            self._log_decision(f"MoveToward: Target ({target_x:.0f},{target_y:.0f}), Current ({current_x:.0f},{current_y:.0f}). Direction changed to {chosen_direction}.")
         
         self.move_in_direction(chosen_direction)
 
-    def find_nearby_food(self):
-        food_items = self.get_food_items_from_scene()
-        if not food_items: return None
-        squid_pos = (self.squid_data['x'], self.squid_data['y'])
-        closest_food, min_dist = None, float('inf')
-        for food in food_items:
-            if not self.is_object_valid(food): continue
-            # Ensure we don't target food being carried by this squid itself (if such a state is possible)
-            # if getattr(food, 'is_carried_by_autopilot_id', None) == self.squid_data.get('node_id'): continue
 
-            dist = self.distance_between(squid_pos, self.get_object_position(food))
+    def find_nearby_food(self):
+        food_items = self.get_food_items_from_scene() # This now logs periodically
+        if not food_items: return None
+        
+        squid_pos = (self.squid_data['x'] + self.squid_data.get('squid_width',0)/2, 
+                     self.squid_data['y'] + self.squid_data.get('squid_height',0)/2) # Squid center
+        closest_food, min_dist = None, float('inf')
+
+        for food in food_items:
+            # is_object_valid should have been called by get_food_items_from_scene implicitly
+            food_center_pos = self.get_object_center_position(food)
+            if food_center_pos is None: continue
+
+            dist = self.distance_between(squid_pos, food_center_pos)
             if dist < min_dist: 
                 min_dist = dist
                 closest_food = food
-        return closest_food if closest_food and min_dist < 300 else None # 300px detection range for food
+        
+        detection_radius = 300 
+        chosen_food = closest_food if closest_food and min_dist < detection_radius else None
+        if chosen_food:
+            self._log_decision(f"FindFood: Target acquired: {os.path.basename(getattr(chosen_food, 'filename', 'N/A'))} at distance {min_dist:.1f}.")
+        elif food_items: # Log if food was seen but none chosen (e.g. too far)
+            self._log_decision(f"FindFood: Food items detected ({len(food_items)}), but none were close enough or suitable (min_dist: {min_dist:.1f if min_dist != float('inf') else 'N/A'}, detection_radius: {detection_radius}).")
+        return chosen_food
 
     def find_nearby_stealable_item(self):
-        items = self.get_stealable_items_from_scene() # This already filters out remote clones
+        items = self.get_stealable_items_from_scene() # This now logs periodically
         if not items: return None
-        squid_pos = (self.squid_data['x'], self.squid_data['y'])
-        closest_item, min_dist = None, float('inf')
-        for item_obj in items:
-            if not self.is_object_valid(item_obj): continue
-            # is_stealable_target also has checks, but good to be robust.
-            # Here, get_stealable_items_from_scene should have already filtered appropriately.
 
-            dist = self.distance_between(squid_pos, self.get_object_position(item_obj))
+        squid_pos = (self.squid_data['x'] + self.squid_data.get('squid_width',0)/2, 
+                     self.squid_data['y'] + self.squid_data.get('squid_height',0)/2)
+        closest_item, min_dist = None, float('inf')
+
+        for item_obj in items:
+            # is_object_valid should have been called by get_stealable_items_from_scene implicitly
+            item_center_pos = self.get_object_center_position(item_obj)
+            if item_center_pos is None: continue
+            
+            dist = self.distance_between(squid_pos, item_center_pos)
             if dist < min_dist: 
                 min_dist = dist
                 closest_item = item_obj
-        detection_radius = 200 # Detection range for stealable items
-        return closest_item if closest_item and min_dist < detection_radius else None
+        
+        detection_radius = 200
+        chosen_item = closest_item if closest_item and min_dist < detection_radius else None
+        if chosen_item:
+            self._log_decision(f"FindStealable: Target acquired: {os.path.basename(getattr(chosen_item, 'filename', 'N/A'))} at distance {min_dist:.1f}.")
+        elif items:
+            self._log_decision(f"FindStealable: Stealable items detected ({len(items)}), but none close/suitable (min_dist: {min_dist:.1f if min_dist != float('inf') else 'N/A'}, detection_radius: {detection_radius}).")
+        return chosen_item
 
     def get_food_items_from_scene(self):
         food_items = []
-        if not self.scene: return food_items
-        for item in self.scene.items():
+        if not self.scene: 
+            if self.debug_mode: self._log_decision("get_food_items: Scene not available.")
+            return food_items
+        
+        items_checked_count = 0
+        scene_items_list = list(self.scene.items()) 
+
+        for item in scene_items_list:
+            items_checked_count += 1
             try:
-                # Skip items that are clones from other remote players or not visible
-                if getattr(item, 'is_remote_clone', False) or not item.isVisible():
+                if not self.is_object_valid(item): # Use the enhanced is_object_valid
                     continue
 
                 is_food = False
-                if hasattr(item, 'category') and getattr(item, 'category', None) == 'food':
+                item_category = str(getattr(item, 'category', '')).lower()
+                item_filename = str(getattr(item, 'filename', '')).lower()
+
+                if item_category == 'food':
                     is_food = True
-                elif hasattr(item, 'filename'): # Fallback to filename check
-                    filename_attr = getattr(item, 'filename', '')
-                    filename = str(filename_attr).lower() if filename_attr is not None else ''
-                    if any(ft in filename for ft in ['food', 'sushi', 'cheese']):
-                        is_food = True
+                elif any(ft_keyword in item_filename for ft_keyword in ['food', 'sushi', 'cheese']):
+                    is_food = True
                 
-                if is_food and item not in food_items: # Ensure not already added
+                if is_food:
                      food_items.append(item)
             except Exception as e:
-                if self.debug_mode: self._log_decision(f"Error checking item for food: {e}") # Log error
+                if self.debug_mode: self._log_decision(f"get_food_items: Error checking item - {type(item)}: {e}")
+        
+        if self.debug_mode and (random.random() < 0.05 or not food_items): 
+             log_food_names = [os.path.basename(getattr(f, 'filename', 'N/A')) for f in food_items]
+             self._log_decision(f"get_food_items: Checked {items_checked_count} scene items. Found {len(food_items)} food: [{', '.join(log_food_names)}].")
         return food_items
 
     def get_stealable_items_from_scene(self):
         stealable_items = []
-        if not self.scene: return stealable_items
-        for item_obj in self.scene.items():
+        if not self.scene: 
+            if self.debug_mode: self._log_decision("get_stealable_items: Scene not available.")
+            return stealable_items
+            
+        items_checked_count = 0
+        scene_items_list = list(self.scene.items())
+
+        for item_obj in scene_items_list:
+            items_checked_count +=1
             try:
-                if not item_obj.isVisible() or getattr(item_obj, 'is_remote_clone', False):
-                    continue # Skip invisible or already remote clones
-
-                item_category_val = getattr(item_obj, 'category', None)
-                item_category = str(item_category_val).lower() if item_category_val is not None else ''
-                item_filename_val = getattr(item_obj, 'filename', None)
-                item_filename = str(item_filename_val).lower() if item_filename_val is not None else ''
+                if not self.is_object_valid(item_obj): # Use the enhanced is_object_valid
+                    continue
                 
-                is_rock = item_category == 'rock' or 'rock' in item_filename
-                is_urchin = item_category == 'urchin' or 'urchin' in item_filename
+                # Crucially, do not attempt to steal items that are already clones from other remote players
+                # This check is now also part of is_stealable_target, but good to have consistency
+                if getattr(item_obj, 'is_remote_clone', False):
+                    continue
 
-                if (is_rock or is_urchin) and item_obj not in stealable_items:
+                item_category = str(getattr(item_obj, 'category', '')).lower()
+                item_filename = str(getattr(item_obj, 'filename', '')).lower()
+                
+                is_rock = item_category == 'rock' or ('rock' in item_filename)
+                is_urchin = item_category == 'urchin' or ('urchin' in item_filename)
+
+                if (is_rock or is_urchin):
                     stealable_items.append(item_obj)
             except Exception as e:
-                if self.debug_mode: self._log_decision(f"Error checking item for stealable: {e}") # Log error
+                if self.debug_mode: self._log_decision(f"get_stealable_items: Error checking item - {type(item_obj)}: {e}")
+        
+        if self.debug_mode and (random.random() < 0.05 or not stealable_items):
+            log_item_names = [os.path.basename(getattr(s, 'filename', 'N/A')) for s in stealable_items]
+            self._log_decision(f"get_stealable_items: Checked {items_checked_count} scene items. Found {len(stealable_items)} stealable: [{', '.join(log_item_names)}].")
         return stealable_items
 
-    def is_in_vision_range(self, item): # General large vision range, less critical for autopilot's direct targeting
+    def is_in_vision_range(self, item): 
         if not item or not self.is_object_valid(item): return False
-        squid_pos = (self.squid_data['x'], self.squid_data['y'])
-        obj_pos = self.get_object_position(item)
-        return self.distance_between(squid_pos, obj_pos) < 800 
+        squid_center_pos = (self.squid_data['x'] + self.squid_data.get('squid_width',0)/2, 
+                           self.squid_data['y'] + self.squid_data.get('squid_height',0)/2)
+        obj_center_pos = self.get_object_center_position(item)
+        if obj_center_pos is None: return False
+        return self.distance_between(squid_center_pos, obj_center_pos) < 800 # Generic large range
 
-    def animate_movement(self, squid_data, remote_visual): # Currently advisory
-        if self.debug_mode: self._log_decision(f"Animate_movement called (advisory function).")
+    def animate_movement(self, squid_data, remote_visual): 
+        if self.debug_mode: self._log_decision(f"Animate_movement called (currently advisory). Pos: ({squid_data.get('x',0):.1f}, {squid_data.get('y',0):.1f}) Dir: {squid_data.get('direction')}")
 
-    def eat_food(self, food_item): # Called when squid is at food_item
+    def eat_food(self, food_item): 
         food_name = os.path.basename(getattr(food_item, 'filename', 'UnknownFood'))
-        if self.debug_mode: print(f"[AutoPilot] Squid {self.squid_data.get('node_id')[-4:]} attempting to 'eat' {food_name}")
-        self._log_decision(f"Action: Eating food '{food_name}'.")
+        self._log_decision(f"Action: Eating food '{food_name}'. Current hunger: {self.squid_data.get('hunger', 50):.1f}.")
         
-        # Update internal stats for summary
-        self.squid_data['hunger'] = max(0, self.squid_data.get('hunger', 50) - 15) 
-        self.squid_data['happiness'] = min(100, self.squid_data.get('happiness', 50) + 10)
+        self.squid_data['hunger'] = max(0, self.squid_data.get('hunger', 50) - 25) # More significant hunger reduction
+        self.squid_data['happiness'] = min(100, self.squid_data.get('happiness', 50) + 15)
         
-        # Signal to mp_plugin_logic (via RemoteEntityManager or directly) to handle actual item removal from scene
         if self.remote_entity_manager and hasattr(self.remote_entity_manager, 'remove_item_from_scene'):
             self.remote_entity_manager.remove_item_from_scene(food_item)
-            self._log_decision(f"Signaled RemoteEntityManager to remove food '{food_name}'.")
-        elif self.plugin_instance and hasattr(self.plugin_instance, 'request_item_removal'):
-            self.plugin_instance.request_item_removal(food_item) # Fallback if no entity manager
-            self._log_decision(f"Requested plugin_instance to remove food '{food_name}'.")
+            self._log_decision(f"Signaled RemoteEntityManager to remove eaten food '{food_name}'. New hunger: {self.squid_data['hunger']:.1f}")
         else:
-            self._log_decision(f"EatFood: Could not signal for removal of food '{food_name}'. Item may persist visually.")
+            self._log_decision(f"EatFood: Could not signal for removal of food '{food_name}'.")
 
-
-    def interact_with_rock(self, rock_item): # This method is somewhat legacy now due to generic interact_with_object
+    def interact_with_rock(self, rock_item): # Legacy, use interact_with_object
         item_name = os.path.basename(getattr(rock_item, 'filename', 'UnknownItem'))
-        if self.debug_mode: print(f"[AutoPilot] Squid {self.squid_data.get('node_id')[-4:]} 'interacted' with item {item_name}")
-        self._log_decision(f"Action: Generic interaction with '{item_name}'.")
+        self._log_decision(f"Action: Legacy interact_with_rock called for '{item_name}'.")
         self.squid_data['happiness'] = min(100, self.squid_data.get('happiness', 50) + 5)
 
-    def is_stealable_target(self, item_obj): # Determines if an item can be targeted for stealing
+    def is_stealable_target(self, item_obj): 
         if not self.is_object_valid(item_obj): return False
-        
-        # Crucially, do not attempt to steal items that are already clones from other remote players
-        if getattr(item_obj, 'is_remote_clone', False):
+        if getattr(item_obj, 'is_remote_clone', False): # Should not steal clones
+            self._log_decision(f"is_stealable_target: Item '{getattr(item_obj, 'filename', 'N/A')}' is a remote clone. Cannot steal.")
             return False
-        # Add any other flags that might indicate an item is not "original" to this scene
-        # e.g., if trophies brought by other squids have a special flag like 'is_foreign_trophy'
-        # if getattr(item_obj, 'is_foreign_trophy_from_other_player', False): return False
 
-        item_category_val = getattr(item_obj, 'category', None)
-        item_category = str(item_category_val).lower() if item_category_val is not None else ''
-        item_filename_val = getattr(item_obj, 'filename', None)
-        item_filename = str(item_filename_val).lower() if item_filename_val is not None else ''
+        item_category = str(getattr(item_obj, 'category', '')).lower()
+        item_filename = str(getattr(item_obj, 'filename', '')).lower()
         
         is_rock = item_category == 'rock' or ('rock' in item_filename)
-        is_urchin = item_category == 'urchin' or ('urchin' in item_filename)
+        is_urchin = item_category == 'urchin' or ('urchin' in item_filename) # Example of another stealable
         
-        return is_rock or is_urchin
+        # Add more conditions for stealable items if needed
+        # e.g. is_plant = item_category == 'plant' or ('plant' in item_filename)
+        
+        can_steal = is_rock or is_urchin # or is_plant etc.
+        if can_steal and self.debug_mode:
+            self._log_decision(f"is_stealable_target: Item '{item_filename}' (cat: {item_category}) IS stealable.")
+        elif not can_steal and self.debug_mode:
+            self._log_decision(f"is_stealable_target: Item '{item_filename}' (cat: {item_category}) is NOT stealable.")
+        return can_steal
+
 
     def is_object_valid(self, obj):
-        # Check if object is not None, belongs to the current scene, and is visible
-        return obj is not None and hasattr(obj, 'scene') and obj.scene() is self.scene and obj.isVisible()
+        if obj is None:
+            if self.debug_mode: self._log_decision("is_object_valid: FAILED - Object is None.")
+            return False
+        
+        has_scene_attr = hasattr(obj, 'scene')
+        obj_scene_instance = obj.scene() if has_scene_attr and callable(obj.scene) else None
+        
+        is_in_correct_scene = obj_scene_instance is self.scene
+        
+        is_visible_attr = hasattr(obj, 'isVisible')
+        is_currently_visible = obj.isVisible() if is_visible_attr and callable(obj.isVisible) else True 
+        
+        valid = is_in_correct_scene and is_currently_visible
 
-    def get_object_position(self, obj):
-        if obj and hasattr(obj, 'pos'): 
-            pos_method = getattr(obj, 'pos')
-            if callable(pos_method):
-                pos = pos_method()
-                return (pos.x(), pos.y())
-        if self.debug_mode: self._log_decision(f"Warning: get_object_position called with invalid/unsuitable object: {obj}")
-        return (self.squid_data.get('x',0), self.squid_data.get('y',0))
+        if not valid and self.debug_mode: # Log only if invalid and debugging
+            filename_info = getattr(obj, 'filename', str(type(obj)))
+            reasons = []
+            if not is_in_correct_scene:
+                reasons.append(f"Scene mismatch/None (ItemSceneID: {id(obj_scene_instance) if obj_scene_instance else 'None'}, AutopilotSceneID: {id(self.scene) if self.scene else 'None'})")
+            if not is_currently_visible:
+                reasons.append("Not visible")
+            self._log_decision(f"is_object_valid: Item '{filename_info}' FAILED validation. Reasons: {'; '.join(reasons) if reasons else 'Unknown'}")
+            
+        return valid
+
+    def get_object_position(self, obj): # Gets top-left
+        if obj and hasattr(obj, 'pos') and callable(obj.pos):
+            pos_qpointf = obj.pos()
+            return (pos_qpointf.x(), pos_qpointf.y())
+        if self.debug_mode: self._log_decision(f"Warning: get_object_position failed for object: {getattr(obj, 'filename', type(obj))}")
+        return (self.squid_data.get('x',0), self.squid_data.get('y',0)) # Fallback
+
+    def get_object_center_position(self, obj):
+        if obj and self.is_object_valid(obj): # Ensure it's valid before getting rect
+            try:
+                # QGraphicsPixmapItem.boundingRect() is in item's local coordinates.
+                # We need its sceneBoundingRect for global center, or combine pos() with boundingRect().center()
+                item_rect_local = obj.boundingRect() # Local bounds
+                item_pos_scene = obj.pos() # Top-left in scene
+                center_x = item_pos_scene.x() + item_rect_local.center().x()
+                center_y = item_pos_scene.y() + item_rect_local.center().y()
+                return (center_x, center_y)
+            except Exception as e:
+                if self.debug_mode: self._log_decision(f"Error getting center for {getattr(obj, 'filename', type(obj))}: {e}")
+        return None
+
 
     def distance_between(self, pos1, pos2):
         try:
             return math.sqrt((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2)
-        except TypeError:
-            self._log_decision(f"Error calculating distance between {pos1} and {pos2}. Positions might be invalid.")
-            return float('inf') # Return a large distance if positions are bad
+        except TypeError: # If pos1 or pos2 is None or not subscriptable
+            self._log_decision(f"Error in distance_between: Invalid input. Pos1: {pos1}, Pos2: {pos2}")
+            return float('inf')
 
     def get_window_width(self):
         if self.remote_entity_manager and hasattr(self.remote_entity_manager, 'window_width'):
             return self.remote_entity_manager.window_width
         elif self.scene and hasattr(self.scene, 'sceneRect') and self.scene.sceneRect():
             return self.scene.sceneRect().width()
-        return self.window_width
+        return self.window_width # Fallback to initial value
 
     def get_window_height(self):
         if self.remote_entity_manager and hasattr(self.remote_entity_manager, 'window_height'):
             return self.remote_entity_manager.window_height
         elif self.scene and hasattr(self.scene, 'sceneRect') and self.scene.sceneRect():
             return self.scene.sceneRect().height()
-        return self.window_height
+        return self.window_height # Fallback to initial value
 
-    def is_at_boundary(self, direction):
+    def is_at_boundary(self, direction_moving_towards: str):
         x, y = self.squid_data['x'], self.squid_data['y']
         squid_w = self.squid_data.get('squid_width', 50)
         squid_h = self.squid_data.get('squid_height', 50)
-        boundary_threshold = 5 
+        # Threshold for being "at" the boundary to trigger exit
+        # Should be small enough that it's definitely at edge, but not so small it overshoots.
+        boundary_exit_threshold = self.move_speed * 1.5 # Approx 1.5 move steps from edge
 
         win_width = self.get_window_width()
         win_height = self.get_window_height()
 
-        if direction == 'left': return x <= boundary_threshold
-        elif direction == 'right': return x + squid_w >= win_width - boundary_threshold
-        elif direction == 'up': return y <= boundary_threshold
-        elif direction == 'down': return y + squid_h >= win_height - boundary_threshold
+        if direction_moving_towards == 'left': return x <= boundary_exit_threshold
+        elif direction_moving_towards == 'right': return x + squid_w >= win_width - boundary_exit_threshold
+        elif direction_moving_towards == 'up': return y <= boundary_exit_threshold
+        elif direction_moving_towards == 'down': return y + squid_h >= win_height - boundary_exit_threshold
         return False
 
+    def determine_home_direction(self):
+        # This method determines the "exit" direction from the current client's perspective
+        # to get "home" (back to its original instance).
+        entry_dir_on_this_screen = self.squid_data.get('entry_direction_on_this_screen')
+        opposite_map = {'left': 'right', 'right': 'left', 'up': 'down', 'down': 'up', 'top': 'down', 'bottom': 'up'}
+        
+        if entry_dir_on_this_screen and entry_dir_on_this_screen.lower() in opposite_map:
+            self.home_direction = opposite_map[entry_dir_on_this_screen.lower()]
+            self._log_decision(f"DetermineHomeDir: Determined home direction '{self.home_direction}' as opposite of entry_direction '{entry_dir_on_this_screen}'.")
+        else:
+            # Fallback: if entry direction was unclear, choose the closest edge as the exit.
+            # This is less ideal as it might not be the true "opposite" of how it entered.
+            x, y = self.squid_data.get('x', self.get_window_width()/2), self.squid_data.get('y', self.get_window_height()/2)
+            width, height = self.get_window_width(), self.get_window_height()
+            
+            distances_to_edge = {
+                'left': x,
+                'right': width - (x + self.squid_data.get('squid_width', 50)),
+                'up': y,
+                'down': height - (y + self.squid_data.get('squid_height', 50))
+            }
+            # Choose the edge it is currently closest to as its "home" direction.
+            self.home_direction = min(distances_to_edge, key=distances_to_edge.get)
+            self._log_decision(f"DetermineHomeDir: Fallback - entry_direction unclear. Closest edge chosen as home_direction: '{self.home_direction}'. Distances: {distances_to_edge}")
+
     def get_summary(self):
-        # Ensure rocks_stolen accurately reflects the count of items in carried_items_data
         actual_items_carried_count = len(self.carried_items_data)
-        if self.rocks_stolen != actual_items_carried_count:
-            self._log_decision(f"Summary: Discrepancy found! self.rocks_stolen was {self.rocks_stolen}, but len(self.carried_items_data) is {actual_items_carried_count}. Updating to actual count.")
+        if self.rocks_stolen != actual_items_carried_count: # Ensure consistency
+            self._log_decision(f"Summary: Correcting 'rocks_stolen' from {self.rocks_stolen} to actual carried count {actual_items_carried_count}.")
             self.rocks_stolen = actual_items_carried_count
 
-        return {
+        summary_data = {
             'time_away': round(self.time_away, 2),
             'food_eaten': self.food_eaten_count,
-            'rock_interactions': self.rock_interaction_count,
-            'rocks_stolen': self.rocks_stolen, 
-            'carried_items_details': self.carried_items_data, 
+            'rock_interactions': self.rock_interaction_count, # Total interactions with stealable types
+            'rocks_stolen': self.rocks_stolen, # Count of items successfully "stolen" and data captured
+            'carried_items_details': list(self.carried_items_data), # Ensure it's a list copy
             'distance_traveled': round(self.distance_traveled, 2),
-            'final_state': self.state, 
-            'node_id': self.squid_data.get('node_id', 'UnknownNode')
+            'final_state_on_this_client': self.state, 
+            'node_id': self.node_id # ID of the squid this controller is for
         }
+        self._log_decision(f"GetSummary: Generating summary - Food: {summary_data['food_eaten']}, Interactions: {summary_data['rock_interactions']}, Stolen: {summary_data['rocks_stolen']}, Items: {len(summary_data['carried_items_details'])}")
+        return summary_data
