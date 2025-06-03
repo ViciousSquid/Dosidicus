@@ -6,7 +6,7 @@ import traceback
 import logging
 from PyQt5 import QtWidgets, QtCore
 import random
-import argparse # <--- ADDED
+import argparse
 from src.ui import Ui
 from src.tamagotchi_logic import TamagotchiLogic
 from src.squid import Squid, Personality
@@ -15,6 +15,7 @@ from src.save_manager import SaveManager
 from src.brain_tool import SquidBrainWindow
 from src.learning import LearningConfig
 from src.plugin_manager import PluginManager
+from src.image_cache import ImageCache
 
 os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
 
@@ -45,7 +46,7 @@ class TeeStream:
         self.file_stream.flush()
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, specified_personality=None, debug_mode=False, neuro_cooldown=None, clean_start=False, parent=None): # <--- ADDED clean_start
+    def __init__(self, specified_personality=None, debug_mode=False, neuro_cooldown=None, clean_start=False, parent=None):
         super().__init__(parent)
 
         # Initialize configuration
@@ -56,7 +57,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Add initialization tracking flag
         self._initialization_complete = False
         
-        self.clean_start_mode = clean_start # <--- STORE clean_start
+        self.clean_start_mode = clean_start
 
         # Set up debugging
         self.debug_mode = debug_mode
@@ -65,7 +66,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Initialize UI first
         logging.debug("Initializing UI")
-        self.user_interface = Ui(self, debug_mode=self.debug_mode)
+        self.user_interface = Ui(self, ImageCache(), debug_mode=self.debug_mode) # Pass ImageCache() here
 
         # Initialize SquidBrainWindow with config
         logging.debug("Initializing SquidBrainWindow")
@@ -81,7 +82,7 @@ class MainWindow(QtWidgets.QMainWindow):
         QtCore.QTimer.singleShot(100, self.preload_brain_window_tabs)
 
         # Continue with normal initialization
-        self.brain_window.set_tamagotchi_logic(None)  # Placeholder to ensure initialization
+        self.brain_window.set_tamagotchi_logic(None)
         self.user_interface.squid_brain_window = self.brain_window
 
         # --- MODIFIED: Centralize PluginManager ---
@@ -109,9 +110,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.initialize_game() # TamagotchiLogic gets plugin_manager here
 
         logging.debug("Setting final tamagotchi_logic references on plugin_manager and brain_window")
-        if hasattr(self.plugin_manager, 'set_tamagotchi_logic'): 
+        if hasattr(self.plugin_manager, 'set_tamagotchi_logic'):
              self.plugin_manager.set_tamagotchi_logic(self.tamagotchi_logic)
-        else: 
+        else:
              self.plugin_manager.tamagotchi_logic = self.tamagotchi_logic
 
 
@@ -126,7 +127,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.user_interface.load_action.triggered.connect(self.load_game)
         self.user_interface.save_action.triggered.connect(self.save_game)
         self.user_interface.decorations_action.triggered.connect(self.user_interface.toggle_decoration_window)
-        if hasattr(self.user_interface, 'statistics_action'): # Ensure statistics_action exists
+        if hasattr(self.user_interface, 'statistics_action'):
             self.user_interface.statistics_action.triggered.connect(self.user_interface.toggle_statistics_window)
 
 
@@ -200,7 +201,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if hasattr(self.brain_window, 'set_tamagotchi_logic'):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
 
-            if not self.save_manager.save_exists() and not self.clean_start_mode: # <--- ADDED condition for clean_start_mode
+            if not self.save_manager.save_exists() and not self.clean_start_mode:
                 QtCore.QTimer.singleShot(500, self.delayed_tutorial_check)
             elif self.clean_start_mode:
                  print("Clean start mode: Skipping tutorial and initial window openings.")
@@ -212,11 +213,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.check_tutorial_preference()
         if self.show_tutorial:
             pass
-        elif not self.clean_start_mode: # <--- ADDED condition for clean_start_mode
+        elif not self.clean_start_mode:
             QtCore.QTimer.singleShot(500, self.open_initial_windows)
 
     def check_tutorial_preference(self):
-        if self.save_manager.save_exists() or self.clean_start_mode: # <--- ADDED condition for clean_start_mode
+        if self.save_manager.save_exists() or self.clean_start_mode:
             self.show_tutorial = False
             return
 
@@ -277,7 +278,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.neuro_cooldown:
             print(f"\x1b[43m Neurogenesis cooldown:\033[0m {self.neuro_cooldown}")
         self.squid.memory_manager.clear_all_memories()
-        if not self.clean_start_mode: # <--- ADDED condition
+        if not self.clean_start_mode:
             self.show_splash_screen()
 
     def start_new_game(self):
@@ -295,9 +296,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.plugin_manager.tamagotchi_logic = self.tamagotchi_logic
         self.brain_window.update_personality_display(self.squid.personality)
         self.tamagotchi_logic.set_simulation_speed(0)
-        if not self.clean_start_mode: # <--- ADDED condition
+        if not self.clean_start_mode:
             self.show_splash_screen()
-        else: # <--- If clean start, manually start simulation parts
+        else:
             self.start_simulation()
         self._initialization_complete = True
 
@@ -416,9 +417,9 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             print("UI not available for hatching notification.")
 
-    def open_initial_windows(self): # <--- MODIFIED
+    def open_initial_windows(self):
         """Open brain window, decorations window, and statistics window unless in clean_start_mode."""
-        if self.clean_start_mode: # <--- ADDED check
+        if self.clean_start_mode:
             print("Clean start mode: Skipping automatic window opening.")
             return
 
@@ -516,7 +517,7 @@ def main():
             specified_personality=personality_enum_val,
             debug_mode=args.debug,
             neuro_cooldown=args.neurocooldown,
-            clean_start=args.clean # <--- PASS new argument
+            clean_start=args.clean
         )
         main_window.show()
         sys.exit(app.exec_())
