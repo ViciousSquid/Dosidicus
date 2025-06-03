@@ -77,7 +77,7 @@ class MultiplayerPlugin:
 
         # --- Flags ---
         self.is_setup = False
-        self.debug_mode = False
+        self.debug_mode = True                                  ### DEBUG MODE TOGGLE
         self.last_controller_update = time.time() 
         self.entity_manager: RemoteEntityManager | None = None # Added type hint
         self.config_manager = None # Placeholder, ensure this is set if used (e.g. in handle_squid_exit_message print)
@@ -985,12 +985,14 @@ class MultiplayerPlugin:
                 self.logger.debug(f"Fallback: Controller for {node_id[-6:]} already exists, skipping duplicate creation.")
 
 
-    # Inside MultiplayerPlugin class in mp_plugin_logic.py
     def update_remote_controllers(self):
         """Called by a QTimer to update RemoteSquidController instances."""
         # --- NEW TRACE PRINT ---
         print(f"!!!!!!!! MP_PLUGIN_LOGIC: update_remote_controllers METHOD ENTERED. Num controllers: {len(self.remote_squid_controllers if hasattr(self, 'remote_squid_controllers') else {})} !!!!!!!!")
         # --- END NEW TRACE PRINT ---
+        # ADDED DEBUG LOGGING
+        if self.logger: # Ensure logger exists before using it
+            self.logger.info(f"DEBUG_MPL_UPDATE: At start of update_remote_controllers. Current controllers: {list(self.remote_squid_controllers.keys()) if hasattr(self, 'remote_squid_controllers') else 'N/A'}. Dict size: {len(self.remote_squid_controllers) if hasattr(self, 'remote_squid_controllers') else 'N/A'}")
 
         if not self.logger: 
             print("MP_PLUGIN_LOGIC: Logger not available in update_remote_controllers.") # Fallback print
@@ -1765,11 +1767,19 @@ class MultiplayerPlugin:
         squid = self.tamagotchi_logic.squid
         view_direction_rad = self.get_actual_view_direction(squid) # Get view cone direction
 
+        # --- Logging for sent direction ---
+        if self.debug_mode:
+            self.logger.debug(f"Sending squid state: NodeID={self.network_node.node_id}, Direction={squid.squid_direction}, X={squid.squid_x:.1f}, Y={squid.squid_y:.1f}")
+
         return {
-            'x': squid.squid_x, 'y': squid.squid_y, 'direction': squid.squid_direction,
+            'x': squid.squid_x, 
+            'y': squid.squid_y, 
+            'direction': squid.squid_direction,  # General movement/logic direction
+            'image_direction_key': squid.squid_direction, # Explicit key for visual rendering direction
             'looking_direction': view_direction_rad, # For view cone
             'view_cone_angle': getattr(squid, 'view_cone_angle_rad', math.radians(60)),
-            'hunger': squid.hunger, 'happiness': squid.happiness,
+            'hunger': squid.hunger, 
+            'happiness': squid.happiness,
             'status': getattr(squid, 'status', "idle"), # Current action/status
             'carrying_rock': getattr(squid, 'carrying_rock', False),
             'is_sleeping': getattr(squid, 'is_sleeping', False),
@@ -1917,8 +1927,9 @@ class MultiplayerPlugin:
 
             # Optional: Trigger local squid's reaction to seeing a remote squid
             if self.tamagotchi_logic.squid and hasattr(self.tamagotchi_logic.squid, 'process_squid_detection') and remote_squid_state:
+                # Pass remote_squid_state as remote_squid_props for position-based fleeing
                 self.tamagotchi_logic.squid.process_squid_detection(
-                    remote_node_id=sender_node_id, is_detected=True, remote_squid_props=remote_squid_state
+                    remote_node_id=sender_node_id, is_visible=True, remote_squid_props=remote_squid_state
                 )
         except Exception as e:
             if self.debug_mode: self.logger.error(f"Handling object_sync from {addr} failed: {e}", exc_info=True)

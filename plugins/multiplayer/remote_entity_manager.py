@@ -93,38 +93,54 @@ class RemoteEntityManager:
     def _get_image_file_name_and_direction(self, payload_direction_key: Optional[str], payload_animation_frame: Any, 
                                           entry_direction_on_this_screen: Optional[str] = None, 
                                           current_image_name_for_fallback_dir: str = "right1.png") -> tuple[str, str]:
-        intended_facing = "right" # Default
+        
+        base_direction = "right" 
         if payload_direction_key:
-            intended_facing = payload_direction_key.lower().strip()
-        elif current_image_name_for_fallback_dir:
-            # Try to derive from current image if payload key is missing
-            # e.g. "left1.png" -> "left"
-            name_part = current_image_name_for_fallback_dir.split('.')[0]
-            if name_part.endswith("1") or name_part.endswith("2"):
-                derived_dir = name_part[:-1]
-                if derived_dir in ["left", "right", "up"]: # Valid known directions
-                    intended_facing = derived_dir
-
-        facing_direction = intended_facing # Start with this
-
-        if entry_direction_on_this_screen: # Arrival logic modifies facing based on entry side
-            if entry_direction_on_this_screen == "left": facing_direction = "right"
-            elif entry_direction_on_this_screen == "right": facing_direction = "left"
-            elif entry_direction_on_this_screen == "bottom": facing_direction = "up"
-            elif entry_direction_on_this_screen == "top": 
-                facing_direction = intended_facing if intended_facing in ["left", "right"] else "right"
+            base_direction = payload_direction_key.lower().strip()
+        else:
+            if self.debug_mode:
+                self.logger.warning(f"_get_image_file_name_and_direction: payload_direction_key is missing. Defaulting to '{base_direction}'. Fallback hint: {current_image_name_for_fallback_dir}")
         
-        if facing_direction == "down": # Map "down" to a horizontal direction
-            if self.debug_mode: self.logger.debug(f"Mapping 'down' direction. Original payload key: {payload_direction_key}")
-            # Prefer left if current image (hint) was left, otherwise default to right
-            facing_direction = "left" if current_image_name_for_fallback_dir.startswith("left") else "right"
+        facing_direction = base_direction
+
+        if entry_direction_on_this_screen:
+            original_facing_for_log = facing_direction
+            if entry_direction_on_this_screen == "left":
+                facing_direction = "right"
+            elif entry_direction_on_this_screen == "right":
+                facing_direction = "left"
+            elif entry_direction_on_this_screen == "bottom": # Enters from bottom, should face up
+                facing_direction = "up"
+            elif entry_direction_on_this_screen == "top":    # Enters from top, should face down
+                facing_direction = "down" # Directly use "down" as it's valid since 'down1.png' exists
+            
+            if self.debug_mode and original_facing_for_log != facing_direction:
+                self.logger.debug(f"_get_image_file_name_and_direction: Arrival adjustment. Entry: {entry_direction_on_this_screen}. Original Payload Facing: {original_facing_for_log}. New Visual Facing: {facing_direction}")
+
+        # Valid sprite directions, now including "down" as per your confirmation
+        valid_sprite_directions = ["left", "right", "up", "down"] 
         
+        if facing_direction not in valid_sprite_directions:
+            if self.debug_mode:
+                self.logger.warning(f"_get_image_file_name_and_direction: Attempted facing_direction '{facing_direction}' is not in {valid_sprite_directions}. Defaulting to 'right'.")
+            facing_direction = "right"
+
         try:
             frame = int(payload_animation_frame)
-            if frame not in [1, 2]: frame = 1
-        except (ValueError, TypeError): frame = 1
+            if frame not in [1, 2]: # Assuming animation frames are 1 and 2
+                if self.debug_mode and payload_animation_frame not in [1,2]: 
+                    self.logger.warning(f"_get_image_file_name_and_direction: Invalid animation frame '{payload_animation_frame}'. Defaulting to 1.")
+                frame = 1
+        except (ValueError, TypeError):
+            if self.debug_mode:
+                 self.logger.warning(f"_get_image_file_name_and_direction: Animation frame '{payload_animation_frame}' is not a valid integer. Defaulting to 1.")
+            frame = 1
         
         image_file_name = f"{facing_direction}{frame}.png"
+        
+        if self.debug_mode:
+            self.logger.debug(f"_get_image_file_name_and_direction: Args(PayloadDirKey='{payload_direction_key}', EntryDir='{entry_direction_on_this_screen}', AnimFrame='{payload_animation_frame}') -> Result(BaseDir='{base_direction}', FinalFacing='{facing_direction}', Image='{image_file_name}')")
+            
         return image_file_name, facing_direction
 
     def _get_scaled_pixmap(self, image_file_name: str) -> tuple[QtGui.QPixmap, tuple[int, int]]:
@@ -178,73 +194,129 @@ class RemoteEntityManager:
             # No debug log here by default to avoid spam, enable if needed
 
     def _handle_new_squid_arrival(self, node_id, squid_data_payload, entry_x, entry_y, entry_direction_on_this_screen):
+        if self.debug_mode:
+            self.logger.debug(f"_handle_new_squid_arrival: NodeID='{node_id}', EntryPos=({entry_x:.1f},{entry_y:.1f}), EntryDir='{entry_direction_on_this_screen}'")
+            self.logger.debug(f"Payload for new arrival '{node_id}': {squid_data_payload}")
+
         payload_dir_key = squid_data_payload.get('image_direction_key', 'right')
-        payload_anim_frame = squid_data_payload.get('current_animation_frame', 1)
-        squid_image_name, _ = self._get_image_file_name_and_direction(payload_dir_key, payload_anim_frame, entry_direction_on_this_screen)
+        payload_anim_frame = squid_data_payload.get('current_animation_frame', 1) 
+        
+        squid_image_name, determined_facing_direction = self._get_image_file_name_and_direction(
+            payload_dir_key, 
+            payload_anim_frame, 
+            entry_direction_on_this_screen=entry_direction_on_this_screen 
+        )
+        
         scaled_pixmap, (current_w, current_h) = self._get_scaled_pixmap(squid_image_name)
         
+        if self.debug_mode:
+            self.logger.debug(f"_handle_new_squid_arrival '{node_id}': Image selected='{squid_image_name}', Determined Facing='{determined_facing_direction}', Size=({current_w}x{current_h})")
+
         remote_visual = AnimatableGraphicsItem(scaled_pixmap)
         remote_visual.setPos(entry_x, entry_y)
-        remote_visual.setZValue(5); remote_visual.setOpacity(self.remote_opacity); remote_visual.setScale(1.0)
+        remote_visual.setZValue(5)
+        remote_visual.setOpacity(self.remote_opacity)
+        remote_visual.setScale(1.0)
         self.scene.addItem(remote_visual)
 
         id_text = self.text_pool.acquire()
-        if id_text.scene() != self.scene:
+        if id_text.scene() != self.scene: 
             if id_text.scene(): id_text.scene().removeItem(id_text)
             self.scene.addItem(id_text)
-        id_text.setPlainText(f"Remote ({node_id[-4:]})"); id_text.setDefaultTextColor(QtGui.QColor(200,200,200,200))
-        id_text.setFont(QtGui.QFont("Arial", 8)); id_text.setZValue(6); id_text.setVisible(self.show_labels)
+        id_text.setPlainText(f"Remote ({node_id[-4:]})")
+        id_text.setDefaultTextColor(QtGui.QColor(200,200,200,200))
+        id_text.setFont(QtGui.QFont("Arial", 8))
+        id_text.setZValue(6) 
+        id_text.setVisible(self.show_labels)
 
         status_text = self.text_pool.acquire()
         if status_text.scene() != self.scene:
             if status_text.scene(): status_text.scene().removeItem(status_text)
             self.scene.addItem(status_text)
-        status_text.setPlainText("ENTERING..."); status_text.setDefaultTextColor(QtGui.QColor(255,255,0))
-        status_text.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold)); status_text.setZValue(6); status_text.setVisible(self.show_labels)
+        status_text.setPlainText("ENTERING...") 
+        status_text.setDefaultTextColor(QtGui.QColor(255,255,0)) 
+        status_text.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        status_text.setZValue(6)
+        status_text.setVisible(self.show_labels)
         
         self._update_dependent_items_position({'id_text': id_text, 'status_text': status_text}, entry_x, entry_y)
 
         self.remote_squids[node_id] = {
-            'visual': remote_visual, 'id_text': id_text, 'status_text': status_text,
-            'view_cone': None, 'last_update': time.time(),
-            'data': squid_data_payload.copy(),
+            'visual': remote_visual, 
+            'id_text': id_text, 
+            'status_text': status_text,
+            'view_cone': None, 
+            'last_update': time.time(),
+            'data': squid_data_payload.copy(), 
             'current_display_dimensions': (current_w, current_h),
             'current_image_name': squid_image_name,
-            'was_arrival_text': True,
+            'was_arrival_text': True, 
             'network_target_x': entry_x, 
             'network_target_y': entry_y
         }
-        self.logger.info(f"REMOTE_ENTITY_MANAGER: Created new remote squid {node_id} at ({entry_x:.1f}, {entry_y:.1f}). Image: {squid_image_name}, Size: {current_w}x{current_h}")
+        if self.debug_mode:
+            self.logger.info(f"REMOTE_ENTITY_MANAGER: Created NEW remote squid '{node_id}' at ({entry_x:.1f}, {entry_y:.1f}). Image: '{squid_image_name}', Size: {current_w}x{current_h}")
 
     def _handle_re_arriving_squid(self, node_id, squid_data_payload, remote_squid_info, entry_x, entry_y, entry_direction_on_this_screen):
+        if self.debug_mode:
+            self.logger.debug(f"_handle_re_arriving_squid: NodeID='{node_id}', EntryPos=({entry_x:.1f},{entry_y:.1f}), EntryDir='{entry_direction_on_this_screen}'")
+            self.logger.debug(f"Payload for re-arriving '{node_id}': {squid_data_payload}")
+
         visual_item = remote_squid_info['visual']
         visual_item.setPos(entry_x, entry_y)
-        visual_item.setOpacity(self.remote_opacity); visual_item.setVisible(True); visual_item.setScale(1.0)
+        visual_item.setOpacity(self.remote_opacity) 
+        visual_item.setVisible(True)
+        visual_item.setScale(1.0) 
 
         payload_dir_key = squid_data_payload.get('image_direction_key', 'right')
         payload_anim_frame = squid_data_payload.get('current_animation_frame', 1)
-        new_squid_image_name, _ = self._get_image_file_name_and_direction(
-            payload_dir_key, payload_anim_frame, entry_direction_on_this_screen,
-            remote_squid_info.get('current_image_name', 'right1.png')
+        current_img_name_fallback = remote_squid_info.get('current_image_name', 'right1.png')
+
+        new_squid_image_name, determined_facing_direction = self._get_image_file_name_and_direction(
+            payload_dir_key, 
+            payload_anim_frame, 
+            entry_direction_on_this_screen=entry_direction_on_this_screen,
+            current_image_name_for_fallback_dir=current_img_name_fallback
         )
         scaled_pixmap, (current_w, current_h) = self._get_scaled_pixmap(new_squid_image_name)
         visual_item.setPixmap(scaled_pixmap)
         
+        if self.debug_mode:
+            self.logger.debug(f"_handle_re_arriving_squid '{node_id}': Image selected='{new_squid_image_name}', Determined Facing='{determined_facing_direction}', Size=({current_w}x{current_h})")
+
         remote_squid_info['current_display_dimensions'] = (current_w, current_h)
         remote_squid_info['current_image_name'] = new_squid_image_name
         remote_squid_info['network_target_x'] = entry_x 
         remote_squid_info['network_target_y'] = entry_y
         
-        if 'status_text' in remote_squid_info and remote_squid_info['status_text']:
-            remote_squid_info['status_text'].setPlainText("ENTERING...")
-            remote_squid_info['status_text'].setDefaultTextColor(QtGui.QColor(255,255,0))
-            remote_squid_info['status_text'].setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
-        self._update_dependent_items_position(remote_squid_info, entry_x, entry_y)
-        remote_squid_info['was_arrival_text'] = True
+        status_item = remote_squid_info.get('status_text')
+        if status_item:
+            status_item.setPlainText("ENTERING...")
+            status_item.setDefaultTextColor(QtGui.QColor(255,255,0)) 
+            status_item.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+            status_item.setVisible(self.show_labels) 
         
-        self.logger.info(f"REMOTE_ENTITY_MANAGER: Re-initialized re-arriving squid {node_id} at ({entry_x:.1f}, {entry_y:.1f}). Image: {new_squid_image_name}, Size: {current_w}x{current_h}")
+        id_item = remote_squid_info.get('id_text')
+        if id_item: 
+            id_item.setVisible(self.show_labels)
+
+        self._update_dependent_items_position(remote_squid_info, entry_x, entry_y)
+        remote_squid_info['was_arrival_text'] = True 
+        
+        if self.debug_mode:
+            self.logger.info(f"REMOTE_ENTITY_MANAGER: Re-initialized RE-ARRIVING squid '{node_id}' at ({entry_x:.1f}, {entry_y:.1f}). Image: '{new_squid_image_name}', Size: {current_w}x{current_h}")
 
     def _handle_existing_squid_update(self, node_id, squid_data_payload, remote_squid_info):
+        if self.debug_mode:
+            log_payload = {
+                'x': squid_data_payload.get('x'), 'y': squid_data_payload.get('y'),
+                'image_direction_key': squid_data_payload.get('image_direction_key'),
+                'current_animation_frame': squid_data_payload.get('current_animation_frame'),
+                'status': squid_data_payload.get('status'),
+                'view_cone_visible': squid_data_payload.get('view_cone_visible')
+            }
+            self.logger.debug(f"_handle_existing_squid_update: NodeID='{node_id}'. Payload essentials: {log_payload}")
+
         network_x = squid_data_payload.get('x')
         network_y = squid_data_payload.get('y')
 
@@ -252,40 +324,69 @@ class RemoteEntityManager:
             remote_squid_info['network_target_x'] = network_x
             remote_squid_info['network_target_y'] = network_y
         else:
-            if self.debug_mode: self.logger.debug(f"Existing squid update for {node_id} missing x or y. Target not updated.")
+            if self.debug_mode:
+                self.logger.warning(f"_handle_existing_squid_update '{node_id}': Update missing x or y coordinates. Target position not updated.")
 
-        visual_item = remote_squid_info['visual'] 
+        visual_item = remote_squid_info.get('visual')
+        if not visual_item:
+            if self.debug_mode:
+                self.logger.error(f"_handle_existing_squid_update '{node_id}': Visual item not found! Cannot update.")
+            return False
 
-        new_status = squid_data_payload.get('status', remote_squid_info.get('data',{}).get('status','visiting'))
-        if 'status_text' in remote_squid_info and remote_squid_info['status_text']:
-            remote_squid_info['status_text'].setPlainText(f"{new_status}")
-            if remote_squid_info.get('was_arrival_text', False):
-                remote_squid_info['status_text'].setDefaultTextColor(QtGui.QColor(200,200,200,230))
-                remote_squid_info['status_text'].setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Normal))
-                remote_squid_info['was_arrival_text'] = False
+        new_status_from_payload = squid_data_payload.get('status', remote_squid_info.get('data',{}).get('status','visiting'))
+        status_text_item = remote_squid_info.get('status_text')
+        if status_text_item:
+            if status_text_item.toPlainText().upper() != new_status_from_payload.upper() or remote_squid_info.get('was_arrival_text', False): # Case-insensitive compare for current text
+                status_text_item.setPlainText(new_status_from_payload.upper())
+                if remote_squid_info.get('was_arrival_text', False) or "ENTERING" in status_text_item.toPlainText(): 
+                    status_text_item.setDefaultTextColor(QtGui.QColor(200,200,200,230)) 
+                    status_text_item.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Normal)) 
+                    remote_squid_info['was_arrival_text'] = False
+            status_text_item.setVisible(self.show_labels)
         
-        if 'view_cone_visible' in squid_data_payload:
+        if 'view_cone_visible' in squid_data_payload: 
             if squid_data_payload['view_cone_visible']:
-                self.update_remote_view_cone(node_id, squid_data_payload)
+                self.update_remote_view_cone(node_id, squid_data_payload) 
             elif remote_squid_info.get('view_cone') and remote_squid_info['view_cone'].scene():
-                self.scene.removeItem(remote_squid_info['view_cone']); remote_squid_info['view_cone'] = None
+                self.scene.removeItem(remote_squid_info['view_cone'])
+                remote_squid_info['view_cone'] = None
         
-        payload_dir_key = squid_data_payload.get('image_direction_key')
+        payload_dir_key = squid_data_payload.get('image_direction_key') 
         payload_anim_frame = squid_data_payload.get('current_animation_frame', 1)
-        potential_new_image_name, _ = self._get_image_file_name_and_direction(
-            payload_dir_key, payload_anim_frame, None,
-            remote_squid_info.get('current_image_name', 'right1.png')
+        current_img_name_fallback = remote_squid_info.get('current_image_name', 'right1.png')
+
+        potential_new_image_name, determined_facing_direction = self._get_image_file_name_and_direction(
+            payload_dir_key, 
+            payload_anim_frame,
+            entry_direction_on_this_screen=None, 
+            current_image_name_for_fallback_dir=current_img_name_fallback
         )
         
         if potential_new_image_name != remote_squid_info.get('current_image_name'):
             scaled_pixmap, (current_w, current_h) = self._get_scaled_pixmap(potential_new_image_name)
-            visual_item.setPixmap(scaled_pixmap); visual_item.setScale(1.0) 
+            visual_item.setPixmap(scaled_pixmap) 
+            
             remote_squid_info['current_display_dimensions'] = (current_w, current_h)
             remote_squid_info['current_image_name'] = potential_new_image_name
-            if self.debug_mode: self.logger.debug(f"Updated image for {node_id} to {potential_new_image_name}, Size: {current_w}x{current_h}")
+            if self.debug_mode:
+                self.logger.debug(f"_handle_existing_squid_update '{node_id}': Image CHANGED to '{potential_new_image_name}', New Facing='{determined_facing_direction}', Size=({current_w}x{current_h})")
+        
         return True
 
     def update_remote_squid(self, node_id, squid_data_payload, is_new_arrival=False):
+        if self.debug_mode:
+            arrival_status = "NEW ARRIVAL" if is_new_arrival else "EXISTING SQUID UPDATE"
+            self.logger.debug(f"update_remote_squid CALLED: NodeID='{node_id}', Status='{arrival_status}'")
+            # Avoid logging full payload if too verbose, log key parts or hash if necessary
+            # For now, logging essential keys to understand context:
+            log_payload_essentials = {
+                'x': squid_data_payload.get('x'), 'y': squid_data_payload.get('y'),
+                'image_direction_key': squid_data_payload.get('image_direction_key'),
+                'status': squid_data_payload.get('status'),
+                'node_id_in_payload': squid_data_payload.get('node_id') # verify it matches argument node_id
+            }
+            self.logger.debug(f"Payload essentials for '{node_id}': {log_payload_essentials}")
+
         if not squid_data_payload:
             if self.debug_mode: self.logger.warning(f"No data for remote squid {node_id}")
             return False
