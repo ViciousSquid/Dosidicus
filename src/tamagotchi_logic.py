@@ -1,11 +1,12 @@
-
 from PyQt5 import QtCore, QtGui, QtWidgets
 import random
 import os
 import time
+import sys
 import json
 import base64
 import math
+import threading
 from .statistics_window import StatisticsWindow
 from .save_manager import SaveManager
 from .rps_game import RPSGame
@@ -43,7 +44,7 @@ class TamagotchiLogic:
         self.window_resize_cooldown_max = 30  # 30 updates before another resize can startle
         self.has_been_resized = False
         self.was_big = False # Tracks if window was previously enlarged
-        self.debug_mode = False # Initial debug mode state
+        self.debug_mode = True          # DEBUG TOGGLE
         self.last_window_size = (1280, 900)  # Default or initial size
 
         # MODIFIED: Use the passed-in PluginManager instance
@@ -158,9 +159,9 @@ class TamagotchiLogic:
         self.score_update_timer.timeout.connect(self.update_score)
         self.score_update_timer.start(5000) # 5 seconds
 
-        self.brain_update_timer = QtCore.QTimer()
-        self.brain_update_timer.timeout.connect(self.update_squid_brain)
-        self.brain_update_timer.start(1000) # 1 second
+        #self.brain_update_timer = QtCore.QTimer()
+        #self.brain_update_timer.timeout.connect(self.update_squid_brain)
+        #self.brain_update_timer.start(1000) # 1 second
 
         self.autosave_timer = QtCore.QTimer()
         self.autosave_timer.timeout.connect(self.autosave)
@@ -716,8 +717,8 @@ class TamagotchiLogic:
         if hasattr(self, 'poop_interaction'):
             self.poop_interaction.setup_timers(interval=100)
         
-        # Start the simulation timer
-        self.simulation_timer.start()
+        # Start the simulation timer (Redundant)
+        # self.simulation_timer.start()
 
     def update_timers(self):
         """Update timer intervals based on current simulation speed"""
@@ -892,8 +893,8 @@ class TamagotchiLogic:
         ink_cloud_item = QtWidgets.QGraphicsPixmapItem(ink_cloud_pixmap)
         
         # Set the center of the ink cloud to match the center of the squid
-        squid_center_x = self.squid_x + self.squid_width // 2
-        squid_center_y = self.squid_y + self.squid_height // 2
+        squid_center_x = self.squid.squid_x + self.squid.squid_width // 2
+        squid_center_y = self.squid_y + self.squid.squid_height // 2
         ink_cloud_item.setPos(
             squid_center_x - ink_cloud_pixmap.width() // 2, 
             squid_center_y - ink_cloud_pixmap.height() // 2
@@ -951,6 +952,8 @@ class TamagotchiLogic:
             # Add thoughts
             self.brain_window.add_thought("No longer startled")
 
+    # Inside TamagotchiLogic class in src/tamagotchi_logic.py
+
     def update_simulation(self):
         # Trigger pre-update hook
         self.plugin_manager.trigger_hook("pre_update", 
@@ -968,18 +971,23 @@ class TamagotchiLogic:
         # 1. Handle existing simulation updates
         self.move_objects()
         self.animate_poops()
-        self.update_statistics()
+        self.update_statistics() # This already calls update_needs for the squid
 
-        # Add poop interaction check
-        self.check_poop_interaction()
+        # Add poop interaction check (if self.poop_interaction is initialized)
+        if hasattr(self, 'poop_interaction'):
+            self.check_poop_interaction()
         
         if self.squid:
             # 2. Core squid updates
-            self.squid.move_squid()
-            self.check_for_decoration_attraction()
-            self.check_for_sickness()
+            self.squid.move_squid() # This includes squid movement and decision making via make_decision
+            self.check_for_decoration_attraction() # Interacts with decorations
+            self.check_for_sickness() # Updates sickness state
             
-            # 3. Mental state updates
+            # New check for TIMID squid's anxiety-driven flee
+            if self.squid.personality == Personality.TIMID:
+                self.squid.check_anxiety_flee()
+
+            # 3. Mental state updates (if enabled)
             if self.mental_states_enabled:
                 self.check_for_startle()
                 self.check_for_curiosity()
@@ -988,9 +996,11 @@ class TamagotchiLogic:
             self.track_neurogenesis_triggers()
             
             # 5. Memory management
-            self.squid.memory_manager.periodic_memory_management()
+            if hasattr(self.squid, 'memory_manager') and self.squid.memory_manager:
+                self.squid.memory_manager.periodic_memory_management()
             
             # 6. Prepare brain state with neurogenesis data
+            # (This seems to be for display/external tools; actual decision uses internal state)
             brain_state = {
                 "hunger": self.squid.hunger,
                 "happiness": self.squid.happiness,
@@ -1005,24 +1015,25 @@ class TamagotchiLogic:
                 "direction": self.squid.squid_direction,
                 "position": (self.squid.squid_x, self.squid.squid_y),
                 
-                # Neurogenesis-specific additions
                 "novelty_exposure": self.neurogenesis_triggers['novel_objects'],
                 "sustained_stress": self.neurogenesis_triggers['high_stress_cycles'] / 10.0,
                 "recent_rewards": self.neurogenesis_triggers['positive_outcomes'],
                 "personality": self.squid.personality.value
             }
             
-            # 7. Update brain (will trigger neurogenesis checks)
-            self.brain_window.update_brain(brain_state)
+            # 7. Update brain window (if visible and exists)
+            if hasattr(self, 'brain_window') and self.brain_window and self.brain_window.isVisible():
+                self.brain_window.update_brain(brain_state)
             
-            # 8. Reset frame-specific flags
+            # 8. Reset frame-specific flags for neurogenesis
             self.new_object_encountered = False
             self.recent_positive_outcome = False
 
         # 9. Handle RPS game state if active
-        if hasattr(self, 'rps_game') and self.rps_game.game_window:
-            self.rps_game.update_state()
-            # Trigger post-update hook at the end
+        if hasattr(self, 'rps_game') and self.rps_game and hasattr(self.rps_game, 'game_window') and self.rps_game.game_window:
+            self.rps_game.update_state() # Assuming rps_game can be None or game_window can be None
+            
+        # Trigger post-update hook at the end
         self.plugin_manager.trigger_hook("post_update", 
                                         tamagotchi_logic=self, 
                                         squid=self.squid)
@@ -1107,15 +1118,15 @@ class TamagotchiLogic:
             )
         
         # Debug output if in debug mode
-        if self.debug_mode:
-            print(f"Neurogenesis triggers: {self.neurogenesis_triggers}")
+        #if self.debug_mode:
+        #    print(f"Neurogenesis triggers: {self.neurogenesis_triggers}")
 
     def make_squid_curious(self):
         self.squid.mental_state_manager.set_state("curious", True)
         self.curious_cooldown = self.curious_cooldown_max
         
         # Use the new add_thought method
-        self.add_thought("Experiencing extreme curiosity")
+        #self.add_thought("Experiencing extreme curiosity")
         
         # Increase curiosity
         self.squid.curiosity = min(100, self.squid.curiosity + 20)
@@ -1305,33 +1316,82 @@ class TamagotchiLogic:
                 return food_item
         return None
 
+
+
     def move_cheese(self, cheese_item):
-        cheese_x = cheese_item.pos().x()
-        cheese_y = cheese_item.pos().y() + (self.base_food_speed * self.simulation_speed)
+        # Ensure this method is called from the main GUI thread
+        current_pos_x = 0.0
+        current_pos_y = 0.0 # Default if pos() fails for some reason
 
-        if cheese_y > self.user_interface.window_height - 120 - self.food_height:
-            cheese_y = self.user_interface.window_height - 120 - self.food_height
+        try:
+            # It's safer to get both x and y before calculating new_y, 
+            # though x has been stable.
+            pos = cheese_item.pos()
+            current_pos_x = pos.x()
+            current_pos_y = pos.y() 
+        except Exception as e:
+            # Log this unexpected failure if pos() or x()/y() fails even here
+            print(f"ERROR in move_cheese getting initial position: {type(e).__name__}: {e}")
+            # Potentially try to use last known good y if available, or skip update
+            if hasattr(cheese_item, 'current_y_for_autopilot'):
+                current_pos_y = cheese_item.current_y_for_autopilot
+            # current_pos_x might also need a fallback if cheese_item.pos().x() could fail
 
-        cheese_item.setPos(cheese_x, cheese_y)
+        # Re-enable sinking logic
+        new_y = current_pos_y + (self.base_food_speed * self.simulation_speed)
 
-        # Directly check collision without redundant checks
+        # Apply boundary checks to new_y
+        if new_y > self.user_interface.window_height - 120 - self.food_height:
+            new_y = self.user_interface.window_height - 120 - self.food_height
+        elif new_y < 0: # Example top boundary
+            new_y = 0 
+            # Optionally, handle item removal if it goes off-screen at the top
+            # self.remove_food(cheese_item) 
+
+        cheese_item.setPos(current_pos_x, new_y)
+        # Store the definitive Y coordinate that was just set
+        cheese_item.current_y_for_autopilot = new_y 
+        # Add a flag to indicate this reliable attribute is available
+        cheese_item.has_current_y_for_autopilot = True
+
         if self.squid and cheese_item.collidesWithItem(self.squid.squid_item):
             self.squid.eat(cheese_item)
-            
-            # Reset status after a short delay
-            QtCore.QTimer.singleShot(2000, self.reset_squid_status)
+            # Assuming QtCore is available and self.reset_squid_status is main-thread safe
+            if 'QtCore' in sys.modules: # Check if QtCore was imported
+                QtCore.QTimer.singleShot(2000, self.reset_squid_status)
+            # self.remove_food(cheese_item) # Add if cheese should be removed upon eating
 
     def move_sushi(self, sushi_item):
-        sushi_x = sushi_item.pos().x()
-        sushi_y = sushi_item.pos().y() + (self.base_food_speed * self.simulation_speed)
+        # Ensure this method is called from the main GUI thread
+        current_pos_x = 0.0
+        current_pos_y = 0.0
 
-        if sushi_y > self.user_interface.window_height - 120 - self.food_height:
-            sushi_y = self.user_interface.window_height - 120 - self.food_height
+        try:
+            pos = sushi_item.pos()
+            current_pos_x = pos.x()
+            current_pos_y = pos.y()
+        except Exception as e:
+            print(f"ERROR in move_sushi getting initial position: {type(e).__name__}: {e}")
+            if hasattr(sushi_item, 'current_y_for_autopilot'):
+                current_pos_y = sushi_item.current_y_for_autopilot
+                
+        # Re-enable sinking logic
+        new_y = current_pos_y + (self.base_food_speed * self.simulation_speed)
 
-        sushi_item.setPos(sushi_x, sushi_y)
+        # Apply boundary checks to new_y
+        if new_y > self.user_interface.window_height - 120 - self.food_height:
+            new_y = self.user_interface.window_height - 120 - self.food_height
+        elif new_y < 0:
+            new_y = 0
+            # self.remove_food(sushi_item) 
+
+        sushi_item.setPos(current_pos_x, new_y)
+        # Store the definitive Y coordinate that was just set
+        sushi_item.current_y_for_autopilot = new_y
+        sushi_item.has_current_y_for_autopilot = True
 
         if self.squid is not None and sushi_item.collidesWithItem(self.squid.squid_item):
-            self.squid.eat(sushi_item)  # Pass the sushi_item as an argument
+            self.squid.eat(sushi_item)
             self.remove_food(sushi_item)
 
     def is_sushi(self, food_item):
