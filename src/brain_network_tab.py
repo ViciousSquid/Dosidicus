@@ -54,9 +54,9 @@ class NetworkTab(BrainBaseTab):
         self.report_button = self.create_button("Network Report", self.show_diagnostic_report, "#ADD8E6")
 
         button_layout.addWidget(self.report_button)
-        button_layout.addWidget(self.stimulate_button)
-        button_layout.addWidget(self.save_button)
-        button_layout.addWidget(self.load_button)
+        # button_layout.addWidget(self.stimulate_button)
+        # button_layout.addWidget(self.save_button)
+        # button_layout.addWidget(self.load_button)
         
         main_content_layout.addLayout(button_layout)
 
