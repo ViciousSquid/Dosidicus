@@ -8,16 +8,16 @@ What if a Tamagotchi had a neural network and could learn stuff?
   Check releases: https://github.com/ViciousSquid/Dosidicus/releases/
 
 
-![image](https://github.com/user-attachments/assets/6102225a-52d6-440c-adfb-a58fd800f1cd)
+![image](https://github.com/user-attachments/assets/2d64d438-99e7-4155-8d15-859a2df2c614)
+)
 
 
 
 ### Autonomous Behavior:
 
-* The squid moves autonomously, making decisions based on his current state (hunger, sleepiness, etc.).
+* The squid neural network makes autonomous decisions based on current state (hunger, sleepiness, etc.).
 * Implements a vision cone for food detection, simulating realistic foraging behavior.
-* Neural network can make decisions and form associations
-* Weights are analysed, tweaked and trained by Hebbian learning algorithm
+* Hebbian learning algorithm runs every 30 seconds (configurable)
 * Experiences from short-term and long-term memory can influence decision-making
 * Squid can create new neurons in response to his environment (Neurogenesis)
 
@@ -30,8 +30,6 @@ I'm trying to document everything!
 * Needs change over time and affect the pet's health and behavior.
 * The squid can become sick and die if his needs are neglected.
 
-Be aware the squid hates taking medicine and will become depressed and need sleep if made to do so.
-
 ### Personality system
 
 * Seven different [personality types](https://github.com/ViciousSquid/Dosidicus/blob/main/Docs/Personalities.md) which influence behaviour
@@ -40,8 +38,5 @@ Be aware the squid hates taking medicine and will become depressed and need slee
 
 * Choose decorations to be placed into the environment which the squid will interact with!
 
-### Debug Tools:
-
-* Directly View and edit the squid's internal states
 
   <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
