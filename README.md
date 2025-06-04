@@ -8,7 +8,8 @@ What if a Tamagotchi had a neural network and could learn stuff?
   Check releases: https://github.com/ViciousSquid/Dosidicus/releases/
 
 
-![image](https://github.com/user-attachments/assets/4d1e219c-faec-4f4a-bffe-5b0048f2ece0)
+![image](https://github.com/user-attachments/assets/bc24bd2b-1825-4ab2-acc6-edaefb3e3165)
+
 
 
 
