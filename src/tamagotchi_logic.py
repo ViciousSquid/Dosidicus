@@ -948,13 +948,13 @@ class TamagotchiLogic:
         
         # Set the center of the ink cloud to match the center of the squid
         squid_center_x = self.squid.squid_x + self.squid.squid_width // 2
-        squid_center_y = self.squid_y + self.squid.squid_height // 2
+        squid_center_y = self.squid.squid_y + self.squid.squid_height // 2
         ink_cloud_item.setPos(
             squid_center_x - ink_cloud_pixmap.width() // 2, 
             squid_center_y - ink_cloud_pixmap.height() // 2
         )
         
-        self.ui.scene.addItem(ink_cloud_item)
+        self.user_interface.scene.addItem(ink_cloud_item)
         
         # Create a QGraphicsOpacityEffect without a parent
         opacity_effect = QtWidgets.QGraphicsOpacityEffect()
@@ -979,13 +979,13 @@ class TamagotchiLogic:
 
     def force_remove_ink_cloud(self, ink_cloud_item):
         """Force remove the ink cloud if it still exists after timeout"""
-        if ink_cloud_item in self.ui.scene.items():
-            self.ui.scene.removeItem(ink_cloud_item)
+        if ink_cloud_item in self.user_interface.scene.items():
+            self.user_interface.scene.removeItem(ink_cloud_item)
 
     def remove_ink_cloud(self, ink_cloud_item):
         """Remove the ink cloud from the scene"""
-        if ink_cloud_item in self.ui.scene.items():
-            self.ui.scene.removeItem(ink_cloud_item)
+        if ink_cloud_item in self.user_interface.scene.items():
+            self.user_interface.scene.removeItem(ink_cloud_item)
         if ink_cloud_item.graphicsEffect():
             ink_cloud_item.graphicsEffect().deleteLater()
         ink_cloud_item.setGraphicsEffect(None)
