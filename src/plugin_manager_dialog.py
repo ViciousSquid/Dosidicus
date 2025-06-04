@@ -6,47 +6,45 @@ class PluginManagerDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.plugin_manager = plugin_manager
         self.setWindowTitle("Plugin Manager")
-        self.resize(600, 450) # Adjusted size slightly for better layout
+        self.resize(600, 400)
         
         self.setup_ui()
-        self.load_plugin_data() # Initial population
+        self.load_plugin_data()
         
     def setup_ui(self):
         # Main layout
         layout = QtWidgets.QVBoxLayout(self)
         
-        # Plugin list (renamed self.plugin_list_widget for clarity if you prefer)
-        self.plugin_list_widget = QtWidgets.QListWidget() 
-        self.plugin_list_widget.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
-        self.plugin_list_widget.currentItemChanged.connect(self.on_plugin_selected)
-        layout.addWidget(self.plugin_list_widget, 2) # Give more space to list
+        # Plugin list
+        self.plugin_list = QtWidgets.QListWidget()
+        self.plugin_list.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.plugin_list.currentItemChanged.connect(self.on_plugin_selected)
+        layout.addWidget(self.plugin_list, 2)
         
         # Plugin details group
         details_group = QtWidgets.QGroupBox("Plugin Details")
         details_layout = QtWidgets.QFormLayout(details_group)
         
-        self.plugin_name_label = QtWidgets.QLabel() # Renamed for clarity
-        details_layout.addRow("Name:", self.plugin_name_label)
+        self.plugin_name = QtWidgets.QLabel()
+        details_layout.addRow("Name:", self.plugin_name)
         
-        self.plugin_version_label = QtWidgets.QLabel() # Renamed
-        details_layout.addRow("Version:", self.plugin_version_label)
+        self.plugin_version = QtWidgets.QLabel()
+        details_layout.addRow("Version:", self.plugin_version)
         
-        self.plugin_author_label = QtWidgets.QLabel() # Renamed
-        details_layout.addRow("Author:", self.plugin_author_label)
+        self.plugin_author = QtWidgets.QLabel()
+        details_layout.addRow("Author:", self.plugin_author)
         
-        self.plugin_description_label = QtWidgets.QLabel() # Renamed
-        self.plugin_description_label.setWordWrap(True)
-        self.plugin_description_label.setMinimumHeight(40) # Allow space for description
-        details_layout.addRow("Description:", self.plugin_description_label)
+        self.plugin_description = QtWidgets.QLabel()
+        self.plugin_description.setWordWrap(True)
+        details_layout.addRow("Description:", self.plugin_description)
         
-        self.plugin_requires_label = QtWidgets.QLabel() # Renamed
-        self.plugin_requires_label.setWordWrap(True)
-        details_layout.addRow("Dependencies:", self.plugin_requires_label)
+        self.plugin_requires = QtWidgets.QLabel()
+        details_layout.addRow("Dependencies:", self.plugin_requires)
         
-        self.plugin_status_label = QtWidgets.QLabel() # Renamed
-        details_layout.addRow("Status:", self.plugin_status_label)
+        self.plugin_status = QtWidgets.QLabel()
+        details_layout.addRow("Status:", self.plugin_status)
         
-        layout.addWidget(details_group, 1) # Give less relative space to details
+        layout.addWidget(details_group, 1)
         
         # Actions group
         actions_group = QtWidgets.QGroupBox("Actions")
@@ -54,17 +52,14 @@ class PluginManagerDialog(QtWidgets.QDialog):
         
         self.enable_button = QtWidgets.QPushButton("Enable")
         self.enable_button.clicked.connect(self.enable_selected_plugin)
-        self.enable_button.setToolTip("Enable the selected plugin. This will also load and set it up if it's the first time.")
         actions_layout.addWidget(self.enable_button)
         
         self.disable_button = QtWidgets.QPushButton("Disable")
         self.disable_button.clicked.connect(self.disable_selected_plugin)
-        self.disable_button.setToolTip("Disable the selected plugin.")
         actions_layout.addWidget(self.disable_button)
         
-        self.refresh_button = QtWidgets.QPushButton("Refresh List")
+        self.refresh_button = QtWidgets.QPushButton("Refresh")
         self.refresh_button.clicked.connect(self.load_plugin_data)
-        self.refresh_button.setToolTip("Refresh the list of plugins and their status.")
         actions_layout.addWidget(self.refresh_button)
         
         layout.addWidget(actions_group)
@@ -72,265 +67,200 @@ class PluginManagerDialog(QtWidgets.QDialog):
         # Close button
         self.close_button = QtWidgets.QPushButton("Close")
         self.close_button.clicked.connect(self.accept)
-        layout.addWidget(self.close_button, 0, QtCore.Qt.AlignRight) # Align to right
-
+        layout.addWidget(self.close_button)
+        
     def load_plugin_data(self):
-        """Load/refresh plugin data into the list, ensuring 'multiplayer' is first if present."""
-        current_selected_key = None
-        if self.plugin_list_widget.currentItem():
-            current_metadata = self.plugin_list_widget.currentItem().data(QtCore.Qt.UserRole)
-            if current_metadata:
-                current_selected_key = current_metadata.get('name', '').lower()
-
-        self.plugin_list_widget.clear()
-        if not self.plugin_manager:
-            self.clear_plugin_details()
-            return
-
-        # Use discovered_plugins as the source of truth for what *can* be managed
-        discovered_plugins_meta = self.plugin_manager._discovered_plugins if self.plugin_manager._discovered_plugins else {}
-        if not discovered_plugins_meta:
-            self.plugin_list_widget.addItem("No plugins discovered.")
-            self.clear_plugin_details()
-            return
-
-        all_plugin_data_values = list(discovered_plugins_meta.values())
+        """Load plugin data into the list"""
+        self.plugin_list.clear()
         
-        multiplayer_plugin_metadata = None
-        other_plugins_metadata = []
-
-        for p_data in all_plugin_data_values:
-            if p_data.get('name', '').lower() == 'multiplayer': # 'name' from discovery is the lowercase key
-                multiplayer_plugin_metadata = p_data
+        # Load plugins from plugin_manager
+        loaded_plugins = {}
+        enabled_plugins = self.plugin_manager.get_enabled_plugins()
+        
+        # First, add loaded plugins
+        for plugin_name in self.plugin_manager.get_loaded_plugins():
+            plugin_data = self.plugin_manager.plugins.get(plugin_name, {})
+            
+            item = QtWidgets.QListWidgetItem(plugin_name)
+            item.setData(QtCore.Qt.UserRole, plugin_data)
+            
+            # Set icon based on status
+            if plugin_name in enabled_plugins:
+                # Green dot for enabled
+                item.setIcon(self.get_status_icon("enabled"))
             else:
-                other_plugins_metadata.append(p_data)
+                # Yellow dot for loaded but not enabled
+                item.setIcon(self.get_status_icon("loaded"))
                 
-        other_plugins_metadata.sort(key=lambda p: p.get('original_name', p.get('name', ''))) # Sort by display name
+            self.plugin_list.addItem(item)
+            loaded_plugins[plugin_name] = True
         
-        final_sorted_metadata_list = []
-        if multiplayer_plugin_metadata:
-            final_sorted_metadata_list.append(multiplayer_plugin_metadata)
-        final_sorted_metadata_list.extend(other_plugins_metadata)
-
-        item_to_reselect = None
-        for plugin_metadata in final_sorted_metadata_list:
-            display_name = plugin_metadata.get('original_name', plugin_metadata.get('name', 'Unknown Plugin'))
-            plugin_key = plugin_metadata.get('name', '').lower()
-
-            if not plugin_key: continue
-
-            item = QtWidgets.QListWidgetItem(display_name)
-            # Store the full discovered metadata with the item.
-            # This metadata contains 'name' (lowercase key), 'original_name', 'version', etc.
-            item.setData(QtCore.Qt.UserRole, plugin_metadata) 
-
-            # Determine status for icon and tooltip
-            is_loaded = plugin_key in self.plugin_manager.plugins
-            is_enabled = plugin_key in self.plugin_manager.enabled_plugins
-            
-            status_icon_type = "discovered" # Default for not loaded
-            if is_enabled:
-                status_icon_type = "enabled"
-            elif is_loaded: # Loaded but not enabled
-                status_icon_type = "loaded"
-            
-            item.setIcon(self.get_status_icon(status_icon_type))
-            self.plugin_list_widget.addItem(item)
-
-            if plugin_key == current_selected_key:
-                item_to_reselect = item
+        # Then add discovered plugins that aren't loaded
+        if hasattr(self.plugin_manager, '_discovered_plugins'):
+            for plugin_name, plugin_data in self.plugin_manager._discovered_plugins.items():
+                if plugin_name not in loaded_plugins:
+                    item = QtWidgets.QListWidgetItem(plugin_name)
+                    item.setData(QtCore.Qt.UserRole, plugin_data)
+                    
+                    # Gray dot for discovered but not loaded
+                    item.setIcon(self.get_status_icon("discovered"))
+                    self.plugin_list.addItem(item)
         
-        if item_to_reselect:
-            self.plugin_list_widget.setCurrentItem(item_to_reselect)
-        elif self.plugin_list_widget.count() > 0:
-            self.plugin_list_widget.setCurrentRow(0)
+        # Select the first plugin if available
+        if self.plugin_list.count() > 0:
+            self.plugin_list.setCurrentRow(0)
         else:
-            self.clear_plugin_details() # Explicitly clear if list is empty
+            self.clear_plugin_details()
             
     def get_status_icon(self, status):
+        """Create a colored dot icon for the plugin status"""
         pixmap = QtGui.QPixmap(16, 16)
         pixmap.fill(QtCore.Qt.transparent)
+        
         painter = QtGui.QPainter(pixmap)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         
-        color = QtGui.QColor(150, 150, 150) # Default: Gray for discovered
         if status == "enabled":
-            color = QtGui.QColor(0, 180, 0)  # Darker Green
+            color = QtGui.QColor(0, 200, 0)  # Green
         elif status == "loaded":
-            color = QtGui.QColor(220, 165, 0)  # Orange/Yellow
+            color = QtGui.QColor(200, 200, 0)  # Yellow
+        else:
+            color = QtGui.QColor(150, 150, 150)  # Gray
             
         painter.setBrush(QtGui.QBrush(color))
-        painter.setPen(QtGui.QPen(QtCore.Qt.black, 0.5)) # Thinner pen
-        painter.drawEllipse(2, 2, 11, 11) # Slightly smaller ellipse
+        painter.setPen(QtGui.QPen(QtCore.Qt.black, 1))
+        painter.drawEllipse(2, 2, 12, 12)
         painter.end()
+        
         return QtGui.QIcon(pixmap)
         
-    def on_plugin_selected(self, current_item, previous_item):
-        if not current_item:
+    def on_plugin_selected(self, current, previous):
+        """Handle plugin selection change"""
+        if not current:
             self.clear_plugin_details()
             return
             
-        plugin_metadata = current_item.data(QtCore.Qt.UserRole)
-        if not plugin_metadata:
-            self.clear_plugin_details()
-            return
-
-        plugin_display_name = current_item.text() 
-        plugin_key = plugin_metadata.get('name', '').lower() # The reliable lowercase key from discovery metadata
-
-        self.plugin_name_label.setText(f"<b>{plugin_display_name}</b>")
-        self.plugin_version_label.setText(plugin_metadata.get('version', 'N/A'))
-        self.plugin_author_label.setText(plugin_metadata.get('author', 'N/A'))
-        self.plugin_description_label.setText(plugin_metadata.get('description', 'No description available.'))
+        # Get plugin data
+        plugin_data = current.data(QtCore.Qt.UserRole)
+        plugin_name = current.text()
         
-        requires = plugin_metadata.get('requires', [])
-        self.plugin_requires_label.setText(", ".join(requires) if requires else "None")
+        # Update details
+        self.plugin_name.setText(plugin_data.get('name', plugin_name))
+        self.plugin_version.setText(plugin_data.get('version', 'Unknown'))
+        self.plugin_author.setText(plugin_data.get('author', 'Unknown'))
+        self.plugin_description.setText(plugin_data.get('description', 'No description available'))
         
-        # Determine status based on the plugin_key by checking PluginManager state
-        is_loaded = plugin_key in self.plugin_manager.plugins 
-        is_setup = is_loaded and self.plugin_manager.plugins[plugin_key].get('is_setup', False)
-        is_enabled = plugin_key in self.plugin_manager.enabled_plugins
+        # Dependencies
+        requires = plugin_data.get('requires', [])
+        if requires:
+            self.plugin_requires.setText(", ".join(requires))
+        else:
+            self.plugin_requires.setText("None")
         
-        status_text_parts = []
-        status_style = "color: gray;" # Default for discovered
-
+        # Status
+        is_loaded = plugin_name in self.plugin_manager.get_loaded_plugins()
+        is_enabled = plugin_name in self.plugin_manager.get_enabled_plugins()
+        
         if is_enabled:
-            status_text_parts.append("Enabled")
-            if is_setup:
-                status_text_parts.append("Setup Complete")
-            elif is_loaded: # Should ideally be setup if enabled
-                status_text_parts.append("Loaded (Setup Incomplete!)") 
-            status_style = "color: darkgreen; font-weight: bold;"
-        elif is_loaded: # Loaded but not enabled
-            status_text_parts.append("Loaded (Disabled)")
-            if is_setup:
-                status_text_parts.append("Setup Complete")
-            else: 
-                status_text_parts.append("Setup Pending")
-            status_style = "color: orange; font-weight: bold;" # orange for loaded but not enabled
-        else: # Discovered, not loaded
-            status_text_parts.append("Discovered (Not Loaded)")
+            self.plugin_status.setText("Enabled")
+            self.plugin_status.setStyleSheet("color: green; font-weight: bold;")
+        elif is_loaded:
+            self.plugin_status.setText("Loaded (Not Enabled)")
+            self.plugin_status.setStyleSheet("color: orange; font-weight: bold;")
+        else:
+            self.plugin_status.setText("Discovered (Not Loaded)")
+            self.plugin_status.setStyleSheet("color: gray;")
         
-        self.plugin_status_label.setText(", ".join(status_text_parts))
-        self.plugin_status_label.setStyleSheet(status_style)
-        
-        # --- MODIFIED BUTTON LOGIC ---
-        # Enable button should be active if the plugin is NOT currently enabled.
-        # PluginManager.enable_plugin (called by self.enable_selected_plugin)
-        # will handle the full lifecycle: load, setup, and then call plugin's own enable.
-        self.enable_button.setEnabled(not is_enabled) 
+        # Enable/disable buttons based on status
+        self.enable_button.setEnabled(is_loaded and not is_enabled)
         self.disable_button.setEnabled(is_enabled)
         
     def clear_plugin_details(self):
-        self.plugin_name_label.setText("N/A")
-        self.plugin_version_label.setText("N/A")
-        self.plugin_author_label.setText("N/A")
-        self.plugin_description_label.setText("Select a plugin to see details.")
-        self.plugin_requires_label.setText("N/A")
-        self.plugin_status_label.setText("N/A")
-        self.plugin_status_label.setStyleSheet("") # Reset style
+        """Clear all plugin details"""
+        self.plugin_name.clear()
+        self.plugin_version.clear()
+        self.plugin_author.clear()
+        self.plugin_description.clear()
+        self.plugin_requires.clear()
+        self.plugin_status.clear()
+        self.plugin_status.setStyleSheet("")
         
         self.enable_button.setEnabled(False)
         self.disable_button.setEnabled(False)
         
     def enable_selected_plugin(self):
-        current_item = self.plugin_list_widget.currentItem()
-        if not current_item: return
-            
-        plugin_metadata = current_item.data(QtCore.Qt.UserRole)
-        if not plugin_metadata: return
-
-        plugin_key = plugin_metadata.get('name', '').lower()
-        plugin_display_name = plugin_metadata.get('original_name', plugin_key)
-
-        if not plugin_key:
-            QtWidgets.QMessageBox.warning(self, "Plugin Action Error", "Invalid plugin data.")
+        """Enable the selected plugin"""
+        current_item = self.plugin_list.currentItem()
+        if not current_item:
             return
-
-        # PluginManager.enable_plugin is now responsible for the full sequence:
-        # 1. Load (call initialize()) if not already loaded (not in self.plugin_manager.plugins)
-        # 2. Setup (call instance.setup()) if not already setup (checks 'is_setup' flag in plugin_data)
-        # 3. Enable (call instance.enable())
-        success = self.plugin_manager.enable_plugin(plugin_key) 
+            
+        plugin_name = current_item.text()
+        
+        # Try to enable the plugin
+        success = False
+        
+        # First check if plugin has a custom enable method
+        if plugin_name in self.plugin_manager.plugins:
+            plugin_instance = self.plugin_manager.plugins[plugin_name].get('instance')
+            if plugin_instance and hasattr(plugin_instance, 'enable'):
+                try:
+                    success = plugin_instance.enable()
+                    if success:
+                        self.plugin_manager.enable_plugin(plugin_name)
+                except Exception as e:
+                    QtWidgets.QMessageBox.warning(
+                        self, 
+                        "Error", 
+                        f"Error enabling plugin {plugin_name}: {str(e)}"
+                    )
+                    return
+            else:
+                success = self.plugin_manager.enable_plugin(plugin_name)
         
         if success:
-            # Optionally show a less intrusive notification or just rely on list refresh
-            # QtWidgets.QMessageBox.information(self, "Plugin Enabled", f"Plugin '{plugin_display_name}' enabled successfully.")
-            pass # Success is visually indicated by list refresh
+            QtWidgets.QMessageBox.information(
+                self,
+                "Success",
+                f"Plugin {plugin_name} enabled successfully"
+            )
+            self.load_plugin_data()
         else:
-            QtWidgets.QMessageBox.warning(self, "Plugin Action Failed", f"Failed to enable plugin '{plugin_display_name}'. Check logs for details.")
-        self.load_plugin_data() # Refresh list to show new status and update button states
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Error",
+                f"Failed to enable plugin {plugin_name}"
+            )
     
     def disable_selected_plugin(self):
-        current_item = self.plugin_list_widget.currentItem()
-        if not current_item: return
-
-        plugin_metadata = current_item.data(QtCore.Qt.UserRole)
-        if not plugin_metadata: return
-
-        plugin_key = plugin_metadata.get('name', '').lower()
-        plugin_display_name = plugin_metadata.get('original_name', plugin_key)
-
-        if not plugin_key:
-            QtWidgets.QMessageBox.warning(self, "Plugin Action Error", "Invalid plugin data.")
+        """Disable the selected plugin"""
+        current_item = self.plugin_list.currentItem()
+        if not current_item:
             return
-
-        success = self.plugin_manager.disable_plugin(plugin_key) # PM's disable calls plugin's disable
+            
+        plugin_name = current_item.text()
+        
+        # Try to disable the plugin
+        success = self.plugin_manager.disable_plugin(plugin_name)
         
         if success:
-            # QtWidgets.QMessageBox.information(self, "Plugin Disabled", f"Plugin '{plugin_display_name}' disabled successfully.")
-            pass
+            # Call custom disable method if available
+            if plugin_name in self.plugin_manager.plugins:
+                plugin_instance = self.plugin_manager.plugins[plugin_name].get('instance')
+                if plugin_instance and hasattr(plugin_instance, 'disable'):
+                    try:
+                        plugin_instance.disable()
+                    except Exception as e:
+                        print(f"Error in plugin disable method: {e}")
+            
+            QtWidgets.QMessageBox.information(
+                self,
+                "Success",
+                f"Plugin {plugin_name} disabled successfully"
+            )
+            self.load_plugin_data()
         else:
-            QtWidgets.QMessageBox.warning(self, "Plugin Action Failed", f"Failed to disable plugin '{plugin_display_name}'.")
-        self.load_plugin_data() # Refresh list
-
-# Example usage (for testing this dialog standalone, not part of main app flow):
-if __name__ == '__main__':
-    app = QtWidgets.QApplication(sys.argv)
-
-    # Mock PluginManager for testing the dialog
-    class MockPluginManager:
-        def __init__(self):
-            self._discovered_plugins = {
-                'plugin_a': {'name': 'plugin_a', 'original_name': 'Plugin A', 'version': '1.0', 'author': 'Dev A', 'description': 'Description for A', 'requires': ['plugin_b']},
-                'multiplayer': {'name': 'multiplayer', 'original_name': 'Multiplayer', 'version': '0.9', 'author': 'Dev MP', 'description': 'Multiplayer functionality plugin.'},
-                'plugin_b': {'name': 'plugin_b', 'original_name': 'Plugin B', 'version': '2.1', 'author': 'Dev B', 'description': 'Description for B, a utility plugin.'},
-                'plugin_c': {'name': 'plugin_c', 'original_name': 'Plugin C (Core)', 'version': '1.5', 'author': 'Dev C', 'description': 'Core C functionality.'},
-            }
-            self.plugins = { # Mock some as "loaded"
-                 'plugin_b': {'instance': object(), 'is_setup': True, 'original_name': 'Plugin B', 'name': 'plugin_b'}
-            }
-            self.enabled_plugins = {'plugin_b'} # Mock 'plugin_b' as also enabled
-
-        def get_enabled_plugins(self): # This method on PM returns list of original_names
-            return [self.plugins[key].get('original_name', key) for key in self.enabled_plugins if key in self.plugins]
-
-        def enable_plugin(self, key):
-            print(f"Dialog trying to enable: {key}")
-            if key not in self._discovered_plugins: return False
-            # Simulate loading if not loaded
-            if key not in self.plugins:
-                self.plugins[key] = self._discovered_plugins[key].copy()
-                self.plugins[key]['instance'] = object() # Mock instance
-                self.plugins[key]['is_setup'] = False
-                print(f"PM: Loaded {key}")
-            # Simulate setup if not setup
-            if not self.plugins[key].get('is_setup'):
-                 self.plugins[key]['is_setup'] = True
-                 print(f"PM: Setup {key}")
-            self.enabled_plugins.add(key)
-            print(f"PM: Enabled {key}")
-            return True
-
-        def disable_plugin(self, key):
-            print(f"Dialog trying to disable: {key}")
-            if key in self.enabled_plugins:
-                self.enabled_plugins.remove(key)
-                print(f"PM: Disabled {key}")
-                return True
-            return False
-
-    mock_pm = MockPluginManager()
-    dialog = PluginManagerDialog(mock_pm)
-    dialog.show()
-    sys.exit(app.exec_())
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Error",
+                f"Failed to disable plugin {plugin_name}"
+            )
