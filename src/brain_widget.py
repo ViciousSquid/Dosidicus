@@ -1270,114 +1270,114 @@ class BrainWidget(QtWidgets.QWidget):
         return self.associations[idx1][idx2]
 
     def draw_connections(self, painter, scale):
-    """Draw connections with extended 2-second weight change animations"""
-    if not self.show_links:
-        return
-        
-    current_time = time.time()
-    
-    for key, weight in self.weights.items():
-        if not isinstance(key, tuple) or len(key) != 2:
-            continue
+        """Draw connections with extended 2-second weight change animations"""
+        if not self.show_links:
+            return
             
-        source, target = key
-        if (source not in self.neuron_positions or target not in self.neuron_positions or
-            source in self.excluded_neurons or target in self.excluded_neurons):
-            continue
+        current_time = time.time()
+        
+        for key, weight in self.weights.items():
+            if not isinstance(key, tuple) or len(key) != 2:
+                continue
+                
+            source, target = key
+            if (source not in self.neuron_positions or target not in self.neuron_positions or
+                source in self.excluded_neurons or target in self.excluded_neurons):
+                continue
+                
+            start = self.neuron_positions[source]
+            end = self.neuron_positions[target]
+            start_point = QtCore.QPointF(float(start[0]), float(start[1]))
+            end_point = QtCore.QPointF(float(end[0]), float(end[1]))
             
-        start = self.neuron_positions[source]
-        end = self.neuron_positions[target]
-        start_point = QtCore.QPointF(float(start[0]), float(start[1]))
-        end_point = QtCore.QPointF(float(end[0]), float(end[1]))
-        
-        # Default connection appearance
-        anim_weight = weight
-        base_width = 1.0 * scale
-        line_width = base_width
-        pen_style = QtCore.Qt.SolidLine
-        animating = False
-        pulse_progress = 0.0
-        
-        # Check for active animations (2-second duration)
-        for anim in self.weight_animations:
-            if anim['pair'] == key:
-                elapsed = current_time - anim['start_time']
-                if elapsed < anim['duration']:
-                    progress = elapsed / anim['duration']
-                    anim_weight = anim['start_weight'] + progress * (anim['end_weight'] - anim['start_weight'])
-                    
-                    # Adjust line width over full 2-second duration
-                    if progress < 0.5:  # First half - growing phase
-                        line_width = base_width + (6.0 * scale * progress * 2)
-                    else:  # Second half - shrinking phase
-                        line_width = base_width + (6.0 * scale * (1 - progress) * 2)
-                    
-                    # Slower pulse for 2-second duration
-                    pulse_progress = progress * anim['pulse_speed']
-                    animating = True
-                    break
-        
-        # Set connection color based on weight
-        if animating:
-            # Use animation color during changes
-            r, g, b = anim['color']
-            alpha = int(255 * (1 - pulse_progress**2))  # Fade out pulse
-            color = QtGui.QColor(r, g, b, alpha)
-        else:
-            # Default color based on weight
-            color = QtGui.QColor(0, int(255 * abs(weight)), 0) if weight > 0 else \
-                    QtGui.QColor(int(255 * abs(weight)), 0, 0)
-        
-        # Adjust line style based on weight strength
-        if abs(anim_weight) < 0.1:
-            pen_style = QtCore.Qt.DotLine
-        elif abs(anim_weight) < 0.3:
+            # Default connection appearance
+            anim_weight = weight
+            base_width = 1.0 * scale
+            line_width = base_width
             pen_style = QtCore.Qt.SolidLine
+            animating = False
+            pulse_progress = 0.0
             
-        painter.setPen(QtGui.QPen(color, line_width, pen_style))
-        painter.drawLine(start_point, end_point)
-        
-        # Draw weight change animation effects
-        if animating:
-            # Draw pulse along connection (slower for 2-second duration)
-            if pulse_progress < 1.0:
-                pulse_pos = pulse_progress
-                pulse_x = start_point.x() + pulse_pos * (end_point.x() - start_point.x())
-                pulse_y = start_point.y() + pulse_pos * (end_point.y() - start_point.y())
-                
-                # Calculate pulse size (smaller and longer-lasting)
-                pulse_size = 6 * scale * (1 - pulse_progress**2)
-                
-                # Draw pulse circle
-                painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 0, 200)))
-                painter.setPen(QtCore.Qt.NoPen)
-                painter.drawEllipse(QtCore.QPointF(pulse_x, pulse_y), 
-                                  pulse_size, pulse_size)
+            # Check for active animations (2-second duration)
+            for anim in self.weight_animations:
+                if anim['pair'] == key:
+                    elapsed = current_time - anim['start_time']
+                    if elapsed < anim['duration']:
+                        progress = elapsed / anim['duration']
+                        anim_weight = anim['start_weight'] + progress * (anim['end_weight'] - anim['start_weight'])
+                        
+                        # Adjust line width over full 2-second duration
+                        if progress < 0.5:  # First half - growing phase
+                            line_width = base_width + (6.0 * scale * progress * 2)
+                        else:  # Second half - shrinking phase
+                            line_width = base_width + (6.0 * scale * (1 - progress) * 2)
+                        
+                        # Slower pulse for 2-second duration
+                        pulse_progress = progress * anim['pulse_speed']
+                        animating = True
+                        break
             
-            # Draw glow effect around connection
-            if progress < 0.7:  # Longer glow phase
-                glow_width = line_width + 4 * scale * (1 - (progress/0.7))
-                glow_color = QtGui.QColor(255, 255, 200, 50)
-                painter.setPen(QtGui.QPen(glow_color, glow_width, pen_style))
-                painter.drawLine(start_point, end_point)
-        
-        # Draw weight text
-        if self.show_weights and abs(weight) > 0.1:
-            midpoint = QtCore.QPointF((start_point.x() + end_point.x()) / 2, 
-                                    (start_point.y() + end_point.y()) / 2)
-            text_area_width, text_area_height = 80.0, 22.0
-            font_size = max(8, min(12, int(8 * scale)))
-            font = painter.font()
-            font.setPointSize(font_size)
-            painter.setFont(font)
-            rect = QtCore.QRectF(midpoint.x() - text_area_width / 2, 
-                                midpoint.y() - text_area_height / 2, 
-                                text_area_width, text_area_height)
-            painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0)))
-            painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
-            painter.drawRect(rect)
-            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255)))
-            painter.drawText(rect, QtCore.Qt.AlignCenter, f"{weight:.2f}")
+            # Set connection color based on weight
+            if animating:
+                # Use animation color during changes
+                r, g, b = anim['color']
+                alpha = int(255 * (1 - pulse_progress**2))  # Fade out pulse
+                color = QtGui.QColor(r, g, b, alpha)
+            else:
+                # Default color based on weight
+                color = QtGui.QColor(0, int(255 * abs(weight)), 0) if weight > 0 else \
+                        QtGui.QColor(int(255 * abs(weight)), 0, 0)
+            
+            # Adjust line style based on weight strength
+            if abs(anim_weight) < 0.1:
+                pen_style = QtCore.Qt.DotLine
+            elif abs(anim_weight) < 0.3:
+                pen_style = QtCore.Qt.SolidLine
+                
+            painter.setPen(QtGui.QPen(color, line_width, pen_style))
+            painter.drawLine(start_point, end_point)
+            
+            # Draw weight change animation effects
+            if animating:
+                # Draw pulse along connection (slower for 2-second duration)
+                if pulse_progress < 1.0:
+                    pulse_pos = pulse_progress
+                    pulse_x = start_point.x() + pulse_pos * (end_point.x() - start_point.x())
+                    pulse_y = start_point.y() + pulse_pos * (end_point.y() - start_point.y())
+                    
+                    # Calculate pulse size (smaller and longer-lasting)
+                    pulse_size = 6 * scale * (1 - pulse_progress**2)
+                    
+                    # Draw pulse circle
+                    painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 0, 200)))
+                    painter.setPen(QtCore.Qt.NoPen)
+                    painter.drawEllipse(QtCore.QPointF(pulse_x, pulse_y), 
+                                    pulse_size, pulse_size)
+                
+                # Draw glow effect around connection
+                if progress < 0.7:  # Longer glow phase
+                    glow_width = line_width + 4 * scale * (1 - (progress/0.7))
+                    glow_color = QtGui.QColor(255, 255, 200, 50)
+                    painter.setPen(QtGui.QPen(glow_color, glow_width, pen_style))
+                    painter.drawLine(start_point, end_point)
+            
+            # Draw weight text
+            if self.show_weights and abs(weight) > 0.1:
+                midpoint = QtCore.QPointF((start_point.x() + end_point.x()) / 2, 
+                                        (start_point.y() + end_point.y()) / 2)
+                text_area_width, text_area_height = 80.0, 22.0
+                font_size = max(8, min(12, int(8 * scale)))
+                font = painter.font()
+                font.setPointSize(font_size)
+                painter.setFont(font)
+                rect = QtCore.QRectF(midpoint.x() - text_area_width / 2, 
+                                    midpoint.y() - text_area_height / 2, 
+                                    text_area_width, text_area_height)
+                painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0)))
+                painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
+                painter.drawRect(rect)
+                painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255)))
+                painter.drawText(rect, QtCore.Qt.AlignCenter, f"{weight:.2f}")
 
     def _get_logical_coords(self, widget_pos):
         """Maps widget QPoint/QPointF to logical neuron coordinates."""
@@ -1405,52 +1405,106 @@ class BrainWidget(QtWidgets.QWidget):
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        
+        # Fill background
         painter.fillRect(self.rect(), QtGui.QColor(240, 240, 240))
-        metrics_font = QtGui.QFont("Arial", 10); metrics_font.setBold(True); painter.setFont(metrics_font); painter.setPen(QtGui.QColor(0, 0, 0))
-        metrics_text = f"Neurons: {self.get_neuron_count()}    Connections: {self.get_edge_count()}    Network Health: {self.calculate_network_health():.1f}%"
-        painter.drawText(QtCore.QRectF(10, 5, self.width() - 20, 30), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, metrics_text)
-        indicator_y_position = 10; indicator_font = QtGui.QFont("Arial", 9, QtGui.QFont.Bold); painter.setFont(indicator_font); font_metrics = painter.fontMetrics()
+
+        # --- REMOVED METRICS DRAWING FROM BRAINWIDGET ---
+        # The following lines that were previously drawing metrics text here have been removed:
+        # metrics_font = QtGui.QFont("Arial", 10); metrics_font.setBold(True); painter.setFont(metrics_font); painter.setPen(QtGui.QColor(0, 0, 0))
+        # metrics_text = f"Neurons: {self.get_neuron_count()}    Connections: {self.get_edge_count()}    Network Health: {self.calculate_network_health():.1f}%"
+        # painter.drawText(QtCore.QRectF(10, 5, self.width() - 20, 30), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, metrics_text)
+        # --- END OF REMOVED SECTION ---
+
+        # --- Start of existing indicator drawing logic ---
+        indicator_y_position = 10 # Y position for indicators like "Fleeing!", "Startled!"
+        indicator_font = QtGui.QFont("Arial", 9, QtGui.QFont.Bold)
+        painter.setFont(indicator_font)
+        font_metrics = painter.fontMetrics()
+        
         active_indicators_data = []
-        if self.state.get('is_fleeing', False): active_indicators_data.append({"text": "Fleeing!", "color": QtGui.QColor(220, 20, 60)})
-        if self.state.get('is_startled', False): active_indicators_data.append({"text": "Startled!", "color": QtGui.QColor(255, 165, 0)})
-        if self.state.get('pursuing_food', False): active_indicators_data.append({"text": "Pursuing Food", "color": QtGui.QColor(60, 179, 113)})
+        if self.state.get('is_fleeing', False): 
+            active_indicators_data.append({"text": "Fleeing!", "color": QtGui.QColor(220, 20, 60)})
+        if self.state.get('is_startled', False): 
+            active_indicators_data.append({"text": "Startled!", "color": QtGui.QColor(255, 165, 0)})
+        if self.state.get('pursuing_food', False): 
+            active_indicators_data.append({"text": "Pursuing Food", "color": QtGui.QColor(60, 179, 113)})
+        
         indicators_to_display = active_indicators_data[:2]
         padding_horizontal, padding_vertical, spacing_between_indicators, min_left_padding, right_padding_from_widget_edge = 8, 4, 10, 10, 100
         min_sensible_width = font_metrics.horizontalAdvance("...") + (2 * padding_horizontal)
         rect_height = font_metrics.height() + (2 * padding_vertical)
         current_target_right_edge_x = self.width() - right_padding_from_widget_edge
+        
         for indicator_details in reversed(indicators_to_display):
-            indicator_text_original = indicator_details["text"]; indicator_bg_color = indicator_details["color"]
-            ideal_text_width = font_metrics.horizontalAdvance(indicator_text_original); ideal_rect_width = ideal_text_width + (2 * padding_horizontal)
+            indicator_text_original = indicator_details["text"]
+            indicator_bg_color = indicator_details["color"]
+            ideal_text_width = font_metrics.horizontalAdvance(indicator_text_original)
+            ideal_rect_width = ideal_text_width + (2 * padding_horizontal)
             max_possible_width_for_this_indicator = current_target_right_edge_x - min_left_padding
-            if max_possible_width_for_this_indicator < min_sensible_width: current_target_right_edge_x = min_left_padding - spacing_between_indicators; continue
+            
+            if max_possible_width_for_this_indicator < min_sensible_width: 
+                current_target_right_edge_x = min_left_padding - spacing_between_indicators
+                continue
+            
             render_rect_width = min(ideal_rect_width, max_possible_width_for_this_indicator)
-            if render_rect_width < min_sensible_width: current_target_right_edge_x = min_left_padding - spacing_between_indicators; continue
+            if render_rect_width < min_sensible_width: 
+                current_target_right_edge_x = min_left_padding - spacing_between_indicators
+                continue
+                
             render_rect_start_x = current_target_right_edge_x - render_rect_width
             indicator_rect = QtCore.QRectF(render_rect_start_x, indicator_y_position, render_rect_width, rect_height)
-            painter.setBrush(indicator_bg_color); painter.setPen(QtCore.Qt.NoPen); painter.drawRoundedRect(indicator_rect, 4, 4)
+            
+            painter.setBrush(indicator_bg_color)
+            painter.setPen(QtCore.Qt.NoPen)
+            painter.drawRoundedRect(indicator_rect, 4, 4)
+            
             available_width_for_text = render_rect_width - (2 * padding_horizontal)
             elided_text = font_metrics.elidedText(indicator_text_original, QtCore.Qt.ElideRight, available_width_for_text)
             text_color = QtCore.Qt.white if indicator_bg_color.lightnessF() < 0.5 else QtCore.Qt.black
-            painter.setPen(text_color); painter.drawText(indicator_rect, QtCore.Qt.AlignCenter, elided_text)
+            painter.setPen(text_color)
+            painter.drawText(indicator_rect, QtCore.Qt.AlignCenter, elided_text)
             current_target_right_edge_x = render_rect_start_x - spacing_between_indicators
+        # --- End of existing indicator drawing logic ---
+
         painter.save()
-        fixed_indicator_area_height = rect_height + 10 if indicators_to_display else 30
+        
+        # Calculate space used by indicators to offset neuron drawing area
+        fixed_indicator_area_height = rect_height + 10 if indicators_to_display else 30 # Add some padding below indicators
         indicator_space_at_top = indicator_y_position + fixed_indicator_area_height
-        base_width_logical = 1024; base_height_logical = 768 - indicator_space_at_top
-        if base_height_logical <=0: base_height_logical = 1
+        
+        base_width_logical = 1024
+        # Adjust logical height based on the actual space available after indicators
+        base_height_logical = 768 - indicator_space_at_top 
+        if base_height_logical <= 0: base_height_logical = 1 # Prevent division by zero or negative
+            
         scale_x = self.width() / base_width_logical
+        
         drawable_height_for_neurons = self.height() - indicator_space_at_top
-        if drawable_height_for_neurons <= 0: drawable_height_for_neurons = 1
-        scale_y = drawable_height_for_neurons / base_height_logical; scale_y = max(0.01, scale_y)
-        scale = max(0.01, min(scale_x, scale_y))
-        painter.translate(0, indicator_space_at_top); painter.scale(scale, scale)
-        self.draw_neurons(painter, 1.0)
+        if drawable_height_for_neurons <= 0: drawable_height_for_neurons = 1 # Prevent division by zero or negative
+            
+        scale_y = drawable_height_for_neurons / base_height_logical
+        scale_y = max(0.01, scale_y) # Ensure scale is positive
+        
+        scale = max(0.01, min(scale_x, scale_y)) # Ensure scale is positive
+
+        painter.translate(0, indicator_space_at_top) # Translate painter down past the indicator area
+        painter.scale(scale, scale)
+        
+        self.draw_neurons(painter, 1.0) # Pass scale as 1.0 as painter is already scaled
+        
         if self.dragging and self.dragged_neuron:
             pos = self.neuron_positions[self.dragged_neuron]
-            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3 / scale)); painter.setBrush(QtCore.Qt.NoBrush); painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 30, 30)
-        self.draw_neurogenesis_highlights(painter, 1.0)
-        if self.show_links: self.draw_connections(painter, 1.0)
+            # When drawing on an already scaled painter, the pen width should be relative to the new scale
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3 / scale)) # Adjust pen width for current scale
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 30, 30) 
+            
+        self.draw_neurogenesis_highlights(painter, 1.0) # Pass scale as 1.0
+        
+        if self.show_links:
+            self.draw_connections(painter, 1.0) # Pass scale as 1.0
+            
         painter.restore()
 
     def draw_neurons(self, painter, scale):
