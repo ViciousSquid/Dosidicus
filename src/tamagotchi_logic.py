@@ -721,18 +721,72 @@ class TamagotchiLogic:
         # self.simulation_timer.start()
 
     def update_timers(self):
-        """Update timer intervals based on current simulation speed"""
+        """Update timer intervals based on current simulation speed, including Hebbian and Neurogenesis."""
         if not hasattr(self, 'base_interval'):
             self.base_interval = 1000  # Ensure base_interval exists
             
         if not hasattr(self, 'simulation_speed'):
             self.simulation_speed = 1
             
+        # Stop all relevant timers if simulation is paused
         if self.simulation_speed == 0:
             self.simulation_timer.stop()
+            if hasattr(self, 'score_update_timer'):
+                self.score_update_timer.stop()
+            if hasattr(self, 'brain_update_timer'):
+                self.brain_update_timer.stop()
+            if hasattr(self.brain_window, 'hebbian_timer'):
+                self.brain_window.hebbian_timer.stop()
+            
+            # When paused, effectively "freeze" the neurogenesis cooldown by noting the pause time
+            if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'neurogenesis_data'):
+                self.brain_window.brain_widget.neurogenesis_data['last_neuron_time_paused_at'] = time.time()
+            return
         else:
-            interval = max(10, self.base_interval // self.simulation_speed)  # Ensure minimum interval
+            # Calculate new interval for main simulation timer
+            # Ensure minimum interval to avoid division by zero or excessively fast updates
+            interval = max(10, self.base_interval // self.simulation_speed)
             self.simulation_timer.start(interval)
+
+            # Adjust other timers (score, brain_update) proportionally
+            if hasattr(self, 'score_update_timer') and not self.score_update_timer.isActive():
+                # Assuming base interval for score update is 5000ms (5 seconds)
+                self.score_update_timer.start(max(100, 5000 // self.simulation_speed))
+            if hasattr(self, 'brain_update_timer') and not self.brain_update_timer.isActive():
+                # Assuming base interval for brain update is 1000ms (1 second)
+                self.brain_update_timer.start(max(100, 1000 // self.simulation_speed))
+
+            # --- Hebbian learning timer adjustment ---
+            if hasattr(self.brain_window, 'hebbian_timer'):
+                # Retrieve original learning interval from brain_window's config
+                # Default to 30000ms (30 seconds) if not found in config
+                original_hebbian_interval = self.brain_window.config.hebbian.get('learning_interval', 30000)
+                
+                # Calculate new interval, ensuring a minimum to prevent issues
+                new_hebbian_interval = max(100, original_hebbian_interval // self.simulation_speed)
+                
+                self.brain_window.hebbian_timer.start(new_hebbian_interval)
+                print(f"\033[38;5;208mHebbian timer adjusted to {new_hebbian_interval}ms (original: {original_hebbian_interval}ms / speed: {self.simulation_speed}x)\033[0m")
+            
+            # --- Neurogenesis cooldown adjustment ---
+            # This adjusts the *value* of the cooldown, which BrainWidget will then use.
+            if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'neurogenesis_config'):
+                original_neuro_cooldown_seconds = self.brain_window.brain_widget.neurogenesis_config.get('cooldown', 300) # In seconds
+                
+                # Calculate new cooldown, ensuring a minimum of 1 second
+                new_neuro_cooldown_seconds = max(1, original_neuro_cooldown_seconds // self.simulation_speed)
+                
+                # Store this scaled cooldown in the neurogenesis_config for BrainWidget to use
+                self.brain_window.brain_widget.neurogenesis_config['scaled_cooldown'] = new_neuro_cooldown_seconds
+                print(f"\033[38;5;208mNeurogenesis cooldown adjusted to {new_neuro_cooldown_seconds}s (original: {original_neuro_cooldown_seconds}s / speed: {self.simulation_speed}x)\033[0m")
+
+                # If unpausing, adjust last_neuron_time to account for the duration of the pause
+                # This prevents an immediate neurogenesis event right after unpausing if conditions were met before pause
+                if 'last_neuron_time_paused_at' in self.brain_window.brain_widget.neurogenesis_data:
+                    paused_duration = time.time() - self.brain_window.brain_widget.neurogenesis_data['last_neuron_time_paused_at']
+                    self.brain_window.brain_widget.neurogenesis_data['last_neuron_time'] += paused_duration
+                    del self.brain_window.brain_widget.neurogenesis_data['last_neuron_time_paused_at']
+
 
     def check_for_startle(self):
         if not self.mental_states_enabled:

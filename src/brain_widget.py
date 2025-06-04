@@ -30,6 +30,7 @@ class BrainWidget(QtWidgets.QWidget):
 
         self.excluded_neurons = ['is_sick', 'is_eating', 'pursuing_food', 'direction', 'is_sleeping'] #
         self.hebbian_countdown_seconds = 30  # Default duration
+        self.neurogenesis_cooldown_seconds = 180
         self.learning_active = True #
         self.pruning_enabled = True #
         self.debug_mode = debug_mode  # Initialize debug_mode
@@ -333,7 +334,7 @@ class BrainWidget(QtWidgets.QWidget):
         self.weight_animations.append({
             'pair': use_pair,
             'start_time': current_time,
-            'duration': 1.0,  # 1 second animation
+            'duration': 2.0,  # 2 second animation
             'start_weight': prev_weight,
             'end_weight': new_weight,
             'neuron1': neuron1,
@@ -797,7 +798,10 @@ class BrainWidget(QtWidgets.QWidget):
 
         max_neurons = self.neurogenesis_config.get('max_neurons', 32)
         current_neuron_count = len(self.neuron_positions) - len(self.excluded_neurons)
-        cooldown_ok = current_time - self.neurogenesis_data.get('last_neuron_time', 0) > self.neurogenesis_config.get('cooldown', 300)
+        
+        # --- MODIFIED: Use scaled_cooldown from config, falling back to original 'cooldown' if not set ---
+        cooldown_period_to_use = self.neurogenesis_config.get('scaled_cooldown', self.neurogenesis_config.get('cooldown', 300))
+        cooldown_ok = current_time - self.neurogenesis_data.get('last_neuron_time', 0) > cooldown_period_to_use
 
         potential_triggers = []
         if self.neurogenesis_data['novelty_counter'] > novelty_threshold:
@@ -869,6 +873,13 @@ class BrainWidget(QtWidgets.QWidget):
         self.neurogenesis_data['novelty_counter'] = max(0, self.neurogenesis_data['novelty_counter'] * decay_rate)
         self.neurogenesis_data['stress_counter'] = max(0, self.neurogenesis_data['stress_counter'] * decay_rate)
         self.neurogenesis_data['reward_counter'] = max(0, self.neurogenesis_data['reward_counter'] * decay_rate)
+
+        # --- ADD THIS BLOCK ---
+        # Calculate neurogenesis cooldown for display
+        cooldown_duration = self.neurogenesis_config.get('scaled_cooldown', self.neurogenesis_config.get('cooldown', 300))
+        time_since_last_neuron = current_time - self.neurogenesis_data.get('last_neuron_time', current_time)
+        self.neurogenesis_cooldown_seconds = max(0, int(cooldown_duration - time_since_last_neuron))
+        # --- END ADD BLOCK ---
 
         # Final update and data capture
         self.update()
@@ -1426,39 +1437,68 @@ class BrainWidget(QtWidgets.QWidget):
         """Draw all neurons with activity-based sizing and highlights"""
         current_time = time.time()
         
+        # Define pulse duration and magnitude
+        pulse_duration = 0.75  # seconds for the pulse effect
+        pulse_magnitude = 1.3 # 30% larger
+        weight_change_pulse_extra_radius = 8.0 * scale # Extra radius for weight change pulse
+
         for name, pos in self.neuron_positions.items():
             if name in self.excluded_neurons:
                 continue
 
             try:
-                # Calculate dynamic size based on activity
                 value = self.get_neuron_value(self.state.get(name, 50))
-                base_size = 25.0
+                base_size = 25.0 
                 size_factor = 0.8 + 0.4 * (abs(value - 50) / 50)
-                target_size = base_size * size_factor * scale
+                target_radius = base_size * size_factor * scale
                 
                 # Smooth size transition
                 if name not in self.neuron_sizes:
-                    self.neuron_sizes[name] = target_size
+                    self.neuron_sizes[name] = target_radius
                 else:
-                    current_size = self.neuron_sizes[name]
-                    size_diff = target_size - current_size
-                    self.neuron_sizes[name] = current_size + size_diff * 0.2
+                    current_radius_val = self.neuron_sizes[name]
+                    size_diff = target_radius - current_radius_val
+                    self.neuron_sizes[name] = current_radius_val + size_diff * 0.2
                 
                 radius = self.neuron_sizes[name]
+                
+                # --- START PULSE LOGIC ---
+                is_pulsing_due_to_weight_change = False
+                if name in self.weight_change_events:
+                    time_since_weight_change = current_time - self.weight_change_events[name]
+                    if time_since_weight_change < pulse_duration:
+                        is_pulsing_due_to_weight_change = True
+                        # Calculate pulse effect (e.g., sinusoidal or simple temporary increase)
+                        # Simple temporary increase for this example:
+                        pulse_progress = time_since_weight_change / pulse_duration
+                        # Make it grow fast and shrink slowly
+                        if pulse_progress < 0.3: # Grow phase (30% of duration)
+                            current_pulse_magnitude = 1 + (pulse_magnitude - 1) * (pulse_progress / 0.3)
+                        else: # Shrink phase (70% of duration)
+                            current_pulse_magnitude = pulse_magnitude - (pulse_magnitude - 1) * ((pulse_progress - 0.3) / 0.7)
+                        
+                        radius *= current_pulse_magnitude
+                        # Ensure minimum radius if pulsing
+                        radius = max(radius, base_size * scale * 0.5 * current_pulse_magnitude)
+
+
+                # --- END PULSE LOGIC ---
+
                 shape = self.neuron_shapes.get(name, 'circle')
                 color = QtGui.QColor(*self.state_colors.get(name, (200, 200, 200)))
 
-                # Draw activity highlight
+                # Draw activity highlight (communication events)
                 if name in self.communication_events:
-                    elapsed = current_time - self.communication_events[name]
-                    if elapsed < self.activity_duration:
-                        pulse = 0.5 + 0.5 * math.sin(current_time * 10)
-                        highlight_radius = radius + 3 + 2 * pulse
-                        painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 150), 2))
-                        painter.setBrush(QtCore.Qt.NoBrush)
-                        painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 
-                                          highlight_radius, highlight_radius)
+                    elapsed_comm = current_time - self.communication_events[name]
+                    if elapsed_comm < self.communication_highlight_duration: # Use defined duration
+                        # Do not draw communication pulse if already pulsing due to weight change
+                        if not is_pulsing_due_to_weight_change:
+                            pulse_comm = 0.5 + 0.5 * math.sin(current_time * 10) # Existing pulse
+                            highlight_radius_comm = radius + (3 * scale) + (2 * scale * pulse_comm)
+                            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 150), 2 * scale)) # Use scale
+                            painter.setBrush(QtCore.Qt.NoBrush)
+                            painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 
+                                              highlight_radius_comm, highlight_radius_comm)
 
                 # Draw the neuron shape
                 if shape == 'diamond':
@@ -1467,9 +1507,9 @@ class BrainWidget(QtWidgets.QWidget):
                     self.draw_triangular_neuron(painter, pos[0], pos[1], radius, name, scale)
                 elif shape == 'square':
                     self.draw_square_neuron(painter, pos[0], pos[1], radius, name, scale)
-                else:
+                else: # Circle
                     painter.setBrush(QtGui.QBrush(color))
-                    painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
+                    painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), 1 * scale)) # Use scale
                     painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), radius, radius)
                     self._draw_neuron_label(painter, pos[0], pos[1], name, radius, scale)
 
@@ -1478,15 +1518,15 @@ class BrainWidget(QtWidgets.QWidget):
                     current_time - self.neurogenesis_highlight['start_time'] < 
                     self.neurogenesis_highlight['duration']):
                     
-                    progress = (current_time - self.neurogenesis_highlight['start_time']) / \
+                    progress_neuro = (current_time - self.neurogenesis_highlight['start_time']) / \
                                self.neurogenesis_highlight['duration']
-                    pulse = 0.5 + 0.5 * math.sin(self.neurogenesis_highlight['pulse_phase'])
-                    highlight_radius = radius + 10 + 10 * pulse * (1 - progress)
+                    pulse_neuro = 0.5 + 0.5 * math.sin(self.neurogenesis_highlight['pulse_phase'])
+                    highlight_radius_neuro = radius + (10 * scale) + (10 * scale * pulse_neuro * (1 - progress_neuro))
                     
-                    painter.setPen(QtGui.QPen(QtGui.QColor(255, 215, 0, 200), 3))
+                    painter.setPen(QtGui.QPen(QtGui.QColor(255, 215, 0, 200), 3 * scale)) # Use scale
                     painter.setBrush(QtCore.Qt.NoBrush)
                     painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 
-                                      highlight_radius, highlight_radius)
+                                      highlight_radius_neuro, highlight_radius_neuro)
 
             except Exception as e:
                 print(f"Error drawing neuron {name}: {str(e)}")

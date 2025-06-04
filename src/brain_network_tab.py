@@ -7,6 +7,8 @@ from .brain_dialogs import StimulateDialog, DiagnosticReportDialog
 class NetworkTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
         super().__init__(parent, tamagotchi_logic, brain_widget, config, debug_mode)
+        self.hebbian_countdown_label = None 
+        self.neurogenesis_cooldown_label = None # Initialize the new label
         self.initialize_ui()
         
     def initialize_ui(self):
@@ -18,63 +20,100 @@ class NetworkTab(BrainBaseTab):
         # Add brain widget to the main content layout
         main_content_layout.addWidget(self.brain_widget, 1)  # Give it a stretch factor of 1
 
-        # Checkbox controls
-        checkbox_layout = QtWidgets.QHBoxLayout()
-        
+        # --- Create Checkboxes ---
         self.checkbox_links = QtWidgets.QCheckBox("Show links")
         self.checkbox_links.setChecked(True)
         self.checkbox_links.stateChanged.connect(self.brain_widget.toggle_links)
-        checkbox_layout.addWidget(self.checkbox_links)
 
         self.checkbox_weights = QtWidgets.QCheckBox("Show weights")
         self.checkbox_weights.setChecked(False)
         self.checkbox_weights.stateChanged.connect(self.brain_widget.toggle_weights)
-        checkbox_layout.addWidget(self.checkbox_weights)
 
-        checkbox_layout.addSpacing(60)  # Spacer
-
-        # Add pruning checkbox - ALWAYS VISIBLE
         self.checkbox_pruning = QtWidgets.QCheckBox("Enable pruning")
         self.checkbox_pruning.setChecked(True)  # Enabled by default
         self.checkbox_pruning.stateChanged.connect(self.toggle_pruning)
-        checkbox_layout.addWidget(self.checkbox_pruning)
-        
-        # Add stretch to push checkboxes to the left
-        checkbox_layout.addStretch(1)
-        main_content_layout.addLayout(checkbox_layout)
 
-        # Button controls
-        button_layout = QtWidgets.QHBoxLayout()
-        
+        # --- Create Buttons ---
         self.stimulate_button = self.create_button("Stimulate", self.stimulate_brain, "#d3d3d3")
         self.stimulate_button.setEnabled(self.debug_mode)
         
         self.save_button = self.create_button("Save", self.save_brain_state, "#d3d3d3")
         self.load_button = self.create_button("Load", self.load_brain_state, "#d3d3d3")
+        
         self.report_button = self.create_button("Network Report", self.show_diagnostic_report, "#ADD8E6")
 
-        button_layout.addWidget(self.report_button)
-        # button_layout.addWidget(self.stimulate_button)
-        # button_layout.addWidget(self.save_button)
-        # button_layout.addWidget(self.load_button)
-        
-        main_content_layout.addLayout(button_layout)
+        # --- Hebbian Countdown Label ---
+        self.hebbian_countdown_label = QtWidgets.QLabel("30") # Initial value, added "H: " prefix
+        self.hebbian_countdown_label.setStyleSheet("""
+            QLabel {
+                background-color: #000000; /* Black background */
+                color: white;
+                border-radius: 4px;
+                padding: 2px 5px;
+                font-size: 20px; 
+                font-weight: bold;
+                min-width: 60px; /* Adjusted min-width for prefix and number */
+                text-align: center;
+            }
+        """)
+        self.hebbian_countdown_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.hebbian_countdown_label.setToolTip("Hebbian timer") # Tooltip added here
 
-        # Add the content widget to our layout
+        # --- Neurogenesis Cooldown Label (NEW) ---
+        self.neurogenesis_cooldown_label = QtWidgets.QLabel("---")
+        self.neurogenesis_cooldown_label.setStyleSheet("""
+            QLabel {
+                background-color: #000000; /* Black background */
+                color: white;
+                border-radius: 4px;
+                padding: 2px 5px;
+                font-size: 20px; 
+                font-weight: bold;
+                min-width: 60px; /* Adjusted min-width for prefix and number */
+                text-align: center;
+                margin-left: 5px; /* Small margin to separate from Hebbian countdown */
+            }
+        """)
+        self.neurogenesis_cooldown_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.neurogenesis_cooldown_label.setToolTip("Neurogenesis cooldown") # Tooltip added here
+
+
+        # --- Bottom Bar Layout ---
+        bottom_bar_layout = QtWidgets.QHBoxLayout()
+        
+        # Original left-aligned widgets
+        bottom_bar_layout.addWidget(self.report_button)
+        bottom_bar_layout.addWidget(self.checkbox_links)
+        bottom_bar_layout.addWidget(self.checkbox_weights)
+        
+        # Add a stretch before the counters to push them right
+        bottom_bar_layout.addStretch(1) 
+        
+        # Add both countdown labels here 
+        bottom_bar_layout.addWidget(self.hebbian_countdown_label) 
+        bottom_bar_layout.addWidget(self.neurogenesis_cooldown_label)
+        
+        # Add another stretch after the counters to push 'Enable pruning' to the far right
+        bottom_bar_layout.addStretch(1)
+        
+        # Add the 'Enable pruning' checkbox last
+        bottom_bar_layout.addWidget(self.checkbox_pruning)
+        
+        # Add the bottom bar to the main content
+        main_content_layout.addLayout(bottom_bar_layout)
+
+        # Add the content widget to our main tab layout
         self.layout.addWidget(main_content_widget)
 
     def preload(self):
         """Preload tab contents to prevent crash during tutorial step 2"""
-        # Ensure the brain widget is fully initialized
         if hasattr(self, 'brain_widget') and self.brain_widget:
-            # Force the brain widget to update
             self.brain_widget.update()
             
-        # Make sure checkbox states are properly initialized    
         if hasattr(self, 'checkbox_links'):
             self.checkbox_links.setChecked(True)
         if hasattr(self, 'checkbox_weights'):
-            self.checkbox_weights.setChecked(True)
+            self.checkbox_weights.setChecked(True) 
 
     def toggle_pruning(self, state):
         """Toggle pruning state in brain widget"""
@@ -82,32 +121,19 @@ class NetworkTab(BrainBaseTab):
             enabled = state == QtCore.Qt.Checked
             self.brain_widget.toggle_pruning(enabled)
             
-            # Show warning if disabling pruning - using a safer approach
             if not enabled:
-                # Print warning to console regardless
                 print("\033[91mWARNING: Pruning disabled - neurogenesis unconstrained!\033[0m")
-                
-                # Try multiple approaches to show a UI message
                 warning_shown = False
-                
-                # Method 1: Check if parent window has show_message
                 if hasattr(self.parent, 'show_message'):
                     try:
                         self.parent.show_message("WARNING: Pruning disabled - neurogenesis unconstrained!")
                         warning_shown = True
-                    except:
-                        pass
-                        
-                # Method 2: Check if we can find the main window
-                if not warning_shown and hasattr(self, 'window'):
+                    except: pass
+                if not warning_shown and hasattr(self, 'window') and hasattr(self.window, 'show_message'):
                     try:
-                        if hasattr(self.window, 'show_message'):
-                            self.window.show_message("WARNING: Pruning disabled - neurogenesis unconstrained!")
-                            warning_shown = True
-                    except:
-                        pass
-                
-                # Method 3: Use a QMessageBox as fallback
+                        self.window.show_message("WARNING: Pruning disabled - neurogenesis unconstrained!")
+                        warning_shown = True
+                    except: pass
                 if not warning_shown:
                     try:
                         from PyQt5.QtWidgets import QMessageBox
@@ -117,15 +143,23 @@ class NetworkTab(BrainBaseTab):
                         msg.setInformativeText("Neurogenesis will be unconstrained and may lead to network instability.")
                         msg.setWindowTitle("Pruning Disabled")
                         msg.exec_()
-                    except:
-                        # If all else fails, we've already printed to console
-                        pass
+                    except: pass
 
     def update_from_brain_state(self, state):
-        """Update tab based on brain state"""
-        # Don't change pruning checkbox visibility based on debug mode
-        # The checkbox should always be visible
-        pass
+        """Update tab based on brain state.
+        This method will be called to update the Hebbian countdown timer.
+        """
+        if hasattr(self, 'hebbian_countdown_label') and self.hebbian_countdown_label:
+            # Safely get the countdown value from the brain_widget if available
+            hebbian_countdown_seconds = getattr(self.brain_widget, 'hebbian_countdown_seconds', 30)
+            self.hebbian_countdown_label.setText(f"H: {hebbian_countdown_seconds}s")
+
+        if hasattr(self, 'neurogenesis_cooldown_label') and self.neurogenesis_cooldown_label:
+            # Safely get the neurogenesis cooldown value from the brain_widget
+            # Assuming 'neurogenesis_cooldown_seconds' is an attribute of brain_widget
+            neurogenesis_cooldown_seconds = getattr(self.brain_widget, 'neurogenesis_cooldown_seconds', '--')
+            self.neurogenesis_cooldown_label.setText(f"N: {neurogenesis_cooldown_seconds}s")
+
 
     def stimulate_brain(self):
         dialog = StimulateDialog(self.brain_widget, self)
@@ -155,7 +189,7 @@ class NetworkTab(BrainBaseTab):
 
     def create_button(self, text, callback, color):
         """Common utility for creating consistent buttons with proper scaling"""
-        from .display_scaling import DisplayScaling
+        from .display_scaling import DisplayScaling 
         
         button = QtWidgets.QPushButton(text)
         button.clicked.connect(callback)
