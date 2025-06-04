@@ -60,12 +60,12 @@ class BrainWidget(QtWidgets.QWidget):
         if not hasattr(self.config, 'neurogenesis'): #
             self.config.neurogenesis = { #
                 'decay_rate': 0.75,  # Default decay rate if not specified
-                'novelty_threshold': 3, #
-                'stress_threshold': 0.7, #
-                'reward_threshold': 0.6, #
-                'cooldown': 300, #
+                'novelty_threshold': 3.0, #
+                'stress_threshold': 1.2, #
+                'reward_threshold': 3.5, #
+                'cooldown': 180, #
                 'highlight_duration': 5.0, #
-                'max_neurons': 32 # <-- MODIFIED
+                'max_neurons': 32
             }
 
         self.neurogenesis_config = self.config.neurogenesis #
@@ -92,7 +92,7 @@ class BrainWidget(QtWidgets.QWidget):
             "position": (0, 0), #
             "is_startled": False, #
             "is_fleeing": False, #
-            'neurogenesis_active': False # Added for consistency with usage
+            'neurogenesis_active': True
         }
 
         # Neuron position configuration
@@ -121,6 +121,19 @@ class BrainWidget(QtWidgets.QWidget):
         # Initialize communication events for all neurons
         for neuron in self.neuron_positions.keys(): #
             self.communication_events[neuron] = 0 #
+
+        # Animation control variables
+        self.animation_timer = QtCore.QTimer(self)
+        self.animation_timer.timeout.connect(self.update_animations)
+        self.animation_timer.start(50)  # 20 FPS
+        self.neuron_sizes = {}  # For smooth size transitions
+        self.weight_animations = []  # Track multiple weight changes
+        self.neurogenesis_highlight = {
+            'neuron': None,
+            'start_time': 0,
+            'duration': 5.0,
+            'pulse_phase': 0
+        }
 
         # Add neurogenesis visualization tracking
         self.neurogenesis_highlight = { #
@@ -181,6 +194,26 @@ class BrainWidget(QtWidgets.QWidget):
             self.stimulate_button.setEnabled(enabled)
 
         print(f"Brain window debug mode set to: {enabled}")
+
+    def update_animations(self):
+        """Update all animation states"""
+        current_time = time.time()
+        
+        # Update neurogenesis pulse phase
+        if self.neurogenesis_highlight['neuron']:
+            elapsed = current_time - self.neurogenesis_highlight['start_time']
+            if elapsed < self.neurogenesis_highlight['duration']:
+                self.neurogenesis_highlight['pulse_phase'] = elapsed * 15
+            else:
+                self.neurogenesis_highlight['neuron'] = None
+        
+        # Update weight animations
+        self.weight_animations = [
+            anim for anim in self.weight_animations 
+            if current_time - anim['start_time'] < anim['duration']
+        ]
+        
+        self.update()
 
     def toggle_pruning(self, enabled):
         """Enable or disable the pruning mechanisms for neurogenesis"""
@@ -250,12 +283,7 @@ class BrainWidget(QtWidgets.QWidget):
     def update_connection(self, neuron1, neuron2, value1, value2):
         """
         Update the connection weight between two neurons based on their activation values,
-        with modulated learning rate. # MODIFIED
-        Args:
-            neuron1 (str): The name of the first neuron.
-            neuron2 (str): The name of the second neuron.
-            value1 (float): The activation value of the first neuron.
-            value2 (float): The activation value of the second neuron.
+        with modulated learning rate and extended visual animations.
         """
         current_time = time.time()
         pair = (neuron1, neuron2)
@@ -263,13 +291,11 @@ class BrainWidget(QtWidgets.QWidget):
 
         # Check if the pair or its reverse exists in weights, if not, initialize it
         if pair not in self.weights and reverse_pair not in self.weights:
-            # Only add if both neurons exist - crucial check!
+            # Only add if both neurons exist
             if neuron1 in self.neuron_positions and neuron2 in self.neuron_positions:
-                 self.weights[pair] = 0.0 # Start with 0 weight
+                self.weights[pair] = 0.0  # Start with 0 weight
             else:
-                 # print(f"Skipping connection: {neuron1} or {neuron2} not found.") # Optional Debug
-                 return # Don't create connection if a neuron doesn't exist
-
+                return  # Don't create connection if a neuron doesn't exist
 
         # Use the correct pair order
         use_pair = pair if pair in self.weights else reverse_pair
@@ -280,9 +306,9 @@ class BrainWidget(QtWidgets.QWidget):
 
         prev_weight = self.weights[use_pair]
 
-        # --- START: MODIFIED Learning Rate ---
-        base_lr = self.learning_rate # Use the instance learning_rate (0.1 by default)
-        newness_boost = 2.0 # New neurons learn 2x faster
+        # --- Learning Rate Calculation ---
+        base_lr = self.learning_rate  # Use the instance learning_rate (0.1 by default)
+        newness_boost = 2.0  # New neurons learn 2x faster
         effective_lr = base_lr
 
         is_n1_new = self.is_new_neuron(neuron1)
@@ -290,35 +316,55 @@ class BrainWidget(QtWidgets.QWidget):
 
         if is_n1_new or is_n2_new:
             effective_lr = base_lr * newness_boost
-        # --- END: MODIFIED Learning Rate ---
+        # --- End Learning Rate ---
 
-        # Use effective_lr for weight change (basic Hebbian)
-        weight_change = effective_lr * (value1 / 100.0) * (value2 / 100.0) 
+        # Calculate weight change (basic Hebbian)
+        weight_change = effective_lr * (value1 / 100.0) * (value2 / 100.0)
         
         # Add weight decay (optional but good for stability)
-        decay_rate = self.config.hebbian.get('weight_decay', 0.01) * 0.1 # Slow decay during learning
+        decay_rate = self.config.hebbian.get('weight_decay', 0.01) * 0.1  # Slow decay during learning
         new_weight = prev_weight + weight_change - (prev_weight * decay_rate)
         
-        new_weight = min(max(new_weight, -1.0), 1.0)  # Ensure weight stays in [-1, 1] range # MODIFIED
+        # Clamp weight to [-1, 1] range
+        new_weight = min(max(new_weight, -1.0), 1.0)
         self.weights[use_pair] = new_weight
+
+        # --- Extended Animation Tracking (2 seconds duration) ---
+        self.weight_animations.append({
+            'pair': use_pair,
+            'start_time': current_time,
+            'duration': 2.0,  # Extended to 2 seconds duration
+            'start_weight': prev_weight,
+            'end_weight': new_weight,
+            'neuron1': neuron1,
+            'neuron2': neuron2,
+            'color': (0, 255, 0) if new_weight > prev_weight else (255, 0, 0),
+            'pulse_speed': 0.5  # Slower pulse for longer duration
+        })
 
         # Record weight change time for both neurons
         if abs(new_weight - prev_weight) > 0.001:  # Only if significant change
             self.weight_change_events[neuron1] = current_time
             self.weight_change_events[neuron2] = current_time
+            
             # Add to recently updated for visualization/logging
             if (neuron1, neuron2) not in self.recently_updated_neuron_pairs and \
-               (neuron2, neuron1) not in self.recently_updated_neuron_pairs:
+            (neuron2, neuron1) not in self.recently_updated_neuron_pairs:
                 self.recently_updated_neuron_pairs.append((neuron1, neuron2))
+            
+            # Trigger visual update
             self.update()
-
-        # Debugging statement to check if update_connection is being called correctly
-        lr_indicator = " (\x1b[35mBOOSTED\x1b[0m)" if effective_lr > base_lr else ""
-        print(f"\x1b[42mUpdated connection\x1b[0m between {neuron1} and {neuron2}: \x1b[31m {prev_weight:.3f} -> \x1b[32m {new_weight:.3f} \x1b[0m (LR: {effective_lr:.3f}{lr_indicator})")
 
         # Record communication time for both neurons
         self.communication_events[neuron1] = current_time
         self.communication_events[neuron2] = current_time
+
+        # Debug output with color coding
+        lr_indicator = " (\x1b[35mBOOSTED\x1b[0m)" if effective_lr > base_lr else ""
+        direction = "\x1b[32m↑\x1b[0m" if new_weight > prev_weight else "\x1b[31m↓\x1b[0m"
+        print(f"\x1b[42mUpdated connection\x1b[0m {direction} between {neuron1} and {neuron2}: "
+            f"\x1b[31m{prev_weight:.3f}\x1b[0m → \x1b[32m{new_weight:.3f}\x1b[0m "
+            f"(LR: {effective_lr:.3f}{lr_indicator})")
 
     def prune_weak_connections(self, threshold=0.05, min_age_sec=600): # Prune if < 0.05 abs weight & > 10 mins old
         """Removes connections with absolute weight below the threshold, ignoring new neurons."""
@@ -1224,38 +1270,114 @@ class BrainWidget(QtWidgets.QWidget):
         return self.associations[idx1][idx2]
 
     def draw_connections(self, painter, scale):
-        if not self.show_links:
-            return
-        for key, weight in self.weights.items():
-            if isinstance(key, tuple):
-                if len(key) > 2 or 'is_fleeing' in key: continue
-                source, target = key
-            elif isinstance(key, str):
-                try:
-                    source, target = key.split('_')
-                    if 'is_fleeing' in source or 'is_fleeing' in target: continue
-                except ValueError: continue
-            else: continue
-            if (source not in self.neuron_positions or target not in self.neuron_positions or source in self.excluded_neurons or target in self.excluded_neurons): continue
-            start = self.neuron_positions[source]
-            end = self.neuron_positions[target]
-            start_point = QtCore.QPointF(float(start[0]), float(start[1]))
-            end_point = QtCore.QPointF(float(end[0]), float(end[1]))
-            color = QtGui.QColor(0, int(255 * abs(weight)), 0) if weight > 0 else QtGui.QColor(int(255 * abs(weight)), 0, 0)
-            if abs(weight) < 0.1: pen_style = QtCore.Qt.DotLine; line_width = 1 * scale
-            elif abs(weight) < 0.3: pen_style = QtCore.Qt.SolidLine; line_width = 1 * scale
-            elif abs(weight) < 0.6: pen_style = QtCore.Qt.SolidLine; line_width = 2 * scale
-            else: pen_style = QtCore.Qt.SolidLine; line_width = 3 * scale
-            painter.setPen(QtGui.QPen(color, line_width, pen_style))
-            painter.drawLine(start_point, end_point)
-            if self.show_weights and abs(weight) > 0.1:
-                midpoint = QtCore.QPointF((start_point.x() + end_point.x()) / 2, (start_point.y() + end_point.y()) / 2)
-                text_area_width, text_area_height = 80.0, 22.0
-                font_size = max(8, min(12, int(8 * scale)))
-                font = painter.font(); font.setPointSize(font_size); painter.setFont(font)
-                rect = QtCore.QRectF(midpoint.x() - text_area_width / 2, midpoint.y() - text_area_height / 2, text_area_width, text_area_height)
-                painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0))); painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0))); painter.drawRect(rect)
-                painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255))); painter.drawText(rect, QtCore.Qt.AlignCenter, f"{weight:.2f}")
+    """Draw connections with extended 2-second weight change animations"""
+    if not self.show_links:
+        return
+        
+    current_time = time.time()
+    
+    for key, weight in self.weights.items():
+        if not isinstance(key, tuple) or len(key) != 2:
+            continue
+            
+        source, target = key
+        if (source not in self.neuron_positions or target not in self.neuron_positions or
+            source in self.excluded_neurons or target in self.excluded_neurons):
+            continue
+            
+        start = self.neuron_positions[source]
+        end = self.neuron_positions[target]
+        start_point = QtCore.QPointF(float(start[0]), float(start[1]))
+        end_point = QtCore.QPointF(float(end[0]), float(end[1]))
+        
+        # Default connection appearance
+        anim_weight = weight
+        base_width = 1.0 * scale
+        line_width = base_width
+        pen_style = QtCore.Qt.SolidLine
+        animating = False
+        pulse_progress = 0.0
+        
+        # Check for active animations (2-second duration)
+        for anim in self.weight_animations:
+            if anim['pair'] == key:
+                elapsed = current_time - anim['start_time']
+                if elapsed < anim['duration']:
+                    progress = elapsed / anim['duration']
+                    anim_weight = anim['start_weight'] + progress * (anim['end_weight'] - anim['start_weight'])
+                    
+                    # Adjust line width over full 2-second duration
+                    if progress < 0.5:  # First half - growing phase
+                        line_width = base_width + (6.0 * scale * progress * 2)
+                    else:  # Second half - shrinking phase
+                        line_width = base_width + (6.0 * scale * (1 - progress) * 2)
+                    
+                    # Slower pulse for 2-second duration
+                    pulse_progress = progress * anim['pulse_speed']
+                    animating = True
+                    break
+        
+        # Set connection color based on weight
+        if animating:
+            # Use animation color during changes
+            r, g, b = anim['color']
+            alpha = int(255 * (1 - pulse_progress**2))  # Fade out pulse
+            color = QtGui.QColor(r, g, b, alpha)
+        else:
+            # Default color based on weight
+            color = QtGui.QColor(0, int(255 * abs(weight)), 0) if weight > 0 else \
+                    QtGui.QColor(int(255 * abs(weight)), 0, 0)
+        
+        # Adjust line style based on weight strength
+        if abs(anim_weight) < 0.1:
+            pen_style = QtCore.Qt.DotLine
+        elif abs(anim_weight) < 0.3:
+            pen_style = QtCore.Qt.SolidLine
+            
+        painter.setPen(QtGui.QPen(color, line_width, pen_style))
+        painter.drawLine(start_point, end_point)
+        
+        # Draw weight change animation effects
+        if animating:
+            # Draw pulse along connection (slower for 2-second duration)
+            if pulse_progress < 1.0:
+                pulse_pos = pulse_progress
+                pulse_x = start_point.x() + pulse_pos * (end_point.x() - start_point.x())
+                pulse_y = start_point.y() + pulse_pos * (end_point.y() - start_point.y())
+                
+                # Calculate pulse size (smaller and longer-lasting)
+                pulse_size = 6 * scale * (1 - pulse_progress**2)
+                
+                # Draw pulse circle
+                painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 0, 200)))
+                painter.setPen(QtCore.Qt.NoPen)
+                painter.drawEllipse(QtCore.QPointF(pulse_x, pulse_y), 
+                                  pulse_size, pulse_size)
+            
+            # Draw glow effect around connection
+            if progress < 0.7:  # Longer glow phase
+                glow_width = line_width + 4 * scale * (1 - (progress/0.7))
+                glow_color = QtGui.QColor(255, 255, 200, 50)
+                painter.setPen(QtGui.QPen(glow_color, glow_width, pen_style))
+                painter.drawLine(start_point, end_point)
+        
+        # Draw weight text
+        if self.show_weights and abs(weight) > 0.1:
+            midpoint = QtCore.QPointF((start_point.x() + end_point.x()) / 2, 
+                                    (start_point.y() + end_point.y()) / 2)
+            text_area_width, text_area_height = 80.0, 22.0
+            font_size = max(8, min(12, int(8 * scale)))
+            font = painter.font()
+            font.setPointSize(font_size)
+            painter.setFont(font)
+            rect = QtCore.QRectF(midpoint.x() - text_area_width / 2, 
+                                midpoint.y() - text_area_height / 2, 
+                                text_area_width, text_area_height)
+            painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0)))
+            painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
+            painter.drawRect(rect)
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255)))
+            painter.drawText(rect, QtCore.Qt.AlignCenter, f"{weight:.2f}")
 
     def _get_logical_coords(self, widget_pos):
         """Maps widget QPoint/QPointF to logical neuron coordinates."""
@@ -1291,7 +1413,7 @@ class BrainWidget(QtWidgets.QWidget):
         active_indicators_data = []
         if self.state.get('is_fleeing', False): active_indicators_data.append({"text": "Fleeing!", "color": QtGui.QColor(220, 20, 60)})
         if self.state.get('is_startled', False): active_indicators_data.append({"text": "Startled!", "color": QtGui.QColor(255, 165, 0)})
-        if self.state.get('pursuing_food', False): active_indicators_data.append({"text": "Food?", "color": QtGui.QColor(60, 179, 113)})
+        if self.state.get('pursuing_food', False): active_indicators_data.append({"text": "Pursuing Food", "color": QtGui.QColor(60, 179, 113)})
         indicators_to_display = active_indicators_data[:2]
         padding_horizontal, padding_vertical, spacing_between_indicators, min_left_padding, right_padding_from_widget_edge = 8, 4, 10, 10, 100
         min_sensible_width = font_metrics.horizontalAdvance("...") + (2 * padding_horizontal)
@@ -1332,30 +1454,73 @@ class BrainWidget(QtWidgets.QWidget):
         painter.restore()
 
     def draw_neurons(self, painter, scale):
-        """Draw all neurons with state validation and error handling"""
+        """Draw all neurons with activity-based sizing and highlights"""
+        current_time = time.time()
+        
         for name, pos in self.neuron_positions.items():
+            if name in self.excluded_neurons:
+                continue
+
             try:
-                if name in self.excluded_neurons: continue
+                # Calculate dynamic size based on activity
+                value = self.get_neuron_value(self.state.get(name, 50))
+                base_size = 25.0
+                size_factor = 0.8 + 0.4 * (abs(value - 50) / 50)
+                target_size = base_size * size_factor * scale
+                
+                # Smooth size transition
+                if name not in self.neuron_sizes:
+                    self.neuron_sizes[name] = target_size
+                else:
+                    current_size = self.neuron_sizes[name]
+                    size_diff = target_size - current_size
+                    self.neuron_sizes[name] = current_size + size_diff * 0.2
+                
+                radius = self.neuron_sizes[name]
                 shape = self.neuron_shapes.get(name, 'circle')
-                value = self.state.get(name, 50)
                 color = QtGui.QColor(*self.state_colors.get(name, (200, 200, 200)))
 
-                # Check the shape and call the appropriate drawing function
-                if shape == 'diamond': 
-                    self.draw_diamond_neuron(painter, pos[0], pos[1], value, name, scale)
-                elif shape == 'triangle': 
-                    self.draw_triangular_neuron(painter, pos[0], pos[1], value, name, scale) # Draws triangle
-                elif shape == 'square': 
-                    self.draw_square_neuron(painter, pos[0], pos[1], value, name, scale) # Draws square
-                else: 
-                    # Default circular neuron
-                    painter.setBrush(QtGui.QBrush(color)); 
-                    painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0))); 
-                    radius = 25 * scale; 
-                    painter.drawEllipse(int(pos[0] - radius), int(pos[1] - radius), int(radius * 2), int(radius * 2)); 
-                    self._draw_neuron_label(painter, pos[0], pos[1], name, scale)
+                # Draw activity highlight
+                if name in self.communication_events:
+                    elapsed = current_time - self.communication_events[name]
+                    if elapsed < self.activity_duration:
+                        pulse = 0.5 + 0.5 * math.sin(current_time * 10)
+                        highlight_radius = radius + 3 + 2 * pulse
+                        painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 150), 2))
+                        painter.setBrush(QtCore.Qt.NoBrush)
+                        painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 
+                                          highlight_radius, highlight_radius)
 
-            except Exception as e: print(f"Error drawing neuron {name}: {str(e)}")
+                # Draw the neuron shape
+                if shape == 'diamond':
+                    self.draw_diamond_neuron(painter, pos[0], pos[1], radius, name, scale)
+                elif shape == 'triangle':
+                    self.draw_triangular_neuron(painter, pos[0], pos[1], radius, name, scale)
+                elif shape == 'square':
+                    self.draw_square_neuron(painter, pos[0], pos[1], radius, name, scale)
+                else:
+                    painter.setBrush(QtGui.QBrush(color))
+                    painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
+                    painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), radius, radius)
+                    self._draw_neuron_label(painter, pos[0], pos[1], name, radius, scale)
+
+                # Draw neurogenesis highlight
+                if (self.neurogenesis_highlight['neuron'] == name and 
+                    current_time - self.neurogenesis_highlight['start_time'] < 
+                    self.neurogenesis_highlight['duration']):
+                    
+                    progress = (current_time - self.neurogenesis_highlight['start_time']) / \
+                               self.neurogenesis_highlight['duration']
+                    pulse = 0.5 + 0.5 * math.sin(self.neurogenesis_highlight['pulse_phase'])
+                    highlight_radius = radius + 10 + 10 * pulse * (1 - progress)
+                    
+                    painter.setPen(QtGui.QPen(QtGui.QColor(255, 215, 0, 200), 3))
+                    painter.setBrush(QtCore.Qt.NoBrush)
+                    painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 
+                                      highlight_radius, highlight_radius)
+
+            except Exception as e:
+                print(f"Error drawing neuron {name}: {str(e)}")
 
     def draw_binary_neuron(self, painter, x, y, value, label, scale=1.0):
         color = (0, 0, 0) if value else (255, 255, 255)
@@ -1372,27 +1537,46 @@ class BrainWidget(QtWidgets.QWidget):
         painter.drawEllipse(int(x - radius), int(y - radius), int(radius*2), int(radius*2))
         self._draw_neuron_label(painter, x, y, label, scale)
 
-    def draw_triangular_neuron(self, painter, x, y, value, label, scale=1.0):
+    def draw_triangular_neuron(self, painter, x, y, radius, label, scale=1.0):
+        """Draw a triangular neuron with given radius"""
         color = QtGui.QColor(*self.state_colors.get(label, (255, 255, 150)))
-        self._draw_polygon_neuron(painter, x, y, 3, color, label, scale)
+        self._draw_polygon_neuron(painter, x, y, 3, radius, color, label, scale)
 
     def show_diagnostic_report(self):
         if hasattr(self, 'brain_widget'): self.brain_widget.show_diagnostic_report()
         else: print("Error: Brain widget not initialized")
 
-    def _draw_polygon_neuron(self, painter, x, y, sides, color, label, scale, rotation=0):
-        painter.save(); painter.translate(x, y); painter.rotate(rotation)
-        painter.setBrush(QtGui.QBrush(color)); painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
-        polygon = QtGui.QPolygonF(); radius = 25 * scale; angle_step = 360.0 / sides
+    def _draw_polygon_neuron(self, painter, x, y, sides, radius, color, label, scale, rotation=0):
+        """Helper to draw regular polygon neurons"""
+        painter.save()
+        painter.translate(x, y)
+        painter.rotate(rotation)
+        painter.setBrush(QtGui.QBrush(color))
+        painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
+        
+        polygon = QtGui.QPolygonF()
+        angle_step = 360.0 / sides
+        
         for i in range(sides):
-            angle = i * angle_step - 90
-            polygon.append(QtCore.QPointF(radius * math.cos(math.radians(angle)), radius * math.sin(math.radians(angle))))
-        painter.drawPolygon(polygon); painter.restore()
-        self._draw_neuron_label(painter, x, y, label, scale)
+            angle = math.radians(i * angle_step - 90)
+            x_pos = radius * math.cos(angle)
+            y_pos = radius * math.sin(angle)
+            polygon.append(QtCore.QPointF(x_pos, y_pos))
+            
+        painter.drawPolygon(polygon)
+        painter.restore()
+        self._draw_neuron_label(painter, x, y, label, radius, scale)
 
-    def _draw_neuron_label(self, painter, x, y, label, scale):
-        painter.setPen(QtGui.QColor(0, 0, 0)); font = painter.font(); font.setPointSize(int(8 * scale)); painter.setFont(font)
-        painter.drawText(int(x - 50*scale), int(y + 40*scale), int(100*scale), int(20*scale), QtCore.Qt.AlignCenter, label)
+    def _draw_neuron_label(self, painter, x, y, label, radius, scale):
+        """Draw neuron label below the neuron"""
+        painter.setPen(QtGui.QColor(0, 0, 0))
+        font = painter.font()
+        font.setPointSize(int(8 * scale))
+        painter.setFont(font)
+        label_y = y + radius + 15 * scale
+        painter.drawText(int(x - 50*scale), int(label_y), 
+                       int(100*scale), int(20*scale), 
+                       QtCore.Qt.AlignCenter, label)
 
     def draw_neurogenesis_highlights(self, painter, scale):
         if (self.neurogenesis_highlight['neuron'] and time.time() - self.neurogenesis_highlight['start_time'] < self.neurogenesis_highlight['duration']):
@@ -1402,13 +1586,15 @@ class BrainWidget(QtWidgets.QWidget):
                 x, y, width, height = int(pos[0] - radius), int(pos[1] - radius), int(radius * 2), int(radius * 2)
                 painter.drawEllipse(x, y, width, height)
 
-    def draw_square_neuron(self, painter, x, y, value, label, scale=1.0):
+    def draw_square_neuron(self, painter, x, y, radius, label, scale=1.0):
+        """Draw a square neuron with given radius"""
         color = QtGui.QColor(*self.state_colors.get(label, (152, 251, 152)))
-        self._draw_polygon_neuron(painter, x, y, 4, color, label, scale, rotation=45)
+        self._draw_polygon_neuron(painter, x, y, 4, radius, color, label, scale, rotation=45)
 
-    def draw_diamond_neuron(self, painter, x, y, value, label, scale=1.0):
+    def draw_diamond_neuron(self, painter, x, y, radius, label, scale=1.0):
+        """Draw a diamond-shaped neuron with given radius"""
         color = QtGui.QColor(*self.state_colors.get(label, (152, 251, 152)))
-        self._draw_polygon_neuron(painter, x, y, 4, color, label, scale, rotation=00)
+        self._draw_polygon_neuron(painter, x, y, 4, radius, color, label, scale, rotation=0)
 
     def toggle_links(self, state):
         self.show_links = state == QtCore.Qt.Checked
