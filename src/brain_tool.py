@@ -10,7 +10,6 @@ from PyQt5.QtWidgets import QSplitter
 from PyQt5.QtGui import QPixmap, QFont
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-# Dependencies
 from .brain_widget import BrainWidget
 from .brain_dialogs import StimulateDialog, RecentThoughtsDialog, LogWindow, DiagnosticReportDialog
 from .brain_utils import ConsoleOutput
@@ -51,7 +50,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         else:
             # Use standard scaling for higher resolutions
             width = DisplayScaling.scale(1280)
-            height = DisplayScaling.scale(800)
+            height = DisplayScaling.scale(920)
 
         self.resize(width, height)
 
