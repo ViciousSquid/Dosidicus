@@ -41,37 +41,26 @@ class NetworkTab(BrainBaseTab):
         
         # Add stretch to push checkboxes to the left
         checkbox_layout.addStretch(1)
-
-        # --- MODIFICATION START ---
-        # Create the report button here and add it to the checkbox_layout
-        self.report_button = self.create_indicator_button("Network Report", self.show_diagnostic_report, "#ADD8E6")
-        # checkbox_layout.addWidget(self.report_button)
-        # --- MODIFICATION END ---
-
         main_content_layout.addLayout(checkbox_layout)
 
-        # Button controls (for Stimulate, Save, Load)
+        # Button controls
         button_layout = QtWidgets.QHBoxLayout()
         
         self.stimulate_button = self.create_button("Stimulate", self.stimulate_brain, "#d3d3d3")
         self.stimulate_button.setEnabled(self.debug_mode)
-       # button_layout.addWidget(self.stimulate_button) # Add stimulate button here
-
-        self.save_button = self.create_button("Save", self.save_brain_state, "#d3d3d3")
-       # button_layout.addWidget(self.save_button) # Add save button here
-
-        self.load_button = self.create_button("Load", self.load_brain_state, "#d3d3d3")
-       # button_layout.addWidget(self.load_button) # Add load button here
-
-        # Add a stretchable spacer to push subsequent widgets to the right (if any, but none left now)
-        button_layout.addStretch(1) 
         
-        # The report_button was moved, so remove it from here
-        # button_layout.addWidget(self.report_button) 
+        self.save_button = self.create_button("Save", self.save_brain_state, "#d3d3d3")
+        self.load_button = self.create_button("Load", self.load_brain_state, "#d3d3d3")
+        self.report_button = self.create_button("Network Report", self.show_diagnostic_report, "#ADD8E6")
+
+        button_layout.addWidget(self.report_button)
+        button_layout.addWidget(self.stimulate_button)
+        button_layout.addWidget(self.save_button)
+        button_layout.addWidget(self.load_button)
         
         main_content_layout.addLayout(button_layout)
 
-        # Add the content widget to our layout (assuming self.layout is the main QVBoxLayout of NetworkTab)
+        # Add the content widget to our layout
         self.layout.addWidget(main_content_widget)
 
     def preload(self):
@@ -177,54 +166,4 @@ class NetworkTab(BrainBaseTab):
         font.setPointSize(DisplayScaling.font_size(10))
         button.setFont(font)
         
-        return button
-
-    # --- NEW METHOD FOR INDICATOR-STYLE BUTTON ---
-    def create_indicator_button(self, text, callback, color):
-        """Utility for creating buttons styled like the state indicators."""
-        from .display_scaling import DisplayScaling
-        
-        button = QtWidgets.QPushButton(text)
-        button.clicked.connect(callback)
-        
-        # Approximate dimensions and styling based on BrainWidget's state indicators
-        # These values are derived from the paintEvent in BrainWidget for indicators
-        indicator_font_size = DisplayScaling.font_size(9)
-        indicator_padding_horizontal = DisplayScaling.scale(6)
-        indicator_padding_vertical = DisplayScaling.scale(3)
-
-        # Calculate approximate height based on font metrics and padding
-        # This requires a QApplication context to get font metrics reliably,
-        # but for fixed styling, we can use a reasonable estimate or hardcode.
-        # Let's use a hardcoded height for consistency with the "pill" look.
-        fixed_height = DisplayScaling.scale(26) # Roughly matches a 9pt font + 3px padding
-
-        font = button.font()
-        font.setPointSize(indicator_font_size)
-        button.setFont(font)
-        
-        # Set a fixed minimum width to accommodate the text, and use the calculated height.
-        # Let the width adjust slightly based on text if possible, but limit it.
-        # For a "pill" look, we might want some horizontal padding as well.
-        # We can use minimum size hints rather than fixed size to allow text to fit better.
-        button.setMinimumHeight(fixed_height)
-        # Use stylesheet for padding and border-radius to get the pill shape
-        button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {color};
-                border: none; /* No border for a softer pill look */
-                border-radius: {fixed_height // 2}px; /* Half of height for pill shape */
-                padding: {indicator_padding_vertical}px {indicator_padding_horizontal}px;
-                color: {'black' if QtGui.QColor(color).lightnessF() > 0.5 else 'white'}; /* Dynamic text color */
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: {QtGui.QColor(color).darker(110).name()};
-            }}
-        """)
-        
-        # Use setMinimumWidth to let the button size itself to the text, but ensure it's not too small
-        button.setMinimumWidth(DisplayScaling.scale(120)) # Ensure it's wide enough for "Network Report"
-        button.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed)
-
         return button
