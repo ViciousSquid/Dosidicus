@@ -48,9 +48,6 @@ class TamagotchiLogic:
 
         # MODIFIED: Use the passed-in PluginManager instance
         self.plugin_manager = plugin_manager_instance
-        # REMOVED: self.plugin_manager = PluginManager()
-        # REMOVED: self.plugin_manager.load_all_plugins() 
-        # Plugin loading and initial enabling is now handled once in main.py
 
         # Update status bar with plugin information (using the shared plugin_manager)
         # This assumes update_status_bar correctly uses self.plugin_manager
@@ -959,6 +956,15 @@ class TamagotchiLogic:
         self.plugin_manager.trigger_hook("pre_update", 
                                         tamagotchi_logic=self, 
                                         squid=self.squid)
+
+        # >>> TRIGGER_HOOK CALL FOR ON_UPDATE <<<
+        if hasattr(self, 'plugin_manager') and self.plugin_manager:
+            self.plugin_manager.trigger_hook(
+                "on_update",
+                tamagotchi_logic=self,
+                squid=self.squid
+            )
+
         # 1. Handle existing simulation updates
         self.move_objects()
         self.animate_poops()
@@ -1540,11 +1546,11 @@ class TamagotchiLogic:
         if is_sushi:
             food_pixmap = QtGui.QPixmap(os.path.join("images", "sushi.png"))
             food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
-            food_item.is_sushi = True
+            food_item.is_sushi = True # type: ignore 
         else:
             food_pixmap = QtGui.QPixmap(os.path.join("images", "cheese.png"))
             food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
-            food_item.is_sushi = False
+            food_item.is_sushi = False # type: ignore
 
         food_x = random.randint(50, self.user_interface.window_width - 50 - self.food_width)
         food_item.setPos(food_x, 50)
@@ -1552,6 +1558,15 @@ class TamagotchiLogic:
         # Add to scene and tracking list
         self.user_interface.scene.addItem(food_item)
         self.food_items.append(food_item)  # Single addition
+
+        # >>> ADDED TRIGGER_HOOK CALL <<<
+        if hasattr(self, 'plugin_manager') and self.plugin_manager:
+            self.plugin_manager.trigger_hook(
+                "on_spawn_food",
+                tamagotchi_logic=self,  # Pass the TamagotchiLogic instance
+                food_item=food_item     # Pass the created food_item
+            )
+        # print(f"Triggered on_spawn_food for {'sushi' if is_sushi else 'cheese'}") # Optional: for debugging
 
     def clean_environment(self):
         current_time = time.time()
@@ -1740,6 +1755,15 @@ class TamagotchiLogic:
             self.user_interface.scene.addItem(poop_item)
             self.poop_items.append(poop_item)
 
+            # >>> ADDED TRIGGER_HOOK CALL <<<
+            if hasattr(self, 'plugin_manager') and self.plugin_manager:
+                self.plugin_manager.trigger_hook(
+                    "on_spawn_poop",
+                    tamagotchi_logic=self, # Pass the TamagotchiLogic instance
+                    poop_item=poop_item    # Pass the created poop_item
+                )
+            # print(f"Triggered on_spawn_poop at ({x}, {y})") # Optional: for debugging
+
     def animate_poops(self):
         if self.squid is not None:
             for poop_item in self.poop_items:
@@ -1808,85 +1832,112 @@ class TamagotchiLogic:
         self.save_game()
 
     def load_game(self):
-        save_data = self.save_manager.load_game()
+        save_data = self.save_manager.load_game() # Tries autosave then normal save by default in SaveManager
         
         if save_data is not None:
-            game_state = save_data['game_state']
-            squid_data = game_state['squid']
-            self.squid.load_state(squid_data)
+            game_state = save_data.get('game_state', {}) # Use .get for safety
+            squid_data = game_state.get('squid')
+            if squid_data and self.squid: # Ensure squid object exists
+                self.squid.load_state(squid_data)
 
-            # Load brain state
-            self.brain_window.set_brain_state(save_data['brain_state'])
+            brain_state_data = save_data.get('brain_state')
+            if brain_state_data and hasattr(self, 'brain_window'): # Ensure brain_window exists
+                self.brain_window.set_brain_state(brain_state_data)
 
-            # Load memories - first try from save_data
-            if 'ShortTerm' in save_data and save_data['ShortTerm']:
-                self.squid.memory_manager.short_term_memory = save_data['ShortTerm']
-            if 'LongTerm' in save_data and save_data['LongTerm']:
-                self.squid.memory_manager.long_term_memory = save_data['LongTerm']
-
-            # If empty or not in save_data, try loading from extracted files
-            if not self.squid.memory_manager.short_term_memory:
-                self.squid.memory_manager.short_term_memory = self.squid.memory_manager.load_memory(
-                    self.squid.memory_manager.short_term_file) or []
-            if not self.squid.memory_manager.long_term_memory:
-                self.squid.memory_manager.long_term_memory = self.squid.memory_manager.load_memory(
-                    self.squid.memory_manager.long_term_file) or []
-
-            # Make sure they are lists
-            if not isinstance(self.squid.memory_manager.short_term_memory, list):
-                self.squid.memory_manager.short_term_memory = []
-            if not isinstance(self.squid.memory_manager.long_term_memory, list):
-                self.squid.memory_manager.long_term_memory = []
-
-            # Save loaded memories to disk to ensure consistency
-            self.squid.memory_manager.save_memory(self.squid.memory_manager.short_term_memory, 
-                                                self.squid.memory_manager.short_term_file)
-            self.squid.memory_manager.save_memory(self.squid.memory_manager.long_term_memory, 
-                                                self.squid.memory_manager.long_term_file)
-
-            print(f"\033[33;1m >>Loaded personality: {self.squid.personality.value}\033[0m")
-
-            # Load decoration data - ensure this runs for both manual loads and autosaves
-            decorations_data = game_state.get('decorations', [])
-            if decorations_data:
-                print(f"Loading {len(decorations_data)} decorations")
-                # Clear existing decorations first to avoid duplicates
-                for item in list(self.user_interface.scene.items()):
-                    if hasattr(item, 'category') and item.category in ['rock', 'plant', 'decoration']:
-                        self.user_interface.scene.removeItem(item)
-                # Now load the decorations
-                self.user_interface.load_decorations_data(decorations_data)
-            else:
-                print("No decorations found in save data")
-
-            # Load TamagotchiLogic data
-            tamagotchi_logic_data = game_state['tamagotchi_logic']
-            self.cleanliness_threshold_time = tamagotchi_logic_data['cleanliness_threshold_time']
-            self.hunger_threshold_time = tamagotchi_logic_data['hunger_threshold_time']
-            self.last_clean_time = tamagotchi_logic_data['last_clean_time']
-            self.points = tamagotchi_logic_data['points']
+            if hasattr(self.squid, 'memory_manager'):
+                short_term_mem = save_data.get('ShortTerm', [])
+                long_term_mem = save_data.get('LongTerm', [])
+                self.squid.memory_manager.short_term_memory = short_term_mem if isinstance(short_term_mem, list) else []
+                self.squid.memory_manager.long_term_memory = long_term_mem if isinstance(long_term_mem, list) else []
+                # Save loaded memories to disk to ensure consistency if that's desired behavior
+                # self.squid.memory_manager.save_memory(self.squid.memory_manager.short_term_memory, 
+                #                                     self.squid.memory_manager.short_term_file)
+                # self.squid.memory_manager.save_memory(self.squid.memory_manager.long_term_memory, 
+                #                                     self.squid.memory_manager.long_term_file)
             
-            # Load plugin data if it exists
-            if 'plugin_data' in save_data:
-                plugin_data = save_data['plugin_data']
+            personality_val = squid_data.get('personality') if squid_data else None
+            log_msg_personality = f"Loaded personality: {personality_val}"
+            if hasattr(self, 'logger'): self.logger.info(log_msg_personality)
+            else: print(f"\033[33;1m >>{log_msg_personality}\033[0m")
+
+
+            # Load decoration data
+            decorations_data = game_state.get('decorations', [])
+            if decorations_data and hasattr(self.user_interface, 'load_decorations_data'):
+                if hasattr(self, 'logger'): self.logger.info(f"Loading {len(decorations_data)} decorations via UI method.")
+                # Clear existing decorations first (assuming this is desired behavior before loading)
+                if hasattr(self.user_interface, 'clear_decorations_from_scene'): # Ideal method
+                    self.user_interface.clear_decorations_from_scene(['rock', 'plant', 'decoration'])
+                else: # Fallback manual clear if specific method doesn't exist
+                    for item in list(self.user_interface.scene.items()):
+                        if hasattr(item, 'category') and getattr(item, 'category', None) in ['rock', 'plant', 'decoration']:
+                            self.user_interface.scene.removeItem(item)
+                
+                # Call the UI method to load decorations
+                # This method should ideally create items and set attributes like 'is_stolen_trophy'
+                created_items = self.user_interface.load_decorations_data(decorations_data)
+
+                # --- START MODIFICATION for applying tint to loaded stolen items ---
+                # After items are loaded by load_decorations_data, iterate them (or scene items)
+                # to apply tint if they are stolen trophies.
+                
+                # If load_decorations_data doesn't return created items, iterate scene:
+                items_to_check_for_tint = []
+                if created_items and isinstance(created_items, list) : # If method returns list of items
+                    items_to_check_for_tint = created_items
+                else: # Fallback to checking all relevant items in scene
+                    for item_in_scene in self.user_interface.scene.items():
+                        if isinstance(item_in_scene, QtWidgets.QGraphicsPixmapItem) and \
+                           hasattr(item_in_scene, 'is_stolen_trophy'):
+                           items_to_check_for_tint.append(item_in_scene)
+                
+                multiplayer_plugin_instance = None
+                if hasattr(self, 'plugin_manager') and hasattr(self.plugin_manager, 'get_plugin_instance'):
+                    multiplayer_plugin_instance = self.plugin_manager.get_plugin_instance('multiplayer') # Use actual key
+
+                for item_instance in items_to_check_for_tint:
+                    if getattr(item_instance, 'is_stolen_trophy', False):
+                        if multiplayer_plugin_instance and hasattr(multiplayer_plugin_instance, 'apply_foreign_object_tint'):
+                            multiplayer_plugin_instance.apply_foreign_object_tint(item_instance)
+                            if hasattr(self, 'logger'): self.logger.debug(f"Applied stolen tint to loaded item: {getattr(item_instance, 'filename', 'Unknown item')}")
+                        else:
+                            # Fallback: maybe set a flag on item if tinting can't be done immediately
+                            setattr(item_instance, 'needs_stolen_tint_on_load', True) 
+                            if hasattr(self, 'logger'): self.logger.warning(f"Could not apply stolen tint during load for {getattr(item_instance, 'filename', '')}. MPPlugin/method missing.")
+                # --- END MODIFICATION ---
+            else:
+                if hasattr(self, 'logger'): self.logger.info("No decorations found in save data or UI method missing.")
+
+            tamagotchi_logic_data = game_state.get('tamagotchi_logic')
+            if tamagotchi_logic_data:
+                self.cleanliness_threshold_time = tamagotchi_logic_data.get('cleanliness_threshold_time', 0)
+                self.hunger_threshold_time = tamagotchi_logic_data.get('hunger_threshold_time', 0)
+                self.last_clean_time = tamagotchi_logic_data.get('last_clean_time', 0)
+                self.points = tamagotchi_logic_data.get('points', 0)
+            
+            plugin_data_loaded = save_data.get('plugin_data')
+            if plugin_data_loaded and hasattr(self, 'plugin_manager'):
                 self.plugin_manager.trigger_hook("on_load_game", 
                                                 tamagotchi_logic=self,
                                                 squid=self.squid,
-                                                plugin_data=plugin_data)
+                                                plugin_data=plugin_data_loaded)
 
-            # Refresh memory tab if it exists
-            if hasattr(self.brain_window, 'memory_tab'):
+            if hasattr(self.brain_window, 'memory_tab') and hasattr(self.brain_window.memory_tab, 'update_memory_display'):
                 QtCore.QTimer.singleShot(1000, self.brain_window.memory_tab.update_memory_display)
 
-            # Ensure the brain window is shown after loading
-            if self.brain_window:
+            if self.brain_window and hasattr(self.brain_window, 'show'):
                 self.brain_window.show()
-                self.brain_window.raise_()  # Brings the window to the front
+                if hasattr(self.brain_window, 'raise_'): self.brain_window.raise_() 
 
-            print("Game loaded successfully")
-            self.set_simulation_speed(1)  # Set simulation speed to 1x after loading
+            log_msg_loaded = "Game loaded successfully"
+            if hasattr(self, 'logger'): self.logger.info(log_msg_loaded)
+            else: print(log_msg_loaded)
+
+            self.set_simulation_speed(1)
         else:
-            print("No save data found")
+            log_msg_no_save = "No save data found"
+            if hasattr(self, 'logger'): self.logger.info(log_msg_no_save)
+            else: print(log_msg_no_save)
 
     def update_score(self):
         if self.squid is not None:
@@ -1930,39 +1981,71 @@ class TamagotchiLogic:
 
             self.brain_window.update_brain(brain_state)
 
-    def save_game(self, squid, tamagotchi_logic, is_autosave=False):
+    def save_game(self, squid, tamagotchi_logic, is_autosave=False): # Existing signature
+        # Use self.squid and self for consistency if squid and tamagotchi_logic parameters are self.squid and self
+        current_squid = self.squid 
+        # current_logic = self 
+
         try:
             # Trigger save game hook to allow plugins to add data
             plugin_data = {}
-            hook_results = self.plugin_manager.trigger_hook("on_save_game", 
-                                                        tamagotchi_logic=self,
-                                                        squid=self.squid)
+            if hasattr(self, 'plugin_manager') and self.plugin_manager: # Check if plugin_manager exists
+                hook_results = self.plugin_manager.trigger_hook("on_save_game", 
+                                                            tamagotchi_logic=self, # Pass self
+                                                            squid=current_squid) # Pass current squid
+                
+                # Collect plugin data from results
+                for result in hook_results:
+                    if isinstance(result, dict):
+                        for plugin_name, data_val in result.items(): # Changed 'data' to 'data_val' to avoid conflict
+                            plugin_data[plugin_name] = data_val
             
-            # Collect plugin data from results
-            for result in hook_results:
-                if isinstance(result, dict):
-                    for plugin_name, data in result.items():
-                        plugin_data[plugin_name] = data
+            brain_state = {}
+            if hasattr(self, 'brain_window') and self.brain_window: # Check if brain_window exists
+                 brain_state = self.brain_window.get_brain_state()
             
-            brain_state = self.brain_window.get_brain_state()
-            print("Debug: Brain State")
-            # print(json.dumps(brain_state, indent=2))
+            # print("Debug: Brain State") # Original debug print
+            # print(json.dumps(brain_state, indent=2)) # Original debug print
+            
+            # Prepare decorations data, including stolen status
+            decorations_to_save = []
+            if hasattr(self, 'user_interface') and hasattr(self.user_interface, 'scene'):
+                for item in self.user_interface.scene.items():
+                    # Ensure item is a QGraphicsPixmapItem and has necessary attributes for saving
+                    if isinstance(item, QtWidgets.QGraphicsPixmapItem) and hasattr(item, 'filename'):
+                        item_pos = item.pos()
+                        decoration_item_data = {
+                            'pixmap_data': self.user_interface.get_pixmap_data(item) if hasattr(self.user_interface, 'get_pixmap_data') else None,
+                            'filename': getattr(item, 'filename', None),
+                            'pos': [item_pos.x(), item_pos.y()],
+                            'scale': item.scale() if hasattr(item, 'scale') else 1.0,
+                            'category': getattr(item, 'category', 'unknown'),
+                            # --- START MODIFICATION for stolen items ---
+                            'is_stolen_trophy': getattr(item, 'is_stolen_trophy', False),
+                            'original_item_id': getattr(item, 'original_item_id', None) 
+                            # --- END MODIFICATION ---
+                        }
+                        # Ensure 'is_foreign' is True if it's a stolen trophy, for tinting on load
+                        if decoration_item_data['is_stolen_trophy']:
+                            decoration_item_data['is_foreign'] = True 
+                            
+                        decorations_to_save.append(decoration_item_data)
             
             save_data = {
                 'game_state': {
                     'squid': {
-                        'hunger': squid.hunger,
-                        'sleepiness': squid.sleepiness,
-                        'happiness': squid.happiness,
-                        'cleanliness': squid.cleanliness,
-                        'health': squid.health,
-                        'is_sick': squid.is_sick,
-                        'squid_x': squid.squid_x,
-                        'squid_y': squid.squid_y,
-                        'satisfaction': squid.satisfaction,
-                        'anxiety': squid.anxiety,
-                        'curiosity': squid.curiosity,
-                        'personality': squid.personality.value
+                        'hunger': current_squid.hunger,
+                        'sleepiness': current_squid.sleepiness,
+                        'happiness': current_squid.happiness,
+                        'cleanliness': current_squid.cleanliness,
+                        'health': current_squid.health,
+                        'is_sick': current_squid.is_sick,
+                        'squid_x': current_squid.squid_x,
+                        'squid_y': current_squid.squid_y,
+                        'satisfaction': current_squid.satisfaction,
+                        'anxiety': current_squid.anxiety,
+                        'curiosity': current_squid.curiosity,
+                        'personality': current_squid.personality.value if hasattr(current_squid.personality, 'value') else str(current_squid.personality)
                     },
                     'tamagotchi_logic': {
                         'cleanliness_threshold_time': self.cleanliness_threshold_time,
@@ -1970,34 +2053,27 @@ class TamagotchiLogic:
                         'last_clean_time': self.last_clean_time,
                         'points': self.points
                     },
-                    'decorations': [
-                        {
-                            'pixmap_data': self.user_interface.get_pixmap_data(item),
-                            'pos': [item.pos().x(), item.pos().y()],
-                            'scale': item.scale(),
-                            'filename': item.filename
-                        }
-                        for item in self.user_interface.scene.items()
-                        if isinstance(item, ResizablePixmapItem)
-                    ]
+                    'decorations': decorations_to_save # Use the collected list
                 },
                 'brain_state': brain_state,
-                'ShortTerm': squid.memory_manager.short_term_memory,
-                'LongTerm': squid.memory_manager.long_term_memory,
+                'ShortTerm': current_squid.memory_manager.short_term_memory if hasattr(current_squid, 'memory_manager') else [],
+                'LongTerm': current_squid.memory_manager.long_term_memory if hasattr(current_squid, 'memory_manager') else [],
                 'plugin_data': plugin_data
             }
 
-            #print("Debug: Short Term Memory")
-            #print(json.dumps(save_data['ShortTerm'], indent=2))
-            #print("Debug: Long Term Memory")
-            #print(json.dumps(save_data['LongTerm'], indent=2))
-
             filepath = self.save_manager.save_game(save_data, is_autosave)
-            print(f"Game {'autosaved' if is_autosave else 'saved'} successfully to {filepath}")
+            if hasattr(self, 'logger'):
+                self.logger.info(f"Game {'autosaved' if is_autosave else 'saved'} successfully to {filepath}")
+            else: # Fallback print
+                print(f"Game {'autosaved' if is_autosave else 'saved'} successfully to {filepath}")
+
         except Exception as e:
-            print(f"Error during save: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            log_msg = f"Error during save: {str(e)}"
+            if hasattr(self, 'logger'):
+                self.logger.error(log_msg, exc_info=True)
+            else: # Fallback print
+                print(log_msg)
+                traceback.print_exc()
 
     def start_autosave(self):
         self.autosave_timer.start(300000)  # 300000 ms = 5 minutes
@@ -2225,3 +2301,86 @@ class TamagotchiLogic:
                 if self.squid.throw_poop(direction):
                     self.squid.status = "roaming"
                     self.squid.current_poop_target = None
+
+    # Inside TamagotchiLogic class
+
+def add_stolen_item_to_tank(self, item_type: str, item_details: str, spawn_position: tuple):
+    """
+    Adds a 'stolen' item (rock or decoration) to the local tank.
+    This item should be visually tinted red.
+    item_details could be a filename or an ID that helps reconstruct the item.
+    spawn_position is where the squid re-entered, to place the item nearby.
+    Returns the created QGraphicsItem or None.
+    """
+    if not self.squid or not hasattr(self, 'user_interface'):
+        if hasattr(self, 'logger'): self.logger.error("Cannot add stolen item, squid or UI missing.")
+        return None
+
+    scene = self.user_interface.scene
+    item_to_add = None
+    base_filename = os.path.basename(item_details) # Assuming item_details is a filename for now
+
+    # Determine image path - this is simplified, you might need more robust lookup
+    image_path = None
+    potential_paths = [
+        os.path.join("images", "decoration", base_filename),
+        os.path.join("images", base_filename) 
+    ]
+    for p_path in potential_paths:
+        if os.path.exists(p_path):
+            image_path = p_path
+            break
+
+    if not image_path and item_type == 'rock': # Fallback for generic rock if specific not found
+         if os.path.exists(os.path.join("images", "rock.png")):
+             image_path = os.path.join("images", "rock.png")
+    elif not image_path and item_type == 'decoration': # Fallback for generic plant if specific not found
+        if os.path.exists(os.path.join("images", "plant.png")): # Example default decoration
+            image_path = os.path.join("images", "plant.png")
+
+
+    if not image_path:
+        if hasattr(self, 'logger'): self.logger.error(f"Could not find image for stolen item: {item_details}")
+        return None
+
+    try:
+        pixmap = QtGui.QPixmap(image_path)
+        if pixmap.isNull():
+            if hasattr(self, 'logger'): self.logger.error(f"Failed to load pixmap for stolen item: {image_path}")
+            return None
+
+        # Use ResizablePixmapItem if available, otherwise standard QGraphicsPixmapItem
+        if hasattr(self.user_interface, 'ResizablePixmapItem'):
+            item_to_add = self.user_interface.ResizablePixmapItem(pixmap, image_path) # Pass image_path as filename
+        else:
+            item_to_add = QtWidgets.QGraphicsPixmapItem(pixmap)
+            setattr(item_to_add, 'filename', image_path) # Store filename for reference
+
+        # Scatter near spawn_position
+        offset_x = random.uniform(-50, 50)
+        offset_y = random.uniform(30, 80) # Place it slightly below and around the squid's return point
+        item_x = spawn_position[0] + offset_x - pixmap.width() / 2
+        item_y = spawn_position[1] + offset_y - pixmap.height() / 2
+
+        # Ensure it's within bounds (simplified boundary check)
+        item_x = max(0, min(item_x, self.user_interface.window_width - pixmap.width()))
+        item_y = max(0, min(item_y, self.user_interface.window_height - pixmap.height() - 100 )) # Avoid very bottom
+
+        item_to_add.setPos(item_x, item_y)
+
+        # Set properties for the stolen item
+        setattr(item_to_add, 'category', item_type) # 'rock' or 'decoration'
+        setattr(item_to_add, 'is_stolen_trophy', True) # Flag for persistence and special handling
+        setattr(item_to_add, 'is_foreign', True) # To trigger existing tint logic if applicable
+
+        scene.addItem(item_to_add)
+
+        if hasattr(self, 'logger'): self.logger.info(f"Added stolen {item_type} ('{base_filename}') to tank.")
+
+        # The red tinting will be handled by mp_plugin_logic's apply_foreign_object_tint
+        # which should be called on 'created_item' returned by this function.
+        return item_to_add
+
+    except Exception as e:
+        if hasattr(self, 'logger'): self.logger.error(f"Error creating stolen item {item_type} in TamagotchiLogic: {e}", exc_info=True)
+        return None

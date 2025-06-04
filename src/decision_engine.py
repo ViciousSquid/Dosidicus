@@ -1,4 +1,4 @@
-# Decision engine version 2.1   April 2025
+# Decision engine version 2.20   May 2025
 
 import random
 from .personality import Personality
@@ -6,6 +6,7 @@ from .personality import Personality
 class DecisionEngine:
     def __init__(self, squid):
         self.squid = squid
+        self.plugin_manager = self.squid.tamagotchi_logic.plugin_manager
     
     def make_decision(self):
         """Decision-making based primarily on neural network state with minimal hardcoding"""
@@ -114,6 +115,28 @@ class DecisionEngine:
         elif self.squid.personality == Personality.GREEDY:
             decision_weights["eating"] *= 1.5
         
+        # --- HOOK: before_decision_evaluation ---
+        # Allows plugins to inspect or modify action weights before randomness and final selection.
+        # Args:
+        #   decision_engine_instance (DecisionEngine): The instance of the decision engine.
+        #   squid_instance (Squid): The squid making the decision.
+        #   current_action_weights (dict): A copy of the calculated weights for each potential action.
+        #                                 Plugins can modify this dictionary.
+        #
+        # Plugins can optionally return a modified dictionary of weights.
+        # If multiple plugins return dictionaries, they might overwrite each other;
+        # 
+
+        modified_weights = self.plugin_manager.dispatch_hook(
+            "before_decision_evaluation",
+            decision_engine_instance=self,
+            squid_instance=self.squid,
+            current_action_weights=decision_weights.copy() # Pass a copy
+        )
+        if modified_weights and isinstance(modified_weights, dict):
+            decision_weights = modified_weights # Update weights if a plugin returned a valid dictionary
+        # --- END HOOK ---
+        
         # Add randomness to create more unpredictable behavior
         for key in decision_weights:
             decision_weights[key] *= random.uniform(0.85, 1.15)
@@ -125,9 +148,24 @@ class DecisionEngine:
         if best_decision == "eating" and self.squid.get_visible_food():
             closest_food = min(self.squid.get_visible_food(), 
                             key=lambda f: self.squid.distance_to(f[0], f[1]))
+            
+            # --- HOOK: on_interaction_focus ---
+            # Notifies plugins when the squid focuses its intent on a specific interactable object.
+            # Args:
+            #   squid_instance (Squid): The squid instance.
+            #   focused_object_type (str): The type of object being focused on (e.g., "food", "rock", "poop").
+            #   focused_object_details (any): Details about the object (e.g., position for food, QGraphicsItem for rock/poop).
+
+            self.plugin_manager.dispatch_hook(
+                "on_interaction_focus",
+                squid_instance=self.squid,
+                focused_object_type="food",
+                focused_object_details={"position": closest_food, "item_instance": None} # Assuming food is (x,y)
+            )
+            # --- END HOOK ---
+            
             self.squid.move_towards(closest_food[0], closest_food[1])
             
-            # Food-specific statuses depending on hunger and distance
             food_distance = self.squid.distance_to(closest_food[0], closest_food[1])
             if food_distance > 100:
                 return "eyeing food"
@@ -145,6 +183,17 @@ class DecisionEngine:
                 if getattr(d, 'can_be_picked_up', False)]
             if nearby_rocks:
                 self.squid.current_rock_target = random.choice(nearby_rocks)
+
+                # --- HOOK: on_interaction_focus ---
+                # Notifies plugins when the squid focuses its intent on a specific interactable object.
+
+                self.plugin_manager.dispatch_hook(
+                    "on_interaction_focus",
+                    squid_instance=self.squid,
+                    focused_object_type="rock",
+                    focused_object_details={"item_instance": self.squid.current_rock_target}
+                )
+                # --- END HOOK ---
                 
                 rock_distance = self.squid.distance_to(
                     self.squid.current_rock_target.pos().x(), 
@@ -168,6 +217,17 @@ class DecisionEngine:
                             if self.squid.distance_to(d.pos().x(), d.pos().y()) < 150]
             if nearby_poops:
                 self.squid.current_poop_target = random.choice(nearby_poops)
+
+                # --- HOOK: on_interaction_focus ---
+                # Notifies plugins when the squid focuses its intent on a specific interactable object.
+                
+                self.plugin_manager.dispatch_hook(
+                    "on_interaction_focus",
+                    squid_instance=self.squid,
+                    focused_object_type="poop",
+                    focused_object_details={"item_instance": self.squid.current_poop_target}
+                )
+                # --- END HOOK ---
                 return "approaching poop"
         
         elif best_decision == "throwing_poop" and self.squid.carrying_poop:
