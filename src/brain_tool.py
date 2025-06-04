@@ -270,7 +270,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Hebbian learning timer
         self.hebbian_timer = QtCore.QTimer()
         self.hebbian_timer.timeout.connect(self.brain_widget.perform_hebbian_learning)
-        # Initial start value, which will be overridden by TamagotchiLogic.update_timers()
         self.hebbian_timer.start(self.config.hebbian.get('learning_interval', 30000))
         
         # Hebbian countdown
@@ -456,30 +455,23 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             if widget is not None:
                 widget.deleteLater()
 
-    def set_pause_state(self, is_paused):
-        """Set pause state for the brain window and manage timers, delegating to TamagotchiLogic for full updates."""
-        self.is_paused = is_paused
-        
-        # Set brain widget pause state
-        if hasattr(self, 'brain_widget'):
-            self.brain_widget.is_paused = is_paused
-        
-        # Update UI (if any pause overlay exists in SquidBrainWindow)
-        self.update_paused_overlay() # This is already in your code, keeping it here.
-
-        # Delegate the actual timer management to TamagotchiLogic
-        # TamagotchiLogic.update_timers() will stop/start all timers, including Hebbian, based on speed.
-        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
-            self.tamagotchi_logic.update_timers()
+    def set_pause_state(self, paused=None):
+        """Set or toggle the pause state"""
+        if paused is not None:
+            self.is_paused = paused
         else:
-            # Fallback if tamagotchi_logic is not set (should not happen in normal flow)
-            if is_paused:
-                if hasattr(self, 'hebbian_timer'):
-                    self.hebbian_timer.stop()
-            else:
-                if hasattr(self, 'hebbian_timer') and hasattr(self.config, 'hebbian'):
-                    # Use the original interval from config if tamagotchi_logic isn't available
-                    self.hebbian_timer.start(self.config.hebbian.get('learning_interval', 30000))
+            self.is_paused = not self.is_paused
+        
+        # Update brain widget pause state if it exists
+        if hasattr(self, 'brain_widget') and self.brain_widget:
+            self.brain_widget.is_paused = self.is_paused
+        
+        # Update UI
+        self.update_paused_overlay()
+        
+        # Update status label if it exists
+        if hasattr(self, 'status_label'):
+            self.status_label.setText("Paused" if self.is_paused else "Running")
 
     def _create_memory_card(self, memory):
         """Create a styled HTML memory card with tooltip"""
@@ -877,18 +869,14 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         }
         return display_names.get(neuron, f"{neuron}")
 
-    def update_countdown(self):
-        """Update the Hebbian learning countdown display to reflect current scaled interval."""
-        # Calculate time until next learning cycle
-        if hasattr(self.brain_widget, 'last_hebbian_time') and hasattr(self, 'hebbian_timer'):
-            elapsed = time.time() - self.brain_widget.last_hebbian_time
-            
-            # --- MODIFIED: Get the actual current interval from the QTimer ---
-            # The .interval() method returns the current interval in milliseconds.
-            current_hebbian_interval_ms = self.hebbian_timer.interval()
-            interval_sec = current_hebbian_interval_ms / 1000.0 
-            # --- END MODIFIED ---
 
+
+    def update_countdown(self):
+        """Update the Hebbian learning countdown display"""
+        # Calculate time until next learning cycle
+        if hasattr(self.brain_widget, 'last_hebbian_time'):
+            elapsed = time.time() - self.brain_widget.last_hebbian_time
+            interval_sec = self.config.hebbian.get('learning_interval', 30000) / 1000
             remaining = max(0, interval_sec - elapsed)
             self.brain_widget.hebbian_countdown_seconds = int(remaining)
         else:
@@ -903,14 +891,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 self.nn_viz_tab.countdown_label.setText(f"{self.brain_widget.hebbian_countdown_seconds} seconds")
             
             # If countdown reached zero and not paused, trigger learning
-            # This logic should be handled by the timer's timeout signal,
-            # but this check serves as a backup to ensure learning fires.
             if (self.brain_widget.hebbian_countdown_seconds == 0 and 
                 hasattr(self.brain_widget, 'is_paused') and 
                 not self.brain_widget.is_paused):
-                # Ensure a short delay to avoid re-triggering learning too rapidly if timer is active
-                # The QTimer.timeout should be the primary trigger.
-                pass
+                self.brain_widget.perform_hebbian_learning()
 
     def check_memory_decay(self):
         """Check for short-term memory decay and transfer important memories to long-term"""

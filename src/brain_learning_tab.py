@@ -74,7 +74,7 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
     def setup_ui(self):
         
         # Remove existing widgets from the layout
-        if hasattr(self, '_layout'): 
+        if hasattr(self, '_layout'):
             while self.layout.count():
                 item = self.layout.takeAt(0)
                 if item.widget():
@@ -174,55 +174,27 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         splitter.addWidget(edu_container)
         splitter.setSizes([600, 500])
 
-        # Bottom layout for countdown labels
+        # Bottom layout for countdown label
         bottom_layout = QtWidgets.QHBoxLayout()
-
-        # --- CHANGES START HERE FOR COUNTDOWN LABELS ---
-
-        # Define the common font for both labels
-        common_font = QtGui.QFont()
-        common_font.setPointSize(14) # Choose your desired font size
-
-        # 1. Static Prefix Label
-        self.static_prefix_label = QtWidgets.QLabel("Hebbian learning occurs in: ")
-        self.static_prefix_label.setFont(common_font)
-        
-        # Set a default text color using QPalette for the static label
-        static_palette = self.static_prefix_label.palette()
-        static_palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor("#4a5568")) # A subtle dark grey
-        self.static_prefix_label.setPalette(static_palette)
-
-        # Ensure the static label doesn't try to resize itself (optional, but good practice)
-        static_metrics = QtGui.QFontMetrics(common_font)
-        static_width = static_metrics.horizontalAdvance("Hebbian learning occurs in: ") + 2 # A tiny bit of padding
-        self.static_prefix_label.setFixedWidth(static_width)
-        self.static_prefix_label.setFixedHeight(static_metrics.height() + 4) # Match the height
-
-        # 2. Dynamic Countdown Label
-        self.countdown_label = QtWidgets.QLabel("30s") # Initialize with a number
-        self.countdown_label.setFont(common_font)
-        
-        # Calculate text dimensions for the dynamic part ("00s")
-        dynamic_metrics = QtGui.QFontMetrics(common_font)
-        # "00s" is the longest possible format for the seconds
-        max_dynamic_width = dynamic_metrics.horizontalAdvance("00s") + 4 # Add minimal padding
-        
-        self.countdown_label.setFixedWidth(max_dynamic_width)
-        self.countdown_label.setFixedHeight(dynamic_metrics.height() + 4) # Match height with prefix label
-        self.countdown_label.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter) # Align left in its fixed width
-        
-        # Set default text color for the dynamic label
-        dynamic_palette = self.countdown_label.palette()
-        dynamic_palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor("#4a5568")) # Same subtle dark grey
-        self.countdown_label.setPalette(dynamic_palette)
-
-        # Add both labels to a horizontal layout
-        bottom_layout.addWidget(self.static_prefix_label)
+        self.countdown_label = QtWidgets.QLabel("Next: 30s")
+        self.countdown_label.setFixedHeight(40)
+        self.countdown_label.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: 500;
+                color: #4dabf7;
+                padding: 4px 12px;
+                background-color: #f8f9fa;
+                border-radius: 6px;
+                border: 1px solid #e1e5eb;
+                margin-right: 10px;
+                min-width: 100px;
+                text-align: center;
+            }
+        """)
         bottom_layout.addWidget(self.countdown_label)
-        bottom_layout.addStretch()  # Push content to the left
+        bottom_layout.addStretch()  # Push countdown label to the left
         main_layout.addLayout(bottom_layout)
-
-        # --- END CHANGES FOR COUNTDOWN LABELS ---
 
         # Ensure splitter takes remaining space
         main_layout.setStretch(0, 1)  # Splitter gets all available space
@@ -235,9 +207,6 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
 
         # Set initial content
         self.update_educational_content()
-        
-        # Call update_countdown immediately after setup to ensure correct initial state
-        self.update_countdown()
 
 
     def setup_timer(self):
@@ -246,20 +215,46 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
 
     def update_countdown(self):
         try:
+            # Ensure countdown_label exists
             if not hasattr(self, 'countdown_label') or self.countdown_label is None:
                 print("Countdown label not initialized")
                 return
 
+            # Try to get countdown from brain widget
             if hasattr(self, 'brain_widget') and hasattr(self.brain_widget, 'hebbian_countdown_seconds'):
                 self.current_countdown = self.brain_widget.hebbian_countdown_seconds
             else:
+                # Fallback to default countdown
                 self.current_countdown = 30
             
-            # Only update the text of the dynamic countdown label
-            self.countdown_label.setText(f"{self.current_countdown}s")
+            # Update label
+            self.countdown_label.setText(f"Next: {self.current_countdown}s")
             
-            # No style/color changes for either label in this method
-            
+            # Color styling based on countdown
+            if self.current_countdown <= 5:
+                self.countdown_label.setStyleSheet("""
+                    QLabel {
+                        color: #e74c3c;
+                        background-color: #f8f9fa;
+                        border: 1px solid #e1e5eb;
+                        font-size: 18px;
+                        font-weight: 500;
+                        padding: 4px 12px;
+                        border-radius: 6px;
+                    }
+                """)
+            else:
+                self.countdown_label.setStyleSheet("""
+                    QLabel {
+                        color: #4dabf7;
+                        background-color: #f8f9fa;
+                        border: 1px solid #e1e5eb;
+                        font-size: 18px;
+                        font-weight: 500;
+                        padding: 4px 12px;
+                        border-radius: 6px;
+                    }
+                """)
         except Exception as e:
             print(f"Error in update_countdown: {e}")
 

@@ -275,10 +275,9 @@ class DecorationWindow(QtWidgets.QWidget):
         self.setFixedHeight(min((row + 1) * (item_size + DisplayScaling.scale(20)) + DisplayScaling.scale(40), DisplayScaling.scale(650)))
 
 class Ui:
-    def __init__(self, window, image_cache, debug_mode=False):
+    def __init__(self, window, debug_mode=False):
         self.window = window
         self.tamagotchi_logic = None
-        self.image_cache = image_cache
         self.debug_mode = debug_mode
         self.setup_neurogenesis_debug_shortcut()
         
