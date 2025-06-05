@@ -19,7 +19,6 @@ What if a Tamagotchi had a neural network and could learn stuff?
 * The squid neural network makes autonomous decisions based on current state (hunger, sleepiness, etc.).
 * Implements a vision cone for food detection, simulating realistic foraging behavior.
 * Hebbian learning algorithm runs every 30 seconds (configurable)
-* Short and long-term memories affect decision-making
 * Experiences from short-term and long-term memory can influence decision-making
 * Squid can create new neurons in response to his environment (Neurogenesis)
 
