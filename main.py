@@ -139,7 +139,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def preload_brain_window_tabs(self):
         """Force creation of all tab contents to prevent crashes during tutorial"""
-        
+        print("Pre-loading brain window tabs...")
         if not hasattr(self, 'brain_window') or not self.brain_window:
             print("Brain window not initialized, cannot preload")
             return
@@ -149,7 +149,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if hasattr(self.brain_window, 'tabs'):
                 # Visit each tab to ensure it's loaded
                 tab_count = self.brain_window.tabs.count()
-                print(f"Pre-loading {tab_count} tabs...")
+                #print(f"Pre-loading {tab_count} tabs...")
                 
                 # Initialize tabs array to prevent garbage collection
                 if not hasattr(self, '_preloaded_tabs'):
@@ -184,7 +184,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.brain_window.hide()
                 self.brain_window.move(original_pos)
                 
-                #print("Brain window tabs pre-loaded successfully")
+                print("Brain window tabs pre-loaded successfully")
             else:
                 print("Brain window has no tabs property")
         except Exception as e:
