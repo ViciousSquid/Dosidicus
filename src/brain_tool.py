@@ -39,28 +39,30 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         self.setWindowTitle("Brain Tool")
 
-        # Get screen resolution
+        # Get screen resolution and available geometry (excluding taskbars/docks)
         screen = QtWidgets.QApplication.primaryScreen()
-        screen_size = screen.size()
+        screen_geometry = screen.availableGeometry() # Use availableGeometry for usable screen space
 
-        # Resolution-specific sizing
-        if screen_size.width() <= 1920 and screen_size.height() <= 1080:
-            # For 1080p, use narrower width (65% of screen width)
-            width = int(screen_size.width() * 0.65)
-            height = int(screen_size.height() * 0.75)
-        else:
-            # Use standard scaling for higher resolutions
-            width = DisplayScaling.scale(800)
-            height = DisplayScaling.scale(550)
+        # Define initial window dimensions directly, without DisplayScaling
+        # This will use absolute pixel values for the window size
+        final_width = 700 # Direct pixel width
+        final_height = 600 # Direct pixel height
 
-        self.resize(width, height)
+        # Ensure the final window dimensions do not exceed the actual screen available geometry
+        final_width = min(final_width, screen_geometry.width())
+        final_height = min(final_height, screen_geometry.height())
 
-        # Position window properly
-        screen = QtWidgets.QDesktopWidget().screenNumber(QtWidgets.QDesktopWidget().cursor().pos())
-        screen_geometry = QtWidgets.QDesktopWidget().screenGeometry(screen)
-        self.move(screen_geometry.right() - width, screen_geometry.top())
+        self.resize(final_width, final_height) # Resize the window with clamped dimensions
 
-        # Continue with the rest of initialization...
+        # Position window properly in the top-right corner of the *available* screen geometry
+        # x-coordinate: right edge of available geometry minus window width, then shift left by 200 pixels
+        x_pos = screen_geometry.right() - final_width - 700 # Shift left by subtracting 700
+        # y-coordinate: top edge of available geometry
+        y_pos = screen_geometry.top() # Use top of available geometry
+
+        self.move(x_pos, y_pos) # Move the window to the calculated position
+
+
         # Setup the central widget and main layout
         self.central_widget = QtWidgets.QWidget()
         self.setCentralWidget(self.central_widget)
