@@ -50,8 +50,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             height = int(screen_size.height() * 0.75)
         else:
             # Use standard scaling for higher resolutions
-            width = DisplayScaling.scale(1280)
-            height = DisplayScaling.scale(920)
+            width = DisplayScaling.scale(800)
+            height = DisplayScaling.scale(550)
 
         self.resize(width, height)
 
