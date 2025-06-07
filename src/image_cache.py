@@ -5,14 +5,19 @@ class ImageCache:
     _cache = {}
     
     @classmethod
-    def get_pixmap(cls, path):
-        """Get a pixmap from cache or load it"""
-        if path not in cls._cache:
-            pixmap = QtGui.QPixmap(path)
-            cls._cache[path] = pixmap
-        return cls._cache[path]
+# from typing import Dict
+from PyQt5.QtGui import QPixmap
+
+def get_pixmap(cls, path: str) -> QPixmap:
+    """Get a pixmap from cache or load it"""
+    if path not in cls._cache:
+        pixmap = QtGui.QPixmap(path)
+        cls._cache[path] = pixmap
+    return cls._cache[path]
     
     @classmethod
-    def clear(cls):
-        """Clear cache to free memory"""
-        cls._cache.clear()
+# from typing import Type
+
+def clear(cls: type) -> None:
+    """Clear cache to free memory"""
+    cls._cache.clear()
