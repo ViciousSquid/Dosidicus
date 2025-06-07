@@ -492,91 +492,29 @@ class Ui:
         self.scene.update()
 
 
-    def setup_plugin_menu(self, plugin_manager):
-        #print("DEBUG: Setting up plugin menu")
+    def setup_plugin_menu(self, plugin_manager_instance): #
+        # This method is called during initial UI setup (Ui.setup_menu_bar).
+        # The plugin_manager_instance might be None at this stage.
+        # The apply_plugin_menu_registrations method is now responsible for the full
+        # and correct setup of the "Plugin Manager" action and plugin-specific menus
+        # once the plugin_manager is fully initialized.
         
-        # Create plugins menu if it doesn't exist
         if not hasattr(self, 'plugins_menu'):
             self.plugins_menu = self.menu_bar.addMenu('Plugins')
         
-        # Clear existing actions to prevent duplicates
-        self.plugins_menu.clear()
-        
-        # Add plugin manager action
-        self.plugin_manager_action = QtWidgets.QAction('Plugin Manager', self.window)
-        self.plugin_manager_action.triggered.connect(
-            lambda: self.show_plugin_manager(plugin_manager)
-        )
-        self.plugins_menu.addAction(self.plugin_manager_action)
-        
-        # Add separator
-        self.plugins_menu.addSeparator()
-        
-        # Create or find Multiplayer menu
-        multiplayer_menu = None
-        multiplayer_loaded = False
-        
-        # Check if plugin manager exists
-        if plugin_manager:
-            # Check if multiplayer plugin is loaded
-            multiplayer_loaded = 'multiplayer' in plugin_manager.plugins
-            
-            # Print all loaded plugins for debugging
-            #print(f"DEBUG: Loaded plugins: {plugin_manager.get_loaded_plugins()}")
-        
-        # Look for existing Multiplayer menu
-        for action in self.menu_bar.actions():
-            if action.text() == '&Multiplayer':
-                multiplayer_menu = action.menu()
-                break
-        
-        # Create Multiplayer menu if it doesn't exist and plugin is loaded
-        if multiplayer_loaded and not multiplayer_menu:
-            #print("Creating Multiplayer menu")
-            multiplayer_menu = self.menu_bar.addMenu('&Multiplayer')
-        # Remove menu if plugin isn't loaded but menu exists
-        elif not multiplayer_loaded and multiplayer_menu:
-            #print("Removing Multiplayer menu - plugin not loaded")
-            self.menu_bar.removeAction(multiplayer_menu.menuAction())
-            multiplayer_menu = None
-        
-        # Skip further setup if multiplayer isn't loaded or menu doesn't exist
-        if not multiplayer_loaded or not multiplayer_menu:
-            print("Skipping multiplayer menu setup - plugin not loaded or menu doesn't exist")
-            return
-        
-        # Clear existing menu items
-        multiplayer_menu.clear()
-        
-        # Get multiplayer plugin instance
-        multiplayer_plugin_instance = None
-        if plugin_manager and 'multiplayer' in plugin_manager.plugins:
-            multiplayer_plugin_instance = plugin_manager.plugins['multiplayer'].get('instance')
-        
-        # Check if plugin is enabled - this is where we check the current status
-        multiplayer_enabled = 'multiplayer' in plugin_manager.get_enabled_plugins()
-        
-        # Add toggle action for enabling/disabling
-        toggle_action = QtWidgets.QAction("Enable Multiplayer", self.window)
-        toggle_action.setCheckable(True)
-        toggle_action.setChecked(multiplayer_enabled)  # Set based on actual enabled state
-        toggle_action.triggered.connect(
-            lambda checked: self.toggle_plugin('multiplayer', checked)
-        )
-        multiplayer_menu.addAction(toggle_action)
-        
-        # Add separator
-        multiplayer_menu.addSeparator()
-        
-        # Add additional menu items if plugin is enabled
-        if multiplayer_enabled and multiplayer_plugin_instance and hasattr(multiplayer_plugin_instance, 'register_menu_actions'):
-            try:
-                # Call the method to register additional actions
-                multiplayer_plugin_instance.register_menu_actions(self, multiplayer_menu)
-            except Exception as e:
-                print(f"Error registering menu actions for multiplayer: {e}")
-        
-        print("        ")
+        # Minimal setup here; apply_plugin_menu_registrations will do the heavy lifting.
+        # We can ensure the "Plugin Manager" action and separator are provisionally added
+        # if the menu is being created for the first time.
+        if not hasattr(self, 'plugin_manager_action') or not self.plugin_manager_action:
+            self.plugin_manager_action = QtWidgets.QAction('Plugin Manager', self.window)
+            self.plugins_menu.addAction(self.plugin_manager_action)
+            self.plugins_menu.addSeparator()
+
+        # The connection and enabling/disabling of plugin_manager_action,
+        # and the addition of other plugin menus, are handled by
+        # apply_plugin_menu_registrations when plugin_manager is ready.
+        if plugin_manager_instance: # This is the main plugin_manager from main.py
+             self.apply_plugin_menu_registrations(plugin_manager_instance)
 
     def create_multiplayer_menu(self):
         """Create multiplayer menu only if the plugin is loaded and enabled"""
@@ -585,97 +523,179 @@ class Ui:
         if hasattr(self.tamagotchi_logic, 'plugin_manager'):
             self.setup_plugin_menu(self.tamagotchi_logic.plugin_manager)
         else:
-            print("WARNING: create_multiplayer_menu called but no plugin_manager available")
+            print("WARNING: create_multiplayer_menu called but plugin_manager is not available")
 
     def apply_plugin_menu_registrations(self, plugin_manager):
-        """Apply menu registrations from plugins"""
-        if not hasattr(plugin_manager, 'get_menu_registrations'):
-            print("Plugin manager doesn't support menu registrations")
-            return
+        """Apply menu registrations from plugins, ensuring Plugin Manager action is correctly set up."""
         
-        # Get all menu registrations
-        registrations = plugin_manager.get_menu_registrations()
-        
-        # Process each plugin's registrations
-        for plugin_name, actions in registrations.items():
-            # Skip if plugin is not enabled
-            if plugin_name not in plugin_manager.get_enabled_plugins():
-                continue
+        # Ensure 'Plugins' menu and 'Plugin Manager' action exist and are correctly configured
+        if not hasattr(self, 'plugins_menu') or not self.plugins_menu:
+            # This means setup_plugin_menu (called during Ui.__init__) did not create self.plugins_menu
+            # or it was cleared. Create/recreate main "Plugins" menu.
+            self.plugins_menu = self.menu_bar.addMenu('Plugins')
             
-            # Group actions by menu name
-            menus = {}
-            for action in actions:
-                menu_name = action['menu_name']
-                if menu_name not in menus:
-                    menus[menu_name] = []
-                menus[menu_name].append(action)
+            # Create the "Plugin Manager" action
+            self.plugin_manager_action = QtWidgets.QAction('Plugin Manager', self.window)
+            self.plugins_menu.addAction(self.plugin_manager_action)
+            self.plugins_menu.addSeparator() # Add separator after Plugin Manager
+        elif not hasattr(self, 'plugin_manager_action') or \
+             not self.plugin_manager_action or \
+             self.plugin_manager_action not in self.plugins_menu.actions():
+            # plugins_menu exists, but the plugin_manager_action is missing or not in the menu.
+            # This can happen if clear() was called on plugins_menu.
+            # Re-create the action and add it to the top.
+            self.plugin_manager_action = QtWidgets.QAction('Plugin Manager', self.window)
             
-            # Create or find each menu and add actions
-            for menu_name, menu_actions in menus.items():
-                # Check if menu already exists
-                menu = None
-                for action in self.menu_bar.actions():
-                    if action.text() == menu_name:
-                        menu = action.menu()
-                        break
-                
-                # Create menu if it doesn't exist
-                if not menu:
-                    menu = QtWidgets.QMenu(menu_name, self.window)
-                    self.menu_bar.addMenu(menu)
-                
-                # Add actions to menu
-                for action_data in menu_actions:
-                    action = QtWidgets.QAction(action_data['action_name'], 
-                                            action_data.get('parent', self.window))
-                    callback = action_data['callback']
-                    if callback:
-                        action.triggered.connect(callback)
-                    menu.addAction(action)
-        
-        print("Applied all plugin menu registrations")
+            # Clear existing connections first (if any, to avoid duplicates)
+            try:
+                self.plugin_manager_action.triggered.disconnect()
+            except TypeError: # No connections to disconnect
+                pass
 
-    def toggle_plugin(self, plugin_name, enable):
-        """Toggle a plugin on/off"""
-        if hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'plugin_manager'):
-            pm = self.tamagotchi_logic.plugin_manager
-            if enable:
-                # Try to enable plugin - if it has a specific enable method, use that
-                if plugin_name in pm.plugins and 'instance' in pm.plugins[plugin_name]:
-                    plugin_instance = pm.plugins[plugin_name]['instance']
-                    
-                    # Make sure plugin has the plugin manager reference
-                    if plugin_instance and not hasattr(plugin_instance, 'plugin_manager') or plugin_instance.plugin_manager is None:
-                        plugin_instance.plugin_manager = pm
-                        print(f"Assigned plugin manager to {plugin_name} plugin")
-                    
-                    # Also make sure it has tamagotchi_logic reference if we have it
-                    if plugin_instance and hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
-                        plugin_instance.tamagotchi_logic = self.tamagotchi_logic
-                        print(f"Assigned tamagotchi_logic to {plugin_name} plugin")
-                    
-                    if plugin_instance and hasattr(plugin_instance, 'enable'):
-                        print(f"Calling custom enable method for {plugin_name}")
-                        success = plugin_instance.enable()
-                        if success:
-                            pm.enable_plugin(plugin_name)
-                    else:
-                        success = pm.enable_plugin(plugin_name)
-                    
-                    # Show multiplayer menu if appropriate
-                    if success and plugin_name.lower() == 'multiplayer':
-                        self.setup_plugin_menu(pm)
-                else:
-                    pm.enable_plugin(plugin_name)
+            all_actions = self.plugins_menu.actions()
+            if all_actions and all_actions[0].isSeparator():
+                # If a separator is somehow first, insert before it
+                self.plugins_menu.insertAction(all_actions[0], self.plugin_manager_action)
+            elif all_actions:
+                # Insert before the first existing action
+                self.plugins_menu.insertAction(all_actions[0], self.plugin_manager_action)
             else:
-                pm.disable_plugin(plugin_name)
-                
-                # Hide multiplayer menu if appropriate
-                if plugin_name.lower() == 'multiplayer':
-                    self.setup_plugin_menu(pm)
-                
-            # Refresh the plugin menu
-            self.setup_plugin_menu(pm)
+                # Menu is empty, just add it
+                self.plugins_menu.addAction(self.plugin_manager_action)
+
+            # Ensure separator exists after Plugin Manager action
+            current_actions = self.plugins_menu.actions()
+            pm_action_index = current_actions.index(self.plugin_manager_action) if self.plugin_manager_action in current_actions else -1
+
+            if pm_action_index != -1:
+                if pm_action_index + 1 >= len(current_actions) or not current_actions[pm_action_index + 1].isSeparator():
+                    # Add separator if it's not the next action or if it's the last action
+                    sep = QtWidgets.QAction(self.window) # Create a QAction to act as a separator placeholder for insertAction
+                    sep.setSeparator(True)
+                    self.plugins_menu.insertAction(current_actions[pm_action_index + 1] if pm_action_index + 1 < len(current_actions) else None, sep)
+
+
+        # (Re)Connect the 'Plugin Manager' action with the provided (and presumably valid) plugin_manager
+        # Clear any existing connections from plugin_manager_action first
+        try:
+            self.plugin_manager_action.triggered.disconnect()
+        except TypeError: # No connections to disconnect
+            pass
+
+        if plugin_manager:
+            self.plugin_manager_action.triggered.connect(
+                lambda: self.show_plugin_manager(plugin_manager) # Connects to the correct instance
+            )
+            self.plugin_manager_action.setEnabled(True)
+            self.plugin_manager_action.setToolTip("Open the plugin manager.")
+        else:
+            # This case should ideally not be hit if called correctly from main.py
+            self.plugin_manager_action.setEnabled(False)
+            self.plugin_manager_action.setToolTip("Plugin manager is not available.")
+
+        # --- Management of plugin-specific menu items ---
+        # Identify the separator that should follow the "Plugin Manager" action.
+        # All actions after this separator are considered plugin-specific and will be cleared and re-added.
+        
+        actions_to_remove = []
+        separator_after_pm_action_found = False
+        pm_action_ref = self.plugin_manager_action # The action we just configured
+
+        if pm_action_ref and pm_action_ref in self.plugins_menu.actions():
+            pm_action_index = self.plugins_menu.actions().index(pm_action_ref)
+            
+            # Check if the item immediately after pm_action_ref is a separator
+            if pm_action_index + 1 < len(self.plugins_menu.actions()):
+                next_action = self.plugins_menu.actions()[pm_action_index + 1]
+                if next_action.isSeparator():
+                    separator_after_pm_action_found = True
+                    # Mark all actions after this specific separator for removal
+                    for i in range(pm_action_index + 2, len(self.plugins_menu.actions())):
+                        actions_to_remove.append(self.plugins_menu.actions()[i])
+        
+        if not separator_after_pm_action_found:
+            # If the specific separator wasn't found (e.g., menu was just created, or structure is unexpected)
+            # Fallback: remove all actions except the plugin_manager_action and its potential direct separator
+            # This is more aggressive but ensures a clean state.
+            temp_actions_to_keep = {pm_action_ref}
+            if pm_action_ref and pm_action_ref in self.plugins_menu.actions():
+                 pm_idx = self.plugins_menu.actions().index(pm_action_ref)
+                 if pm_idx + 1 < len(self.plugins_menu.actions()) and self.plugins_menu.actions()[pm_idx+1].isSeparator():
+                     temp_actions_to_keep.add(self.plugins_menu.actions()[pm_idx+1])
+
+            for action in self.plugins_menu.actions():
+                if action not in temp_actions_to_keep:
+                    actions_to_remove.append(action)
+
+
+        for action_to_remove in actions_to_remove:
+            self.plugins_menu.removeAction(action_to_remove)
+
+        # Logic to add actions from individual (enabled) plugins
+        if plugin_manager and hasattr(plugin_manager, 'plugins'):
+            enabled_plugin_keys = plugin_manager.get_enabled_plugins() # Get set of enabled plugin keys
+
+            for plugin_name_key, plugin_data_dict in plugin_manager.plugins.items():
+                if plugin_name_key not in enabled_plugin_keys: # Only process enabled plugins
+                    continue
+
+                plugin_instance = plugin_data_dict.get('instance')
+                original_name = plugin_data_dict.get('original_name', plugin_name_key.capitalize())
+
+                if plugin_instance and hasattr(plugin_instance, 'register_menu_actions'):
+                    # Create a submenu for this plugin if it has actions
+                    # Ensure it's added AFTER the main separator for Plugin Manager
+                    plugin_submenu = self.plugins_menu.addMenu(original_name)
+                    try:
+                        # The plugin's register_menu_actions should now add actions to plugin_submenu
+                        # Pass the main window (self.window) and the newly created submenu
+                        plugin_instance.register_menu_actions(self.window, plugin_submenu)
+                    except Exception as e:
+                        print(f"Error calling register_menu_actions for {original_name}: {e}")
+                        # traceback.print_exc() # For more detailed debugging if needed
+
+        print("Applied all plugin menu registrations") #
+
+    def toggle_plugin(self, plugin_name, enable_flag): # Renamed 'enable' to 'enable_flag' for clarity
+        """Toggle a plugin on/off using the PluginManager."""
+        if hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'plugin_manager'):
+            plugin_mgr = self.tamagotchi_logic.plugin_manager
+            
+            # Plugin keys are stored in lowercase by the PluginManager
+            # Ensure plugin_name matches this convention if it's coming from elsewhere with different casing.
+            # However, since it's likely 'multiplayer' from setup_plugin_menu, it should be fine.
+            
+            if plugin_name not in plugin_mgr.plugins:
+                print(f"WARNING:UI: Attempted to toggle plugin '{plugin_name}', but it's not loaded/found in plugin_mgr.plugins.")
+                # Optionally, you might want to refresh the menu here if this state is unexpected
+                # self.setup_plugin_menu(plugin_mgr)
+                return
+
+            success = False
+            if enable_flag:
+                print(f"INFO:UI: Requesting PluginManager to enable plugin '{plugin_name}'.")
+                success = plugin_mgr.enable_plugin(plugin_name) # Let PluginManager handle setup and enable
+                if success:
+                    print(f"INFO:UI: PluginManager reported success enabling '{plugin_name}'.")
+                else:
+                    print(f"WARNING:UI: PluginManager reported failure enabling '{plugin_name}'.")
+            else:
+                print(f"INFO:UI: Requesting PluginManager to disable plugin '{plugin_name}'.")
+                success = plugin_mgr.disable_plugin(plugin_name) # Let PluginManager handle disable
+                if success:
+                    print(f"INFO:UI: PluginManager reported success disabling '{plugin_name}'.")
+                else:
+                    print(f"WARNING:UI: PluginManager reported failure disabling '{plugin_name}'.")
+
+            # Refresh the plugin menu to reflect the new state.
+            # The setup_plugin_menu method in your ui.py is responsible for rebuilding
+            # the necessary menu items, including the toggle for the multiplayer plugin.
+            if hasattr(self, 'setup_plugin_menu') and callable(self.setup_plugin_menu):
+                self.setup_plugin_menu(plugin_mgr)
+            else:
+                print("WARNING:UI: setup_plugin_menu method not found, cannot refresh UI after toggle.")
+        else:
+            print("WARNING:UI: Cannot toggle plugin - TamagotchiLogic or PluginManager not available.")
 
     def show_plugin_manager(self, plugin_manager):
         """Show the plugin manager dialog"""

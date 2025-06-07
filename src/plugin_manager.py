@@ -1,8 +1,63 @@
 import os
 import importlib.util
-import inspect
+import inspect # Retained as it was in the original file
 import logging
+import sys # For sys.stdout and potentially sys.modules if discover_plugins uses it
 from typing import Dict, List, Callable, Any
+
+# ANSI escape codes for colors
+class ANSI:
+    BLUE = "\x1b[34m"
+    RED = "\x1b[31m"
+    YELLOW = "\x1b[33m" # For warnings
+    CYAN = "\x1b[36m"   # For debug
+    RESET = "\x1b[0m"
+
+class ColoredFormatter(logging.Formatter):
+    """
+    A custom logging formatter that colors only the 'LEVEL:NAME:' prefix
+    for messages from the 'PluginManager' logger.
+    """
+    
+    COLORS = {
+        logging.DEBUG: ANSI.CYAN,
+        logging.INFO: ANSI.BLUE,
+        logging.WARNING: ANSI.YELLOW,
+        logging.ERROR: ANSI.RED,
+        logging.CRITICAL: ANSI.RED, # Can use BOLD_RED if needed
+    }
+
+    def __init__(self, fmt="%(levelname)s:%(name)s:%(message)s", datefmt=None, style='%'):
+        # We call super().__init__ but will override format completely
+        super().__init__(fmt, datefmt, style)
+
+    def format(self, record):
+        # Check if the log is from our target logger
+        if record.name == "PluginManager":
+            # Get the appropriate color for the log level
+            color = self.COLORS.get(record.levelno, ANSI.RESET) # Default to RESET if no color found
+            
+            # Create the prefix string (e.g., "INFO:PluginManager:")
+            prefix = f"{record.levelname}:{record.name}:"
+            
+            # Get the actual log message
+            message = record.getMessage()
+            
+            # Append exception information if present
+            if record.exc_info:
+                if not record.exc_text:
+                    record.exc_text = self.formatException(record.exc_info)
+                if record.exc_text:
+                    message = message + "\n" + record.exc_text
+            
+            # Construct the final colored log string
+            # Only the prefix is colored; the message remains default (white/black) until RESET
+            return f"{color}{prefix}{ANSI.RESET} {message}"
+        else:
+            # For any other logger, use the default formatter behavior (uncolored)
+            # You might want to define a specific format here if needed,
+            # but super().format(record) uses the 'fmt' passed during __init__.
+            return super().format(record)
 
 class PluginManager:
     _instance = None  # Singleton instance reference
@@ -20,75 +75,91 @@ class PluginManager:
             return
             
         self.plugin_directory = plugin_directory
-        self.plugins = {}        # Stores loaded plugins' metadata and instances
-        self.hooks = {}          # Registered hooks and their subscribers
-        self.enabled_plugins = set()  # Names of enabled plugins
-        self.logger = logging.getLogger("PluginManager")
-        self._discovered_plugins = None  # Cache for discovered plugins
+        self.plugins: Dict[str, Dict] = {}        # Stores loaded plugins' metadata and instances
+        self.hooks: Dict[str, List[Dict]] = {}    # Registered hooks and their subscribers
+        self.enabled_plugins: set[str] = set()    # Names of enabled plugins (use lowercase)
         
-        # Create plugins directory if it doesn't exist
+        # Configure the logger for PluginManager
+        self.logger = logging.getLogger("PluginManager")
+        
+        if not self.logger.handlers: # Avoid adding multiple handlers
+            self.logger.setLevel(logging.INFO) # Set the minimum level
+
+            ch = logging.StreamHandler(sys.stdout) # Log to standard output
+            
+            # Use the NEW ColoredFormatter. 
+            # The 'fmt' here is less critical since we override format(), 
+            # but it acts as a fallback or for other loggers.
+            formatter = ColoredFormatter() 
+            ch.setFormatter(formatter)
+            
+            self.logger.addHandler(ch)
+            self.logger.propagate = False # Prevent logs from going to root logger
+
+        self._discovered_plugins: Dict[str, Dict] | None = None
+        
         os.makedirs(plugin_directory, exist_ok=True)
         
-        # Initialize standard hooks
         self._initialize_hooks()
-        self._initialized = True  # Mark as initialized
-    
+        self._initialized = True
+
+    # --- Start of Original PluginManager Methods ---
+    # (These methods remain largely the same, only the logger setup in __init__ 
+    # and the Formatter class definition are the core changes for coloring)
+
     def _initialize_hooks(self):
         """Initialize standard hooks that plugins can register for"""
         # Lifecycle hooks
-        self.register_hook("on_startup")           # Application startup
-        self.register_hook("on_shutdown")          # Application shutdown
-        self.register_hook("on_new_game")          # New game created
-        self.register_hook("on_save_game")         # Game being saved
-        self.register_hook("on_load_game")         # Game being loaded
+        self.register_hook("on_startup")
+        self.register_hook("on_shutdown")
+        self.register_hook("on_new_game")
+        self.register_hook("on_save_game")
+        self.register_hook("on_load_game")
         
         # Simulation hooks
-        self.register_hook("pre_update")           # Before simulation update
-        self.register_hook("post_update")          # After simulation update
-        self.register_hook("on_speed_change")      # Simulation speed changed
+        self.register_hook("pre_update")
+        self.register_hook("post_update")
+        self.register_hook("on_speed_change")
         
         # Squid state hooks
-        self.register_hook("on_squid_state_change") # Squid state changed
-        self.register_hook("on_hunger_change")     # Hunger value changed
-        self.register_hook("on_happiness_change")  # Happiness value changed
-        self.register_hook("on_cleanliness_change") # Cleanliness value changed
-        self.register_hook("on_sleepiness_change") # Sleepiness value changed
-        self.register_hook("on_satisfaction_change") # Satisfaction value changed
-        self.register_hook("on_anxiety_change")    # Anxiety value changed
-        self.register_hook("on_curiosity_change")  # Curiosity value changed
+        self.register_hook("on_squid_state_change")
+        self.register_hook("on_hunger_change")
+        self.register_hook("on_happiness_change")
+        self.register_hook("on_cleanliness_change")
+        self.register_hook("on_sleepiness_change")
+        self.register_hook("on_satisfaction_change")
+        self.register_hook("on_anxiety_change")
+        self.register_hook("on_curiosity_change")
         
         # Action hooks
-        self.register_hook("on_feed")              # Squid fed
-        self.register_hook("on_clean")             # Environment cleaned
-        self.register_hook("on_medicine")         # Medicine given
-        self.register_hook("on_sleep")             # Squid falling asleep
-        self.register_hook("on_wake")              # Squid waking up
-        self.register_hook("on_startle")           # Squid startled
+        self.register_hook("on_feed")
+        self.register_hook("on_clean")
+        self.register_hook("on_medicine")
+        self.register_hook("on_sleep")
+        self.register_hook("on_wake")
+        self.register_hook("on_startle")
         
         # Interaction hooks
-        self.register_hook("on_rock_pickup")       # Rock picked up
-        self.register_hook("on_rock_throw")        # Rock thrown
-        self.register_hook("on_decoration_interaction") # Decoration interaction
-        self.register_hook("on_ink_cloud")         # Ink cloud created
+        self.register_hook("on_rock_pickup")
+        self.register_hook("on_rock_throw")
+        self.register_hook("on_decoration_interaction")
+        self.register_hook("on_ink_cloud")
         
         # Neural/memory hooks
-        self.register_hook("on_neurogenesis")      # New neuron created
-        self.register_hook("on_memory_created")    # New memory created
-        self.register_hook("on_memory_to_long_term") # Memory moved to long term
+        self.register_hook("on_neurogenesis")
+        self.register_hook("on_memory_created")
+        self.register_hook("on_memory_to_long_term")
         
         # UI hooks
-        self.register_hook("on_menu_creation")     # UI menus being created
-        self.register_hook("on_message_display")   # Message being displayed
+        self.register_hook("on_menu_creation")
+        self.register_hook("on_message_display")
         
         # Custom menu action hooks
-        self.register_hook("register_menu_actions") # Register custom menu actions
+        self.register_hook("register_menu_actions")
     
     def register_hook(self, hook_name: str) -> None:
         """
         Register a new hook that plugins can subscribe to.
-        
-        Args:
-            hook_name: Name of the hook
         """
         if hook_name not in self.hooks:
             self.hooks[hook_name] = []
@@ -97,14 +168,6 @@ class PluginManager:
     def subscribe_to_hook(self, hook_name: str, plugin_name: str, callback: Callable) -> bool:
         """
         Subscribe a plugin's callback to a specific hook.
-        
-        Args:
-            hook_name: Name of the hook to subscribe to
-            plugin_name: Name of the plugin subscribing
-            callback: Function to call when the hook is triggered
-            
-        Returns:
-            bool: True if subscription was successful, False otherwise
         """
         if hook_name not in self.hooks:
             self.logger.warning(f"Plugin {plugin_name} tried to subscribe to non-existent hook: {hook_name}")
@@ -120,13 +183,6 @@ class PluginManager:
     def unsubscribe_from_hook(self, hook_name: str, plugin_name: str) -> bool:
         """
         Unsubscribe a plugin from a specific hook.
-        
-        Args:
-            hook_name: Name of the hook to unsubscribe from
-            plugin_name: Name of the plugin unsubscribing
-            
-        Returns:
-            bool: True if unsubscription was successful, False otherwise
         """
         if hook_name not in self.hooks:
             return False
@@ -138,16 +194,8 @@ class PluginManager:
         return True
     
     def trigger_hook(self, hook_name, **kwargs):
-        #print(f"Attempting to trigger hook: {hook_name}")
         """
         Trigger a hook, calling all subscribed plugin callbacks.
-        
-        Args:
-            hook_name: Name of the hook to trigger
-            **kwargs: Arguments to pass to plugin callbacks
-            
-        Returns:
-            List of results from plugin callbacks
         """
         if hook_name not in self.hooks:
             self.logger.warning(f"Attempted to trigger non-existent hook: {hook_name}")
@@ -156,7 +204,8 @@ class PluginManager:
         results = []
         for subscriber in self.hooks[hook_name]:
             plugin_name = subscriber["plugin"]
-            if plugin_name not in self.enabled_plugins:
+            # Only trigger hooks for enabled plugins
+            if plugin_name.lower() not in self.enabled_plugins:
                 continue
                 
             try:
@@ -164,418 +213,339 @@ class PluginManager:
                 result = callback(**kwargs)
                 results.append(result)
             except Exception as e:
-                self.logger.error(f"Error in plugin {plugin_name} for hook {hook_name}: {str(e)}")
+                self.logger.error(f"Error in plugin {plugin_name} for hook {hook_name}: {str(e)}", exc_info=True)
         
         return results
     
     def discover_plugins(self) -> Dict[str, Dict]:
         """
         Discover available plugins from the plugin directory.
-        Only loads plugins that have a main.py file in their directory.
-        
-        Returns:
-            Dictionary mapping plugin names to metadata
+        Ensures plugin names (keys in the returned dict) are lowercase.
         """
-        # Store current enabled plugins before discovery
-        current_enabled = set(self.enabled_plugins)
+        plugin_info: Dict[str, Dict] = {}
         
-        plugin_info = {}
-        
-        # Skip if directory doesn't exist
         if not os.path.exists(self.plugin_directory):
-            print(f"WARNING: Plugin directory does not exist: {self.plugin_directory}")
+            self.logger.warning(f"Plugin directory does not exist: {self.plugin_directory}")
             return plugin_info
         
-        #print(f"+++ Scanning for plugins...")
-        #print(f"Directory contents: {os.listdir(self.plugin_directory)}")
+        self.logger.info(f"Discovering plugins in directory: '{self.plugin_directory}'")
 
-        
-        # Iterate through plugin directories
         for plugin_dir in os.listdir(self.plugin_directory):
             plugin_path = os.path.join(self.plugin_directory, plugin_dir)
             
-            # Only consider directories
             if not os.path.isdir(plugin_path):
-                #print(f"Skipping non-directory: {plugin_path}")
                 continue
                 
-            # Look for main.py in the plugin directory
             main_py = os.path.join(plugin_path, "main.py")
-            #print(f"Checking for main.py in: {main_py}")
             
             if not os.path.exists(main_py):
-                print(f"No main.py found in {plugin_path}")
+                self.logger.debug(f"No main.py found in {plugin_path}")
                 continue
                 
             try:
-                # Load the plugin module
-                spec = importlib.util.spec_from_file_location(f"plugins.{plugin_dir}.main", main_py)
+                module_name = f"plugins.{plugin_dir}.main"
+                spec = importlib.util.spec_from_file_location(module_name, main_py)
+                if spec is None or spec.loader is None:
+                    self.logger.error(f"Could not create spec for plugin {plugin_dir} at {main_py}")
+                    continue
                 module = importlib.util.module_from_spec(spec)
+                
+                sys.modules[module_name] = module
+
                 spec.loader.exec_module(module)
                 
-                # Get plugin metadata
-                plugin_name = getattr(module, "PLUGIN_NAME", plugin_dir).lower()
+                plugin_name_attr = getattr(module, "PLUGIN_NAME", plugin_dir)
+                plugin_name = plugin_name_attr.lower()
+                
                 metadata = {
                     "name": plugin_name,
+                    "original_name": plugin_name_attr,
                     "version": getattr(module, "PLUGIN_VERSION", "1.0.0"),
                     "author": getattr(module, "PLUGIN_AUTHOR", "Unknown"),
                     "description": getattr(module, "PLUGIN_DESCRIPTION", ""),
-                    "requires": getattr(module, "PLUGIN_REQUIRES", []),
+                    "requires": [req.lower() for req in getattr(module, "PLUGIN_REQUIRES", [])],
                     "path": main_py,
                     "directory": plugin_path,
-                    "module": module
+                    "module": module,
+                    "main_class_name": getattr(module, "PLUGIN_MAIN_CLASS", None) 
                 }
                 
-                # Add plugin to discovered plugins
                 plugin_info[plugin_name] = metadata
-                self.logger.info(f"Discovered plugin: {metadata['name']} v{metadata['version']} by {metadata['author']}")
-                
-                #print(f"+++ Found plugin: {plugin_name}")
-                #print(f"Plugin metadata: {metadata}")
+                self.logger.info(f"Discovered plugin: {metadata['original_name']} v{metadata['version']} (key: {plugin_name})")
                 
             except Exception as e:
-                print(f"+++ Error loading plugin {plugin_dir}: {str(e)}")
-                import traceback
-                traceback.print_exc()
+                self.logger.error(f"Error discovering plugin in '{plugin_dir}': {str(e)}", exc_info=True)
         
-        #print(f"+++ Total plugins discovered: {len(plugin_info)}")
-        
-        # Restore previously enabled plugins
-        self.enabled_plugins.update(current_enabled)
-        #print(f"+++ Restored enabled plugins: {list(self.enabled_plugins)}")
-        
+        self._discovered_plugins = plugin_info
+        if not plugin_info:
+            self.logger.info("No plugins discovered to load.")
         return plugin_info
-    
-    # In plugin_manager.py, modify the load_all_plugins method
 
-    def load_all_plugins(self) -> Dict[str, bool]:
+    def load_plugin(self, plugin_name: str) -> bool:
         """
-        Load all discovered plugins.
-        
-        Returns:
-            Dictionary mapping plugin names to load success status
+        Load and initialize a plugin by name. Assumes plugin_name is already lowercase.
+        (Using the version from previous turns, without the 'instance' check that was causing issues)
         """
-        # Clear any existing plugin tracking
-        self.plugins.clear()
-        self.enabled_plugins.clear()
-        
-        # Discover plugins
-        self._discovered_plugins = self.discover_plugins()
-        results = {}
-        
-        #print(f"Attempting to load {len(self._discovered_plugins)} discovered plugins")
-        
-        # Load multiplayer plugin first, but DON'T automatically enable it
-        if 'multiplayer' in self._discovered_plugins:
-            #print("Attempting to load multiplayer plugin (ignoring dependencies)...")
-            result = self.load_plugin('multiplayer')
-            results['multiplayer'] = result
-            
-            if result:
-                print("    ")
-                # Remove this line so it doesn't auto-enable
-                # self.enabled_plugins.add('multiplayer')
-            else:
-                print("Failed to load multiplayer plugin despite ignoring dependencies")
-        
-        # Now load other plugins
-        for plugin_name in self._discovered_plugins:
-            if plugin_name != 'multiplayer':  # Skip multiplayer as we already tried to load it
-                print(f"Loading plugin: {plugin_name}")
-                result = self.load_plugin(plugin_name)
-                results[plugin_name] = result
-                
-                # Ensure successful plugins are added to enabled set
-                if result:
-                    self.enabled_plugins.add(plugin_name.lower())
-        
-        # Print debug information
-        #print(f"Loaded Plugins: {list(self.plugins.keys())}")
-        #print(f"Enabled Plugins: {list(self.enabled_plugins)}")
-        
-        return results
-    
-    def unload_plugin(self, plugin_name):
-        """Unload a plugin"""
-        success = self.plugin_manager.unload_plugin(plugin_name)
-        if success:
-            self.show_message(f"Plugin {plugin_name} unloaded")
-        else:
-            self.show_message(f"Failed to unload plugin {plugin_name}")
-        
-        # Refresh the list
-        self.load_plugins()
-    
-    def unload_all_plugins(self) -> None:
-        """Unload all active plugins"""
-        for plugin_name in list(self.plugins.keys()):
-            self.unload_plugin(plugin_name)
-    
-    def enable_plugin(self, plugin_name: str) -> bool:
-        """Enable a loaded plugin."""
-        plugin_name = plugin_name.lower()
-        
-        if plugin_name not in self.plugins:
-            return False
-            
-        # Get plugin instance
-        plugin_data = self.plugins[plugin_name]
-        plugin_instance = plugin_data.get('instance')
-        
-        # If plugin has an enable method, call it
-        if plugin_instance and hasattr(plugin_instance, 'enable'):
-            success = plugin_instance.enable()
-            if not success:
-                return False
-        
-        # Add to enabled set
-        self.enabled_plugins.add(plugin_name)
-        self.logger.info(f"Enabled plugin: {plugin_name}")
-        return True
-
-    def disable_plugin(self, plugin_name: str) -> bool:
-        """Disable a loaded plugin."""
-        plugin_name = plugin_name.lower()
-        
-        if plugin_name not in self.plugins:
-            return False
-            
-        # Get plugin instance
-        plugin_data = self.plugins[plugin_name]
-        plugin_instance = plugin_data.get('instance')
-        
-        # If plugin has a disable method, call it
-        if plugin_instance and hasattr(plugin_instance, 'disable'):
-            plugin_instance.disable()
-        
-        # Remove from enabled set
-        if plugin_name in self.enabled_plugins:
-            self.enabled_plugins.remove(plugin_name)
-            self.logger.info(f"Disabled plugin: {plugin_name}")
-        return True
-    
-    def disable_plugin(self, plugin_name: str) -> bool:
-        """
-        Disable a loaded plugin without unloading it.
-        
-        Args:
-            plugin_name: Name of the plugin to disable
-            
-        Returns:
-            bool: True if plugin was disabled successfully, False otherwise
-        """
-        # Normalize plugin name to lowercase
-        plugin_name = plugin_name.lower()
-        
-        if plugin_name not in self.plugins:
-            return False
-            
-        if plugin_name in self.enabled_plugins:
-            self.enabled_plugins.remove(plugin_name)
-            self.logger.info(f"Disabled plugin: {plugin_name}")
-            
-        return True
-    
-    def get_plugin_info(self, plugin_name: str) -> Dict:
-        """
-        Get information about a loaded plugin.
-        
-        Args:
-            plugin_name: Name of the plugin to get info for
-            
-        Returns:
-            Dict containing plugin metadata
-        """
-        if plugin_name not in self.plugins:
-            return {}
-            
-        return self.plugins[plugin_name]
-    
-    def get_loaded_plugins(self) -> List[str]:
-        """
-        Get names of all loaded plugins.
-        
-        Returns:
-            List of plugin names
-        """
-        return list(self.plugins.keys())
-    
-    def get_enabled_plugins(self) -> List[str]:
-        #print(f"Current enabled_plugins: {self.enabled_plugins}")
-        return list(set(plugin.lower() for plugin in self.enabled_plugins))
-    
-    def check_dependencies(self, plugin_name):
-        """
-        Check if all dependencies for a plugin are satisfied.
-        
-        Args:
-            plugin_name: Name of the plugin to check dependencies for
-            
-        Returns:
-            bool: True if all dependencies are satisfied, False otherwise
-        """
-        if plugin_name not in self._discovered_plugins:
-            self.logger.error(f"Plugin not found: {plugin_name}")
-            return False
-            
-        plugin_data = self._discovered_plugins[plugin_name]
-        required_plugins = plugin_data.get("requires", [])
-        
-        if not required_plugins:
-            return True  # No dependencies
-            
-        # Check if all required plugins are loaded
-        for required in required_plugins:
-            if required not in self.plugins:
-                self.logger.error(f"Plugin {plugin_name} requires {required} which is not loaded")
-                return False
-        
-        return True
-
-    def load_plugin(self, plugin_name):
-        """
-        Load and initialize a plugin by name.
-
-        Args:
-            plugin_name: Name of the plugin to load
-
-        Returns:
-            bool: True if plugin was loaded successfully, False otherwise
-        """
-        # Normalize plugin name to lowercase
         plugin_name = plugin_name.lower()
 
-        # Skip if already loaded
         if plugin_name in self.plugins:
-            self.logger.info(f"Plugin already loaded: {plugin_name}")
-
-            # Ensure it's in enabled plugins, but not for multiplayer
-            if plugin_name != "multiplayer" and plugin_name not in self.enabled_plugins:
-                self.enabled_plugins.add(plugin_name)
-
+            self.logger.info(f"Plugin '{plugin_name}' already loaded.")
             return True
 
-        # Discover plugins if needed
-        if not hasattr(self, '_discovered_plugins') or not self._discovered_plugins:
+        if self._discovered_plugins is None:
+            self.logger.error("Plugin discovery must be run before loading.")
             self._discovered_plugins = self.discover_plugins()
 
-        # Check if plugin exists
         if plugin_name not in self._discovered_plugins:
-            self.logger.error(f"Plugin not found: {plugin_name}")
+            self.logger.error(f"Plugin '{plugin_name}' not found.")
             return False
 
         plugin_data = self._discovered_plugins[plugin_name]
         module = plugin_data["module"]
+        original_plugin_name_display = plugin_data.get("original_name", plugin_name)
 
-        # Check for required plugins (skip for multiplayer)
-        if plugin_name.lower() != "multiplayer":
-            required_plugins = plugin_data.get("requires", [])
-            if required_plugins:
-                missing_plugins = []
-                for required in required_plugins:
-                    if required not in self.plugins:
-                        missing_plugins.append(required)
+        self.logger.info(f"Attempting to load plugin '{original_plugin_name_display}' (key: '{plugin_name}')")
+        self.logger.info(f"Plugin '{plugin_name}': Module '{module.__name__}' found.")
 
-                if missing_plugins:
-                    self.logger.error(f"Plugin {plugin_name} requires {missing_plugins} which are not loaded")
-                    return False
+        required_plugins = plugin_data.get("requires", [])
+        if required_plugins:
+            missing_plugins = []
+            for required_name_lower in required_plugins:
+                if required_name_lower not in self.plugins:
+                    missing_plugins.append(required_name_lower)
+            if missing_plugins:
+                self.logger.error(f"Plugin '{plugin_name}' requires missing plugin(s): {', '.join(missing_plugins)}.")
+                self.logger.error(f"Plugin '{plugin_name}': Dependency check failed.")
+                return False
+        self.logger.info(f"Plugin '{plugin_name}': Dependencies satisfied.")
 
-        # Check for initialize function
         if not hasattr(module, "initialize"):
-            self.logger.error(f"Plugin {plugin_name} has no initialize function")
+            self.logger.error(f"Plugin '{plugin_name}' has no 'initialize' function.")
             return False
+        self.logger.info(f"Plugin '{plugin_name}': Found 'initialize' function. Attempting to call.")
 
         try:
-            # Initialize the plugin
-            #print(f"Attempting to initialize plugin: {plugin_name}")
             initialize_func = getattr(module, "initialize")
-
-            # Special handling for multiplayer plugin
-            if plugin_name.lower() == "multiplayer":
-                #print("Using special initialization for multiplayer plugin")
-                # Create the plugin instance
-                if hasattr(module, "MultiplayerPlugin"):
-                    plugin_instance = module.MultiplayerPlugin()
-                    # Store the instance in plugin_data
-                    plugin_data['instance'] = plugin_instance
-                    
-                    # Pass plugin manager and tamagotchi_logic references
-                    plugin_instance.plugin_manager = self
-                    if hasattr(self, 'tamagotchi_logic'):
-                        plugin_instance.tamagotchi_logic = self.tamagotchi_logic
-                    
-                    # Pass plugin manager to initialize
-                    success = initialize_func(self)
-                else:
-                    print(f"ERROR: Could not find MultiplayerPlugin class in {plugin_name}")
-                    success = False
-            else:
-                # Normal initialization for other plugins
-                success = initialize_func(self)
+            success = initialize_func(self)  # Call initialize
 
             if success:
-                # Store plugin instance for future reference
-                self.plugins[plugin_name] = plugin_data
+                self.logger.info(f"Plugin '{plugin_name}': 'initialize' function executed successfully.")
+                
+                # Check if plugin registered itself (especially important for multiplayer's pattern)
+                if plugin_name not in self.plugins:
+                     # If it didn't register itself, add the discovered data now.
+                     # This might happen for simpler plugins. If it was *supposed* to register and didn't,
+                     # it might cause issues later if an instance is expected.
+                     self.logger.info(f"Plugin '{plugin_name}' did not self-register; adding discovered data.")
+                     self.plugins[plugin_name] = plugin_data
 
-                # Add to enabled plugins, but not the multiplayer plugin
+                # Check if an instance *is* now present in the (potentially updated) record
+                if plugin_name in self.plugins and ('instance' not in self.plugins[plugin_name] or self.plugins[plugin_name].get('instance') is None):
+                     # This is the warning that replaces the previous hard error
+                     self.logger.warning(f"Plugin '{plugin_name}': Instance was not explicitly set in manager's records by 'initialize'.")
+                elif plugin_name in self.plugins:
+                     self.logger.info(f"Plugin '{plugin_name}': Instance found/set in manager's records.")
+
                 if plugin_name != "multiplayer":
                     self.enabled_plugins.add(plugin_name)
-
-                self.logger.info(f"Loaded plugin: {plugin_name}")
-                #print(f"Successfully loaded plugin: {plugin_name}")
+                
                 return True
             else:
-                self.logger.error(f"Plugin {plugin_name} initialization returned False")
-                print(f"Plugin {plugin_name} initialization returned False")
+                self.logger.error(f"Plugin '{plugin_name}' 'initialize' function returned False or failed.")
                 return False
 
         except Exception as e:
-            self.logger.error(f"Error initializing plugin {plugin_name}: {str(e)}")
-            print(f"Error initializing plugin {plugin_name}: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            self.logger.error(f"Error during initialization of plugin '{plugin_name}': {str(e)}", exc_info=True)
             return False
-    
-    def enable_plugin(self, plugin_name: str) -> bool:
-        """Enable a loaded plugin with improved error handling."""
-        plugin_name = plugin_name.lower()
+
+    def load_all_plugins(self) -> Dict[str, bool]:
+        """
+        Load all discovered plugins.
+        """
+        self.logger.info("Loading all discovered plugins...")
+        self.plugins.clear()
+        self.enabled_plugins.clear()
         
-        if plugin_name not in self.plugins:
-            print(f"Cannot enable plugin {plugin_name}: not loaded")
+        self._discovered_plugins = self.discover_plugins() 
+        if not self._discovered_plugins:
+            return {}
+            
+        results = {}
+        plugins_to_load_ordered = list(self._discovered_plugins.keys())
+
+        for plugin_name_key in plugins_to_load_ordered:
+            result = self.load_plugin(plugin_name_key) 
+            results[plugin_name_key] = result
+
+        self.logger.info(f"Finished loading all plugins. Results: {results}")
+        self.logger.info(f"Currently loaded plugins in self.plugins: {list(self.plugins.keys())}")
+        self.logger.info(f"Currently enabled plugins: {list(self.enabled_plugins)}")
+        
+        return results
+    
+    def unload_plugin(self, plugin_name: str) -> bool:
+        """Unload a plugin by name."""
+        plugin_name_lower = plugin_name.lower()
+        if plugin_name_lower not in self.plugins:
+            self.logger.warning(f"Plugin '{plugin_name_lower}' not found for unloading.")
+            return False
+
+        plugin_data = self.plugins.get(plugin_name_lower)
+        if plugin_data:
+            instance = plugin_data.get('instance')
+            if instance and hasattr(instance, 'shutdown'):
+                try:
+                    instance.shutdown()
+                    self.logger.info(f"Plugin '{plugin_name_lower}' shutdown method called.")
+                except Exception as e:
+                    self.logger.error(f"Error during plugin '{plugin_name_lower}' shutdown: {e}", exc_info=True)
+        
+        if plugin_name_lower in self.enabled_plugins:
+            self.enabled_plugins.remove(plugin_name_lower)
+            self.logger.info(f"Plugin '{plugin_name_lower}' disabled.")
+        
+        for hook_name in list(self.hooks.keys()):
+            self.hooks[hook_name] = [
+                sub for sub in self.hooks[hook_name] if sub['plugin'].lower() != plugin_name_lower
+            ]
+
+        del self.plugins[plugin_name_lower]
+        self.logger.info(f"Plugin '{plugin_name_lower}' unloaded successfully.")
+        return True
+
+    def unload_all_plugins(self) -> None:
+        """Unload all active plugins."""
+        self.logger.info("Unloading all plugins...")
+        for plugin_name_key in list(self.plugins.keys()):
+            self.unload_plugin(plugin_name_key)
+        self.logger.info("All plugins have been unloaded.")
+
+    def enable_plugin(self, plugin_key: str) -> bool:
+        plugin_key_lower = plugin_key.lower() # Normalize to lowercase
+
+        if plugin_key_lower in self.enabled_plugins:
+            self.logger.info(f"Plugin '{plugin_key_lower}' is already enabled.")
+            return True
+
+        plugin_data = self.plugins.get(plugin_key_lower)
+        if not plugin_data or 'instance' not in plugin_data:
+            self.logger.error(f"ERROR:PluginManager: Plugin '{plugin_key_lower}' not found or has no instance for enabling.")
+            return False
+
+        instance = plugin_data['instance']
+        if not instance:
+            self.logger.error(f"ERROR:PluginManager: Instance for plugin '{plugin_key_lower}' is None.")
+            return False
+
+        # --- Call setup() if it hasn't been run ---
+        if hasattr(instance, 'setup') and callable(instance.setup):
+            # Check the 'is_setup' flag stored by the PluginManager for this plugin.
+            # This flag is initialized to False in plugins/multiplayer/main.py's initialize().
+            if not plugin_data.get('is_setup', False): 
+                try:
+                    self.logger.info(f"INFO:PluginManager: Calling setup() for plugin '{plugin_key_lower}'.")
+                    # Pass PluginManager instance (self) and tamagotchi_logic
+                    tamagotchi_logic_ref = getattr(self, 'tamagotchi_logic', None)
+                    if tamagotchi_logic_ref:
+                        instance.setup(self, tamagotchi_logic_ref)
+                    else:
+                        self.logger.warning(f"WARNING:PluginManager: tamagotchi_logic not available in PluginManager when setting up '{plugin_key_lower}'. Passing None.")
+                        instance.setup(self, None)
+
+                    plugin_data['is_setup'] = True # Mark that setup has been run (in PluginManager's records)
+                    self.logger.info(f"INFO:PluginManager: setup() for plugin '{plugin_key_lower}' completed.")
+                except Exception as e:
+                    self.logger.error(f"ERROR:PluginManager: Exception during setup of plugin '{plugin_key_lower}': {e}", exc_info=True)
+                    return False # If setup fails, do not proceed.
+            else:
+                self.logger.info(f"INFO:PluginManager: Plugin '{plugin_key_lower}' already marked as setup by PluginManager. Skipping setup() call.")
+
+        # --- Now, call the plugin's own enable method ---
+        if hasattr(instance, 'enable') and callable(instance.enable):
+            try:
+                self.logger.info(f"INFO:PluginManager: Calling enable() method on plugin instance '{plugin_key_lower}'.")
+                if instance.enable(): # This calls your MultiplayerPlugin.enable()
+                    self.enabled_plugins.add(plugin_key_lower)
+                    self.logger.info(f"INFO:PluginManager: Plugin '{plugin_key_lower}' successfully enabled and added to enabled set.")
+                    self.trigger_hook("on_plugin_enabled", plugin_key=plugin_key_lower)
+                    return True
+                else:
+                    self.logger.error(f"ERROR:PluginManager: Plugin '{plugin_key_lower}' enable() method returned False.")
+                    return False
+            except AttributeError as ae: 
+                self.logger.error(f"ERROR:PluginManager: AttributeError during enable() of plugin '{plugin_key_lower}': {ae}. This suggests 'self.is_setup' was not initialized in the plugin's __init__.", exc_info=True)
+                return False
+            except Exception as e:
+                self.logger.error(f"ERROR:PluginManager: Exception during enable() of plugin '{plugin_key_lower}': {e}", exc_info=True)
+                return False
+        else:
+            # If the plugin has no specific enable method, just mark it as enabled in the manager
+            self.enabled_plugins.add(plugin_key_lower)
+            self.logger.info(f"INFO:PluginManager: Plugin '{plugin_key_lower}' has no custom enable() method, marked as enabled in manager.")
+            self.trigger_hook("on_plugin_enabled", plugin_key=plugin_key_lower)
+            return True
+
+    def disable_plugin(self, plugin_name: str) -> bool:
+        """Disable an enabled plugin."""
+        plugin_name_lower = plugin_name.lower()
+        
+        if plugin_name_lower not in self.enabled_plugins:
+            self.logger.warning(f"Plugin '{plugin_name_lower}' is not currently enabled.")
             return False
             
-        # Get plugin instance
-        plugin_data = self.plugins[plugin_name]
-        plugin_instance = plugin_data.get('instance')
+        plugin_data = self.plugins.get(plugin_name_lower)
+        if plugin_data:
+            plugin_instance = plugin_data.get('instance')
+            if plugin_instance and hasattr(plugin_instance, 'disable'):
+                try:
+                    plugin_instance.disable()
+                    self.logger.info(f"Plugin '{plugin_name_lower}'.disable() method called.")
+                except Exception as e:
+                    self.logger.error(f"Error calling .disable() on plugin '{plugin_name_lower}': {e}", exc_info=True)
         
-        # Make sure the plugin has references it needs
-        if plugin_instance:
-            # Set plugin_manager reference if needed
-            if not hasattr(plugin_instance, 'plugin_manager') or plugin_instance.plugin_manager is None:
-                plugin_instance.plugin_manager = self
-                print(f"Set plugin_manager reference for {plugin_name}")
-                
-            # Set tamagotchi_logic reference if available
-            if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
-                plugin_instance.tamagotchi_logic = self.tamagotchi_logic
-                print(f"Set tamagotchi_logic reference for {plugin_name}")
-        
-        # If plugin has an enable method, call it
-        try:
-            if plugin_instance and hasattr(plugin_instance, 'enable'):
-                print(f"Calling enable() method for {plugin_name}")
-                success = plugin_instance.enable()
-                if not success:
-                    print(f"Plugin {plugin_name}.enable() returned False")
-                    return False
-        except Exception as e:
-            print(f"Error enabling plugin {plugin_name}: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-        
-        # Add to enabled set
-        self.enabled_plugins.add(plugin_name)
-        self.logger.info(f"Enabled plugin: {plugin_name}")
-        print(f"Successfully enabled plugin: {plugin_name}")
+        self.enabled_plugins.remove(plugin_name_lower)
+        self.logger.info(f"Plugin '{plugin_name_lower}' disabled.")
         return True
+    
+    def get_plugin_info(self, plugin_name: str) -> Dict | None:
+        """Get information about a loaded plugin."""
+        plugin_name_lower = plugin_name.lower()
+        return self.plugins.get(plugin_name_lower)
+    
+    def get_loaded_plugins(self) -> List[str]:
+        """Get original names of all loaded plugins."""
+        return [data.get('original_name', key) for key, data in self.plugins.items()]
+    
+    def get_enabled_plugins(self) -> List[str]:
+        """Get original names of all enabled plugins."""
+        enabled_original_names = []
+        for name_lower in self.enabled_plugins:
+            if name_lower in self.plugins:
+                enabled_original_names.append(self.plugins[name_lower].get('original_name', name_lower))
+            else:
+                enabled_original_names.append(name_lower) 
+        return enabled_original_names
+
+    def check_dependencies(self, plugin_name_to_check: str) -> bool:
+        """Check if dependencies for a plugin are met."""
+        plugin_name_to_check = plugin_name_to_check.lower()
+        if self._discovered_plugins is None or plugin_name_to_check not in self._discovered_plugins:
+            self.logger.error(f"Plugin '{plugin_name_to_check}' not found for dependency check.")
+            return False
+            
+        plugin_data = self._discovered_plugins[plugin_name_to_check]
+        required_plugin_keys = plugin_data.get("requires", []) 
+        
+        if not required_plugin_keys:
+            return True
+            
+        for required_key in required_plugin_keys:
+            if required_key not in self.plugins:
+                self.logger.error(f"Plugin '{plugin_name_to_check}' requires '{required_key}' which is not loaded.")
+                return False
+        return True
+
+    def set_tamagotchi_logic(self, tamagotchi_logic_instance):
+        """Allows setting a reference to the main TamagotchiLogic instance."""
+        setattr(self, 'tamagotchi_logic', tamagotchi_logic_instance)
+        self.logger.info("TamagotchiLogic instance has been linked to PluginManager.")

@@ -20,19 +20,14 @@ class Squid:
         self.push_animation = None
         self.startled_icon = None
         self.startled_icon_offset = QtCore.QPointF(0, -100)
-        self.name = "Squid"
 
-        # Set neurogenesis cooldown (default to 180 seconds if not specified)
-        self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 180
+        # Set neurogenesis cooldown (default to 200 seconds if not specified)
+        self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 200
 
-        # Object interactions
+        # Rock interaction system
         self.carrying_rock = False
         self.current_rock = None  # Currently held rock
         self.rock_being_thrown = None  # Rock in mid-flight
-        self.is_carrying = False    
-        self.carrying_item_visual = None
-        self.carried_item_offset_x = 30 # X offset for carried items
-        self.carried_item_offset_y = 0  # Y offset for carried items
 
         # Hoarding preferences
         self.hoard_corner = {
@@ -106,14 +101,9 @@ class Squid:
         self.curiosity = 50
 
         if personality is None:
-            available_personalities = list(Personality)
-            self.personality = random.choice(available_personalities)
+            self.personality = random.choice(list(Personality))
         else:
             self.personality = personality
-        
-        self.has_fled_first_encounter = False
-
-        
 
     @property
     def carrying_rock(self):
@@ -339,121 +329,6 @@ class Squid:
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
             self.tamagotchi_logic.update_squid_brain()
 
-    # Inside the Squid class in src/squid.py
-    def start_carrying_item(self, item_visual: QtWidgets.QGraphicsPixmapItem):
-        if not isinstance(item_visual, QtWidgets.QGraphicsPixmapItem):
-            print(f"Error: item_visual passed to start_carrying_item is not a QGraphicsPixmapItem.")
-            return
-
-        self.is_carrying = True
-        self.carrying_item_visual = item_visual
-        
-        item_filename = getattr(self.carrying_item_visual, 'filename', 'item')
-        if isinstance(item_filename, str):
-            item_filename = os.path.basename(item_filename)
-
-        # print(f"Squid '{getattr(self, 'name', 'Squid')}' started carrying: {item_filename}") # Or use self.logger
-
-        if self.carrying_item_visual:
-            self.carrying_item_visual.setVisible(True) # Ensure it's visible
-            self.carrying_item_visual.setOpacity(1.0)   # Ensure it's fully opaque
-            self._update_carried_item_position()      # Position it correctly relative to the squid immediately
-            self.status = f"carrying {item_filename}"
-
-            # Auto-drop after a few seconds (for testing)
-            drop_delay_ms = 5000  # Drop after 5 seconds (example)
-            QtCore.QTimer.singleShot(drop_delay_ms, self.place_carried_item)
-            
-            # Use print for now, or self.logger if you implement one in Squid class
-            print(f"Squid '{getattr(self, 'name', 'Squid')}' will auto-drop '{item_filename}' in {drop_delay_ms / 1000} seconds.")
-        else:
-            print(f"Error: carrying_item_visual is None in start_carrying_item for Squid '{getattr(self, 'name', 'Squid')}'")
-            self.is_carrying = False # Reset if item is invalid
-
-    def _update_carried_item_position(self):
-        if self.is_carrying and self.carrying_item_visual and self.squid_item:
-            # Calculate base offset
-            current_offset_x = self.carried_item_offset_x 
-            current_offset_y = self.carried_item_offset_y
-
-            squid_width = self.squid_item.boundingRect().width() * self.squid_item.scale()
-            item_width = 0
-            item_height = 0
-            if self.carrying_item_visual.pixmap(): # Check if pixmap exists
-                item_width = self.carrying_item_visual.pixmap().width() * self.carrying_item_visual.scale()
-                item_height = self.carrying_item_visual.pixmap().height() * self.carrying_item_visual.scale()
-
-            # Adjust offset based on squid's facing direction to make it look like it's "in front"
-            if self.squid_direction == "left":
-                current_offset_x = -item_width - 5 # Place item to the left of the squid, with a 5px gap
-            elif self.squid_direction == "right":
-                current_offset_x = squid_width + 5 # Place item to the right of the squid, with a 5px gap
-            elif self.squid_direction == "up":
-                # Example: Center it above the squid
-                current_offset_x = (squid_width / 2) - (item_width / 2)
-                current_offset_y = -item_height - 5 
-            elif self.squid_direction == "down":
-                # Example: Center it below the squid
-                current_offset_x = (squid_width / 2) - (item_width / 2)
-                current_offset_y = (self.squid_item.boundingRect().height() * self.squid_item.scale()) + 5
-
-            # Position the carried item relative to the squid's main visual (self.squid_item)
-            # self.squid_item.x() and y() are the top-left of the squid item
-            new_item_x = self.squid_item.x() + current_offset_x
-            new_item_y = self.squid_item.y() + current_offset_y
-            
-            self.carrying_item_visual.setPos(new_item_x, new_item_y)
-            # Ensure carried item is visually on top of or appropriately layered with the squid
-            self.carrying_item_visual.setZValue(self.squid_item.zValue() + 0.1) # Slightly above the squid
-
-
-    # Inside the Squid class in src/squid.py
-    def place_carried_item(self):
-        if self.is_carrying and self.carrying_item_visual:
-            item_filename_full_path = getattr(self.carrying_item_visual, 'filename', 'item')
-            item_filename_base = "unknown_item" # Default if os.path.basename fails
-            if isinstance(item_filename_full_path, str):
-                item_filename_base = os.path.basename(item_filename_full_path)
-            
-            # Use print for now, or self.logger if you implement one in Squid class
-            squid_name = getattr(self, 'name', 'Squid') # Get squid name if it exists
-            print(f"Squid '{squid_name}' is placing down '{item_filename_base}'.")
-
-            # The item is already in the scene.
-            # Optionally, adjust its Z-value if it was elevated while carried.
-            # original_z = getattr(self.carrying_item_visual, 'original_zValue', 0) # If you stored this
-            # self.carrying_item_visual.setZValue(original_z)
-            # Or set to a default Z for placed items, e.g., self.carrying_item_visual.setZValue(0)
-
-            # Optionally, adjust its final resting position.
-            # For now, it remains at its last position relative to the squid.
-            # You could add logic here to "nudge" it or place it more precisely.
-
-            # Log to memory manager using the correct parameters: category, key, value, importance
-            if hasattr(self, 'memory_manager') and self.memory_manager:
-                try:
-                    self.memory_manager.add_short_term_memory(
-                        category='interaction',  # Correct: first argument, or keyword 'category'
-                        key='placed_item',       # Correct: second argument, or keyword 'key'
-                        value=f"Stole {item_filename_base} from another tank!", # Correct: third argument, or keyword 'value'
-                        importance=5             # Correct: fourth argument, or keyword 'importance'
-                    )
-                except TypeError as e:
-                    print(f"ERROR calling add_short_term_memory in place_carried_item: {e}")
-                    print(f"Arguments were: category='interaction', key='placed_item', value='description string', importance=5")
-
-
-            # Update squid's state
-            self.is_carrying = False
-            self.carrying_item_visual = None # Detach the item
-            self.status = "admiring my treasure" 
-
-            if hasattr(self.tamagotchi_logic, 'show_message'):
-                self.tamagotchi_logic.show_message(f"{squid_name} placed a {item_filename_base} in the tank!")
-            
-        elif self.debug_mode if hasattr(self, 'debug_mode') else False: 
-            squid_name = getattr(self, 'name', 'Squid')
-            print(f"Squid '{squid_name}' tried to place an item, but wasn't carrying anything.")
 
     def load_images(self):
         """Load images with cache to reduce memory usage and apply resolution scaling"""
@@ -652,11 +527,6 @@ class Squid:
         """
         Comprehensive boundary exit detection with robust network node handling
         """
-        # If squid is transitioning (e.g., moving between tanks), do nothing further.
-        if self.is_transitioning:
-            # print(f"DEBUG: {getattr(self, 'name', 'Squid')} is_transitioning is True in check_boundary_exit, returning False.")
-            return False # Do not check for exits if already transitioning
-
         try:
             # Check basic prerequisites
             if not hasattr(self, 'tamagotchi_logic') or not self.tamagotchi_logic:
@@ -683,8 +553,7 @@ class Squid:
                     if multiplayer_plugin and hasattr(multiplayer_plugin, 'network_node'):
                         network_node = multiplayer_plugin.network_node
                         # Attempt to set on tamagotchi_logic for future use
-                        if hasattr(self.tamagotchi_logic, 'network_node'): # Check if attribute exists before setting
-                             self.tamagotchi_logic.network_node = network_node
+                        self.tamagotchi_logic.network_node = network_node
                 except Exception as plugin_error:
                     print(f"Error finding network node in plugin: {plugin_error}")
             
@@ -699,83 +568,56 @@ class Squid:
             
             exit_direction = None
             
-            # The print statements below are from your original code and are useful for debugging.
-            # print("\n===== BOUNDARY EXIT ANALYSIS =====")
-            # print(f"Squid Position: ({self.squid_x}, {self.squid_y})")
-            # print(f"Squid Dimensions: {self.squid_width}x{self.squid_height}")
-            # print(f"Window Dimensions: {self.ui.window_width}x{self.ui.window_height}")
+            print("\n===== BOUNDARY EXIT ANALYSIS =====")
+            print(f"Squid Position: ({self.squid_x}, {self.squid_y})")
+            print(f"Squid Dimensions: {self.squid_width}x{self.squid_height}")
+            print(f"Window Dimensions: {self.ui.window_width}x{self.ui.window_height}")
             
             # Comprehensive boundary checks
-            # Ensure these use the most up-to-date squid position (self.squid_x, self.squid_y)
-            # and dimensions. The window dimensions come from self.ui.
-            if self.squid_x <= 0: # Exiting left
+            if self.squid_x <= 0:
                 exit_direction = 'left'
-            elif squid_right >= self.ui.window_width: # Exiting right
+            elif squid_right >= self.ui.window_width:
                 exit_direction = 'right'
-            elif self.squid_y <= 0: # Exiting up
+            elif self.squid_y <= 0:
                 exit_direction = 'up'
-            elif squid_bottom >= self.ui.window_height: # Exiting down
+            elif squid_bottom >= self.ui.window_height:
                 exit_direction = 'down'
             
             if exit_direction:
-                # This print is from your original code, good for debugging
-                # print(f"Exit Direction Detected: {exit_direction}") 
+                print(f"Exit Direction Detected: {exit_direction}")
                 
                 # Prepare comprehensive exit data
                 exit_data = {
                     'node_id': network_node.node_id,
                     'direction': exit_direction,
-                    'position': { # Position at the point of exit detection
+                    'position': {
                         'x': self.squid_x,
                         'y': self.squid_y
                     },
-                    'color': self._get_squid_color(), # Make sure _get_squid_color works
+                    'color': self._get_squid_color(),
                     'squid_width': self.squid_width,
                     'squid_height': self.squid_height,
-                    'window_width': self.ui.window_width, # Window of this instance
-                    'window_height': self.ui.window_height, # Window of this instance
-                    # Add any other state needed for the remote squid representation
-                    # For example, current animation frame or facing direction if different from exit direction
-                    'current_animation_frame': None, # Placeholder, implement if needed
-                    'image_direction_key': self.squid_direction # The squid's current facing direction
+                    'window_width': self.ui.window_width,
+                    'window_height': self.ui.window_height
                 }
                 
-                # This print block is from your original code, good for debugging
-                # print("Exit Data Details:")
-                # for key, value in exit_data.items():
-                #     print(f"  {key}: {value}")
+                print("Exit Data Details:")
+                for key, value in exit_data.items():
+                    print(f"  {key}: {value}")
                 
                 # Broadcast exit message
                 try:
                     network_node.send_message(
                         'squid_exit', 
-                        {'payload': exit_data} # Original code had payload nested again, ensure mp_plugin_logic handles this
+                        {'payload': exit_data}
                     )
-                    print("Exit message successfully broadcast") # This line is confirmed in your logs
-                    
-                    # VERIFICATION POINT: State setting occurs AFTER successful broadcast
-                    self.is_transitioning = True
-                    self.can_move = False 
-                    if hasattr(self.squid_item, 'setVisible'):
-                         self.squid_item.setVisible(False)
-                    else: # Fallback if no setVisible, e.g. if squid_item is not QGraphicsItem
-                         print(f"Warning: squid_item for {getattr(self,'name','Squid')} has no setVisible method.")
-
-                    self.status = "visiting another tank" # Or some other appropriate "exited" status
-                    
-                    # print(f"DEBUG: {getattr(self, 'name', 'Squid')} - just set is_transitioning=True, can_move=False, setInvisible.")
-
-
-                    if hasattr(self.tamagotchi_logic, 'show_message'):
-                        self.tamagotchi_logic.show_message(f"Your squid left through the {exit_direction} boundary!")
-                    return True # Exit successfully processed and broadcast
+                    print("Exit message successfully broadcast")
+                    return True
                 except Exception as broadcast_error:
-                    print(f"Broadcast error during squid_exit: {broadcast_error}")
-                    # Potentially, is_transitioning should not be set if broadcast fails,
-                    # or there should be a retry mechanism. For now, it returns False.
+                    print(f"Broadcast error: {broadcast_error}")
                     return False
             
-            return False # No exit direction detected
+            return False
         
         except Exception as e:
             print(f"Comprehensive boundary exit error: {e}")
@@ -1131,22 +973,16 @@ class Squid:
         """
         Move the squid with comprehensive debug logging and boundary check
         """
-        # If squid is transitioning (e.g., moving between tanks), do nothing further.
-        if self.is_transitioning:
-            # print(f"DEBUG: {getattr(self, 'name', 'Squid')} is_transitioning is True in move_squid, returning.")
-            return
-
         # Check if movement is allowed
-        if not getattr(self, 'can_move', True): # Checks if 'can_move' attribute exists, defaults to True if not
-            # print(f"DEBUG: {getattr(self, 'name', 'Squid')} can_move is False, returning from move_squid.")
+        if not getattr(self, 'can_move', True):
             return
         
-        # Determine if multiplayer is enabled (copied from your existing logic)
+        # Check if multiplayer is available and enabled
         if hasattr(self.tamagotchi_logic, 'plugin_manager'):
             pm = self.tamagotchi_logic.plugin_manager
             multiplayer_enabled = 'multiplayer' in pm.get_enabled_plugins()
         else:
-            multiplayer_enabled = False # Default if no plugin_manager
+            multiplayer_enabled = False
         
         if self.animation_speed == 0:
             #print("Animation speed is 0, no movement")
@@ -1154,89 +990,86 @@ class Squid:
 
         if self.is_sleeping:
             #print("Squid is sleeping, limited movement")
-            if self.squid_y < self.ui.window_height - 120 - self.squid_height: 
-                self.squid_y += self.base_vertical_speed * self.animation_speed # Ensure base_vertical_speed is defined
-                # self.squid_item.setPos(self.squid_x, self.squid_y) # Position update now centralized below
+            if self.squid_y < self.ui.window_height - 120 - self.squid_height:
+                self.squid_y += self.base_vertical_speed * self.animation_speed
+                self.squid_item.setPos(self.squid_x, self.squid_y)
             self.current_frame = (self.current_frame + 1) % 2
-            # self.update_squid_image() # Image update now centralized below
-            # return # Movement logic continues below now
+            self.update_squid_image()
+            return
 
-        # This section seems to be where squid_x_new, squid_y_new are determined
-        # For brevity, I'm assuming squid_x_new and squid_y_new are calculated before this point
-        # based on your existing logic for food pursuit, random movement, etc.
-        # The important part is that self.squid_x and self.squid_y get updated.
-        
-        current_time = QtCore.QTime.currentTime().msecsSinceStartOfDay() # Assuming this is still relevant
+        current_time = QtCore.QTime.currentTime().msecsSinceStartOfDay()
 
         visible_food = self.get_visible_food()
 
         if visible_food:
             closest_food = min(visible_food, key=lambda f: self.distance_to(f[0], f[1]))
             self.pursuing_food = True
-            self.target_food = closest_food 
-            self.move_towards(closest_food[0], closest_food[1]) 
-        elif self.pursuing_food: 
+            self.target_food = closest_food
+            self.move_towards(closest_food[0], closest_food[1])
+        elif self.pursuing_food:
             self.pursuing_food = False
             self.target_food = None
-            self.move_randomly() 
-        else: 
+            self.move_randomly()
+        else:
             if current_time - self.last_view_cone_change > self.view_cone_change_interval:
-                self.change_view_cone_direction() 
+                self.change_view_cone_direction()
                 self.last_view_cone_change = current_time
             self.move_randomly()
 
-        squid_x_new = self.squid_x # Will be modified by logic below
-        squid_y_new = self.squid_y # Will be modified by logic below
+        # Calculate new position
+        squid_x_new = self.squid_x
+        squid_y_new = self.squid_y
 
         if self.squid_direction == "left":
             squid_x_new -= self.base_squid_speed * self.animation_speed
         elif self.squid_direction == "right":
             squid_x_new += self.base_squid_speed * self.animation_speed
         elif self.squid_direction == "up":
-            squid_y_new -= self.base_vertical_speed * self.animation_speed # Ensure base_vertical_speed defined
+            squid_y_new -= self.base_vertical_speed * self.animation_speed
         elif self.squid_direction == "down":
-            squid_y_new += self.base_vertical_speed * self.animation_speed # Ensure base_vertical_speed defined
+            squid_y_new += self.base_vertical_speed * self.animation_speed
 
+        # Boundary handling for single-player and multiplayer modes
         if not multiplayer_enabled:
+            # Original boundary restrictions for single-player mode
             if squid_x_new < 50:
-                squid_x_new = 50; self.change_direction()
+                squid_x_new = 50
+                self.change_direction()
             elif squid_x_new > self.ui.window_width - 50 - self.squid_width:
-                squid_x_new = self.ui.window_width - 50 - self.squid_width; self.change_direction()
+                squid_x_new = self.ui.window_width - 50 - self.squid_width
+                self.change_direction()
+
             if squid_y_new < 50:
-                squid_y_new = 50; self.change_direction()
+                squid_y_new = 50
+                self.change_direction()
             elif squid_y_new > self.ui.window_height - 120 - self.squid_height:
-                squid_y_new = self.ui.window_height - 120 - self.squid_height; self.change_direction()
-        
+                squid_y_new = self.ui.window_height - 120 - self.squid_height
+                self.change_direction()
+        else:
+            # Extended boundary check for multiplayer
+            print("Multiplayer mode: Extended boundary check")
+            squid_right = squid_x_new + self.squid_width
+            squid_bottom = squid_y_new + self.squid_height
+
+        # Update squid position
         self.squid_x = squid_x_new
         self.squid_y = squid_y_new
-        
-        # Centralized visual update for the squid itself
-        if self.squid_item:
-            if self.is_sleeping: # Handle sleeping image update here
-                 self.current_frame = (self.current_frame + 1) % 2
-                 self.squid_item.setPixmap(self.current_image())
-                 if self.squid_y < self.ui.window_height - 120 - self.squid_height: # Sleeping drift boundary
-                    pass # Position already updated if it drifted
-                 else: # Hit bottom boundary while sleeping
-                    self.squid_y = self.ui.window_height - 120 - self.squid_height
-            elif self.squid_direction in ["left", "right", "up", "down"]: # Handle active movement images
-                self.current_frame = (self.current_frame + 1) % 2
-                self.squid_item.setPixmap(self.current_image())
 
-            # Set new position for the squid itself
-            self.squid_item.setPos(self.squid_x, self.squid_y)
+        # Update animation frame and image
+        if self.squid_direction in ["left", "right", "up", "down"]:
+            self.current_frame = (self.current_frame + 1) % 2
+            self.squid_item.setPixmap(self.current_image())
 
-            # --- INTEGRATION OF CARRIED ITEM UPDATE ---
-            if self.is_carrying and self.carrying_item_visual:
-                self._update_carried_item_position() # Call the method to update carried item's pos
-            # --- END INTEGRATION ---
-
-            self.update_view_cone() 
-            self.update_sick_icon_position() # Ensure this is called
+        # Set new position and update related elements
+        self.squid_item.setPos(self.squid_x, self.squid_y)
+        self.update_view_cone()
+        self.update_sick_icon_position()
 
         # Comprehensive boundary exit check in multiplayer mode
         if multiplayer_enabled:
+            #print("Triggering boundary exit check in multiplayer mode")
             exit_result = self.check_boundary_exit()
+            #print(f"Boundary Exit Result: {exit_result}")
 
     def move_towards(self, x, y):
         dx = x - (self.squid_x + self.squid_width // 2)
@@ -1384,67 +1217,45 @@ class Squid:
         distance = math.sqrt((squid_center_x - food_x)**2 + (squid_center_y - food_y)**2)
         return distance < 100  # Adjust the distance threshold as needed
     
-    def process_squid_detection(self, remote_node_id, is_visible=True, remote_squid_props=None):
+    def process_squid_detection(self, remote_node_id, is_visible=True):
         """
         Process the detection of another squid in this squid's vision cone
         
         Args:
             remote_node_id (str): ID of the detected squid
             is_visible (bool): Whether the squid is currently visible
-            remote_squid_props (dict, optional): Properties of the remote squid (e.g., position).
         """
+        # Only react if the squid is not sleeping
         if self.is_sleeping:
             return
         
         if is_visible:
-            # --- TIMID SQUID REACTION ---
-            if self.personality == Personality.TIMID and not self.has_fled_first_encounter:
-                # Check if it's the first time seeing this specific squid
-                is_first_sighting_of_this_squid = not hasattr(self, '_seen_squids') or remote_node_id not in self._seen_squids
-                
-                if is_first_sighting_of_this_squid:
-                    if hasattr(self.tamagotchi_logic, 'create_ink_cloud'):
-                        self.tamagotchi_logic.create_ink_cloud() # Call TamagotchiLogic's method
-                    else:
-                        # Fallback or log error if method doesn't exist
-                        print(f"LOGIC ERROR: TamagotchiLogic does not have create_ink_cloud method for {self.name}")
-
-                    self.flee_from_encounter(remote_squid_props) 
-                    self.has_fled_first_encounter = True # Ensure this one-time action
-                    
-                    if hasattr(self, 'memory_manager'):
-                        self.memory_manager.add_short_term_memory(
-                            category='reaction', 
-                            key='first_encounter_flee',
-                            value=f"Saw squid {remote_node_id[-4:]} for the first time and fled!",
-                            importance=8 
-                        )
-                    self.anxiety = min(100, self.anxiety + 40) # Significant anxiety spike
-                    
-                    # Ensure this squid is marked as seen to prevent re-triggering general "first sighting"
-                    if not hasattr(self, '_seen_squids'):
-                        self._seen_squids = set()
-                    self._seen_squids.add(remote_node_id)
-                    return # Timid squid's special action is complete for this event
-
-            # ---- General reactions (if not TIMID and fleeing, or if TIMID but already fled once) ----
+            # Detected a new squid or is continuing to see it
+            
+            # Increase curiosity when first detected
             if not hasattr(self, '_seen_squids') or remote_node_id not in self._seen_squids:
-                # First time seeing this squid (general reaction)
+                # First time seeing this squid
                 self.curiosity = min(100, self.curiosity + 15)
-                self.anxiety = min(100, self.anxiety + 10) 
                 
-                if hasattr(self, 'memory_manager'):
-                    self.memory_manager.add_short_term_memory(
-                        'social', 'squid_detection',
-                        f"Detected another squid (ID: {remote_node_id[-4:]})"
-                    )
+                # Small anxiety spike from the surprise
+                self.anxiety = min(100, self.anxiety + 10)
                 
+                # Add memory
+                self.memory_manager.add_short_term_memory(
+                    'social', 'squid_detection',
+                    f"Detected another squid (ID: {remote_node_id[-4:]})"
+                )
+                
+                # Initialize tracking of seen squids if needed
                 if not hasattr(self, '_seen_squids'):
                     self._seen_squids = set()
+                
+                # Add to seen squids
                 self._seen_squids.add(remote_node_id)
                 
-                # General startle chance
-                if random.random() < 0.3: 
+                # Chance to get startled
+                if random.random() < 0.3:  # 30% chance
+                    # Try to use the startle function if it exists
                     if hasattr(self.tamagotchi_logic, 'startle_squid'):
                         self.tamagotchi_logic.startle_squid(source="detected_squid")
             else:
@@ -1452,113 +1263,12 @@ class Squid:
                 self.curiosity = min(100, self.curiosity + 5)
         else:
             # Lost sight of a squid
+            # Nothing special happens, just note it
             if hasattr(self, '_seen_squids') and remote_node_id in self._seen_squids:
-                if hasattr(self, 'memory_manager'):
-                    self.memory_manager.add_short_term_memory(
-                        'social', 'squid_lost',
-                        f"Lost sight of squid (ID: {remote_node_id[-4:]})"
-                    )
-
-    def flee_from_encounter(self, remote_squid_props=None):
-        self.status = "fleeing" # Update squid's status
-        if hasattr(self.tamagotchi_logic, 'show_message'):
-            self.tamagotchi_logic.show_message(f"{self.name} is scared and flees!")
-        self.is_fleeing = True # Set a flag to indicate fleeing state
-        
-        # Determine direction to flee
-        if remote_squid_props and 'x' in remote_squid_props and 'y' in remote_squid_props:
-            # Flee away from the detected squid's position
-            remote_x = remote_squid_props['x']
-            remote_y = remote_squid_props['y']
-            
-            dx_from_remote = self.squid_x - remote_x
-            dy_from_remote = self.squid_y - remote_y
-            
-            if abs(dx_from_remote) > abs(dy_from_remote): # Flee primarily horizontally
-                self.squid_direction = "right" if dx_from_remote > 0 else "left"
-            else: # Flee primarily vertically
-                self.squid_direction = "down" if dy_from_remote > 0 else "up"
-        else:
-            # Fallback: If remote position is unknown, flee in a random direction
-            # different from the current one.
-            possible_directions = ["left", "right", "up", "down"]
-            if self.squid_direction in possible_directions: # Avoid choosing the same direction
-                possible_directions.remove(self.squid_direction)
-            self.squid_direction = random.choice(possible_directions) if possible_directions else "left" # Default if list becomes empty
-
-        # Temporarily increase speed
-        # Assuming self.current_speed is used by your move_squid() logic.
-        # If self.base_speed is the primary speed determinant, adjust self.base_speed instead.
-        original_speed = self.current_speed 
-        self.current_speed *= 1.5 # Increase speed by 50%
-        
-        # Set a timer to stop fleeing after a few seconds
-        flee_duration_ms = 3000 # Flee for 3 seconds
-        QtCore.QTimer.singleShot(flee_duration_ms, lambda: self.stop_fleeing(original_speed))
-
-    # Inside the Squid class in src/squid.py
-
-    def flee_from_anxiety(self):
-        self.status = "panicking" # A more specific status for this type of flee
-        # The message is already shown in check_anxiety_flee
-        self.is_fleeing = True
-        
-        # Flee in a random direction (or opposite to current facing)
-        possible_directions = ["left", "right", "up", "down"]
-        if self.squid_direction in possible_directions:
-            possible_directions.remove(self.squid_direction) # Try not to continue in the same direction
-        self.squid_direction = random.choice(possible_directions) if possible_directions else "left"
-
-        original_speed = self.current_speed 
-        self.current_speed *= 1.5 # Increase speed
-        
-        flee_duration_ms = 3000 # Flee for 3 seconds (can be shorter than encounter flee)
-        QtCore.QTimer.singleShot(flee_duration_ms, lambda: self.stop_fleeing(original_speed))
-        # self.stop_fleeing is already defined and should work here.
-
-    def check_anxiety_flee(self):
-        """
-        Allows a TIMID squid to randomly create an ink cloud and flee if highly anxious.
-        This is a rare event.
-        """
-        if self.personality != Personality.TIMID:
-            return
-
-        if self.is_sleeping or self.is_fleeing or (hasattr(self, 'is_carrying') and self.is_carrying): # Don't flee if sleeping, already fleeing, or busy carrying
-            return
-
-        # Define anxiety threshold and flee chance
-        anxiety_threshold = 70  # Example: Squid must be quite anxious
-        flee_chance = 0.01     # 1% chance per check when anxious (making it rare)
-
-        if self.anxiety > anxiety_threshold and random.random() < flee_chance:
-            if hasattr(self.tamagotchi_logic, 'show_message'):
-                self.tamagotchi_logic.show_message(f"{self.name} suddenly panics from anxiety!")
-            
-            # Use TamagotchiLogic's create_ink_cloud method
-            if hasattr(self.tamagotchi_logic, 'create_ink_cloud'):
-                self.tamagotchi_logic.create_ink_cloud()
-            else:
-                print(f"LOGIC ERROR: TamagotchiLogic does not have create_ink_cloud method for {self.name}")
-            
-            self.flee_from_anxiety() # Call a new specific fleeing method
-            
-            if hasattr(self, 'memory_manager'):
                 self.memory_manager.add_short_term_memory(
-                    category='reaction',
-                    key='anxiety_flee',
-                    value="Suddenly panicked and fled due to high anxiety!",
-                    importance=7
+                    'social', 'squid_lost',
+                    f"Lost sight of squid (ID: {remote_node_id[-4:]})"
                 )
-
-    def stop_fleeing(self, original_speed):
-        self.is_fleeing = False
-        self.current_speed = original_speed # Restore normal speed
-        self.status = "roaming" # Or another default status
-        if hasattr(self.tamagotchi_logic, 'show_message'):
-            self.tamagotchi_logic.show_message(f"{self.name} calmed down a bit.")
-        # Optionally, reduce anxiety slightly after successfully fleeing
-        self.anxiety = max(0, self.anxiety - 15)
 
     def react_to_rock_throw(self, source_node_id, is_target=False):
         """

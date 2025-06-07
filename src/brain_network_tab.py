@@ -20,24 +20,21 @@ class NetworkTab(BrainBaseTab):
 
     def initialize_ui(self):
         # --- CRITICAL FIX: Clear existing widgets from the layout ---
-        # This ensures that if initialize_ui is somehow called again, or if old widgets persist,
-        # they are removed before rebuilding the UI for this tab.
         if self.layout is not None:
             while self.layout.count():
-                item = self.layout.takeAt(0) # Remove item from layout
+                item = self.layout.takeAt(0)
                 widget = item.widget()
                 if widget is not None:
-                    widget.deleteLater() # Schedule widget for deletion
+                    widget.deleteLater()
                 else:
-                    # If it's a sub-layout, clear it too
                     sub_layout = item.layout()
                     if sub_layout is not None:
                         self._clear_layout_recursively(sub_layout)
 
-        # --- Metrics Bar (New) ---
+        # --- Metrics Bar ---
         self.metrics_bar = QtWidgets.QWidget()
         self.metrics_bar.setStyleSheet("background-color: rgb(200, 200, 200);")
-        self.metrics_bar.setFixedHeight(DisplayScaling.scale(50)) # Use DisplayScaling
+        self.metrics_bar.setFixedHeight(DisplayScaling.scale(50))
         metrics_layout = QtWidgets.QHBoxLayout(self.metrics_bar)
         metrics_layout.setContentsMargins(DisplayScaling.scale(10), 0, DisplayScaling.scale(10), 0)
         metrics_layout.setSpacing(DisplayScaling.scale(20))
@@ -113,23 +110,52 @@ class NetworkTab(BrainBaseTab):
         
         checkbox_layout.addStretch(1)
         main_content_layout.addLayout(checkbox_layout)
-
-        #button_layout = QtWidgets.QHBoxLayout()
-        #self.stimulate_button = self.create_button("Stimulate", self.stimulate_brain, "#d3d3d3")
-        #if self.stimulate_button:
-        #     self.stimulate_button.setEnabled(self.debug_mode)
         
-        #self.save_button = self.create_button("Save", self.save_brain_state, "#d3d3d3")
-        #self.load_button = self.create_button("Load", self.load_brain_state, "#d3d3d3")
-        #self.report_button = self.create_button("Network Report", self.show_diagnostic_report, "#ADD8E6")
-
-        #if self.report_button: button_layout.addWidget(self.report_button)
-        #if self.stimulate_button: button_layout.addWidget(self.stimulate_button)
-        #if self.save_button: button_layout.addWidget(self.save_button)
-        #if self.load_button: button_layout.addWidget(self.load_button)
-        
-        #main_content_layout.addLayout(button_layout)
         self.layout.addWidget(main_content_widget)
+
+        # --- Neurogenesis Values Display (Bottom Right) ---
+        values_display_layout = QtWidgets.QHBoxLayout()
+        values_display_layout.addStretch(1) # Pushes the container to the right
+
+        values_container = QtWidgets.QWidget()
+        values_box = QtWidgets.QHBoxLayout(values_container)
+        values_box.setContentsMargins(10, 5, 10, 5)
+        values_box.setSpacing(10)
+
+        font_size_values = DisplayScaling.font_size(10)
+        value_font = QtGui.QFont("Arial", font_size_values)
+        value_font.setBold(True)
+
+        # Novelty
+        self.novelty_value_label = QtWidgets.QLabel("N: N/A")
+        self.novelty_value_label.setFont(value_font)
+        self.novelty_value_label.setToolTip("Novelty Counter: Increases with new experiences.")
+        values_box.addWidget(self.novelty_value_label)
+
+        # Separator
+        separator1 = QtWidgets.QLabel("|")
+        separator1.setFont(value_font)
+        values_box.addWidget(separator1)
+
+        # Stress
+        self.stress_value_label = QtWidgets.QLabel("S: N/A")
+        self.stress_value_label.setFont(value_font)
+        self.stress_value_label.setToolTip("Stress Counter: Increases during stressful events.")
+        values_box.addWidget(self.stress_value_label)
+
+        # Separator
+        separator2 = QtWidgets.QLabel("|")
+        separator2.setFont(value_font)
+        values_box.addWidget(separator2)
+
+        # Reward
+        self.reward_value_label = QtWidgets.QLabel("R: N/A")
+        self.reward_value_label.setFont(value_font)
+        self.reward_value_label.setToolTip("Reward Counter: Increases after positive outcomes.")
+        values_box.addWidget(self.reward_value_label)
+
+        values_display_layout.addWidget(values_container)
+        self.layout.addLayout(values_display_layout)
         
         self.update_metrics_display()
         self.update_hebbian_label()
@@ -236,6 +262,24 @@ class NetworkTab(BrainBaseTab):
             remaining_cooldown = max(0, cooldown_duration - time_since_last)
             self.neurogenesis_timer_value = int(remaining_cooldown)
         self.update_neurogenesis_label()
+
+        # --- Update Neurogenesis Values Display ---
+        if self.brain_widget and hasattr(self.brain_widget, 'neurogenesis_data') and self.brain_widget.neurogenesis_data is not None:
+            neuro_data = self.brain_widget.neurogenesis_data
+            
+            novelty_val = neuro_data.get('novelty_counter', 0)
+            stress_val = neuro_data.get('stress_counter', 0)
+            reward_val = neuro_data.get('reward_counter', 0)
+
+            # Update labels
+            self.novelty_value_label.setText(f"N: {novelty_val:.2f}")
+            self.stress_value_label.setText(f"S: {stress_val:.2f}")
+            self.reward_value_label.setText(f"R: {reward_val:.2f}")
+        else:
+            # Handle case where data is not available
+            self.novelty_value_label.setText("N: N/A")
+            self.stress_value_label.setText("S: N/A")
+            self.reward_value_label.setText("R: N/A")
 
     def preload(self):
         if hasattr(self, 'brain_widget') and self.brain_widget and hasattr(self.brain_widget, 'update'):
