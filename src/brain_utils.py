@@ -1,17 +1,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 class ConsoleOutput:
-    """Writes text to a QtGui.QTextEdit.
-
-    Attributes:
-        text_edit: The QtGui.QTextEdit to write to.
-    """
-def __init__(self, text_edit):
-        """Initializes the object with a text edit instance.
-
-        Args:
-            text_edit: The text edit instance to be associated with this object.
-        """
+    def __init__(self, text_edit):
         self.text_edit = text_edit
 
     def write(self, text):
