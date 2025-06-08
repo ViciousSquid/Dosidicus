@@ -503,7 +503,28 @@ class TamagotchiLogic:
         scene_rect = self.user_interface.scene.sceneRect()
         new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
         
-        decoration.setPos(new_x, current_pos.y())
+        # Create an animation to make the movement smoother using the correct classes
+        # 1. Create a QTimeLine for the animation duration.
+        timeLine = QtCore.QTimeLine(300)  # 300 ms duration
+        timeLine.setFrameRange(0, 100)
+        timeLine.setEasingCurve(QtCore.QEasingCurve.OutCubic)
+
+        # 2. Create a QGraphicsItemAnimation.
+        animation = QtWidgets.QGraphicsItemAnimation()
+        animation.setItem(decoration)
+        animation.setTimeLine(timeLine)
+
+        # 3. Set the animation steps.
+        animation.setPosAt(0, current_pos) # Start at the current position
+        animation.setPosAt(1, QtCore.QPointF(new_x, current_pos.y())) # End at the new position
+
+        # 4. Start the animation.
+        timeLine.start()
+
+        # 5. Store the animation objects to prevent them from being garbage collected prematurely.
+        #    We can attach them to the item being animated.
+        decoration._animation = animation
+        decoration._timeline = timeLine
 
     def apply_decoration_effects(self, active_decorations):
         """Apply effects from nearby decorations"""

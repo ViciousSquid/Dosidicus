@@ -729,17 +729,17 @@ class BrainWidget(QtWidgets.QWidget):
             if counter_key not in self.neurogenesis_data:
                 self.neurogenesis_data[counter_key] = 0
         if 'last_neuron_time' not in self.neurogenesis_data:
-             self.neurogenesis_data['last_neuron_time'] = time.time() - self.neurogenesis_config.get('cooldown', 300)
+            self.neurogenesis_data['last_neuron_time'] = time.time() - self.neurogenesis_config.get('cooldown', 300)
 
 
         # Update neurogenesis counters based on internal state and new_state triggers
         if 'curiosity' in self.state and self.state['curiosity'] > 75:
             self.neurogenesis_data['novelty_counter'] += 0.1
         if ('anxiety' in self.state and self.state['anxiety'] > 80) or \
-           ('cleanliness' in self.state and self.state['cleanliness'] < 20):
+        ('cleanliness' in self.state and self.state['cleanliness'] < 20):
             self.neurogenesis_data['stress_counter'] += 0.25
         if ('happiness' in self.state and self.state['happiness'] > 85) or \
-           ('satisfaction' in self.state and self.state['satisfaction'] > 85):
+        ('satisfaction' in self.state and self.state['satisfaction'] > 85):
             self.neurogenesis_data['reward_counter'] += 0.2
 
         if 'anxiety' in self.state and self.state['anxiety'] > 75:
@@ -824,14 +824,14 @@ class BrainWidget(QtWidgets.QWidget):
             
             # Avoid repeating the same type twice in a row if possible
             if neuron_type_to_create == self.last_neurogenesis_type:
-                 found_different = False
-                 for p_type, _ in potential_triggers:
-                     if p_type != self.last_neurogenesis_type:
-                         neuron_type_to_create = p_type
-                         found_different = True
-                         break
-                 if not found_different:
-                      neuron_type_to_create = None # Only create if different type available
+                found_different = False
+                for p_type, _ in potential_triggers:
+                    if p_type != self.last_neurogenesis_type:
+                        neuron_type_to_create = p_type
+                        found_different = True
+                        break
+                if not found_different:
+                    neuron_type_to_create = None # Only create if different type available
 
 
         if neuron_type_to_create:
@@ -850,6 +850,10 @@ class BrainWidget(QtWidgets.QWidget):
                     self.neurogenesis_data['novelty_counter'] = 0
                 elif neuron_type_to_create == 'stress':
                     self.neurogenesis_data['stress_counter'] = 0
+                    # --- START: Permanently reduce anxiety ---
+                    if 'anxiety' in self.state:
+                        self.state['anxiety'] = max(0, self.state['anxiety'] - 10)
+                    # --- END: Permanently reduce anxiety ---
                 self.update() # Redraw to show new neuron & connections
             else:
                 self.last_neurogenesis_type = None # Reset if creation failed
@@ -1289,6 +1293,34 @@ class BrainWidget(QtWidgets.QWidget):
             end = self.neuron_positions[target]
             start_point = QtCore.QPointF(float(start[0]), float(start[1]))
             end_point = QtCore.QPointF(float(end[0]), float(end[1]))
+
+            # --- START: Revised logic for Stress->Anxiety connection ---
+            # Check if the connection is between any stress neuron and the anxiety neuron
+            is_stress_to_anxiety = (source.lower().startswith('stress') and target.lower() == 'anxiety') or \
+                                (target.lower().startswith('stress') and source.lower() == 'anxiety')
+
+            if is_stress_to_anxiety:
+                pen = QtGui.QPen(QtGui.QColor("lightblue"))
+                pen.setWidth(3)  # A thick line
+                painter.setPen(pen)
+                painter.drawLine(start_point, end_point)
+
+                # Draw the 'inhibitory' label
+                font = painter.font()
+                # The painter is already scaled, so we use a fixed font size for clarity
+                font.setPointSize(8)
+                painter.setFont(font)
+                
+                # Calculate midpoint for the label
+                mid_point = (start_point + end_point) / 2.0
+                
+                # Offset the label below the line, relative to the current painter scale
+                offset = QtCore.QPointF(0, 15) 
+                
+                painter.setPen(QtGui.QColor(0,0,0)) # Black text for readability
+                painter.drawText(QtCore.QPointF(mid_point.x(), mid_point.y() + offset.y()), "inhibitory")
+                continue # Skip the default drawing logic for this specific connection
+            # --- END: Revised logic ---
             
             # Default connection appearance
             anim_weight = weight
