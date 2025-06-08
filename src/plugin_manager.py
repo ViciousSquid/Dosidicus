@@ -304,8 +304,8 @@ class PluginManager:
         module = plugin_data["module"]
         original_plugin_name_display = plugin_data.get("original_name", plugin_name)
 
-        self.logger.info(f"Attempting to load plugin '{original_plugin_name_display}' (key: '{plugin_name}')")
-        self.logger.info(f"Plugin '{plugin_name}': Module '{module.__name__}' found.")
+        #self.logger.info(f"Attempting to load plugin '{original_plugin_name_display}' (key: '{plugin_name}')")
+        #self.logger.info(f"Plugin '{plugin_name}': Module '{module.__name__}' found.")
 
         required_plugins = plugin_data.get("requires", [])
         if required_plugins:
@@ -314,10 +314,10 @@ class PluginManager:
                 if required_name_lower not in self.plugins:
                     missing_plugins.append(required_name_lower)
             if missing_plugins:
-                self.logger.error(f"Plugin '{plugin_name}' requires missing plugin(s): {', '.join(missing_plugins)}.")
-                self.logger.error(f"Plugin '{plugin_name}': Dependency check failed.")
+                #self.logger.error(f"Plugin '{plugin_name}' requires missing plugin(s): {', '.join(missing_plugins)}.")
+                #self.logger.error(f"Plugin '{plugin_name}': Dependency check failed.")
                 return False
-        self.logger.info(f"Plugin '{plugin_name}': Dependencies satisfied.")
+        #self.logger.info(f"Plugin '{plugin_name}': Dependencies satisfied.")
 
         if not hasattr(module, "initialize"):
             self.logger.error(f"Plugin '{plugin_name}' has no 'initialize' function.")
@@ -377,9 +377,9 @@ class PluginManager:
             result = self.load_plugin(plugin_name_key) 
             results[plugin_name_key] = result
 
-        self.logger.info(f"Finished loading all plugins. Results: {results}")
-        self.logger.info(f"Currently loaded plugins in self.plugins: {list(self.plugins.keys())}")
-        self.logger.info(f"Currently enabled plugins: {list(self.enabled_plugins)}")
+        #self.logger.info(f"Finished loading all plugins. Results: {results}")
+        #self.logger.info(f"Currently loaded plugins in self.plugins: {list(self.plugins.keys())}")
+        #self.logger.info(f"Currently enabled plugins: {list(self.enabled_plugins)}")
         
         return results
     

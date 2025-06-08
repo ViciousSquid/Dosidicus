@@ -1322,15 +1322,19 @@ class Ui:
         scene_rect = self.scene.sceneRect()
         new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
         
-        decoration.setPos(new_x, current_pos.y())
-
-        # Create a small animation to make the movement smoother
-        animation = QtCore.QPropertyAnimation(decoration, b"pos")
-        animation.setDuration(300)  # 300 ms duration
+        # Use QVariantAnimation as QGraphicsItem is not a QObject
+        animation = QtCore.QVariantAnimation()
         animation.setStartValue(current_pos)
         animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
+        animation.setDuration(300)  # 300 ms duration
         animation.setEasingCurve(QtCore.QEasingCurve.OutCubic)
-        animation.start()
+
+        # On each frame of the animation, update the decoration's position
+        animation.valueChanged.connect(decoration.setPos)
+
+        # Store animation to prevent garbage collection and start it
+        decoration._animation = animation
+        animation.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():

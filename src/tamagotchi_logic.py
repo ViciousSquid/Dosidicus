@@ -501,30 +501,24 @@ class TamagotchiLogic:
         
         # Ensure the decoration stays within the scene boundaries
         scene_rect = self.user_interface.scene.sceneRect()
-        new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
+        new_x = max(scene_rect.left(), min(new_x, self.user_interface.window_width - decoration.boundingRect().width()))
         
-        # Create an animation to make the movement smoother using the correct classes
-        # 1. Create a QTimeLine for the animation duration.
-        timeLine = QtCore.QTimeLine(300)  # 300 ms duration
-        timeLine.setFrameRange(0, 100)
-        timeLine.setEasingCurve(QtCore.QEasingCurve.OutCubic)
-
-        # 2. Create a QGraphicsItemAnimation.
-        animation = QtWidgets.QGraphicsItemAnimation()
-        animation.setItem(decoration)
-        animation.setTimeLine(timeLine)
-
-        # 3. Set the animation steps.
-        animation.setPosAt(0, current_pos) # Start at the current position
-        animation.setPosAt(1, QtCore.QPointF(new_x, current_pos.y())) # End at the new position
-
-        # 4. Start the animation.
-        timeLine.start()
-
-        # 5. Store the animation objects to prevent them from being garbage collected prematurely.
-        #    We can attach them to the item being animated.
+        # Use QVariantAnimation because QGraphicsPixmapItem does not inherit from QObject.
+        # This animation will interpolate the position value for us.
+        animation = QtCore.QVariantAnimation()
+        animation.setStartValue(current_pos)
+        animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
+        animation.setDuration(300)  # 300 ms duration
+        animation.setEasingCurve(QtCore.QEasingCurve.OutCubic)
+        
+        # Connect the animation's valueChanged signal to the item's setPos method
+        animation.valueChanged.connect(decoration.setPos)
+        
+        # Store the animation object to prevent it from being garbage collected
         decoration._animation = animation
-        decoration._timeline = timeLine
+        
+        # Start the animation and have it delete itself when finished
+        animation.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
 
     def apply_decoration_effects(self, active_decorations):
         """Apply effects from nearby decorations"""

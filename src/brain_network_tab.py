@@ -4,7 +4,7 @@ import time
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .brain_dialogs import StimulateDialog, DiagnosticReportDialog
-from .display_scaling import DisplayScaling # Activated this import
+from .display_scaling import DisplayScaling 
 
 class NetworkTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
@@ -67,16 +67,6 @@ class NetworkTab(BrainBaseTab):
         self.hebbian_timer_label.setStyleSheet("color: white;")
         self.hebbian_timer_label.setFont(timer_font)
         timers_layout.addWidget(self.hebbian_timer_label)
-
-        timer_separator = QtWidgets.QLabel("|")
-        timer_separator.setStyleSheet("color: white;")
-        timer_separator.setFont(timer_font)
-        timers_layout.addWidget(timer_separator)
-        
-        self.neurogenesis_timer_label = QtWidgets.QLabel("NeuroGenesis: XX")
-        self.neurogenesis_timer_label.setStyleSheet("color: white;")
-        self.neurogenesis_timer_label.setFont(timer_font)
-        timers_layout.addWidget(self.neurogenesis_timer_label)
         
         metrics_layout.addWidget(timers_container)
         self.layout.insertWidget(0, self.metrics_bar)
@@ -159,7 +149,6 @@ class NetworkTab(BrainBaseTab):
         
         self.update_metrics_display()
         self.update_hebbian_label()
-        self.update_neurogenesis_label()
 
     def _clear_layout_recursively(self, layout_to_clear):
         """Helper to recursively clear a layout and delete its widgets."""
@@ -181,18 +170,7 @@ class NetworkTab(BrainBaseTab):
         self.hebbian_timer_value = getattr(self.config, 'hebbian_cycle_seconds', 30) 
         self.hebbian_countdown.start(1000)
 
-        self.neurogenesis_countdown = QtCore.QTimer(self)
-        self.neurogenesis_countdown.timeout.connect(self.update_neurogenesis_timer)
-        default_neuro_cooldown = 180
-        if hasattr(self.config, 'neurogenesis') and isinstance(self.config.neurogenesis, dict) and 'cooldown' in self.config.neurogenesis:
-            default_neuro_cooldown = self.config.neurogenesis['cooldown']
-        elif hasattr(self.config, 'neurogenesis_cooldown'):
-            default_neuro_cooldown = self.config.neurogenesis_cooldown
-        self.neurogenesis_timer_value = default_neuro_cooldown
-        self.neurogenesis_countdown.start(1000)
-        
         self.update_hebbian_label()
-        self.update_neurogenesis_label()
 
     def update_hebbian_timer(self):
         if self.hebbian_timer_value > 0:
@@ -201,25 +179,9 @@ class NetworkTab(BrainBaseTab):
             self.hebbian_timer_value = getattr(self.config, 'hebbian_cycle_seconds', 30)
         self.update_hebbian_label()
 
-    def update_neurogenesis_timer(self):
-        if self.neurogenesis_timer_value > 0:
-            self.neurogenesis_timer_value -= 1
-        else:
-            default_neuro_cooldown = 180
-            if hasattr(self.config, 'neurogenesis') and isinstance(self.config.neurogenesis, dict) and 'cooldown' in self.config.neurogenesis:
-                default_neuro_cooldown = self.config.neurogenesis['cooldown']
-            elif hasattr(self.config, 'neurogenesis_cooldown'):
-                 default_neuro_cooldown = self.config.neurogenesis_cooldown
-            self.neurogenesis_timer_value = default_neuro_cooldown
-        self.update_neurogenesis_label()
-
     def update_hebbian_label(self):
         if hasattr(self, 'hebbian_timer_label'):
             self.hebbian_timer_label.setText(f"Hebbian: {self.hebbian_timer_value}")
-
-    def update_neurogenesis_label(self):
-        if hasattr(self, 'neurogenesis_timer_label'):
-            self.neurogenesis_timer_label.setText(f"NeuroGenesis: {self.neurogenesis_timer_value}")
 
     def update_metrics_display(self):
         neuron_count, connection_count, health_value = "N/A", "N/A", "N/A"
@@ -248,20 +210,6 @@ class NetworkTab(BrainBaseTab):
         elif hasattr(self.brain_widget, 'hebbian_countdown_seconds'):
             self.hebbian_timer_value = self.brain_widget.hebbian_countdown_seconds
         self.update_hebbian_label()
-
-        if hasattr(self.brain_widget, 'neurogenesis_manager') and hasattr(self.brain_widget.neurogenesis_manager, 'get_cooldown_remaining'):
-            self.neurogenesis_timer_value = self.brain_widget.neurogenesis_manager.get_cooldown_remaining()
-        elif hasattr(self.brain_widget, 'neurogenesis_data') and 'last_neuron_time' in self.brain_widget.neurogenesis_data and self.brain_widget.neurogenesis_data['last_neuron_time'] is not None:
-            cooldown_duration = 180 
-            if hasattr(self.config, 'neurogenesis') and isinstance(self.config.neurogenesis, dict) and 'cooldown' in self.config.neurogenesis:
-                cooldown_duration = self.config.neurogenesis['cooldown']
-            elif hasattr(self.config, 'neurogenesis_cooldown'):
-                 cooldown_duration = self.config.neurogenesis_cooldown
-            
-            time_since_last = time.time() - self.brain_widget.neurogenesis_data['last_neuron_time']
-            remaining_cooldown = max(0, cooldown_duration - time_since_last)
-            self.neurogenesis_timer_value = int(remaining_cooldown)
-        self.update_neurogenesis_label()
 
         # --- Update Neurogenesis Values Display ---
         if self.brain_widget and hasattr(self.brain_widget, 'neurogenesis_data') and self.brain_widget.neurogenesis_data is not None:
