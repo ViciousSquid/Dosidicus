@@ -310,40 +310,48 @@ class RockInteractionManager:
 
     def update_throw_animation(self):
         """Handles the physics update for thrown rocks"""
-        if not hasattr(self.squid, 'carried_rock') or not self.squid.carried_rock:
+        if not hasattr(self, 'squid') or not self.squid.carried_rock:
             self.throw_animation_timer.stop()
             self.cleanup_after_throw()
             return
-        
+
         rock = self.squid.carried_rock
         new_x = rock.x() + self.throw_velocity_x
         new_y = rock.y() + self.throw_velocity_y
-        
+
         # Apply gravity (reduced from 0.5 to 0.3 for slower descent)
         self.throw_velocity_y += 0.3
-        
+
+        # Apply friction to the horizontal velocity
+        friction_coefficient = 0.98
+        self.throw_velocity_x *= friction_coefficient
+
         # Boundary checks
         scene_rect = self.scene.sceneRect()
         rock_rect = rock.boundingRect()
-        
+
         # Left/right boundaries with reduced bounce
         if new_x < scene_rect.left():
             new_x = scene_rect.left()
-            self.throw_velocity_x *= -0.5  # Reduced from -0.7
+            self.throw_velocity_x *= -0.2
         elif new_x > scene_rect.right() - rock_rect.width():
             new_x = scene_rect.right() - rock_rect.width()
-            self.throw_velocity_x *= -0.5
-        
+            self.throw_velocity_x *= -0.2
+
         # Top/bottom boundaries
         if new_y < scene_rect.top():
             new_y = scene_rect.top()
-            self.throw_velocity_y *= -0.5  # Reduced bounce
-        elif new_y > scene_rect.bottom() - rock_rect.height():
-            new_y = scene_rect.bottom() - rock_rect.height()
-            # MODIFIED: Reverse and dampen y-velocity for bounce instead of stopping.
-            self.throw_velocity_y *= -0.5 
-        
+            self.throw_velocity_y *= -0.2
+        elif new_y > scene_rect.bottom() - rock_rect.height() - 50:
+            new_y = scene_rect.bottom() - rock_rect.height() - 50
+            self.throw_velocity_y *= -0.2
+
         rock.setPos(new_x, new_y)
+
+        # Stop the animation if the rock has slowed down enough
+        if abs(self.throw_velocity_x) < 0.1 and abs(self.throw_velocity_y) < 0.1 and new_y >= scene_rect.bottom() - rock_rect.height() - 51:
+            self.throw_animation_timer.stop()
+            self.cleanup_after_throw()
 
     def cleanup(self):
         """Reset all rock interaction state"""

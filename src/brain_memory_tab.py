@@ -340,6 +340,13 @@ class MemoryTab(BrainBaseTab):
     
     def _get_memory_color(self, memory):
         """Determine the background color for a memory based on its valence"""
+        # Check for "positive:" or "negative:" prefix in the formatted value
+        formatted_value = memory.get('formatted_value', '').lower()
+        if formatted_value.startswith('positive:'):
+            return "#D1FFD1"  # Pastel green for positive
+        if formatted_value.startswith('negative:'):
+            return "#FFD1DC"  # Pastel red for negative
+            
         # Check for negative memories (startled events)
         if memory.get('category') == 'mental_state' and memory.get('key') == 'startled':
             return "#FFD1DC"  # Pastel red for negative

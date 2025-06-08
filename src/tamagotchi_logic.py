@@ -1465,7 +1465,7 @@ class TamagotchiLogic:
         """Allow the squid to be startled after the initial delay."""
         self.initial_startle_allowed = True
         self.is_first_instance = False  # Reset the flag after the first instance
-        print("Initial startle protection period ended")
+        #print("Initial startle protection period ended")
     
     def handle_window_resize_event(self, width_change, height_change, new_size):
         """Handle window resize events with specific effects"""
@@ -1473,7 +1473,7 @@ class TamagotchiLogic:
         if not self.has_been_resized and self.initial_startle_allowed:
             self.startle_squid(source="first_resize")
             self.has_been_resized = True
-            self.add_thought("The environment changed suddenly!")
+            self.add_thought("positive: My environment got bigger!")
             self.last_window_size = new_size
             return
 
@@ -1489,7 +1489,7 @@ class TamagotchiLogic:
             self.squid.satisfaction = min(100, self.squid.satisfaction + 3)
             self.was_big = True
 
-            memory_msg = "positive: increased happiness and satisfaction from more space"
+            memory_msg = "My environment got bigger!"
             self.squid.memory_manager.add_short_term_memory(
                 'environment',
                 'window_enlarged',
