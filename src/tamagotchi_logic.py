@@ -156,6 +156,7 @@ class TamagotchiLogic:
         self.curious_interaction_cooldown = 1
         self.curious_interaction_cooldown_max = 5
         self.startle_cooldown = 1000
+        self.plant_calming_effect_counter = 0
 
     
 
@@ -434,6 +435,18 @@ class TamagotchiLogic:
         if active_decorations:
             self.apply_decoration_effects(active_decorations)
             
+            # NEW: Check for plant contact and update status
+            is_hiding = False
+            for decoration in active_decorations:
+                if hasattr(decoration, 'category') and decoration.category == 'plant':
+                    if decoration.collidesWithItem(self.squid.squid_item):
+                        self.squid.status = "hiding behind plant"
+                        is_hiding = True
+                        break  # Squid can only hide behind one plant at a time
+            
+            if not is_hiding and self.squid.status == "hiding behind plant":
+                self.squid.status = "roaming" # Or another default status
+                
             # Move decorations
             for decoration in active_decorations:
                 decoration_pos = decoration.pos()
@@ -496,36 +509,33 @@ class TamagotchiLogic:
         """Apply effects from nearby decorations"""
         if not active_decorations:
             return
-        
-        # Calculate cumulative effects
+
         effects = {}
         strongest_effect = 0
         strongest_decoration = None
-        
+
         for decoration in active_decorations:
-            # Skip decorations without a valid filename
             if not hasattr(decoration, 'filename') or decoration.filename is None:
                 continue
-                
-            # Skip decorations without valid stat multipliers
-            if not hasattr(decoration, 'stat_multipliers') or not decoration.stat_multipliers:
+            if not hasattr(decoration, 'stat_modifiers') or not decoration.stat_modifiers:
                 continue
-                
-            # Find strongest decoration
-            max_multiplier = max(decoration.stat_multipliers.values())
-            if max_multiplier > strongest_effect:
-                strongest_effect = max_multiplier
+
+            # Find the decoration with the strongest effect (absolute value)
+            max_modifier = max(abs(val) for val in decoration.stat_modifiers.values())
+            if max_modifier > strongest_effect:
+                strongest_effect = max_modifier
                 strongest_decoration = decoration
-        
-        # Apply effects if we found a valid decoration
+
         if strongest_decoration:
-            for stat, multiplier in strongest_decoration.stat_multipliers.items():
+            # Apply stat modifiers additively
+            for stat, modifier in strongest_decoration.stat_modifiers.items():
                 if hasattr(self.squid, stat):
                     current_value = getattr(self.squid, stat)
-                    new_value = min(current_value * multiplier, 100)
-                    boost = new_value - current_value
+                    new_value = current_value + modifier
+                    # Clamp the value between 0 and 100
+                    new_value = max(0, min(100, new_value))
                     setattr(self.squid, stat, new_value)
-                    effects[stat] = boost
+                    effects[stat] = modifier
 
             # Apply category-specific effects
             if strongest_decoration.category == 'plant':
@@ -536,16 +546,13 @@ class TamagotchiLogic:
                 old_satisfaction = self.squid.satisfaction
                 self.squid.satisfaction = min(self.squid.satisfaction + 5, 100)
                 effects['satisfaction'] = effects.get('satisfaction', 0) + (self.squid.satisfaction - old_satisfaction)
-        
-        # If we found a valid strongest decoration, record the memory
+
         if strongest_decoration and hasattr(strongest_decoration, 'filename') and strongest_decoration.filename is not None:
             self.squid.memory_manager.add_short_term_memory('decorations', strongest_decoration.filename, effects)
         else:
-            # Create a generic memory if we have effects but no valid decoration filename
             if effects:
                 self.squid.memory_manager.add_short_term_memory('decorations', 'nearby_decorations', effects)
-        
-        # Trigger Hebbian learning if we have effects
+
         if effects:
             self.update_decoration_learning(effects)
 
@@ -1334,7 +1341,27 @@ class TamagotchiLogic:
                 if self.squid.status == "hiding behind plant":
                     # Hiding among plants actively reduces anxiety over time.
                     # This makes it a tangible calming behavior for the squid.
+                    previous_anxiety = self.squid.anxiety
                     self.squid.anxiety = max(0, self.squid.anxiety - (0.5 * self.simulation_speed))
+                    
+                    if self.squid.anxiety < previous_anxiety:
+                        # Form a memory of the calming effect
+                        memory_value = "Being near plants is calming (Anxiety reduction)"
+                        self.squid.memory_manager.add_short_term_memory(
+                            'environment', 
+                            'plant_calming_effect', 
+                            memory_value,
+                            importance=1.5  # Higher importance
+                        )
+
+                        # Increment counter and check for long-term memory transfer
+                        self.plant_calming_effect_counter += 1
+                        if self.plant_calming_effect_counter >= 5:
+                            self.squid.memory_manager.transfer_to_long_term_memory(
+                                'environment', 
+                                'plant_calming_effect'
+                            )
+                            self.plant_calming_effect_counter = 0 # Reset counter
 
                 # Check if cleanliness has been too low for too long
                 if self.squid.cleanliness < 20:

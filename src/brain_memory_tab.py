@@ -3,6 +3,7 @@ from .brain_base_tab import BrainBaseTab
 from .brain_ui_utils import UiUtils
 from datetime import datetime
 
+
 class MemoryTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
         super().__init__(parent, tamagotchi_logic, brain_widget, config, debug_mode)
@@ -342,6 +343,10 @@ class MemoryTab(BrainBaseTab):
         # Check for negative memories (startled events)
         if memory.get('category') == 'mental_state' and memory.get('key') == 'startled':
             return "#FFD1DC"  # Pastel red for negative
+
+        # ADDED: Check for plant calming effect memory
+        if memory.get('key') == 'plant_calming_effect':
+            return "#D1FFD1" # Pastel green for positive
         
         # Check for memories with numerical effects
         if isinstance(memory.get('raw_value'), dict):

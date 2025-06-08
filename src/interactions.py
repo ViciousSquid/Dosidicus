@@ -340,9 +340,8 @@ class RockInteractionManager:
             self.throw_velocity_y *= -0.5  # Reduced bounce
         elif new_y > scene_rect.bottom() - rock_rect.height():
             new_y = scene_rect.bottom() - rock_rect.height()
-            self.throw_animation_timer.stop()
-            self.cleanup_after_throw()
-            return  # Stop updates when hitting bottom
+            # MODIFIED: Reverse and dampen y-velocity for bounce instead of stopping.
+            self.throw_velocity_y *= -0.5 
         
         rock.setPos(new_x, new_y)
 
