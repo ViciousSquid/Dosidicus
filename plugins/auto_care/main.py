@@ -104,7 +104,7 @@ class AutoCarePlugin:
             self.active_indicator_item = QGraphicsTextItem(f"{PLUGIN_NAME} active") 
             
             if QColor: 
-                self.active_indicator_item.setDefaultTextColor(QColor("yellow")) 
+                self.active_indicator_item.setDefaultTextColor(QColor("black")) 
             
             self.active_indicator_item.setPos(10, 10)
             self.active_indicator_item.setZValue(200) 
