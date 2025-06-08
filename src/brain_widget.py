@@ -227,6 +227,10 @@ class BrainWidget(QtWidgets.QWidget):
                 print("\x1b[31mWARNING: Disabling pruning may lead to network instability\x1b[0m")
 
         return self.pruning_enabled
+    
+    def get_stress_neuron_count(self):
+        """Counts the number of neurons that start with the name 'stress'."""
+        return len([name for name in self.neuron_positions if name.startswith('stress')])
 
     def stop_hebbian_learning(self):
         """Stop Hebbian learning immediately"""
@@ -758,7 +762,8 @@ class BrainWidget(QtWidgets.QWidget):
             if new_neuron_name:
                 self.neurogenesis_highlight = {'neuron': new_neuron_name, 'start_time': time.time(), 'duration': self.neurogenesis_config.get('highlight_duration', 5.0)}
                 self.last_neurogenesis_type = neuron_type_to_create
-                
+                self.neurogenesis_data['last_neuron_time'] = time.time()
+
                 # Reset counter AFTER creation
                 if neuron_type_to_create == 'reward': self.neurogenesis_data['reward_counter'] = 0
                 elif neuron_type_to_create == 'novelty': self.neurogenesis_data['novelty_counter'] = 0

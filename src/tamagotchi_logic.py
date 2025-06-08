@@ -750,11 +750,11 @@ class TamagotchiLogic:
     def startle_squid(self, source="unknown"):
         if not self.mental_states_enabled:
             return
-            
+
         # Add protection against startling during initialization
         if not getattr(self, 'initial_startle_allowed', False):
             return
-        
+
         try:
             # Ensure speed attributes exist
             if not hasattr(self.squid, 'base_speed'):
@@ -768,7 +768,7 @@ class TamagotchiLogic:
 
             # Change status to more descriptive startled state
             previous_status = getattr(self.squid, 'status', "roaming")
-            
+
             if source == "first_resize":
                 self.squid.status = "startled by environment change"
             elif source == "incoming_rock":
@@ -785,38 +785,60 @@ class TamagotchiLogic:
                     self.squid.status = "hiding"
                 else:
                     self.squid.status = "startled"
-                    
+
             self.squid.is_fleeing = True
             self.squid.current_speed = 180  # 2x speed boost
-            
+
             # Random direction
             self.squid.direction = random.choice(['up', 'down', 'left', 'right'])
 
+            # --- START OF RESILIENCE MODIFICATIONS ---
+
+            # 1. Get the number of stress neurons from the brain
+            stress_neuron_count = 0
+            if self.brain_window and hasattr(self.brain_window, 'brain_widget'):
+                # Assuming you added get_stress_neuron_count() to BrainWidget
+                stress_neuron_count = self.brain_window.brain_widget.get_stress_neuron_count()
+
+            # 2. Calculate resilience with diminishing returns (using natural logarithm)
+            # The +1 ensures that we don't take log(0) and that the first neuron provides a benefit.
+            resilience_factor = math.log(stress_neuron_count + 1)
+            
+            # 3. Define base anxiety increase and apply resilience
+            if source == "first_resize":
+                base_anxiety_increase = 5
+                message = "The squid noticed its environment changing!"
+                base_ink_chance = 0.6
+            else:
+                base_anxiety_increase = 15 # Slightly increased base for other startles
+                message = "The squid was startled!"
+                base_ink_chance = 0.6
+            
+            # Dampen the anxiety increase by the resilience factor
+            # The 'max(0, ...)' ensures anxiety never decreases from a startle
+            anxiety_increase = max(0, base_anxiety_increase - (resilience_factor * 5)) # Each point of resilience factor negates 5 points of anxiety
+
+            # Apply anxiety, clamped at 100
+            self.squid.anxiety = min(100, self.squid.anxiety + anxiety_increase)
+            
+            # Add a thought that shows the resilience in action
+            if stress_neuron_count > 0:
+                self.brain_window.add_thought(f"Startled, but felt {resilience_factor:.1f}x more resilient. Anxiety increased by only {anxiety_increase:.1f}.")
+
+            # --- END OF RESILIENCE MODIFICATIONS ---
+
             # First startle detection
-            is_first_startle = not hasattr(self, '_has_startled_before') #
+            is_first_startle = not hasattr(self, '_has_startled_before')
             if is_first_startle:
                 self._has_startled_before = True
-
-            # Configure based on source
-            if source == "first_resize":
-                anxiety_increase = 5 #
-                message = "The squid noticed its environment changing!" #
-                base_ink_chance = 0.6 #
-            else:
-                anxiety_increase = 10 #
-                message = "The squid was startled!" #
-                base_ink_chance = 0.6 #
 
             # Increase ink chance based on anxiety
             ink_chance = base_ink_chance
             if self.squid.anxiety > 60:
                 ink_chance = 0.9 # Increase to 90% if anxiety > 60
 
-            # Apply anxiety
-            self.squid.anxiety = min(100, self.squid.anxiety + anxiety_increase) #
-            
             # Ink cloud - Modified logic
-            produce_ink = is_first_startle or random.random() < ink_chance #
+            produce_ink = is_first_startle or random.random() < ink_chance
 
             # Create memory
             memory_value = (f"Startled! Status changed from {previous_status} to {self.squid.status}, "
@@ -1438,7 +1460,7 @@ class TamagotchiLogic:
                     # Add thoughts
                     self.brain_window.add_thought("I am exhausted and going to sleep")
             else:
-                self.squid.sleepiness = max(0, self.squid.sleepiness - (0.2 * self.simulation_speed))
+                self.squid.sleepiness = max(0, self.squid.sleepiness - (0.5 * self.simulation_speed))
                 if self.squid.sleepiness == 0:
                     self.squid.wake_up()
 
