@@ -1329,6 +1329,13 @@ class TamagotchiLogic:
                 self.update_anxiety()
                 self.update_curiosity()
 
+                # --- NEWLY ADDED ---
+                # Check for special status effects on anxiety reduction.
+                if self.squid.status == "hiding behind plant":
+                    # Hiding among plants actively reduces anxiety over time.
+                    # This makes it a tangible calming behavior for the squid.
+                    self.squid.anxiety = max(0, self.squid.anxiety - (0.5 * self.simulation_speed))
+
                 # Check if cleanliness has been too low for too long
                 if self.squid.cleanliness < 20:
                     self.cleanliness_threshold_time += 1

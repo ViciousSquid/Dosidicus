@@ -846,6 +846,11 @@ class Squid:
         """Callback when push animation finishes"""
         self.happiness = min(100, self.happiness + 5)
         self.curiosity = min(100, self.curiosity + 10)
+        
+        # --- NEWLY ADDED ---
+        # Pushing decorations is a comforting action that reduces anxiety.
+        self.anxiety = max(0, self.anxiety - 6)
+        
         self.status = "pushing decoration"
         self.tamagotchi_logic.show_message("Squid pushed a decoration")
 
