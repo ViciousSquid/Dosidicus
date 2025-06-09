@@ -273,23 +273,24 @@ class MemoryTab(BrainBaseTab):
     def _create_memory_widget(self, memory, target_layout):
         """Create a memory card widget and add it to the target layout"""
         from .display_scaling import DisplayScaling
-        
+
         # Create a frame with styled background
         memory_widget = QtWidgets.QFrame()
         memory_widget.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Raised)
         memory_widget.setLineWidth(DisplayScaling.scale(2))
-        
+
         # Set color based on memory valence
         bg_color = self._get_memory_color(memory)
         memory_widget.setStyleSheet(f"background-color: {bg_color};")
-        
+
         # Set scaled size constraints
-        memory_widget.setMinimumHeight(DisplayScaling.scale(100))
+        memory_widget.setMinimumHeight(DisplayScaling.scale(220))
         memory_widget.setMinimumWidth(DisplayScaling.scale(300))
-        
+        memory_widget.setMaximumHeight(DisplayScaling.scale(220))
+
         # Create layout
         card_layout = QtWidgets.QVBoxLayout(memory_widget)
-        
+
         # Category header - removed "Category:" prefix
         header = QtWidgets.QLabel(f"{memory.get('category', 'unknown').capitalize()}")
         font = header.font()
@@ -297,7 +298,7 @@ class MemoryTab(BrainBaseTab):
         font.setPointSize(DisplayScaling.font_size(12))
         header.setFont(font)
         card_layout.addWidget(header)
-        
+
         # Content
         content = memory.get('formatted_value', str(memory.get('value', '')))
         content_label = QtWidgets.QLabel(content)
@@ -306,7 +307,7 @@ class MemoryTab(BrainBaseTab):
         content_font.setPointSize(DisplayScaling.font_size(10))
         content_label.setFont(content_font)
         card_layout.addWidget(content_label)
-        
+
         # Timestamp at bottom
         timestamp = memory.get('timestamp', '')
         if isinstance(timestamp, str):
@@ -315,27 +316,27 @@ class MemoryTab(BrainBaseTab):
                 timestamp = datetime.fromisoformat(timestamp).strftime("%H:%M:%S")
             except Exception as e:
                 timestamp = str(memory.get('timestamp', ''))
-        
+
         time_label = QtWidgets.QLabel(f"Time: {timestamp}")
         time_font = time_label.font()
         time_font.setPointSize(DisplayScaling.font_size(8))
         time_label.setFont(time_font)
         card_layout.addWidget(time_label, alignment=QtCore.Qt.AlignRight)
-        
+
         # Importance indicator (if available)
         if 'importance' in memory:
             importance = memory.get('importance', 1)
-            if importance >= 7:
+            if importance >= 5:
                 importance_label = QtWidgets.QLabel("⭐ Important")
-                importance_label.setStyleSheet(f"color: #FF5733; font-weight: bold; font-size: {DisplayScaling.font_size(8)}px;")
+                importance_label.setStyleSheet(f"color: #FF5733; font-weight: bold; font-size: {DisplayScaling.font_sze(8)}px;")
                 card_layout.addWidget(importance_label, alignment=QtCore.Qt.AlignRight)
-        
+
         # Add to layout
         target_layout.addWidget(memory_widget)
-        
+
         # Add click handler to increase importance and potentially transfer to long-term
         memory_widget.mousePressEvent = lambda event, mem=memory: self._on_memory_card_clicked(mem)
-        
+
         return memory_widget
     
     def _get_memory_color(self, memory):
@@ -353,7 +354,7 @@ class MemoryTab(BrainBaseTab):
 
         # ADDED: Check for plant calming effect memory
         if memory.get('key') == 'plant_calming_effect':
-            return "#D1FFD1" # Pastel green for positive
+            return "#E0FFD1" # Pastel green for positive
         
         # Check for memories with numerical effects
         if isinstance(memory.get('raw_value'), dict):

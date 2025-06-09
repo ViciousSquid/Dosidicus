@@ -528,7 +528,7 @@ class BrainWidget(QtWidgets.QWidget):
                 else:
                     source = "window_resize"
 
-                self.tamagotchi_logic.startle_squid(source=source)
+                #self.tamagotchi_logic.startle_squid(source=source) #STARTLE WHEN WINDOW RESIZE
 
                 if self.debug_mode:
                     print(f"Squid startled by {source}")
@@ -1230,6 +1230,7 @@ class BrainWidget(QtWidgets.QWidget):
                 return name
         return None
 
+
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
@@ -1237,60 +1238,63 @@ class BrainWidget(QtWidgets.QWidget):
         # Fill background
         painter.fillRect(self.rect(), QtGui.QColor(240, 240, 240))
 
-        # --- Start of existing indicator drawing logic ---
-        indicator_y_position = 10 # Y position for indicators like "Fleeing!", "Startled!"
-        indicator_font = QtGui.QFont("Arial", 9, QtGui.QFont.Bold)
+        # --- Start of indicator drawing logic ---
+        indicator_y_position = 10 # Y position for indicators
+        indicator_font = QtGui.QFont("Arial", 10, QtGui.QFont.Bold) # Increased font size
         painter.setFont(indicator_font)
         font_metrics = painter.fontMetrics()
         
         active_indicators_data = []
+        # Existing indicators
         if self.state.get('is_fleeing', False): 
             active_indicators_data.append({"text": "Fleeing!", "color": QtGui.QColor(220, 20, 60)})
         if self.state.get('is_startled', False): 
             active_indicators_data.append({"text": "Startled!", "color": QtGui.QColor(255, 165, 0)})
         if self.state.get('pursuing_food', False): 
             active_indicators_data.append({"text": "Pursuing Food", "color": QtGui.QColor(60, 179, 113)})
+
+        # New indicators
+        squid_status = self.state.get('status', '').lower()
+        if self.state.get('is_eating', False) or 'eating' in squid_status:
+             active_indicators_data.append({"text": "Eating", "color": QtGui.QColor(46, 204, 113)})
+        if self.state.get('is_sleeping', False):
+             active_indicators_data.append({"text": "Sleeping", "color": QtGui.QColor(142, 68, 173)})
+        if 'rock' in squid_status or 'play' in squid_status:
+            active_indicators_data.append({"text": "Playing", "color": QtGui.QColor(241, 196, 15)})
+        if 'hiding' in squid_status:
+            active_indicators_data.append({"text": "Hiding", "color": QtGui.QColor(22, 160, 133)})
+        if self.state.get('anxiety', 0) > 70 or 'anxious' in squid_status:
+            active_indicators_data.append({"text": "Anxious", "color": QtGui.QColor(231, 76, 60)})
+        if self.state.get('curiosity', 0) > 80 or 'curious' in squid_status:
+            active_indicators_data.append({"text": "Curious", "color": QtGui.QColor(52, 152, 219)})
         
-        # --- START FIX ---
-        # Increased the number of indicators to display and the padding from the right edge.
-        indicators_to_display = active_indicators_data[:3] # Changed from 2 to 3
-        padding_horizontal, padding_vertical, spacing_between_indicators, min_left_padding, right_padding_from_widget_edge = 8, 4, 10, 10, 120 # Changed from 100 to 120
-        # --- END FIX ---
+        indicators_to_display = active_indicators_data[:3]
+        padding_horizontal, padding_vertical, spacing_between_indicators = 10, 5, 10
         
-        min_sensible_width = font_metrics.horizontalAdvance("...") + (2 * padding_horizontal)
         rect_height = font_metrics.height() + (2 * padding_vertical)
-        current_target_right_edge_x = self.width() - right_padding_from_widget_edge
-        
-        for indicator_details in reversed(indicators_to_display):
+        current_target_left_edge_x = 15 # Start 15px from the left
+
+        for indicator_details in indicators_to_display:
             indicator_text_original = indicator_details["text"]
             indicator_bg_color = indicator_details["color"]
+            
             ideal_text_width = font_metrics.horizontalAdvance(indicator_text_original)
-            ideal_rect_width = ideal_text_width + (2 * padding_horizontal)
-            max_possible_width_for_this_indicator = current_target_right_edge_x - min_left_padding
+            render_rect_width = ideal_text_width + (2 * padding_horizontal)
             
-            if max_possible_width_for_this_indicator < min_sensible_width: 
-                current_target_right_edge_x = min_left_padding - spacing_between_indicators
-                continue
-            
-            render_rect_width = min(ideal_rect_width, max_possible_width_for_this_indicator)
-            if render_rect_width < min_sensible_width: 
-                current_target_right_edge_x = min_left_padding - spacing_between_indicators
-                continue
-                
-            render_rect_start_x = current_target_right_edge_x - render_rect_width
+            render_rect_start_x = current_target_left_edge_x
             indicator_rect = QtCore.QRectF(render_rect_start_x, indicator_y_position, render_rect_width, rect_height)
             
             painter.setBrush(indicator_bg_color)
             painter.setPen(QtCore.Qt.NoPen)
             painter.drawRoundedRect(indicator_rect, 4, 4)
             
-            available_width_for_text = render_rect_width - (2 * padding_horizontal)
-            elided_text = font_metrics.elidedText(indicator_text_original, QtCore.Qt.ElideRight, available_width_for_text)
+            elided_text = font_metrics.elidedText(indicator_text_original, QtCore.Qt.ElideRight, ideal_text_width)
             text_color = QtCore.Qt.white if indicator_bg_color.lightnessF() < 0.5 else QtCore.Qt.black
             painter.setPen(text_color)
             painter.drawText(indicator_rect, QtCore.Qt.AlignCenter, elided_text)
-            current_target_right_edge_x = render_rect_start_x - spacing_between_indicators
-
+            
+            current_target_left_edge_x += render_rect_width + spacing_between_indicators
+            
         painter.save()
         
         # Calculate space used by indicators to offset neuron drawing area

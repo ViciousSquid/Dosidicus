@@ -1516,7 +1516,7 @@ class TamagotchiLogic:
 
         # Only startle for MAJOR size changes (increased threshold)
         if (abs(width_change) > 200 or abs(height_change) > 200) and random.random() < 0.3:  # Added randomness
-            self.startle_squid(source="major_resize")
+            # self.startle_squid(source="major_resize") # STARTLE WHEN WINDOW IS RESIZED
             return
 
         # Check if window got bigger
@@ -1942,8 +1942,8 @@ class TamagotchiLogic:
             if hasattr(self.squid, 'mental_state_manager') and self.squid.mental_state_manager:
                 is_startled_state = self.squid.mental_state_manager.is_state_active('startled')
             # Fallback: Check squid status if mental_state_manager is not present or doesn't have the state
-            elif hasattr(self.squid, 'status') and self.squid.status:
-                 is_startled_state = ("startled" in self.squid.status.lower())
+            elif hasattr(self, 'squid') and hasattr(self.squid, 'status') and self.squid.status:
+                    is_startled_state = ("startled" in self.squid.status.lower())
 
 
             brain_state = {
@@ -1962,7 +1962,8 @@ class TamagotchiLogic:
                 "is_startled": is_startled_state,  # Updated logic for is_startled
                 "direction": self.squid.squid_direction,
                 "position": (self.squid.squid_x, self.squid.squid_y),
-                "personality": self.squid.personality.value
+                "personality": self.squid.personality.value,
+                "status": self.squid.status
             }
 
             self.brain_window.update_brain(brain_state)
