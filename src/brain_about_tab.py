@@ -186,26 +186,33 @@ class AboutTab(BrainBaseTab):
         self.personality_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(22)}px;")
         personality_layout.addWidget(self.personality_label)
         
-        # Button container
+       # Button container
         button_container = QtWidgets.QWidget()
         button_layout = QtWidgets.QHBoxLayout(button_container)
         button_layout.setContentsMargins(0, DisplayScaling.scale(10), 0, 0)
+
+        # Add stretchable space to the left to push buttons to the center
+        button_layout.addStretch()
 
         # Add Certificate button (removed care tips button)
         certificate_button = QtWidgets.QPushButton("View Squid Certificate")
         certificate_button.clicked.connect(self.show_certificate)
         certificate_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px;")
-        button_layout.addWidget(certificate_button)
+        #button_layout.addWidget(certificate_button)
 
         # Add color picker button
-        color_button = QtWidgets.QPushButton("Change Color")
+        color_button = QtWidgets.QPushButton("Choose Colour")
         color_button.clicked.connect(self.open_color_picker)
-        color_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px;")
+        # Set background color to pink
+        color_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px; background-color: #FFC0CB;") # Hex code for pink
         button_layout.addWidget(color_button)
+
+        # Add stretchable space to the right to push buttons to the center
+        button_layout.addStretch()
 
         # Add button container to personality layout
         personality_layout.addWidget(button_container)
-        
+
         # Add all widgets to the main layout
         self.layout.addWidget(about_text)
         self.layout.addWidget(badge_widget)

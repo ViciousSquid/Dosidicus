@@ -2000,7 +2000,8 @@ class TamagotchiLogic:
                         'anxiety': squid.anxiety,
                         'curiosity': squid.curiosity,
                         'personality': squid.personality.value,
-                        'tint_color': squid.tint_color.getRgb() if squid.tint_color else None,
+                        # --- This line is added to save the color ---
+                        'tint_color': squid.tint_color.getRgb() if squid.tint_color else None
                     },
                     'tamagotchi_logic': {
                         'cleanliness_threshold_time': self.cleanliness_threshold_time,
@@ -2024,6 +2025,11 @@ class TamagotchiLogic:
                 'LongTerm': squid.memory_manager.long_term_memory,
                 'plugin_data': plugin_data
             }
+
+            #print("Debug: Short Term Memory")
+            #print(json.dumps(save_data['ShortTerm'], indent=2))
+            #print("Debug: Long Term Memory")
+            #print(json.dumps(save_data['LongTerm'], indent=2))
 
             filepath = self.save_manager.save_game(save_data, is_autosave)
             print(f"Game {'autosaved' if is_autosave else 'saved'} successfully to {filepath}")

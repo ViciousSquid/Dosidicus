@@ -816,13 +816,15 @@ class Squid:
         if 'name' in state:
             self.name = state['name']
         
-        # Load the tint color if it exists in the saved state
+        # --- This block is added to load the color ---
         if 'tint_color' in state and state['tint_color']:
+            # Recreate the QColor object from the saved RGBA tuple
             self.tint_color = QtGui.QColor(*state['tint_color'])
         else:
             self.tint_color = None
-
+        
         self.squid_item.setPos(self.squid_x, self.squid_y)
+        # We must update the image to apply the loaded tint
         self.update_squid_image()
 
     def push_decoration(self, decoration, direction):
