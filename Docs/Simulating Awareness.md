@@ -44,7 +44,7 @@ The new neurons then participate in Hebbian learning, allowing the network to ad
 
 New neurons add capacity to learn novel patterns (e.g., a "novelty" neuron helps recognize new objects).
 
-Stress-induced neurons may improve threat response.
+Stress-induced neurons reduce sensitivity to anxiety and stress
 
 Reward-based neurons reinforce positive behaviors.
 
