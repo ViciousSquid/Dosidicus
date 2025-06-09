@@ -2000,7 +2000,6 @@ class TamagotchiLogic:
                         'anxiety': squid.anxiety,
                         'curiosity': squid.curiosity,
                         'personality': squid.personality.value,
-                        # --- This line is added to save the color ---
                         'tint_color': squid.tint_color.getRgb() if squid.tint_color else None
                     },
                     'tamagotchi_logic': {
