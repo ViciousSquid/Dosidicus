@@ -320,23 +320,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.squid.memory_manager.clear_all_memories()
         self.show_splash_screen()
 
-    def start_new_game(self):
-        """Handle new game request"""
-        # Clear existing objects first
-        self.clear_all_scene_objects()
-        
-        self.create_new_game()
-        self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
-        self.squid.tamagotchi_logic = self.tamagotchi_logic
-        self.user_interface.tamagotchi_logic = self.tamagotchi_logic
-        self.brain_window.tamagotchi_logic = self.tamagotchi_logic
-        # Add this line to propagate the reference to all tabs
-        if hasattr(self.brain_window, 'set_tamagotchi_logic'):
-            self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
-        
-        self.brain_window.update_personality_display(self.squid.personality)
-        self.tamagotchi_logic.set_simulation_speed(0)
-        self.show_splash_screen()
+    def start_new_game(self, personality=None):
+        """Starts a new game, either from the menu or after the splash screen."""
+        if self.tamagotchi_logic:
+            self.tamagotchi_logic.autosave_timer.stop()
+
+        if personality is None:
+            personality = self.personality_selection_dialog()
+            if personality is None:
+                return  # User cancelled
+
+        # Re-initialize the UI and logic for a new game
+        self.ui = Ui(self, self.debug_mode)
+        self.squid = Squid(self.ui, personality=personality, neuro_cooldown=self.neuro_cooldown)
+        self.tamagotchi_logic = TamagotchiLogic(self.ui, self.squid, self.brain_window)
+
+        self.ui.set_tamagotchi_logic(self.tamagotchi_logic)
+        self.squid.ui = self.ui  # Ensure squid has the latest UI reference
+
+        self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
+
+        # The existing method gathers all squid data and updates the entire brain window.
+        # This is the correct way to propagate the new squid's state.
+        self.tamagotchi_logic.update_squid_brain()
+
+        self.tamagotchi_logic.start_autosave()
+        self.show()
+        self.brain_window.show()
 
     def clear_all_scene_objects(self):
         """Clear all objects from the scene for a fresh start"""
