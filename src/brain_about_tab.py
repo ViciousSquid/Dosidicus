@@ -197,6 +197,12 @@ class AboutTab(BrainBaseTab):
         certificate_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px;")
         button_layout.addWidget(certificate_button)
 
+        # Add color picker button
+        color_button = QtWidgets.QPushButton("Change Color")
+        color_button.clicked.connect(self.open_color_picker)
+        color_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px;")
+        button_layout.addWidget(color_button)
+
         # Add button container to personality layout
         personality_layout.addWidget(button_container)
         
@@ -206,6 +212,13 @@ class AboutTab(BrainBaseTab):
         self.layout.addWidget(personality_container)
         
         print(f"AboutTab initialization complete - Personality: {personality}")
+
+    def open_color_picker(self):
+        """Open a color picker dialog to change the squid's tint."""
+        color = QtWidgets.QColorDialog.getColor()
+        if color.isValid():
+            if self.tamagotchi_logic and self.tamagotchi_logic.squid:
+                self.tamagotchi_logic.squid.apply_tint(color)
 
     def edit_name(self):
         """Allow user to edit squid name on double-click"""

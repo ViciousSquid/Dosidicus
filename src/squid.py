@@ -13,6 +13,7 @@ from .decision_engine import DecisionEngine
 from .image_cache import ImageCache
 
 class Squid:
+
     def __init__(self, user_interface, tamagotchi_logic=None, personality=None, neuro_cooldown=None):
         self.ui = user_interface
         self.tamagotchi_logic = tamagotchi_logic
@@ -20,6 +21,7 @@ class Squid:
         self.push_animation = None
         self.startled_icon = None
         self.startled_icon_offset = QtCore.QPointF(0, -100)
+        self.tint_color = None
 
         # Set neurogenesis cooldown (default to 200 seconds if not specified)
         self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 200
@@ -316,6 +318,11 @@ class Squid:
                     old_value=old_value,
                     new_value=self._curiosity
                 )
+
+    def apply_tint(self, color):
+        """Apply a color tint to the squid's image."""
+        self.tint_color = color
+        self.update_squid_image()
 
     def set_animation_speed(self, speed):
         self.animation_speed = speed
@@ -809,7 +816,14 @@ class Squid:
         if 'name' in state:
             self.name = state['name']
         
+        # Load the tint color if it exists in the saved state
+        if 'tint_color' in state and state['tint_color']:
+            self.tint_color = QtGui.QColor(*state['tint_color'])
+        else:
+            self.tint_color = None
+
         self.squid_item.setPos(self.squid_x, self.squid_y)
+        self.update_squid_image()
 
     def push_decoration(self, decoration, direction):
         """Push a decoration with proper animation handling"""
@@ -1464,20 +1478,14 @@ class Squid:
         self.squid_item.setPixmap(self.current_image())
 
     def current_image(self):
-        """Return the current image of the squid"""
-        # Check if we're in startled transition
+        """Return the current image of the squid, with tint applied only to white parts."""
+        # Base image selection logic (same as before)
         if hasattr(self, 'startled_transition') and self.startled_transition:
-            # Use the startled image directly during transition
-            return self.startled_image
-        
-        # Check if we're in startled state
-        if hasattr(self, 'status') and self.status == "startled" and not self.is_sleeping:
-            # Use a side-facing frame which looks more natural after being startled
+            base_image = self.startled_image
+        elif hasattr(self, 'status') and self.status == "startled" and not self.is_sleeping:
             direction = "left" if random.random() < 0.5 else "right"
-            return self.images[f"{direction}{self.current_frame + 1}"]
-        
-        # Normal image selection
-        if self.is_sleeping:
+            base_image = self.images[f"{direction}{self.current_frame + 1}"]
+        elif self.is_sleeping:
             base_image = self.images[f"sleep{self.current_frame + 1}"]
         elif self.squid_direction == "left":
             base_image = self.images[f"left{self.current_frame + 1}"]
@@ -1487,8 +1495,49 @@ class Squid:
             base_image = self.images[f"up{self.current_frame + 1}"]
         else:
             base_image = self.images["left1"]
-        
-        return base_image
+
+        # If no tint color is set, return the original image
+        if not self.tint_color:
+            return base_image
+
+        # --- Corrected Tinting Logic ---
+
+        # Convert the QPixmap to a QImage for pixel-level access
+        source_image = base_image.toImage()
+
+        # Create a new QImage to draw our modified squid onto.
+        # Using Format_ARGB32 is crucial for handling transparency correctly
+        # and preventing the black background issue.
+        output_image = QtGui.QImage(source_image.size(), QtGui.QImage.Format_ARGB32)
+        output_image.fill(QtCore.Qt.transparent)  # Start with a fully transparent canvas
+
+        white_threshold = 240
+
+        # Iterate over every pixel in the source image
+        for y in range(source_image.height()):
+            for x in range(source_image.width()):
+                # Get the color of the current pixel from the source
+                pixel_color = QtGui.QColor(source_image.pixel(x, y))
+
+                # Check if the pixel is 'white enough' and not fully transparent
+                if (pixel_color.alpha() > 0 and
+                    pixel_color.red() > white_threshold and
+                    pixel_color.green() > white_threshold and
+                    pixel_color.blue() > white_threshold):
+                    
+                    # If it's a white pixel, apply the tint color
+                    new_color = QtGui.QColor(self.tint_color)
+                    # Preserve the original pixel's alpha value to keep smooth edges
+                    new_color.setAlpha(pixel_color.alpha())
+                    output_image.setPixelColor(x, y, new_color)
+                else:
+                    # For any other pixel (the outline, or fully transparent areas),
+                    # just copy it directly from the source. This ensures the background
+                    # remains transparent.
+                    output_image.setPixel(x, y, source_image.pixel(x, y))
+
+        # Convert the modified QImage back to a QPixmap and return it
+        return QtGui.QPixmap.fromImage(output_image)
 
     def move_randomly(self):
         if random.random() < 0.20:
