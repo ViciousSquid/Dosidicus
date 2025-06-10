@@ -913,19 +913,41 @@ class Squid:
             self.status = "searching for food"
             self.move_randomly()
 
+    def get_visible_objects(self, object_list):
+        """
+        Finds objects from a given list that are within the squid's vision cone.
+        This is a generic helper method.
+        """
+        visible_objects = []
+        for item in object_list:
+            item_x, item_y = item.pos().x(), item.pos().y()
+            if self.is_in_vision_cone(item_x, item_y):
+                visible_objects.append(item)
+        return visible_objects
+
     def get_visible_food(self):
+        """
+        Returns the positions of visible food items, prioritized by type (sushi first).
+        This method is now refactored to use the generic get_visible_objects.
+        """
         if self.tamagotchi_logic is None:
             return []
-        visible_food = []
-        for food_item in self.tamagotchi_logic.food_items:
-            food_x, food_y = food_item.pos().x(), food_item.pos().y()
-            # Only add food if it's in the view cone
-            if self.is_in_vision_cone(food_x, food_y):
-                if getattr(food_item, 'is_sushi', False):
-                    visible_food.insert(0, (food_x, food_y))  # Prioritize sushi
-                else:
-                    visible_food.append((food_x, food_y))  # Add cheese to the end
-        return visible_food
+        
+        # Use the new generic method to find all food items in view
+        all_visible_food_items = self.get_visible_objects(self.tamagotchi_logic.food_items)
+
+        if not all_visible_food_items:
+            return []
+
+        # Sort visible food to prioritize sushi
+        sushi_items = [item for item in all_visible_food_items if getattr(item, 'is_sushi', False)]
+        other_food_items = [item for item in all_visible_food_items if not getattr(item, 'is_sushi', False)]
+        
+        # Return sorted positions
+        sorted_positions = [(food.pos().x(), food.pos().y()) for food in sushi_items]
+        sorted_positions.extend([(food.pos().x(), food.pos().y()) for food in other_food_items])
+        
+        return sorted_positions
 
     def is_in_vision_cone(self, x, y):
         """

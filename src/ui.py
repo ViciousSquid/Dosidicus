@@ -14,6 +14,7 @@ from .statistics_window import StatisticsWindow
 from .brain_tool import NeuronInspector as EnhancedNeuronInspector
 from .plugin_manager_dialog import PluginManagerDialog
 from .tutorial import TutorialManager
+from .vision import VisionWindow
 
 class DecorationItem(QtWidgets.QLabel):
     def __init__(self, pixmap, filename):
@@ -1578,9 +1579,13 @@ class Ui:
         elif hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'squid') and hasattr(self.tamagotchi_logic.squid, 'toggle_view_cone'): # Fallback if connect_view_cone_action is not on logic
              self.view_cone_action.triggered.connect(self.tamagotchi_logic.squid.toggle_view_cone)
         debug_menu.addAction(self.view_cone_action)
+
+        self.vision_action = QtWidgets.QAction("Squid Vision", self.window)
+        self.vision_action.triggered.connect(self.show_vision_window)
+        debug_menu.addAction(self.vision_action)
         
         # Neurogenesis Debug Window Action
-        self.neurogenesis_debug_action = QtWidgets.QAction('Neurogenesis Debug Info', self.window)
+        self.neurogenesis_debug_action = QtWidgets.QAction('Neurogenesis Debug', self.window)
         self.neurogenesis_debug_action.triggered.connect(self.show_neurogenesis_debug) 
         debug_menu.addAction(self.neurogenesis_debug_action)
 
@@ -1592,6 +1597,23 @@ class Ui:
         # Add Plugins Menu
         self.plugins_menu = self.menu_bar.addMenu('Plugins')
         # This menu will be populated later when the plugin manager is available
+
+    def show_vision_window(self):
+        """Creates and shows the Squid's Vision window."""
+        # Check if the window already exists and is visible to avoid duplicates.
+        # This is good practice for dialogs that can be opened and closed.
+        if not hasattr(self, 'vision_window') or self.vision_window is None or not self.vision_window.isVisible():
+            if self.tamagotchi_logic:
+                # Create a new instance, passing the required logic and parent window
+                self.vision_window = VisionWindow(self.tamagotchi_logic, self.window)
+                self.vision_window.show()
+            else:
+                # Handle case where game logic is not yet available
+                QtWidgets.QMessageBox.warning(self.window, "Error", "Game logic is not yet initialized.")
+        else:
+            # If it already exists and is visible, just bring it to the front
+            self.vision_window.raise_()
+            self.vision_window.activateWindow()
 
     def set_simulation_speed(self, speed):
         """Set the simulation speed (0 = paused, 1 = normal, 2 = fast, 3 = very fast)"""

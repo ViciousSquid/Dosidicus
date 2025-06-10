@@ -1,23 +1,46 @@
-# Decision engine version 3.0 - June 2025 - Emergent Behavior Revamp
+# Decision engine version 3.11 - June 2025
+#
+# changelog: 
+# 3.11 - Added vision
+#
 
 import random
 from .personality import Personality
-import math # Import math for more complex calculations
+import math
 
 class DecisionEngine:
     def __init__(self, squid):
         self.squid = squid
-    
+
     def make_decision(self):
         """
         Decision-making process designed for emergent behavior.
         Actions are not chosen from a simple weighted list but emerge from the interplay
-        of physiological needs, memories, personality, and environmental context.
+        of physiological needs, memories,personality, and environmental context.
         """
         # =================================================================
         # 1. GATHER SENSORY AND INTERNAL STATE DATA
         # =================================================================
         # This creates a complete snapshot of the squid's current condition.
+
+        # Gather all relevant world objects to check for visibility
+        all_world_objects = []
+        if hasattr(self.squid.tamagotchi_logic, 'food_items'):
+            all_world_objects.extend(self.squid.tamagotchi_logic.food_items)
+        if hasattr(self.squid.tamagotchi_logic, 'poop_items'):
+            all_world_objects.extend(self.squid.tamagotchi_logic.poop_items)
+        if hasattr(self.squid.tamagotchi_logic, 'user_interface') and hasattr(self.squid.tamagotchi_logic.user_interface, 'scene'):
+            all_decorations = [item for item in self.squid.tamagotchi_logic.user_interface.scene.items() if hasattr(item, 'category')]
+            all_world_objects.extend(all_decorations)
+
+        # Use the squid's vision to get what it can actually see
+        visible_objects = self.squid.get_visible_objects(all_world_objects)
+
+        visible_rocks = [obj for obj in visible_objects if getattr(obj, 'category', '') == 'rock']
+        visible_poops = [obj for obj in visible_objects if getattr(obj, 'category', '') == 'poop']
+        visible_food = [obj for obj in visible_objects if hasattr(obj, 'is_sushi')] # Assuming food has 'is_sushi'
+        visible_plants = [obj for obj in visible_objects if getattr(obj, 'category', '') == 'plant'] # New
+
         current_state = {
             "hunger": self.squid.hunger,
             "happiness": self.squid.happiness,
@@ -28,7 +51,10 @@ class DecisionEngine:
             "curiosity": self.squid.curiosity,
             "is_sick": self.squid.is_sick,
             "is_sleeping": self.squid.is_sleeping,
-            "has_food_visible": bool(self.squid.get_visible_food()),
+            "has_food_visible": bool(visible_food),
+            "has_rock_visible": bool(visible_rocks),
+            "has_poop_visible": bool(visible_poops),
+            "has_plant_visible": bool(visible_plants), # New
             "carrying_rock": self.squid.carrying_rock,
             "carrying_poop": self.squid.carrying_poop,
             "rock_throw_cooldown": getattr(self.squid, 'rock_throw_cooldown', 0),
@@ -50,7 +76,8 @@ class DecisionEngine:
             "approaching_rock": 1.0,
             "avoiding_threat": 1.0,
             "organizing": 1.0,
-            "social": 1.0 # A new weight for potential social interactions
+            "social": 1.0,
+            "approaching_plant": 1.0 # New
         }
 
         for memory in active_memories:
@@ -68,6 +95,8 @@ class DecisionEngine:
             elif memory['category'] == 'mental_state' and 'startled' in memory['key']:
                  memory_influence_weights['avoiding_threat'] *= 1.3 # Negative startle memory promotes caution
                  memory_influence_weights['exploring'] *= 0.8 # and discourages exploration
+            elif memory['category'] == 'interaction' and 'plant' in memory['key'] and total_effect > 0: # New
+                memory_influence_weights['approaching_plant'] *= 1.2 # Positive plant memory encourages more
 
         # =================================================================
         # 3. CALCULATE PHYSIOLOGICAL URGENCY
@@ -104,10 +133,11 @@ class DecisionEngine:
         decision_weights = {
             "exploring": brain_state.get("curiosity", 50) * (1 - (brain_state.get("anxiety", 50) / 120)), # Anxiety suppresses curiosity
             "eating": brain_state.get("hunger", 50) if current_state['has_food_visible'] else 0,
-            "approaching_rock": brain_state.get("curiosity", 50) * 0.7 if not self.squid.carrying_rock else 0,
+            "approaching_rock": brain_state.get("curiosity", 50) * 0.7 if current_state['has_rock_visible'] and not self.squid.carrying_rock else 0,
             "throwing_rock": brain_state.get("satisfaction", 50) * 0.7 if self.squid.carrying_rock else 0,
-            "approaching_poop": brain_state.get("curiosity", 50) * 0.5 if not self.squid.carrying_poop and len(self.squid.tamagotchi_logic.poop_items) > 0 else 0,
+            "approaching_poop": brain_state.get("curiosity", 50) * 0.5 if current_state['has_poop_visible'] and not self.squid.carrying_poop and len(self.squid.tamagotchi_logic.poop_items) > 0 else 0,
             "throwing_poop": brain_state.get("satisfaction", 50) * 0.6 if self.squid.carrying_poop else 0,
+            "approaching_plant": brain_state.get("curiosity", 20) * 0.8 if current_state['has_plant_visible'] else 0, # New
             "avoiding_threat": brain_state.get("anxiety", 50),
             "organizing": brain_state.get("satisfaction", 50) * 0.5,
             "sleeping": brain_state.get("sleepiness", 50) # Added sleeping as a conscious decision
@@ -127,16 +157,20 @@ class DecisionEngine:
             if action in decision_weights:
                 decision_weights[action] *= weight
 
-        # Apply Personality Modifiers: Innate traits provide a behavioral baseline.
+        # Apply Personality and State Modifiers: Innate traits provide a behavioral baseline.
         if self.squid.personality == Personality.TIMID:
             decision_weights["avoiding_threat"] *= 1.5
             decision_weights["exploring"] *= 0.7
+            decision_weights["approaching_plant"] *= 1.8 # Timid squids like plants
         elif self.squid.personality == Personality.ADVENTUROUS:
             decision_weights["exploring"] *= 1.3
             decision_weights["approaching_rock"] *= 1.2
         elif self.squid.personality == Personality.GREEDY:
             decision_weights["eating"] *= 1.5
         
+        if self.squid.anxiety > 50: # Anxious squids seek comfort in plants
+            decision_weights["approaching_plant"] *= 1.6
+
         # Add a touch of randomness to prevent behavior from being too deterministic.
         for key in decision_weights:
             decision_weights[key] *= random.uniform(0.9, 1.1)
@@ -154,12 +188,12 @@ class DecisionEngine:
         # where a single decision leads to a sequence of smaller actions and status changes.
         
         # --- Behavioral Chaining Example: EATING ---
-        if best_decision == "eating" and self.squid.get_visible_food():
-            closest_food = min(self.squid.get_visible_food(), 
-                            key=lambda f: self.squid.distance_to(f[0], f[1]))
-            self.squid.move_towards(closest_food[0], closest_food[1])
+        if best_decision == "eating" and visible_food:
+            closest_food = min(visible_food, 
+                            key=lambda f: self.squid.distance_to(f.pos().x(), f.pos().y()))
+            self.squid.move_towards(closest_food.pos().x(), closest_food.pos().y())
             
-            food_distance = self.squid.distance_to(closest_food[0], closest_food[1])
+            food_distance = self.squid.distance_to(closest_food.pos().x(), closest_food.pos().y())
             # The squid's status changes based on its progress towards the goal.
             if food_distance > 100:
                 return "eyeing food" # Chain 1: Initial observation
@@ -174,15 +208,31 @@ class DecisionEngine:
             self.squid.go_to_sleep()
             return "feeling drowsy"
 
-        # (The rest of the action implementations follow a similar logic)
-        elif best_decision == "approaching_rock" and not self.squid.carrying_rock:
-            # Implementation for approaching a rock...
-            nearby_rocks = [d for d in self.squid.tamagotchi_logic.get_nearby_decorations(
-                self.squid.squid_x, self.squid.squid_y, 150)
-                if getattr(d, 'can_be_picked_up', False)]
-            if nearby_rocks:
-                self.squid.current_rock_target = random.choice(nearby_rocks)
-                return "interested in rock"
+        # --- PLANT APPROACH ---
+        elif best_decision == "approaching_plant" and current_state['has_plant_visible']:
+            closest_plant = min(visible_plants, key=lambda p: self.squid.distance_to(p.pos().x(), p.pos().y()))
+            self.squid.move_towards(closest_plant.pos().x(), closest_plant.pos().y())
+            
+            plant_distance = self.squid.distance_to(closest_plant.pos().x(), closest_plant.pos().y())
+            if plant_distance > 100:
+                return "noticing plant"
+            elif plant_distance > 50:
+                return "seeking comfort from plant" if self.squid.anxiety > 50 else "curiously approaching plant"
+            else:
+                return "moving toward plant"
+
+        # --- ROCK APPROACH ---
+        elif best_decision == "approaching_rock" and current_state['has_rock_visible']:
+            closest_rock = min(visible_rocks, key=lambda r: self.squid.distance_to(r.pos().x(), r.pos().y()))
+            self.squid.move_towards(closest_rock.pos().x(), closest_rock.pos().y())
+            
+            rock_distance = self.squid.distance_to(closest_rock.pos().x(), closest_rock.pos().y())
+            if rock_distance > 100:
+                return "eyeing rock"
+            elif rock_distance > 50:
+                return "curiously approaching rock"
+            else:
+                return "moving toward rock"
         
         elif best_decision == "throwing_rock" and self.squid.carrying_rock:
             # Implementation for throwing a rock...

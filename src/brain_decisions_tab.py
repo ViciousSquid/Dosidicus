@@ -1,5 +1,8 @@
+# src/brain_decisions_tab.py
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
+from .display_scaling import DisplayScaling
 
 class DecisionsTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
@@ -11,23 +14,23 @@ class DecisionsTab(BrainBaseTab):
         Initializes the UI with a persistent, non-flickering layout for the decision path
         and a fixed bar at the bottom for the final action.
         """
-        self.layout.setContentsMargins(15, 15, 15, 15)
-        self.layout.setSpacing(10)
+        self.layout.setContentsMargins(DisplayScaling.scale(15), DisplayScaling.scale(15), DisplayScaling.scale(15), DisplayScaling.scale(15))
+        self.layout.setSpacing(DisplayScaling.scale(10))
 
         # Main container
         main_container = QtWidgets.QWidget()
         main_container.setObjectName("mainContainer")
         main_container.setStyleSheet("background-color: #f8f9fa; border-radius: 10px;")
         main_layout = QtWidgets.QVBoxLayout(main_container)
-        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setContentsMargins(DisplayScaling.scale(10), DisplayScaling.scale(10), DisplayScaling.scale(10), DisplayScaling.scale(10))
         self.layout.addWidget(main_container)
 
         # Title
         title_layout = QtWidgets.QHBoxLayout()
         title_icon = QtWidgets.QLabel("🧠")
-        title_icon.setStyleSheet("font-size: 28px;")
+        title_icon.setStyleSheet(f"font-size: {DisplayScaling.font_size(28)}px;")
         title_label = QtWidgets.QLabel("Squid's Thought Process")
-        title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #343a40;")
+        title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(24)}px; font-weight: bold; color: #343a40;")
         title_layout.addWidget(title_icon)
         title_layout.addWidget(title_label)
         title_layout.addStretch()
@@ -41,7 +44,7 @@ class DecisionsTab(BrainBaseTab):
         
         path_container = QtWidgets.QWidget()
         self.path_layout = QtWidgets.QVBoxLayout(path_container)
-        self.path_layout.setSpacing(15)
+        self.path_layout.setSpacing(DisplayScaling.scale(15))
         self.path_layout.setAlignment(QtCore.Qt.AlignTop)
         path_scroll_area.setWidget(path_container)
 
@@ -75,16 +78,16 @@ class DecisionsTab(BrainBaseTab):
                 border-radius: 8px;
             }
         """)
-        final_action_bar.setFixedHeight(50)
+        final_action_bar.setFixedHeight(DisplayScaling.scale(50))
         
         bar_layout = QtWidgets.QHBoxLayout(final_action_bar)
-        bar_layout.setContentsMargins(15, 5, 15, 5)
+        bar_layout.setContentsMargins(DisplayScaling.scale(15), DisplayScaling.scale(5), DisplayScaling.scale(15), DisplayScaling.scale(5))
         
         action_title_label = QtWidgets.QLabel("<b>Final Action:</b>")
-        action_title_label.setStyleSheet("font-size: 14pt; color: #495057;")
+        action_title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; color: #495057;")
         
         self.final_action_label = QtWidgets.QLabel("...")
-        self.final_action_label.setStyleSheet("font-size: 14pt; font-weight: bold; color: #007bff;")
+        self.final_action_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; font-weight: bold; color: #007bff;")
 
         bar_layout.addWidget(action_title_label)
         bar_layout.addWidget(self.final_action_label)
@@ -98,21 +101,21 @@ class DecisionsTab(BrainBaseTab):
         """Creates a styled widget for a single step and returns it and its content label."""
         step_widget = QtWidgets.QWidget()
         step_widget.setObjectName("stepWidget")
-        step_widget.setStyleSheet("""
-            #stepWidget {
+        step_widget.setStyleSheet(f"""
+            #stepWidget {{
                 background-color: #ffffff;
                 border: 1px solid #dee2e6;
                 border-radius: 8px;
-                padding: 10px;
-            }
+                padding: {DisplayScaling.scale(10)}px;
+            }}
         """)
         step_layout = QtWidgets.QVBoxLayout(step_widget)
 
         header_layout = QtWidgets.QHBoxLayout()
         icon_label = QtWidgets.QLabel(icon)
-        icon_label.setStyleSheet("font-size: 24px;")
+        icon_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(24)}px;")
         title_label = QtWidgets.QLabel(f"<b>Step {step_number}: {title}</b>")
-        title_label.setStyleSheet("font-size: 16px; color: #495057;")
+        title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; color: #495057;")
         header_layout.addWidget(icon_label)
         header_layout.addWidget(title_label)
         header_layout.addStretch()
@@ -121,14 +124,14 @@ class DecisionsTab(BrainBaseTab):
         content_label = QtWidgets.QLabel("...")
         content_label.setWordWrap(True)
         content_label.setAlignment(QtCore.Qt.AlignTop)
-        content_label.setStyleSheet("padding-left: 10px; padding-top: 5px;")
+        content_label.setStyleSheet(f"padding-left: {DisplayScaling.scale(10)}px; padding-top: {DisplayScaling.scale(5)}px; font-size: {DisplayScaling.font_size(15)}px;")
         step_layout.addWidget(content_label)
         
         return step_widget, content_label
 
     def update_path_with_placeholder(self):
         """Sets initial placeholder content on the persistent labels."""
-        placeholder_text = "<i style='color: #6c757d;'>Awaiting the squid's next thought...</i>"
+        placeholder_text = f"<i style='color: #6c757d; font-size: {DisplayScaling.font_size(15)}px;'>Awaiting the squid's next thought...</i>"
         self.step1_label.setText(placeholder_text)
         self.step2_label.setText(placeholder_text)
         self.step3_label.setText(placeholder_text)
@@ -154,15 +157,31 @@ class DecisionsTab(BrainBaseTab):
         # Update the bottom bar
         self.final_action_label.setText(final_decision.capitalize())
 
-
     def _update_state_step(self, inputs):
-        text = "The squid assesses its current condition:<br><ul>"
+        text = "The squid assesses his current condition and visible objects:<br><ul>"
         if not inputs:
             text += "<li>No sensory data available.</li>"
         else:
+            visible_items = []
+            if inputs.get("has_food_visible"):
+                visible_items.append("Food")
+            if inputs.get("has_rock_visible"):
+                visible_items.append("Rock")
+            if inputs.get("has_poop_visible"):
+                visible_items.append("Poop")
+            if inputs.get("has_plant_visible"):
+                visible_items.append("Plant")
+
+            if visible_items:
+                text += f"<li><b>Visible Objects:</b> {', '.join(visible_items)}</li>"
+            else:
+                text += "<li><b>Visible Objects:</b> None</li>"
+
+            excluded_keys = {"has_food_visible", "has_rock_visible", "has_poop_visible", "has_plant_visible"}
             for key, value in sorted(inputs.items()):
-                formatted_value = f"{value:.2f}" if isinstance(value, float) else str(value)
-                text += f"<li><b>{key.replace('_', ' ').capitalize()}:</b> {formatted_value}</li>"
+                if key not in excluded_keys:
+                    formatted_value = f"{value:.2f}" if isinstance(value, float) else str(value)
+                    text += f"<li><b>{key.replace('_', ' ').capitalize()}:</b> {formatted_value}</li>"
         text += "</ul>"
         self.step1_label.setText(text)
 
@@ -170,9 +189,9 @@ class DecisionsTab(BrainBaseTab):
         if not weights:
             self.step2_label.setText("No urges calculated.")
             return
-            
+
         strongest_urge = max(weights, key=weights.get)
-        text = f"Based on its needs, the strongest initial urge is to <b>{strongest_urge.capitalize()}</b>.<br><br>Initial scores:"
+        text = f"Based on needs, the strongest urge is <b>{strongest_urge.capitalize()}</b>.<br><br>Initial scores:"
         text += "<ul>"
         for action, weight in sorted(weights.items(), key=lambda item: item[1], reverse=True):
             text += f"<li><b>{action.capitalize()}:</b> {weight:.3f}</li>"
@@ -183,7 +202,7 @@ class DecisionsTab(BrainBaseTab):
         weights = data.get('weights', {})
         adj_weights = data.get('adjusted_weights', {})
         text = "Personality traits and recent memories then adjust these urges:<br><ul>"
-        
+
         modified = False
         for action, final_score in adj_weights.items():
             base_score = weights.get(action, final_score)
@@ -193,18 +212,18 @@ class DecisionsTab(BrainBaseTab):
                 color = "#28a745" if delta > 0 else "#dc3545"
                 text += f"<li>The score for <b>{action.capitalize()}</b> {direction} by {abs(delta):.3f} <span style='color:{color};'>({delta:+.3f})</span></li>"
                 modified = True
-        
+
         if not modified:
             text += "<li>No significant adjustments from personality or memory this time.</li>"
-            
+
         text += "</ul>"
         self.step3_label.setText(text)
 
     def _update_final_decision_step(self, data, final_decision):
         confidence = data.get('confidence', 0.0)
         adj_weights = data.get('adjusted_weights', {})
-        
-        text = f"After all calculations, the final scores are tallied. The highest score determines the action."
+
+        text = "After all calculations, the final scores are tallied. The highest score determines the action."
         text += "<ul>"
         if not adj_weights:
             text += "<li>No final scores available.</li>"
@@ -212,16 +231,15 @@ class DecisionsTab(BrainBaseTab):
             for action, score in sorted(adj_weights.items(), key=lambda item: item[1], reverse=True):
                 item_text = f"<li><b>{action.capitalize()}:</b> {score:.3f}</li>"
                 if action == final_decision:
-                     item_text = f"<li style='background-color: #d4edda; border-radius: 4px; padding: 2px;'><b>▶ {action.capitalize()}: {score:.3f}</b></li>"
+                    item_text = f"<li style='background-color: #d4edda; border-radius: 4px; padding: 2px;'><b>▶ {action.capitalize()}: {score:.3f}</b></li>"
                 text += item_text
         text += "</ul>"
-        
-        text += f"<hr>The squid has decided to <b>{final_decision.capitalize()}</b> with a confidence level of <b>{confidence:.1%}</b>."
+
+        text += f"<hr>The squid has decided <b>{final_decision.capitalize()}</b> with a confidence level of <b>{confidence:.1%}</b>."
         self.step4_label.setText(text)
 
     def _create_arrow(self):
-        """Creates a downward arrow label to show flow."""
         arrow_label = QtWidgets.QLabel("⬇️")
         arrow_label.setAlignment(QtCore.Qt.AlignCenter)
-        arrow_label.setStyleSheet("font-size: 20px; color: #adb5bd; margin: -5px 0 -5px 0;")
+        arrow_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(20)}px; color: #adb5bd; margin: -5px 0 -5px 0;")
         return arrow_label
