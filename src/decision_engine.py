@@ -38,7 +38,7 @@ class DecisionEngine:
 
         visible_rocks = [obj for obj in visible_objects if getattr(obj, 'category', '') == 'rock']
         visible_poops = [obj for obj in visible_objects if getattr(obj, 'category', '') == 'poop']
-        visible_food = [obj for obj in visible_objects if hasattr(obj, 'is_sushi')] # Assuming food has 'is_sushi'
+        visible_food = [obj for obj in visible_objects if getattr(obj, 'category', None) == 'food']
         visible_plants = [obj for obj in visible_objects if getattr(obj, 'category', '') == 'plant'] # New
 
         current_state = {
