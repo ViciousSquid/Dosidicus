@@ -28,9 +28,9 @@ class DecisionsTab(BrainBaseTab):
         # Title
         title_layout = QtWidgets.QHBoxLayout()
         title_icon = QtWidgets.QLabel("🧠")
-        title_icon.setStyleSheet(f"font-size: {DisplayScaling.font_size(28)}px;")
+        title_icon.setStyleSheet(f"font-size: {DisplayScaling.font_size(34)}px;")
         title_label = QtWidgets.QLabel("Squid's Thought Process")
-        title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(24)}px; font-weight: bold; color: #343a40;")
+        title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(30)}px; font-weight: bold; color: #343a40;")
         title_layout.addWidget(title_icon)
         title_layout.addWidget(title_label)
         title_layout.addStretch()
@@ -78,16 +78,16 @@ class DecisionsTab(BrainBaseTab):
                 border-radius: 8px;
             }
         """)
-        final_action_bar.setFixedHeight(DisplayScaling.scale(50))
+        final_action_bar.setFixedHeight(DisplayScaling.scale(60))
         
         bar_layout = QtWidgets.QHBoxLayout(final_action_bar)
         bar_layout.setContentsMargins(DisplayScaling.scale(15), DisplayScaling.scale(5), DisplayScaling.scale(15), DisplayScaling.scale(5))
         
         action_title_label = QtWidgets.QLabel("<b>Final Action:</b>")
-        action_title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; color: #495057;")
+        action_title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(22)}px; color: #495057;")
         
         self.final_action_label = QtWidgets.QLabel("...")
-        self.final_action_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; font-weight: bold; color: #007bff;")
+        self.final_action_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(22)}px; font-weight: bold; color: #007bff;")
 
         bar_layout.addWidget(action_title_label)
         bar_layout.addWidget(self.final_action_label)
@@ -113,9 +113,9 @@ class DecisionsTab(BrainBaseTab):
 
         header_layout = QtWidgets.QHBoxLayout()
         icon_label = QtWidgets.QLabel(icon)
-        icon_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(24)}px;")
+        icon_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(30)}px;")
         title_label = QtWidgets.QLabel(f"<b>Step {step_number}: {title}</b>")
-        title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; color: #495057;")
+        title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(22)}px; color: #495057;")
         header_layout.addWidget(icon_label)
         header_layout.addWidget(title_label)
         header_layout.addStretch()
@@ -124,14 +124,14 @@ class DecisionsTab(BrainBaseTab):
         content_label = QtWidgets.QLabel("...")
         content_label.setWordWrap(True)
         content_label.setAlignment(QtCore.Qt.AlignTop)
-        content_label.setStyleSheet(f"padding-left: {DisplayScaling.scale(10)}px; padding-top: {DisplayScaling.scale(5)}px; font-size: {DisplayScaling.font_size(15)}px;")
+        content_label.setStyleSheet(f"padding-left: {DisplayScaling.scale(10)}px; padding-top: {DisplayScaling.scale(5)}px; font-size: {DisplayScaling.font_size(19)}px;")
         step_layout.addWidget(content_label)
         
         return step_widget, content_label
 
     def update_path_with_placeholder(self):
         """Sets initial placeholder content on the persistent labels."""
-        placeholder_text = f"<i style='color: #6c757d; font-size: {DisplayScaling.font_size(15)}px;'>Awaiting the squid's next thought...</i>"
+        placeholder_text = f"<i style='color: #6c757d; font-size: {DisplayScaling.font_size(19)}px;'>Awaiting the squid's next thought...</i>"
         self.step1_label.setText(placeholder_text)
         self.step2_label.setText(placeholder_text)
         self.step3_label.setText(placeholder_text)
@@ -241,5 +241,5 @@ class DecisionsTab(BrainBaseTab):
     def _create_arrow(self):
         arrow_label = QtWidgets.QLabel("⬇️")
         arrow_label.setAlignment(QtCore.Qt.AlignCenter)
-        arrow_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(20)}px; color: #adb5bd; margin: -5px 0 -5px 0;")
+        arrow_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(24)}px; color: #adb5bd; margin: -5px 0 -5px 0;")
         return arrow_label
