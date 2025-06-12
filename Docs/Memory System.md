@@ -46,16 +46,29 @@ Short-term memories are recent experiences or observations. They have a limited 
 - Expire after `self.short_term_duration`
 
 ```python
-def add_short_term_memory(self, category, key, value, importance=1):
-    memory = {
-        'category': category,
-        'key': key,
-        'value': value,
-        'timestamp': datetime.now().isoformat(),
-        'importance': importance,
-        'access_count': 1
-    }
-    self.short_term_memory.append(memory)
+def add_short_term_memory(self, category, key, value, importance=1.0, related_neurons=None):
+        """Adds a memory, using float timestamps."""
+        for memory in self.short_term_memory:
+            if memory.get('key') == key and memory.get('category') == category:
+                memory['importance'] = memory.get('importance', 1.0) + 0.5
+                memory['timestamp'] = time.time()
+                if memory['importance'] >= 3.0:
+                    self.transfer_to_long_term_memory(category, key)
+                return
+
+        memory_item = {
+            "timestamp": time.time(),
+            "category": category,
+            "key": key,
+            "value": value,
+            "importance": importance,
+            "related_neurons": related_neurons or [],
+            "access_count": 1
+        }
+        self.short_term_memory.append(memory_item)
+        if len(self.short_term_memory) > self.short_term_limit:
+            self.short_term_memory.pop(0)
+        self.save_memory(self.short_term_memory, self.short_term_file)
 ```
 
 ### 3. Long-term Memory
@@ -68,13 +81,9 @@ Long-term memories are persistent and don't expire. They represent important or 
 
 ```python
 def add_long_term_memory(self, category, key, value):
-    memory = {
-        'category': category,
-        'key': key,
-        'value': value,
-        'timestamp': datetime.now().isoformat()
-    }
-    self.long_term_memory.append(memory)
+        memory = {'category': category, 'key': key, 'value': value, 'timestamp': time.time()}
+        self.long_term_memory.append(memory)
+        self.save_memory(self.long_term_memory, self.long_term_file)
 ```
 
 ### 4. Memory Persistence
@@ -83,18 +92,25 @@ Memories are saved to and loaded from JSON files for persistence across sessions
 
 ```python
 def save_memory(self, memory, file_path):
-    with open(file_path, 'w') as file:
-        json.dump(memory, file, indent=4, default=str)
-
-def load_memory(self, file_path):
-    if os.path.exists(file_path):
-        with open(file_path, 'r') as file:
-            memory = json.loads(file.read())
+        """Saves memory to JSON, converting float timestamps to ISO strings."""
+        if not memory:
+            # To clear a file, we can write an empty list
+            memory_to_save = []
+        else:
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            serializable_memory = []
             for item in memory:
-                if 'timestamp' in item:
-                    item['timestamp'] = datetime.fromisoformat(item['timestamp'])
-            return memory
-    return []
+                new_item = item.copy()
+                if 'timestamp' in new_item and isinstance(new_item['timestamp'], float):
+                    new_item['timestamp'] = datetime.fromtimestamp(new_item['timestamp']).isoformat()
+                serializable_memory.append(new_item)
+            memory_to_save = serializable_memory
+
+        try:
+            with open(file_path, 'w') as file:
+                json.dump(memory_to_save, file, indent=4)
+        except Exception as e:
+            print(f"Error saving memory to {file_path}: {e}")
 ```
 
 ### 5. Memory Transfer Mechanism
@@ -102,19 +118,22 @@ def load_memory(self, file_path):
 Short-term memories can be transferred to long-term memory based on importance and access frequency.
 
 ```python
-def should_transfer_to_long_term(self, memory):
-    return (
-        memory['importance'] >= 7 or
-        memory['access_count'] >= 3 or
-        (memory['importance'] >= 5 and memory['access_count'] >= 2)
-    )
+ def should_transfer_to_long_term(self, memory):
+        return (memory.get('importance', 1) >= 7 or
+                memory.get('access_count', 0) >= 3 or
+                (memory.get('importance', 1) >= 5 and memory.get('access_count', 0) >= 2))
 
 def review_and_transfer_memories(self):
-    for memory in list(self.short_term_memory):
-        if self.should_transfer_to_long_term(memory):
-            self.transfer_to_long_term_memory(memory['category'], memory['key'])
-        elif (datetime.now() - memory['timestamp']) > self.short_term_duration:
-            self.short_term_memory.remove(memory)
+        current_time = time.time()
+        # Iterate over a copy as we may modify the list
+        for memory in list(self.short_term_memory):
+            timestamp = memory.get('timestamp', 0)
+            if isinstance(timestamp, (int, float)) and (current_time - timestamp) > self.short_term_duration:
+                if self.should_transfer_to_long_term(memory):
+                    self.transfer_to_long_term_memory(memory['category'], memory['key'])
+                else:
+                    self.short_term_memory.remove(memory)
+        self.cleanup_short_term_memory()
 ```
 
 ### 6. Integration with Decision-making
