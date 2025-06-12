@@ -21,7 +21,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 * Squid can create new neurons in response to his environment (Neurogenesis)
 
 I'm trying to document everything!
-[https://github.com/ViciousSquid/Dosidicus/tree/main/Docs]
+[[https://github.com/ViciousSquid/Dosidicus/wiki](https://github.com/ViciousSquid/Dosidicus/wiki)]
 
 ### Needs Management System:
 
