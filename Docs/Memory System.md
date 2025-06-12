@@ -1,6 +1,6 @@
 # Memory System Technical Overview
 
-The `MemoryManager` class handles both short-term and long-term memories. This system allows the squid to store, retrieve, and utilize past experiences to influence its decision-making process.
+The `MemoryManager` class handles both short-term and long-term memories. This system allows the squid to store, retrieve, and utilize past experiences to influence his decision-making process.
 * The `_memory` folder holds `ShortTerm.json` and `LongTerm.json`
 
 ## Key Components
@@ -151,4 +151,4 @@ def make_decision(self):
 
 7. **Importance and Access Tracking**: Memories have importance levels and access counts, which influence their likelihood of being transferred to long-term storage.
 
-This memory system provides the squid with a sophisticated ability to learn from and adapt to its experiences, contributing to more complex and realistic behavior over time.
+This memory system provides the squid with a sophisticated ability to learn from and adapt to his experiences, contributing to more complex and realistic behavior over time.
