@@ -101,6 +101,15 @@ class MemoryManager:
             self.short_term_memory = self.short_term_memory[:self.short_term_limit]
 
     def add_long_term_memory(self, category, key, value):
+        """Adds a memory to long-term storage, preventing duplicates."""
+        for memory in self.long_term_memory:
+            if memory.get('key') == key and memory.get('category') == category:
+                # Memory already exists, so we don't add it again.
+                # Optional: update timestamp to reflect it's a reinforced memory
+                memory['timestamp'] = time.time()
+                self.save_memory(self.long_term_memory, self.long_term_file)
+                return
+
         memory = {'category': category, 'key': key, 'value': value, 'timestamp': time.time()}
         self.long_term_memory.append(memory)
         self.save_memory(self.long_term_memory, self.long_term_file)
@@ -171,16 +180,22 @@ class MemoryManager:
             self.review_and_transfer_memories()
 
     def transfer_to_long_term_memory(self, category, key):
+        """Transfers an important memory from short-term to long-term storage."""
         memory_to_transfer = None
         for mem in self.short_term_memory:
              if mem.get('category') == category and mem.get('key') == key:
                   memory_to_transfer = mem
                   break
         if memory_to_transfer:
-            self.long_term_memory.append(memory_to_transfer)
+            # Use the new add_long_term_memory to handle duplicates
+            self.add_long_term_memory(
+                memory_to_transfer['category'],
+                memory_to_transfer['key'],
+                memory_to_transfer['value']
+            )
+            # Remove from short-term memory to prevent re-transfer
             self.short_term_memory.remove(memory_to_transfer)
             self.save_memory(self.short_term_memory, self.short_term_file)
-            self.save_memory(self.long_term_memory, self.long_term_file)
 
     def should_transfer_to_long_term(self, memory):
         return (memory.get('importance', 1) >= 7 or
