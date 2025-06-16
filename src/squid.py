@@ -948,6 +948,21 @@ class Squid:
         sorted_positions.extend([(food.pos().x(), food.pos().y()) for food in other_food_items])
         
         return sorted_positions
+    
+    def get_visible_plants(self):
+        """Finds plant decorations that are within the squid's vision cone."""
+        if self.tamagotchi_logic is None:
+            return []
+
+        # Get all items in the scene that are categorized as 'plant'
+        all_plants = []
+        for item in self.tamagotchi_logic.user_interface.scene.items():
+            if hasattr(item, 'category') and item.category == 'plant':
+                all_plants.append(item)
+
+        # Use the existing generic vision function to see which plants are visible
+        visible_plants = self.get_visible_objects(all_plants)
+        return visible_plants
 
     def is_in_vision_cone(self, x, y):
         """
