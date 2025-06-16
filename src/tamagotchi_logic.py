@@ -1636,7 +1636,7 @@ class TamagotchiLogic:
 
         # Remove poops and food that the line has passed
         for poop_item in self.poop_items[:]:
-            if poop_item.pos().x() > new_x:
+            if poop_item.scenePos().x() > new_x:
                 self.user_interface.scene.removeItem(poop_item)
                 self.poop_items.remove(poop_item)
 
