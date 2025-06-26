@@ -104,14 +104,11 @@ class NetworkNode:
                 except OSError as e:
                     if self.debug_mode: self.logger.debug(f"SO_REUSEPORT not supported or error setting it: {e}")
 
-
-            # --- KEY CHANGE: ENABLE MULTICAST LOOPBACK ---
             try:
-                self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
+                self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 0)
                 if self.debug_mode: self.logger.debug("Multicast loopback enabled.")
             except socket.error as e_loop:
                 self.logger.warning(f"Could not enable multicast loopback: {e_loop}. May impact same-machine testing.")
-            # --------------------------------------------
 
             self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2) # Time-to-live for multicast packets
 
