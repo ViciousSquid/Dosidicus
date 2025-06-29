@@ -1,5 +1,7 @@
+# Name of the GitHub Actions workflow
 name: Build Dosidicus Linux Binary for Release
 
+# This workflow will run when you publish a new release on GitHub
 on:
   release:
     types: [published]
@@ -8,25 +10,48 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # 1. Checks out your repository's code so the workflow can access it
       - name: Check out code
         uses: actions/checkout@v4
 
+      # 2. Sets up the Python version for the build
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
+      # 3. Installs Poetry, a tool for managing Python dependencies
       - name: Install Poetry
         uses: snok/install-poetry@v1
 
+      # 4. This is the main step that builds your application.
+      #    We use a tool called 'pyapp' to package your Python code into a single executable.
       - name: Setup PyAPP and build Dosidicus
         env:
+          # Tells pyapp to create a fully self-contained executable
           PYAPP_FULL_ISOLATION: 1
+          # The name of your application
           PYAPP_PROJECT_NAME: dosidicus
-          PYAPP_EXEC_SPEC: 'main:main'
-          PYAPP_PIP_EXTRA_ARGS: 'PyQt5 numpy'
+          # --- IMPORTANT: YOU MUST CUSTOMIZE THIS ---
+          # This is the entry point of your application. It tells the executable which function to run.
+          # It should be in the format 'your_package.your_module:your_function'.
+          # For example, if your main function is in a file called 'cli.py' inside a 'dosidicus' folder,
+          # and the function is named 'main', this would be 'dosidicus.cli:main'.
+          # Look for a 'main' function in your code or in your 'pyproject.toml' file.
+          PYAPP_EXEC_SPEC: 'main:main'  # <-- CUSTOMIZE THIS
+          # --- IMPORTANT: YOU MUST CUSTOMIZE THIS ---
+          # A space-separated list of your project's Python dependencies.
+          # These are the libraries your code needs to run.
+          # You can find these in your 'pyproject.toml' or 'requirements.txt' file.
+          PYAPP_PIP_EXTRA_ARGS: 'pyqt5 numpy' # <-- CUSTOMIZE THIS with your dependencies
+          # Embeds the distribution information into the executable
           PYAPP_DISTRIBUTION_EMBED: 1
         run: |
+          # CORRECTION: Change to the correct directory before running poetry.
+          # This ensures that the 'pyproject.toml' file is found.
+          cd ${{ github.workspace }}
+
+          # The following commands download pyapp, build it, and then use it to package your application
           poetry build
           curl -sSL https://github.com/ofek/pyapp/releases/latest/download/source.tar.gz -o pyapp-source.tar.gz
           tar -xzf pyapp-source.tar.gz
@@ -36,14 +61,14 @@ jobs:
           mv target/release/pyapp ../../dosidicus
           chmod +x ../../dosidicus
 
-      # --- THIS STEP IS UPDATED ---
+      # 5. Creates a zip file containing your new 'dosidicus' executable and other important files
       - name: Create release zip
         run: |
-          # This command now zips the executable, README, and the entire 'images' folder.
-          # Make sure you have a folder named 'images' in your project's root directory.
-          zip -r dosidicus-linux-amd64.zip dosidicus README.md images
+          # CORRECTION: The zip filename now matches the one in the next step.
+          zip dosidicus-linux-amd64.zip dosidicus LICENSE README.md
 
+      # 6. Attaches the zip file to the GitHub release you just created
       - name: Attach executable to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dosidicus_2.4.2-amd64-linux.zip
+          files: dosidicus-linux-amd64.zip
