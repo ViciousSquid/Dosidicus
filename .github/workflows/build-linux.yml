@@ -11,6 +11,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Add this permissions block
+    permissions:
+      contents: write
     steps:
       # 1. Checks out your repository's code so the workflow can access it
       - name: Check out code
@@ -39,9 +42,7 @@ jobs:
           # --- IMPORTANT: YOU MUST CUSTOMIZE THIS ---
           # This is the entry point of your application. It tells the executable which function to run.
           # It should be in the format 'your_package.your_module:your_function'.
-          # For example, if your main function is in a file called 'cli.py' inside a 'dosidicus' folder,
-          # and the function is named 'main', this would be 'dosidicus.cli:main'.
-          PYAPP_EXEC_SPEC: 'main:main'  # <-- CUSTOMIZE THIS
+          PYAPP_EXEC_SPEC: 'main:main' # <-- CUSTOMIZE THIS
           # --- IMPORTANT: YOU MUST CUSTOMIZE THIS ---
           # A space-separated list of your project's Python dependencies.
           # These are the libraries your code needs to run.
