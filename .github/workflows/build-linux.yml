@@ -61,11 +61,12 @@ jobs:
           mv target/release/pyapp ../../dosidicus
           chmod +x ../../dosidicus
 
-      # 5. Creates a zip file containing your new 'dosidicus' executable and other important files
+      # 5. Creates a zip file containing the executable and all repository files
       - name: Create release zip
         run: |
-          # The zip filename now matches the one in the next step.
-          zip dosidicus-linux-amd64.zip dosidicus LICENSE README.md
+          # The -r flag zips recursively. The '.' includes everything in the current directory.
+          # The -x flag excludes the specified patterns.
+          zip -r dosidicus-linux-amd64.zip . -x ".git/*" -x "dosidicus-linux-amd64.zip"
 
       # 6. Attaches the zip file to the GitHub release you just created
       - name: Attach executable to release
