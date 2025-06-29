@@ -5,6 +5,8 @@ name: Build Dosidicus Linux Binary for Release
 on:
   release:
     types: [published]
+  # Add this to allow manual triggers
+  workflow_dispatch:
 
 jobs:
   build:
