@@ -34,6 +34,8 @@ jobs:
           PYAPP_FULL_ISOLATION: 1
           # The name of your application
           PYAPP_PROJECT_NAME: dosidicus
+          # The version of your application, taken from the release tag
+          PYAPP_PROJECT_VERSION: ${{ github.ref_name }}
           # --- IMPORTANT: YOU MUST CUSTOMIZE THIS ---
           # This is the entry point of your application. It tells the executable which function to run.
           # It should be in the format 'your_package.your_module:your_function'.
