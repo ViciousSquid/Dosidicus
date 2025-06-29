@@ -37,7 +37,6 @@ jobs:
           # It should be in the format 'your_package.your_module:your_function'.
           # For example, if your main function is in a file called 'cli.py' inside a 'dosidicus' folder,
           # and the function is named 'main', this would be 'dosidicus.cli:main'.
-          # Look for a 'main' function in your code or in your 'pyproject.toml' file.
           PYAPP_EXEC_SPEC: 'main:main'  # <-- CUSTOMIZE THIS
           # --- IMPORTANT: YOU MUST CUSTOMIZE THIS ---
           # A space-separated list of your project's Python dependencies.
@@ -47,10 +46,6 @@ jobs:
           # Embeds the distribution information into the executable
           PYAPP_DISTRIBUTION_EMBED: 1
         run: |
-          # CORRECTION: Change to the correct directory before running poetry.
-          # This ensures that the 'pyproject.toml' file is found.
-          cd ${{ github.workspace }}
-
           # The following commands download pyapp, build it, and then use it to package your application
           poetry build
           curl -sSL https://github.com/ofek/pyapp/releases/latest/download/source.tar.gz -o pyapp-source.tar.gz
@@ -64,7 +59,7 @@ jobs:
       # 5. Creates a zip file containing your new 'dosidicus' executable and other important files
       - name: Create release zip
         run: |
-          # CORRECTION: The zip filename now matches the one in the next step.
+          # The zip filename now matches the one in the next step.
           zip dosidicus-linux-amd64.zip dosidicus LICENSE README.md
 
       # 6. Attaches the zip file to the GitHub release you just created
