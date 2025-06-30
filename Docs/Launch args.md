@@ -1,9 +1,9 @@
 The following launch args are available
 
 
-* `-d` - Debug (logs the console to console.txt, plugins and other logic will create their own logs too)
-* `-nc` [VALUE]- Neuro cooldown (cooldown for neurogenesis [in seconds] )
-* `-p` [VALUE] - Personality (forces generation of a specific personality)
+* `-d` or `--debug` - Debug (logs the console to console.txt, plugins and other logic will create their own logs too)
+* `-nc` or `--neurocooldown` [VALUE]- Neuro cooldown (cooldown for neurogenesis [in seconds] )
+* `-p` or `--personality` [VALUE] - Personality (forces generation of a specific personality)
 
 
 * (example: `python main.py -c -d` - clean start with debugging ) Ideal for plugin development and testing
