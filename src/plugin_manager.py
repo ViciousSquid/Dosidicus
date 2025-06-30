@@ -103,9 +103,6 @@ class PluginManager:
         self._initialize_hooks()
         self._initialized = True
 
-    # --- Start of Original PluginManager Methods ---
-    # (These methods remain largely the same, only the logger setup in __init__ 
-    # and the Formatter class definition are the core changes for coloring)
 
     def _initialize_hooks(self):
         """Initialize standard hooks that plugins can register for"""
@@ -345,9 +342,6 @@ class PluginManager:
                      self.logger.warning(f"Plugin '{plugin_name}': Instance was not explicitly set in manager's records by 'initialize'.")
                 elif plugin_name in self.plugins:
                      self.logger.info(f"Plugin '{plugin_name}': Instance found/set in manager's records.")
-
-                if plugin_name != "multiplayer":
-                    self.enabled_plugins.add(plugin_name)
                 
                 return True
             else:
