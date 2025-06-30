@@ -6,8 +6,9 @@ The following launch args are available
 * `-p` or `--personality` [VALUE] - Personality (forces generation of a specific personality)
 
 
-* (example: `python main.py -c -d` - clean start with debugging ) Ideal for plugin development and testing
-* (example: `python main.py -p ADVENTUROUS` - Force creation of ADVENTUROUS personality type
+ (example: `python main.py -d -p ADVENTUROUS` - Force creation of ADVENTUROUS personality type and also enable debugging
+
+-------------------------
 
 NOTE: It is not advisable to change neurocooldown (-nc) from the default (180 seconds) 
 Too low a value will cause too rapid creation of new neurons leading to neural network instability and collapse. 
