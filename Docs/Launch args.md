@@ -1,6 +1,6 @@
 The following launch args are available
 
-* `-c` - Clean start (skips hatching animations, laoding of saved games, tutorials and starts the simulation directly)
+
 * `-d` - Debug (logs the console to console.txt, plugins and other logic will create their own logs too)
 * `-nc` [VALUE]- Neuro cooldown (cooldown for neurogenesis [in seconds] )
 * `-p` [VALUE] - Personality (forces generation of a specific personality)
