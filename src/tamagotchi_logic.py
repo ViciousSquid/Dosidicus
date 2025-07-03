@@ -992,7 +992,11 @@ class TamagotchiLogic:
             self.track_neurogenesis_triggers()
             
             # 5. Memory management
-            self.squid.memory_manager.periodic_memory_management()
+            # During sleep, consolidate short-term memories to long-term
+            if self.squid.is_sleeping:
+                self.squid.memory_manager.review_and_transfer_memories()
+            else:
+                self.squid.memory_manager.periodic_memory_management() # Existing periodic management
             
             # 6. Prepare brain state with neurogenesis data
             brain_state = {
@@ -1364,7 +1368,7 @@ class TamagotchiLogic:
             # Update squid needs
             if not self.squid.is_sleeping:
                 self.squid.hunger = min(100, self.squid.hunger + (0.1 * self.simulation_speed))
-                self.squid.sleepiness = min(100, self.squid.sleepiness + (0.1 * self.simulation_speed))
+                self.squid.sleepiness = min(100, self.squid.sleepiness + (0.25 * self.simulation_speed))
                 self.squid.happiness = max(0, self.squid.happiness - (0.1 * self.simulation_speed))
                 self.squid.cleanliness = max(0, self.squid.cleanliness - (0.1 * self.simulation_speed))
 

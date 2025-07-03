@@ -1500,6 +1500,9 @@ class Squid:
                         squid=self
                     )
             
+            # Clear all short-term memories when the squid goes to sleep
+            self.memory_manager.clear_short_term_memory()
+
             self.tamagotchi_logic.show_message("Squid is sleeping...")
 
     def wake_up(self):
