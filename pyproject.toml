@@ -2,7 +2,7 @@
 name = "dosidicus"
 version = "2.4.2"
 description = "Tamagotchi-style digital pet with a neural network"
-authors = ["ViciousSquid"] # <-- Change this to your name/email
+authors = ["ViciousSquid"]
 readme = "README.md"
 packages = [{include = "src"}]
 include = ["images/**/*", "main.py", "config.ini"]
