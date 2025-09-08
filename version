@@ -1,3 +1,4 @@
 dosidicus: 2.4.4_stable
 brain_tool: 2.0
-decision_engine: 3.11
+
+decision_engine: 3.12
