@@ -47,23 +47,22 @@ Neurogenesis is triggered when a counter for Novelty, Stress, or Reward exceeds 
 
 The neurogenesis process follows a clear data flow through the application:
 
-1.  **State Change:** The squid's internal state (e.g., hunger, happiness, anxiety) changes due to interactions with the environment or internal processes. This happens in src/tamagotchi\_logic.py.
+1.  **State Change:** The squid's internal state (e.g., hunger, happiness, anxiety) changes due to interactions with the environment or internal processes. This happens in src/tamagotchi_logic.py.
 2.  **Trigger Update:** The `update_simulation` method in `TamagotchiLogic` detects these state changes and updates the neurogenesis trigger counters (novelty, stress, reward) accordingly.
 3.  **Brain Update:** The updated trigger counters are passed to the `BrainWidget` in src/brain\_widget.py via the `update_squid_brain` method.
 4.  **Neurogenesis Check:** The `update_state` method in `BrainWidget` calls `check_neurogenesis` to determine if any of the trigger counters have exceeded their thresholds and if the cooldown period has passed.
 5.  **Neuron Creation:** If the conditions are met, `_create_neuron_internal` is called to create a new neuron with the appropriate properties (color, shape, connections) based on the trigger type.
 6.  **Visualization:** The new neuron and its associated visual effects are rendered in the brain visualization.
-7.  **UI Update:** The `NeurogenesisTab` in src/brain\_neurogenesis\_tab.py is updated to reflect the new state of the counters, cooldown, and the recently created neuron.
-8.  **Logging:** The neurogenesis event is logged to neurogenesis\_log.txt.
+7.  **Logging:** The neurogenesis event is logged to neurogenesis_log.txt.
 
 4\. Core Logic and Implementation
 ---------------------------------
 
-### 4.1. Trigger Management (src/tamagotchi\_logic.py)
+### 4.1. Trigger Management (src/tamagotchi_logic.py)
 
-The `TamagotchiLogic` class in src/tamagotchi\_logic.py is responsible for managing the squid's state and updating the neurogenesis triggers. The `update_simulation` method continuously monitors the squid's needs and interactions, incrementing the novelty, stress, and reward counters based on the logic defined in this class and the parameters from `config.ini`.
+The `TamagotchiLogic` class in src/tamagotchi_logic.py is responsible for managing the squid's state and updating the neurogenesis triggers. The `update_simulation` method continuously monitors the squid's needs and interactions, incrementing the novelty, stress, and reward counters based on the logic defined in this class and the parameters from `config.ini`.
 
-### 4.2. Neuron Creation and Visualization (src/brain\_widget.py)
+### 4.2. Neuron Creation and Visualization (src/brain_widget.py)
 
 The `BrainWidget` class is the heart of the neurogenesis visualization. The key methods involved are:
 
@@ -75,7 +74,7 @@ This method is called by `update_state` and is responsible for checking if the c
 
 This method handles the actual creation of a new neuron. Here's a simplified code snippet illustrating its function:
 
-    
+```python    
     
     def _create_neuron_internal(self, neuron_type, state):
         # Generate a unique name for the new neuron
@@ -99,13 +98,13 @@ This method handles the actual creation of a new neuron. Here's a simplified cod
         self.neurogenesis_highlight = {'neuron': new_name, ...}
         
         return new_name
-
+```
         
             
 
-### 4.3. User Interface (src/brain\_neurogenesis\_tab.py)
+### 4.3. User Interface (src/brain_neurogenesis_tab.py)
 
-The `NeurogenesisTab` class in src/brain\_neurogenesis\_tab.py provides a user-friendly interface for monitoring the neurogenesis process. It displays the following real-time information:
+The `NeurogenesisTab` class in src/brain_neurogenesis_tab.py provides a user-friendly interface for monitoring the neurogenesis process. It displays the following real-time information:
 
 *   **Live Counters:** The current values of the novelty, stress, and reward counters.
 *   **Thresholds:** The current thresholds for each trigger.
