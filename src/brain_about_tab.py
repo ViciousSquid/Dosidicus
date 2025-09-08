@@ -2,106 +2,90 @@ import random
 import os
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
+from .statistics_tab import StatisticsTab
 
 class AboutTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
         super().__init__(parent, tamagotchi_logic, brain_widget, config, debug_mode)
         self.initialize_ui()
 
+    def set_tamagotchi_logic(self, tamagotchi_logic):
+        """Set the tamagotchi_logic reference for this tab and its children."""
+        self.tamagotchi_logic = tamagotchi_logic
+        if hasattr(self, 'statistics_tab') and self.statistics_tab:
+            self.statistics_tab.set_tamagotchi_logic(tamagotchi_logic)
+
+    def handle_tab_change(self, index):
+        """Handle the user switching between the About and Statistics tabs."""
+        current_widget = self.tab_widget.widget(index)
+        
+        if current_widget == self.statistics_tab:
+            # The statistics tab is now visible, start its updates
+            self.statistics_tab.start_updates()
+        else:
+            # The statistics tab is no longer visible, stop its updates
+            if hasattr(self, 'statistics_tab'): # Safety check
+                self.statistics_tab.stop_updates()
+
     def update_from_brain_state(self, state):
         """Update tab based on brain state - handle personality updates"""
         if not hasattr(self, 'personality_label'):
             return
-
-        # Check for personality in state
         if 'personality' in state:
             new_personality = str(state['personality']).lower().capitalize()
-
-            # Only update if the personality has actually changed
             current_text = self.personality_label.text()
             current_personality = current_text.replace("Personality: ", "").strip()
-
             if new_personality != current_personality:
-                #print(f"AboutTab: Updated personality from '{current_personality}' to '{new_personality}'")
                 self.personality_label.setText(f"Personality: {new_personality}")
-
-                # Enable care tips button if we now have a personality
                 if hasattr(self, 'care_tips_button'):
                     self.care_tips_button.setEnabled(new_personality != "Unknown")
-                    # Update button callback to use current personality
                     try:
                         self.care_tips_button.clicked.disconnect()
                     except TypeError:
-                        # It's okay if there wasn't a connection
                         pass
                     self.care_tips_button.clicked.connect(lambda: self.show_care_tips(new_personality))
-
-        # Check for squid object updates
         if hasattr(self.tamagotchi_logic, 'squid') and self.tamagotchi_logic.squid:
             squid = self.tamagotchi_logic.squid
-
-            # Update name if it exists
             if hasattr(squid, 'name') and hasattr(self, 'name_label'):
                 current_name = self.name_label.text()
                 if squid.name != current_name:
                     self.name_label.setText(squid.name)
 
     def initialize_ui(self):
-        # Get version info first
         version_info = self.get_version_info()
-        
         from .display_scaling import DisplayScaling
-        
-        # Main text content using QTextEdit
+
+        # Create a top-level tab widget that will contain "About" and "Statistics"
+        self.tab_widget = QtWidgets.QTabWidget()
+        self.layout.addWidget(self.tab_widget)
+
+        # --- Create the 'About' Page ---
+        about_page_widget = QtWidgets.QWidget()
+        about_page_layout = QtWidgets.QVBoxLayout(about_page_widget)
+        self.tab_widget.addTab(about_page_widget, "About")
+
         about_text = QtWidgets.QTextEdit()
         about_text.setReadOnly(True)
-        
-        # Set scaled font size for QTextEdit
         font = about_text.font()
         font.setPointSize(DisplayScaling.font_size(10))
         about_text.setFont(font)
         
-        # Predefined list of approved squid names
         SQUID_NAMES = [
-            "Algernon", "Cuthbert", "Englebert", "D'Artagnan",
-            "Gaspard", "Ulysses", "Leopold", "Miroslav",
-            "Artemis", "Jacques", "Cecil", "Wilhelm", "Giskard"
+            "Algernon", "Cuthbert", "Englebert", "D'Artagnan", "Gaspard", 
+            "Ulysses", "Leopold", "Miroslav", "Artemis", "Jacques", "Cecil", 
+            "Wilhelm", "Giskard"
         ]
-        
-        # Determine the squid name and personality - more robust approach
         squid_name = random.choice(SQUID_NAMES)
         personality = "Unknown"
-        
-        # Debug log
-        #print("AboutTab initialize_ui:")
-        #print(f"  tamagotchi_logic exists: {hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None}")
-        
-        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
-            if hasattr(self.tamagotchi_logic, 'squid') and self.tamagotchi_logic.squid:
-                squid = self.tamagotchi_logic.squid
-                
-                # Get personality if available
-                if hasattr(squid, 'personality'):
-                    personality = str(squid.personality).split('.')[-1]
-                    personality = personality.lower().capitalize()
-                    print(f"  Found personality: {personality}")
-                else:
-                    print("  Squid has no personality attribute")
-                
-                # Handle name (existing or assign new)
-                if hasattr(squid, 'name'):
-                    if squid.name:
-                        squid_name = squid.name
-                        print(f"  Using existing name: {squid_name}")
-                    else:
-                        squid.name = squid_name
-                        print(f"  Assigned new name: {squid_name}")
-                else:
-                    # Initialize name attribute
-                    squid.name = squid_name
-                    print(f"  Created new name attribute: {squid_name}")
-        
-        # Build About text with version info
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'squid') and self.tamagotchi_logic.squid:
+            squid = self.tamagotchi_logic.squid
+            if hasattr(squid, 'personality'):
+                personality = str(squid.personality).split('.')[-1].lower().capitalize()
+            if hasattr(squid, 'name') and squid.name:
+                squid_name = squid.name
+            else:
+                squid.name = squid_name
+
         about_text.setHtml(f"""
         <h1>Dosidicus electronicae</h1>
         <p><a href="https://github.com/ViciousSquid/Dosidicus">github.com/ViciousSquid/Dosidicus</a></p>
@@ -116,107 +100,72 @@ class AboutTab(BrainBaseTab):
         </ul>
         """)
         
-        # Create a custom widget for the badge
         badge_widget = QtWidgets.QWidget()
         badge_layout = QtWidgets.QVBoxLayout(badge_widget)
-        badge_layout.setContentsMargins(0, 0, 0, 0)  # No margins
-        badge_layout.setSpacing(0)  # No spacing
+        badge_layout.setContentsMargins(0, 0, 0, 0)
+        badge_layout.setSpacing(0)
         
-        # Badge container
         badge_container = QtWidgets.QWidget()
         badge_container.setFixedWidth(DisplayScaling.scale(300))
-        badge_container.setStyleSheet("""
-            background-color: white;
-            border: 4px solid #FF0000;
-            border-radius: 5px;
-        """)
-        
+        badge_container.setStyleSheet("background-color: white; border: 4px solid #FF0000; border-radius: 5px;")
         badge_inner_layout = QtWidgets.QVBoxLayout(badge_container)
-        badge_inner_layout.setContentsMargins(0, 0, 0, 0)  # No margins
-        badge_inner_layout.setSpacing(0)  # No spacing
+        badge_inner_layout.setContentsMargins(0, 0, 0, 0)
+        badge_inner_layout.setSpacing(0)
         
-        # "HELLO" label
         hello_label = QtWidgets.QLabel("HELLO")
         hello_label.setAlignment(QtCore.Qt.AlignCenter)
-        hello_label.setStyleSheet(f"""
-            font-family: Arial, sans-serif;
-            font-size: {DisplayScaling.font_size(38)}px;
-            font-weight: bold;
-            color: #FFFFFF;
-            background-color: #FF0000;
-        """)
+        hello_label.setStyleSheet(f"font-family: Arial, sans-serif; font-size: {DisplayScaling.font_size(38)}px; font-weight: bold; color: #FFFFFF; background-color: #FF0000;")
         badge_inner_layout.addWidget(hello_label)
         
-        # "my name is..." label
         my_name_label = QtWidgets.QLabel("my name is")
         my_name_label.setAlignment(QtCore.Qt.AlignCenter)
-        my_name_label.setStyleSheet(f"""
-            font-family: Arial, sans-serif;
-            font-size: {DisplayScaling.font_size(20)}px;
-            color: #FFFFFF;
-            background-color: #FF0000;
-        """)
+        my_name_label.setStyleSheet(f"font-family: Arial, sans-serif; font-size: {DisplayScaling.font_size(20)}px; color: #FFFFFF; background-color: #FF0000;")
         badge_inner_layout.addWidget(my_name_label)
         
-        # Name label - editable on double-click
         self.name_label = QtWidgets.QLabel(squid_name)
         self.name_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.name_label.setStyleSheet(f"""
-            font-family: Arial, sans-serif;
-            font-size: {DisplayScaling.font_size(38)}px;
-            font-weight: bold;
-            color: #000000;
-            background-color: white;
-        """)
+        self.name_label.setStyleSheet(f"font-family: Arial, sans-serif; font-size: {DisplayScaling.font_size(38)}px; font-weight: bold; color: #000000; background-color: white;")
         self.name_label.mouseDoubleClickEvent = lambda event: self.edit_name()
         self.name_label.setToolTip("Double-click to change name")
         self.name_label.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         badge_inner_layout.addWidget(self.name_label)
-        
         badge_layout.addWidget(badge_container, alignment=QtCore.Qt.AlignHCenter)
         
-        # Add personality information below the badge
         personality_container = QtWidgets.QWidget()
         personality_layout = QtWidgets.QVBoxLayout(personality_container)
         personality_layout.setContentsMargins(DisplayScaling.scale(10), DisplayScaling.scale(20), DisplayScaling.scale(10), DisplayScaling.scale(10))
         
-        # Personality label - store reference for updates
         self.personality_label = QtWidgets.QLabel(f"Personality: {personality}")
         self.personality_label.setAlignment(QtCore.Qt.AlignCenter)
         self.personality_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(22)}px;")
         personality_layout.addWidget(self.personality_label)
         
-       # Button container
         button_container = QtWidgets.QWidget()
         button_layout = QtWidgets.QHBoxLayout(button_container)
         button_layout.setContentsMargins(0, DisplayScaling.scale(10), 0, 0)
-
-        # Add stretchable space to the left to push buttons to the center
         button_layout.addStretch()
-
-        # Add Certificate button (removed care tips button)
-        certificate_button = QtWidgets.QPushButton("View Squid Certificate")
-        certificate_button.clicked.connect(self.show_certificate)
-        certificate_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px;")
-        #button_layout.addWidget(certificate_button)
-
-        # Add color picker button
+        
         color_button = QtWidgets.QPushButton("Choose Colour")
         color_button.clicked.connect(self.open_color_picker)
-        # Set background color to pink
-        color_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px; background-color: #FFC0CB;") # Hex code for pink
+        color_button.setStyleSheet(f"font-size: {DisplayScaling.font_size(18)}px; padding: {DisplayScaling.scale(12)}px; background-color: #FFC0CB;")
         button_layout.addWidget(color_button)
-
-        # Add stretchable space to the right to push buttons to the center
         button_layout.addStretch()
-
-        # Add button container to personality layout
         personality_layout.addWidget(button_container)
 
-        # Add all widgets to the main layout
-        self.layout.addWidget(about_text)
-        self.layout.addWidget(badge_widget)
-        self.layout.addWidget(personality_container)
+        # Add original widgets to the "About" page layout
+        about_page_layout.addWidget(about_text)
+        about_page_layout.addWidget(badge_widget)
+        about_page_layout.addWidget(personality_container)
+        
+        # --- Create the 'Statistics' Tab ---
+        self.statistics_tab = StatisticsTab(self.tamagotchi_logic)
+        self.tab_widget.addTab(self.statistics_tab, "Statistics")
+
+        # --- CONNECT THE TAB CHANGE SIGNAL ---
+        self.tab_widget.currentChanged.connect(self.handle_tab_change)
+        
+        # Set initial state (by default, the "About" tab is visible, so stats updates will be off)
+        self.handle_tab_change(self.tab_widget.currentIndex())
         
         print(f"AboutTab initialization complete - Personality: {personality}")
 
@@ -243,24 +192,6 @@ class AboutTab(BrainBaseTab):
             if hasattr(self.tamagotchi_logic, 'squid') and self.tamagotchi_logic.squid:
                 self.tamagotchi_logic.squid.name = new_name
 
-    def show_certificate(self):
-        """Show the squid certificate window"""
-        try:
-            # Import here to avoid circular imports
-            from .certificate import SquidCertificateWindow
-
-            if not hasattr(self, 'certificate_window') or self.certificate_window is None:
-                self.certificate_window = SquidCertificateWindow(self, self.tamagotchi_logic)
-            else:
-                # Update the certificate with current data
-                self.certificate_window.update_certificate()
-
-            self.certificate_window.show()
-            self.certificate_window.raise_()
-        except Exception as e:
-            print(f"Error showing certificate: {e}")
-            import traceback
-            traceback.print_exc()
 
     def show_care_tips(self, personality_type):
         """Show care tips for the specific personality type"""

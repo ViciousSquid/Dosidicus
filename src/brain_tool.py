@@ -20,6 +20,7 @@ from .brain_about_tab import AboutTab
 from .brain_learning_tab import NeuralNetworkVisualizerTab
 from .brain_memory_tab import MemoryTab
 from .brain_decisions_tab import DecisionsTab
+from .statistics_tab import StatisticsTab
 from .brain_personality_tab import PersonalityTab
 # from .brain_neurogenesis_tab import NeurogenesisTab
 

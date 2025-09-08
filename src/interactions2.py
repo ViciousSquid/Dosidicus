@@ -212,6 +212,10 @@ class PoopInteractionManager:
         self.squid.happiness = min(100, self.squid.happiness - 5)
         self.squid.satisfaction = min(100, self.squid.satisfaction - 3)
         self.squid.anxiety = min(100, self.squid.anxiety + 10)
+
+        # --- NEW: Increment poops thrown statistic ---
+        if hasattr(self.squid, 'stats'):
+            self.squid.stats.total_poops_thrown += 1
         
         # Simplified negative memory
         memory_details = {

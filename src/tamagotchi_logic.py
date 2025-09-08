@@ -964,6 +964,44 @@ class TamagotchiLogic:
             # Add thoughts
             self.brain_window.add_thought("No longer startled")
 
+    def process_memory_emotional_impact(self):
+        """Periodically review high-impact memories and adjust emotional state."""
+        # Only process every few seconds to avoid constant fluctuations
+        if random.random() > 0.1:
+            return
+    
+        # Get the 3 most important recent memories
+        high_impact_memories = self.squid.memory_manager.get_active_memories_data(3) # <-- CORRECTED LINE
+    
+        if not high_impact_memories:
+            return
+            
+        # Get the single most impactful memory from the list
+        most_impactful_memory = max(high_impact_memories, key=lambda m: m.get('importance', 0))
+    
+        # Check if this memory has been processed already to avoid repeated effects
+        if most_impactful_memory.get('processed_for_emotion', False):
+            return
+            
+        memory_value = most_impactful_memory.get('raw_value', {})
+        
+        # Check for positive impact
+        if isinstance(memory_value, dict) and memory_value.get('is_positive', False):
+            # Positive memories boost happiness and satisfaction
+            self.squid.happiness = min(100, self.squid.happiness + 10)
+            self.squid.satisfaction = min(100, self.squid.satisfaction + 10)
+            
+            # Mark as processed
+            most_impactful_memory['processed_for_emotion'] = True
+            
+        # Check for negative impact (e.g., being startled)
+        elif most_impactful_memory.get('category') == 'mental_state' and 'startled' in most_impactful_memory.get('key', ''):
+            # Negative memories directly increase anxiety
+            self.squid.anxiety = min(100, self.squid.anxiety + 15)
+            
+            # Mark as processed
+            most_impactful_memory['processed_for_emotion'] = True
+
     def update_simulation(self):
         # Trigger pre-update hook
         self.plugin_manager.trigger_hook("pre_update", 
@@ -997,6 +1035,7 @@ class TamagotchiLogic:
                 self.squid.memory_manager.review_and_transfer_memories()
             else:
                 self.squid.memory_manager.periodic_memory_management() # Existing periodic management
+                self.process_memory_emotional_impact()
             
             # 6. Prepare brain state with neurogenesis data
             brain_state = {
@@ -1361,6 +1400,9 @@ class TamagotchiLogic:
             poop_item.setPos(poop_x, poop_y)
 
     def update_statistics(self):
+        if self.squid and hasattr(self.squid, 'stats'):
+            self.squid.stats.update()
+            
         self.statistics_window.update_statistics()
         self.update_cleanliness_overlay()
 
@@ -2005,7 +2047,8 @@ class TamagotchiLogic:
                         'anxiety': squid.anxiety,
                         'curiosity': squid.curiosity,
                         'personality': squid.personality.value,
-                        'tint_color': squid.tint_color.getRgb() if squid.tint_color else None
+                        'tint_color': squid.tint_color.getRgb() if squid.tint_color else None,
+                        'total_age_seconds': squid.stats.get_total_age_seconds(),
                     },
                     'tamagotchi_logic': {
                         'cleanliness_threshold_time': self.cleanliness_threshold_time,
