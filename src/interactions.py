@@ -237,9 +237,6 @@ class RockInteractionManager:
         self.squid.satisfaction = min(100, self.squid.satisfaction + config['satisfaction_boost'])
         self.squid.anxiety = max(0, self.squid.anxiety - config['anxiety_reduction'])
         
-        if hasattr(self.squid, 'stats'):
-            self.squid.stats.total_rocks_thrown += 1
-        
         # Simplified positive memory
         memory_details = {
             "activity": "rock_throwing",

@@ -11,7 +11,6 @@ from .memory_manager import MemoryManager
 from .personality import Personality
 from .decision_engine import DecisionEngine
 from .image_cache import ImageCache
-from .squid_statistics import SquidStatistics
 
 class Squid:
 
@@ -19,7 +18,6 @@ class Squid:
         self.ui = user_interface
         self.tamagotchi_logic = tamagotchi_logic
         self.memory_manager = MemoryManager()
-        self.stats = SquidStatistics(self)
         self.push_animation = None
         self.startled_icon = None
         self.startled_icon_offset = QtCore.QPointF(0, -100)
@@ -814,11 +812,6 @@ class Squid:
         self.curiosity = state['curiosity']
         self.personality = Personality(state['personality'])
         
-        # Load the squid's persistent age and reset the session timer
-        if 'total_age_seconds' in state:
-            self.stats.total_age_seconds = state['total_age_seconds']
-        self.stats.start_time = time.time()
-        
         # Load the squid's name if it exists in the saved state
         if 'name' in state:
             self.name = state['name']
@@ -871,22 +864,7 @@ class Squid:
         # --- NEWLY ADDED ---
         # Pushing decorations is a comforting action that reduces anxiety.
         self.anxiety = max(0, self.anxiety - 6)
-
-        # --- NEW: Increment environment interaction statistic ---
-        if hasattr(self, 'stats'):
-            self.stats.total_env_interactions += 1
         
-        # --- NEW: Add a positive memory for the interaction ---
-        if hasattr(self, 'memory_manager'):
-            decoration_name = getattr(decoration, 'filename', 'a decoration').split('/')[-1]
-            memory_value = f"Pushed {decoration_name} around. Anxiety was reduced"
-            self.memory_manager.add_short_term_memory(
-                category='play',
-                key=f'push_{decoration_name}',
-                value=memory_value,
-                importance=2.0  # Assign a slightly higher importance
-            )
-
         self.status = "pushing decoration"
         self.tamagotchi_logic.show_message("Squid pushed a decoration")
 
@@ -1133,9 +1111,6 @@ class Squid:
         self.squid_x = squid_x_new
         self.squid_y = squid_y_new
 
-        # Increment distance swam statistic
-        self.stats.distance_swam += 1
-
         # Update animation frame and image
         if self.squid_direction in ["left", "right", "up", "down"]:
             self.current_frame = (self.current_frame + 1) % 2
@@ -1182,12 +1157,6 @@ class Squid:
         # Determine food type and effects
         is_sushi = getattr(food_item, 'is_sushi', False)
         food_name = "sushi" if is_sushi else "cheese"
-        
-        # Update statistics
-        if is_sushi:
-            self.stats.sushi_consumed += 1
-        else:
-            self.stats.cheese_consumed += 1
         
         # Satisfaction boost (stronger for sushi)
         effects['satisfaction'] = min(15 if is_sushi else 10, 100 - self.satisfaction)
@@ -1641,20 +1610,6 @@ class Squid:
 
     def update_view_cone(self):
         if self.view_cone_visible:
-            # Dynamic Vision Cone Adjustment
-            base_cone_angle = math.pi / 2.5  # Original 80 degrees
-            
-            # Increase cone angle with curiosity (up to 20% wider)
-            curiosity_bonus = (self.curiosity / 100.0) * (base_cone_angle * 0.2)
-            
-            # Decrease cone angle with anxiety (up to 20% narrower)
-            anxiety_penalty = (self.anxiety / 100.0) * (base_cone_angle * 0.2)
-            
-            self.view_cone_angle = base_cone_angle + curiosity_bonus - anxiety_penalty
-            
-            # Ensure the angle is within a reasonable range (e.g., 20 to 120 degrees)
-            self.view_cone_angle = max(math.pi / 9, min(math.pi * 2/3, self.view_cone_angle))
-
             if self.view_cone_item is None:
                 self.view_cone_item = QtWidgets.QGraphicsPolygonItem()
                 self.view_cone_item.setPen(QtGui.QPen(QtCore.Qt.yellow))

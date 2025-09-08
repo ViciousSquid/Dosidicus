@@ -99,31 +99,6 @@ class DecisionEngine:
                 memory_influence_weights['approaching_plant'] *= 1.2 # Positive plant memory encourages more
 
         # =================================================================
-        # 2.5. CONTEXTUAL MEMORY RETRIEVAL & EMOTIONAL ADJUSTMENT
-        # =================================================================
-        # Query for memories related to currently visible objects.
-        
-        if current_state['has_rock_visible']:
-            rock_memories = self.squid.memory_manager.get_memories_by_category('interaction', key_filter='rock')
-            if rock_memories:
-                # Get the most recent, strongest memory
-                latest_rock_memory = max(rock_memories, key=lambda m: m.get('timestamp', 0))
-                if latest_rock_memory.get('is_positive', False):
-                    # Positive memory boosts curiosity
-                    self.squid.curiosity = min(100, self.squid.curiosity + 15)
-                else:
-                    # Negative or neutral memories increase caution
-                    self.squid.anxiety = min(100, self.squid.anxiety + 10)
-        
-        if current_state['has_plant_visible']:
-            plant_memories = self.squid.memory_manager.get_memories_by_category('environment', key_filter='plant')
-            if plant_memories:
-                latest_plant_memory = max(plant_memories, key=lambda m: m.get('timestamp', 0))
-                if 'calming' in latest_plant_memory.get('value', ''):
-                    # Positive memory reduces anxiety
-                    self.squid.anxiety = max(0, self.squid.anxiety - 15)
-
-        # =================================================================
         # 3. CALCULATE PHYSIOLOGICAL URGENCY
         # =================================================================
         # Instead of a linear influence, critical needs create a powerful, non-linear urge to act.
