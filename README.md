@@ -42,7 +42,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 
 ![image](https://github.com/user-attachments/assets/5a6449c8-e138-42aa-9acf-d9bd9b46d6e4)
 
-### GETTING STARTED/CARE GUIDE: https://github.com/ViciousSquid/Dosidicus/wiki/Care-Guide
+### CARE GUIDE: https://github.com/ViciousSquid/Dosidicus/wiki/Care-Guide
 
 ### WIKI: [[https://github.com/ViciousSquid/Dosidicus/wiki](https://github.com/ViciousSquid/Dosidicus/wiki)]
 
@@ -71,3 +71,4 @@ What if a Tamagotchi had a neural network and could learn stuff?
 
 
   <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+
