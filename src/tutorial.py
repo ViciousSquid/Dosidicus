@@ -3,7 +3,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import logging
 
 class TutorialManager:
-    """Manages tutorial overlays and sequences for the Dosidicus application"""
+    """Manages tutorial overlays and sequences"""
     
     def __init__(self, ui_reference, main_window):
         self.ui = ui_reference
@@ -728,4 +728,5 @@ class TutorialManager:
         self.tutorial_elements = []
         
         # Force scene update
+
         self.ui.scene.update()
