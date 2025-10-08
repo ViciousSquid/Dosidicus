@@ -13,11 +13,12 @@ PLUGIN_REQUIRES = [] # Names of other plugins this one depends on
 MULTICAST_GROUP = '224.3.29.71'   # IP address for the multicast group
 MULTICAST_PORT = 10000            # Port number for multicast communication
 SYNC_INTERVAL = 1.0               # Default seconds between game state sync broadcasts
-MAX_PACKET_SIZE = 65507           # Maximum UDP packet size, to prevent fragmentation
+MAX_PACKET_SIZE = 1472           # Maximum UDP packet size, to prevent fragmentation
 
 # --- Visual Settings (Defaults) ---
 # These are default visual parameters. The MultiplayerPlugin instance may override these
 # based on runtime configuration (e.g., from a settings dialog).
 REMOTE_SQUID_OPACITY = 1.0        # Default opacity for remote squids (0.0 to 1.0)
 SHOW_REMOTE_LABELS = True         # Default setting for showing labels on remote entities
+
 SHOW_CONNECTION_LINES = True      # Default setting for showing lines connecting to remote squids
