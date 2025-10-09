@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dosidicus"
-version = "2.4.2"
+version = "2.4.3"
 description = "Tamagotchi-style digital pet with a neural network"
 authors = ["ViciousSquid"]
 readme = "README.md"
