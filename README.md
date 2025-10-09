@@ -1,41 +1,10 @@
 
-<div align="right">
-  <details>
-    <summary >🌐 Language</summary>
-    <div>
-      <div align="center">
-        <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=en">English</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=zh-CN">简体中文</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=zh-TW">繁體中文</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=ja">日本語</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=ko">한국어</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=hi">हिन्दी</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=th">ไทย</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=fr">Français</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=de">Deutsch</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=es">Español</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=it">Italiano</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=ru">Русский</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=pt">Português</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=nl">Nederlands</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=pl">Polski</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=ar">العربية</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=fa">فارسی</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=tr">Türkçe</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=vi">Tiếng Việt</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=id">Bahasa Indonesia</a>
-        | <a href="https://openaitx.github.io/view.html?user=ViciousSquid&project=Dosidicus&lang=as">অসমীয়া</
-      </div>
-    </div>
-  </details>
-</div>
-
 What if a Tamagotchi had a neural network and could learn stuff?
 # Dosidicus electronicae
 ### A digital pet with a simple neural network [research project]
 * Includes tools for visualising and understanding neural networks, Hebbian learning and Neurogenesis
 
-* requires `PyQt5` and `numpy`
+* requires Python 3.9 or greater , `PyQt5` and `numpy`
 
 
 
