@@ -12,7 +12,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 
 
 
-### Autonomous Behavior:
+### 🧠 Autonomous Behavior:
 
 * The squid neural network makes autonomous decisions based on current state (hunger, sleepiness, etc.).
 * Implements a vision cone for food detection, simulating realistic foraging behavior.
@@ -39,3 +39,4 @@ I'm trying to document everything!
 
 
   <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+
