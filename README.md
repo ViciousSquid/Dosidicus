@@ -10,7 +10,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 
 ![image](https://github.com/user-attachments/assets/5a6449c8-e138-42aa-9acf-d9bd9b46d6e4)
 
-
+## Please take a wiki: [[https://github.com/ViciousSquid/Dosidicus/wiki](https://github.com/ViciousSquid/Dosidicus/wiki)]
 
 ### 🧠 Autonomous Behavior:
 
@@ -20,8 +20,6 @@ What if a Tamagotchi had a neural network and could learn stuff?
 * Experiences from short-term and long-term memory can influence decision-making
 * Squid can create new neurons in response to his environment (Neurogenesis)
 
-I'm trying to document everything!
-[[https://github.com/ViciousSquid/Dosidicus/wiki](https://github.com/ViciousSquid/Dosidicus/wiki)]
 
 ### Needs Management System:
 
@@ -39,5 +37,6 @@ I'm trying to document everything!
 
 
   <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+
 
 
