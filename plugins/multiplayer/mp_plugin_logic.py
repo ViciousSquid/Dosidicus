@@ -77,7 +77,18 @@ class MultiplayerPlugin:
 
         # --- Flags ---
         self.is_setup = False
-        self.debug_mode = True                                  ### DEBUG MODE TOGGLE
+        # 1. Try to get the global flag from config.ini
+        try:
+            self.debug_mode = self.plugin_manager.config_manager.get_debug_flag("multiplayer_debug", fallback=False)
+        except Exception:
+            # 2. Any problem (no ConfigManager, no key, etc.) → stay quiet
+            self.debug_mode = False
+
+        # 3. Push the value to every sub-component that cares
+        if self.network_node:
+            self.network_node.debug_mode = self.debug_mode
+        if getattr(self, 'entity_manager', None):
+            self.entity_manager.debug_mode = self.debug_mode
         self.last_controller_update = time.time() 
         self.entity_manager: RemoteEntityManager | None = None # Added type hint
         self.config_manager = None # Placeholder, ensure this is set if used (e.g. in handle_squid_exit_message print)
@@ -155,75 +166,93 @@ class MultiplayerPlugin:
             self.logger.debug(f"  Target: {'Yes (' + type(target_obj).__name__ + ')' if target_obj else 'No'}")
         self.logger.debug("=====================================\n")
 
-    def enable(self):
-        self.logger.info("Attempting to enable Multiplayer...")
+        def enable(self):
+            self.logger.info("Attempting to enable Multiplayer...")
 
-        # Plugin already set up?
-        if not self.is_setup:
-            self.logger.info("Multiplayer plugin is not set up. Calling setup()...")
-            # Assuming self.plugin_manager and self.tamagotchi_logic_ref are available
-            if not self.setup(self.plugin_manager, self.tamagotchi_logic_ref): # Pass necessary args
-                self.logger.error("Multiplayer setup failed during enable(). Cannot enable.")
-                return False
-        else:
-            self.logger.info("Multiplayer is already marked as set up. Re-enabling components.")
+            # --- NEW: Debug log all key objects ---
+            self.logger.debug(f"[ENABLE] status_widget: {self.status_widget}")
+            self.logger.debug(f"[ENABLE] entity_manager: {self.entity_manager}")
+            self.logger.debug(f"[ENABLE] network_node: {self.network_node}")
+            self.logger.debug(f"[ENABLE] tamagotchi_logic: {self.tamagotchi_logic}")
+            self.logger.debug(f"[ENABLE] config_manager: {getattr(self, 'config_manager', None)}")
+            # --- END DEBUG LOG ---
 
-        # --- BEGIN NEW/MODIFIED SECTION ---
-        # Ensure network node is ready and listening
-        if self.network_node:
-            # Ensure the socket structure is initialized (it should be by NetworkNode.__init__ or a previous setup)
-            # but a re-check or re-init if disconnected can be robust.
-            if not self.network_node.is_connected:
-                self.logger.info("NetworkNode socket not connected, attempting to initialize in enable()...")
-                if not self.network_node.initialize_socket_structure():
-                    self.logger.error("Failed to initialize NetworkNode socket in enable(). Cannot proceed with enabling multiplayer.")
-                    # Potentially set self.enabled = False or similar state management
-                    return False # Or handle error appropriately
-
-            # Explicitly start the listener thread if it's not already active
-            if not self.network_node.is_listening():
-                self.logger.info("NetworkNode listener not active, starting it explicitly in enable()...")
-                if not self.network_node.start_listening():
-                    self.logger.error("Failed to start NetworkNode listener in enable(). Multiplayer might not receive messages.")
-                    # Decide if this is a fatal error for enabling or just a warning
-                    # For now, let's treat it as potentially non-fatal but log an error.
-                    # Depending on requirements, you might return False here.
-                else:
-                    self.logger.info(">>>>>> NetworkNode listener started successfully!")
+            # Plugin already set up?
+            if not self.is_setup:
+                self.logger.info("Multiplayer plugin is not set up. Calling setup()...")
+                # Assuming self.plugin_manager and self.tamagotchi_logic_ref are available
+                if not self.setup(self.plugin_manager, self.tamagotchi_logic_ref): # Pass necessary args
+                    self.logger.error("Multiplayer setup failed during enable(). Cannot enable.")
+                    return False
             else:
-                self.logger.info("NetworkNode listener was already active.")
-        else:
-            self.logger.error("NetworkNode not found after setup in enable(). Cannot enable multiplayer fully.")
-            # Potentially set self.enabled = False
-            return False # This is likely a critical failure
-        # --- END NEW/MODIFIED SECTION ---
+                self.logger.info("Multiplayer is already marked as set up. Re-enabling components.")
 
-        # Resume original enable logic:
-        # For example, re-initialize UI components, timers, etc.
-        # Ensure any components that were disabled are re-enabled.
+            # --- BEGIN NEW/MODIFIED SECTION ---
+            # Ensure network node is ready and listening
+            if self.network_node:
+                # Ensure the socket structure is initialized (it should be by NetworkNode.__init__ or a previous setup)
+                # but a re-check or re-init if disconnected can be robust.
+                if not self.network_node.is_connected:
+                    self.logger.info("NetworkNode socket not connected, attempting to initialize in enable()...")
+                    if not self.network_node.initialize_socket_structure():
+                        self.logger.error("Failed to initialize NetworkNode socket in enable(). Cannot proceed with enabling multiplayer.")
+                        # Potentially set self.enabled = False or similar state management
+                        return False # Or handle error appropriately
 
-        # Re-initialize or ensure timers are running (if they were stopped in disable)
-        if not self.message_process_timer or not self.message_process_timer.isActive():
-            if not self.message_process_timer:
-                self.message_process_timer = QtCore.QTimer()
-                self.message_process_timer.timeout.connect(self._process_network_node_queue)
-            self.message_process_timer.start(50)
-            self.logger.info("Message processing timer started/restarted.")
+                # Explicitly start the listener thread if it's not already active
+                if not self.network_node.is_listening():
+                    self.logger.info("NetworkNode listener not active, starting it explicitly in enable()...")
+                    if not self.network_node.start_listening():
+                        self.logger.error("Failed to start NetworkNode listener in enable(). Multiplayer might not receive messages.")
+                        # Decide if this is a fatal error for enabling or just a warning
+                        # For now, let's treat it as potentially non-fatal but log an error.
+                        # Depending on requirements, you might return False here.
+                    else:
+                        self.logger.info(">>>>>> NetworkNode listener started successfully!")
+                else:
+                    self.logger.info("NetworkNode listener was already active.")
+            else:
+                self.logger.error("NetworkNode not found after setup in enable(). Cannot enable multiplayer fully.")
+                # Potentially set self.enabled = False
+                return False # This is likely a critical failure
+            # --- END NEW/MODIFIED SECTION ---
 
-        if not (hasattr(self, 'sync_timer') and self.sync_timer and self.sync_timer.isActive()):
-            # Assuming start_sync_timer handles creation if necessary and starts it
-            self.logger.info("Sync timer not active, starting/restarting it.")
-            self.start_sync_timer()
-        
-        # Update status widget if applicable
-        if self.status_widget:
-            self.status_widget.update_status("Enabled", True)
-            current_ip = self.network_node.local_ip if self.network_node else "N/A"
-            self.status_widget.set_ip_address(current_ip)
+            # Resume original enable logic:
+            # For example, re-initialize UI components, timers, etc.
+            # Ensure any components that were disabled are re-enabled.
 
-        self.enabled = True # Mark as enabled
-        self.logger.info("Multiplayer enabled successfully.")
-        return True
+            # Re-initialize or ensure timers are running (if they were stopped in disable)
+            if self.message_process_timer:
+                if not self.message_process_timer.isActive():
+                    self.message_process_timer.start(50)
+                    self.logger.info("Message processing timer restarted.")
+            else:
+                self.logger.warning("message_process_timer is None in enable(). Skipping.")
+
+            if hasattr(self, 'sync_timer') and self.sync_timer:
+                if not self.sync_timer.isActive():
+                    self.logger.info("Sync timer not active, starting/restarting it.")
+                    self.start_sync_timer()
+            else:
+                self.logger.warning("sync_timer not found or is None. Skipping.")
+
+            # Update status widget if applicable
+            if self.status_widget:
+                try:
+                    self.status_widget.update_status("Enabled", True)
+                    current_ip = self.network_node.local_ip if self.network_node else "N/A"
+                    if hasattr(self.status_widget, 'set_ip_address'):
+                        self.status_widget.set_ip_address(current_ip)
+                    else:
+                        self.logger.warning("status_widget has no set_ip_address method.")
+                except Exception as e:
+                    self.logger.error(f"Error updating status_widget in enable(): {e}", exc_info=True)
+            else:
+                self.logger.warning("status_widget is None in enable(). Skipping UI update.")
+
+            self.enabled = True # Mark as enabled
+            self.logger.info("Multiplayer enabled successfully.")
+            return True
 
     def disable(self):
         """Disables the multiplayer plugin and cleans up resources."""
@@ -852,27 +881,32 @@ class MultiplayerPlugin:
 
 
     def handle_squid_exit_message(self, node: Any, message: Dict, addr: tuple):
-        # Ensure config_manager is available or provide a default for the print
-        node_id_for_print = "UnknownNode_HandleExit"
-        if hasattr(self, 'config_manager') and self.config_manager and hasattr(self.config_manager, 'get_node_id'):
-            node_id_for_print = self.config_manager.get_node_id()
-        elif self.network_node: # Fallback to network_node's ID if config_manager not fully set up
-            node_id_for_print = self.network_node.node_id
-        
-        print(f"DEBUG_STEP_1: Node {node_id_for_print} - handle_squid_exit_message CALLED. Message type: {message.get('type')}, Full message: {message}")
+        """
+        We just received a 'squid_exit' multicast.
+        Draw the giant exit-arrow and then create / update the remote squid visual.
+        """
+        # ----- basic sanity / logging -----
+        node_id_for_print = (getattr(self, 'config_manager', None) and
+                            getattr(self.config_manager, 'get_node_id', None) and
+                            self.config_manager.get_node_id()) or \
+                            (self.network_node and self.network_node.node_id) or "UnknownNode_HandleExit"
 
-        if not self.logger: 
+        if self.debug_mode:
+            print(f"DEBUG_STEP_1: Node {node_id_for_print} - handle_squid_exit_message CALLED. "
+                f"Message type: {message.get('type')}")
+
+        if not self.logger:
             print("MPPluginLogic ERRA: Logger not available in handle_squid_exit_message")
-            return False 
+            return False
 
         try:
-            self.logger.info(f"MY NODE ID {self.network_node.node_id if self.network_node else 'Unknown'} - Received squid_exit message: {message} from {addr}")
+            self.logger.info(f"MY NODE ID {self.network_node.node_id if self.network_node else 'Unknown'} - "
+                            f"Received squid_exit message: {message} from {addr}")
 
             exit_payload_outer = message.get('payload', {})
-            exit_payload_inner = exit_payload_outer.get('payload', None) # This is the actual exit_data
-            
+            exit_payload_inner = exit_payload_outer.get('payload')  # actual exit_data
             if not exit_payload_inner:
-                self.logger.warning("squid_exit message missing a nested 'payload' key containing the actual exit data.")
+                self.logger.warning("squid_exit message missing nested 'payload' key.")
                 return False
 
             source_node_id = exit_payload_inner.get('node_id')
@@ -880,74 +914,46 @@ class MultiplayerPlugin:
                 self.logger.warning("squid_exit inner payload missing 'node_id'.")
                 return False
 
+            # ignore our own broadcast
             if self.network_node and source_node_id == self.network_node.node_id:
-                # This instance is the one that sent the exit message. Ignore.
                 self.logger.debug(f"Ignoring own squid_exit broadcast for {source_node_id}.")
-                return False # Important: do not process self-exit as an arrival
+                return False
 
-            self.logger.info(f"Processing squid_exit from REMOTE node {source_node_id} for potential entry.")
-            self.logger.info(f"Exit payload from remote: {exit_payload_inner}")
+            # ========== NEW: SHOW THE BIG EXIT ARROW ==========
+            exit_dir = exit_payload_inner.get('direction', 'right')
+            if self.debug_mode:
+                self.logger.debug(f"Showing exit arrow for direction: {exit_dir}")
+            self._show_exit_arrow(exit_dir)
+            # ===================================================
 
-            if hasattr(self, 'entity_manager') and self.entity_manager:
-                # update_remote_squid now expects the exit_payload_inner (actual exit_data)
-                # It will handle making the squid visible immediately and statically.
+            # create / update the remote squid visual
+            if self.entity_manager:
                 update_success = self.entity_manager.update_remote_squid(
-                    source_node_id,
-                    exit_payload_inner, 
-                    is_new_arrival=True # Signal to RemoteEntityManager that this is a new arrival
+                    source_node_id, exit_payload_inner, is_new_arrival=True
                 )
-                # self.logger.info(f"Called entity_manager.update_remote_squid for {source_node_id}. Result: {update_success}")
-                
-                # The visual item is created/updated by entity_manager.
-                # Autopilot creation can proceed if update_success (which is a boolean) is True.
-                if update_success:
-                    # Ensure RemoteSquidController is imported
-                    # from .squid_multiplayer_autopilot import RemoteSquidController # (Already at top)
+                if update_success and source_node_id not in self.remote_squid_controllers:
+                    self.logger.info(f"Creating new autopilot for remote squid {source_node_id}")
+                    entry_details = self.entity_manager.get_last_calculated_entry_details(source_node_id)
+                    initial_data = exit_payload_inner.copy()
+                    if entry_details:
+                        initial_data['x'], initial_data['y'] = entry_details['entry_pos']
+                        initial_data['entry_direction_on_this_screen'] = entry_details['entry_direction']
 
-                    if source_node_id not in self.remote_squid_controllers:
-                        self.logger.info(f"Creating new autopilot for remote squid {source_node_id}")
-                        
-                        # Prepare initial data for the autopilot.
-                        # The autopilot might use entry_details to set its initial position/target.
-                        entry_details = self.entity_manager.get_last_calculated_entry_details(source_node_id)
-                        initial_autopilot_data = exit_payload_inner.copy() # Start with original exit data
-                        if entry_details:
-                            # Override x,y with calculated entry positions for this screen
-                            initial_autopilot_data['x'], initial_autopilot_data['y'] = entry_details['entry_pos']
-                            # Add the direction of entry on this screen, useful for autopilot's initial logic
-                            initial_autopilot_data['entry_direction_on_this_screen'] = entry_details['entry_direction']
-                        else: # Fallback if entry details somehow not available
-                            self.logger.warning(f"Entry details not found for {source_node_id} when creating autopilot. Autopilot will use direct exit payload positions.")
-                            # Autopilot will use x,y from exit_payload_inner if entry_details are missing
-                        
-                        try:
-                            autopilot_controller = RemoteSquidController(
-                                squid_data=initial_autopilot_data, # Pass full data, including potential entry pos & direction
-                                scene=self.tamagotchi_logic.user_interface.scene,
-                                plugin_instance=self, # Pass this MultiplayerPlugin instance
-                                debug_mode=self.debug_mode,
-                                remote_entity_manager=self.entity_manager # Pass manager reference
-                            )
-                            self.remote_squid_controllers[source_node_id] = autopilot_controller
-                            self.logger.info(f"Autopilot for {source_node_id} created. Initial target might be set by controller based on entry data.")
-                            
-                            # Autopilot's constructor or its first update can now use the 'entry_direction_on_this_screen'
-                            # and its calculated 'x' and 'y' to set an initial movement target.
-                            # For example, the autopilot's __init__ or an initial_setup method could call:
-                            # self.set_initial_entry_target() if 'entry_direction_on_this_screen' in self.squid_data: ...
-
-                        except Exception as e_auto:
-                             self.logger.error(f"Error creating RemoteSquidController for {source_node_id}: {e_auto}", exc_info=True)
-                    else:
-                        self.logger.info(f"Autopilot controller for {source_node_id} already exists. Updating its data if necessary.")
-                        # Optionally update existing autopilot if needed:
-                        # self.remote_squid_controllers[source_node_id].update_squid_data(exit_payload_inner) # if such a method exists and is appropriate
+                    autopilot_controller = RemoteSquidController(
+                        squid_data=initial_data,
+                        scene=self.tamagotchi_logic.user_interface.scene,
+                        plugin_instance=self,
+                        debug_mode=self.debug_mode,
+                        remote_entity_manager=self.entity_manager
+                    )
+                    self.remote_squid_controllers[source_node_id] = autopilot_controller
+                    self.logger.info(f"Autopilot for {source_node_id} created.")
                 else:
-                    self.logger.warning(f"Failed to create or update remote squid {source_node_id} in entity_manager. Autopilot not created/updated.")
+                    self.logger.warning(f"Failed to create/update remote squid {source_node_id} in entity_manager.")
             else:
-                self.logger.error("Remote entity manager (self.entity_manager) not found or not initialized!")
-            
-            return True # Indicate successful processing attempt
+                self.logger.error("Remote entity manager (self.entity_manager) not found!")
+
+            return True
 
         except Exception as e:
             self.logger.error(f"Error in handle_squid_exit_message: {e}", exc_info=True)
@@ -987,41 +993,35 @@ class MultiplayerPlugin:
 
     def update_remote_controllers(self):
         """Called by a QTimer to update RemoteSquidController instances."""
-        # --- NEW TRACE PRINT ---
-        print(f"!!!!!!!! MP_PLUGIN_LOGIC: update_remote_controllers METHOD ENTERED. Num controllers: {len(self.remote_squid_controllers if hasattr(self, 'remote_squid_controllers') else {})} !!!!!!!!")
-        # --- END NEW TRACE PRINT ---
-        # ADDED DEBUG LOGGING
-        if self.logger: # Ensure logger exists before using it
-            self.logger.info(f"DEBUG_MPL_UPDATE: At start of update_remote_controllers. Current controllers: {list(self.remote_squid_controllers.keys()) if hasattr(self, 'remote_squid_controllers') else 'N/A'}. Dict size: {len(self.remote_squid_controllers) if hasattr(self, 'remote_squid_controllers') else 'N/A'}")
-
-        if not self.logger: 
-            print("MP_PLUGIN_LOGIC: Logger not available in update_remote_controllers.") # Fallback print
+        if not self.logger:
             return
+
+        # ----  TRACE  ----
+        if self.debug_mode:
+            print(f"TRACE ++++ MP_PLUGIN_LOGIC: update_remote_controllers METHOD ENTERED. "
+                f"Num controllers: {len(self.remote_squid_controllers)} ++++")
+            self.logger.info("DEBUG_MPL_UPDATE: At start of update_remote_controllers. "
+                            "Current controllers: %s. Dict size: %s",
+                            list(self.remote_squid_controllers.keys()),
+                            len(self.remote_squid_controllers))
+        # -----------------
+
         if not hasattr(self, 'remote_squid_controllers') or not self.remote_squid_controllers:
-            # print("MP_PLUGIN_LOGIC: No remote squid controllers to update.") # Can be noisy
             return
 
         current_time = time.time()
-        delta_time = current_time - self.last_controller_update # self.last_controller_update should be initialized in __init__ or setup
-        
-        # Prevent excessively small or negative delta_time if system time changes or very rapid calls
-        if delta_time <= 0.001: # Check against a small positive threshold
-            # if self.debug_mode: # Make this conditional if too verbose
-            #     print(f"MP_PLUGIN_LOGIC: Delta time too small or zero ({delta_time:.4f}), skipping controller update cycle.")
-            return 
+        delta_time = current_time - self.last_controller_update
+        if delta_time <= 0.001:
+            return
         self.last_controller_update = current_time
 
-        # if self.debug_mode: # Optional: guard this if console is too noisy
-        #      print(f"--- MultiplayerPlugin: update_remote_controllers. Delta time: {delta_time:.3f}. Num controllers: {len(self.remote_squid_controllers)} ---")
-
-        for node_id, controller in list(self.remote_squid_controllers.items()): # Iterate over a copy
+        for node_id, controller in list(self.remote_squid_controllers.items()):
             try:
-                # --- NEW TRACE PRINT ---
-                print(f"--- MP_PLUGIN_LOGIC: Attempting to call update() for controller {node_id[-4:]} ---")
-                # --- END NEW TRACE PRINT ---
-                controller.update(delta_time) 
+                if self.debug_mode:
+                    print(f"++++ MP_PLUGIN_LOGIC: Attempting to call update() for controller {node_id[-4:]} ++++")
+                controller.update(delta_time)
             except Exception as e:
-                self.logger.error(f"MP_PLUGIN_LOGIC: Error updating controller for {node_id[-6:]}: {e}", exc_info=True)
+                self.logger.error(f"++++ MP_PLUGIN_LOGIC: Error updating controller for {node_id[-6:]}: {e}", exc_info=True)
 
 
     def calculate_entry_position(self, entry_side_direction: str) -> tuple:
@@ -1087,18 +1087,64 @@ class MultiplayerPlugin:
         if self.debug_mode:
             self.logger.debug(f"Skipping dynamic exit effect for static testing at ({center_x},{center_y}).")
 
-        # If you still want a minimal static cue:
-        # travel_text_str = "Off to explore!"
-        # travel_text_item = scene.addText(travel_text_str)
-        # travel_font = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
-        # travel_text_item.setFont(travel_font)
-        # text_metrics = QtGui.QFontMetrics(travel_font)
-        # text_rect = text_metrics.boundingRect(travel_text_str)
-        # travel_text_item.setDefaultTextColor(QtGui.QColor(173, 216, 230)) # Light blue
-        # travel_text_item.setPos(center_x - text_rect.width() / 2, center_y + 30) # Position below exit
-        # travel_text_item.setZValue(100)
-        # travel_text_item.setVisible(True)
-        # QtCore.QTimer.singleShot(2500, lambda: scene.removeItem(travel_text_item) if travel_text_item.scene() else None)
+    from PyQt5 import QtCore, QtGui, QtWidgets
+
+    def _show_exit_arrow(self, exit_direction: str):
+        """
+        Draw a big arrow flush with the screen edge the squid just left through.
+        exit_direction : 'left' | 'right' | 'up' | 'down'
+        """
+        if not self.tamagotchi_logic or not hasattr(self.tamagotchi_logic, 'user_interface'):
+            return
+        ui = self.tamagotchi_logic.user_interface
+        scene = ui.scene
+        w, h = ui.window_width, ui.window_height
+        colour = QtGui.QColor(255, 200, 0, 200)   # juicy orange
+        pen = QtGui.QPen(colour, 16)
+        pen.setCapStyle(QtCore.Qt.RoundCap)
+        pen.setJoinStyle(QtCore.Qt.RoundJoin)
+
+        # ---------- geometry ----------
+        shaft_len = min(w, h) * 0.55          # long shaft
+        head_len  = shaft_len * 0.30          # arrow-head
+        shaft_wid = 24                        # visual thickness
+
+        if exit_direction == 'left':          # leaving LEFT edge → arrow points LEFT
+            shaft = QtCore.QLineF(shaft_len, h/2, 0, h/2)
+            head1 = QtCore.QLineF(head_len,  h/2 - head_len*0.6, 0, h/2)
+            head2 = QtCore.QLineF(head_len,  h/2 + head_len*0.6, 0, h/2)
+        elif exit_direction == 'right':       # leaving RIGHT edge → arrow points RIGHT
+            shaft = QtCore.QLineF(w - shaft_len, h/2, w, h/2)
+            head1 = QtCore.QLineF(w - head_len,  h/2 - head_len*0.6, w, h/2)
+            head2 = QtCore.QLineF(w - head_len,  h/2 + head_len*0.6, w, h/2)
+        elif exit_direction == 'up':          # leaving TOP edge → arrow points UP
+            shaft = QtCore.QLineF(w/2, shaft_len, w/2, 0)
+            head1 = QtCore.QLineF(w/2 - head_len*0.6, head_len, w/2, 0)
+            head2 = QtCore.QLineF(w/2 + head_len*0.6, head_len, w/2, 0)
+        else:                                 # leaving BOTTOM edge → arrow points DOWN
+            shaft = QtCore.QLineF(w/2, h - shaft_len, w/2, h)
+            head1 = QtCore.QLineF(w/2 - head_len*0.6, h - head_len, w/2, h)
+            head2 = QtCore.QLineF(w/2 + head_len*0.6, h - head_len, w/2, h)
+
+        # ---------- draw ----------
+        group = QtWidgets.QGraphicsItemGroup()
+        group.setZValue(1000)  # on top of everything
+        for line in (shaft, head1, head2):
+            group.addToGroup(scene.addLine(line, pen))
+        scene.addItem(group)
+
+        # ---------- fade & self-destruct ----------
+        def fade():
+            opacity = group.opacity()
+            if opacity > 0.01:
+                group.setOpacity(max(0, opacity - 0.04))
+            else:
+                scene.removeItem(group)
+                fade_timer.stop()
+
+        fade_timer = QtCore.QTimer()
+        fade_timer.timeout.connect(fade)
+        fade_timer.start(40)  # ~25 fps → gone in ~2 s
 
     def handle_squid_return(self, node: NetworkNode, message: Dict, addr: tuple):
         """Handles a 'squid_return' message for the player's own squid."""
@@ -1463,7 +1509,7 @@ class MultiplayerPlugin:
         self.SHOW_CONNECTION_LINES = checked_state
         
         # This will be handled by entity_manager's update_settings or fallback update_connection_lines
-        if self.entity_manager:
+        if getattr(self, 'entity_manager', None):
             self.entity_manager.update_settings(show_connections=self.SHOW_CONNECTION_LINES)
         else: # Fallback if no entity manager
             if hasattr(self.tamagotchi_logic, 'user_interface') and self.tamagotchi_logic.user_interface:

@@ -3,7 +3,7 @@
 # --- Plugin Metadata ---
 # These constants describe the plugin to the system and users.
 PLUGIN_NAME = "Multiplayer"
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "1.2.0"
 PLUGIN_AUTHOR = "Rufus Pearce"
 PLUGIN_DESCRIPTION = "Enables network sync for squids and objects (Experimental)"
 PLUGIN_REQUIRES = [] # Names of other plugins this one depends on
@@ -14,6 +14,10 @@ MULTICAST_GROUP = '224.3.29.71'   # IP address for the multicast group
 MULTICAST_PORT = 10000            # Port number for multicast communication
 SYNC_INTERVAL = 1.0               # Default seconds between game state sync broadcasts
 MAX_PACKET_SIZE = 1472           # Maximum UDP packet size, to prevent fragmentation
+
+USE_TCP        = False   # default – restored from ini
+TCP_IP_LIST    = []      # will be ['192.168.1.50','192.168.1.51',…]
+TCP_PORT       = 5008
 
 # --- Visual Settings (Defaults) ---
 # These are default visual parameters. The MultiplayerPlugin instance may override these

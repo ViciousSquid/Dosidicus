@@ -1,252 +1,98 @@
+# multiplayer_config_dialog.py
 from PyQt5 import QtCore, QtGui, QtWidgets
-import time
+from plugins.multiplayer import mp_constants
+import os
 
 class MultiplayerConfigDialog(QtWidgets.QDialog):
-    def __init__(self, plugin, parent=None, multicast_group=None, port=None, sync_interval=None, remote_opacity=None, show_labels=None, show_connections=None):
+    """
+    Modal dialog that lets the user change multiplayer network settings.
+    New: checkbox to switch to TCP/IP list + line-edit for addresses.
+    """
+    def __init__(self, plugin_instance, parent=None, initial_settings=None):
         super().__init__(parent)
-        self.plugin = plugin
-        
-        # Store settings
-        self.MULTICAST_GROUP = multicast_group
-        self.MULTICAST_PORT = port
-        self.SYNC_INTERVAL = sync_interval
-        self.REMOTE_SQUID_OPACITY = remote_opacity
-        self.SHOW_REMOTE_LABELS = show_labels
-        self.SHOW_CONNECTION_LINES = show_connections
+        self.plugin = plugin_instance
+        self.setWindowTitle("Multiplayer Network Settings")
+        self.setModal(True)
+        self.resize(500, 400)
+        self._build_ui(initial_settings or {})
 
-        # Initialize UI
-        self.setup_ui()
+    # ------------------------------------------------------------------
+    # UI construction
+    # ------------------------------------------------------------------
+    def _build_ui(self, cfg):
+        main_layout = QtWidgets.QVBoxLayout(self)
 
-    def setup_ui(self):
-        """Set up the UI components with larger fonts and better scaling"""
-        layout = QtWidgets.QVBoxLayout(self)
-        
-        # Set a base font size for better readability
-        base_font = QtGui.QFont()
-        base_font.setPointSize(10)  # Increase default font size
-        
-        # Apply the font to the dialog
-        self.setFont(base_font)
-        
-        # Network settings group
-        network_group = QtWidgets.QGroupBox("Network Settings")
-        network_group.setFont(base_font)  # Apply font to group box title
-        network_layout = QtWidgets.QFormLayout(network_group)
-        
-        # Multicast group address (larger font)
-        self.multicast_address = QtWidgets.QLineEdit(self.MULTICAST_GROUP)
-        self.multicast_address.setFont(base_font)  # Apply font to text input
-        network_layout.addRow("Multicast Group:", self.multicast_address)
-        
-        # Port (larger font)
-        self.port = QtWidgets.QSpinBox()
-        self.port.setFont(base_font)
-        self.port.setRange(1024, 65535)
-        self.port.setValue(self.MULTICAST_PORT)
-        network_layout.addRow("Port:", self.port)
-        
-        # Sync interval (larger font)
-        self.sync_interval = QtWidgets.QDoubleSpinBox()
-        self.sync_interval.setFont(base_font)
-        self.sync_interval.setRange(0.1, 5.0)
-        self.sync_interval.setSingleStep(0.1)
-        self.sync_interval.setValue(self.SYNC_INTERVAL)
-        network_layout.addRow("Sync Interval (s):", self.sync_interval)
-        
-        layout.addWidget(network_group)
-        
-        # Node info group (larger font)
-        node_group = QtWidgets.QGroupBox("Local Node Information")
-        node_group.setFont(base_font)
-        node_layout = QtWidgets.QFormLayout(node_group)
-        
-        # Node ID (read-only, larger font)
-        self.node_id = QtWidgets.QLineEdit()
-        self.node_id.setFont(base_font)
-        self.node_id.setReadOnly(True)
-        if hasattr(self.plugin, 'network_node') and self.plugin.network_node:
-            self.node_id.setText(self.plugin.network_node.node_id)
-        node_layout.addRow("Node ID:", self.node_id)
-        
-        # Local IP (read-only, larger font)
-        self.local_ip = QtWidgets.QLineEdit()
-        self.local_ip.setFont(base_font)
-        self.local_ip.setReadOnly(True)
-        if hasattr(self.plugin, 'network_node') and self.plugin.network_node:
-            self.local_ip.setText(self.plugin.network_node.local_ip)
-        node_layout.addRow("Local IP:", self.local_ip)
-        
-        layout.addWidget(node_group)
-        
-        # Visual settings group (larger font)
-        visual_group = QtWidgets.QGroupBox("Visual Settings")
-        visual_group.setFont(base_font)
-        visual_layout = QtWidgets.QFormLayout(visual_group)
-        
-        # Remote squid opacity (larger font)
-        self.remote_opacity = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.remote_opacity.setFont(base_font)
-        self.remote_opacity.setRange(10, 100)
-        self.remote_opacity.setValue(int(self.REMOTE_SQUID_OPACITY * 100))
-        self.remote_opacity.setTickPosition(QtWidgets.QSlider.TicksBelow)
-        self.remote_opacity.setTickInterval(10)
-        visual_layout.addRow("Remote Squid Opacity:", self.remote_opacity)
-        
-        # Show remote labels (larger font)
-        self.show_labels = QtWidgets.QCheckBox()
-        self.show_labels.setFont(base_font)
-        self.show_labels.setChecked(self.SHOW_REMOTE_LABELS)
-        visual_layout.addRow("Show Remote Labels:", self.show_labels)
-        
-        # Show connection lines (larger font)
-        self.show_connections = QtWidgets.QCheckBox()
-        self.show_connections.setFont(base_font)
-        self.show_connections.setChecked(self.SHOW_CONNECTION_LINES)
-        visual_layout.addRow("Show Connection Lines:", self.show_connections)
-        
-        layout.addWidget(visual_group)
-        
-        # Add advanced settings group
-        advanced_group = QtWidgets.QGroupBox("Advanced Settings")
-        advanced_group.setFont(base_font)
-        advanced_layout = QtWidgets.QFormLayout(advanced_group)
-        
-        # Debug mode checkbox
-        self.debug_mode = QtWidgets.QCheckBox()
-        self.debug_mode.setFont(base_font)
-        self.debug_mode.setChecked(getattr(self.plugin, 'debug_mode', False))
-        advanced_layout.addRow("Debug Mode:", self.debug_mode)
-        
-        # Reconnect on failure checkbox
-        self.auto_reconnect = QtWidgets.QCheckBox()
-        self.auto_reconnect.setFont(base_font)
-        self.auto_reconnect.setChecked(getattr(self.plugin.network_node, 'auto_reconnect', True) 
-                                    if hasattr(self.plugin, 'network_node') else True)
-        advanced_layout.addRow("Auto Reconnect:", self.auto_reconnect)
-        
-        # Packet compression checkbox
-        self.use_compression = QtWidgets.QCheckBox()
-        self.use_compression.setFont(base_font)
-        self.use_compression.setChecked(getattr(self.plugin.network_node, 'use_compression', True)
-                                    if hasattr(self.plugin, 'network_node') else True)
-        advanced_layout.addRow("Use Compression:", self.use_compression)
-        
-        layout.addWidget(advanced_group)
-        
-        # Connected peers list (larger font)
-        peers_group = QtWidgets.QGroupBox("Connected Peers")
-        peers_group.setFont(base_font)
-        peers_layout = QtWidgets.QVBoxLayout(peers_group)
-        
-        self.peers_list = QtWidgets.QListWidget()
-        self.peers_list.setFont(base_font)  # Apply font to list items
-        self.update_peers_list()
-        peers_layout.addWidget(self.peers_list)
-        
-        refresh_button = QtWidgets.QPushButton("Refresh")
-        refresh_button.setFont(base_font)  # Larger button text
-        refresh_button.clicked.connect(self.update_peers_list)
-        peers_layout.addWidget(refresh_button)
-        
-        layout.addWidget(peers_group)
-        
-        # Buttons (larger font)
-        button_box = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Save | 
-            QtWidgets.QDialogButtonBox.Cancel
-        )
-        button_box.setFont(base_font)  # Larger button text
-        button_box.accepted.connect(self.save_settings)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
-    
-    def update_peers_list(self):
-        """Update the list of connected peers"""
-        self.peers_list.clear()
-        
-        if (hasattr(self.plugin, 'network_node') and 
-            self.plugin.network_node and 
-            hasattr(self.plugin.network_node, 'known_nodes')):
-            
-            for node_id, (ip, last_seen, squid_data) in self.plugin.network_node.known_nodes.items():
-                status = "Active" if time.time() - last_seen < 10 else "Inactive"
-                item = QtWidgets.QListWidgetItem(f"{node_id} ({ip}) - {status}")
-                
-                # Set color based on status
-                if status == "Active":
-                    item.setForeground(QtGui.QBrush(QtGui.QColor(0, 128, 0)))
-                else:
-                    item.setForeground(QtGui.QBrush(QtGui.QColor(128, 128, 128)))
-                
-                self.peers_list.addItem(item)
-                
-        if self.peers_list.count() == 0:
-            self.peers_list.addItem("No peers connected")
-    
-    def save_settings(self):
-        """Save settings back to the plugin"""
-        try:
-            # Validate multicast address
-            import socket
-            socket.inet_aton(self.multicast_address.text())
-            
-            # Save settings that can be changed without restart
-            self.plugin.REMOTE_SQUID_OPACITY = self.remote_opacity.value() / 100.0
-            self.plugin.SHOW_REMOTE_LABELS = self.show_labels.isChecked()
-            self.plugin.SHOW_CONNECTION_LINES = self.show_connections.isChecked()
-            
-            # Update remote squid visuals with new opacity
-            if hasattr(self.plugin, 'remote_squids'):
-                for squid_data in self.plugin.remote_squids.values():
-                    if 'visual' in squid_data and squid_data['visual']:
-                        squid_data['visual'].setOpacity(self.plugin.REMOTE_SQUID_OPACITY)
-            
-            # Update entity manager if available
-            if hasattr(self.plugin, 'entity_manager'):
-                self.plugin.entity_manager.update_settings(
-                    opacity=self.plugin.REMOTE_SQUID_OPACITY,
-                    show_labels=self.plugin.SHOW_REMOTE_LABELS,
-                    show_connections=self.plugin.SHOW_CONNECTION_LINES
-                )
-            
-            # Settings that require restart
-            restart_needed = False
-            if (self.plugin.MULTICAST_GROUP != self.multicast_address.text() or
-                self.plugin.MULTICAST_PORT != self.port.value() or
-                abs(self.plugin.SYNC_INTERVAL - self.sync_interval.value()) > 0.01):
-                
-                self.plugin.MULTICAST_GROUP = self.multicast_address.text()
-                self.plugin.MULTICAST_PORT = self.port.value()
-                self.plugin.SYNC_INTERVAL = self.sync_interval.value()
-                restart_needed = True
-            
-            # Save advanced settings
-            self.plugin.debug_mode = self.debug_mode.isChecked()
-            if hasattr(self.plugin, 'network_node'):
-                self.plugin.network_node.auto_reconnect = self.auto_reconnect.isChecked()
-                self.plugin.network_node.use_compression = self.use_compression.isChecked()
-                
-                # Update debug mode on related components
-                if hasattr(self.plugin, 'network_node'):
-                    self.plugin.network_node.debug_mode = self.plugin.debug_mode
-                if hasattr(self.plugin, 'entity_manager'):
-                    self.plugin.entity_manager.debug_mode = self.plugin.debug_mode
-                if hasattr(self.plugin, 'event_dispatcher'):
-                    self.plugin.event_dispatcher.debug_mode = self.plugin.debug_mode
-            
-            # Show message about restart if needed
-            if restart_needed:
-                QtWidgets.QMessageBox.information(
-                    self,
-                    "Restart Required",
-                    "Some settings changes require restarting the application to take effect."
-                )
-            
-            self.accept()
-            
-        except Exception as e:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Invalid Settings",
-                f"Error in settings: {str(e)}"
-            )
+        # ----- multicast group / port -----
+        grp_multicast = QtWidgets.QGroupBox("Multicast (UDP)")
+        form = QtWidgets.QFormLayout(grp_multicast)
+        self.mc_group_edit = QtWidgets.QLineEdit(cfg.get("multicast_group", mp_constants.MULTICAST_GROUP))
+        self.mc_port_spin = QtWidgets.QSpinBox()
+        self.mc_port_spin.setRange(1024, 65535)
+        self.mc_port_spin.setValue(cfg.get("port", mp_constants.MULTICAST_PORT))
+        form.addRow("Group:", self.mc_group_edit)
+        form.addRow("Port:", self.mc_port_spin)
+        main_layout.addWidget(grp_multicast)
+
+        # ----- TCP/IP list -----
+        grp_tcp = QtWidgets.QGroupBox("TCP/IP Peer List")
+        vbox = QtWidgets.QVBoxLayout(grp_tcp)
+        self.use_tcp_check = QtWidgets.QCheckBox("Use TCP/IP list instead of multicast")
+        self.use_tcp_check.setToolTip("Check this to connect to specific IPs across routers / Internet.")
+        self.tcp_ip_edit = QtWidgets.QLineEdit(cfg.get("tcp_ip_list", ""))
+        self.tcp_ip_edit.setPlaceholderText("e.g. 192.168.1.50,203.0.113.12,example.com")
+        self.tcp_ip_edit.setEnabled(False)
+        self.use_tcp_check.toggled.connect(lambda on: self.tcp_ip_edit.setEnabled(on))
+        self.use_tcp_check.setChecked(cfg.get("use_tcp", False))
+        vbox.addWidget(self.use_tcp_check)
+        vbox.addWidget(self.tcp_ip_edit)
+        main_layout.addWidget(grp_tcp)
+
+        # ----- other existing sliders -----
+        self.opacity_slider = self._new_slider(cfg.get("remote_opacity", 1.0), 0.2, 1.0, 0.05, "Remote opacity")
+        self.sync_spin = QtWidgets.QSpinBox()
+        self.sync_spin.setRange(1, 10)
+        self.sync_spin.setValue(int(cfg.get("sync_interval", 2)))
+        form2 = QtWidgets.QFormLayout()
+        form2.addRow("Remote squid opacity:", self.opacity_slider)
+        form2.addRow("Sync interval (s):", self.sync_spin)
+        main_layout.addLayout(form2)
+
+        # ----- OK / Cancel -----
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self._on_ok)
+        buttons.rejected.connect(self.reject)
+        main_layout.addWidget(buttons)
+
+    # ------------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------------
+    def _new_slider(self, val, minv, maxv, step, label):
+        slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        slider.setRange(int(minv / step), int(maxv / step))
+        slider.setValue(int(val / step))
+        slider.setTickPosition(QtWidgets.QSlider.TicksBelow)
+        slider.setTickInterval(1)
+        slider.setSingleStep(1)
+        return slider
+
+    def _on_ok(self):
+        self.new_settings = {
+            "multicast_group": self.mc_group_edit.text().strip(),
+            "port": self.mc_port_spin.value(),
+            "remote_opacity": self.opacity_slider.value() * 0.05,
+            "sync_interval": self.sync_spin.value(),
+            "use_tcp": self.use_tcp_check.isChecked(),
+            "tcp_ip_list": self.tcp_ip_edit.text().strip()
+        }
+        self.accept()
+
+    # ------------------------------------------------------------------
+    # let caller re-load values if dialog is re-opened
+    # ------------------------------------------------------------------
+    def load_settings(self, cfg):
+        self.mc_group_edit.setText(cfg.get("multicast_group", mp_constants.MULTICAST_GROUP))
+        self.mc_port_spin.setValue(cfg.get("port", mp_constants.MULTICAST_PORT))
+        self.opacity_slider.setValue(int(cfg.get("remote_opacity", 1.0) / 0.05))
+        self.sync_spin.setValue(int(cfg.get("sync_interval", 2)))
+        self.use_tcp_check.setChecked(cfg.get("use_tcp", False))
+        self.tcp_ip_edit.setText(cfg.get("tcp_ip_list", ""))
