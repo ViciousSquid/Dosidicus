@@ -5,6 +5,7 @@ import time
 import sys
 import json
 import os
+import shutil
 import traceback
 import logging
 from PyQt5 import QtWidgets, QtCore
@@ -30,6 +31,19 @@ def global_exception_handler(exctype, value, tb):
     logging.error("Unhandled exception:\n%s", error_message)
     QtWidgets.QMessageBox.critical(None, "Error", 
                                  "An unexpected error occurred. Please check dosidicus_log.txt for details.")
+    
+
+def clean_pycache(root_dir='.'):
+    """Recursively delete all __pycache__ directories under root_dir."""
+    for dirpath, dirnames, _ in os.walk(root_dir):
+        for dirname in dirnames:
+            if dirname == '__pycache__':
+                full_path = os.path.join(dirpath, dirname)
+                try:
+                    shutil.rmtree(full_path)
+                    print(f"Deleted: {full_path}")
+                except Exception as e:
+                    print(f"Failed to delete {full_path}: {e}")
 
 class TeeStream:
     """Duplicate output to both console and file"""
@@ -47,13 +61,14 @@ class TeeStream:
         self.file_stream.flush()
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, specified_personality=None, debug_mode=False, neuro_cooldown=None, parent=None):
+    def __init__(self, specified_personality=None, debug_mode=False, neuro_cooldown=None, clean_mode=False, parent=None):
         super().__init__(parent)
         
         # Initialize configuration
         self.config = LearningConfig()
         if neuro_cooldown is not None:
             self.config.neurogenesis['cooldown'] = neuro_cooldown
+        self.clean_mode = clean_mode
         
         # Add initialization tracking flag
         self._initialization_complete = False
@@ -195,12 +210,27 @@ class MainWindow(QtWidgets.QMainWindow):
             traceback.print_exc()
 
     def initialize_game(self):
-        """Initialize the game based on whether save data exists"""
+        """Initialize the game based on whether save data exists or clean mode is active"""
+        if self.clean_mode:
+            print("\x1b[92m--------------  CLEAN MODE: STARTING FRESH --------------\x1b[0m")
+            self.create_new_game(self.specified_personality)
+            self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
+            self.squid.tamagotchi_logic = self.tamagotchi_logic
+            self.user_interface.tamagotchi_logic = self.tamagotchi_logic
+            self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
+            self.plugin_manager.tamagotchi_logic = self.tamagotchi_logic
+            self.tamagotchi_logic.plugin_manager = self.plugin_manager
+            self.plugin_manager.load_all_plugins()
+            self.user_interface.apply_plugin_menu_registrations(self.plugin_manager)
+            self._initialization_complete = True
+            QtCore.QTimer.singleShot(500, self.open_initial_windows)
+            return
+
         if self.save_manager.save_exists() and self.specified_personality is None:
             print("\x1b[32mExisting save data found and will be loaded\x1b[0m")
             self.squid = Squid(self.user_interface, None, None)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
-            
+
             # Set up connections
             self.squid.tamagotchi_logic = self.tamagotchi_logic
             self.user_interface.tamagotchi_logic = self.tamagotchi_logic
@@ -208,27 +238,27 @@ class MainWindow(QtWidgets.QMainWindow):
             self.brain_window.statistics_tab.set_logic(self.tamagotchi_logic)
             if hasattr(self.brain_window, 'set_tamagotchi_logic'):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
-            
+
             # Now load from save data
             self.create_squid_from_save_data()
         else:
             print("\x1b[92m--------------  STARTING A NEW SIMULATION --------------\x1b[0m")
-            
+
             # Create the game but don't check for tutorial yet
             self.create_new_game(self.specified_personality)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
-            
+
             # Connect components
             self.squid.tamagotchi_logic = self.tamagotchi_logic
             self.user_interface.tamagotchi_logic = self.tamagotchi_logic
             self.brain_window.tamagotchi_logic = self.tamagotchi_logic
             if hasattr(self.brain_window, 'set_tamagotchi_logic'):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
-                
+
             # Schedule tutorial check for AFTER initialization
             if not self.save_manager.save_exists():
                 QtCore.QTimer.singleShot(500, self.delayed_tutorial_check)
-        
+
         # Mark initialization as complete
         self._initialization_complete = True
 
@@ -452,10 +482,17 @@ class MainWindow(QtWidgets.QMainWindow):
     def start_simulation(self):
         """Begin the simulation and automatically open brain and decoration windows"""
         print("  ")
-        
+
         # Clean up any duplicate squids
         self.cleanup_duplicate_squids()
-        
+
+        if self.clean_mode:
+            print("Clean mode: Skipping splash screen and tutorial")
+            self.tamagotchi_logic.set_simulation_speed(1)
+            self.tamagotchi_logic.start_autosave()
+            QtCore.QTimer.singleShot(500, self.open_initial_windows)
+            return
+
         self.tamagotchi_logic.set_simulation_speed(1)
         self.tamagotchi_logic.start_autosave()
 
@@ -580,6 +617,9 @@ def main():
     """Main entry point"""
     sys.excepthook = global_exception_handler
 
+    # Clean up __pycache__ directories before starting
+    clean_pycache()
+
     parser = argparse.ArgumentParser(description="Dosidicus digital squid with a neural network")
     parser.add_argument('-p', '--personality', type=str, 
                        choices=[p.value for p in Personality], 
@@ -588,6 +628,8 @@ def main():
                        help='Enable debug mode with console logging')
     parser.add_argument('-nc', '--neurocooldown', type=int, 
                        help='Set neurogenesis cooldown in seconds')
+    parser.add_argument('-c', '--clean', action='store_true',
+                   help='Start a clean new game: ignore saves, skip tutorial and splash screen')
     args = parser.parse_args()
 
     print(f"Personality: {args.personality}")
@@ -598,7 +640,7 @@ def main():
     
     try:
         personality = Personality(args.personality) if args.personality else None
-        main_window = MainWindow(personality, args.debug, args.neurocooldown)
+        main_window = MainWindow(personality, args.debug, args.neurocooldown, clean_mode=args.clean)
         main_window.show()
         sys.exit(app.exec_())
     except Exception as e:
