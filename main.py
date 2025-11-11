@@ -1,3 +1,6 @@
+# Dosidicus - a digital pet with a neural network
+# main.py Entrypoint 
+
 import time
 import sys
 import json
@@ -18,7 +21,6 @@ from src.plugin_manager import PluginManager
 
 os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
 
-# Set up logging
 logging.basicConfig(filename='dosidicus_log.txt', level=logging.ERROR, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -203,6 +205,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.squid.tamagotchi_logic = self.tamagotchi_logic
             self.user_interface.tamagotchi_logic = self.tamagotchi_logic
             self.brain_window.tamagotchi_logic = self.tamagotchi_logic
+            self.brain_window.statistics_tab.set_logic(self.tamagotchi_logic)
             if hasattr(self.brain_window, 'set_tamagotchi_logic'):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
             
