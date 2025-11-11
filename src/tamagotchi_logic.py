@@ -44,6 +44,12 @@ class TamagotchiLogic:
         self.debug_mode = False
         self.last_window_size = (1280, 900)  # Default size
 
+        # Age tracking
+        self.squid_birth_time = time.time()
+        self.age_update_timer = QtCore.QTimer()
+        self.age_update_timer.timeout.connect(self.update_squid_age)
+        self.age_update_timer.start(60000)  # 1 minute
+
         # Initialize plugin manager
         self.plugin_manager = PluginManager()
         self.plugin_manager.load_all_plugins()
@@ -157,6 +163,39 @@ class TamagotchiLogic:
         self.curious_interaction_cooldown_max = 5
         self.startle_cooldown = 1000
         self.plant_calming_effect_counter = 0
+
+    def update_squid_age(self):
+        if hasattr(self.brain_window, 'statistics_tab'):
+            age_min = int((time.time() - self.squid_birth_time) / 60)
+            self.brain_window.statistics_tab.statistics['squid_age_minutes'] = age_min
+            self.brain_window.statistics_tab.update_display()
+
+    def track_poop_thrown(self):
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.increment_stat('poops_thrown')
+
+    def update_highest_anxiety(self, value):
+        if hasattr(self.brain_window, 'statistics_tab'):
+            tab = self.brain_window.statistics_tab
+            if value > tab.statistics['highest_anxiety']:
+                tab.statistics['highest_anxiety'] = value
+                tab.update_display()
+
+    def update_lowest_happiness(self, value):
+        if hasattr(self.brain_window, 'statistics_tab'):
+            tab = self.brain_window.statistics_tab
+            if value < tab.statistics['lowest_happiness']:
+                tab.statistics['lowest_happiness'] = value
+                tab.update_display()
+
+    def update_max_memories(self):
+        if hasattr(self.brain_window, 'statistics_tab') and hasattr(self.squid, 'memory_manager'):
+            tab = self.brain_window.statistics_tab
+            stm = len(self.squid.memory_manager.short_term_memory)
+            ltm = len(self.squid.memory_manager.long_term_memory)
+            tab.statistics['max_short_term_memories'] = max(tab.statistics['max_short_term_memories'], stm)
+            tab.statistics['max_long_term_memories'] = max(tab.statistics['max_long_term_memories'], ltm)
+            tab.update_display()
 
     
 
@@ -316,6 +355,24 @@ class TamagotchiLogic:
             traceback.print_exc()
         
         return decision_data
+    
+    def give_rl_reward(self, reward):
+        """
+        Feed a scalar reward into the DecisionEngine's Q-learning update.
+        Call this immediately after the action finishes.
+        """
+        if hasattr(self, 'squid') and hasattr(self.squid, 'decision_engine'):
+            de = self.squid.decision_engine
+            if de.last_state is not None and de.last_action is not None:
+                # Build next state from current squid state
+                next_state = de.get_state_index({
+                    "hunger": self.squid.hunger,
+                    "happiness": self.squid.happiness,
+                    "anxiety": self.squid.anxiety,
+                    "curiosity": self.squid.curiosity
+                })
+                # Update Q-table
+                de.ql.update(de.last_state, de.last_action, reward, next_state)
 
     def get_active_memories(self):
         # Get raw memory objects instead of display strings
@@ -627,6 +684,8 @@ class TamagotchiLogic:
             action.triggered.connect(lambda checked, s=speed: self.set_simulation_speed(s))
             speed_menu.addAction(action)
 
+    
+
     def set_simulation_speed(self, speed):
         """Set the simulation speed and notify plugins of the change"""
         # Store current speed before changing (default to 1 if not set)
@@ -751,22 +810,19 @@ class TamagotchiLogic:
         if not self.mental_states_enabled:
             return
 
-        # Add protection against startling during initialization
         if not getattr(self, 'initial_startle_allowed', False):
             return
 
         try:
-            # Ensure speed attributes exist
+            # --- existing speed init -------------------------------------------------
             if not hasattr(self.squid, 'base_speed'):
                 self.squid.base_speed = 90
             if not hasattr(self.squid, 'current_speed'):
                 self.squid.current_speed = self.squid.base_speed
 
-            # Set startled state
+            # --- existing startled state / status block ------------------------------
             self.squid.mental_state_manager.set_state("startled", True)
             self.startle_cooldown = self.startle_cooldown_max
-
-            # Change status to more descriptive startled state
             previous_status = getattr(self.squid, 'status', "roaming")
 
             if source == "first_resize":
@@ -780,84 +836,76 @@ class TamagotchiLogic:
             elif source in ["environment", "decoration"]:
                 self.squid.status = "startled"
             else:
-                # Check for personality-specific startle reactions
                 if self.squid.personality == Personality.TIMID:
                     self.squid.status = "hiding"
                 else:
                     self.squid.status = "startled"
 
             self.squid.is_fleeing = True
-            self.squid.current_speed = 180  # 2x speed boost
-
-            # Random direction
+            self.squid.current_speed = 180
             self.squid.direction = random.choice(['up', 'down', 'left', 'right'])
 
-            # --- START OF RESILIENCE MODIFICATIONS ---
+            # ------------------------------------------------------------------
+            # NEW: 15 % ink-cloud trigger (skip if woken from sleep)
+            # ------------------------------------------------------------------
+            if source != "startled_awake" and random.random() < 0.25:
+                self.create_ink_cloud()
+                self.squid.status = "fleeing from ink cloud"
+                self.squid.memory_manager.add_short_term_memory(
+                    'behaviour', 'ink_cloud', 'Startled! Created an ink cloud'
+                )
+                QtCore.QTimer.singleShot(5000, self.end_ink_flee)
 
-            # 1. Get the number of stress neurons from the brain
+            if hasattr(self.brain_window, 'statistics_tab'):
+                self.brain_window.statistics_tab.increment_stat('startles_experienced')
+
+            # --- resilience / anxiety / ink logic --------------------------
             stress_neuron_count = 0
             if self.brain_window and hasattr(self.brain_window, 'brain_widget'):
-                # Assuming you added get_stress_neuron_count() to BrainWidget
                 stress_neuron_count = self.brain_window.brain_widget.get_stress_neuron_count()
-
-            # 2. Calculate resilience with diminishing returns (using natural logarithm)
-            # The +1 ensures that we don't take log(0) and that the first neuron provides a benefit.
             resilience_factor = math.log(stress_neuron_count + 1)
-            
-            # 3. Define base anxiety increase and apply resilience
+
             if source == "first_resize":
                 base_anxiety_increase = 5
                 message = "The squid noticed its environment changing!"
                 base_ink_chance = 0.6
             else:
-                base_anxiety_increase = 15 # Slightly increased base for other startles
+                base_anxiety_increase = 15
                 message = "The squid was startled!"
                 base_ink_chance = 0.6
-            
-            # Dampen the anxiety increase by the resilience factor
-            # The 'max(0, ...)' ensures anxiety never decreases from a startle
-            anxiety_increase = max(0, base_anxiety_increase - (resilience_factor * 5)) # Each point of resilience factor negates 5 points of anxiety
 
-            # Apply anxiety, clamped at 100
+            anxiety_increase = max(0, base_anxiety_increase - (resilience_factor * 5))
             self.squid.anxiety = min(100, self.squid.anxiety + anxiety_increase)
-            
-            # Add a thought that shows the resilience in action
+
             if stress_neuron_count > 0:
-                self.brain_window.add_thought(f"Startled, but felt {resilience_factor:.1f}x more resilient. Anxiety increased by only {anxiety_increase:.1f}.")
+                self.brain_window.add_thought(
+                    f"Startled, but felt {resilience_factor:.1f}x more resilient. "
+                    f"Anxiety increased by only {anxiety_increase:.1f}."
+                )
 
-            # --- END OF RESILIENCE MODIFICATIONS ---
-
-            # First startle detection
+            # --- existing first-startle / ink / memory / timer ----------------------
             is_first_startle = not hasattr(self, '_has_startled_before')
             if is_first_startle:
                 self._has_startled_before = True
 
-            # Increase ink chance based on anxiety
-            ink_chance = base_ink_chance
-            if self.squid.anxiety > 60:
-                ink_chance = 0.9 # Increase to 90% if anxiety > 60
-
-            # Ink cloud - Modified logic
+            ink_chance = 0.9 if self.squid.anxiety > 60 else base_ink_chance
             produce_ink = is_first_startle or random.random() < ink_chance
 
-            # Create memory
-            memory_value = (f"Startled! Status changed from {previous_status} to {self.squid.status}, "
-                        f"Speed {self.squid.current_speed}px, Direction {self.squid.direction}")
+            memory_value = (
+                f"Startled! Status changed from {previous_status} to {self.squid.status}, "
+                f"Speed {self.squid.current_speed}px, Direction {self.squid.direction}"
+            )
             self.squid.memory_manager.add_short_term_memory(
-                'behavior',
-                'startle_response',
-                memory_value
+                'behavior', 'startle_response', memory_value
             )
 
             self.show_message(message)
-            
-            # Ink cloud
             if produce_ink:
                 self.create_ink_cloud()
-            
-            # End flee after 3 seconds
-            QtCore.QTimer.singleShot(self.startle_cooldown_max * 100, lambda: self.end_fleeing(previous_status))
-            
+
+            QtCore.QTimer.singleShot(self.startle_cooldown_max * 100,
+                                    lambda: self.end_fleeing(previous_status))
+
         except Exception as e:
             print(f"Error during startle: {str(e)}")
             self.show_message("The squid panicked!")
@@ -905,14 +953,15 @@ class TamagotchiLogic:
         ink_cloud_item = QtWidgets.QGraphicsPixmapItem(ink_cloud_pixmap)
         
         # Set the center of the ink cloud to match the center of the squid
-        squid_center_x = self.squid_x + self.squid_width // 2
-        squid_center_y = self.squid_y + self.squid_height // 2
+        squid = self.squid
+        squid_center_x = squid.squid_x + squid.squid_width // 2
+        squid_center_y = squid.squid_y + squid.squid_height // 2
         ink_cloud_item.setPos(
             squid_center_x - ink_cloud_pixmap.width() // 2, 
             squid_center_y - ink_cloud_pixmap.height() // 2
         )
         
-        self.ui.scene.addItem(ink_cloud_item)
+        squid.ui.scene.addItem(ink_cloud_item)
         
         # Create a QGraphicsOpacityEffect without a parent
         opacity_effect = QtWidgets.QGraphicsOpacityEffect()
@@ -937,8 +986,8 @@ class TamagotchiLogic:
 
     def force_remove_ink_cloud(self, ink_cloud_item):
         """Force remove the ink cloud if it still exists after timeout"""
-        if ink_cloud_item in self.ui.scene.items():
-            self.ui.scene.removeItem(ink_cloud_item)
+        if ink_cloud_item in self.squid.ui.scene.items():
+            self.squid.ui.scene.removeItem(ink_cloud_item)
 
     def remove_ink_cloud(self, ink_cloud_item):
         """Remove the ink cloud from the scene"""
@@ -963,6 +1012,50 @@ class TamagotchiLogic:
             self.squid.mental_state_manager.set_state("startled", False)
             # Add thoughts
             self.brain_window.add_thought("No longer startled")
+
+    def track_food_consumed(self, food_item):
+        """Track when food is consumed"""
+        if hasattr(self.brain_window, 'statistics_tab'):
+            if getattr(food_item, 'is_sushi', False):
+                self.brain_window.statistics_tab.increment_stat('sushi_eaten')
+            else:
+                self.brain_window.statistics_tab.increment_stat('cheese_eaten')
+
+    def track_poop_created(self):
+        """Track when poop is created"""
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.increment_stat('poops_created')
+            # Update max poops if needed
+            current_poops = len(self.poop_items)
+            if current_poops > self.brain_window.statistics_tab.statistics['max_poops_cleaned']:
+                self.brain_window.statistics_tab.statistics['max_poops_cleaned'] = current_poops
+                self.brain_window.statistics_tab.update_display()
+
+    def track_rock_thrown(self):
+        """Track when rock is thrown"""
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.increment_stat('rocks_thrown')
+
+    def track_plant_interaction(self):
+        """Track when squid interacts with plants"""
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.increment_stat('plants_interacted')
+
+    def track_startle(self):
+        """Track when squid is startled"""
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.increment_stat('startles_experienced')
+
+
+            ############################################################################################
+            ############################################################################################
+            ############################################################################################
+            ############################################################################################
+            ############################################################################################
+            ############################################################################################
+            ############################################################################################
+            ############################################################################################
+
 
     def update_simulation(self):
         # Trigger pre-update hook
@@ -1071,6 +1164,25 @@ class TamagotchiLogic:
         # Check for curiosity
         if random.random() < curious_chance:
             self.make_squid_curious()
+
+    def track_neuron_creation(self, neuron_type):
+        if hasattr(self.brain_window, 'statistics_tab'):
+            if neuron_type == 'novelty':
+                self.brain_window.statistics_tab.increment_stat('novelty_neurons_created')
+            elif neuron_type == 'stress':
+                self.brain_window.statistics_tab.increment_stat('stress_neurons_created')
+            elif neuron_type == 'reward':
+                self.brain_window.statistics_tab.increment_stat('reward_neurons_created')
+
+            current = self.brain_window.statistics_tab.statistics['current_neurons']
+            self.brain_window.statistics_tab.statistics['current_neurons'] = current + 1
+            self.brain_window.statistics_tab.update_display()
+
+    def track_neuron_counts(self, current_count, max_count):
+        """Track current and maximum neuron counts"""
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.update_current_neurons(current_count)
+            self.brain_window.statistics_tab.track_max_neurons(max_count)
 
     def track_neurogenesis_triggers(self):
         """Update counters for neurogenesis triggers"""
@@ -1715,6 +1827,10 @@ class TamagotchiLogic:
             fade_out_animation.finished.connect(lambda: scene.removeItem(message_item))
             fade_out_animation.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
 
+    def show_thought(self, text):
+        """Display a squid 'thought' in yellow."""
+        self.user_interface.show_message(f'<span style="color:#FFEB3B;">{text}</span>')
+
     def toggle_debug_mode(self):
         """Toggle debug mode across all components without circular references"""
         # Set the new state directly (don't toggle twice)
@@ -1849,85 +1965,69 @@ class TamagotchiLogic:
         self.save_game()
 
     def load_game(self):
+        """
+        Load the full game state – including the StatisticsTab data – from zip.
+        """
         save_data = self.save_manager.load_game()
-        
-        if save_data is not None:
-            game_state = save_data['game_state']
-            squid_data = game_state['squid']
-            self.squid.load_state(squid_data)
-
-            # Load brain state
-            self.brain_window.set_brain_state(save_data['brain_state'])
-
-            # Load memories - first try from save_data
-            if 'ShortTerm' in save_data and save_data['ShortTerm']:
-                self.squid.memory_manager.short_term_memory = save_data['ShortTerm']
-            if 'LongTerm' in save_data and save_data['LongTerm']:
-                self.squid.memory_manager.long_term_memory = save_data['LongTerm']
-
-            # If empty or not in save_data, try loading from extracted files
-            if not self.squid.memory_manager.short_term_memory:
-                self.squid.memory_manager.short_term_memory = self.squid.memory_manager.load_memory(
-                    self.squid.memory_manager.short_term_file) or []
-            if not self.squid.memory_manager.long_term_memory:
-                self.squid.memory_manager.long_term_memory = self.squid.memory_manager.load_memory(
-                    self.squid.memory_manager.long_term_file) or []
-
-            # Make sure they are lists
-            if not isinstance(self.squid.memory_manager.short_term_memory, list):
-                self.squid.memory_manager.short_term_memory = []
-            if not isinstance(self.squid.memory_manager.long_term_memory, list):
-                self.squid.memory_manager.long_term_memory = []
-
-            # Save loaded memories to disk to ensure consistency
-            self.squid.memory_manager.save_memory(self.squid.memory_manager.short_term_memory, 
-                                                self.squid.memory_manager.short_term_file)
-            self.squid.memory_manager.save_memory(self.squid.memory_manager.long_term_memory, 
-                                                self.squid.memory_manager.long_term_file)
-
-            print(f"\033[33;1m >>Loaded personality: {self.squid.personality.value}\033[0m")
-
-            # Load decoration data - ensure this runs for both manual loads and autosaves
-            decorations_data = game_state.get('decorations', [])
-            if decorations_data:
-                print(f"Loading {len(decorations_data)} decorations")
-                # Clear existing decorations first to avoid duplicates
-                for item in list(self.user_interface.scene.items()):
-                    if hasattr(item, 'category') and item.category in ['rock', 'plant', 'decoration']:
-                        self.user_interface.scene.removeItem(item)
-                # Now load the decorations
-                self.user_interface.load_decorations_data(decorations_data)
-            else:
-                print("No decorations found in save data")
-
-            # Load TamagotchiLogic data
-            tamagotchi_logic_data = game_state['tamagotchi_logic']
-            self.cleanliness_threshold_time = tamagotchi_logic_data['cleanliness_threshold_time']
-            self.hunger_threshold_time = tamagotchi_logic_data['hunger_threshold_time']
-            self.last_clean_time = tamagotchi_logic_data['last_clean_time']
-            self.points = tamagotchi_logic_data['points']
-            
-            # Load plugin data if it exists
-            if 'plugin_data' in save_data:
-                plugin_data = save_data['plugin_data']
-                self.plugin_manager.trigger_hook("on_load_game", 
-                                                tamagotchi_logic=self,
-                                                squid=self.squid,
-                                                plugin_data=plugin_data)
-
-            # Refresh memory tab if it exists
-            if hasattr(self.brain_window, 'memory_tab'):
-                QtCore.QTimer.singleShot(1000, self.brain_window.memory_tab.update_memory_display)
-
-            # Ensure the brain window is shown after loading
-            if self.brain_window:
-                self.brain_window.show()
-                self.brain_window.raise_()  # Brings the window to the front
-
-            print("Game loaded successfully")
-            self.set_simulation_speed(1)  # Set simulation speed to 1x after loading
-        else:
+        if 'statistics' in save_data and hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.statistics.update(save_data['statistics'])
+            self.brain_window.statistics_tab.update_display()
+        if save_data is None:
             print("No save data found")
+            return
+
+        # ---------- basic state ----------
+        game_state = save_data['game_state']
+        squid_data = game_state['squid']
+        self.squid.load_state(squid_data)
+
+        # ---------- brain ----------
+        self.brain_window.set_brain_state(save_data['brain_state'])
+
+        # ---------- memories ----------
+        if 'ShortTerm' in save_data and save_data['ShortTerm']:
+            self.squid.memory_manager.short_term_memory = save_data['ShortTerm']
+        if 'LongTerm' in save_data and save_data['LongTerm']:
+            self.squid.memory_manager.long_term_memory = save_data['LongTerm']
+
+        # ---------- decorations ----------
+        decorations_data = game_state.get('decorations', [])
+        if decorations_data:
+            print(f"Loading {len(decorations_data)} decorations")
+            # clear old
+            for item in list(self.user_interface.scene.items()):
+                if hasattr(item, 'category') and item.category in ['rock', 'plant', 'decoration']:
+                    self.user_interface.scene.removeItem(item)
+            # load new
+            self.user_interface.load_decorations_data(decorations_data)
+
+        # ---------- TamagotchiLogic ----------
+        tlog_data = game_state['tamagotchi_logic']
+        self.cleanliness_threshold_time = tlog_data['cleanliness_threshold_time']
+        self.hunger_threshold_time    = tlog_data['hunger_threshold_time']
+        self.last_clean_time          = tlog_data['last_clean_time']
+        self.points                   = tlog_data['points']
+
+        # ---------- plugin data ----------
+        if 'plugin_data' in save_data:
+            self.plugin_manager.trigger_hook(
+                "on_load_game",
+                tamagotchi_logic=self,
+                squid=self.squid,
+                plugin_data=save_data['plugin_data']
+            )
+
+        # ---------- statistics ----------
+        if 'statistics' in save_data and hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.statistics.update(save_data['statistics'])
+            self.brain_window.statistics_tab.update_display()
+
+        # ---------- memory tab refresh ----------
+        if hasattr(self.brain_window, 'memory_tab'):
+            QtCore.QTimer.singleShot(1000, self.brain_window.memory_tab.update_memory_display)
+
+        print("Game loaded successfully")
+        self.set_simulation_speed(1)
 
     def update_score(self):
         if self.squid is not None:
@@ -1973,23 +2073,30 @@ class TamagotchiLogic:
             self.brain_window.update_brain(brain_state)
 
     def save_game(self, squid, tamagotchi_logic, is_autosave=False):
+        """
+        Save the full game state – including the StatisticsTab data – to zip.
+        """
         try:
-            # Trigger save game hook to allow plugins to add data
+            # ---------- plugin hook ----------
             plugin_data = {}
-            hook_results = self.plugin_manager.trigger_hook("on_save_game", 
-                                                        tamagotchi_logic=self,
-                                                        squid=self.squid)
-            
-            # Collect plugin data from results
+            hook_results = self.plugin_manager.trigger_hook(
+                "on_save_game",
+                tamagotchi_logic=self,
+                squid=self.squid
+            )
             for result in hook_results:
                 if isinstance(result, dict):
-                    for plugin_name, data in result.items():
-                        plugin_data[plugin_name] = data
-            
+                    plugin_data.update(result)
+
+            # ---------- brain ----------
             brain_state = self.brain_window.get_brain_state()
-            print("Debug: Brain State")
-            # print(json.dumps(brain_state, indent=2))
-            
+
+            # ---------- statistics ----------
+            stats_dict = {}
+            if hasattr(self.brain_window, 'statistics_tab'):
+                stats_dict = self.brain_window.statistics_tab.statistics
+
+            # ---------- main save bundle ----------
             save_data = {
                 'game_state': {
                     'squid': {
@@ -2027,20 +2134,20 @@ class TamagotchiLogic:
                 'brain_state': brain_state,
                 'ShortTerm': squid.memory_manager.short_term_memory,
                 'LongTerm': squid.memory_manager.long_term_memory,
-                'plugin_data': plugin_data
+                'plugin_data': plugin_data,
+                'statistics': stats_dict,
+                'squid_age_minutes': self.brain_window.statistics_tab.statistics['squid_age_minutes']
             }
-
-            #print("Debug: Short Term Memory")
-            #print(json.dumps(save_data['ShortTerm'], indent=2))
-            #print("Debug: Long Term Memory")
-            #print(json.dumps(save_data['LongTerm'], indent=2))
 
             filepath = self.save_manager.save_game(save_data, is_autosave)
             print(f"Game {'autosaved' if is_autosave else 'saved'} successfully to {filepath}")
+            return filepath
+
         except Exception as e:
             print(f"Error during save: {str(e)}")
             import traceback
             traceback.print_exc()
+            return None
 
     def start_autosave(self):
         self.autosave_timer.start(300000)  # 300000 ms = 5 minutes

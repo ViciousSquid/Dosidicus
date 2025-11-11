@@ -16,6 +16,7 @@ class MemoryManager:
         self.short_term_limit = 50
         self.short_term_duration = 300  # 5 minutes in seconds
         self.last_cleanup_time = time.time()
+        self.plant_interaction_count = {}
 
     def _load_and_convert_timestamps(self, file_path):
         """Loads memory from JSON and converts all timestamps to floats."""
@@ -141,26 +142,23 @@ class MemoryManager:
         return filtered
 
     def get_active_memories_data(self, count=None):
-        """Gets active memories, ensuring timestamps are floats before use."""
+        """Return memories with human-readable time string."""
         current_time = time.time()
-        active_memories = []
-        for memory in self.short_term_memory:
-            timestamp = memory.get('timestamp')
-            # Now we can reliably expect a float
-            if isinstance(timestamp, (int, float)) and (current_time - timestamp) <= self.short_term_duration:
-                formatted_memory = {
-                    'category': memory.get('category'),
-                    'key': memory.get('key'),
-                    'formatted_value': memory.get('value'),
-                    'raw_value': memory.get('value'),
-                    'timestamp': datetime.fromtimestamp(timestamp),
-                    'importance': memory.get('importance', 1),
-                    'access_count': memory.get('access_count', 0)
-                }
-                active_memories.append(formatted_memory)
-        
-        active_memories.sort(key=lambda x: (x.get('importance', 1), x.get('access_count', 0)), reverse=True)
-        return active_memories[:count] if count is not None else active_memories
+        active = []
+        for mem in self.short_term_memory:
+            ts = mem.get('timestamp', 0)
+            if isinstance(ts, (int, float)) and (current_time - ts) <= self.short_term_duration:
+                active.append({
+                    'category': mem.get('category'),
+                    'key'     : mem.get('key'),
+                    'formatted_value': mem.get('value'),
+                    'raw_value': mem.get('value'),
+                    'time_str' : datetime.fromtimestamp(ts).strftime('%H:%M:%S'),  # ← HH:MM:SS
+                    'importance': mem.get('importance', 1),
+                    'access_count': mem.get('access_count', 0)
+                })
+        active.sort(key=lambda x: (x['importance'], x['access_count']), reverse=True)
+        return active[:count] if count else active
 
     def review_and_transfer_memories(self):
         current_time = time.time()

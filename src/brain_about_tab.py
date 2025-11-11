@@ -221,11 +221,14 @@ class AboutTab(BrainBaseTab):
         print(f"AboutTab initialization complete - Personality: {personality}")
 
     def open_color_picker(self):
-        """Open a color picker dialog to change the squid's tint."""
         color = QtWidgets.QColorDialog.getColor()
         if color.isValid():
             if self.tamagotchi_logic and self.tamagotchi_logic.squid:
                 self.tamagotchi_logic.squid.apply_tint(color)
+                #  NEW:  count this action
+                if hasattr(self.tamagotchi_logic, 'brain_window') and \
+                hasattr(self.tamagotchi_logic.brain_window, 'statistics_tab'):
+                    self.tamagotchi_logic.brain_window.statistics_tab.increment_stat('times_colour_changed')
 
     def edit_name(self):
         """Allow user to edit squid name on double-click"""

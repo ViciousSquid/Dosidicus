@@ -927,7 +927,7 @@ class BrainWidget(QtWidgets.QWidget):
         self.neuron_shapes[new_name] = cfg_shapes.get(neuron_type, default_shapes.get(neuron_type, 'circle'))
         self.communication_events[new_name] = time.time()
 
-        # --- START FIX: Add default connections for all neuron types ---
+        # ---  Add default connections for all neuron types ---
         default_weights = {
             'novelty': {'curiosity': 0.6, 'anxiety': -0.4},
             'stress': {'anxiety': -0.7, 'happiness': 0.3},
@@ -942,13 +942,17 @@ class BrainWidget(QtWidgets.QWidget):
                     self.weights[(new_name, target)] = weight
                     self.weights[(target, new_name)] = weight * 0.5  # Weaker reciprocal connection
                     self.communication_events[target] = time.time() # Highlight target neuron
-        # --- END FIX ---
         
         trigger_reason_value = trigger_value_for_log if trigger_value_for_log is not None else state.get({'novelty': 'novelty_exposure', 'stress': 'sustained_stress', 'reward': 'recent_rewards'}[neuron_type], 0)
         
         log_creation_details = {"trigger_type": neuron_type, "trigger_value": round(trigger_reason_value, 2), "context": ""}
         self.log_neurogenesis_event(new_name, "created", details=log_creation_details)
         self.apply_repulsion_force()
+
+        # ✅ Track neuron creation for statistics
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            self.tamagotchi_logic.track_neuron_creation(neuron_type)
+
         return new_name
 
     def apply_repulsion_force(self, iterations=15, strength=0.6, threshold=120.0):
@@ -1008,7 +1012,6 @@ class BrainWidget(QtWidgets.QWidget):
         """
         Update weights by adding small random noise. 
         WARNING: This adds noise and might counteract Hebbian learning.
-        Consider disabling or further reducing noise if learning seems unstable.
         """
         if self.frozen_weights is not None:
             return

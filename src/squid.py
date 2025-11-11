@@ -503,6 +503,19 @@ class Squid:
         self.startled_transition = True
         self.startled_transition_frames = 5  # Show startled animation for 5 frames
 
+        if random.random() < 0.25:
+            self.tamagotchi_logic.create_ink_cloud()          # spawns the cloud
+            self.current_speed = self.base_speed * 2          # double speed
+            self.status = "fleeing from ink cloud"
+
+            # create the requested memory
+            self.memory_manager.add_short_term_memory(
+                'behaviour', 'ink_cloud', 'Ink Cloud!'
+            )
+
+            # return to normal speed after 5 s
+            QtCore.QTimer.singleShot(5000, self.end_ink_flee)
+
         # Start timers
         self.anxiety_cooldown_timer = QtCore.QTimer()
         self.anxiety_cooldown_timer.timeout.connect(self.reduce_startle_anxiety)
@@ -513,6 +526,15 @@ class Squid:
 
         # End transition after a short delay (about half a second)
         QtCore.QTimer.singleShot(500, self.end_startled_transition)
+
+    def end_ink_flee(self):
+        """Called 5 s after an ink-cloud flee starts."""
+        self.current_speed = self.base_speed
+        # fall back to a sensible status
+        if self.anxiety > 60:
+            self.status = "nervous"
+        else:
+            self.status = "roaming"
 
     def end_startled_transition(self):
         """End the startled transition and set a natural direction"""
@@ -828,47 +850,69 @@ class Squid:
     def push_decoration(self, decoration, direction):
         """Push a decoration with proper animation handling"""
         try:
-            push_distance = 80  # pixels to push
+            push_distance = 80
             current_pos = decoration.pos()
             new_x = current_pos.x() + (push_distance * direction)
 
-            # Ensure the decoration stays within scene boundaries
             scene_rect = self.ui.scene.sceneRect()
-            new_x = max(scene_rect.left(), 
-                    min(new_x, scene_rect.right() - decoration.boundingRect().width()))
-            
-            # Only create animation if we don't have one running
+            new_x = max(scene_rect.left(), min(new_x, scene_rect.right() - decoration.boundingRect().width()))
+
             if self.push_animation and self.push_animation.state() == QtCore.QAbstractAnimation.Running:
                 self.push_animation.stop()
 
-            # Create position animation
-            self.push_animation = QtCore.QPropertyAnimation(decoration, b"pos")
+            self.push_animation = QtCore.QVariantAnimation()
             self.push_animation.setDuration(300)
             self.push_animation.setStartValue(current_pos)
             self.push_animation.setEndValue(QtCore.QPointF(new_x, current_pos.y()))
-            self.push_animation.finished.connect(
-                lambda: self._on_push_complete(decoration))
+            self.push_animation.setEasingCurve(QtCore.QEasingCurve.OutCubic)
+
+            self.push_animation.valueChanged.connect(decoration.setPos)
+            self.push_animation.finished.connect(lambda: self._on_push_complete(decoration))
             self.push_animation.start()
-            
+
         except Exception as e:
-            print(f"Error pushing decoration: {e}")
-            # Fallback to immediate movement
+            print(f"Tried to push decoration but failed: {e}")
             decoration.setPos(new_x, current_pos.y())
             self._on_push_complete(decoration)
 
     def _on_push_complete(self, decoration):
-        """Callback when push animation finishes"""
+        """Called when the push animation finishes."""
         self.happiness = min(100, self.happiness + 5)
         self.curiosity = min(100, self.curiosity + 10)
-        
-        # --- NEWLY ADDED ---
-        # Pushing decorations is a comforting action that reduces anxiety.
         self.anxiety = max(0, self.anxiety - 6)
-        
+
+        # --- Plant-specific tracking & reward ---
+        if hasattr(decoration, 'category') and decoration.category == 'plant':
+            # Count this interaction
+            self.memory_manager.add_short_term_memory(
+                'interaction', 'plant_contact',
+                {'plant_key': decoration.filename, 'effect': 'calming'},
+                importance=2.0
+            )
+            # Tell the logic layer to track it
+            if hasattr(self.tamagotchi_logic, 'track_plant_interaction'):
+                self.tamagotchi_logic.track_plant_interaction()
+
+            # Mark as favourite after 3 touches
+            key = decoration.filename
+            self.memory_manager.plant_interaction_count[key] = self.memory_manager.plant_interaction_count.get(key, 0) + 1
+        if self.memory_manager.plant_interaction_count[key] >= 3:
+            self.memory_manager.add_long_term_memory('favourite_plant', key, {
+                'reason': 'Repeated calming contact',
+                'anxiety_reduction': True
+            })
+
+        if hasattr(self.tamagotchi_logic, 'brain_window') and hasattr(self.tamagotchi_logic.brain_window, 'statistics_tab'):
+            self.tamagotchi_logic.brain_window.statistics_tab.increment_stat('plants_interacted')
+
+        # --- Reward for RL ---
+        if hasattr(self.tamagotchi_logic, 'recent_positive_outcome'):
+            self.tamagotchi_logic.recent_positive_outcome = True
+
         self.status = "pushing decoration"
         self.tamagotchi_logic.show_message("Squid pushed a decoration")
 
-        # Remove animation reference
+        # Clean up animation reference
         self.push_animation = None
 
     def record_startle_reason(self, reason):
@@ -1072,6 +1116,9 @@ class Squid:
                 self.last_view_cone_change = current_time
             self.move_randomly()
 
+        # Store previous position for distance calculation
+        prev_x, prev_y = self.squid_x, self.squid_y
+
         # Calculate new position
         squid_x_new = self.squid_x
         squid_y_new = self.squid_y
@@ -1110,6 +1157,11 @@ class Squid:
         # Update squid position
         self.squid_x = squid_x_new
         self.squid_y = squid_y_new
+
+        # Track distance - exactly 1 unit per actual movement
+        if self.squid_x != prev_x or self.squid_y != prev_y:
+            if hasattr(self.tamagotchi_logic, 'brain_window') and hasattr(self.tamagotchi_logic.brain_window, 'statistics_tab'):
+                self.tamagotchi_logic.brain_window.statistics_tab.track_distance(1)
 
         # Update animation frame and image
         if self.squid_direction in ["left", "right", "up", "down"]:
@@ -1206,6 +1258,10 @@ class Squid:
         self.pursuing_food = False
         self.target_food = None
         self.is_eating = False
+
+        # Add tracking (added in 2.4.4)
+        if hasattr(self.tamagotchi_logic, 'track_food_consumed'):
+            self.tamagotchi_logic.track_food_consumed(food_item)
 
         # Personality reactions (with enhanced messages)
         if self.personality == Personality.GREEDY:
@@ -1418,7 +1474,9 @@ class Squid:
 
     def create_poop(self):
         self.tamagotchi_logic.spawn_poop(self.squid_x + self.squid_width // 2, self.squid_y + self.squid_height)
-        #print("Poop created at squid location")
+        # Add tracking
+        if hasattr(self.tamagotchi_logic, 'track_poop_created'):
+            self.tamagotchi_logic.track_poop_created()
 
     def show_eating_effect(self):
         if not self.is_debug_mode():
@@ -1491,6 +1549,7 @@ class Squid:
             self.is_sleeping = True
             self.squid_direction = "down"
             self.status = "sleeping"
+            self.anxiety = max(0, self.anxiety - (1.5 * self.tamagotchi_logic.simulation_speed)) # Anxiety reduction test
             
             # Trigger hook if tamagotchi_logic exists
             if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
@@ -1742,10 +1801,40 @@ class Squid:
         return self.tamagotchi_logic.rock_interaction.attach_rock_to_squid(item)
 
     def throw_rock(self, direction):
-        """Delegate to interaction manager"""
+        """
+        Delegate to interaction manager BUT capture result for RL reward.
+        Returns:  bool  True = rock landed (success), False = fell out of bounds / no effect
+        """
         if not hasattr(self.tamagotchi_logic, 'rock_interaction'):
             return False
-        return self.tamagotchi_logic.rock_interaction.throw_rock(direction)
+
+        # --- Call the existing manager ---
+        success = self.tamagotchi_logic.rock_interaction.throw_rock(direction)
+
+        # --- Compute RL reward ---
+        reward = 0.0
+        if success:
+            reward += 5.0                       # base success
+            reward += self.happiness * 0.05     # happier squid → bigger reward
+            reward += self.satisfaction * 0.05
+            if self.personality == Personality.GREEDY:
+                reward += 3.0                   # greedy squid LOVES throwing
+            # memory boost
+            rock_mem = self.memory_manager.get_short_term_memory('interaction', 'rock_throw')
+            if rock_mem and isinstance(rock_mem, dict) and rock_mem.get('is_positive'):
+                reward += 2.0
+        else:
+            reward -= 2.0                       # small penalty for miss
+
+        # --- Push reward into RL ---
+        if hasattr(self.tamagotchi_logic, 'give_rl_reward'):
+            self.tamagotchi_logic.give_rl_reward(reward)
+
+        # --- Flag for neurogenesis / stats ---
+        if hasattr(self.tamagotchi_logic, 'recent_positive_outcome'):
+            self.tamagotchi_logic.recent_positive_outcome = success
+
+        return success
 
 
     def update_rock_throw(self):

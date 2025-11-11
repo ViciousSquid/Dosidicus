@@ -21,7 +21,7 @@ from .brain_learning_tab import NeuralNetworkVisualizerTab
 from .brain_memory_tab import MemoryTab
 from .brain_decisions_tab import DecisionsTab
 from .brain_personality_tab import PersonalityTab
-# from .brain_neurogenesis_tab import NeurogenesisTab
+from .brain_statistics_tab import StatisticsTab
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
     def __init__(self, tamagotchi_logic, debug_mode=False, config=None):
@@ -315,27 +315,26 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.personality_tab = PersonalityTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.personality_tab, "Personality")
 
-        # --- ADD YOUR NEW NEUROGENESIS TAB HERE ---
-        # self.neurogenesis_tab = NeurogenesisTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        # self.tabs.addTab(self.neurogenesis_tab, "Neurogenesis") # Or your chosen display name
-        # -----------------------------------------
+        # ADD THE NEW STATISTICS TAB HERE
+        self.statistics_tab = StatisticsTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
+        self.tabs.addTab(self.statistics_tab, "Statistics")
 
         self.about_tab = AboutTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.about_tab, "About")
 
         # Make sure all tabs have correct tamagotchi_logic reference
-        # ADD 'neurogenesis_tab' TO THIS LIST
-        for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'decisions_tab', 'personality_tab', 'neurogenesis_tab', 'about_tab']:
+        # ADD 'statistics_tab' TO THIS LIST
+        for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'decisions_tab', 'personality_tab', 'statistics_tab', 'about_tab']:
             if hasattr(self, tab_name):
                 tab = getattr(self, tab_name)
                 if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:
                     tab.set_tamagotchi_logic(self.tamagotchi_logic)
-                    print(f"Set tamagotchi_logic for {tab_name}")
+                print(f"Set tamagotchi_logic for {tab_name}")
 
         # Pre-load the learning tab to make it responsive on first click
         if hasattr(self, 'nn_viz_tab'):
             if hasattr(self.nn_viz_tab, 'pre_load_data'):
-                QtCore.QTimer.singleShot(500, self.nn_viz_tab.pre_load_data)
+                QtCore.QTimer.singleShot(700, self.nn_viz_tab.pre_load_data)
 
 
     def update_randomness_factors(self, randomness):
