@@ -9,6 +9,9 @@ import shutil
 import traceback
 import logging
 from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtWidgets import QShortcut
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtCore import Qt
 import random
 import argparse
 from src.ui import Ui
@@ -20,10 +23,13 @@ from src.brain_tool import SquidBrainWindow
 from src.learning import LearningConfig
 from src.plugin_manager import PluginManager
 
+os.makedirs("logs", exist_ok=True)
+
 os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
 
-logging.basicConfig(filename='dosidicus_log.txt', level=logging.ERROR, 
+logging.basicConfig(filename='logs/dosidicus_log.txt', level=logging.ERROR, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 def global_exception_handler(exctype, value, tb):
     """Global exception handler to log unhandled exceptions"""
@@ -32,6 +38,14 @@ def global_exception_handler(exctype, value, tb):
     QtWidgets.QMessageBox.critical(None, "Error", 
                                  "An unexpected error occurred. Please check dosidicus_log.txt for details.")
     
+def open_neuron_inspector(self):
+        if self.brain_widget is None:
+            return
+        from src.neuron_inspector import NeuronInspector
+        inspector = NeuronInspector(self, self.brain_widget)
+        inspector.show()
+        inspector.raise_()
+        inspector.activateWindow()
 
 def clean_pycache(root_dir='.'):
     """Recursively delete all __pycache__ directories under root_dir."""
@@ -152,7 +166,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.move(window_x - 300, self.y())
         
         if self.debug_mode:
-            print(f"DEBUG MODE ENABLED: Console output is being logged to console.txt")
+            print(f"DEBUG MODE ENABLED: Console output is being logged to /logs/console.txt")
 
     def preload_brain_window_tabs(self):
         """Force creation of all tab contents to prevent crashes during tutorial"""
@@ -316,7 +330,7 @@ class MainWindow(QtWidgets.QMainWindow):
         logging.basicConfig(
             level=logging.DEBUG,
             format='%(asctime)s:%(levelname)s:%(name)s:%(message)s',
-            filename='console.txt',
+            filename='logs/console.txt',
             filemode='w'
         )
         console_handler = logging.StreamHandler(sys.stdout)
@@ -325,8 +339,8 @@ class MainWindow(QtWidgets.QMainWindow):
         logging.getLogger().addHandler(console_handler)
 
         # Tee output to file
-        sys.stdout = TeeStream(sys.stdout, open('console.txt', 'w'))
-        sys.stderr = TeeStream(sys.stderr, open('console.txt', 'a'))
+        sys.stdout = TeeStream(sys.stdout, open('logs/console.txt', 'w'))
+        sys.stderr = TeeStream(sys.stderr, open('logs/console.txt', 'a'))
 
     def create_new_game(self, personality=None):
         """Initialize a new game with specified personality"""
