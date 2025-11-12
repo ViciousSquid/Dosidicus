@@ -7,7 +7,6 @@ import json
 import math
 from .statistics_window import StatisticsWindow
 from .save_manager import SaveManager
-from .rps_game import RPSGame
 from .squid import Personality, Squid
 from .ui import ResizablePixmapItem
 from .brain_tool import SquidBrainWindow
