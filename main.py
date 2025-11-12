@@ -1,5 +1,5 @@
 # Dosidicus - a digital pet with a neural network
-# main.py Entrypoint 
+# 2.4.4.0 November 2025 | Main entry point
 
 import time
 import sys
