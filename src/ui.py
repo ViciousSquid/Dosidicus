@@ -1839,17 +1839,35 @@ class Ui:
         return decorations_data
 
     def load_decorations_data(self, decorations_data):
+        """Load decorations from saved data"""
         for decoration_data in decorations_data:
-            pixmap_data = decoration_data['pixmap_data']
-            pixmap = QtGui.QPixmap()
-            pixmap.loadFromData(QtCore.QByteArray.fromBase64(pixmap_data.encode()))
-            pos = QtCore.QPointF(decoration_data['pos'][0], decoration_data['pos'][1])
-            scale = decoration_data['scale']
-            filename = decoration_data['filename']
-            item = ResizablePixmapItem(pixmap, filename)
-            item.setPos(pos)
-            item.setScale(scale)
-            self.scene.addItem(item)
+            try:
+                # Get pixmap data
+                pixmap_data = decoration_data.get('pixmap_data')
+                if pixmap_data:
+                    # Convert base64 back to pixmap
+                    byte_array = QtCore.QByteArray.fromBase64(pixmap_data.encode('utf-8'))
+                    pixmap = QtGui.QPixmap()
+                    pixmap.loadFromData(byte_array, "PNG")
+                    
+                    # Create the decoration item
+                    if pixmap and not pixmap.isNull():
+                        item = ResizablePixmapItem(pixmap)
+                        item.setPos(QtCore.QPointF(decoration_data['pos'][0], decoration_data['pos'][1]))
+                        item.setScale(decoration_data['scale'])
+                        item.filename = decoration_data.get('filename', '')
+                        
+                        # Set category based on filename or other logic
+                        if 'plant' in item.filename.lower():
+                            item.category = 'plant'
+                        elif 'rock' in item.filename.lower():
+                            item.category = 'rock'
+                        else:
+                            item.category = 'decoration'
+                        
+                        self.scene.addItem(item)
+            except Exception as e:
+                print(f"Error loading decoration: {str(e)}")
 
     def get_pixmap_data(self, item):
         pixmap = item.pixmap()

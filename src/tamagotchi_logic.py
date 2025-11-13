@@ -2080,7 +2080,7 @@ class TamagotchiLogic:
                     },
                     'decorations': [
                         {
-                            'pixmap_data': self.user_interface.get_pixmap_data(item),
+                            'pixmap_data': self._get_pixmap_data(item),
                             'pos': [item.pos().x(), item.pos().y()],
                             'scale': item.scale(),
                             'filename': item.filename
@@ -2106,6 +2106,19 @@ class TamagotchiLogic:
             import traceback
             traceback.print_exc()
             return None
+        
+    def _get_pixmap_data(self, item):
+        """Get pixmap data from a QGraphicsPixmapItem for serialization"""
+        if hasattr(item, 'pixmap'):
+            pixmap = item.pixmap()
+            if not pixmap.isNull():
+                # Convert pixmap to base64 encoded PNG data
+                byte_array = QtCore.QByteArray()
+                buffer = QtCore.QBuffer(byte_array)
+                buffer.open(QtCore.QIODevice.WriteOnly)
+                pixmap.save(buffer, "PNG")
+                return byte_array.toBase64().data().decode('utf-8')
+        return None
 
     def start_autosave(self):
         self.autosave_timer.start(300000)  # 300000 ms = 5 minutes
