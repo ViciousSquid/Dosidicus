@@ -118,6 +118,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         
         print(f"Brain window debug mode set to: {enabled}")
 
+    
+
 
     def on_hebbian_countdown_finished(self):
         """Called when the Hebbian learning countdown reaches zero"""
@@ -174,12 +176,24 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                  # Log or handle cases where k is not a 2-tuple if necessary
                  print(f"Warning: Skipping non-standard weight key: {k}")
 
+        # Serialize functional neuron data if it exists
+        functional_neurons_data = {}
+        if hasattr(self.brain_widget, 'enhanced_neurogenesis') and \
+           hasattr(self.brain_widget.enhanced_neurogenesis, 'functional_neurons'):
+            for name, func_neuron in self.brain_widget.enhanced_neurogenesis.functional_neurons.items():
+                functional_neurons_data[name] = {
+                    'specialization': func_neuron.specialization,
+                    'utility_score': func_neuron.utility_score,
+                    'activation_count': func_neuron.activation_count
+                }
+
         return {
             'weights_list': weights_list, # <-- Use list format
             'neuron_positions': {str(k): v for k, v in self.brain_widget.neuron_positions.items()},
             'neuron_states': self.brain_widget.state,
             'neurogenesis_data': self.brain_widget.neurogenesis_data,
-            'state_colors': self.brain_widget.state_colors
+            'state_colors': self.brain_widget.state_colors,
+            'functional_neurons': functional_neurons_data
         }
 
     def set_brain_state(self, state):
@@ -225,6 +239,32 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             'is_sleeping': (204, 229, 255), 'pursuing_food': (255, 229, 204),
             'direction': (229, 204, 255)
         })
+
+        # Load functional neuron data if it exists
+        if 'functional_neurons' in state and \
+           hasattr(self.brain_widget, 'enhanced_neurogenesis') and \
+           hasattr(self.brain_widget.enhanced_neurogenesis, 'functional_neurons'):
+            
+            functional_neurons_data = state['functional_neurons']
+            
+            # Create a simple class to hold functional neuron attributes
+            class FunctionalNeuronData:
+                def __init__(self, specialization, utility_score, activation_count):
+                    self.specialization = specialization
+                    self.utility_score = utility_score
+                    self.activation_count = activation_count
+            
+            # Restore functional neurons
+            restored_neurons = {}
+            for name, data in functional_neurons_data.items():
+                restored_neurons[name] = FunctionalNeuronData(
+                    data['specialization'],
+                    data['utility_score'],
+                    data['activation_count']
+                )
+            
+            self.brain_widget.enhanced_neurogenesis.functional_neurons = restored_neurons
+            print(f"Loaded {len(restored_neurons)} functional neurons")
 
         # --- Critical Step: Ensure brain_widget consistency after loading ---
         all_neurons = list(self.brain_widget.neuron_positions.keys())
@@ -879,27 +919,30 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def update_countdown(self):
         """Update the Hebbian learning countdown display"""
+        # Check if simulation is paused
+        is_paused = False
+        if hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'simulation_speed'):
+            is_paused = (self.tamagotchi_logic.simulation_speed == 0)
+        
         # Calculate time until next learning cycle
-        if hasattr(self.brain_widget, 'last_hebbian_time'):
+        if not is_paused and hasattr(self.brain_widget, 'last_hebbian_time'):
             elapsed = time.time() - self.brain_widget.last_hebbian_time
             interval_sec = self.config.hebbian.get('learning_interval', 30000) / 1000
             remaining = max(0, interval_sec - elapsed)
             self.brain_widget.hebbian_countdown_seconds = int(remaining)
-        else:
+        elif not hasattr(self.brain_widget, 'last_hebbian_time'):
             self.brain_widget.hebbian_countdown_seconds = 0
 
         # If we have the neural network visualizer tab initialized, update its countdown
-        if hasattr(self, 'nn_viz_tab') and hasattr(self.nn_viz_tab, 'countdown_label'):
+        if hasattr(self, 'nn_viz_tab') and hasattr(self.nn_viz_tab, 'countdown_label') and self.nn_viz_tab.countdown_label is not None:
             # Update the formatted display
-            if hasattr(self.brain_widget, 'is_paused') and self.brain_widget.is_paused:
+            if is_paused:
                 self.nn_viz_tab.countdown_label.setText("PAUSED")
             else:
                 self.nn_viz_tab.countdown_label.setText(f"{self.brain_widget.hebbian_countdown_seconds} seconds")
             
             # If countdown reached zero and not paused, trigger learning
-            if (self.brain_widget.hebbian_countdown_seconds == 0 and 
-                hasattr(self.brain_widget, 'is_paused') and 
-                not self.brain_widget.is_paused):
+            if self.brain_widget.hebbian_countdown_seconds == 0 and not is_paused:
                 self.brain_widget.perform_hebbian_learning()
 
     def check_memory_decay(self):
@@ -1232,6 +1275,38 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             with open(file_name, 'r') as f:
                 state = json.load(f)
             self.brain_widget.update_state(state)
+
+    def export_brain_weights_text(self):
+        """Return a human-readable block with every connection."""
+        lines = ["# Squid brain weights – saved {}\n".format(
+                    QtCore.QDateTime.currentDateTime().toString())]
+        for (src, dst), w in sorted(self.brain_widget.weights.items(),
+                                    key=lambda kv: abs(kv[1]), reverse=True):
+            lines.append(f"{src:20} → {dst:20}  {w:+.4f}")
+        return "\n".join(lines)
+
+    def export_hebbian_json(self):
+        """Return a JSON-serialisable list with the *entire* learning log."""
+        # learning_data is already a list of lists:
+        # [timestamp, n1, n2, Δw, direction]
+        return {
+            "saved_at": time.time(),
+            "learning_interval_ms": self.config.hebbian.get('learning_interval', 30000),
+            "history": getattr(self.brain_widget, 'learning_data', [])
+        }
+    
+    def export_decision_engine_json(self):
+        """Ask the DecisionEngine to serialise itself."""
+        if not hasattr(self.tamagotchi_logic, 'squid') or \
+           not hasattr(self.tamagotchi_logic.squid, 'decision_engine'):
+            return {}
+        engine = self.tamagotchi_logic.squid.decision_engine
+        # Minimal example – extend as needed
+        return {
+            "epsilon": getattr(engine, 'epsilon', 0.1),
+            "learning_rate": getattr(engine, 'learning_rate', 0.05),
+            "q_table": getattr(engine, 'q_table', {}).copy()
+        }
 
     def init_console(self):
         self.console_output = QtWidgets.QTextEdit()
@@ -2593,9 +2668,6 @@ class NeuronInspector(QtWidgets.QDialog):
             self.connections_table.setItem(row, 1, item_weight)
             self.connections_table.setItem(row, 2, QtWidgets.QTableWidgetItem(conn_info['direction'])) #
 
-
-        # --- Activity Tab Data (Placeholder) ---
-        # self.activity_info_label can remain for now
 
         # Refresh neuron list only if necessary (e.g., if current neuron disappeared)
         # This check was simplified; if it causes issues, it might need refinement.

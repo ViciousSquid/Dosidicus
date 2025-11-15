@@ -19,13 +19,13 @@ class ConfigManager:
         # Rock Interactions
         self.config['RockInteractions'] = {
             'pickup_probability': '0.7',
-            'throw_probability': '0.6',
+            'throw_probability': '0.4',
             'min_carry_duration': '3.0',
             'max_carry_duration': '8.0',
-            'cooldown_after_throw': '20.0',
-            'happiness_boost': '15',
-            'satisfaction_boost': '20',
-            'anxiety_reduction': '10',
+            'cooldown_after_throw': '10.0',
+            'happiness_boost': '9',
+            'satisfaction_boost': '11',
+            'anxiety_reduction': '9',
             'memory_decay_rate': '0.95',
             'max_rock_memories': '6'
         }
@@ -33,16 +33,22 @@ class ConfigManager:
         # Neurogenesis
         self.config['Neurogenesis'] = {
             'enabled': 'True',
-            'cooldown': '300.0',
-            'max_neurons': '20',
+            'cooldown': '180.0',
+            'per_type_cooldown': '30.0',
+            'max_neurons': '50',
             'initial_neuron_count': '7'
+        }
+
+        # Specialist Neuron Cap (Important!)
+        self.config['Neurogenesis.SpecialisationCaps'] = {
+            'novelty_object_investigation': '5',
         }
 
         # Neurogenesis Triggers
         self.config['Neurogenesis.Novelty'] = {
             'enabled': 'True',
             'threshold': '3.0',
-            'decay_rate': '0.95',
+            'decay_rate': '0.85',
             'max_counter': '10.0',
             'min_curiosity': '0.3',
             'adventurous_modifier': '1.2',
@@ -51,7 +57,7 @@ class ConfigManager:
 
         self.config['Neurogenesis.Stress'] = {
             'enabled': 'True',
-            'threshold': '1.2',
+            'threshold': '2.0',
             'decay_rate': '0.85',
             'max_counter': '10.0',
             'min_anxiety': '0.4',
@@ -61,7 +67,7 @@ class ConfigManager:
 
         self.config['Neurogenesis.Reward'] = {
             'enabled': 'True',
-            'threshold': '1.0',
+            'threshold': '2.5',
             'decay_rate': '0.88',
             'max_counter': '10.0',
             'min_satisfaction': '0.5',
@@ -71,7 +77,7 @@ class ConfigManager:
         # Neuron Properties
         self.config['Neurogenesis.NeuronProperties'] = {
             'base_activation': '0.5',
-            'position_variance': '50',
+            'position_variance': '75',
             'default_connections': 'True',
             'connection_strength': '0.3',
             'reciprocal_strength': '0.15'
@@ -121,13 +127,22 @@ class ConfigManager:
             'happiness_penalty': 5,
             'anxiety_increase': 10
         }
+    
+    def get_specialisation_caps(self):
+        """Return dict {specialisation_name: int_max}"""
+        caps = {}
+        if self.config.has_section('Neurogenesis.SpecialisationCaps'):
+            for spec, val in self.config.items('Neurogenesis.SpecialisationCaps'):
+                caps[spec] = int(val)
+        return caps
 
     def get_neurogenesis_config(self):
         """Returns the complete neurogenesis configuration as a dictionary"""
         return {
             'general': {
                 'enabled': self.config.getboolean('Neurogenesis', 'enabled', fallback=True),
-                'cooldown': self.config.getfloat('Neurogenesis', 'cooldown', fallback=120),
+                'cooldown': self.config.getfloat('Neurogenesis', 'cooldown', fallback=180),
+                'per_type_cooldown': self.config.getfloat('Neurogenesis', 'per_type_cooldown', fallback=30),
                 'max_neurons': self.config.getint('Neurogenesis', 'max_neurons', fallback=20),
                 'initial_neuron_count': self.config.getint('Neurogenesis', 'initial_neuron_count', fallback=7)
             },

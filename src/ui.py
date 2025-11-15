@@ -5,6 +5,7 @@ import json
 import math
 import time
 import random
+import uuid
 import traceback
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import QObject, pyqtProperty
@@ -15,6 +16,7 @@ from .brain_tool import NeuronInspector as EnhancedNeuronInspector
 from .plugin_manager_dialog import PluginManagerDialog
 from .tutorial import TutorialManager
 from .vision import VisionWindow
+from .neuro_debug import NeurogenesisDebugDialog
 
 class DecorationItem(QtWidgets.QLabel):
     def __init__(self, pixmap, filename):
@@ -83,7 +85,7 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         self.original_scale = 1.0
 
         # Print initialization info
-        print(f"Created item: {filename}, Has original pixmap: {self.original_pixmap is not None}")
+        # print(f"Created item: {filename}, Has original pixmap: {self.original_pixmap is not None}")
 
     def boundingRect(self):
         # Just use the original bounding rect without extra space for handles
@@ -278,6 +280,7 @@ class DecorationWindow(QtWidgets.QWidget):
 class Ui:
     def __init__(self, window, debug_mode=False):
         self.window = window
+        self.awarded_decorations = set()
         self.tamagotchi_logic = None
         self.debug_mode = debug_mode
         self.setup_neurogenesis_debug_shortcut()
@@ -1349,6 +1352,9 @@ class Ui:
         else:
             event.ignore()
 
+
+    import uuid
+
     def dropEvent(self, event):
         if event.mimeData().hasUrls():
             url = event.mimeData().urls()[0]
@@ -1356,52 +1362,46 @@ class Ui:
             pixmap = QtGui.QPixmap(file_path)
             if not pixmap.isNull():
                 filename = os.path.basename(file_path)
-                
-                # Create the item with the original pixmap
+
+                # Create the item
                 item = ResizablePixmapItem(pixmap, file_path)
-                
-                # IMPORTANT: Make sure the original is preserved
                 item.original_pixmap = pixmap
-                
+
                 # Set initial size for non-rock items
                 if not ('rock01' in file_path.lower() or 'rock02' in file_path.lower()):
                     from .display_scaling import DisplayScaling
-                    
-                    # Target initial maximum dimension
-                    target_max_size = DisplayScaling.scale(192)  # Adjust this value as needed
-                    
-                    # Get dimensions
+                    target_max_size = DisplayScaling.scale(192)
                     orig_width = pixmap.width()
                     orig_height = pixmap.height()
-                    
-                    # Calculate scaling based on largest dimension
                     max_dimension = max(orig_width, orig_height)
                     if max_dimension > target_max_size:
                         scale_factor = target_max_size / max_dimension
-                        
-                        # Apply scaling
-                        scaled_width = int(orig_width * scale_factor)
-                        scaled_height = int(orig_height * scale_factor)
-                        
-                        # Create scaled pixmap
                         scaled_pixmap = pixmap.scaled(
-                            scaled_width, scaled_height,
+                            int(orig_width * scale_factor),
+                            int(orig_height * scale_factor),
                             QtCore.Qt.KeepAspectRatio,
                             QtCore.Qt.SmoothTransformation
                         )
-                        
-                        # Update item pixmap
                         item.setPixmap(scaled_pixmap)
-                
+
                 # Set position and add to scene
                 pos = self.view.mapToScene(event.pos())
                 item.setPos(pos)
-                
-                # Add to scene and select for immediate access
                 self.scene.addItem(item)
                 self.scene.clearSelection()
                 item.setSelected(True)
-                
+
+                # Generate unique ID and award points only once
+                unique_id = str(uuid.uuid4())
+                item._decoration_id = unique_id
+                if unique_id not in self.awarded_decorations:
+                    self.awarded_decorations.add(unique_id)
+                    if (hasattr(self, 'tamagotchi_logic') and
+                        self.tamagotchi_logic is not None and
+                        hasattr(self.tamagotchi_logic, 'statistics_window') and
+                        self.tamagotchi_logic.statistics_window):
+                            self.tamagotchi_logic.statistics_window.award(10)
+
                 event.accept()
 
     def keyPressEvent(self, event):
@@ -1486,6 +1486,9 @@ class Ui:
     def delete_selected_items(self):
         for item in self.scene.selectedItems():
             if isinstance(item, ResizablePixmapItem):
+                # Remove from awarded set if it was awarded
+                if hasattr(item, '_decoration_id'):
+                    self.awarded_decorations.discard(item._decoration_id)
                 self.scene.removeItem(item)
         self.scene.update()
 
@@ -1517,9 +1520,10 @@ class Ui:
         self.brain_action.triggered.connect(self.toggle_brain_window)
         view_menu.addAction(self.brain_action)
 
-        self.inspector_action = QtWidgets.QAction('Neuron Inspector', self.window)
-        self.inspector_action.triggered.connect(self.show_neuron_inspector)
-        view_menu.addAction(self.inspector_action)
+         # Neurogenesis Debug Window Action
+        self.neurogenesis_debug_action = QtWidgets.QAction('Neuron Laboratory', self.window)
+        self.neurogenesis_debug_action.triggered.connect(self.show_neurogenesis_debug) 
+        view_menu.addAction(self.neurogenesis_debug_action)
 
         # Speed Menu
         speed_menu = self.menu_bar.addMenu('Speed')
@@ -1583,11 +1587,6 @@ class Ui:
         self.vision_action = QtWidgets.QAction("Squid Vision", self.window)
         self.vision_action.triggered.connect(self.show_vision_window)
         debug_menu.addAction(self.vision_action)
-        
-        # Neurogenesis Debug Window Action
-        self.neurogenesis_debug_action = QtWidgets.QAction('Neurogenesis Debug', self.window)
-        self.neurogenesis_debug_action.triggered.connect(self.show_neurogenesis_debug) 
-        debug_menu.addAction(self.neurogenesis_debug_action)
 
         # Add to debug menu
         self.rock_test_action = QtWidgets.QAction('Rock test (forced)', self.window)
@@ -1903,231 +1902,3 @@ class Ui:
         for rock in self.get_rock_items():
             rock.is_being_carried = False
             self.highlight_rock(rock, False)
-
-
-class NeurogenesisDebugDialog(QtWidgets.QDialog):
-    def __init__(self, brain_widget, parent=None):
-        super().__init__(parent)
-        self.brain_widget = brain_widget
-        
-        self.setWindowTitle("Neurogenesis Debug Information (Auto-Refreshes)")
-        self.resize(650, 850) # Slightly wider for more details
-        
-        # Main layout
-        layout = QtWidgets.QVBoxLayout()
-        self.setLayout(layout)
-        
-        # Scrollable text area
-        self.debug_text = QtWidgets.QTextEdit()
-        self.debug_text.setReadOnly(True)
-        # Use a monospace font for better table alignment if complex text tables are used
-        # self.debug_text.setFont(QtGui.QFont("Monospace", 9)) 
-        layout.addWidget(self.debug_text)
-        
-        # REMOVE Refresh button
-        # refresh_button = QtWidgets.QPushButton("Refresh Data")
-        # refresh_button.clicked.connect(self.update_debug_info)
-        # layout.addWidget(refresh_button)
-        
-        # ADD QTimer for auto-refresh
-        self.update_timer = QtCore.QTimer(self)
-        self.update_timer.timeout.connect(self.update_debug_info)
-        # Timer will be started in showEvent
-
-        self.update_debug_info() # Initial update when dialog is created
-    
-
-    def update_debug_info(self):
-        # Clear existing text
-        self.debug_text.clear()
-        
-        # Simplified HTML styling for QTextEdit
-        html_template = """
-        <html>
-        <head>
-            <style type="text/css">
-                body { font-family: Arial, sans-serif; font-size: 10pt; /* Standard font size for Qt */ }
-                .container { padding: 5px; }
-                .section { 
-                    background-color: #f0f0f0; 
-                    padding: 8px; 
-                    margin-bottom: 8px; 
-                    border: 1px solid #cccccc;
-                }
-                .title { 
-                    font-weight: bold; 
-                    color: #00007f; /* Dark Blue */
-                    font-size: 12pt; 
-                    margin-bottom: 5px; 
-                    border-bottom: 1px solid #aaaaaa; 
-                    padding-bottom: 2px;
-                }
-                .data table { 
-                    width: 100%; 
-                    border-collapse: collapse; 
-                    margin-top: 5px; 
-                    font-size: 9pt; 
-                }
-                .data th, .data td { 
-                    border: 1px solid #bbbbbb; 
-                    padding: 4px; 
-                    text-align: left; 
-                    vertical-align: top; 
-                }
-                .data th { 
-                    background-color: #dddddd; 
-                    font-weight: bold; 
-                    color: #333333;
-                }
-                /* Alternating row colors might need to be applied via Python if :nth-child is not supported */
-                /* For simplicity, removed here. Can add <tr bgcolor="#f9f9f9"> in Python loop. */
-
-                .metric-name { font-weight: bold; color: #333333; }
-                .value-current { color: #0055aa; font-weight: bold; }
-                .value-threshold { color: #007700; font-weight: bold; }
-                .value-progress { font-size: 8pt; color: #444444; }
-                .neuron-name { color: #770077; font-weight: bold; } /* Purple */
-                .timestamp { font-size: 8pt; color: #444444; }
-                .status-ok { color: #007700; } /* Green */
-                .status-warning { color: #DD6600; } /* Orange */
-                .status-active { color: #aa0000; } /* Red */
-                .details-snapshot ul { margin-top: 2px; margin-bottom: 2px; padding-left: 15px; list-style-type: disc; }
-                .details-snapshot li { margin-bottom: 1px; }
-                .code { font-family: 'Courier New', Courier, monospace; background-color: #eeeeee; padding: 1px 2px; font-size: 8pt;}
-            </style>
-        </head>
-        <body><div class="container">
-        """
-        
-        # --- Data Gathering and HTML Construction (largely the same logic as before) ---
-        if hasattr(self.brain_widget, 'neurogenesis_data') and self.brain_widget.neurogenesis_data and \
-           hasattr(self.brain_widget, 'neurogenesis_config') and self.brain_widget.neurogenesis_config:
-            data = self.brain_widget.neurogenesis_data
-            config = self.brain_widget.neurogenesis_config
-            
-            # Counters and Thresholds Section
-            html_template += f"""
-            <div class="section">
-                <div class="title">&#x1F9E0; Neurogenesis Counters &amp; Thresholds</div>
-                <div class="data">
-                    <table>
-                        <tr><th>Metric</th><th>Current Value</th><th>Config Threshold</th><th>Progress</th></tr>"""
-            
-            metrics = [
-                ('Novelty', data.get('novelty_counter', 0), config.get('novelty_threshold', 3)),
-                ('Stress', data.get('stress_counter', 0), config.get('stress_threshold', 0.7)),
-                ('Reward', data.get('reward_counter', 0), config.get('reward_threshold', 0.6))
-            ]
-            
-            for name, current_val, threshold_val in metrics:
-                progress_percent = (current_val / threshold_val) * 100 if threshold_val > 0 else 0
-                progress_percent = min(100, max(0, progress_percent)) # Cap at 0-100
-                html_template += f"""
-                        <tr>
-                            <td class="metric-name">{name} Counter</td>
-                            <td><span class="value-current">{current_val:.3f}</span></td>
-                            <td><span class="value-threshold">{threshold_val}</span></td>
-                            <td><span class="value-progress">{progress_percent:.1f}%</span></td>
-                        </tr>"""
-            html_template += "</table></div></div>"
-
-            # Status and Limits Section
-            last_creation_time = data.get('last_neuron_time', 0)
-            time_since_last = time.time() - last_creation_time if last_creation_time > 0 else -1
-            cooldown_period = config.get('cooldown', 300)
-            cooldown_active = time_since_last >= 0 and time_since_last < cooldown_period
-            cooldown_status_class = "status-active" if cooldown_active else "status-ok"
-            cooldown_text = f"{time_since_last:.1f}s ago (Cooldown: {'Active' if cooldown_active else 'Inactive'})" if time_since_last >=0 else "N/A"
-
-            pruning_enabled_val = self.brain_widget.pruning_enabled if hasattr(self.brain_widget, 'pruning_enabled') else 'N/A'
-            pruning_status_class = "status-ok" if pruning_enabled_val else "status-warning"
-            
-            current_neurons_val = len(self.brain_widget.neuron_positions) - len(self.brain_widget.excluded_neurons) if hasattr(self.brain_widget, 'neuron_positions') and hasattr(self.brain_widget, 'excluded_neurons') else 'N/A'
-            max_neurons_val = config.get('max_neurons', 20)
-            
-            html_template += f"""
-            <div class="section">
-                <div class="title">&#x2699;&#xFE0F; Neuron Creation Status &amp; Limits</div>
-                <div class="data">
-                    <table>
-                        <tr><td class="metric-name">Last Neuron Created:</td><td class="timestamp">{time.ctime(last_creation_time) if last_creation_time else 'N/A'}</td></tr>
-                        <tr><td class="metric-name">Time Since Last / Cooldown:</td><td class="{cooldown_status_class}">{cooldown_text} / {cooldown_period}s</td></tr>
-                        <tr><td class="metric-name">Pruning Enabled:</td><td class="{pruning_status_class}">{pruning_enabled_val}</td></tr>
-                        <tr><td class="metric-name">Max Neurons (if pruning):</td><td>{max_neurons_val}</td></tr>
-                        <tr><td class="metric-name">Current Eligible Neurons:</td><td>{current_neurons_val}</td></tr>
-                        <tr><td class="metric-name">Neurogenesis Neurons Count:</td><td>{len(data.get('new_neurons_details', {}))}</td></tr>
-                    </table>
-                </div>
-            </div>"""
-            
-            # Detailed Neurogenesis Neuron Info Section
-            new_neurons_details = data.get('new_neurons_details', {})
-            if new_neurons_details:
-                html_template += """
-                <div class="section">
-                    <div class="title">&#x1F4A1; Details of Neurogenesis Neurons</div>
-                    <div class="data"><table>
-                        <tr>
-                            <th>Neuron Name</th>
-                            <th>Created At</th>
-                            <th>Trigger Type</th>
-                            <th>Trigger Value</th>
-                            <th>Associated State Snapshot</th>
-                        </tr>"""
-                sorted_neuron_details = sorted(new_neurons_details.items(), key=lambda item: item[1].get('created_at', 0), reverse=True)
-
-                for name, details in sorted_neuron_details:
-                    created_at_val = details.get('created_at')
-                    created_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created_at_val)) if created_at_val else "Unknown"
-                    trigger_type = str(details.get('trigger_type', "N/A")).capitalize()
-                    trigger_value_raw = details.get('trigger_value_at_creation', "N/A")
-                    trigger_value_str = f"{trigger_value_raw:.2f}" if isinstance(trigger_value_raw, float) else str(trigger_value_raw)
-                    
-                    snapshot = details.get('associated_state_snapshot', {})
-                    snapshot_html = "<ul class='details-snapshot'>"
-                    if snapshot:
-                        for k, v_snap in snapshot.items():
-                            if v_snap is not None:
-                                snapshot_html += f"<li><span class='metric-name'>{k.capitalize()}:</span> <span class='code'>{v_snap}</span></li>"
-                    else:
-                        snapshot_html += "<li>N/A</li>"
-                    snapshot_html += "</ul>"
-
-                    html_template += f"""
-                        <tr>
-                            <td><span class="neuron-name">{name}</span></td>
-                            <td class="timestamp">{created_at_str}</td>
-                            <td>{trigger_type}</td>
-                            <td><span class="value-current">{trigger_value_str}</span></td>
-                            <td>{snapshot_html}</td>
-                        </tr>"""
-                html_template += "</table></div></div>"
-            else:
-                html_template += """
-                <div class="section">
-                    <div class="title">&#x1F4A1; Details of Neurogenesis Neurons</div>
-                    <div class="data"><p>No neurogenesis neurons with details found.</p></div>
-                </div>"""
-        else:
-            html_template += "<div class='section'><div class='title'>Error</div><p class='data status-active'>Neurogenesis data or configuration not available from BrainWidget.</p></div>"
-        
-        html_template += "</div></body></html>"
-        
-        self.debug_text.setHtml(html_template)
-
-    def showEvent(self, event):
-        """Start the timer when the dialog is shown."""
-        if not self.update_timer.isActive():
-            self.update_timer.start(1000) # 1 second
-        self.update_debug_info() # Refresh immediately on show
-        super().showEvent(event)
-
-    def hideEvent(self, event):
-        """Stop the timer when the dialog is hidden/closed."""
-        self.update_timer.stop()
-        super().hideEvent(event)
-
-    def closeEvent(self, event):
-        """Ensure the timer stops when the dialog is explicitly closed."""
-        self.update_timer.stop()
-        super().closeEvent(event)

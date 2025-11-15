@@ -228,7 +228,6 @@ class PluginManager:
             self.logger.warning(f"Plugin directory does not exist: {self.plugin_directory}")
             return plugin_info
         
-        self.logger.info(f"Discovering plugins in directory: '{self.plugin_directory}'")
 
         for plugin_dir in os.listdir(self.plugin_directory):
             plugin_path = os.path.join(self.plugin_directory, plugin_dir)
@@ -271,7 +270,7 @@ class PluginManager:
                 }
                 
                 plugin_info[plugin_name] = metadata
-                self.logger.info(f"Discovered plugin: {metadata['original_name']} v{metadata['version']} (key: {plugin_name})")
+                #self.logger.info(f"Discovered plugin:   {metadata['original_name']} v{metadata['version']} (key: {plugin_name})")
                 
             except Exception as e:
                 self.logger.error(f"Error discovering plugin in '{plugin_dir}': {str(e)}", exc_info=True)
@@ -322,14 +321,14 @@ class PluginManager:
         if not hasattr(module, "initialize"):
             self.logger.error(f"Plugin '{plugin_name}' has no 'initialize' function.")
             return False
-        self.logger.info(f"Plugin '{plugin_name}': Found 'initialize' function. Attempting to call.")
+        #self.logger.info(f"Plugin '{plugin_name}': Found 'initialize' function. Attempting to call.")
 
         try:
             initialize_func = getattr(module, "initialize")
             success = initialize_func(self)  # Call initialize
 
             if success:
-                self.logger.info(f"Plugin '{plugin_name}': 'initialize' function executed successfully.")
+                #self.logger.info(f"Plugin '{plugin_name}': 'initialize' function executed successfully.")
                 
                 # Check if plugin registered itself (especially important for multiplayer's pattern)
                 if plugin_name not in self.plugins:
@@ -344,7 +343,7 @@ class PluginManager:
                      # This is the warning that replaces the previous hard error
                      self.logger.warning(f"Plugin '{plugin_name}': Instance was not explicitly set in manager's records by 'initialize'.")
                 elif plugin_name in self.plugins:
-                     self.logger.info(f"Plugin '{plugin_name}': Instance found/set in manager's records.")
+                     self.logger.info(f"Success")
 
                 if plugin_name != "multiplayer":
                     self.enabled_plugins.add(plugin_name)
@@ -362,7 +361,7 @@ class PluginManager:
         """
         Load all discovered plugins.
         """
-        self.logger.info("Loading all discovered plugins...")
+        self.logger.info("  Discovering plugins...")
         self.plugins.clear()
         self.enabled_plugins.clear()
         

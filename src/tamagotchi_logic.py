@@ -1,4 +1,3 @@
-
 from PyQt5 import QtCore, QtGui, QtWidgets
 import random
 import os
@@ -49,6 +48,20 @@ class TamagotchiLogic:
         self.age_update_timer = QtCore.QTimer()
         self.age_update_timer.timeout.connect(self.update_squid_age)
         self.age_update_timer.start(60000)  # 1 minute
+
+        # -------  curiosity / startle cooldowns  -------
+        
+        self.mental_states_enabled = True 
+        self.curious_cooldown = 0
+        self.curious_cooldown_max = 20
+        self.curious_interaction_cooldown = 1
+        self.curious_interaction_cooldown_max = 5
+        self.startle_cooldown = 1000
+        self.startle_cooldown_max = 20 
+        self.plant_calming_effect_counter = 0
+
+        # Add action tracking - new in 2.4.5.0
+        self.recent_actions = []
 
         # Initialize plugin manager
         self.plugin_manager = PluginManager()
@@ -107,9 +120,8 @@ class TamagotchiLogic:
             self.thought_log = []
             self.add_thought = self._log_thought
 
-        # Initialize save manager
+        # Initialize save manager (but don't load yet)
         self.save_manager = SaveManager()
-        self.load_game()
 
         # Connect menu actions
         self.user_interface.feed_action.triggered.connect(self.feed_squid)
@@ -131,7 +143,11 @@ class TamagotchiLogic:
 
         # Initialize statistics window
         self.statistics_window = StatisticsWindow(squid)
+        squid.statistics_window = self.statistics_window
         self.statistics_window.show()
+        
+        # NOW load the game after statistics_window exists
+        self.load_game()
 
         # Setup additional timers
         self.score_update_timer = QtCore.QTimer()
@@ -150,25 +166,14 @@ class TamagotchiLogic:
         self.squid.anxiety = 10
         self.squid.curiosity = 55
 
-        ################################
-        #### MENTAL STATE COOLDOWNS ####
-        ################################
-
-        self.startle_cooldown = 0
-        self.startle_cooldown_max = 30 
-        self.mental_states_enabled = True 
-        self.curious_cooldown = 0
-        self.curious_cooldown_max = 20
-        self.curious_interaction_cooldown = 1
-        self.curious_interaction_cooldown_max = 5
-        self.startle_cooldown = 1000
-        self.plant_calming_effect_counter = 0
+        
 
     def update_squid_age(self):
         if hasattr(self.brain_window, 'statistics_tab'):
             age_min = int((time.time() - self.squid_birth_time) / 60)
             self.brain_window.statistics_tab.statistics['squid_age_minutes'] = age_min
             self.brain_window.statistics_tab.update_display()
+
 
     def track_poop_thrown(self):
         if hasattr(self.brain_window, 'statistics_tab'):
@@ -779,9 +784,45 @@ class TamagotchiLogic:
             
         if self.simulation_speed == 0:
             self.simulation_timer.stop()
+            # Also stop brain-related timers when paused
+            if hasattr(self, 'brain_window') and self.brain_window:
+                if hasattr(self.brain_window, 'hebbian_timer'):
+                    self.brain_window.hebbian_timer.stop()
+                if hasattr(self.brain_window, 'countdown_timer'):
+                    self.brain_window.countdown_timer.stop()
         else:
             interval = max(10, self.base_interval // self.simulation_speed)  # Ensure minimum interval
             self.simulation_timer.start(interval)
+            
+            # Update hebbian learning timer if it exists
+            if hasattr(self, 'brain_window') and self.brain_window:
+                if hasattr(self.brain_window, 'hebbian_timer'):
+                    # Get the base learning interval from config
+                    base_learning_interval = self.brain_window.config.hebbian.get('learning_interval', 30000)
+                    # Scale the interval inversely with simulation speed
+                    new_learning_interval = max(1000, int(base_learning_interval / self.simulation_speed))
+                    self.brain_window.hebbian_timer.setInterval(new_learning_interval)
+                    
+                    # Update the countdown timer's initial value
+                    if hasattr(self.brain_window, 'hebbian_countdown_seconds'):
+                        self.brain_window.hebbian_countdown_seconds = int(new_learning_interval / 1000)
+                    
+                    # Restart countdown timer if it was stopped
+                    if hasattr(self.brain_window, 'countdown_timer'):
+                        if not self.brain_window.countdown_timer.isActive():
+                            self.brain_window.countdown_timer.start(1000)
+                
+                # Update neurogenesis cooldown if the system exists
+                if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'neurogenesis_system'):
+                    # The neurogenesis system uses time-based cooldowns, so we need to adjust how time passes
+                    # This is handled by the base cooldown time in the config
+                    neuro_system = self.brain_window.brain_widget.neurogenesis_system
+                    if hasattr(neuro_system, 'config'):
+                        # Store the base cooldown if not already stored
+                        if not hasattr(neuro_system, 'base_cooldown'):
+                            neuro_system.base_cooldown = neuro_system.config.neurogenesis.get('cooldown', 120)
+                        # Scale cooldown inversely with simulation speed
+                        neuro_system.config.neurogenesis['cooldown'] = max(10, int(neuro_system.base_cooldown / self.simulation_speed))
 
     def check_for_startle(self):
         if not self.mental_states_enabled:
@@ -842,6 +883,7 @@ class TamagotchiLogic:
                     self.squid.status = "startled"
 
             self.squid.is_fleeing = True
+            self.statistics_window.award(-50)
             self.squid.current_speed = 180
             self.squid.direction = random.choice(['up', 'down', 'left', 'right'])
 
@@ -850,7 +892,7 @@ class TamagotchiLogic:
             # ------------------------------------------------------------------
             if source != "startled_awake" and random.random() < 0.25:
                 self.create_ink_cloud()
-                self.squid.status = "fleeing from ink cloud"
+                self.squid.status = "fleeing!"
                 self.squid.memory_manager.add_short_term_memory(
                     'behaviour', 'ink_cloud', 'Startled! Created an ink cloud'
                 )
@@ -980,6 +1022,7 @@ class TamagotchiLogic:
 
         # Start the animation
         fade_out_animation.start()
+        self.statistics_window.award(-250)
         
         # Backup timer to force remove after 10 seconds in case animation fails
         QtCore.QTimer.singleShot(10000, lambda: self.force_remove_ink_cloud(ink_cloud_item))
@@ -1062,6 +1105,11 @@ class TamagotchiLogic:
         self.plugin_manager.trigger_hook("pre_update", 
                                         tamagotchi_logic=self, 
                                         squid=self.squid)
+        
+        # Check if simulation is paused - if so, don't process anything
+        if self.simulation_speed == 0:
+            return
+            
         # 1. Handle existing simulation updates
         self.move_objects()
         self.animate_poops()
@@ -1120,13 +1168,9 @@ class TamagotchiLogic:
             self.new_object_encountered = False
             self.recent_positive_outcome = False
 
-        # 9. Handle RPS game state if active
-        if hasattr(self, 'rps_game') and self.rps_game.game_window:
-            self.rps_game.update_state()
-            # Trigger post-update hook at the end
-        self.plugin_manager.trigger_hook("post_update", 
-                                        tamagotchi_logic=self, 
-                                        squid=self.squid)
+            # 9. Hunger scoring
+        if self.squid.hunger == 0 or self.squid.hunger >= 99:
+            self.statistics_window.update_score()   # triggers time-based hunger scoring
 
     def check_for_sickness(self):
         # Existing sickness logic
@@ -1134,6 +1178,7 @@ class TamagotchiLogic:
         (self.hunger_threshold_time >= 10 * self.simulation_speed and self.hunger_threshold_time <= 50 * self.simulation_speed):
             if random.random() < 0.8:
                 self.squid.mental_state_manager.set_state("sick", True)
+                self.brain_window.brain_widget.provide_outcome_feedback(-0.8)
                 
                 # Set more descriptive sick status
                 if self.squid.health < 30:
@@ -1177,6 +1222,7 @@ class TamagotchiLogic:
             current = self.brain_window.statistics_tab.statistics['current_neurons']
             self.brain_window.statistics_tab.statistics['current_neurons'] = current + 1
             self.brain_window.statistics_tab.update_display()
+            self.statistics_window.award(500)
 
     def track_neuron_counts(self, current_count, max_count):
         """Track current and maximum neuron counts"""
@@ -1356,7 +1402,7 @@ class TamagotchiLogic:
             
             self.squid.happiness = max(0, self.squid.happiness - 30)
             self.squid.sleepiness = min(100, self.squid.sleepiness + 50)
-            
+            self.statistics_window.award(-100)
             self.show_message("Medicine given. Squid didn't like that!")
             
             # Add thoughts and set status
@@ -1623,7 +1669,14 @@ class TamagotchiLogic:
         # Update last known size
         self.last_window_size = new_size
 
+    def track_action(self, action_name):
+        """Track what the squid is doing"""
+        self.recent_actions.append(action_name)
+        if len(self.recent_actions) > 10:
+            self.recent_actions.pop(0)
+
     def feed_squid(self):
+        self.track_action('feeding')
         # Get plugin results
         results = self.plugin_manager.trigger_hook("on_feed", 
                                                 tamagotchi_logic=self, 
@@ -1640,6 +1693,9 @@ class TamagotchiLogic:
         # Only create one food item
         is_sushi = random.random() < 0.5
         self.spawn_food(is_sushi=is_sushi)
+
+        if self.squid.hunger < 50:  # Feeding was successful
+            self.brain_window.brain_widget.provide_outcome_feedback(1.0)
 
     def spawn_food(self, is_sushi=False):
         if len(self.food_items) >= self.max_food:
@@ -1663,6 +1719,7 @@ class TamagotchiLogic:
         self.food_items.append(food_item)  # Single addition
 
     def clean_environment(self):
+        self.track_action('cleaning')
         current_time = time.time()
         if current_time - self.last_clean_time < self.clean_cooldown:
             remaining_cooldown = int(self.clean_cooldown - (current_time - self.last_clean_time))
@@ -1722,20 +1779,22 @@ class TamagotchiLogic:
 
 
     def finish_cleaning(self):
-        # Remove the cleaning line
+        # 1. remove the cleaning line (existing)
         self.user_interface.scene.removeItem(self.cleaning_line)
 
-        # Update squid stats if Squid object is available
-        if self.squid is not None:
+        # 2. count poops actually removed & award
+        poops_removed = 0
+        for poop_item in self.poop_items[:]:
+            if not poop_item.scene():   # already erased by the swipe
+                poops_removed += 1
+        if poops_removed:
+            self.statistics_window.award(25 * poops_removed)   # 25 per poop
+
+        # 3. rest unchanged …
+        if self.squid:
             self.squid.cleanliness = 100
             self.squid.happiness = min(100, self.squid.happiness + 20)
-
-        # Show a message
         self.show_message("Environment cleaned! Squid is happier!")
-        # Add thoughts
-        self.brain_window.add_thought("I am pleased that the tank was cleaned")
-
-        # Force an update of the scene
         self.user_interface.scene.update()
 
     def show_message(self, message):
@@ -1934,6 +1993,17 @@ class TamagotchiLogic:
             self.brain_window.statistics_tab.statistics.update(save_data['statistics'])
             self.brain_window.statistics_tab.update_display()
 
+        # ---------- score data restoration ----------
+        if 'score_data' in save_data and hasattr(self, 'statistics_window'):
+            score_data = save_data['score_data']
+            self.statistics_window.score = score_data.get('score', 0)
+            self.statistics_window.combo_level = score_data.get('combo_level', 1)
+            self.statistics_window.combo_timer = score_data.get('combo_timer', 0)
+            self.statistics_window.last_food_time = score_data.get('last_food_time', 0)
+            # Update the score label immediately
+            self.statistics_window.display_score = self.statistics_window.score
+            self.statistics_window.score_label.setText(f"{int(self.statistics_window.display_score):04d}")
+
         # ---------- basic state ----------
         game_state = save_data['game_state']
         squid_data = game_state['squid']
@@ -1974,11 +2044,6 @@ class TamagotchiLogic:
                 squid=self.squid,
                 plugin_data=save_data['plugin_data']
             )
-
-        # ---------- statistics ----------
-        if 'statistics' in save_data and hasattr(self.brain_window, 'statistics_tab'):
-            self.brain_window.statistics_tab.statistics.update(save_data['statistics'])
-            self.brain_window.statistics_tab.update_display()
 
         # ---------- memory tab refresh ----------
         if hasattr(self.brain_window, 'memory_tab'):
@@ -2025,14 +2090,17 @@ class TamagotchiLogic:
                 "direction": self.squid.squid_direction,
                 "position": (self.squid.squid_x, self.squid.squid_y),
                 "personality": self.squid.personality.value,
-                "status": self.squid.status
+                "status": self.squid.status,
+                'recent_actions': self.recent_actions,
+                'food_count': len(self.food_items),
+                'poop_count': len(self.poop_items)
             }
 
             self.brain_window.update_brain(brain_state)
 
     def save_game(self, squid, tamagotchi_logic, is_autosave=False):
         """
-        Save the full game state – including the StatisticsTab data – to zip.
+        Save the full game state to zip.
         """
         try:
             # ---------- plugin hook ----------
@@ -2054,10 +2122,22 @@ class TamagotchiLogic:
             if hasattr(self.brain_window, 'statistics_tab'):
                 stats_dict = self.brain_window.statistics_tab.statistics
 
+
+            # ---------- score data from statistics window ----------
+            score_data = {}
+            if hasattr(self, 'statistics_window'):
+                score_data = {
+                    'score': self.statistics_window.score,
+                    'combo_level': self.statistics_window.combo_level,
+                    'combo_timer': self.statistics_window.combo_timer,
+                    'last_food_time': self.statistics_window.last_food_time
+                }
+
             # ---------- main save bundle ----------
             save_data = {
                 'game_state': {
                     'squid': {
+                        'name': squid.name,
                         'hunger': squid.hunger,
                         'sleepiness': squid.sleepiness,
                         'happiness': squid.happiness,
@@ -2094,7 +2174,7 @@ class TamagotchiLogic:
                 'LongTerm': squid.memory_manager.long_term_memory,
                 'plugin_data': plugin_data,
                 'statistics': stats_dict,
-                'squid_age_minutes': self.brain_window.statistics_tab.statistics['squid_age_minutes']
+                'score_data': score_data,
             }
 
             filepath = self.save_manager.save_game(save_data, is_autosave)

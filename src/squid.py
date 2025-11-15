@@ -6,11 +6,13 @@ from enum import Enum
 import math
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import QTimer
+from .brain_about_tab import SQUID_NAMES
 from .mental_states import MentalStateManager
 from .memory_manager import MemoryManager
 from .personality import Personality
 from .decision_engine import DecisionEngine
 from .image_cache import ImageCache
+from .statistics_window import StatisticsWindow
 
 class Squid:
 
@@ -22,9 +24,10 @@ class Squid:
         self.startled_icon = None
         self.startled_icon_offset = QtCore.QPointF(0, -100)
         self.tint_color = None
+        self.name = random.choice(SQUID_NAMES)
 
-        # Set neurogenesis cooldown (default to 200 seconds if not specified)
-        self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 200
+        # Set neurogenesis cooldown (default to 180 seconds if not specified)
+        self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 180
 
         # Rock interaction system
         self.carrying_rock = False
@@ -106,6 +109,39 @@ class Squid:
             self.personality = random.choice(list(Personality))
         else:
             self.personality = personality
+
+    def _has_personality_starter_neuron(self):
+        """Check if a personality-specific starter neuron already exists"""
+        if not hasattr(self, 'tamagotchi_logic') or not self.tamagotchi_logic:
+            return False
+        
+        brain_window = self.tamagotchi_logic.brain_window
+        if not brain_window or not hasattr(brain_window, 'brain_widget'):
+            return False
+        
+        brain_widget = brain_window.brain_widget
+        if not hasattr(brain_widget, 'enhanced_neurogenesis'):
+            return False
+        
+        # Check for personality-specific neuron names
+        personality_neuron_names = {
+            'timid': 'timid_caution',
+            'adventurous': 'explorer_drive',
+            'lazy': 'energy_conservation',
+            'energetic': 'restless_activity',
+            'introvert': 'solitude_preference',
+            'greedy': 'insatiable_hunger',
+            'stubborn': 'sushi_preference'
+        }
+        
+        personality_key = self.personality.value.lower()
+        expected_neuron_name = personality_neuron_names.get(personality_key)
+        
+        if not expected_neuron_name:
+            return False
+        
+        # Check if this neuron exists in the functional neurons
+        return expected_neuron_name in brain_widget.enhanced_neurogenesis.functional_neurons
 
     @property
     def carrying_rock(self):
@@ -319,6 +355,30 @@ class Squid:
                     new_value=self._curiosity
                 )
 
+    def _has_personality_starter_neuron(self) -> bool:
+        """Return True if any starter neuron for this personality already exists."""
+        if not hasattr(self, 'brain_widget') or not self.brain_widget:
+            return True          # skip creation if brain not ready
+        if not self.personality:
+            return True
+
+        # Map enum -> prefix used in neurogenesis.py
+        prefix_map = {
+            Personality.TIMID:      "timid_caution",
+            Personality.ADVENTUROUS: "explorer_drive",
+            Personality.LAZY:        "energy_conservation",
+            Personality.ENERGETIC:   "restless_activity",
+            Personality.INTROVERT:   "solitude_preference",
+            Personality.GREEDY:      "insatiable_hunger",
+            Personality.STUBBORN:    "sushi_preference",
+        }
+        prefix = prefix_map.get(self.personality)
+        if not prefix:               # unknown personality → skip
+            return True
+
+        existing = self.brain_widget.neuron_positions.keys()
+        return any(n.startswith(prefix) for n in existing)
+
     def apply_tint(self, color):
         """Apply a color tint to the squid's image."""
         self.tint_color = color
@@ -493,6 +553,7 @@ class Squid:
         # self.sleepiness = 0  # Waking up no longer removes all tiredness
         self.happiness = max(0, self.happiness - 25)  # Increased happiness decrease
         self.anxiety = min(100, self.anxiety + 60)    # Increased anxiety spike
+        self.statistics_window.award(-100)
 
         # Visual feedback
         self.show_startled_icon()  # Show the startled icon
@@ -835,11 +896,8 @@ class Squid:
         self.personality = Personality(state['personality'])
         
         # Load the squid's name if it exists in the saved state
-        if 'name' in state:
-            self.name = state['name']
-        
+        self.name = state.get('name', 'Squid')
         if 'tint_color' in state and state['tint_color']:
-            # Recreate the QColor object from the saved RGBA tuple
             self.tint_color = QtGui.QColor(*state['tint_color'])
         else:
             self.tint_color = None
@@ -1071,7 +1129,7 @@ class Squid:
 
     def move_squid(self):
         """
-        Move the squid with comprehensive debug logging and boundary check
+        Move the squid with comprehensive debug logging and multiplayer boundary check
         """
         # Check if movement is allowed
         if not getattr(self, 'can_move', True):
@@ -1096,6 +1154,7 @@ class Squid:
             self.current_frame = (self.current_frame + 1) % 2
             self.update_squid_image()
             return
+        
 
         current_time = QtCore.QTime.currentTime().msecsSinceStartOfDay()
 
@@ -1232,6 +1291,7 @@ class Squid:
         
         self.is_eating = True
         self.status = "eating"
+        self.statistics_window.award(75)
         # Apply all stat changes
         for attr, change in effects.items():
             setattr(self, attr, getattr(self, attr) + change)

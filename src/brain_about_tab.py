@@ -3,6 +3,13 @@ import os
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 
+# Predefined list of approved squid names - moved to module level for reuse
+SQUID_NAMES = [
+    "Algernon", "Cuthbert", "Englebert", "D'Artagnan",
+    "Gaspard", "Ulysses", "Leopold", "Miroslav",
+    "Artemis", "Jacques", "Cecil", "Wilhelm", "Giskard"
+]
+
 class AboutTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
         super().__init__(parent, tamagotchi_logic, brain_widget, config, debug_mode)
@@ -61,13 +68,6 @@ class AboutTab(BrainBaseTab):
         font.setPointSize(DisplayScaling.font_size(10))
         about_text.setFont(font)
         
-        # Predefined list of approved squid names
-        SQUID_NAMES = [
-            "Algernon", "Cuthbert", "Englebert", "D'Artagnan",
-            "Gaspard", "Ulysses", "Leopold", "Miroslav",
-            "Artemis", "Jacques", "Cecil", "Wilhelm", "Giskard"
-        ]
-        
         # Determine the squid name and personality - more robust approach
         squid_name = random.choice(SQUID_NAMES)
         personality = "Unknown"
@@ -112,6 +112,7 @@ class AboutTab(BrainBaseTab):
         <b>Dosidicus version: {version_info['dosidicus']}</b><br>
         Brain Tool version: {version_info['brain_tool']}<br>
         Decision engine version: {version_info['decision_engine']}<br><br>
+        Neurogenesis version: {version_info['neurogenesis']}<br><br>
         <p>This is a research project. Please suggest features.</p><br><br>
         </ul>
         """)
@@ -372,10 +373,11 @@ class AboutTab(BrainBaseTab):
     def get_version_info(self):
         """Read version information from the version file"""
         version_info = {
-            "dosidicus": "2.1.0",  # Default versions if file not found
-            "brain_tool": "2.0nf",
-            "decision_engine": "2.1"
-        }
+            "dosidicus": "2.4.5.0_base",  # Default versions if file not found
+            "brain_tool": "N/A",
+            "decision_engine":"N/A",
+            "neurogenesis":   "N/A"         # fallback
+}
 
         try:
             # Look for version file in the project root

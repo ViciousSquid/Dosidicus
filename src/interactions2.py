@@ -212,6 +212,7 @@ class PoopInteractionManager:
         self.squid.happiness = min(100, self.squid.happiness - 5)
         self.squid.satisfaction = min(100, self.squid.satisfaction - 3)
         self.squid.anxiety = min(100, self.squid.anxiety + 10)
+        self.logic.statistics_window.award(-75)
         
         # Simplified negative memory
         memory_details = {

@@ -3,9 +3,10 @@ from .brain_base_tab import BrainBaseTab
 import random
 import time
 
+
 class NeuralNetworkVisualizerTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
-    
+
         # Ensure brain_widget is not None
         if brain_widget is None:
             print("WARNING: Brain widget is None. Creating a placeholder.")
@@ -14,17 +15,27 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
 
         # Call parent's __init__
         super().__init__(parent, tamagotchi_logic, brain_widget, config, debug_mode)
-        
+
         # Explicit attribute initialization
         self.countdown_label = None
         self.countdown_timer = None
-        self.activity_log = None
-        self.tab_widget = None  # Updated to use tab widget
-        self.edu_views = {}     # Dictionary to store QTextEdit for each tab
+        self.tab_widget = None
+        self.edu_views = {}
         self.current_countdown = 30
         self.learning_history = []
         self.recent_pairs = []
-        
+
+        # Card display areas
+        self.learning_scroll = None
+        self.learning_content = None
+        self.learning_content_layout = None
+
+        # Blink timer for Hebbian label
+        self.blink_timer = QtCore.QTimer(self)
+        self.blink_timer.setInterval(500)  # 0.5 s toggle
+        self.blink_timer.timeout.connect(self._blink_hebbian_label)
+        self._blink_visible = True
+
         self.setup_ui()
 
     def pre_load_data(self):
@@ -33,46 +44,23 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         if hasattr(self, 'edu_views'):
             for tab_name, edu_view in self.edu_views.items():
                 self.update_educational_content(tab_name=tab_name)
-        
-        # Pre-initialize any visualizations
-        if hasattr(self, 'activity_log'):
-            # Add placeholder entry to initialize rendering
-            self.activity_log.insertHtml(
-                '<div style="color: #555; font-style: italic; padding: 10px;">Learning system ready.</div>'
+
+        # Pre-initialize learning cards
+        if hasattr(self, 'learning_content_layout'):
+            # Add placeholder to initialize rendering
+            placeholder = self._create_info_card(
+                "Learning System Ready",
+                "Hebbian learning will create associations between neurons that activate together.",
+                "#e3f2fd"
             )
-        
-        # Pre-compute any expensive operations that would happen on first tab selection
+            self.learning_content_layout.addWidget(placeholder)
+
+        # Pre-compute any expensive operations
         if hasattr(self, 'brain_widget') and hasattr(self.brain_widget, 'weights'):
-            # Process some sample data to initialize any visualizations
             sample_state = self.brain_widget.state.copy() if hasattr(self.brain_widget, 'state') else {}
             self.update_from_brain_state(sample_state)
 
-    def create_custom_button(self, text, callback, color, font_size=18):
-        """Create a button with custom styling"""
-        button = QtWidgets.QPushButton(text)
-        button.clicked.connect(callback)
-        button.setStyleSheet(f"""
-            QPushButton {{
-                font-size: {font_size}px;
-                padding: 4px 12px;
-                border-radius: 6px;
-                font-weight: 500;
-                border: 2px solid {color};
-                background-color: {color};
-                color: white;
-                min-width: 120px;
-                height: 30px;
-            }}
-            QPushButton:hover {{
-                background-color: {self.darken_color(color, 20)};
-                border: 2px solid {self.darken_color(color, 20)};
-            }}
-        """)
-        button.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
-        return button
-
     def setup_ui(self):
-        
         # Remove existing widgets from the layout
         if hasattr(self, '_layout'):
             while self.layout.count():
@@ -86,42 +74,13 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         main_layout = QtWidgets.QVBoxLayout()
         self.layout.addLayout(main_layout)
 
-        # Splitter for main content
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
-        main_layout.addWidget(splitter)
-
-        # Left panel - Activity Log
-        log_container = QtWidgets.QWidget()
-        log_layout = QtWidgets.QVBoxLayout(log_container)
-        
-        self.activity_log = QtWidgets.QTextEdit()
-        self.activity_log.setReadOnly(True)
-        self.activity_log.setStyleSheet("""
-            QTextEdit {
-                background-color: #f5f7fa;
-                border: 2px solid #e1e5eb;
-                border-radius: 12px;
-                padding: 20px;
-                font-size: 18px;
-                font-family: 'Segoe UI', Arial, sans-serif;
-            }
-        """)
-        log_layout.addWidget(QtWidgets.QLabel(
-            "<h1 style='font-size: 28px; margin-bottom: 15px; color: #2c3e50; font-weight: 600;'>🧠 Neural Activity Log</h1>"
-        ))
-        log_layout.addWidget(self.activity_log)
-
-        # Right panel - Educational Content with Tabs
-        edu_container = QtWidgets.QWidget()
-        edu_layout = QtWidgets.QVBoxLayout(edu_container)
-        
-        # Add tab widget
+        # Create tab widget for different sections
         self.tab_widget = QtWidgets.QTabWidget()
         self.tab_widget.setStyleSheet("""
             QTabWidget::pane {
                 border: 2px solid #e1e5eb;
                 border-radius: 12px;
-                background-color: #ffffff;
+                background-color: #f8f9fa;
             }
             QTabBar::tab {
                 background: #f8f9fa;
@@ -142,398 +101,481 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
                 background: #e9ecef;
             }
         """)
-        
-        # Create tabs
-        tabs = ['Overview', 'Mechanics']
-        for tab_name in tabs:
-            tab_widget = QtWidgets.QWidget()
-            tab_layout = QtWidgets.QVBoxLayout(tab_widget)
-            
-            edu_view = QtWidgets.QTextEdit()
-            edu_view.setReadOnly(True)
-            edu_view.setStyleSheet("""
-                QTextEdit {
-                    background-color: #ffffff;
-                    border: none;
-                    padding: 25px;
-                    font-size: 18px;
-                    font-family: 'Segoe UI', Arial, sans-serif;
-                }
-            """)
-            tab_layout.addWidget(edu_view)
-            self.edu_views[tab_name] = edu_view
-            self.tab_widget.addTab(tab_widget, tab_name)
-        
-        edu_layout.addWidget(QtWidgets.QLabel(
-            "<h1 style='font-size: 28px; margin-bottom: 15px; color: #2c3e50; font-weight: 600;'>📚 Learning Guide</h1>"
-        ))
-        edu_layout.addWidget(self.tab_widget)
 
-        # Add to splitter
-        splitter.addWidget(log_container)
-        splitter.addWidget(edu_container)
-        splitter.setSizes([600, 500])
+        # ====== LEARNING PAIRS TAB ======
+        self.learning_tab = QtWidgets.QWidget()
+        learning_tab_layout = QtWidgets.QVBoxLayout(self.learning_tab)
 
-        # Bottom layout for countdown label
-        bottom_layout = QtWidgets.QHBoxLayout()
-        self.countdown_label = QtWidgets.QLabel("Next: 30s")
-        self.countdown_label.setFixedHeight(40)
-        self.countdown_label.setStyleSheet("""
-            QLabel {
-                font-size: 18px;
-                font-weight: 500;
-                color: #4dabf7;
-                padding: 4px 12px;
+        # Header with title and Hebbian countdown
+        header_layout = QtWidgets.QHBoxLayout()
+        header_label = QtWidgets.QLabel(
+            "<h2 style='font-size: 24px; color: #2c3e50; font-weight: 600;'>Active Learning Pairs</h2>"
+        )
+        header_layout.addWidget(header_label)
+        header_layout.addStretch()
+
+        # Hebbian countdown timer label
+        self.hebbian_timer_label_learning = QtWidgets.QLabel("Hebbian Cycle: --")
+        self.hebbian_timer_label_learning.setStyleSheet("""
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            padding: 5px 10px;
+            background-color: #e3f2fd;
+            border-radius: 6px;
+            border: 1px solid #90caf9;
+        """)
+        header_layout.addWidget(self.hebbian_timer_label_learning)
+
+        learning_tab_layout.addLayout(header_layout)
+
+        # Scroll area for learning cards
+        self.learning_scroll = QtWidgets.QScrollArea()
+        self.learning_scroll.setWidgetResizable(True)
+        self.learning_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
                 background-color: #f8f9fa;
-                border-radius: 6px;
-                border: 1px solid #e1e5eb;
-                margin-right: 10px;
-                min-width: 100px;
-                text-align: center;
             }
         """)
-        bottom_layout.addWidget(self.countdown_label)
-        bottom_layout.addStretch()  # Push countdown label to the left
-        main_layout.addLayout(bottom_layout)
 
-        # Ensure splitter takes remaining space
-        main_layout.setStretch(0, 1)  # Splitter gets all available space
-        main_layout.setStretch(1, 0)  # Bottom layout gets minimum space
+        self.learning_content = QtWidgets.QWidget()
+        self.learning_content_layout = QtWidgets.QVBoxLayout(self.learning_content)
+        self.learning_content_layout.setSpacing(15)
+        self.learning_content_layout.setContentsMargins(10, 10, 10, 10)
+        self.learning_content_layout.addStretch()
 
-        # Setup countdown timer
-        self.countdown_timer = QtCore.QTimer(self)
-        self.countdown_timer.timeout.connect(self.update_countdown)
-        self.countdown_timer.start(1000)
+        self.learning_scroll.setWidget(self.learning_content)
+        learning_tab_layout.addWidget(self.learning_scroll)
 
-        # Set initial content
-        self.update_educational_content()
+        # ====== OVERVIEW TAB ======
+        overview_tab = QtWidgets.QWidget()
+        overview_layout = QtWidgets.QVBoxLayout(overview_tab)
 
+        overview_scroll = QtWidgets.QScrollArea()
+        overview_scroll.setWidgetResizable(True)
+        overview_content = QtWidgets.QWidget()
+        overview_content_layout = QtWidgets.QVBoxLayout(overview_content)
 
-    def setup_timer(self):
-        self.countdown_timer.timeout.connect(self.update_countdown)
-        self.countdown_timer.start(1000)
+        # Create overview cards
+        overview_card = self._create_educational_card(
+            "Hebbian Learning Overview",
+            """
+            <div style='font-size: 16px; line-height: 1.8; color: #4a5568;'>
+                <div style='background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px;'>
+                    <div style='font-size: 20px; font-weight: bold; color: #1976d2; margin-bottom: 10px;'>
+                        "Neurons that fire together, wire together"
+                    </div>
+                    <p>This fundamental principle describes how neural networks learn through experience.</p>
+                </div>
 
-    def update_countdown(self):
-        try:
-            # Ensure countdown_label exists
-            if not hasattr(self, 'countdown_label') or self.countdown_label is None:
-                print("Countdown label not initialized")
-                return
+                <p style='margin-bottom: 20px;'>
+                    Hebbian learning is a simple yet powerful rule used in artificial neural networks. When two neurons
+                    activate simultaneously, the connection (weight) between them strengthens. If they activate separately,
+                    the connection weakens. This allows the network to form associations between related concepts naturally.
+                </p>
 
-            # Try to get countdown from brain widget
-            if hasattr(self, 'brain_widget') and hasattr(self.brain_widget, 'hebbian_countdown_seconds'):
-                self.current_countdown = self.brain_widget.hebbian_countdown_seconds
-            else:
-                # Fallback to default countdown
-                self.current_countdown = 30
-            
-            # Update label
-            self.countdown_label.setText(f"Next: {self.current_countdown}s")
-            
-            # Color styling based on countdown
-            if self.current_countdown <= 5:
-                self.countdown_label.setStyleSheet("""
-                    QLabel {
-                        color: #e74c3c;
-                        background-color: #f8f9fa;
-                        border: 1px solid #e1e5eb;
-                        font-size: 18px;
-                        font-weight: 500;
-                        padding: 4px 12px;
-                        border-radius: 6px;
-                    }
-                """)
-            else:
-                self.countdown_label.setStyleSheet("""
-                    QLabel {
-                        color: #4dabf7;
-                        background-color: #f8f9fa;
-                        border: 1px solid #e1e5eb;
-                        font-size: 18px;
-                        font-weight: 500;
-                        padding: 4px 12px;
-                        border-radius: 6px;
-                    }
-                """)
-        except Exception as e:
-            print(f"Error in update_countdown: {e}")
+                <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0;'>
+                    <div style='background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50;'>
+                        <div style='font-weight: bold; color: #2e7d32; margin-bottom: 5px; font-size: 18px;'>Excitatory Connections</div>
+                        <div style='font-size: 14px;'>Positive weights (0.0–1.0) make neurons more likely to activate together</div>
+                    </div>
+
+                    <div style='background: #ffebee; padding: 15px; border-radius: 8px; border-left: 4px solid #f44336;'>
+                        <div style='font-weight: bold; color: #c62828; margin-bottom: 5px; font-size: 18px;'>Inhibitory Connections</div>
+                        <div style='font-size: 14px;'>Negative weights (-1.0–0.0) reduce the chance of co-activation</div>
+                    </div>
+                </div>
+
+                <div style='background: #fff3e0; padding: 15px; border-radius: 8px; margin-top: 20px;'>
+                    <div style='font-weight: bold; color: #e65100; margin-bottom: 10px; font-size: 18px;'>In Practice</div>
+                    <p style='margin: 0;'>
+                        In your squid's brain, Hebbian learning helps associate related states like 'hunger' with
+                        'satisfaction' when feeding occurs, or 'curiosity' with 'anxiety' during exploration.
+                        These learned associations influence future behavior.
+                    </p>
+                </div>
+            </div>
+            """,
+            "#ffffff"
+        )
+        overview_content_layout.addWidget(overview_card)
+
+        overview_scroll.setWidget(overview_content)
+        overview_layout.addWidget(overview_scroll)
+
+        # ====== MECHANICS TAB ======
+        mechanics_tab = QtWidgets.QWidget()
+        mechanics_layout = QtWidgets.QVBoxLayout(mechanics_tab)
+
+        mechanics_scroll = QtWidgets.QScrollArea()
+        mechanics_scroll.setWidgetResizable(True)
+        mechanics_content = QtWidgets.QWidget()
+        mechanics_content_layout = QtWidgets.QVBoxLayout(mechanics_content)
+
+        mechanics_card = self._create_educational_card(
+            "Learning Mechanics",
+            """
+            <div style='font-size: 16px; line-height: 1.8; color: #4a5568;'>
+                <p style='margin-bottom: 20px;'>
+                    Hebbian learning updates connection strength (weight) between neurons based on their activity patterns.
+                    When neurons activate together, their connection strengthens; when they activate separately, it weakens.
+                </p>
+
+                <div style='background: #f3e5f5; padding: 20px; border-radius: 8px; margin: 20px 0;'>
+                    <h3 style='color: #6a1b9a; margin: 0 0 15px 0; font-size: 20px;'>The Learning Rule</h3>
+                    <div style='background: white; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 18px; text-align: center; margin-bottom: 15px;'>
+                        <b>Δw = η × x × y</b>
+                    </div>
+                    <p style='margin-bottom: 15px;'>Where:</p>
+                    <ul style='list-style: none; padding: 0;'>
+                        <li style='margin-bottom: 12px; padding-left: 10px;'>
+                            <b>Δw</b> = Change in weight between two neurons
+                        </li>
+                        <li style='margin-bottom: 12px; padding-left: 10px;'>
+                            <b>η</b> (eta) = Learning rate (controls speed of change)
+                        </li>
+                        <li style='margin-bottom: 12px; padding-left: 10px;'>
+                            <b>x, y</b> = Activation values of the neurons (1 if active, 0 if inactive)
+                        </li>
+                    </ul>
+                </div>
+
+                <div style='background: #e8eaf6; padding: 20px; border-radius: 8px; margin: 20px 0;'>
+                    <h3 style='color: #3f51b5; margin: 0 0 15px 0; font-size: 20px;'>Example Calculation</h3>
+                    <div style='background: white; padding: 15px; border-radius: 6px;'>
+                        <p style='margin: 0 0 10px 0;'><b>Scenario:</b> 'hunger' and 'satisfaction' both activate</p>
+                        <ul style='list-style: none; padding: 0; margin: 10px 0;'>
+                            <li>x = 1 (hunger is active)</li>
+                            <li>y = 1 (satisfaction is active)</li>
+                            <li>η = 0.1 (learning rate)</li>
+                        </ul>
+                        <div style='background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0;'>
+                            <b>Δw = 0.1 × 1 × 1 = 0.1</b>
+                        </div>
+                        <p style='margin: 10px 0 0 0;'>
+                            The weight increases by 0.1, strengthening the connection between these neurons.
+                        </p>
+                    </div>
+                </div>
+
+                <div style='background: #fce4ec; padding: 20px; border-radius: 8px;'>
+                    <h3 style='color: #c2185b; margin: 0 0 15px 0; font-size: 20px;'>Over Time</h3>
+                    <p style='margin: 0;'>
+                        Through repeated activations, these small weight changes accumulate. Frequently co-occurring
+                        patterns develop strong connections, while rarely occurring patterns develop weak or negative
+                        connections. This is how your squid learns from experience!
+                    </p>
+                </div>
+            </div>
+            """,
+            "#ffffff"
+        )
+        mechanics_content_layout.addWidget(mechanics_card)
+
+        mechanics_scroll.setWidget(mechanics_content)
+        mechanics_layout.addWidget(mechanics_scroll)
+
+        # Add all tabs
+        self.tab_widget.addTab(self.learning_tab, "Learning Pairs")
+        self.tab_widget.addTab(overview_tab, "Overview")
+        self.tab_widget.addTab(mechanics_tab, "Mechanics")
+
+        main_layout.addWidget(self.tab_widget)
+
+    def _create_educational_card(self, title, content, bg_color):
+        """Create an educational information card"""
+        card = QtWidgets.QWidget()
+        card.setStyleSheet(f"""
+            QWidget {{
+                background-color: {bg_color};
+                border-radius: 12px;
+                border: 1px solid #e1e5eb;
+            }}
+        """)
+
+        card_layout = QtWidgets.QVBoxLayout(card)
+        card_layout.setContentsMargins(25, 25, 25, 25)
+
+        # Title
+        title_label = QtWidgets.QLabel(f"<h2 style='color: #2c3e50; margin: 0 0 20px 0;'>{title}</h2>")
+        card_layout.addWidget(title_label)
+
+        # Content
+        content_label = QtWidgets.QTextBrowser()
+        content_label.setHtml(content)
+        content_label.setOpenExternalLinks(True)
+        content_label.setStyleSheet("""
+            QTextBrowser {
+                background-color: transparent;
+                border: none;
+                font-size: 16px;
+            }
+        """)
+        card_layout.addWidget(content_label)
+
+        return card
+
+    def _create_info_card(self, title, description, color):
+        """Create a simple info card"""
+        card = QtWidgets.QWidget()
+        card.setStyleSheet(f"""
+            QWidget {{
+                background-color: {color};
+                border-radius: 10px;
+                padding: 15px;
+                border: 1px solid #dee2e6;
+            }}
+        """)
+
+        card_layout = QtWidgets.QVBoxLayout(card)
+        card_layout.setSpacing(8)
+
+        title_label = QtWidgets.QLabel(f"<b style='font-size: 18px;'>{title}</b>")
+        card_layout.addWidget(title_label)
+
+        desc_label = QtWidgets.QLabel(description)
+        desc_label.setWordWrap(True)
+        desc_label.setStyleSheet("color: #495057; font-size: 14px;")
+        card_layout.addWidget(desc_label)
+
+        return card
+
+    def _create_learning_pair_card(self, pair, weight, weight_change=None):
+        """Create a card displaying a learning pair"""
+        # Determine colors based on weight
+        if weight > 0.5:
+            border_color = "#4caf50"
+            bg_color = "#e8f5e9"
+            weight_color = "#2e7d32"
+            strength = "Strong Excitatory"
+        elif weight > 0:
+            border_color = "#8bc34a"
+            bg_color = "#f1f8e9"
+            weight_color = "#558b2f"
+            strength = "Weak Excitatory"
+        elif weight > -0.5:
+            border_color = "#ff9800"
+            bg_color = "#fff3e0"
+            weight_color = "#e65100"
+            strength = "Weak Inhibitory"
+        else:
+            border_color = "#f44336"
+            bg_color = "#ffebee"
+            weight_color = "#c62828"
+            strength = "Strong Inhibitory"
+
+        # Weight change indicator
+        change_indicator = ""
+        if weight_change == "increase":
+            change_indicator = "<span style='color: #4caf50; font-size: 24px; margin-left: 10px;'>↗</span>"
+        elif weight_change == "decrease":
+            change_indicator = "<span style='color: #f44336; font-size: 24px; margin-left: 10px;'>↘</span>"
+
+        card = QtWidgets.QWidget()
+        card.setStyleSheet(f"""
+            QWidget {{
+                background-color: {bg_color};
+                border-radius: 12px;
+                border: 2px solid {border_color};
+            }}
+            QWidget:hover {{
+                border: 3px solid {self.darken_color(border_color, 20)};
+                background-color: {self.darken_color(bg_color, 5)};
+            }}
+        """)
+
+        card_layout = QtWidgets.QVBoxLayout(card)
+        card_layout.setContentsMargins(25, 20, 25, 20)
+        card_layout.setSpacing(10)
+
+        # Top row - connection visualization
+        connection_layout = QtWidgets.QHBoxLayout()
+        connection_layout.setSpacing(20)
+
+        # Neuron 1 - large and prominent
+        neuron1_label = QtWidgets.QLabel(f"<span style='font-size: 24px; font-weight: bold; color: #2c3e50;'>{pair[0].upper()}</span>")
+        neuron1_label.setAlignment(QtCore.Qt.AlignCenter)
+        connection_layout.addWidget(neuron1_label, 1)
+
+        # Arrow and weight - centered
+        arrow_widget = QtWidgets.QWidget()
+        arrow_layout = QtWidgets.QVBoxLayout(arrow_widget)
+        arrow_layout.setSpacing(5)
+        arrow_layout.setContentsMargins(0, 0, 0, 0)
+
+        arrow_label = QtWidgets.QLabel("<span style='font-size: 36px; color: #607d8b;'>↔</span>")
+        arrow_label.setAlignment(QtCore.Qt.AlignCenter)
+        arrow_layout.addWidget(arrow_label)
+
+        weight_display = QtWidgets.QLabel(
+            f"<span style='font-size: 20px; font-weight: bold; color: {weight_color};'>{weight:.3f}</span>"
+        )
+        weight_display.setAlignment(QtCore.Qt.AlignCenter)
+        arrow_layout.addWidget(weight_display)
+
+        connection_layout.addWidget(arrow_widget, 0)
+
+        # Neuron 2 - large and prominent
+        neuron2_label = QtWidgets.QLabel(f"<span style='font-size: 24px; font-weight: bold; color: #2c3e50;'>{pair[1].upper()}</span>")
+        neuron2_label.setAlignment(QtCore.Qt.AlignCenter)
+        connection_layout.addWidget(neuron2_label, 1)
+
+        card_layout.addLayout(connection_layout)
+
+        # Bottom row - metadata
+        meta_layout = QtWidgets.QHBoxLayout()
+
+        strength_label = QtWidgets.QLabel(
+            f"<span style='font-size: 16px; font-weight: 600; color: {weight_color};'>{strength}</span>{change_indicator}"
+        )
+        meta_layout.addWidget(strength_label)
+
+        meta_layout.addStretch()
+
+        timestamp_label = QtWidgets.QLabel(
+            f"<span style='color: #6c757d; font-size: 13px;'>{time.strftime('%H:%M:%S')}</span>"
+        )
+        meta_layout.addWidget(timestamp_label)
+
+        card_layout.addLayout(meta_layout)
+
+        return card
+
+    def create_custom_button(self, text, callback, color, font_size=14):
+        """Create a button with custom styling"""
+        button = QtWidgets.QPushButton(text)
+        button.clicked.connect(callback)
+        button.setStyleSheet(f"""
+            QPushButton {{
+                font-size: {font_size}px;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-weight: 500;
+                border: 2px solid {color};
+                background-color: {color};
+                color: white;
+                min-width: 100px;
+            }}
+            QPushButton:hover {{
+                background-color: {self.darken_color(color, 20)};
+                border: 2px solid {self.darken_color(color, 20)};
+            }}
+        """)
+        button.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        return button
 
     def darken_color(self, hex_color, percent):
-        """Darken a hex color by specified percentage"""
-        color = QtGui.QColor(hex_color)
-        return color.darker(100 + percent).name()
-
-    def create_neuron_card(self, neuron_name, is_left=True):
-        """Create a playing card style neuron display with improved contrast"""
-        colors = {
-            "hunger": "#f39c12",
-            "happiness": "#2ecc71",
-            "cleanliness": "#3498db",
-            "sleepiness": "#9b59b6",
-            "satisfaction": "#e74c3c",
-            "anxiety": "#f1c40f",
-            "curiosity": "#1abc9c"
-        }
-        
-        base_color = colors.get(neuron_name.split('_')[0], "#4dabf7")
-        gradient = f"linear-gradient(135deg, {self.lighten_color(base_color, 20)}, {base_color})"
-        
-        return f"""
-        <div style='flex: 1; text-align: center; padding: 20px; 
-                    background: {gradient}; 
-                    border-radius: 12px; 
-                    border: 2px solid {self.darken_color(base_color, 15)};
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                    color: #2c3e50;
-                    font-size: 22px; 
-                    font-weight: 600;
-                    margin-{'right' if is_left else 'left'}: 10px;'>
-            {neuron_name}
-        </div>
-        """
-
-    def lighten_color(self, hex_color, percent):
-        """Lighten a hex color by specified percentage"""
-        color = QtGui.QColor(hex_color)
-        return color.lighter(100 + percent).name()
+        """Darken a hex color by a percentage"""
+        hex_color = hex_color.lstrip('#')
+        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+        r = max(0, int(r * (100 - percent) / 100))
+        g = max(0, int(g * (100 - percent) / 100))
+        b = max(0, int(b * (100 - percent) / 100))
+        return f'#{r:02x}{g:02x}{b:02x}'
 
     def add_log_entry(self, message, pair=None, weight_change=None):
-        from .display_scaling import DisplayScaling
-        
-        timestamp = QtCore.QTime.currentTime().toString("hh:mm:ss")
-        
-        if message.startswith("🟢") or message.startswith("🔴"):
-            message = message[2:].strip()
-        
-        # Base card HTML with increased margin for vertical gap
-        entry = f"""
-        <div style='margin-bottom: {DisplayScaling.scale(30)}px; border-radius: {DisplayScaling.scale(12)}px; overflow: hidden;
-                box-shadow: 0 {DisplayScaling.scale(3)}px {DisplayScaling.scale(12)}px rgba(0,0,0,0.1);'>
-        """
-        
-        # Add timestamp header
-        entry += f"""
-            <div style='background-color: #2c3e50; color: white; padding: {DisplayScaling.scale(12)}px {DisplayScaling.scale(15)}px; 
-                    font-size: {DisplayScaling.font_size(14)}px;'>
-               <br> 🕒 {timestamp} 
-            </div>
-        """
-        
-        # Add connection visualization if we have a pair
-        if pair:
+        """Add a new learning pair card to the display"""
+        if pair and hasattr(self, 'learning_content_layout'):
+            # Remove placeholder if it exists
+            if self.learning_content_layout.count() == 1:
+                item = self.learning_content_layout.takeAt(0)
+                if item and item.widget():
+                    item.widget().deleteLater()
+
+            # Get weight
             weight = getattr(self.brain_widget, 'weights', {}).get(pair, 0)
-            is_positive = weight > 0
-            
-            # Determine colors based on connection type
-            bg_color = "#e8f5e9" if is_positive else "#ffebee"  # Pastel green or red
-            text_color = "#2e7d32" if is_positive else "#c62828"  # Darker green or red
-            icon = "🟢" if is_positive else "🔴"
-            arrow = "→" if is_positive else "⊣"
-            
-            # Main card content with requested format and scaled sizes
-            entry += f"""
-            <div style='background-color: {bg_color}; padding: {DisplayScaling.scale(15)}px; color: #333;'>
-                <div style='font-size: {DisplayScaling.font_size(20)}px; font-weight: bold; margin-bottom: {DisplayScaling.scale(12)}px;'>
-                    {icon} {message}
-                </div>
-                
-                <div style='font-size: {DisplayScaling.font_size(22)}px; font-weight: bold; text-align: center; margin: {DisplayScaling.scale(15)}px 0;'>
-                    {pair[0]} & {pair[1]}
-                </div>
-                
-                <div style='font-size: {DisplayScaling.font_size(26)}px; text-align: center; color: {text_color}; margin: {DisplayScaling.scale(12)}px 0;'>
-                    {arrow} {weight:.2f}
-                </div>
-            </div>
-            """
-        else:
-            # Simple message without pair
-            entry += f"""
-            <div style='background-color: #f5f5f5; padding: {DisplayScaling.scale(15)}px;'>
-                <div style='color: #2c3e50; font-size: {DisplayScaling.font_size(18)}px;'>
-                    {message}
-                </div>
-            </div>
-            """
-        
-        # Close the entry div
-        entry += "</div>"
-        
-        # Insert the formatted entry
-        self.activity_log.insertHtml(entry)
-        
-        # Update tracking
-        if pair:
-            if not hasattr(self, 'learning_history'):
-                self.learning_history = []
-            if not hasattr(self, 'recent_pairs'):
-                self.recent_pairs = []
-                
-            self.learning_history.append(pair)
+
+            # Create card
+            card = self._create_learning_pair_card(pair, weight, weight_change)
+
+            # Insert at the top (before stretch)
+            self.learning_content_layout.insertWidget(0, card)
+
+            # Keep only last 20 cards
+            while self.learning_content_layout.count() > 21:  # 20 cards + 1 stretch
+                item = self.learning_content_layout.takeAt(20)
+                if item and item.widget():
+                    item.widget().deleteLater()
+
+            # Update history
+            if pair not in self.learning_history:
+                self.learning_history.append(pair)
             self.recent_pairs.append(pair)
-            self.update_educational_content(pair=pair)
-        
-        # Auto-scroll
-        self.activity_log.verticalScrollBar().setValue(
-            self.activity_log.verticalScrollBar().maximum()
-        )
 
     def clear_log(self):
-        self.activity_log.clear()
+        """Clear all learning pair cards"""
+        if hasattr(self, 'learning_content_layout'):
+            while self.learning_content_layout.count() > 1:  # Keep the stretch
+                item = self.learning_content_layout.takeAt(0)
+                if item and item.widget():
+                    item.widget().deleteLater()
+
         self.recent_pairs = []
-        self.update_educational_content()
-        self.add_log_entry("📭 Log cleared")
+        self.learning_history = []
+
+        # Add info card
+        placeholder = self._create_info_card(
+            "Log Cleared",
+            "Learning pairs will appear here as your squid's neurons form new connections.",
+            "#e3f2fd"
+        )
+        self.learning_content_layout.insertWidget(0, placeholder)
 
     def update_educational_content(self, pair=None, tab_name=None):
-        # Define content for each tab
-        tab_contents = {
-            'Overview': """
-                <div style='font-size: 18px; line-height: 1.6; color: #4a5568;'>
-                    <div style='display: flex; align-items: center; margin-bottom: 15px;'>
-                        <div style='font-size: 28px; margin-right: 15px;'>⚡</div>
-                        <div><b>"Neurons that fire together, wire together"</b></div>
-                    </div>
-                    <p style='margin-bottom: 20px;'>
-                        Hebbian learning is a simple rule used in artificial neural networks to help them learn patterns. When two neurons activate at the same time, the connection (or weight) between them gets stronger. If they activate separately, the connection weakens. This process allows the network to associate related ideas, like linking 'hunger' to 'satisfaction' when the squid is fed, without complex calculations like those used in other methods.
-                    </p>
-                    <ul style='list-style-type: none; padding-left: 0;'>
-                        <li style='display: flex; align-items: center; margin-bottom: 10px;'>
-                            <span style='font-size: 24px; margin-right: 10px;'>🟢</span>
-                            <span><b>Excitatory Connections:</b> Positive weights (0.0–1.0) make neurons more likely to activate together.</span>
-                        </li>
-                        <li style='display: flex; align-items: center; margin-bottom: 10px;'>
-                            <span style='font-size: 24px; margin-right: 10px;'>🔴</span>
-                            <span><b>Inhibitory Connections:</b> Negative weights (-1.0–0.0) reduce the chance of neurons activating together.</span>
-                        </li>
-                    </ul>
-                </div>
-            """,
-            'Mechanics': """
-                <div style='font-size: 18px; line-height: 1.6; color: #4a5568;'>
-                    <p style='margin-bottom: 20px;'>
-                        Hebbian learning updates the connection strength (weight) between neurons based on their activity. When two neurons activate together, their connection strengthens; if they activate separately, it weakens. This process helps the network learn patterns, like associating 'curiosity' with 'anxiety' in the squid's brain.
-                    </p>
-                    <h3 style='color: #2c3e50; font-size: 20px; margin: 15px 0 10px;'>The Learning Rule</h3>
-                    <p style='margin-bottom: 15px;'>
-                        The basic Hebbian rule can be written as: <b>Δw = η * x * y</b>, where:
-                    </p>
-                    <ul style='list-style-type: none; padding-left: 0;'>
-                        <li style='display: flex; align-items: center; margin-bottom: 10px;'>
-                            <span style='font-size: 24px; margin-right: 10px;'>🔢</span>
-                            <span><b>Δw</b> is the change in weight between two neurons.</span>
-                        </li>
-                        <li style='display: flex; align-items: center; margin-bottom: 10px;'>
-                            <span style='font-size: 24px; margin-right: 10px;'>⚙️</span>
-                            <span><b>η</b> (eta) is the learning rate, controlling how fast the weight changes.</span>
-                        </li>
-                        <li style='display: flex; align-items: center; margin-bottom: 10px;'>
-                            <span style='font-size: 24px; margin-right: 10px;'>🔥</span>
-                            <span><b>x</b> and <b>y</b> are the activation values of the two neurons (e.g., 1 if active, 0 if not).</span>
-                        </li>
-                    </ul>
-                    <p style='margin: 15px 0;'>
-                        <b>Example:</b> If 'hunger' and 'satisfaction' both activate (x=1, y=1) with η=0.1, the weight increases by 0.1. If only one activates (x=1, y=0), the weight doesn't change. Over time, this strengthens connections for related patterns.
-                    </p>
-                </div>
-            """
-        }
-
-        # Add recent pair visualization if provided
-        pair_html = ""
-        if pair:
-            weight = getattr(self.brain_widget, 'weights', {}).get(pair, 0)
-            weight_color = "#2ecc71" if weight > 0 else "#e74c3c"
-            
-            pair_html = f"""
-                <div style='margin: 25px 0;'>
-                    <div style='font-size: 20px; color: #4a5568; margin-bottom: 15px;'>
-                        Current Learning Pair:
-                    </div>
-                    <div style='display: flex; justify-content: center; gap: 20px;'>
-                        {self.create_neuron_card(pair[0], True)}
-                        <div style='display: flex; flex-direction: column; justify-content: center; 
-                                    align-items: center; gap: 5px;'>
-                            <div style='font-size: 28px; color: #4dabf7;'>⇄</div>
-                            <div style='font-size: 18px; color: {weight_color}; font-weight: 600;'>
-                                {weight:.2f}
-                            </div>
-                        </div>
-                        {self.create_neuron_card(pair[1], False)}
-                    </div>
-                </div>
-            """
-
-        # Update specific tab or all tabs
-        tabs_to_update = [tab_name] if tab_name else self.edu_views.keys()
-        for tab_name in tabs_to_update:
-            edu_view = self.edu_views[tab_name]
-            html = f"""
-                <div style='margin-bottom: 30px;'>
-                    <div style='background: #ffffff; border-radius: 12px; padding: 25px; 
-                                box-shadow: 0 4px 12px rgba(0,0,0,0.08);'>
-                        <h2 style='color: #2c3e50; margin: 0 0 20px 0; font-size: 24px; font-weight: 600;'>
-                            🧬 Hebbian Learning - {tab_name}
-                        </h2>
-                        {tab_contents[tab_name]}
-                        {pair_html}
-                    </div>
-                </div>
-            """
-            edu_view.setHtml(html)
+        """Update educational content - kept for compatibility"""
+        pass
 
     def update_from_brain_state(self, state):
+        """Update display based on brain state changes"""
         if hasattr(self.brain_widget, 'recently_updated_neuron_pairs'):
             for pair in self.brain_widget.recently_updated_neuron_pairs:
                 if pair not in self.learning_history:
-                    self.learning_history.append(pair)
                     weight = getattr(self.brain_widget, 'weights', {}).get(pair, 0)
-                    
-                    # Determine if weight increased or decreased
+
+                    # Determine weight change
                     prev_weight = self.brain_widget.weights.get(pair, 0)
                     weight_change = None
                     if weight > prev_weight:
                         weight_change = "increase"
                     elif weight < prev_weight:
                         weight_change = "decrease"
-                    
-                    weight_type = "strengthened" if weight > 0 else "weakened"
-                    weight_icon = "🟢" if weight > 0 else "🔴"
-                    
-                    self.add_log_entry(
-                        f"{weight_icon} <b>New connection {weight_type}</b><br>"
-                        f"{weight:.2f}</span>", 
-                        pair,
-                        weight_change
-                    )
 
-    def simulate_learning(self):
-        sample_pairs = [
-            ("hunger", "satisfaction"),
-            ("curiosity", "anxiety"),
-            ("happiness", "cleanliness")
-        ]
-        for pair in sample_pairs:
-            if not hasattr(self.brain_widget, 'weights'):
-                self.brain_widget.weights = {}
+                    self.add_log_entry("", pair, weight_change)
+
+        # Sync Hebbian timer from brain_widget
+        if hasattr(self.brain_widget, 'hebbian_countdown_seconds'):
+            self.update_hebbian_label_learning(self.brain_widget.hebbian_countdown_seconds)
+
+    def update_hebbian_label_learning(self, value):
+        """Update the Hebbian countdown label and handle blinking when <5s"""
+        if hasattr(self, 'hebbian_timer_label_learning'):
+            # Check if simulation is paused
+            is_paused = False
+            if hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'simulation_speed'):
+                is_paused = (self.tamagotchi_logic.simulation_speed == 0)
             
-            prev_weight = self.brain_widget.weights.get(pair, 0)
-            self.brain_widget.weights[pair] = random.uniform(-1, 1)
-            weight = self.brain_widget.weights[pair]
-            
-            # Determine if weight increased or decreased
-            weight_change = None
-            if weight > prev_weight:
-                weight_change = "increase"
-            elif weight < prev_weight:
-                weight_change = "decrease"
-            
-            weight_type = "strengthened" if weight > 0 else "weakened"
-            weight_icon = "🟢" if weight > 0 else "🔴"
-            
-            self.add_log_entry(
-                f"🧪 <b>Simulated learning</b> ({weight_type})<br>"
-                f"{weight:.2f}</span>", 
-                pair,
-                weight_change
-            )
-        self.update_educational_content(pair=sample_pairs[-1])
+            # Display PAUSE if paused, otherwise show countdown
+            if is_paused:
+                self.hebbian_timer_label_learning.setText("Hebbian Cycle: PAUSED")
+                # Stop blinking when paused
+                if self.blink_timer.isActive():
+                    self.blink_timer.stop()
+                self.hebbian_timer_label_learning.setVisible(True)
+            else:
+                self.hebbian_timer_label_learning.setText(f"Hebbian Cycle: {value}s")
+                
+                # Start/stop blinking
+                if isinstance(value, int) and value < 5:
+                    if not self.blink_timer.isActive():
+                        self.blink_timer.start()
+                else:
+                    if self.blink_timer.isActive():
+                        self.blink_timer.stop()
+                    # Ensure visible when not blinking
+                    self.hebbian_timer_label_learning.setVisible(True)
+
+    def _blink_hebbian_label(self):
+        """Toggle visibility of the Hebbian label to create blink effect"""
+        self._blink_visible = not self._blink_visible
+        self.hebbian_timer_label_learning.setVisible(self._blink_visible)

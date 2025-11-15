@@ -236,6 +236,7 @@ class RockInteractionManager:
         self.squid.happiness = min(100, self.squid.happiness + config['happiness_boost'])
         self.squid.satisfaction = min(100, self.squid.satisfaction + config['satisfaction_boost'])
         self.squid.anxiety = max(0, self.squid.anxiety - config['anxiety_reduction'])
+        self.logic.statistics_window.award(50)
         
         # Simplified positive memory
         memory_details = {

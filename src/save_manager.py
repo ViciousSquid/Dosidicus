@@ -49,6 +49,17 @@ class SaveManager:
             with zipfile.ZipFile(filepath, 'w') as zipf:
                 for key, data in save_data.items():
                     zipf.writestr(f"{key}.json", json.dumps(data, indent=4, cls=DateTimeEncoder))
+
+                if 'brain_weights_txt' in save_data:
+                    zipf.writestr('brain_weights.txt', save_data['brain_weights_txt'])
+                if 'hebbian_json' in save_data:
+                    zipf.writestr('hebbian.json',
+                                json.dumps(save_data['hebbian_json'], indent=2, cls=DateTimeEncoder))
+                if 'decisionengine_json' in save_data:
+                    zipf.writestr('decisionengine.json',
+                                json.dumps(save_data['decisionengine_json'], indent=2))
+
+
             return filepath
         except Exception as e:
             print(f"Error saving game: {str(e)}")
@@ -58,20 +69,25 @@ class SaveManager:
 
     def load_game(self):
         latest_save = self.get_latest_save()
-        if latest_save:
-            save_data = {}
-            with zipfile.ZipFile(latest_save, 'r') as zipf:
-                for filename in zipf.namelist():
-                    with zipf.open(filename) as f:
-                        key = os.path.splitext(filename)[0]
-                        save_data[key] = json.loads(f.read().decode('utf-8'))
-            
-            # Extract memory files one directory level above
-                extract_path = os.path.join(os.path.dirname(os.path.dirname(latest_save)), '_memory')
-                self.extract_memories(latest_save, extract_path)
-            
-            return save_data
-        return None
+        if not latest_save:
+            return None
+
+        save_data = {}
+        with zipfile.ZipFile(latest_save, 'r') as zipf:
+            for filename in zipf.namelist():
+                with zipf.open(filename) as f:
+                    raw = f.read()
+                    if not raw:                # 0-byte file – ignore
+                        continue
+                    key = os.path.splitext(filename)[0]
+                    save_data[key] = json.loads(raw.decode('utf-8'))
+
+            # memories extraction (unchanged)
+            extract_path = os.path.join(
+                os.path.dirname(os.path.dirname(latest_save)), '_memory')
+            self.extract_memories(latest_save, extract_path)
+
+        return save_data
 
     def delete_save(self, is_autosave=False):
         """Delete a save file."""

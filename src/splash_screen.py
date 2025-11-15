@@ -4,7 +4,8 @@ from .display_scaling import DisplayScaling
 
 class SplashScreen(QtWidgets.QWidget):
     finished = QtCore.pyqtSignal()
-    second_frame = QtCore.pyqtSignal()  # New signal for second frame
+    second_frame = QtCore.pyqtSignal()
+    frame_changed = QtCore.pyqtSignal(int)  # NEW: Emits current frame index
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -48,12 +49,15 @@ class SplashScreen(QtWidgets.QWidget):
 
     def start_animation(self):
         """Start the animation sequence after window is ready"""
+        # Emit signal for the initial frame (frame 0)
+        self.frame_changed.emit(self.frame_index)
         self.timer.start(1500)  # 1.5 seconds between frames
 
     def next_frame(self):
         self.frame_index += 1
         if self.frame_index < len(self.frames):
             self.label.setPixmap(self.frames[self.frame_index])
+            self.frame_changed.emit(self.frame_index)  # NEW: Notify listeners
             if self.frame_index == 1:  # Second frame (index 1)
                 self.second_frame.emit()  # Emit signal for second frame
         elif self.frame_index == len(self.frames):
@@ -63,10 +67,10 @@ class SplashScreen(QtWidgets.QWidget):
             self.timer.stop()
 
     def end_animation(self):
-        print("  ")
+        print("")
         print("                     ******************************")
         print("                     ***  A SQUID HAS HATCHED!  ***")
-        print("                      YOU NEED TO LOOK AFTER HIM.. ")
+        print("                      YOU NEED TO LOOK AFTER HIM..")
         print("                     ******************************")
         self.hide()
         self.finished.emit()
