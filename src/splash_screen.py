@@ -51,7 +51,7 @@ class SplashScreen(QtWidgets.QWidget):
         """Start the animation sequence after window is ready"""
         # Emit signal for the initial frame (frame 0)
         self.frame_changed.emit(self.frame_index)
-        self.timer.start(1500)  # 1.5 seconds between frames
+        self.timer.start(1000)  # 1 seconds between frames
 
     def next_frame(self):
         self.frame_index += 1
