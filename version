@@ -1,3 +1,4 @@
-dosidicus: 2.4.4_ts__stable
+dosidicus: 2.4.5.0_release
 brain_tool: 2.0
 decision_engine: 3.11
+neurogenesis: rev2_nov25
