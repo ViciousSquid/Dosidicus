@@ -301,6 +301,31 @@ class MainWindow(QtWidgets.QMainWindow):
             
             # Now load from save data
             self.load_game()
+
+            # ------------------------------------------------------------------
+            #  NEW: reveal all neurons with the same fast animation used on
+            #       first-run, so saved-game startups also get the fade-in effect.
+            # ------------------------------------------------------------------
+            brain_widget = self.brain_window.brain_widget
+
+            # -- make every neuron visible -------------------------------------
+            # core neurons
+            for name in brain_widget.original_neurons:
+                brain_widget.visible_neurons.add(name)
+            # neurogenesis neurons
+            if hasattr(brain_widget, 'neurogenesis_data'):
+                for name in brain_widget.neurogenesis_data.get('new_neurons_details', {}):
+                    brain_widget.visible_neurons.add(name)
+
+            # -- animate them (0.5 s apart) ------------------------------------
+            core = brain_widget.original_neurons
+            for idx, name in enumerate(core):
+                QtCore.QTimer.singleShot(idx * 500, lambda n=name: brain_widget.reveal_neuron(n))
+
+            # -- finally, show window and check menu item ----------------------
+            self.brain_window.show()
+            self.user_interface.brain_action.setChecked(True)
+
         else:
             print("No save data found, creating new game...")
             # Create the game but don't check for tutorial yet
@@ -476,24 +501,24 @@ class MainWindow(QtWidgets.QMainWindow):
             # Ensure brain widget starts empty
             if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'visible_neurons'):
                 self.brain_window.brain_widget.visible_neurons = set()
-                print(f"🧠 Cleared visible neurons, starting fresh")
+                #print(f"🧠 Cleared visible neurons, starting fresh")
             
             # Show brain window first
-            print("🧠 Opening brain window...")
+            #print("🧠 Opening brain window...")
             self.brain_window.show()
             self.user_interface.brain_action.setChecked(True)
-            print(f"🧠 Brain window visible: {self.brain_window.isVisible()}")
+            #print(f"🧠 Brain window visible: {self.brain_window.isVisible()}")
             
             # Force immediate processing to ensure brain window is painted
             QtWidgets.QApplication.processEvents()
             
             # Give the brain window time to fully render (longer delay)
             # This ensures users see the empty brain network before neurons start appearing
-            print("⏳ Waiting for brain window to render before starting animation...")
+            #print("⏳ Waiting for brain window to render before starting animation...")
             QtCore.QTimer.singleShot(1500, lambda: self._start_splash_with_reveals())
         else:
             # For loaded games, show brain window with all neurons visible
-            print("📂 Loading existing game, showing brain window with all neurons")
+            #print("📂 Loading existing game, showing brain window with all neurons")
             
             # Make all core neurons visible immediately for loaded games
             if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'visible_neurons'):
@@ -507,12 +532,16 @@ class MainWindow(QtWidgets.QMainWindow):
                     for neuron_name in brain_widget.neurogenesis_data['new_neurons_details'].keys():
                         brain_widget.visible_neurons.add(neuron_name)
                 
-                print(f"🧠 Made {len(brain_widget.visible_neurons)} neurons visible")
+                #print(f"🧠 Made {len(brain_widget.visible_neurons)} neurons visible")
             
-            # Show brain window
+            # Show brain window immediately for loaded games
+            #print("🧠 Opening brain window for loaded game...")
             self.brain_window.show()
             self.user_interface.brain_action.setChecked(True)
-            print(f"🧠 Brain window visible: {self.brain_window.isVisible()}")
+            #print(f"🧠 Brain window visible: {self.brain_window.isVisible()}")
+            
+            # Force immediate processing to ensure brain window is painted
+            QtWidgets.QApplication.processEvents()
             
             # Show splash normally (no animated reveals needed for loaded games)
             self.splash.show()
@@ -520,7 +549,7 @@ class MainWindow(QtWidgets.QMainWindow):
     
     def _start_splash_with_reveals(self):
         """Start splash screen with neuron reveal synchronization (called after brain window is ready)"""
-        print("🥚 Starting egg animation with neuron reveals...")
+        print("🥚 A squid is hatching...")
         
         # Connect frame changes to neuron reveals
         self.splash.frame_changed.connect(self._reveal_neuron_for_frame)
@@ -537,14 +566,14 @@ class MainWindow(QtWidgets.QMainWindow):
         brain_widget = self.brain_window.brain_widget
         core_neurons = brain_widget.original_neurons
         
-        # Distribution: 1-2 neurons per frame to reveal all 7 core neurons
+        # Distribution: 1-2 neurons per frame to reveal all 7 core neurons quickly
         reveal_map = {
             0: [0],       # First frame: reveal hunger
-            1: [1],       # Second frame: reveal happiness
+            1: [1],       # Second frame: reveal happiness  
             2: [2],       # Third frame: reveal cleanliness
             3: [3],       # Fourth frame: reveal sleepiness
-            4: [4, 5],    # Fifth frame: reveal satisfaction & anxiety
-            5: [6]        # Sixth frame: reveal curiosity
+            4: [4],    # Fifth frame: reveal satisfaction & anxiety
+            5: [5, 6]        # Sixth frame: reveal curiosity
         }
         
         # Reveal mapped neurons for this frame
