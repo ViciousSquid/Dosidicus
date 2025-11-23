@@ -27,11 +27,26 @@ class SquidStatistics:
         return self.total_age_seconds + current_session_age
 
     def get_squid_age(self):
-        """Returns the total age formatted as a string."""
-        age_seconds = self.get_total_age_seconds()
-        hours = int(age_seconds // 3600)
-        minutes = int((age_seconds % 3600) // 60)
-        return f"{hours}h {minutes}m"
+        """
+        Return the squid’s age as a readable string:
+            1 min  – 59 min   → “<n> min”
+            60 min – 89 min   → “1 hr”
+            90 min – 119 min  → “1.5 hrs”
+            120 min – 149 min → “2 hrs”
+            150 min – 179 min → “2.5 hrs”
+            …and so on, stepping in 30-minute blocks.
+        """
+        total_minutes = int(self.get_total_age_seconds() // 60)
+
+        if total_minutes < 60:                      # still in minutes
+            return f"{total_minutes} min" + ("s" if total_minutes != 1 else "")
+
+        # 60 min and above → switch to hours, 30-min steps
+        whole_hours = total_minutes // 60
+        half_hour   = (total_minutes % 60) // 30   # 0 or 1
+
+        hours_str = f"{whole_hours}" if half_hour == 0 else f"{whole_hours}.5"
+        return f"{hours_str} hr" + ("s" if whole_hours + half_hour != 1 else "")
 
     def update(self):
         # Update peak mental states
