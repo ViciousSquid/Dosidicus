@@ -36,8 +36,13 @@ class ExperienceContext:
     
     def get_pattern_signature(self) -> str:
         """Generate specific signatures with action sequences and env deltas"""
+        # Filter out ALL binary state neurons (anything starting with 'is_')
+        # We only want motivational/drive neurons (hunger, happiness, curiosity, etc.)
+        motivational_neurons = {k: v for k, v in self.active_neurons.items() 
+                                if not k.startswith('is_')}
+        
         # Get top 3 active neurons WITH ranges
-        top_neurons = sorted(self.active_neurons.items(), 
+        top_neurons = sorted(motivational_neurons.items(), 
                             key=lambda x: abs(x[1] - 50), 
                             reverse=True)[:3]
         
@@ -73,8 +78,13 @@ class ExperienceContext:
         Get a broader parent pattern for hierarchical grouping.
         This allows you to group related specific patterns together.
         """
+        # Filter out ALL binary state neurons (anything starting with 'is_')
+        # We only want motivational/drive neurons (hunger, happiness, curiosity, etc.)
+        motivational_neurons = {k: v for k, v in self.active_neurons.items() 
+                                if not k.startswith('is_')}
+        
         # Get top 2 neurons (instead of 3) for broader matching
-        top_neurons = sorted(self.active_neurons.items(), 
+        top_neurons = sorted(motivational_neurons.items(), 
                             key=lambda x: abs(x[1] - 50), 
                             reverse=True)[:2]
         
