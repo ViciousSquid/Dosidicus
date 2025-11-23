@@ -428,98 +428,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def start_new_game(self):
         """Start a new game, deleting any existing save"""
-        # First, ask for confirmation with a timed dialog
-        confirm_dialog = TimedMessageBox(
-            self,
-            "Confirm New Game",
-            "Are you sure you want to start a new game? This will delete all current progress and save data.",
-            timeout_seconds=10
-        )
-        confirm_dialog.exec_()
-        
-        # If user declined or let it timeout, abort
-        if confirm_dialog.get_result() != QtWidgets.QMessageBox.Yes:
-            print("New game cancelled by user")
-            return
-        
         print("Starting new game...")
-        
-        # Ask about tutorial
-        tutorial_dialog = TimedMessageBox(
-            self,
-            "Tutorial",
-            "Would you like to see the tutorial?",
-            timeout_seconds=5
-        )
-        tutorial_dialog.exec_()
-        self.show_tutorial = (tutorial_dialog.get_result() == QtWidgets.QMessageBox.Yes)
         
         # Stop current simulation if running
         if hasattr(self, 'tamagotchi_logic'):
             self.tamagotchi_logic.stop()
-            # Stop autosave timer if it exists
-            if hasattr(self.tamagotchi_logic, 'autosave_timer'):
-                self.tamagotchi_logic.autosave_timer.stop()
         
-        # Delete all save files (both autosave and manual save)
+        # Delete the save
         if self.save_manager.save_exists():
-            self.save_manager.delete_save(is_autosave=True)  # Delete autosave
-            self.save_manager.delete_save(is_autosave=False)  # Delete manual save
-            print("All save files deleted")
-        
-        # Clear memory files
-        memory_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '_memory')
-        if os.path.exists(memory_dir):
-            import shutil
-            shutil.rmtree(memory_dir)
-            print("Memory directory cleared")
-        
-        # Clear all neurons and state from brain window
-        if hasattr(self, 'brain_window') and hasattr(self.brain_window, 'brain_widget'):
-            brain_widget = self.brain_window.brain_widget
-            
-            # Clear visible neurons
-            brain_widget.visible_neurons = set()
-            
-            # Clear neurogenesis data
-            if hasattr(brain_widget, 'neurogenesis_data'):
-                brain_widget.neurogenesis_data = {
-                    'new_neurons': [],
-                    'new_neurons_details': {},
-                    'new_synapses': []
-                }
-            
-            # Clear enhanced neurogenesis tracking
-            if hasattr(brain_widget, 'enhanced_neurogenesis'):
-                brain_widget.enhanced_neurogenesis.reset_all_state()
-            
-            # Reset brain widget state
-            if hasattr(brain_widget, 'state'):
-                brain_widget.state = brain_widget.create_initial_state()
-            
-            # Clear hebbian learning state
-            if hasattr(brain_widget, 'hebbian'):
-                brain_widget.hebbian.reset()
-            
-            print("Brain state cleared")
-        
-        # Clear all decorations and items from the scene
-        if hasattr(self, 'user_interface') and hasattr(self.user_interface, 'scene'):
-            # Remove all items except the squid (we'll create a new squid anyway)
-            items_to_remove = []
-            for item in self.user_interface.scene.items():
-                # Keep the background and remove everything else
-                if not isinstance(item, QtWidgets.QGraphicsPixmapItem) or item != self.user_interface.background:
-                    items_to_remove.append(item)
-            
-            for item in items_to_remove:
-                self.user_interface.scene.removeItem(item)
-            
-            # Clear decoration tracking
-            if hasattr(self.user_interface, 'awarded_decorations'):
-                self.user_interface.awarded_decorations = set()
-            
-            print("Scene cleared")
+            self.save_manager.delete_save()
+            print("Previous save deleted")
         
         # Create new game (creates squid but not tamagotchi_logic)
         self.create_new_game(self.specified_personality)
@@ -537,23 +455,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plugin_manager.tamagotchi_logic = self.tamagotchi_logic
         self.tamagotchi_logic.plugin_manager = self.plugin_manager
         
-        # Create personality starter neuron if needed
-        squid = self.tamagotchi_logic.squid
-        brain_widget = self.brain_window.brain_widget
-        if (squid and squid.personality and
-            brain_widget and hasattr(brain_widget, 'enhanced_neurogenesis')):
-            if not squid._has_personality_starter_neuron():
-                neuron = brain_widget.enhanced_neurogenesis.create_personality_starter_neuron(
-                    squid.personality.value,
-                    brain_widget.state
-                )
-                if neuron:
-                    print(f"🧬 Personality starter neuron created: {neuron}")
-        
         # Reload plugins to ensure they get the new tamagotchi_logic
         self.plugin_manager.reload_all_plugins()
-        
-        print("New game created successfully!")
 
     def load_game(self):
         """Delegate to tamagotchi_logic"""
@@ -588,18 +491,12 @@ class MainWindow(QtWidgets.QMainWindow):
         """Display splash screen animation with synchronized neuron reveal"""
         self.splash = SplashScreen(self)
         self.splash.finished.connect(self.start_simulation)
-        self.splash.finished.connect(lambda: self.tamagotchi_logic.statistics_window.award(1000))
         self.splash.second_frame.connect(self.show_hatching_notification)
-
-        # NEW: award 1000 points the instant the splash ends
-        self.splash.finished.connect(
-            lambda: self.tamagotchi_logic.statistics_window.award(1000)
-        )
-
+        
         # Check if this is a brand new game (no save exists)
         is_new_game = not self.save_manager.save_exists()
         print(f"🎮 show_splash_screen: is_new_game={is_new_game}, save_exists={self.save_manager.save_exists()}")
-
+        
         if is_new_game:
             # Ensure brain widget starts empty
             if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'visible_neurons'):
