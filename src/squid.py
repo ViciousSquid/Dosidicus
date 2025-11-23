@@ -389,18 +389,8 @@ class Squid:
 
     def finish_eating(self):
         """Reset status after eating"""
-        # Check if status contains "eating" (handles "eating cheese", "eating sushi", "eating greedily", etc.)
-        if "eating" in self.status.lower():
-            # Reset to personality-appropriate default status
-            if self.personality == Personality.TIMID:
-                self.status = "cautiously exploring"
-            elif self.personality == Personality.ADVENTUROUS:
-                self.status = "boldly exploring"
-            else:
-                self.status = "roaming"
-        
-        # Always clear the is_eating flag
-        self.is_eating = False
+        if self.status == "eating":
+            self.status = "roaming"  # Or another appropriate status
             
         # Make sure the brain is updated
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
@@ -964,11 +954,11 @@ class Squid:
             # Mark as favourite after 3 touches
             key = decoration.filename
             self.memory_manager.plant_interaction_count[key] = self.memory_manager.plant_interaction_count.get(key, 0) + 1
-            if self.memory_manager.plant_interaction_count[key] >= 3:
-                self.memory_manager.add_long_term_memory('favourite_plant', key, {
-                    'reason': 'Repeated calming contact',
-                    'anxiety_reduction': True
-                })
+        if self.memory_manager.plant_interaction_count[key] >= 3:
+            self.memory_manager.add_long_term_memory('favourite_plant', key, {
+                'reason': 'Repeated calming contact',
+                'anxiety_reduction': True
+            })
 
         if hasattr(self.tamagotchi_logic, 'brain_window') and hasattr(self.tamagotchi_logic.brain_window, 'statistics_tab'):
             self.tamagotchi_logic.brain_window.statistics_tab.increment_stat('plants_interacted')
@@ -1299,11 +1289,9 @@ class Squid:
                     effects=effects
                 )
         
-        # Set eating state BEFORE applying effects
         self.is_eating = True
-        self.status = f"eating {food_name}"  # Use lowercase for consistency
+        self.status = "eating"
         self.statistics_window.award(75)
-        
         # Apply all stat changes
         for attr, change in effects.items():
             setattr(self, attr, getattr(self, attr) + change)
@@ -1323,11 +1311,13 @@ class Squid:
             self.tamagotchi_logic.neurogenesis_triggers['positive_outcomes'] = min(current + reward_points, 5)
 
         # Visual/behavioral effects
+        self.status = f"Eating {food_name}"
         self.tamagotchi_logic.remove_food(food_item)
         self.show_eating_effect()
         self.start_poop_timer()
         self.pursuing_food = False
         self.target_food = None
+        self.is_eating = False
 
         # Add tracking (added in 2.4.4)
         if hasattr(self.tamagotchi_logic, 'track_food_consumed'):
@@ -1345,8 +1335,7 @@ class Squid:
                 self.tamagotchi_logic.show_message("Stubborn squid happily accepts sushi")
 
     def eat_greedily(self, food_item):
-        # Update status to show greedy eating (lowercase for consistency)
-        self.status = "eating greedily"
+        self.status = "Eating greedily"
         food_type = "sushi" if getattr(food_item, 'is_sushi', False) else "cheese"
 
         # Reduce hunger more than usual
@@ -1361,16 +1350,10 @@ class Squid:
         # Slightly increase anxiety (from overeating)
         self.anxiety = min(100, self.anxiety + 5)
 
-        # Note: Food is already removed in eat() method, don't remove again
-        # self.tamagotchi_logic.remove_food(food_item)  # REMOVED - already done
+        self.tamagotchi_logic.remove_food(food_item)
         #print(f"The greedy squid enthusiastically ate the {food_type}")
-        
-        # These are already called in eat() method, but safe to call again
         self.show_eating_effect()
-        # Poop timer already started in eat(), don't restart
-        # self.start_poop_timer()  # Already called
-        
-        # These should already be set in eat(), but ensure they're cleared
+        self.start_poop_timer()
         self.pursuing_food = False
         self.target_food = None
 

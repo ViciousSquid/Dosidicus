@@ -235,7 +235,7 @@ class TamagotchiLogic:
 
     def reset_squid_status(self):
         """Reset squid status to default state after temporary actions"""
-        if self.squid and "eating" in self.squid.status.lower():
+        if self.squid and self.squid.status in ["eating cheese", "eating sushi"]:
             # Choose default status based on personality
             if self.squid.personality == Personality.TIMID:
                 self.squid.status = "cautiously exploring"
@@ -243,9 +243,6 @@ class TamagotchiLogic:
                 self.squid.status = "boldly exploring"
             else:
                 self.squid.status = "roaming"
-            
-            # Ensure is_eating flag is also cleared
-            self.squid.is_eating = False
 
 
 
@@ -1166,13 +1163,6 @@ class TamagotchiLogic:
             
             # 7. Update brain (will trigger neurogenesis checks)
             self.brain_window.update_brain(brain_state)
-
-            # 7a. Track current action for neurogenesis pattern signatures
-            if hasattr(self.brain_window, 'brain_widget') and \
-               hasattr(self.brain_window.brain_widget, 'neurogenesis_system'):
-                current_status = getattr(self.squid, 'status', 'roaming')
-                action_to_track = self._normalize_action_name(current_status)
-                self.brain_window.brain_widget.neurogenesis_system.track_action(action_to_track)
             
             # 8. Reset frame-specific flags
             self.new_object_encountered = False
@@ -1285,81 +1275,6 @@ class TamagotchiLogic:
         # Debug output if in debug mode
         if self.debug_mode:
             print(f"Neurogenesis triggers: {self.neurogenesis_triggers}")
-
-    def _normalize_action_name(self, status_string):
-        """
-        Convert verbose status strings into trackable action categories.
-        This prevents explosion of unique but semantically similar actions.
-        """
-        if not status_string:
-            return 'idle'
-            
-        status_lower = status_string.lower()
-        
-        # Food-related behaviors
-        if 'eating' in status_lower:
-            return 'eating'
-        elif 'eyeing food' in status_lower or 'approaching food' in status_lower:
-            return 'pursuing_food'
-        elif 'moving toward food' in status_lower:
-            return 'pursuing_food'
-        
-        # Rock interactions
-        elif 'rock' in status_lower:
-            if 'throwing' in status_lower or 'thrown' in status_lower:
-                return 'throwing_rock'
-            elif 'approaching' in status_lower or 'eyeing' in status_lower:
-                return 'investigating_rock'
-            elif 'carrying' in status_lower:
-                return 'carrying_rock'
-        
-        # Poop interactions
-        elif 'poop' in status_lower:
-            if 'throwing' in status_lower:
-                return 'throwing_poop'
-            elif 'approaching' in status_lower:
-                return 'investigating_poop'
-        
-        # Plant interactions
-        elif 'plant' in status_lower:
-            if 'hiding' in status_lower:
-                return 'hiding'
-            elif 'comfort' in status_lower or 'approaching' in status_lower or 'seeking' in status_lower:
-                return 'seeking_plant'
-            elif 'noticing' in status_lower:
-                return 'noticing_plant'
-        
-        # Emotional/mental states
-        elif 'startled' in status_lower or 'fleeing' in status_lower:
-            return 'fleeing'
-        elif 'anxious' in status_lower or 'nervous' in status_lower:
-            return 'anxious'
-        elif 'sleeping' in status_lower or 'drowsy' in status_lower or 'feeling drowsy' in status_lower:
-            return 'sleeping'
-        elif 'sick' in status_lower or 'ill' in status_lower or 'suffering' in status_lower:
-            return 'sick'
-        elif 'distressed' in status_lower:
-            return 'distressed'
-        
-        # Exploration behaviors
-        elif 'exploring' in status_lower:
-            return 'exploring'
-        elif 'roaming' in status_lower or 'wandering' in status_lower or 'patrolling' in status_lower:
-            return 'roaming'
-        elif 'zooming' in status_lower or 'buzzing' in status_lower:
-            return 'energetic_movement'
-        elif 'resting' in status_lower or 'lounging' in status_lower:
-            return 'resting'
-        elif 'watching' in status_lower:
-            return 'watching'
-        elif 'seeking adventure' in status_lower:
-            return 'seeking_adventure'
-        elif 'searching' in status_lower or 'scouting' in status_lower:
-            return 'searching'
-        
-        # Default fallback
-        else:
-            return 'idle'
 
     def make_squid_curious(self):
         self.squid.mental_state_manager.set_state("curious", True)
@@ -1584,9 +1499,6 @@ class TamagotchiLogic:
         if self.squid is not None and sushi_item.collidesWithItem(self.squid.squid_item):
             self.squid.eat(sushi_item)  # Pass the sushi_item as an argument
             self.remove_food(sushi_item)
-            
-            # Reset status after a short delay (matching cheese behavior)
-            QtCore.QTimer.singleShot(2000, self.reset_squid_status)
 
     def is_sushi(self, food_item):
         return getattr(food_item, 'is_sushi', False)     
@@ -1764,14 +1676,7 @@ class TamagotchiLogic:
             self.recent_actions.pop(0)
 
     def feed_squid(self):
-        """Modified to track action for neurogenesis"""
-        # Track for neurogenesis FIRST
-        if hasattr(self.brain_window, 'brain_widget') and \
-           hasattr(self.brain_window.brain_widget, 'neurogenesis_system'):
-            self.brain_window.brain_widget.neurogenesis_system.track_action('user_feeding')
-        
-        self.track_action('feeding')  # Keep original tracking
-        
+        self.track_action('feeding')
         # Get plugin results
         results = self.plugin_manager.trigger_hook("on_feed", 
                                                 tamagotchi_logic=self, 
@@ -1814,11 +1719,6 @@ class TamagotchiLogic:
         self.food_items.append(food_item)  # Single addition
 
     def clean_environment(self):
-        # Track for neurogenesis FIRST
-        if hasattr(self.brain_window, 'brain_widget') and \
-        hasattr(self.brain_window.brain_widget, 'neurogenesis_system'):
-            self.brain_window.brain_widget.neurogenesis_system.track_action('user_cleaning')
-        
         self.track_action('cleaning')
         current_time = time.time()
         if current_time - self.last_clean_time < self.clean_cooldown:

@@ -162,7 +162,7 @@ class StatisticsWindow(QtWidgets.QWidget):
             pill.setStyleSheet("""
                 QLabel {
                     color: white;
-                    font-size: 16px;
+                    font-size: 14px;
                     font-weight: bold;
                     border-radius: 5px;
                     padding: 5px 10px;

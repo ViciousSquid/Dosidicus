@@ -1,3 +1,4 @@
+
 import json
 import time
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -13,11 +14,12 @@ class NetworkTab(BrainBaseTab):
         self.hebbian_timer_value = 0
         self.neurogenesis_timer_value = 0
 
-        # --- Repulsion timer and flag ---
+        # --- NEW: 5-second repulsion timer and flag ---
         self.repulsion_timer = QtCore.QTimer(self)
-        self.repulsion_timer.setInterval(10000)          # 10 s
+        self.repulsion_timer.setInterval(5000)          # 5 s
         self.repulsion_timer.timeout.connect(self._do_repulsion_step)
-        self.repulsion_enabled = False                   # default OFF
+        self.repulsion_enabled = True                   # default ON
+        # ---------------------------------------------
 
         if not hasattr(self, 'layout') or self.layout is None:
             self.layout = QtWidgets.QVBoxLayout(self)   # Fallback, BrainBaseTab should provide it
@@ -25,7 +27,6 @@ class NetworkTab(BrainBaseTab):
         self.initialize_ui()
         self.setup_timers()
         self.neuron_lab_dialog = None
-        self.experience_buffer_dialog = None
 
     # ------------------------------------------------------------------
     #  UI BUILD
@@ -175,12 +176,12 @@ class NetworkTab(BrainBaseTab):
         checkbox_layout.addSpacing(DisplayScaling.scale(60))
 
         # >>>  NEW: Repulsion check-box  <<<
-        #self.checkbox_repulsion = QtWidgets.QCheckBox("Repulsion")
-        #self.checkbox_repulsion.setChecked(True)
-        #self.checkbox_repulsion.stateChanged.connect(self._toggle_repulsion)
-        #checkbox_layout.addWidget(self.checkbox_repulsion)
+        self.checkbox_repulsion = QtWidgets.QCheckBox("Repulsion")
+        self.checkbox_repulsion.setChecked(True)
+        self.checkbox_repulsion.stateChanged.connect(self._toggle_repulsion)
+        checkbox_layout.addWidget(self.checkbox_repulsion)
 
-        #checkbox_layout.addSpacing(DisplayScaling.scale(60))
+        checkbox_layout.addSpacing(DisplayScaling.scale(60))
 
         self.checkbox_pruning = QtWidgets.QCheckBox("Enable pruning")
         self.checkbox_pruning.setChecked(True)
@@ -270,22 +271,10 @@ class NetworkTab(BrainBaseTab):
         health_percentage_str = "N/A"
 
         if hasattr(self, 'brain_widget') and self.brain_widget:
-            # Check if we're currently revealing neurons (animation in progress)
-            if hasattr(self.brain_widget, 'revealed_neurons'):
-                # During animation, show only revealed neurons count
-                neuron_count = len(self.brain_widget.revealed_neurons)
-            elif hasattr(self.brain_widget, 'get_neuron_count'):
-                # Normal operation - show all neurons
+            if hasattr(self.brain_widget, 'get_neuron_count'):
                 neuron_count = self.brain_widget.get_neuron_count()
-            
-            # Check if we're currently revealing connections (animation in progress)
-            if hasattr(self.brain_widget, 'revealed_connections'):
-                # During animation, show only revealed connections count
-                connection_count = len(self.brain_widget.revealed_connections)
-            elif hasattr(self.brain_widget, 'get_edge_count'):
-                # Normal operation - show all connections
+            if hasattr(self.brain_widget, 'get_edge_count'):
                 connection_count = self.brain_widget.get_edge_count()
-            
             if hasattr(self.brain_widget, 'calculate_network_health'):
                 health_value = self.brain_widget.calculate_network_health()
                 health_percentage_str = f"{health_value:.1f}%" if isinstance(health_value, (int, float)) else "N/A"
@@ -366,7 +355,6 @@ class NetworkTab(BrainBaseTab):
         self.new_50x50_button = QtWidgets.QPushButton("🔍")
         self.new_50x50_button.setFixedSize(DisplayScaling.scale(50), DisplayScaling.scale(50))
         self.new_50x50_button.setStyleSheet("background-color: #3f51b5; color: white; border-radius: 5px; font-size: 32pt;")
-        self.new_50x50_button.clicked.connect(self._show_experience_buffer)
 
         new_button_layout.addWidget(self.new_50x50_button)
 
@@ -529,152 +517,3 @@ class NetworkTab(BrainBaseTab):
         font.setPointSize(font_size_val)
         button.setFont(font)
         return button
-
-    def _show_experience_buffer(self):
-        """Show the Experience Buffer window when magnifying glass is clicked"""
-        if not self.brain_widget:
-            QtWidgets.QMessageBox.warning(self, "Missing Brain", "Cannot open Experience Buffer: Brain Widget is not available.")
-            return
-
-        if not hasattr(self.brain_widget, 'enhanced_neurogenesis') or self.brain_widget.enhanced_neurogenesis is None:
-            QtWidgets.QMessageBox.warning(self, "No Neurogenesis", "Cannot open Experience Buffer: Neurogenesis system is not initialized.")
-            return
-
-        # Create or show the dialog
-        if self.experience_buffer_dialog is None:
-            self.experience_buffer_dialog = ExperienceBufferDialog(self.brain_widget, self)
-        
-        self.experience_buffer_dialog.refresh_data()
-        self.experience_buffer_dialog.show()
-        self.experience_buffer_dialog.raise_()
-        self.experience_buffer_dialog.activateWindow()
-
-
-class ExperienceBufferDialog(QtWidgets.QDialog):
-    """Floating window showing the experience buffer contents"""
-    
-    def __init__(self, brain_widget, parent=None):
-        super().__init__(parent)
-        self.brain_widget = brain_widget
-        self.setWindowTitle("Experience Buffer")
-        self.setFixedSize(640, 600)
-        self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
-        
-        self.setup_ui()
-        
-    def setup_ui(self):
-        """Create the UI elements"""
-        layout = QtWidgets.QVBoxLayout(self)
-        
-        # Header with info
-        header = QtWidgets.QLabel("Recent Experiences")
-        header.setStyleSheet("font-weight: bold; font-size: 12pt; padding: 5px;")
-        layout.addWidget(header)
-        
-        # Create table to show experiences
-        self.table = QtWidgets.QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Type", "Pattern", "Outcome", "Time"])
-        
-        # Set column widths
-        self.table.setColumnWidth(0, 70)   # Type
-        self.table.setColumnWidth(1, 220)  # Pattern
-        self.table.setColumnWidth(2, 70)   # Outcome
-        self.table.setColumnWidth(3, 80)   # Time
-        
-        # Style the table
-        self.table.setStyleSheet("""
-            QTableWidget {
-                background-color: white;
-                gridline-color: #ddd;
-            }
-            QHeaderView::section {
-                background-color: #3f51b5;
-                color: white;
-                padding: 5px;
-                font-weight: bold;
-            }
-        """)
-        
-        self.table.setAlternatingRowColors(True)
-        self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-        
-        layout.addWidget(self.table)
-        
-        # Bottom info panel
-        self.info_label = QtWidgets.QLabel()
-        self.info_label.setStyleSheet("padding: 5px; background-color: #f5f5f5; border-radius: 3px;")
-        layout.addWidget(self.info_label)
-        
-        # Refresh button
-        button_layout = QtWidgets.QHBoxLayout()
-        refresh_btn = QtWidgets.QPushButton("Refresh")
-        refresh_btn.clicked.connect(self.refresh_data)
-        refresh_btn.setFixedSize(80, 30)
-        button_layout.addStretch()
-        button_layout.addWidget(refresh_btn)
-        layout.addLayout(button_layout)
-        
-    def refresh_data(self):
-        """Update the table with current experience buffer data"""
-        if not hasattr(self.brain_widget, 'enhanced_neurogenesis') or self.brain_widget.enhanced_neurogenesis is None:
-            return
-            
-        eng = self.brain_widget.enhanced_neurogenesis
-        
-        if not hasattr(eng, 'experience_buffer'):
-            self.info_label.setText("⚠️ Experience buffer not available")
-            return
-            
-        buffer = eng.experience_buffer
-        experiences = list(buffer.buffer)
-        
-        # Clear and populate table
-        self.table.setRowCount(len(experiences))
-        
-        for i, exp in enumerate(reversed(experiences)):  # Most recent first
-            # Type column
-            type_item = QtWidgets.QTableWidgetItem(exp.trigger_type.capitalize())
-            type_color = {
-                'novelty': '#2196F3',
-                'stress': '#F44336',
-                'reward': '#4CAF50'
-            }.get(exp.trigger_type, '#757575')
-            type_item.setForeground(QtGui.QColor(type_color))
-            type_item.setFont(QtGui.QFont("Arial", 9, QtGui.QFont.Bold))
-            self.table.setItem(i, 0, type_item)
-            
-            # Pattern column
-            pattern = exp.get_pattern_signature()
-            pattern_item = QtWidgets.QTableWidgetItem(pattern)
-            pattern_item.setToolTip(pattern)
-            self.table.setItem(i, 1, pattern_item)
-            
-            # Outcome column
-            outcome_item = QtWidgets.QTableWidgetItem(exp.outcome.capitalize())
-            outcome_item.setForeground(QtGui.QColor('#4CAF50' if exp.outcome == 'positive' else '#757575'))
-            self.table.setItem(i, 2, outcome_item)
-            
-            # Time column (relative)
-            time_ago = int(time.time() - exp.timestamp)
-            if time_ago < 60:
-                time_str = f"{time_ago}s ago"
-            elif time_ago < 3600:
-                time_str = f"{time_ago // 60}m ago"
-            else:
-                time_str = f"{time_ago // 3600}h ago"
-            time_item = QtWidgets.QTableWidgetItem(time_str)
-            time_item.setForeground(QtGui.QColor('#757575'))
-            self.table.setItem(i, 3, time_item)
-        
-        # Update info label with pattern counts
-        pattern_counts = buffer.pattern_counts
-        top_patterns = sorted(pattern_counts.items(), key=lambda x: x[1], reverse=True)[:3]
-        
-        if top_patterns:
-            pattern_text = "Top patterns: " + " | ".join([f"{p}: {c}" for p, c in top_patterns])
-        else:
-            pattern_text = "No patterns yet"
-            
-        self.info_label.setText(f"📊 Buffer size: {len(experiences)}/{buffer.buffer.maxlen} | {pattern_text}")
