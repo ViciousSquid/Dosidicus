@@ -32,7 +32,8 @@ class BrainWidget(QtWidgets.QWidget):
             }
         super().__init__() #
 
-        self.enhanced_neurogenesis = EnhancedNeurogenesis(self, config)
+        from .neurogenesis_show import ShowmanNeurogenesis
+        self.enhanced_neurogenesis = ShowmanNeurogenesis(EnhancedNeurogenesis(self, config))
         self.excluded_neurons = ['is_sick', 'is_eating', 'pursuing_food', 'direction', 'is_sleeping'] #
         self.hebbian_countdown_seconds = 30  # Default duration
         self.learning_active = True #
@@ -64,7 +65,7 @@ class BrainWidget(QtWidgets.QWidget):
                 'reward_threshold': 3.5, #
                 'cooldown': 180, #
                 'highlight_duration': 5.0, #
-                'max_neurons': 32
+                'max_neurons': 50
             }
 
         self.neurogenesis_config = self.config.neurogenesis 
@@ -121,17 +122,10 @@ class BrainWidget(QtWidgets.QWidget):
                                  "satisfaction", "anxiety", "curiosity"]
         # Animation state for neuron reveals
         self.neuron_reveal_animations = {}  # {neuron_name: {'start_time': float, 'progress': float}}
-
-        # Set shapes for specific original neurons to 'square'
-        self.neuron_shapes["curiosity"] = 'square' #
-        self.neuron_shapes["anxiety"] = 'square' #
-        self.neuron_shapes["satisfaction"] = 'square' #
-
-        # Set shapes for other original neurons (defaults to circle if not set)
-        self.neuron_shapes["hunger"] = 'circle' #
-        self.neuron_shapes["happiness"] = 'circle' #
-        self.neuron_shapes["cleanliness"] = 'circle' #
-        self.neuron_shapes["sleepiness"] = 'circle' #
+        
+        # Track revealed neurons and connections for synced count display during animation
+        self.revealed_neurons = set()
+        self.revealed_connections = set()
 
         # Initialize communication events for all neurons
         for neuron in self.neuron_positions.keys(): #
@@ -216,6 +210,15 @@ class BrainWidget(QtWidgets.QWidget):
 
         print(f"Brain window debug mode set to: {enabled}")
 
+        
+    def is_neuron_revealed(self, name):
+        """Return True if the neuron has finished its reveal animation."""
+        if name not in self.neuron_reveal_animations:
+            return name in self.visible_neurons  # never animated = already visible
+        anim = self.neuron_reveal_animations[name]
+        elapsed = time.time() - anim['start_time']
+        return elapsed >= 0.4  # same duration used in draw_neurons
+
     def update_animations(self):
         """Update all animation states"""
         current_time = time.time()
@@ -232,7 +235,7 @@ class BrainWidget(QtWidgets.QWidget):
         completed_reveals = []
         for neuron_name, anim_data in self.neuron_reveal_animations.items():
             elapsed = current_time - anim_data['start_time']
-            duration = 0.8  # 0.8 seconds for reveal animation
+            duration = 0.5  # 0.4 seconds for reveal animation
             
             if elapsed >= duration:
                 anim_data['progress'] = 1.0
@@ -246,6 +249,13 @@ class BrainWidget(QtWidgets.QWidget):
         for neuron_name in completed_reveals:
             del self.neuron_reveal_animations[neuron_name]
         
+        # Check if all core neurons have finished revealing
+        if (hasattr(self, 'revealed_neurons') and 
+            len(self.revealed_neurons) == len(self.original_neurons) and
+            len(self.neuron_reveal_animations) == 0):
+            # All core neurons revealed - cleanup tracking
+            self.finish_reveal_animation()
+        
         # Update weight animations
         self.weight_animations = [
             anim for anim in self.weight_animations 
@@ -257,35 +267,81 @@ class BrainWidget(QtWidgets.QWidget):
     def reveal_neuron(self, neuron_name):
         """Reveal a neuron with an expand animation"""
         if neuron_name not in self.original_neurons:
-            print(f"⚠️  Warning: Attempted to reveal non-core neuron: {neuron_name}")
             return
-            
         if neuron_name in self.visible_neurons:
-            print(f"⚠️  Neuron {neuron_name} is already visible")
             return
-        
-        # Check if neuron has a position
         if neuron_name not in self.neuron_positions:
             print(f"❌ ERROR: Neuron {neuron_name} has no position defined!")
             return
-        
-        # Mark neuron as visible
+
+        # ---------- staggered start ----------
+        stagger = 0.4                              # seconds between neurons
+        delay = len(self.visible_neurons) * stagger # how long to wait
+
         self.visible_neurons.add(neuron_name)
         
-        # Start reveal animation
+        # Track this neuron as revealed for count display
+        self.revealed_neurons.add(neuron_name)
+        
+        # Reveal connections between already-revealed neurons
+        self._reveal_connections_for_neuron(neuron_name)
+        
+        # Trigger immediate metrics update to show new counts
+        self._update_network_metrics()
+
         self.neuron_reveal_animations[neuron_name] = {
-            'start_time': time.time(),
+            'start_time': time.time() + delay,      # ← each starts later
             'progress': 0.0
         }
-        
+
         pos = self.neuron_positions[neuron_name]
-        #print(f"🌟 Revealing {neuron_name} at position {pos} - visible neurons: {len(self.visible_neurons)}/{len(self.original_neurons)}")
+        # (keep any logging you had below this point)
+
     
     def reveal_all_core_neurons(self):
         """Make all core neurons visible immediately (for loaded games)"""
         for neuron_name in self.original_neurons:
             self.visible_neurons.add(neuron_name)
+        # For loaded games, remove tracking attributes immediately
+        if hasattr(self, 'revealed_neurons'):
+            delattr(self, 'revealed_neurons')
+        if hasattr(self, 'revealed_connections'):
+            delattr(self, 'revealed_connections')
         #print("🧠 All core neurons revealed")
+    
+    def _reveal_connections_for_neuron(self, neuron_name):
+        """Reveal connections between this neuron and other revealed neurons"""
+        if not hasattr(self, 'weights'):
+            return
+            
+        # Check all weights to find connections involving this neuron
+        for (source, target), weight in self.weights.items():
+            # If both ends of the connection are revealed, track it
+            if source in self.revealed_neurons and target in self.revealed_neurons:
+                edge_key = f"{source}->{target}"
+                if edge_key not in self.revealed_connections:
+                    self.revealed_connections.add(edge_key)
+    
+    def _update_network_metrics(self):
+        """Update the network tab metrics display"""
+        try:
+            # Try to get the parent window (SquidBrainWindow)
+            parent = self.parent()
+            if parent and hasattr(parent, 'network_tab'):
+                parent.network_tab.update_metrics_display()
+        except Exception as e:
+            pass  # Silently fail if we can't update - not critical
+    
+    def finish_reveal_animation(self):
+        """Called when the reveal animation completes - cleanup tracking attributes"""
+        # Remove reveal tracking so normal counting resumes
+        if hasattr(self, 'revealed_neurons'):
+            delattr(self, 'revealed_neurons')
+        if hasattr(self, 'revealed_connections'):
+            delattr(self, 'revealed_connections')
+        
+        # Trigger a final metrics update
+        # (The network tab will call update_metrics_display automatically)
 
     def add_weight_animation(self, neuron1, neuron2, old_weight, new_weight):
         """Add animation for a weight change without modifying the weight itself"""
@@ -313,6 +369,31 @@ class BrainWidget(QtWidgets.QWidget):
         if (neuron1, neuron2) not in self.recently_updated_neuron_pairs and \
         (neuron2, neuron1) not in self.recently_updated_neuron_pairs:
             self.recently_updated_neuron_pairs.append((neuron1, neuron2))
+
+    def is_neurogenesis_neuron(self, neuron_name: str) -> bool:
+        """
+        Check if a neuron was created through neurogenesis (and can be dragged).
+        Core neurons from original_neurons list cannot be dragged.
+        """
+        if not neuron_name:
+            return False
+        
+        # Core neurons that should NOT be draggable
+        if neuron_name in self.original_neurons:
+            return False
+        
+        # If it's in functional_neurons, it's a neurogenesis neuron
+        if hasattr(self, 'enhanced_neurogenesis'):
+            if neuron_name in self.enhanced_neurogenesis.functional_neurons:
+                return True
+        
+        # Check if it has a non-circular shape (neurogenesis neurons use special shapes)
+        if neuron_name in self.neuron_shapes:
+            shape = self.neuron_shapes[neuron_name]
+            if shape in ['triangle', 'square', 'diamond']:
+                return True
+        
+        return False
 
     def _periodic_neurogenesis_check(self):
         """
@@ -819,15 +900,18 @@ class BrainWidget(QtWidgets.QWidget):
 
     def update_state(self, new_state: Dict[str, float]):
         """
-        COMPLETE: Update brain state with clamping, decay, neurogenesis triggers,
-        and state change detection. Prevents stagnation at extreme values.
+        COMPLETE: Update brain state with clamping, decay, and state change detection.
+        Prevents stagnation at extreme values.
+        
+        NOTE: Neurogenesis checks are handled by _periodic_neurogenesis_check(), 
+        not here, to avoid redundancy.
         """
         # Track if any meaningful state changes occurred
         state_changed = False
         old_state = self.state.copy()
         current_time = time.time()  # Define once for timestamp updates
         
-        # ===== NEW: PREVENT STAGNATION WITH NORMALIZATION =====
+        # ===== PREVENT STAGNATION WITH NORMALIZATION =====
         for neuron, value in new_state.items():
             # Validate neuron exists
             if neuron not in self.neuron_positions:
@@ -841,7 +925,7 @@ class BrainWidget(QtWidgets.QWidget):
             if abs(current_value - 50) > 30:  # If far from baseline
                 decay_rate = 0.02  # 2% per update
                 if current_value > 50:
-                    value = current_value - (decay_rate * (current_value - 50))  # ✅ FIXED: was current_time
+                    value = current_value - (decay_rate * (current_value - 50))
                 else:
                     value = current_value + (decay_rate * (50 - current_value))
             
@@ -865,58 +949,15 @@ class BrainWidget(QtWidgets.QWidget):
             if neuron not in self.communication_events:
                 self.communication_events[neuron] = 0
             
-            # ✅ FIXED: Use safe conversion before arithmetic
             neuron_value = self.get_neuron_value(self.state[neuron])
             if abs(neuron_value - 50) > 20:  # If significantly active
-                self.communication_events[neuron] = current_time  # ✅ FIXED: Set timestamp, not increment
+                self.communication_events[neuron] = current_time
         
-        # ===== NEUROGENESIS TRIGGERING =====
-        # Only trigger if state actually changed meaningfully
-        if state_changed and hasattr(self, 'enhanced_neurogenesis'):
-            try:
-                # Build context for neurogenesis
-                recent_actions = []
-                env_state = {
-                    'food_count': getattr(self, 'food_count', 0),
-                    'poop_count': getattr(self, 'poop_count', 0),
-                    'is_sick': getattr(self, 'is_sick', False),
-                    'is_eating': getattr(self, 'is_eating', False)
-                }
-                
-                # Check for significant experiences
-                if hasattr(self.tamagotchi_logic, 'neurogenesis_triggers'):
-                    triggers = self.tamagotchi_logic.neurogenesis_triggers
-                    
-                    # Novelty detection (curiosity spike)
-                    if 'curiosity' in new_state:
-                        old_curiosity = old_state.get('curiosity', 50)
-                        new_curiosity = new_state['curiosity']
-                        if new_curiosity - old_curiosity > 15 and new_curiosity > 60:
-                            # Create context and trigger neurogenesis
-                            ctx = self.enhanced_neurogenesis.capture_experience_context(
-                                'novelty', self.state, recent_actions, env_state
-                            )
-                    
-                    # Stress detection (anxiety spike)
-                    if 'anxiety' in new_state:
-                        old_anxiety = old_state.get('anxiety', 50)
-                        new_anxiety = new_state['anxiety']
-                        if new_anxiety - old_anxiety > 15 or new_anxiety > 70:
-                            ctx = self.enhanced_neurogenesis.capture_experience_context(
-                                'stress', self.state, recent_actions, env_state
-                            )
-                    
-                    # Reward detection (satisfaction/happiness spike)
-                    if 'satisfaction' in new_state:
-                        old_satisfaction = old_state.get('satisfaction', 50)
-                        new_satisfaction = new_state['satisfaction']
-                        if new_satisfaction - old_satisfaction > 15:
-                            ctx = self.enhanced_neurogenesis.capture_experience_context(
-                                'reward', self.state, recent_actions, env_state
-                            )
-            except Exception as e:
-                if self.debug_mode:
-                    print(f"DEBUG: Neurogenesis trigger error: {e}")
+        # ===== REMOVED: Redundant neurogenesis triggering =====
+        # Neurogenesis is now handled solely by _periodic_neurogenesis_check()
+        # which runs every 2 seconds via self.neurogenesis_timer
+        # This eliminates duplicate experience capture and potential conflicts
+        # ======================================================
         
         # ===== UPDATE FUNCTIONAL NEURONS =====
         # Let existing functional neurons calculate their activation
@@ -954,7 +995,7 @@ class BrainWidget(QtWidgets.QWidget):
     
     
     def check_neurogenesis_triggers(self, state):
-        """Enhanced neurogenesis check"""
+        """Enhanced neurogenesis check with proper trigger priority"""
         if not state.get('neurogenesis_active', True):
             return False
         
@@ -966,14 +1007,26 @@ class BrainWidget(QtWidgets.QWidget):
             'has_rock': state.get('carrying_rock', False)
         }
         
-        # Determine trigger type based on state
+        # ===== FIX: PROPER TRIGGER PRIORITY WITH EMERGENCY OVERRIDE =====
         trigger_type = None
-        if state.get('curiosity', 50) > 70 or state.get('novelty_exposure', 0) > 2:
-            trigger_type = 'novelty'
+        
+        # 🚨 HIGHEST PRIORITY: Emergency stress (overrides everything)
+        if state.get('anxiety', 50) >= 95:
+            trigger_type = 'stress'
+            print(f"🚨 EMERGENCY: Critical anxiety level ({state.get('anxiety', 50):.1f})!")
+        
+        # HIGH PRIORITY: Stress (anxiety or sustained stress)
         elif state.get('anxiety', 50) > 75 or state.get('sustained_stress', 0) > 1:
             trigger_type = 'stress'
+        
+        # MEDIUM PRIORITY: Novelty (curiosity or new objects)
+        elif state.get('curiosity', 50) > 70 or state.get('novelty_exposure', 0) > 2:
+            trigger_type = 'novelty'
+        
+        # LOW PRIORITY: Reward (satisfaction or positive outcomes)
         elif state.get('satisfaction', 50) > 70 or state.get('recent_rewards', 0) > 2:
             trigger_type = 'reward'
+        # ================================================================
         
         if trigger_type:
             # Capture full experience context
@@ -1307,6 +1360,11 @@ class BrainWidget(QtWidgets.QWidget):
                 continue
                 
             source, target = key
+            
+            # --- NEW: skip if either neuron is still revealing ---
+            if not self.is_neuron_revealed(source) or not self.is_neuron_revealed(target):
+                continue
+            
             if (source not in self.neuron_positions or target not in self.neuron_positions or
                 source in self.excluded_neurons or target in self.excluded_neurons):
                 continue
@@ -1463,14 +1521,14 @@ class BrainWidget(QtWidgets.QWidget):
         # Fill background
         painter.fillRect(self.rect(), QtGui.QColor(240, 240, 240))
 
-        # --- Start of indicator drawing logic ---
-        indicator_y_position = 10 # Y position for indicators
-        indicator_font = QtGui.QFont("Arial", 10, QtGui.QFont.Bold) # Increased font size
+        # HIDDEN: State indicator pills (functionality retained, display disabled)
+        indicator_y_position = 10
+        indicator_font = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
         painter.setFont(indicator_font)
         font_metrics = painter.fontMetrics()
         
         active_indicators_data = []
-        # Existing indicators
+        # Collect state data for statistics window
         if self.state.get('is_fleeing', False): 
             active_indicators_data.append({"text": "Fleeing!", "color": QtGui.QColor(220, 20, 60)})
         if self.state.get('is_startled', False): 
@@ -1478,12 +1536,11 @@ class BrainWidget(QtWidgets.QWidget):
         if self.state.get('pursuing_food', False): 
             active_indicators_data.append({"text": "Pursuing Food", "color": QtGui.QColor(60, 179, 113)})
 
-        # New indicators
         squid_status = self.state.get('status', '').lower()
         if self.state.get('is_eating', False) or 'eating' in squid_status:
-             active_indicators_data.append({"text": "Eating", "color": QtGui.QColor(46, 204, 113)})
+            active_indicators_data.append({"text": "Eating", "color": QtGui.QColor(46, 204, 113)})
         if self.state.get('is_sleeping', False):
-             active_indicators_data.append({"text": "Sleeping", "color": QtGui.QColor(142, 68, 173)})
+            active_indicators_data.append({"text": "Sleeping", "color": QtGui.QColor(142, 68, 173)})
         if 'rock' in squid_status or 'play' in squid_status:
             active_indicators_data.append({"text": "Playing", "color": QtGui.QColor(241, 196, 15)})
         if 'hiding' in squid_status:
@@ -1494,88 +1551,66 @@ class BrainWidget(QtWidgets.QWidget):
             active_indicators_data.append({"text": "Curious", "color": QtGui.QColor(52, 152, 219)})
         
         indicators_to_display = active_indicators_data[:3]
-        padding_horizontal, padding_vertical, spacing_between_indicators = 10, 5, 10
         
-        rect_height = font_metrics.height() + (2 * padding_vertical)
-        current_target_left_edge_x = 15 # Start 15px from the left
-
-        for indicator_details in indicators_to_display:
-            indicator_text_original = indicator_details["text"]
-            indicator_bg_color = indicator_details["color"]
-            
-            ideal_text_width = font_metrics.horizontalAdvance(indicator_text_original)
-            render_rect_width = ideal_text_width + (2 * padding_horizontal)
-            
-            render_rect_start_x = current_target_left_edge_x
-            indicator_rect = QtCore.QRectF(render_rect_start_x, indicator_y_position, render_rect_width, rect_height)
-            
-            painter.setBrush(indicator_bg_color)
-            painter.setPen(QtCore.Qt.NoPen)
-            painter.drawRoundedRect(indicator_rect, 4, 4)
-            
-            elided_text = font_metrics.elidedText(indicator_text_original, QtCore.Qt.ElideRight, ideal_text_width)
-            text_color = QtCore.Qt.white if indicator_bg_color.lightnessF() < 0.5 else QtCore.Qt.black
-            painter.setPen(text_color)
-            painter.drawText(indicator_rect, QtCore.Qt.AlignCenter, elided_text)
-            
-            current_target_left_edge_x += render_rect_width + spacing_between_indicators
             
         painter.save()
         
-        # Calculate space used by indicators to offset neuron drawing area
-        fixed_indicator_area_height = rect_height + 10 if indicators_to_display else 30 # Add some padding below indicators
+        # Calculate space - no indicators displayed, so no space needed
+        fixed_indicator_area_height = 0
         indicator_space_at_top = indicator_y_position + fixed_indicator_area_height
         
         base_width_logical = 1024
-        # Adjust logical height based on the actual space available after indicators
-        base_height_logical = 768 - indicator_space_at_top 
-        if base_height_logical <= 0: base_height_logical = 1 # Prevent division by zero or negative
+        base_height_logical = 768 - indicator_space_at_top
+        if base_height_logical <= 0: 
+            base_height_logical = 1
             
         scale_x = self.width() / base_width_logical
         
         drawable_height_for_neurons = self.height() - indicator_space_at_top
-        if drawable_height_for_neurons <= 0: drawable_height_for_neurons = 1 # Prevent division by zero or negative
+        if drawable_height_for_neurons <= 0: 
+            drawable_height_for_neurons = 1
             
         scale_y = drawable_height_for_neurons / base_height_logical
-        scale_y = max(0.01, scale_y) # Ensure scale is positive
+        scale_y = max(0.01, scale_y)
         
-        scale = max(0.01, min(scale_x, scale_y)) # Ensure scale is positive
+        scale = max(0.01, min(scale_x, scale_y))
 
-        painter.translate(0, indicator_space_at_top) # Translate painter down past the indicator area
+        painter.translate(0, indicator_space_at_top)
         painter.scale(scale, scale)
         
-        self.draw_neurons(painter, 1.0) # Pass scale as 1.0 as painter is already scaled
+        self.draw_neurons(painter, 1.0)
         
         if self.dragging and self.dragged_neuron:
             pos = self.neuron_positions[self.dragged_neuron]
-            # When drawing on an already scaled painter, the pen width should be relative to the new scale
-            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3 / scale)) # Adjust pen width for current scale
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3 / scale))
             painter.setBrush(QtCore.Qt.NoBrush)
             painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 30, 30) 
             
-        self.draw_neurogenesis_highlights(painter, 1.0) # Pass scale as 1.0
+        self.draw_neurogenesis_highlights(painter, 1.0)
         
-        if self.show_links:
-            self.draw_connections(painter, 1.0) # Pass scale as 1.0
+        if self.show_links and len(self.visible_neurons) == len(self.original_neurons):
+            self.draw_connections(painter, 1.0)
+            
+        # FIX: Draw strength multipliers on top of neurons
+        self.draw_strength_multiplier(painter, 1.0)
             
         painter.restore()
 
     def draw_neurons(self, painter, scale):
         """Draw all neurons with activity-based sizing and highlights"""
         current_time = time.time()
-        
+
         # Debug: Print visible neurons count on first draw after reveals
         if hasattr(self, '_last_visible_count'):
             if self._last_visible_count != len(self.visible_neurons):
-                print(f"🎨 Drawing {len(self.visible_neurons)} visible neurons: {sorted(self.visible_neurons)}")
                 self._last_visible_count = len(self.visible_neurons)
         else:
             self._last_visible_count = len(self.visible_neurons)
-        
+
         for name, pos in self.neuron_positions.items():
             if name in self.excluded_neurons:
                 continue
-            
+
             # Skip core neurons that haven't been revealed yet
             if name in self.original_neurons and name not in self.visible_neurons:
                 continue
@@ -1586,7 +1621,7 @@ class BrainWidget(QtWidgets.QWidget):
                 base_size = 25.0
                 size_factor = 0.8 + 0.4 * (abs(value - 50) / 50)
                 target_size = base_size * size_factor * scale
-                
+
                 # Smooth size transition
                 if name not in self.neuron_sizes:
                     self.neuron_sizes[name] = target_size
@@ -1594,20 +1629,27 @@ class BrainWidget(QtWidgets.QWidget):
                     current_size = self.neuron_sizes[name]
                     size_diff = target_size - current_size
                     self.neuron_sizes[name] = current_size + size_diff * 0.2
-                
+
                 radius = self.neuron_sizes[name]
-                
+
                 # Apply reveal animation if in progress
                 reveal_scale = 1.0
                 reveal_alpha = 255
                 if name in self.neuron_reveal_animations:
-                    progress = self.neuron_reveal_animations[name]['progress']
-                    reveal_scale = progress  # Scale from 0 to 1
-                    reveal_alpha = int(255 * progress)  # Fade from 0 to 255
-                
+                    elapsed = current_time - self.neuron_reveal_animations[name]['start_time']
+                    duration = 0.4  # 0.4 seconds for reveal animation
+                    if elapsed >= duration:
+                        progress = 1.0
+                    else:
+                        # Ease-out animation curve
+                        progress = elapsed / duration
+                        progress = 1 - (1 - progress) ** 3
+                    reveal_scale = progress
+                    reveal_alpha = max(0, min(255, int(255 * progress)))  # ← safe alpha
+
                 # Apply reveal scaling to radius
                 animated_radius = radius * reveal_scale
-                
+
                 shape = self.neuron_shapes.get(name, 'circle')
                 base_color = self.state_colors.get(name, (200, 200, 200))
                 color = QtGui.QColor(*base_color)
@@ -1622,8 +1664,8 @@ class BrainWidget(QtWidgets.QWidget):
                         highlight_color = QtGui.QColor(255, 255, 0, min(150, reveal_alpha))
                         painter.setPen(QtGui.QPen(highlight_color, 2))
                         painter.setBrush(QtCore.Qt.NoBrush)
-                        painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 
-                                          highlight_radius, highlight_radius)
+                        painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]),
+                                        highlight_radius, highlight_radius)
 
                 # Draw the neuron shape with reveal animation
                 if shape == 'diamond':
@@ -1641,20 +1683,20 @@ class BrainWidget(QtWidgets.QWidget):
                     self._draw_neuron_label(painter, pos[0], pos[1], name, animated_radius, scale, reveal_alpha)
 
                 # Draw neurogenesis highlight
-                if (self.neurogenesis_highlight['neuron'] == name and 
-                    current_time - self.neurogenesis_highlight['start_time'] < 
+                if (self.neurogenesis_highlight['neuron'] == name and
+                    current_time - self.neurogenesis_highlight['start_time'] <
                     self.neurogenesis_highlight['duration']):
-                    
+
                     progress = (current_time - self.neurogenesis_highlight['start_time']) / \
-                               self.neurogenesis_highlight['duration']
+                            self.neurogenesis_highlight['duration']
                     pulse = 0.5 + 0.5 * math.sin(self.neurogenesis_highlight['pulse_phase'])
                     highlight_radius = animated_radius + 10 + 10 * pulse * (1 - progress)
-                    
+
                     highlight_color = QtGui.QColor(255, 215, 0, min(200, reveal_alpha))
                     painter.setPen(QtGui.QPen(highlight_color, 3))
                     painter.setBrush(QtCore.Qt.NoBrush)
-                    painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 
-                                      highlight_radius, highlight_radius)
+                    painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]),
+                                    highlight_radius, highlight_radius)
 
             except Exception as e:
                 print(f"Error drawing neuron {name}: {str(e)}")
@@ -1683,36 +1725,35 @@ class BrainWidget(QtWidgets.QWidget):
         if hasattr(self, 'brain_widget'): self.brain_widget.show_diagnostic_report()
         else: print("Error: Brain widget not initialized")
 
-    def _draw_polygon_neuron(self, painter, x, y, sides, radius, color, label, scale, rotation=0, alpha=255):
-        """Helper to draw regular polygon neurons"""
+    def _draw_polygon_neuron(self, painter, x, y, sides, radius, color, label, scale,
+                            rotation=0, alpha=255):
         painter.save()
         painter.translate(x, y)
         painter.rotate(rotation)
-        
-        # Apply alpha to color
+
+        alpha = max(0, min(255, alpha))            # ← clamp
         colored = QtGui.QColor(color)
         colored.setAlpha(alpha)
-        painter.setBrush(QtGui.QBrush(colored))
-        
+
         pen_color = QtGui.QColor(0, 0, 0)
         pen_color.setAlpha(alpha)
+
+        painter.setBrush(QtGui.QBrush(colored))
         painter.setPen(QtGui.QPen(pen_color))
-        
+
         polygon = QtGui.QPolygonF()
         angle_step = 360.0 / sides
-        
         for i in range(sides):
             angle = math.radians(i * angle_step - 90)
-            x_pos = radius * math.cos(angle)
-            y_pos = radius * math.sin(angle)
-            polygon.append(QtCore.QPointF(x_pos, y_pos))
-            
+            polygon.append(QtCore.QPointF(radius * math.cos(angle),
+                                        radius * math.sin(angle)))
         painter.drawPolygon(polygon)
         painter.restore()
         self._draw_neuron_label(painter, x, y, label, radius, scale, alpha)
 
     def _draw_neuron_label(self, painter, x, y, label, radius, scale, alpha=255):
         """Draw neuron label below the neuron"""
+        alpha = max(0, min(255, alpha))              # ← clamp alpha
         label_color = QtGui.QColor(0, 0, 0)
         label_color.setAlpha(alpha)
         painter.setPen(label_color)
@@ -1720,20 +1761,19 @@ class BrainWidget(QtWidgets.QWidget):
         font.setPointSize(int(8 * scale))
         painter.setFont(font)
         label_y = y + radius + 15 * scale
-        
+
         # Calculate the width needed for the text
         font_metrics = painter.fontMetrics()
-        text_width = font_metrics.horizontalAdvance(label)  # Get the pixel width of the text
-        # Add some padding (e.g., 10 pixels on each side after scaling)
+        text_width = font_metrics.horizontalAdvance(label)
         padding = 10 * scale
         rect_width = text_width + 2 * padding
-        
+
         # Center the text rectangle horizontally around the neuron center (x)
         painter.drawText(
             int(x - rect_width / 2),
             int(label_y),
             int(rect_width),
-            int(20 * scale),  # Height can remain fixed or also be dynamic if needed
+            int(20 * scale),
             QtCore.Qt.AlignCenter,
             label
         )
@@ -1768,10 +1808,30 @@ class BrainWidget(QtWidgets.QWidget):
         self.capture_training_data_enabled = state
 
     def mousePressEvent(self, event):
-        if event.button() == QtCore.Qt.LeftButton:
-            neuron = self.get_neuron_at_pos(event.pos())
-            if neuron: self.dragged_neuron = neuron; self.dragging = True; self.drag_start_pos = event.pos(); self.update()
-            else: self.dragged_neuron = None; self.dragging = False
+        if event.button() != QtCore.Qt.LeftButton:
+            super().mousePressEvent(event)
+            return
+
+        neuron = self.get_neuron_at_pos(event.pos())
+        if not neuron:
+            self.dragged_neuron = None
+            self.dragging = False
+            super().mousePressEvent(event)
+            return
+
+        # --- neurogenesis-only drag rule ---
+        if self.is_neurogenesis_neuron(neuron):
+            self.dragged_neuron = neuron
+            self.dragging = True
+            self.drag_start_pos = event.pos()
+            self.update()
+        else:
+            # Core neuron: register click but no drag
+            self.dragged_neuron = neuron
+            self.dragging = False
+            self.drag_start_pos = None
+            self.update()
+
         super().mousePressEvent(event)
 
     def handle_neuron_clicked(self, neuron_name):
@@ -1787,10 +1847,12 @@ class BrainWidget(QtWidgets.QWidget):
         if hasattr(self, 'tooltip_manager'):
             self.tooltip_manager.show_tooltip_for_position(event)
 
+        # Only allow dragging neurogenesis neurons
         if self.dragging and self.dragged_neuron:
-            logical_pos = self._get_logical_coords(event.pos())
-            self.neuron_positions[self.dragged_neuron] = (logical_pos.x(), logical_pos.y())
-            self.update()
+            if self.is_neurogenesis_neuron(self.dragged_neuron):
+                logical_pos = self._get_logical_coords(event.pos())
+                self.neuron_positions[self.dragged_neuron] = (logical_pos.x(), logical_pos.y())
+                self.update()
 
         super().mouseMoveEvent(event)
 
@@ -1831,15 +1893,82 @@ class BrainWidget(QtWidgets.QWidget):
             is_click = False
             if self.dragged_neuron and self.drag_start_pos:
                 distance = (event.pos() - self.drag_start_pos).manhattanLength()
-                if distance < QtWidgets.QApplication.startDragDistance(): is_click = True
-            if is_click: self.neuronClicked.emit(self.dragged_neuron)
+                if distance < QtWidgets.QApplication.startDragDistance():
+                    is_click = True
+            if is_click:
+                self.neuronClicked.emit(self.dragged_neuron)
             self.dragging = False
             self.dragged_neuron = None
             self.drag_start_pos = None
             self.update()
-            # Apply repulsion forces to settle network after drag/click
-            self.apply_repulsion_force()
+            # Only apply repulsion to neurogenesis neurons
+            if hasattr(self, 'enhanced_neurogenesis'):
+                self.apply_repulsion_force()
         super().mouseReleaseEvent(event)
+
+    def draw_strength_multiplier(self, painter, scale):
+        """
+        Draw strength multipliers on neurons that have been strengthened.
+        Displays as "2.5x" above strengthened neurons with a badge.
+        """
+        if not hasattr(self, 'enhanced_neurogenesis'):
+            return
+        
+        current_time = time.time()
+        
+        for name, neuron in self.enhanced_neurogenesis.functional_neurons.items():
+            # Only show multiplier if > 1.0 (i.e., strengthened at least once)
+            # FIX: Check if neuron has strength_multiplier attribute before accessing it
+            if not hasattr(neuron, 'strength_multiplier'):
+                continue
+                
+            if neuron.strength_multiplier <= 1.0 or name not in self.neuron_positions:
+                continue
+            
+            pos = self.neuron_positions[name]
+            x, y = pos
+            
+            # Position ABOVE the neuron
+            label_y = y - 45 * scale
+            
+            # Format multiplier text
+            multiplier_text = f"{neuron.strength_multiplier:.1f}x"
+            
+            # Create font
+            font = QtGui.QFont()
+            font.setPointSize(int(9 * scale))
+            font.setBold(True)
+            painter.setFont(font)
+            
+            # Draw background circle/badge for visibility
+            font_metrics = painter.fontMetrics()
+            text_width = font_metrics.horizontalAdvance(multiplier_text)
+            badge_radius = max(12 * scale, (text_width / 2) + 5 * scale)
+            
+            painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 215, 0, 220)))  # Gold background
+            painter.setPen(QtGui.QPen(QtGui.QColor(139, 105, 20), 2))  # Dark gold border
+            painter.drawEllipse(QtCore.QPointF(x, label_y), badge_radius, badge_radius)
+            
+            # Draw text on top in black
+            painter.setPen(QtGui.QColor(0, 0, 0))
+            painter.drawText(
+                int(x - text_width / 2),
+                int(label_y - font_metrics.height() / 2),
+                int(text_width),
+                int(font_metrics.height()),
+                QtCore.Qt.AlignCenter,
+                multiplier_text
+            )
+            
+            # Add a small star icon to indicate strengthening
+            star_radius = 8 * scale
+            star_x = x + 20 * scale
+            star_y = y - 20 * scale
+            
+            painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 215, 0, 200)))
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 165, 0), 2))
+            painter.drawEllipse(QtCore.QPointF(star_x, star_y), star_radius, star_radius)
+
 
     def _is_click_on_neuron(self, point, neuron_pos, scale):
         neuron_x, neuron_y = neuron_pos

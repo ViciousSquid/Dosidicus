@@ -146,6 +146,35 @@ class StatisticsWindow(QtWidgets.QWidget):
         self.status_label.setStyleSheet(f"font-size:{status_font_size}px;")
         main_layout.addWidget(self.status_label)
 
+        # State indicator pills container (mirrors brain network view - can show multiple)
+        self.state_pills_container = QtWidgets.QWidget()
+        self.state_pills_layout = QtWidgets.QHBoxLayout(self.state_pills_container)
+        self.state_pills_layout.setSpacing(10)
+        self.state_pills_layout.setContentsMargins(0, 5, 0, 5)
+        self.state_pills_layout.addStretch()  # Center the pills
+        
+        # Create up to 3 pill labels (matching brain network view limit)
+        self.state_pills = []
+        for i in range(3):
+            pill = QtWidgets.QLabel()
+            pill.setAlignment(QtCore.Qt.AlignCenter)
+            pill.setMinimumHeight(30 if window_width <= 320 else 40)
+            pill.setStyleSheet("""
+                QLabel {
+                    color: white;
+                    font-size: 16px;
+                    font-weight: bold;
+                    border-radius: 5px;
+                    padding: 5px 10px;
+                }
+            """)
+            pill.hide()
+            self.state_pills.append(pill)
+            self.state_pills_layout.addWidget(pill)
+        
+        self.state_pills_layout.addStretch()  # Center the pills
+        main_layout.addWidget(self.state_pills_container)
+
         main_layout.addWidget(self.score_label)
 
         self.apply_button = QtWidgets.QPushButton("Apply Changes")
@@ -210,6 +239,59 @@ class StatisticsWindow(QtWidgets.QWidget):
                 if hasattr(self.squid, key):
                     box.set_value(getattr(self.squid, key))
             self.status_label.setText(f"Status: {self.squid.status}")
+            self._update_state_pill()
+
+    def _update_state_pill(self):
+        """Update the state indicator pills to match the brain network view states (up to 3)"""
+        if self.squid is None:
+            for pill in self.state_pills:
+                pill.hide()
+            return
+
+        # Collect all active states (matches brain_widget.py logic lines 1474-1494)
+        active_states = []
+        
+        # Check states in priority order
+        if getattr(self.squid, 'is_fleeing', False):
+            active_states.append(("Fleeing!", "rgb(220, 20, 60)"))  # Crimson
+        if getattr(self.squid, 'is_startled', False):
+            active_states.append(("Startled!", "rgb(255, 165, 0)"))  # Orange
+        if getattr(self.squid, 'pursuing_food', False):
+            active_states.append(("Pursuing Food", "rgb(60, 179, 113)"))  # Medium Sea Green
+        if getattr(self.squid, 'is_eating', False) or 'eating' in self.squid.status.lower():
+            active_states.append(("Eating", "rgb(46, 204, 113)"))  # Emerald
+        if getattr(self.squid, 'is_sleeping', False):
+            active_states.append(("Sleeping", "rgb(142, 68, 173)"))  # Purple
+        if 'rock' in self.squid.status.lower() or 'play' in self.squid.status.lower():
+            active_states.append(("Playing", "rgb(241, 196, 15)"))  # Sun Flower
+        if 'hiding' in self.squid.status.lower():
+            active_states.append(("Hiding", "rgb(22, 160, 133)"))  # Green Sea
+        if getattr(self.squid, 'anxiety', 0) > 70 or 'anxious' in self.squid.status.lower():
+            active_states.append(("Anxious", "rgb(231, 76, 60)"))  # Alizarin
+        if getattr(self.squid, 'curiosity', 0) > 80 or 'curious' in self.squid.status.lower():
+            active_states.append(("Curious", "rgb(52, 152, 219)"))  # Peter River
+        
+        # Display up to 3 states (matching brain network view limit)
+        states_to_show = active_states[:3]
+        
+        # Update each pill
+        for i, pill in enumerate(self.state_pills):
+            if i < len(states_to_show):
+                state_text, state_color = states_to_show[i]
+                pill.setText(state_text)
+                pill.setStyleSheet(f"""
+                    QLabel {{
+                        color: white;
+                        background-color: {state_color};
+                        font-size: 14px;
+                        font-weight: bold;
+                        border-radius: 5px;
+                        padding: 5px 10px;
+                    }}
+                """)
+                pill.show()
+            else:
+                pill.hide()
 
     def set_debug_mode(self, enabled):
         for key, box in self.stat_boxes.items():
