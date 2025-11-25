@@ -67,7 +67,7 @@ class SaveManager:
                     zf.writestr(f"{key}.json",
                                 json.dumps(data, indent=4, cls=DateTimeEncoder))
                 # 2) immutable squid UUID
-                zf.writestr("uuid.txt", save_data["game_state"]["squid"]["uuid"])
+                zf.writestr("uuid.txt", f"SquidSignature    {save_data['game_state']['squid']['uuid']}")
 
             if os.path.exists(target_path):
                 os.replace(target_path, target_path + ".old")
