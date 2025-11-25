@@ -8,8 +8,6 @@ import time
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, asdict
-from enum import Enum
 from pathlib import Path
 
 from PyQt5 import QtCore, QtWidgets, QtGui
@@ -30,185 +28,26 @@ _DS.font_size = lambda pt: max(8, _DS.scale(_scale_size(pt)))
 # Re-export the (now patched) class under its original name so UI code can see it
 DisplayScaling = _DS
 
+# Import achievement definitions from separate file
+from .achievements_data import (
+    Achievement,
+    UnlockedAchievement,
+    AchievementCategory,
+    ACHIEVEMENT_DEFINITIONS,
+    TIER_COLORS,
+    get_achievement,
+)
+
 
 # =============================================================================
 # PLUGIN METADATA - Required by PluginManager
 # =============================================================================
 
 PLUGIN_NAME = "Achievements"
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "2.0.0"
 PLUGIN_AUTHOR = "ViciousSquid"
 PLUGIN_DESCRIPTION = "Track milestones and unlock achievements as your squid grows"
 PLUGIN_REQUIRES = []  # No dependencies
-
-
-# =============================================================================
-# ACHIEVEMENT DEFINITIONS
-# =============================================================================
-
-class AchievementCategory(Enum):
-    FEEDING = "feeding"
-    NEUROGENESIS = "neurogenesis"
-    SLEEP = "sleep"
-    MILESTONES = "milestones"
-    EXPLORATION = "exploration"
-    SOCIAL = "social"
-    SECRET = "secret"
-
-
-@dataclass
-class Achievement:
-    id: str
-    name: str
-    description: str
-    icon: str = "🏆"
-    category: str = "milestones"
-    hidden: bool = False
-    points: int = 10
-    tier: int = 1
-    target_count: int = 1
-
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-
-@dataclass
-class UnlockedAchievement:
-    achievement_id: str
-    unlocked_at: str
-    progress: int = 0
-    notified: bool = False
-
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: dict) -> 'UnlockedAchievement':
-        return cls(**data)
-
-
-# Tier colors for UI
-TIER_COLORS = {
-    1: "#CD7F32",  # Bronze
-    2: "#C0C0C0",  # Silver
-    3: "#FFD700",  # Gold
-    4: "#E5E4E2",  # Platinum
-}
-
-# All achievement definitions
-ACHIEVEMENT_DEFINITIONS: Dict[str, Achievement] = {
-    # --- Feeding ---
-    "first_feeding": Achievement(
-        id="first_feeding", name="First Bite",
-        description="Feed the squid for the first time",
-        icon="🍽️", category="feeding", points=10, tier=1,
-    ),
-    "fed_10_times": Achievement(
-        id="fed_10_times", name="Regular Meals",
-        description="Feed the squid 10 times",
-        icon="🥄", category="feeding", points=15, tier=1, target_count=10,
-    ),
-    "fed_50_times": Achievement(
-        id="fed_50_times", name="Dedicated Caretaker",
-        description="Feed the squid 50 times",
-        icon="🍴", category="feeding", points=25, tier=2, target_count=50,
-    ),
-    "fed_100_times": Achievement(
-        id="fed_100_times", name="Master Chef",
-        description="Feed the squid 100 times",
-        icon="👨‍🍳", category="feeding", points=50, tier=3, target_count=100,
-    ),
-    "fed_500_times": Achievement(
-        id="fed_500_times", name="Culinary Legend",
-        description="Feed the squid 500 times",
-        icon="🌟", category="feeding", points=100, tier=4, target_count=500, hidden=True,
-    ),
-    # --- Neurogenesis ---
-    "first_neuron": Achievement(
-        id="first_neuron", name="Brain Spark",
-        description="Create the first neurogenesis neuron",
-        icon="🧠", category="neurogenesis", points=20, tier=1,
-    ),
-    "neurons_10": Achievement(
-        id="neurons_10", name="Neural Network",
-        description="Create 10 neurons through neurogenesis",
-        icon="🔮", category="neurogenesis", points=30, tier=2, target_count=10,
-    ),
-    "neurons_50": Achievement(
-        id="neurons_50", name="Expanding Mind",
-        description="Create 50 neurons through neurogenesis",
-        icon="💫", category="neurogenesis", points=50, tier=3, target_count=50,
-    ),
-    "first_neuron_levelup": Achievement(
-        id="first_neuron_levelup", name="Strengthened Synapse",
-        description="Level up a neuron for the first time",
-        icon="⚡", category="neurogenesis", points=15, tier=1,
-    ),
-    "neuron_max_level": Achievement(
-        id="neuron_max_level", name="Peak Performance",
-        description="Level a neuron to maximum strength",
-        icon="🌠", category="neurogenesis", points=40, tier=3,
-    ),
-    # --- Sleep ---
-    "first_sleep": Achievement(
-        id="first_sleep", name="Sweet Dreams",
-        description="The squid wakes from its first sleep",
-        icon="😴", category="sleep", points=10, tier=1,
-    ),
-    "slept_10_times": Achievement(
-        id="slept_10_times", name="Well Rested",
-        description="The squid has slept 10 times",
-        icon="🛏️", category="sleep", points=20, tier=2, target_count=10,
-    ),
-    "dream_state": Achievement(
-        id="dream_state", name="Deep Dreamer",
-        description="Squid entered REM sleep",
-        icon="💭", category="sleep", points=25, tier=2, hidden=True,
-    ),
-    # --- Milestones ---
-    "age_1_hour": Achievement(
-        id="age_1_hour", name="One Hour Old",
-        description="Squid reached 1 hour old",
-        icon="⏰", category="milestones", points=15, tier=1,
-    ),
-    "age_10_hours": Achievement(
-        id="age_10_hours", name="Growing Up",
-        description="Squid reached 10 hours old",
-        icon="📅", category="milestones", points=30, tier=2,
-    ),
-    "age_24_hours": Achievement(
-        id="age_24_hours", name="One Day Wonder",
-        description="Squid survived for 24 hours",
-        icon="🎂", category="milestones", points=50, tier=3,
-    ),
-    "age_1_week": Achievement(
-        id="age_1_week", name="Week Veteran",
-        description="Squid has lived for one week",
-        icon="🏅", category="milestones", points=100, tier=4, hidden=True,
-    ),
-    "happiness_100": Achievement(
-        id="happiness_100", name="Pure Bliss",
-        description="Reach 100% happiness",
-        icon="😄", category="milestones", points=20, tier=2,
-    ),
-    "all_stats_high": Achievement(
-        id="all_stats_high", name="Perfect Balance",
-        description="All stats above 80% simultaneously",
-        icon="⚖️", category="milestones", points=40, tier=3,
-    ),
-    # --- Exploration ---
-    "first_poop_throw": Achievement(
-        id="first_poop_throw", name="Mischief Maker",
-        description="Squid threw a poop for the first time",
-        icon="💩", category="exploration", points=10, tier=1,
-    ),
-    # --- Secret ---
-    "night_owl": Achievement(
-        id="night_owl", name="Night Owl",
-        description="Play between midnight and 4 AM",
-        icon="🦉", category="secret", points=15, tier=2, hidden=True,
-    ),
-}
 
 
 # =============================================================================
@@ -216,7 +55,7 @@ ACHIEVEMENT_DEFINITIONS: Dict[str, Achievement] = {
 # =============================================================================
 
 class AchievementNotification(QtWidgets.QWidget):
-    """Toast notification for achievement unlocks"""
+    """Toast notification for achievement unlocks - LARGER VERSION with description"""
 
     def __init__(self, achievement: Achievement, parent=None):
         super().__init__(parent)
@@ -231,51 +70,87 @@ class AchievementNotification(QtWidgets.QWidget):
             QtCore.Qt.Tool
         )
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
-        # 1.4× larger base geometry
-        self.setFixedSize(DisplayScaling.scale(448), DisplayScaling.scale(112))
+        
+        # LARGER toast to fit description - increased height significantly
+        self.setFixedSize(DisplayScaling.scale(520), DisplayScaling.scale(160))
 
         container = QtWidgets.QFrame(self)
-        container.setFixedSize(DisplayScaling.scale(420), DisplayScaling.scale(98))
-        container.move(DisplayScaling.scale(14), DisplayScaling.scale(7))
+        container.setFixedSize(DisplayScaling.scale(490), DisplayScaling.scale(145))
+        container.move(DisplayScaling.scale(15), DisplayScaling.scale(7))
 
+        # Simple dark rectangle background
+        tier_color = TIER_COLORS.get(self.achievement.tier, "#CD7F32")
         container.setStyleSheet("""
             QFrame {
-                background-color: rgb(25, 25, 25);
+                background: rgb(30, 30, 35);
                 border: none;
                 border-radius: 8px;
             }
         """)
 
         layout = QtWidgets.QHBoxLayout(container)
-        layout.setContentsMargins(DisplayScaling.scale(14),
-                                  DisplayScaling.scale(7),
-                                  DisplayScaling.scale(14),
-                                  DisplayScaling.scale(7))
+        layout.setContentsMargins(
+            DisplayScaling.scale(16),
+            DisplayScaling.scale(12),
+            DisplayScaling.scale(16),
+            DisplayScaling.scale(12)
+        )
+        layout.setSpacing(DisplayScaling.scale(14))
 
+        # Icon - larger
         icon_label = QtWidgets.QLabel(self.achievement.icon)
-        icon_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(45)}px; background: transparent; color: white;")
-        icon_label.setFixedWidth(DisplayScaling.scale(70))   # give icon a bit more room
+        icon_label.setStyleSheet(f"""
+            font-size: {DisplayScaling.font_size(52)}px; 
+            background: transparent; 
+            color: white;
+        """)
+        icon_label.setFixedWidth(DisplayScaling.scale(80))
+        icon_label.setAlignment(QtCore.Qt.AlignCenter)
         layout.addWidget(icon_label)
 
+        # Text section
         text_layout = QtWidgets.QVBoxLayout()
-        text_layout.setSpacing(DisplayScaling.scale(3))
+        text_layout.setSpacing(DisplayScaling.scale(4))
 
+        # Header "Achievement Unlocked!"
         header = QtWidgets.QLabel("Achievement Unlocked!")
-        header.setStyleSheet(f"color: white; "
-                             f"font-size: {DisplayScaling.font_size(15)}px; "
-                             f"font-weight: bold; background: transparent;")
+        header.setStyleSheet(f"""
+            color: {tier_color}; 
+            font-size: {DisplayScaling.font_size(14)}px; 
+            font-weight: bold; 
+            background: transparent;
+        """)
         text_layout.addWidget(header)
 
+        # Achievement name
         name_label = QtWidgets.QLabel(self.achievement.name)
-        name_label.setStyleSheet(f"color: white; "
-                                 f"font-size: {DisplayScaling.font_size(20)}px; "
-                                 f"font-weight: bold; background: transparent;")
+        name_label.setStyleSheet(f"""
+            color: white; 
+            font-size: {DisplayScaling.font_size(22)}px; 
+            font-weight: bold; 
+            background: transparent;
+        """)
         text_layout.addWidget(name_label)
 
+        # Achievement DESCRIPTION - the key addition!
+        desc_label = QtWidgets.QLabel(self.achievement.description)
+        desc_label.setStyleSheet(f"""
+            color: #cccccc; 
+            font-size: {DisplayScaling.font_size(13)}px; 
+            background: transparent;
+        """)
+        desc_label.setWordWrap(True)
+        desc_label.setMaximumWidth(DisplayScaling.scale(320))
+        text_layout.addWidget(desc_label)
+
+        # Points earned
         points_label = QtWidgets.QLabel(f"+{self.achievement.points} points")
-        points_label.setStyleSheet(f"color: #aaa; "
-                                   f"font-size: {DisplayScaling.font_size(14)}px; "
-                                   f"background: transparent;")
+        points_label.setStyleSheet(f"""
+            color: {tier_color}; 
+            font-size: {DisplayScaling.font_size(12)}px; 
+            font-weight: bold;
+            background: transparent;
+        """)
         text_layout.addWidget(points_label)
 
         layout.addLayout(text_layout)
@@ -300,7 +175,7 @@ class AchievementNotification(QtWidgets.QWidget):
         self.display_timer.setSingleShot(True)
         self.display_timer.timeout.connect(self.fade_out.start)
 
-    def show_notification(self, duration_ms=3500):
+    def show_notification(self, duration_ms=4000):
         self.show()
         self.fade_in.start()
         self.display_timer.start(duration_ms)
@@ -313,7 +188,7 @@ class AchievementsWindow(QtWidgets.QDialog):
         super().__init__(parent)
         self.plugin = plugin
         self.setWindowTitle(f"🏆 {PLUGIN_NAME}")
-        self.setMinimumSize(DisplayScaling.scale(500), DisplayScaling.scale(600))
+        self.setMinimumSize(DisplayScaling.scale(550), DisplayScaling.scale(650))
         self._setup_ui()
 
     def _setup_ui(self):
@@ -352,7 +227,9 @@ class AchievementsWindow(QtWidgets.QDialog):
         tabs = QtWidgets.QTabWidget()
         tabs.addTab(self._create_list(None), "All")
         for cat in AchievementCategory:
-            tabs.addTab(self._create_list(cat.value), cat.value.title())
+            cat_achievements = [a for a in ACHIEVEMENT_DEFINITIONS.values() if a.category == cat.value]
+            if cat_achievements:  # Only add tab if category has achievements
+                tabs.addTab(self._create_list(cat.value), cat.value.title())
         layout.addWidget(tabs)
 
     def _create_list(self, category_filter: Optional[str]) -> QtWidgets.QScrollArea:
@@ -440,11 +317,20 @@ class AchievementsPlugin:
         self.progress: Dict[str, int] = {}
         self.statistics: Dict[str, int] = {}
 
+        # Timers
         self.age_check_timer: Optional[QtCore.QTimer] = None
         self.stat_check_timer: Optional[QtCore.QTimer] = None
         self.notification_timer: Optional[QtCore.QTimer] = None
         self.notification_queue: List[Achievement] = []
         self.current_notification: Optional[AchievementNotification] = None
+
+        # Tracking for timed achievements
+        self.cleanliness_high_since: Optional[float] = None  # For germaphobe
+        self.anxiety_low_since: Optional[float] = None  # For zen_master
+        self.max_speed_since: Optional[float] = None  # For speed_demon
+        self.health_was_critical: bool = False  # For comeback_kid
+        self.weekend_saturday: bool = False  # For weekend_warrior
+        self.weekend_sunday: bool = False
 
         self.parent_window: Optional[QtWidgets.QMainWindow] = None
         self.is_setup = False
@@ -455,10 +341,9 @@ class AchievementsPlugin:
     #  Write unlock to text file only
     # ----------------------------------------------------------
     def _log_unlock_to_text_file(self, ach: Achievement) -> None:
-        """Append 'ID | long-date | HHMMSS | name' to achievements_log.txt in the same folder as the json save."""
+        """Append 'ID | long-date | HHMMSS | name' to achievements_log.txt"""
         try:
             log_path = Path(self._get_save_path()).with_name("achievements_log.txt")
-            # long form date + HHMMSS
             time_stamp = datetime.now().strftime("%A, %B %d, %Y @ %H%M%S")
             line = f"{ach.id} | {time_stamp} | {ach.name}\n"
             with log_path.open("a", encoding="utf-8") as fh:
@@ -503,7 +388,7 @@ class AchievementsPlugin:
         # Setup timers
         self._setup_timers()
 
-        # Subscribe to plugin manager hooks (more reliable than method hooking)
+        # Subscribe to plugin manager hooks
         self._subscribe_to_hooks()
 
         # Also try direct method hooks as backup
@@ -521,10 +406,24 @@ class AchievementsPlugin:
             return
         
         hook_subscriptions = [
+            # Original hooks
             ("on_feed", self._hook_on_feed),
             ("on_wake", self._hook_on_wake),
             ("on_sleep", self._hook_on_sleep),
             ("on_neurogenesis", self._hook_on_neurogenesis),
+            # New hooks for expanded achievements
+            ("on_clean", self._hook_on_clean),
+            ("on_medicine", self._hook_on_medicine),
+            ("on_rock_pickup", self._hook_on_rock_pickup),
+            ("on_rock_throw", self._hook_on_rock_throw),
+            ("on_decoration_interaction", self._hook_on_decoration_interaction),
+            ("on_ink_cloud", self._hook_on_ink_cloud),
+            ("on_startle", self._hook_on_startle),
+            ("on_memory_created", self._hook_on_memory_created),
+            ("on_memory_to_long_term", self._hook_on_memory_to_long_term),
+            ("on_curiosity_change", self._hook_on_curiosity_change),
+            ("on_anxiety_change", self._hook_on_anxiety_change),
+            ("on_speed_change", self._hook_on_speed_change),
         ]
         
         for hook_name, callback in hook_subscriptions:
@@ -532,87 +431,460 @@ class AchievementsPlugin:
                 if hasattr(self.plugin_manager, 'subscribe_to_hook'):
                     result = self.plugin_manager.subscribe_to_hook(hook_name, PLUGIN_NAME, callback)
                     if self.logger:
-                        self.logger.info(f"Subscribed to hook '{hook_name}': {result}")
+                        self.logger.debug(f"Subscribed to hook '{hook_name}': {result}")
             except Exception as e:
                 if self.logger:
                     self.logger.warning(f"Could not subscribe to hook '{hook_name}': {e}")
 
+    # ----------------------------------------------------------
+    # Hook Callbacks
+    # ----------------------------------------------------------
+    
     def _hook_on_feed(self, **kwargs):
-        """Called via plugin manager hook when squid is fed"""
-        if self.logger:
-            self.logger.info(f"Hook on_feed triggered! kwargs={kwargs}")
         self.on_squid_fed()
 
     def _hook_on_wake(self, **kwargs):
-        """Called via plugin manager hook when squid wakes"""
-        if self.logger:
-            self.logger.info(f"Hook on_wake triggered!")
         self.on_squid_woke()
 
     def _hook_on_sleep(self, **kwargs):
-        """Called via plugin manager hook when squid sleeps"""
-        if self.logger:
-            self.logger.info(f"Hook on_sleep triggered!")
-        # Sleep achievement triggers on wake, not on sleep start
+        pass  # Sleep achievement triggers on wake
 
     def _hook_on_neurogenesis(self, **kwargs):
-        """Called via plugin manager hook when neurogenesis occurs"""
-        if self.logger:
-            self.logger.info(f"Hook on_neurogenesis triggered!")
         self.on_neuron_created()
 
-    def enable(self) -> bool:
-        """Called when plugin is enabled"""
-        if self.logger:
-            self.logger.info(f"{PLUGIN_NAME} enable() called. is_setup={self.is_setup}")
-        
-        # If not setup yet, that's okay - setup() will be called by plugin manager first
-        # Just make sure timers are created
-        if not self.age_check_timer:
-            self._setup_timers()
-        
-        # Re-acquire squid reference in case it changed
-        if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'squid'):
-            if self.squid != self.tamagotchi_logic.squid:
-                self.squid = self.tamagotchi_logic.squid
-                self._install_hooks()  # Reinstall hooks on new squid
-                if self.logger:
-                    self.logger.info(f"Re-acquired squid reference and reinstalled hooks")
+    def _hook_on_clean(self, **kwargs):
+        self.on_tank_cleaned()
 
-        # Start timers
-        if self.age_check_timer and not self.age_check_timer.isActive():
-            self.age_check_timer.start(60000)
-            if self.logger:
-                self.logger.info("Age check timer started")
-                
-        if self.stat_check_timer and not self.stat_check_timer.isActive():
-            self.stat_check_timer.start(5000)
-            if self.logger:
-                self.logger.info("Stat check timer started")
+    def _hook_on_medicine(self, **kwargs):
+        self.on_medicine_given()
+
+    def _hook_on_rock_pickup(self, **kwargs):
+        self.on_rock_picked_up()
+
+    def _hook_on_rock_throw(self, **kwargs):
+        self.on_rock_thrown()
+
+    def _hook_on_decoration_interaction(self, **kwargs):
+        decoration = kwargs.get('decoration')
+        interaction_type = kwargs.get('type', 'push')
+        self.on_decoration_interacted(decoration, interaction_type)
+
+    def _hook_on_ink_cloud(self, **kwargs):
+        self.on_ink_cloud_released()
+
+    def _hook_on_startle(self, **kwargs):
+        self.on_squid_startled()
+
+    def _hook_on_memory_created(self, **kwargs):
+        self.on_memory_formed()
+
+    def _hook_on_memory_to_long_term(self, **kwargs):
+        self.on_memory_promoted()
+
+    def _hook_on_curiosity_change(self, **kwargs):
+        new_value = kwargs.get('new_value', 0)
+        if new_value >= 100:
+            self.unlock_achievement("curiosity_100")
+
+    def _hook_on_anxiety_change(self, **kwargs):
+        new_value = kwargs.get('new_value', 0)
+        if new_value >= 100:
+            self.unlock_achievement("nervous_wreck")
+        # Track for zen_master
+        if new_value < 10:
+            if self.anxiety_low_since is None:
+                self.anxiety_low_since = time.time()
+        else:
+            self.anxiety_low_since = None
+
+    def _hook_on_speed_change(self, **kwargs):
+        speed = kwargs.get('speed', 1)
+        max_speed = kwargs.get('max_speed', 4)
+        if speed >= max_speed:
+            if self.max_speed_since is None:
+                self.max_speed_since = time.time()
+        else:
+            self.max_speed_since = None
+
+    # ----------------------------------------------------------
+    # Event Handlers
+    # ----------------------------------------------------------
+
+    def on_squid_fed(self):
+        self._increment_stat("times_fed")
+        count = self.statistics.get("times_fed", 0)
+        if count == 1:
+            self.unlock_achievement("first_feeding")
+        if count >= 10:
+            self.unlock_achievement("fed_10_times")
+        if count >= 50:
+            self.unlock_achievement("fed_50_times")
+        if count >= 100:
+            self.unlock_achievement("fed_100_times")
+        if count >= 500:
+            self.unlock_achievement("fed_500_times")
+        for aid in ["fed_10_times", "fed_50_times", "fed_100_times", "fed_500_times"]:
+            self._update_progress(aid, count)
+
+    def on_squid_woke(self):
+        self._increment_stat("times_slept")
+        count = self.statistics.get("times_slept", 0)
+        if count == 1:
+            self.unlock_achievement("first_sleep")
+        if count >= 10:
+            self.unlock_achievement("slept_10_times")
+        self._update_progress("slept_10_times", count)
+
+    def on_neuron_created(self):
+        self._increment_stat("neurons_created")
+        count = self.statistics.get("neurons_created", 0)
+        if count == 1:
+            self.unlock_achievement("first_neuron")
+        if count >= 10:
+            self.unlock_achievement("neurons_10")
+        if count >= 50:
+            self.unlock_achievement("neurons_50")
+        if count >= 100:
+            self.unlock_achievement("neurons_100")
+        self._update_progress("neurons_10", count)
+        self._update_progress("neurons_50", count)
+        self._update_progress("neurons_100", count)
+
+    def on_neuron_leveled(self):
+        self._increment_stat("neurons_leveled")
+        if self.statistics.get("neurons_leveled", 0) == 1:
+            self.unlock_achievement("first_neuron_levelup")
+
+    def on_poop_thrown(self):
+        self._increment_stat("poops_thrown")
+        if self.statistics.get("poops_thrown", 0) == 1:
+            self.unlock_achievement("first_poop_throw")
+
+    def on_tank_cleaned(self):
+        self._increment_stat("times_cleaned")
+        count = self.statistics.get("times_cleaned", 0)
+        if count == 1:
+            self.unlock_achievement("first_clean")
+        if count >= 25:
+            self.unlock_achievement("cleaned_25_times")
+        self._update_progress("cleaned_25_times", count)
+
+    def on_medicine_given(self):
+        self._increment_stat("times_medicated")
+        count = self.statistics.get("times_medicated", 0)
+        if count == 1:
+            self.unlock_achievement("first_medicine")
+        if count >= 10:
+            self.unlock_achievement("medicine_10_times")
+        self._update_progress("medicine_10_times", count)
+        
+        # Check for comeback_kid - track if health was critical before medicine
+        if self.health_was_critical and self.squid:
+            health = getattr(self.squid, 'health', 100)
+            if health >= 100:
+                self.unlock_achievement("comeback_kid")
+                self.health_was_critical = False
+
+    def on_rock_picked_up(self):
+        self._increment_stat("rocks_picked")
+        count = self.statistics.get("rocks_picked", 0)
+        if count == 1:
+            self.unlock_achievement("first_rock_pickup")
+        if count >= 10:
+            self.unlock_achievement("rocks_picked_10")
+        if count >= 50:
+            self.unlock_achievement("rocks_picked_50")
+        self._update_progress("rocks_picked_10", count)
+        self._update_progress("rocks_picked_50", count)
+        # Also count as object investigated
+        self._on_object_investigated()
+
+    def on_rock_thrown(self):
+        self._increment_stat("rocks_thrown")
+        count = self.statistics.get("rocks_thrown", 0)
+        if count == 1:
+            self.unlock_achievement("first_rock_throw")
+        if count >= 25:
+            self.unlock_achievement("rocks_thrown_25")
+        if count >= 100:
+            self.unlock_achievement("rocks_thrown_100")
+        self._update_progress("rocks_thrown_25", count)
+        self._update_progress("rocks_thrown_100", count)
+
+    def on_decoration_interacted(self, decoration=None, interaction_type='push'):
+        """Handle decoration interactions (push, investigate, etc.)"""
+        # Track push interactions
+        if interaction_type == 'push':
+            self._increment_stat("decorations_pushed")
+            count = self.statistics.get("decorations_pushed", 0)
+            if count == 1:
+                self.unlock_achievement("first_decoration_push")
+            if count >= 10:
+                self.unlock_achievement("decorations_pushed_10")
+            if count >= 50:
+                self.unlock_achievement("decorations_pushed_50")
+            self._update_progress("decorations_pushed_10", count)
+            self._update_progress("decorations_pushed_50", count)
+        
+        # Track plant-specific interactions
+        if decoration and hasattr(decoration, 'category'):
+            if decoration.category == 'plant':
+                self._increment_stat("plants_interacted")
+                count = self.statistics.get("plants_interacted", 0)
+                if count == 1:
+                    self.unlock_achievement("first_plant_interact")
+                if count >= 10:
+                    self.unlock_achievement("plants_interacted_10")
+                if count >= 50:
+                    self.unlock_achievement("plants_interacted_50")
+                self._update_progress("plants_interacted_10", count)
+                self._update_progress("plants_interacted_50", count)
+        
+        # Count as object investigated
+        self._on_object_investigated()
+
+    def _on_object_investigated(self):
+        """Track unique object investigations"""
+        self._increment_stat("objects_investigated")
+        count = self.statistics.get("objects_investigated", 0)
+        if count >= 25:
+            self.unlock_achievement("objects_investigated_25")
+        if count >= 100:
+            self.unlock_achievement("objects_investigated_100")
+        self._update_progress("objects_investigated_25", count)
+        self._update_progress("objects_investigated_100", count)
+
+    def on_ink_cloud_released(self):
+        self._increment_stat("ink_clouds")
+        count = self.statistics.get("ink_clouds", 0)
+        if count == 1:
+            self.unlock_achievement("first_ink_cloud")
+        if count >= 20:
+            self.unlock_achievement("ink_clouds_20")
+        self._update_progress("ink_clouds_20", count)
+
+    def on_squid_startled(self):
+        self._increment_stat("times_startled")
+        if self.statistics.get("times_startled", 0) == 1:
+            self.unlock_achievement("first_startle")
+
+    def on_memory_formed(self):
+        self._increment_stat("memories_formed")
+        count = self.statistics.get("memories_formed", 0)
+        if count == 1:
+            self.unlock_achievement("first_memory")
+        if count >= 50:
+            self.unlock_achievement("memories_50")
+        self._update_progress("memories_50", count)
+
+    def on_memory_promoted(self):
+        self._increment_stat("memories_promoted")
+        if self.statistics.get("memories_promoted", 0) == 1:
+            self.unlock_achievement("memory_long_term")
+
+    def on_brain_tool_opened(self):
+        """Called when brain visualization is opened"""
+        if "brain_surgeon" not in self.unlocked:
+            self.unlock_achievement("brain_surgeon")
+
+    # ----------------------------------------------------------
+    # Periodic Checks
+    # ----------------------------------------------------------
+
+    def _check_age_achievements(self):
+        if not self.squid:
+            return
+        age_hours = 0
+        if hasattr(self.squid, 'birth_time'):
+            age_hours = (time.time() - self.squid.birth_time) / 3600
+        elif hasattr(self.squid, 'age_hours'):
+            age_hours = self.squid.age_hours
+
+        if age_hours >= 1:
+            self.unlock_achievement("age_1_hour")
+        if age_hours >= 10:
+            self.unlock_achievement("age_10_hours")
+        if age_hours >= 24:
+            self.unlock_achievement("age_24_hours")
+        if age_hours >= 168:  # 1 week
+            self.unlock_achievement("age_1_week")
+        if age_hours >= 720:  # 30 days
+            self.unlock_achievement("age_1_month")
+
+        # Time-of-day achievements
+        hour = datetime.now().hour
+        if 0 <= hour < 4:
+            self.unlock_achievement("night_owl")
+        if 5 <= hour < 7:
+            self.unlock_achievement("early_bird")
+        
+        # Weekend warrior
+        day = datetime.now().weekday()
+        if day == 5:  # Saturday
+            self.weekend_saturday = True
+        elif day == 6:  # Sunday
+            self.weekend_sunday = True
+        if self.weekend_saturday and self.weekend_sunday:
+            self.unlock_achievement("weekend_warrior")
+
+    def _check_stat_achievements(self):
+        if not self.squid:
+            return
+        
+        # Happiness
+        if hasattr(self.squid, 'happiness') and self.squid.happiness >= 100:
+            self.unlock_achievement("happiness_100")
+
+        # All stats high
+        stats = ['happiness', 'hunger', 'energy', 'health']
+        all_high = all(getattr(self.squid, s, 0) >= 80 for s in stats if hasattr(self.squid, s))
+        if all_high:
+            self.unlock_achievement("all_stats_high")
+        
+        # Check health for comeback_kid tracking
+        if hasattr(self.squid, 'health'):
+            if self.squid.health < 20:
+                self.health_was_critical = True
+            elif self.squid.health >= 100 and self.health_was_critical:
+                self.unlock_achievement("comeback_kid")
+                self.health_was_critical = False
+        
+        # Cleanliness tracking for germaphobe
+        if hasattr(self.squid, 'cleanliness'):
+            if self.squid.cleanliness >= 90:
+                if self.cleanliness_high_since is None:
+                    self.cleanliness_high_since = time.time()
+                elif time.time() - self.cleanliness_high_since >= 3600:  # 1 hour
+                    self.unlock_achievement("germaphobe")
+            else:
+                self.cleanliness_high_since = None
+        
+        # Anxiety tracking for zen_master
+        if hasattr(self.squid, 'anxiety'):
+            if self.squid.anxiety < 10:
+                if self.anxiety_low_since is None:
+                    self.anxiety_low_since = time.time()
+                elif time.time() - self.anxiety_low_since >= 1800:  # 30 minutes
+                    self.unlock_achievement("zen_master")
+            else:
+                self.anxiety_low_since = None
+        
+        # Speed demon check
+        if self.max_speed_since is not None:
+            if time.time() - self.max_speed_since >= 600:  # 10 minutes
+                self.unlock_achievement("speed_demon")
+        
+        # Completionist check
+        unlocked_count = len(self.unlocked)
+        if "completionist" not in self.unlocked and unlocked_count >= 30:
+            self.unlock_achievement("completionist")
+
+    # ----------------------------------------------------------
+    # Core Methods
+    # ----------------------------------------------------------
+
+    def unlock_achievement(self, achievement_id: str, silent: bool = False) -> bool:
+        if achievement_id in self.unlocked:
+            return False
+        if achievement_id not in ACHIEVEMENT_DEFINITIONS:
+            return False
+
+        ach = ACHIEVEMENT_DEFINITIONS[achievement_id]
+        if ach.target_count > 1 and self.progress.get(achievement_id, 0) < ach.target_count:
+            return False
+
+        self.unlocked[achievement_id] = UnlockedAchievement(
+            achievement_id=achievement_id,
+            unlocked_at=datetime.now().isoformat(),
+            progress=ach.target_count,
+            notified=silent
+        )
 
         if self.logger:
-            self.logger.info(f"{PLUGIN_NAME} enabled successfully")
+            self.logger.info(f"🏆 Unlocked: {ach.name}")
+
+        self._log_unlock_to_text_file(ach)
+
+        if not silent:
+            self._queue_notification(ach)
+
+        if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'show_message'):
+            self.tamagotchi_logic.show_message(f"🏆")
+
         return True
 
-    def disable(self):
-        """Called when plugin is disabled"""
-        if self.logger:
-            self.logger.info(f"{PLUGIN_NAME} disable() called")
-            
-        if self.age_check_timer:
-            self.age_check_timer.stop()
-        if self.stat_check_timer:
-            self.stat_check_timer.stop()
-        if self.notification_timer:
-            self.notification_timer.stop()
-        
-        if self.logger:
-            self.logger.info(f"{PLUGIN_NAME} disabled")
+    def manually_trigger(self, event_name: str):
+        handlers = {
+            "fed": self.on_squid_fed,
+            "woke": self.on_squid_woke,
+            "neuron_created": self.on_neuron_created,
+            "neuron_leveled": self.on_neuron_leveled,
+            "poop_thrown": self.on_poop_thrown,
+            "cleaned": self.on_tank_cleaned,
+            "medicine": self.on_medicine_given,
+            "rock_pickup": self.on_rock_picked_up,
+            "rock_throw": self.on_rock_thrown,
+            "ink_cloud": self.on_ink_cloud_released,
+            "startle": self.on_squid_startled,
+            "memory_formed": self.on_memory_formed,
+            "memory_promoted": self.on_memory_promoted,
+            "brain_opened": self.on_brain_tool_opened,
+            "neuron_max_level": lambda: self.unlock_achievement("neuron_max_level"),
+            "dream_state": lambda: self.unlock_achievement("dream_state"),
+        }
+        if event_name in handlers:
+            handlers[event_name]()
+        else:
+            self.unlock_achievement(event_name)
 
-    def shutdown(self):
-        """Called on plugin unload"""
-        self.disable()
-        self._uninstall_hooks()
+    def get_total_points(self) -> int:
+        return sum(
+            ACHIEVEMENT_DEFINITIONS[a.achievement_id].points
+            for a in self.unlocked.values()
+            if a.achievement_id in ACHIEVEMENT_DEFINITIONS
+        )
+
+    def _increment_stat(self, name: str, amount: int = 1):
+        self.statistics[name] = self.statistics.get(name, 0) + amount
+
+    def _update_progress(self, achievement_id: str, value: int):
+        self.progress[achievement_id] = value
+
+    # ----------------------------------------------------------
+    # Notifications
+    # ----------------------------------------------------------
+
+    def _queue_notification(self, achievement: Achievement):
+        self.notification_queue.append(achievement)
+        if not self.notification_timer.isActive():
+            self._show_next_notification()
+
+    def _show_next_notification(self):
+        if self.current_notification:
+            self.current_notification.close()
+            self.current_notification = None
+
+        if not self.notification_queue:
+            self.notification_timer.stop()
+            return
+
+        ach = self.notification_queue.pop(0)
+        self.current_notification = AchievementNotification(ach, self.parent_window)
+
+        if self.parent_window:
+            geo = self.parent_window.geometry()
+            x = geo.x() + DisplayScaling.scale(20)
+            y = geo.y() + DisplayScaling.scale(20)
+            self.current_notification.move(x, y)
+
+        self.current_notification.show_notification()
+
+        if self.notification_queue:
+            self.notification_timer.start(4500)  # Slightly longer for reading description
+
+    # ----------------------------------------------------------
+    # Timers & Hooks Setup
+    # ----------------------------------------------------------
 
     def _setup_timers(self):
         self.age_check_timer = QtCore.QTimer()
@@ -625,7 +897,7 @@ class AchievementsPlugin:
         self.notification_timer.timeout.connect(self._show_next_notification)
 
     def _install_hooks(self):
-        """Hook into game events"""
+        """Hook into game events via method wrapping"""
         if self.logger:
             self.logger.info(f"Installing hooks... squid={self.squid is not None}")
         
@@ -641,7 +913,7 @@ class AchievementsPlugin:
             if hasattr(self.squid, 'eat') and 'eat' not in self._original_methods:
                 self._original_methods['eat'] = self.squid.eat
                 original_eat = self._original_methods['eat']
-                plugin_self = self  # Capture reference
+                plugin_self = self
                 
                 def hooked_eat(*args, **kwargs):
                     result = original_eat(*args, **kwargs)
@@ -715,6 +987,24 @@ class AchievementsPlugin:
                     pm.throw_poop = hooked_throw
                     hooks_installed.append('throw_poop')
 
+            # Hook push_decoration on squid
+            if hasattr(self.squid, 'push_decoration') and 'push_decoration' not in self._original_methods:
+                self._original_methods['push_decoration'] = self.squid.push_decoration
+                original_push = self._original_methods['push_decoration']
+                plugin_self = self
+                
+                def hooked_push(decoration, direction):
+                    result = original_push(decoration, direction)
+                    try:
+                        plugin_self.on_decoration_interacted(decoration, 'push')
+                    except Exception as e:
+                        if plugin_self.logger:
+                            plugin_self.logger.error(f"Error in on_decoration_interacted: {e}")
+                    return result
+                
+                self.squid.push_decoration = hooked_push
+                hooks_installed.append('push_decoration')
+
             if self.logger:
                 self.logger.info(f"Hooks installed: {hooks_installed}")
 
@@ -728,191 +1018,63 @@ class AchievementsPlugin:
                 self.squid.eat = self._original_methods['eat']
             if 'wake_up' in self._original_methods and self.squid:
                 self.squid.wake_up = self._original_methods['wake_up']
+            if 'push_decoration' in self._original_methods and self.squid:
+                self.squid.push_decoration = self._original_methods['push_decoration']
         except:
             pass
         self._original_methods.clear()
 
-    # --- Event Handlers ---
+    # ----------------------------------------------------------
+    # Enable / Disable / Shutdown
+    # ----------------------------------------------------------
 
-    def on_squid_fed(self):
+    def enable(self) -> bool:
         if self.logger:
-            self.logger.info("")
-        self._increment_stat("times_fed")
-        count = self.statistics.get("times_fed", 0)
-        if self.logger:
-            self.logger.info(f"")
-        if count == 1:
-            self.unlock_achievement("first_feeding")
-        if count >= 10:
-            self.unlock_achievement("fed_10_times")
-        if count >= 50:
-            self.unlock_achievement("fed_50_times")
-        if count >= 100:
-            self.unlock_achievement("fed_100_times")
-        if count >= 500:
-            self.unlock_achievement("fed_500_times")
-        for aid in ["fed_10_times", "fed_50_times", "fed_100_times", "fed_500_times"]:
-            self._update_progress(aid, count)
+            self.logger.info(f"{PLUGIN_NAME} enable() called. is_setup={self.is_setup}")
+        
+        if not self.age_check_timer:
+            self._setup_timers()
+        
+        if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'squid'):
+            if self.squid != self.tamagotchi_logic.squid:
+                self.squid = self.tamagotchi_logic.squid
+                self._install_hooks()
+                if self.logger:
+                    self.logger.info(f"Re-acquired squid reference and reinstalled hooks")
 
-    def on_squid_woke(self):
-        self._increment_stat("times_slept")
-        count = self.statistics.get("times_slept", 0)
-        if count == 1:
-            self.unlock_achievement("first_sleep")
-        if count >= 10:
-            self.unlock_achievement("slept_10_times")
-        self._update_progress("slept_10_times", count)
-
-    def on_neuron_created(self):
-        self._increment_stat("neurons_created")
-        count = self.statistics.get("neurons_created", 0)
-        if count == 1:
-            self.unlock_achievement("first_neuron")
-        if count >= 10:
-            self.unlock_achievement("neurons_10")
-        if count >= 50:
-            self.unlock_achievement("neurons_50")
-        self._update_progress("neurons_10", count)
-        self._update_progress("neurons_50", count)
-
-    def on_neuron_leveled(self):
-        self._increment_stat("neurons_leveled")
-        if self.statistics.get("neurons_leveled", 0) == 1:
-            self.unlock_achievement("first_neuron_levelup")
-
-    def on_poop_thrown(self):
-        self._increment_stat("poops_thrown")
-        if self.statistics.get("poops_thrown", 0) == 1:
-            self.unlock_achievement("first_poop_throw")
-
-    def _check_age_achievements(self):
-        if not self.squid:
-            return
-        age_hours = 0
-        if hasattr(self.squid, 'birth_time'):
-            age_hours = (time.time() - self.squid.birth_time) / 3600
-        elif hasattr(self.squid, 'age_hours'):
-            age_hours = self.squid.age_hours
-
-        if age_hours >= 1:
-            self.unlock_achievement("age_1_hour")
-        if age_hours >= 10:
-            self.unlock_achievement("age_10_hours")
-        if age_hours >= 24:
-            self.unlock_achievement("age_24_hours")
-        if age_hours >= 168:
-            self.unlock_achievement("age_1_week")
-
-        if 0 <= datetime.now().hour < 4:
-            self.unlock_achievement("night_owl")
-
-    def _check_stat_achievements(self):
-        if not self.squid:
-            return
-        if hasattr(self.squid, 'happiness') and self.squid.happiness >= 100:
-            self.unlock_achievement("happiness_100")
-
-        stats = ['happiness', 'hunger', 'energy', 'health']
-        all_high = all(getattr(self.squid, s, 0) >= 80 for s in stats if hasattr(self.squid, s))
-        if all_high:
-            self.unlock_achievement("all_stats_high")
-
-    # --- Core Methods ---
-
-    def unlock_achievement(self, achievement_id: str, silent: bool = False) -> bool:
-        if achievement_id in self.unlocked:
-            return False
-        if achievement_id not in ACHIEVEMENT_DEFINITIONS:
-            return False
-
-        ach = ACHIEVEMENT_DEFINITIONS[achievement_id]
-        if ach.target_count > 1 and self.progress.get(achievement_id, 0) < ach.target_count:
-            return False
-
-        self.unlocked[achievement_id] = UnlockedAchievement(
-            achievement_id=achievement_id,
-            unlocked_at=datetime.now().isoformat(),
-            progress=ach.target_count,
-            notified=silent
-        )
+        if self.age_check_timer and not self.age_check_timer.isActive():
+            self.age_check_timer.start(60000)
+                
+        if self.stat_check_timer and not self.stat_check_timer.isActive():
+            self.stat_check_timer.start(5000)
 
         if self.logger:
-            self.logger.info(f"🏆 Unlocked: {ach.name}")
-
-        # Log to text file
-        self._log_unlock_to_text_file(ach)
-
-        if not silent:
-            self._queue_notification(ach)
-
-        if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'show_message'):
-            self.tamagotchi_logic.show_message(f"🏆")
-
+            self.logger.info(f"{PLUGIN_NAME} enabled successfully")
         return True
 
-    def manually_trigger(self, event_name: str):
-        handlers = {
-            "fed": self.on_squid_fed,
-            "woke": self.on_squid_woke,
-            "neuron_created": self.on_neuron_created,
-            "neuron_leveled": self.on_neuron_leveled,
-            "poop_thrown": self.on_poop_thrown,
-            "neuron_max_level": lambda: self.unlock_achievement("neuron_max_level"),
-            "dream_state": lambda: self.unlock_achievement("dream_state"),
-        }
-        if event_name in handlers:
-            handlers[event_name]()
-        else:
-            self.unlock_achievement(event_name)
-
-    def get_total_points(self) -> int:
-        return sum(
-            ACHIEVEMENT_DEFINITIONS[a.achievement_id].points
-            for a in self.unlocked.values()
-            if a.achievement_id in ACHIEVEMENT_DEFINITIONS
-        )
-
-    def _increment_stat(self, name: str, amount: int = 1):
-        self.statistics[name] = self.statistics.get(name, 0) + amount
-
-    def _update_progress(self, achievement_id: str, value: int):
-        self.progress[achievement_id] = value
-
-    # --- Notifications ---
-
-    def _queue_notification(self, achievement: Achievement):
-        self.notification_queue.append(achievement)
-        if not self.notification_timer.isActive():
-            self._show_next_notification()
-
-    def _show_next_notification(self):
-        if self.current_notification:
-            self.current_notification.close()
-            self.current_notification = None
-
-        if not self.notification_queue:
+    def disable(self):
+        if self.logger:
+            self.logger.info(f"{PLUGIN_NAME} disable() called")
+            
+        if self.age_check_timer:
+            self.age_check_timer.stop()
+        if self.stat_check_timer:
+            self.stat_check_timer.stop()
+        if self.notification_timer:
             self.notification_timer.stop()
-            return
+        
+        if self.logger:
+            self.logger.info(f"{PLUGIN_NAME} disabled")
 
-        ach = self.notification_queue.pop(0)
-        self.current_notification = AchievementNotification(ach, self.parent_window)
+    def shutdown(self):
+        self.disable()
+        self._uninstall_hooks()
 
-        if self.parent_window:
-            geo = self.parent_window.geometry()
-            # pin top-left corner with a small inset
-            x = geo.x() + DisplayScaling.scale(20)
-            y = geo.y() + DisplayScaling.scale(20)
-            self.current_notification.move(x, y)
-
-        self.current_notification.show_notification()
-
-        if self.notification_queue:
-            self.notification_timer.start(4000)
-
-    # --- Persistence ---
+    # ----------------------------------------------------------
+    # Persistence
+    # ----------------------------------------------------------
 
     def _get_save_path(self) -> str:
-        # We only use this to determine the directory for the text log
         os.makedirs("saves", exist_ok=True)
         return os.path.join("saves", "achievements.json")
 
@@ -921,6 +1083,10 @@ class AchievementsPlugin:
             "unlocked": {k: v.to_dict() for k, v in self.unlocked.items()},
             "progress": self.progress,
             "statistics": self.statistics,
+            "tracking": {
+                "weekend_saturday": self.weekend_saturday,
+                "weekend_sunday": self.weekend_sunday,
+            }
         }
 
     def load_save_data(self, data: dict):
@@ -930,8 +1096,13 @@ class AchievementsPlugin:
             self.unlocked[aid] = UnlockedAchievement.from_dict(adata)
         self.progress = data.get("progress", {})
         self.statistics = data.get("statistics", {})
+        tracking = data.get("tracking", {})
+        self.weekend_saturday = tracking.get("weekend_saturday", False)
+        self.weekend_sunday = tracking.get("weekend_sunday", False)
 
-    # --- UI ---
+    # ----------------------------------------------------------
+    # UI
+    # ----------------------------------------------------------
 
     def show_achievements_window(self):
         window = AchievementsWindow(self, self.parent_window)
@@ -948,17 +1119,18 @@ class AchievementsPlugin:
 # =============================================================================
 
 def initialize(plugin_manager) -> bool:
-    """
-    Called by PluginManager to initialize this plugin.
-    Must register the plugin instance with the plugin manager.
-    """
+    plugin_key = PLUGIN_NAME.lower()
+
+    if plugin_key in plugin_manager.plugins:
+        if hasattr(plugin_manager, 'logger'):
+            plugin_manager.logger.warning(f"{PLUGIN_NAME} is already registered. Skipping re-registration.")
+        return True  # Already initialized, no error
+
     try:
-        # Create plugin instance
         instance = AchievementsPlugin()
 
-        # Register with plugin manager (REQUIRED!)
-        plugin_manager.plugins[PLUGIN_NAME.lower()] = {
-            'name': PLUGIN_NAME.lower(),
+        plugin_manager.plugins[plugin_key] = {
+            'name': plugin_key,
             'original_name': PLUGIN_NAME,
             'version': PLUGIN_VERSION,
             'author': PLUGIN_AUTHOR,
@@ -968,7 +1140,6 @@ def initialize(plugin_manager) -> bool:
             'is_setup': False,
         }
 
-        # Log success
         if hasattr(plugin_manager, 'logger'):
             plugin_manager.logger.info(f"{PLUGIN_NAME} v{PLUGIN_VERSION} initialized")
 
