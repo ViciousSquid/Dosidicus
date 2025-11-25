@@ -15,6 +15,7 @@ from .enhanced_brain_tooltips import EnhancedBrainTooltips
 from .personality import Personality
 from .learning import LearningConfig
 from .neuro_debug import NeuronLaboratory
+from .brain_worker import BrainWorker  # Threading support
 from typing import Dict
 
 class BrainWidget(QtWidgets.QWidget):
@@ -157,6 +158,21 @@ class BrainWidget(QtWidgets.QWidget):
         # Animation control variables
         self.animation_timer = QtCore.QTimer(self)
         self.animation_timer.timeout.connect(self.update_animations)
+
+        # Initialize the background worker thread for heavy computations
+        self.brain_worker = BrainWorker(self)
+        self.brain_worker.neurogenesis_result.connect(self._on_neurogenesis_complete)
+        self.brain_worker.hebbian_result.connect(self._on_hebbian_complete)
+        self.brain_worker.state_update_result.connect(self._on_state_update_complete)
+        self.brain_worker.error_occurred.connect(self._on_worker_error)
+        self.brain_worker.start()
+        print("🧵 BrainWorker thread initialized and started")
+        
+        # Threading control flags
+        self._use_threaded_processing = True
+        self._pending_neurogenesis_check = False
+        self._pending_hebbian_learning = False
+
         # NEUROGENESIS FIX: Start monitoring timer
         self.neurogenesis_timer = QtCore.QTimer(self)
         self.neurogenesis_timer.timeout.connect(self._periodic_neurogenesis_check)
@@ -234,6 +250,172 @@ class BrainWidget(QtWidgets.QWidget):
             self.stimulate_button.setEnabled(enabled)
 
         print(f"Brain window debug mode set to: {enabled}")
+
+    # =========================================================================
+    # Worker thread signal handlers
+    # =========================================================================
+    
+    def _on_neurogenesis_complete(self, result: dict):
+        """Handle neurogenesis result from worker thread (called on main thread)."""
+        self._pending_neurogenesis_check = False
+        
+        if not result.get('created', False):
+            return
+            
+        neuron_name = result.get('neuron_name')
+        neuron_type = result.get('neuron_type')
+        position = result.get('position')
+        connections = result.get('connections', {})
+        trigger_value = result.get('trigger_value', 0)
+        
+        if not neuron_name or not neuron_type or not position:
+            return
+            
+        print(f"✨ Main thread: Creating neuron {neuron_name} at {position}")
+        
+        # Add the neuron to data structures (main thread only)
+        self.neuron_positions[neuron_name] = position
+        self.state[neuron_name] = 50
+        
+        # Set color based on type
+        color_map = {
+            'stress': (255, 0, 0),
+            'novelty': (255, 255, 150),
+            'reward': (173, 216, 230)
+        }
+        self.state_colors[neuron_name] = color_map.get(neuron_type, (200, 200, 200))
+            
+        # Set shape
+        shape_map = {'novelty': 'diamond', 'stress': 'square', 'reward': 'triangle'}
+        self.neuron_shapes[neuron_name] = shape_map.get(neuron_type, 'circle')
+        
+        # Add connections
+        for target, weight in connections.items():
+            if target in self.neuron_positions:
+                self.weights[(neuron_name, target)] = weight
+                
+        # Track as new neuron
+        if 'new_neurons' not in self.neurogenesis_data:
+            self.neurogenesis_data['new_neurons'] = []
+        self.neurogenesis_data['new_neurons'].append(neuron_name)
+        self.neurogenesis_data['new_neurons_details'][neuron_name] = {
+            'created_at': time.time(),
+            'type': neuron_type,
+            'trigger_value': trigger_value
+        }
+        
+        # Initialize communication events
+        self.communication_events[neuron_name] = 0
+        
+        # Start highlight animation
+        self.neurogenesis_highlight = {
+            'neuron': neuron_name,
+            'start_time': time.time(),
+            'duration': 5.0,
+            'pulse_phase': 0
+        }
+        
+        # Log the event
+        self.log_neurogenesis_event(
+            neuron_name, "created", 
+            details={'trigger_type': neuron_type, 'trigger_value': trigger_value}
+        )
+        
+        self.update()
+            
+    def _on_hebbian_complete(self, result: dict):
+        """Handle Hebbian learning result from worker thread (called on main thread)."""
+        self._pending_hebbian_learning = False
+        
+        updated_pairs = result.get('updated_pairs', [])
+        weight_updates = result.get('weight_updates', {})
+        
+        if not weight_updates:
+            return
+            
+        # Apply the weight updates (main thread only)
+        for pair_str, update_data in weight_updates.items():
+            # Convert string key back to tuple if needed
+            if isinstance(pair_str, str):
+                pair = tuple(pair_str.split(','))
+            else:
+                pair = pair_str
+                
+            if pair in self.weights:
+                old_weight = update_data['old_weight']
+                new_weight = update_data['new_weight']
+                self.weights[pair] = new_weight
+                
+                # Add animation for visual feedback
+                n1, n2 = pair
+                self.add_weight_animation(n1, n2, old_weight, new_weight)
+                
+        # Update tracking
+        self.recently_updated_neuron_pairs = list(updated_pairs)
+        self.last_hebbian_time = time.time()
+        
+        # Console output
+        if updated_pairs:
+            COLORS = ["\033[96m", "\033[93m", "\033[95m", "\033[92m", "\033[94m"]
+            RESET = "\033[0m"
+            colored = []
+            for i, pair in enumerate(updated_pairs):
+                if isinstance(pair, (list, tuple)) and len(pair) == 2:
+                    a, b = pair
+                    color = COLORS[i % len(COLORS)]
+                    colored.append(f"{color}{a} ↔ {b}{RESET}")
+            if colored:
+                print("     Hebbian learning chosen pairs: " + "  ".join(colored))
+            
+        self.update()
+        
+    def _on_state_update_complete(self, result: dict):
+        """Handle state update result from worker thread (called on main thread)."""
+        processed_state = result.get('processed_state', {})
+        
+        # Apply the processed state (main thread only)
+        for neuron, value in processed_state.items():
+            self.state[neuron] = value
+            
+        # Update communication events
+        current_time = time.time()
+        for neuron in self.state.keys():
+            if neuron not in self.communication_events:
+                self.communication_events[neuron] = 0
+            neuron_value = self.get_neuron_value(self.state[neuron])
+            if abs(neuron_value - 50) > 20:
+                self.communication_events[neuron] = current_time
+                
+        # Update functional neurons
+        if hasattr(self, 'enhanced_neurogenesis') and self.enhanced_neurogenesis.functional_neurons:
+            self.enhanced_neurogenesis.update_neuron_activations(self.state)
+            
+        self.update()
+        
+    def _on_worker_error(self, error_msg: str):
+        """Handle errors from the worker thread."""
+        print(f"⚠️ BrainWorker error: {error_msg}")
+        
+    def _update_worker_cache(self):
+        """Update the worker's cached data for thread-safe access."""
+        if hasattr(self, 'brain_worker') and self.brain_worker:
+            self.brain_worker.update_cache(
+                self.state,
+                self.weights,
+                self.neuron_positions,
+                self.config
+            )
+            
+    def stop_worker(self):
+        """Stop the worker thread gracefully (call on application exit)."""
+        if hasattr(self, 'brain_worker') and self.brain_worker:
+            self.brain_worker.stop()
+            self.brain_worker.wait(2000)  # Wait up to 2 seconds
+            print("🧵 BrainWorker thread stopped")
+    
+    # =========================================================================
+    # End worker thread signal handlers
+    # =========================================================================
 
         
     def is_neuron_revealed(self, name):
@@ -502,37 +684,48 @@ class BrainWidget(QtWidgets.QWidget):
 
     def _periodic_neurogenesis_check(self):
         """
-        Periodic check for neurogenesis triggers.
-        This method is called every 2 seconds by self.neurogenesis_timer.
+        Periodic check for neurogenesis triggers (every 2 seconds).
+        Now queues work to background thread instead of blocking main thread.
         """
         if not hasattr(self, 'check_neurogenesis_triggers'):
             return
-        
+            
+        # Skip if a check is already pending
+        if self._pending_neurogenesis_check:
+            return
+            
         # Build state with context
         state_with_context = self.state.copy()
         
         # Add environmental data if available
-        if hasattr(self, 'parent') and hasattr(self.parent, 'tamagotchi_logic'):
-            logic = self.parent.tamagotchi_logic
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            logic = self.tamagotchi_logic
             if hasattr(logic, 'food_items'):
                 state_with_context['food_count'] = len(logic.food_items)
             if hasattr(logic, 'poop_items'):
                 state_with_context['poop_count'] = len(logic.poop_items)
             if hasattr(logic, 'squid'):
-                state_with_context['carrying_rock'] = logic.squid.carrying_rock
+                state_with_context['carrying_rock'] = getattr(logic.squid, 'carrying_rock', False)
         
         # Add empty recent_actions if not present
         if 'recent_actions' not in state_with_context:
             state_with_context['recent_actions'] = []
         
-        try:
-            created = self.check_neurogenesis_triggers(state_with_context)
-            if created:
-                print(f"✨ Neurogenesis triggered! New neuron created.")
-        except Exception as e:
-            print(f"⚠️ Neurogenesis check error: {e}")
-            import traceback
-            traceback.print_exc()
+        # Update worker cache with current data
+        self._update_worker_cache()
+        
+        if self._use_threaded_processing and hasattr(self, 'brain_worker'):
+            # Queue the work to the background thread
+            self._pending_neurogenesis_check = True
+            self.brain_worker.queue_neurogenesis_check(state_with_context)
+        else:
+            # Fallback: synchronous processing (original behavior)
+            try:
+                created = self.check_neurogenesis_triggers(state_with_context)
+                if created:
+                    print(f"✨ Neurogenesis triggered! New neuron created.")
+            except Exception as e:
+                print(f"⚠️ Neurogenesis check error: {e}")
 
     def toggle_pruning(self, enabled):
         """Enable or disable the pruning mechanisms for neurogenesis"""
@@ -733,53 +926,54 @@ class BrainWidget(QtWidgets.QWidget):
     def perform_hebbian_learning(self):
         """
         One full Hebbian update cycle.
-        The number of neuron pairs updated is read from config.ini
-        (key max_hebbian_pairs in the [Neurogenesis] section).
+        Now queues work to background thread instead of blocking main thread.
         """
+        # Skip if already pending
+        if self._pending_hebbian_learning:
+            return
+            
+        # Update worker cache with current data
+        self._update_worker_cache()
+        
+        if self._use_threaded_processing and hasattr(self, 'brain_worker'):
+            # Queue the work to the background thread
+            self._pending_hebbian_learning = True
+            self.brain_worker.queue_hebbian_learning()
+        else:
+            # Fallback: synchronous processing
+            self._perform_hebbian_learning_sync()
+
+    def _perform_hebbian_learning_sync(self):
+        """Original synchronous Hebbian learning (fallback if threading disabled)."""
         from heapq import nlargest
 
-        # --- COLOR SETUP ---
-        COLORS = [
-            "\033[96m",  # CYAN
-            "\033[93m",  # YELLOW/ORANGE
-            "\033[95m",  # MAGENTA
-            "\033[92m",  # GREEN
-            "\033[94m",  # BLUE
-        ]
+        COLORS = ["\033[96m", "\033[93m", "\033[95m", "\033[92m", "\033[94m"]
         RESET = "\033[0m"
-        # --------------------
 
         if not hasattr(self, 'weights'):
             self.weights = {}
         self.recently_updated_neuron_pairs.clear()
 
-        # 1. collect real neurons only
         neurons = [n for n in self.neuron_positions.keys() if n not in self.excluded_neurons]
 
-        # 2. score every possible pair by summed activation
         scored_pairs = []
         for i, n1 in enumerate(neurons):
             for n2 in neurons[i + 1:]:
-                v1 = self.get_neuron_value(self.state[n1])
-                v2 = self.get_neuron_value(self.state[n2])
+                v1 = self.get_neuron_value(self.state.get(n1, 50))
+                v2 = self.get_neuron_value(self.state.get(n2, 50))
                 score = v1 + v2
                 scored_pairs.append((score, n1, n2, v1, v2))
 
-        # 3. grab the configurable number of top pairs
         top_k = self.config.neurogenesis.get('max_hebbian_pairs', 2)
         top_pairs = nlargest(top_k, scored_pairs)
 
-        # 4. classic Hebbian update on those pairs with animations
         updated_pairs = []
-        current_time = time.time()
 
         for _, n1, n2, v1, v2 in top_pairs:
             base_lr = self.learning_rate
             decay_rate = self.config.hebbian.get('weight_decay', 0.01)
 
-            is_n1_new = self.is_new_neuron(n1)
-            is_n2_new = self.is_new_neuron(n2)
-            if is_n1_new or is_n2_new:
+            if self.is_new_neuron(n1) or self.is_new_neuron(n2):
                 base_lr *= 2.0
 
             delta = base_lr * (v1 / 100.0) * (v2 / 100.0)
@@ -793,26 +987,22 @@ class BrainWidget(QtWidgets.QWidget):
 
             old_w = self.weights[use_pair]
             new_w = old_w + delta - (old_w * decay_rate)
-            new_w = max(self.config.hebbian['min_weight'],
-                        min(self.config.hebbian['max_weight'], new_w))
+            new_w = max(self.config.hebbian.get('min_weight', -1.0),
+                        min(self.config.hebbian.get('max_weight', 1.0), new_w))
 
             self.weights[use_pair] = new_w
             self.add_weight_animation(n1, n2, old_w, new_w)
             updated_pairs.append((n1, n2))
 
-        # 5. console & UI feed
         if updated_pairs:
             colored = []
             for i, (a, b) in enumerate(updated_pairs):
                 color = COLORS[i % len(COLORS)]
                 colored.append(f"{color}{a} ↔ {b}{RESET}")
-
             print("     Hebbian learning chosen pairs: " + "  ".join(colored))
 
         self.recently_updated_neuron_pairs = updated_pairs
         self.last_hebbian_time = time.time()
-
-        # trigger visual update
         self.update()
 
 
@@ -859,6 +1049,9 @@ class BrainWidget(QtWidgets.QWidget):
 
     def closeEvent(self, event):
         """Handle window close event - save state and clean up resources"""
+        # Stop the worker thread first
+        self.stop_worker()
+        
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
             # Save current brain state
             try:
@@ -1132,8 +1325,9 @@ class BrainWidget(QtWidgets.QWidget):
         if hasattr(self, 'enhanced_neurogenesis') and self.enhanced_neurogenesis.functional_neurons:
             self.enhanced_neurogenesis.update_neuron_activations(self.state)
         
-        # ===== SCHEDULE VISUAL UPDATE =====
-        # Trigger redraw of brain visualization
+        # Keep worker cache in sync
+        self._update_worker_cache()
+        
         self.update()
         
         # ===== LOG MAJOR STATE CHANGES =====

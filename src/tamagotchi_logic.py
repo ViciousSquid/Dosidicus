@@ -2598,5 +2598,4 @@ class TamagotchiLogic:
                 direction = "left" if random.random() < 0.5 else "right"
                 if self.squid.throw_poop(direction):
                     self.squid.status = "roaming"
-
                     self.squid.current_poop_target = None

@@ -3,7 +3,7 @@ import os
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 
-# Predefined list of approved squid names - moved to module level for reuse
+# Predefined list of approved squid names
 SQUID_NAMES = [
     "Algernon", "Cuthbert", "Englebert", "D'Artagnan",
     "Gaspard", "Ulysses", "Leopold", "Miroslav",
