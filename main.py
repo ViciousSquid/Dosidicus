@@ -562,7 +562,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def save_game(self):
         """Delegate to tamagotchi_logic"""
         if self.squid and self.tamagotchi_logic:
-            self.tamagotchi_logic.save_game(self.squid, self.tamagotchi_logic)
+            self.tamagotchi_logic.save_game()
 
     def closeEvent(self, event):
         """Handle window close event"""
