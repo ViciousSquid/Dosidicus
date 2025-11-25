@@ -21,7 +21,7 @@ class ColoredFormatter(logging.Formatter):
     
     COLORS = {
         logging.DEBUG: ANSI.CYAN,
-        logging.INFO: ANSI.BLUE,
+        logging.INFO: ANSI.CYAN,
         logging.WARNING: ANSI.YELLOW,
         logging.ERROR: ANSI.RED,
         logging.CRITICAL: ANSI.RED, # Can use BOLD_RED if needed
@@ -418,6 +418,25 @@ class PluginManager:
         for plugin_name_key in list(self.plugins.keys()):
             self.unload_plugin(plugin_name_key)
         self.logger.info("All plugins have been unloaded.")
+
+    def reload_all_plugins(self) -> Dict[str, bool]:
+        """
+        Reload all plugins by unloading and then loading them again.
+        This is useful when starting a new game to ensure plugins start fresh.
+        
+        Returns:
+            Dict[str, bool]: Dictionary mapping plugin names to their load success status
+        """
+        self.logger.info("Reloading all plugins...")
+        
+        # First unload all plugins
+        self.unload_all_plugins()
+        
+        # Then load them all again
+        results = self.load_all_plugins()
+        
+        self.logger.info("All plugins have been reloaded.")
+        return results
 
     def enable_plugin(self, plugin_key: str) -> bool:
         plugin_key_lower = plugin_key.lower() # Normalize to lowercase

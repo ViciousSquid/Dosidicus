@@ -1,5 +1,5 @@
 """
-Neurogenesis ver2_nov25 |   2.4.5.0
+Neurogenesis ver2_nov25 |   2.4.5.1
 
 Context-aware neurogenesis where new neurons:
 1. Encode specific experiences and patterns
@@ -23,6 +23,7 @@ import random
 from collections import deque
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
+from PyQt5.QtCore import QTimer
 
 @dataclass
 class ExperienceContext:
@@ -35,43 +36,73 @@ class ExperienceContext:
     timestamp: float
     
     def get_pattern_signature(self) -> str:
-        """Generate specific signatures with action sequences and env deltas"""
-        # Filter out ALL binary state neurons (anything starting with 'is_')
-        # We only want motivational/drive neurons (hunger, happiness, curiosity, etc.)
-        motivational_neurons = {k: v for k, v in self.active_neurons.items() 
-                                if not k.startswith('is_')}
+        """
+        Generate HIGHLY SPECIFIC patterns that capture meaningful variation.
+        """
+        # Use CORE motivational neurons only (remove the over-filtering)
+        motivational_neurons = {
+            k: v for k, v in self.active_neurons.items() 
+            if k in ['hunger', 'happiness', 'satisfaction', 'anxiety', 'curiosity', 'cleanliness', 'sleepiness']
+        }
         
-        # Get top 3 active neurons WITH ranges
-        top_neurons = sorted(motivational_neurons.items(), 
-                            key=lambda x: abs(x[1] - 50), 
-                            reverse=True)[:3]
+        if not motivational_neurons:
+            return f"{self.trigger_type}_{self.outcome}_neutral"
         
-        # Start with trigger and outcome
-        pattern = f"{self.trigger_type}_{self.outcome}"
+        # Get the MOST active neuron (primary drive) - but keep its actual value
+        primary_neuron, primary_value = max(motivational_neurons.items(), key=lambda x: abs(x[1] - 50))
         
-        # Add action sequence (last 3 actions)
-        recent_actions_str = "_".join(self.recent_actions[-3:]) if self.recent_actions else "none"
-        pattern += f"_actions_{recent_actions_str}"
+        # Get SECONDARY driver for more specificity
+        secondary = sorted(motivational_neurons.items(), key=lambda x: abs(x[1] - 50), reverse=True)
+        secondary_neuron = secondary[1][0] if len(secondary) > 1 else "none"
+        secondary_value = secondary[1][1] if len(secondary) > 1 else 50
         
-        # Add top neurons with their activation ranges
-        for neuron, activation in top_neurons:
-            # Bin activation into ranges
-            if activation < 35:
-                level = "low"
-            elif activation < 65:
-                level = "mid"
+        # Use VALUE RANGES for specificity (not just high/low)
+        def get_range(value):
+            if value < 20: return "critical_low"
+            elif value < 40: return "low"
+            elif value > 80: return "critical_high"
+            elif value > 60: return "high"
+            else: return "mid"
+        
+        # Build pattern with MORE distinguishing features
+        pattern_parts = [
+            self.trigger_type,
+            self.outcome,
+            f"primary_{primary_neuron}_{get_range(primary_value)}",
+            f"secondary_{secondary_neuron}_{get_range(secondary_value)}"
+        ]
+        
+        # Add MEANINGFUL action context (not just "none")
+        meaningful_actions = [a for a in self.recent_actions[-3:] if a and a != 'none' and a != 'idle']
+        if meaningful_actions:
+            last_action = meaningful_actions[-1].lower()
+            # Categorize more specifically
+            if 'rock' in last_action:
+                pattern_parts.append("rock_interaction")
+            elif 'poop' in last_action:
+                pattern_parts.append("waste_avoidance")
+            elif 'food' in last_action or 'eat' in last_action:
+                pattern_parts.append("food_consumption")
+            elif 'plant' in last_action:
+                pattern_parts.append("comfort_seeking")
+            elif 'sleep' in last_action:
+                pattern_parts.append("rest_behavior")
             else:
-                level = "high"
-            pattern += f"_{neuron}_{level}"
+                pattern_parts.append(f"action_{last_action[:20]}")
         
-        # Add environmental deltas (changes, not static values)
+        # Add environmental context if relevant
         env = self.environmental_state
-        if env.get('food_count', 0) == 0:
-            pattern += "_nofreshfood"  # More specific than "nofood"
+        if env.get('food_count', 0) > 0 and 'hunger' in motivational_neurons:
+            pattern_parts.append("food_present")
         if env.get('poop_count', 0) > 2:
-            pattern += f"_dirty_{env['poop_count']}"  # Include count
+            pattern_parts.append("filthy_environment")
+        if env.get('has_rock', False) and 'curiosity' in motivational_neurons:
+            pattern_parts.append("rock_present")
         
+        pattern = "_".join(pattern_parts)
+        #print(f"    📊 Generated pattern: {pattern}")  # DEBUG LOG
         return pattern
+    
     
     def get_parent_pattern(self) -> str:
         """
@@ -81,7 +112,12 @@ class ExperienceContext:
         # Filter out ALL binary state neurons (anything starting with 'is_')
         # We only want motivational/drive neurons (hunger, happiness, curiosity, etc.)
         motivational_neurons = {k: v for k, v in self.active_neurons.items() 
-                                if not k.startswith('is_')}
+                                if not k.startswith('is_') and k not in [
+                                    'position', 'direction', 'status',
+                                    'pursuing_food',
+                                    'novelty_exposure', 'sustained_stress', 'recent_rewards', 'personality',
+                                    'neurogenesis_active'
+                                ]}
         
         # Get top 2 neurons (instead of 3) for broader matching
         top_neurons = sorted(motivational_neurons.items(), 
@@ -120,16 +156,62 @@ class ExperienceBuffer:
         parent = context.get_parent_pattern()
         self.parent_pattern_counts[parent] = self.parent_pattern_counts.get(parent, 0) + 1
         
-    def should_create_specialized_neuron(self, pattern: str, threshold=3) -> bool:
+    def should_create_specialized_neuron(self, pattern: str, threshold=5) -> bool:
         """Check if a pattern occurs frequently enough to warrant a specialized neuron"""
         return self.pattern_counts.get(pattern, 0) >= threshold
     
-    def is_pattern_over_clustered(self, pattern: str, max_occurrences=20) -> bool:
+    def to_dict(self):
+        """Serialize experience buffer to dictionary for saving"""
+        return {
+            'pattern_counts': dict(self.pattern_counts),
+            'parent_pattern_counts': dict(self.parent_pattern_counts),
+            'buffer_size': len(self.buffer),
+            'recent_experiences': [
+                {
+                    'trigger_type': exp.trigger_type,
+                    'active_neurons': exp.active_neurons,
+                    'recent_actions': exp.recent_actions,
+                    'environmental_state': exp.environmental_state,
+                    'outcome': exp.outcome,
+                    'timestamp': exp.timestamp
+                }
+                for exp in list(self.buffer)
+            ]
+        }
+
+    def is_pattern_over_clustered(self, pattern: str, max_occurrences: int = 20) -> bool:
         """
-        Check if a pattern has become over-clustered (too many occurrences).
-        This suggests the pattern is too generic and grouping unrelated experiences.
+        STRICT check - if pattern appears more than max_occurrences, BLOCK it.
         """
-        return self.pattern_counts.get(pattern, 0) > max_occurrences
+        count = self.pattern_counts.get(pattern, 0)
+        is_over = count > max_occurrences
+        
+        if is_over:
+            print(f"      ⚠️ Pattern '{pattern}' appears {count} times (limit: {max_occurrences})")
+            # Clear old entries to prevent infinite growth
+            if count > max_occurrences * 2:
+                self.pattern_counts[pattern] = max_occurrences
+        
+        return is_over
+
+
+    def should_create_specialized_neuron(self, pattern: str, threshold: int = 5) -> bool:
+        """
+        Check if pattern is recurring ENOUGH but not over-clustered.
+        """
+        count = self.pattern_counts.get(pattern, 0)
+        
+        # Too few = not significant
+        if count < threshold:
+            print(f"      Pattern '{pattern}' count: {count}/{threshold} (too low)")
+            return False
+        
+        # Too many = over-clustered
+        if self.is_pattern_over_clustered(pattern):
+            return False
+        
+        print(f"      ✅ Pattern '{pattern}' passed: {count}/{threshold} reps")
+        return True
     
     def get_pattern_specificity(self, context: ExperienceContext) -> str:
         """
@@ -177,6 +259,7 @@ class FunctionalNeuron:
         self.activation_count = 0
         self.last_activated = 0
         self.utility_score = 0.0
+        self.strength_multiplier = 1.0
         
     def _determine_specialization(self) -> str:
         """Determine what this neuron specializes in based on creation context"""
@@ -325,6 +408,55 @@ class FunctionalNeuron:
         # Exponential moving average
         alpha = 0.3
         self.utility_score = alpha * outcome_value + (1 - alpha) * self.utility_score
+    
+    def to_dict(self):
+        """Serialize this neuron to a dictionary for saving"""
+        return {
+            'name': self.name,
+            'neuron_type': self.neuron_type,
+            'specialization': self.specialization,
+            'activation_count': self.activation_count,
+            'last_activated': self.last_activated,
+            'utility_score': self.utility_score,
+            'strength_multiplier': self.strength_multiplier,
+            'creation_context': {
+                'trigger_type': self.creation_context.trigger_type,
+                'active_neurons': self.creation_context.active_neurons.copy(),
+                'recent_actions': list(self.creation_context.recent_actions),
+                'environmental_state': self.creation_context.environmental_state.copy(),
+                'outcome': self.creation_context.outcome,
+                'timestamp': self.creation_context.timestamp
+            }
+        }
+    
+    @classmethod
+    def from_dict(cls, data):
+        """Reconstruct a FunctionalNeuron from saved data"""
+        # Recreate the context
+        context = ExperienceContext(
+            trigger_type=data['creation_context']['trigger_type'],
+            active_neurons=data['creation_context']['active_neurons'],
+            recent_actions=data['creation_context']['recent_actions'],
+            environmental_state=data['creation_context']['environmental_state'],
+            outcome=data['creation_context']['outcome'],
+            timestamp=data['creation_context']['timestamp']
+        )
+        
+        # Create the neuron
+        neuron = cls(
+            name=data['name'],
+            neuron_type=data['neuron_type'],
+            creation_context=context
+        )
+        
+        # Restore state
+        neuron.specialization = data.get('specialization', neuron.specialization)
+        neuron.activation_count = data.get('activation_count', 0)
+        neuron.last_activated = data.get('last_activated', 0)
+        neuron.utility_score = data.get('utility_score', 0.0)
+        neuron.strength_multiplier = data.get('strength_multiplier', 1.0)
+        
+        return neuron
 
 
 class EnhancedNeurogenesis:
@@ -339,189 +471,203 @@ class EnhancedNeurogenesis:
         self.functional_neurons = {}  # name -> FunctionalNeuron
         self.novelty_neuron_count = 0
         self._awarded_neurons = set()
-        
-        # Track last creation time per trigger type to prevent rapid-fire creation
-        self.last_creation_by_type = {
-            'novelty': 0,
-            'stress': 0,
-            'reward': 0
-        }
+        self.last_neurogenesis_time      = 0
+        self.neurons_created_this_session = 0
+        self.last_creation_by_type        = {'novelty': 0, 'stress': 0, 'reward': 0}
+
+    def create_functional_neuron(self, ctx):
+        """Real implementation – wrapper will call this."""
+        return self._create_neuron_internal(ctx.trigger_type,
+                                            ctx.active_neurons,
+                                            trigger_value_for_log=None)
         
     def capture_experience_context(self, trigger_type: str,
-                                   brain_state: dict,
-                                   recent_actions: list,
-                                   environment: dict) -> ExperienceContext:
+                           brain_state: dict,
+                           recent_actions: list,
+                           environment: dict) -> ExperienceContext:
         """
-        Wrapper that records the *first real game tick* and then
-        lets the experience buffer begin accepting samples only
-        after 5 s have elapsed.
+        Capture experience but DON'T buffer during first 3 seconds.
         """
-        # Mark the very first real tick (once only)
+        # Initialize first tick marker
         if not hasattr(self, '_first_real_tick'):
             self._first_real_tick = time.time()
-
-        # Build the context object regardless
+            print(f"   ⏱️ First real tick recorded at t=0")
+        
+        # Helper for safe number conversion
+        def _num(v):
+            try:
+                return float(v)
+            except Exception:
+                return 50.0
+        
+        # Clean neurons AT SOURCE - remove ALL binary flags and neurogenesis metrics
+        clean_neurons = {
+            k: _num(v)
+            for k, v in brain_state.items()
+            if not k.startswith('is_') and k not in [
+                'novelty_exposure', 'sustained_stress', 'recent_rewards',
+                'neurogenesis_active', 'personality', 'pursuing_food',
+                'position', 'direction', 'status'
+            ]
+        }
+        
         ctx = ExperienceContext(
             trigger_type=trigger_type,
-            active_neurons={k: v for k, v in brain_state.items()
-                          if isinstance(v, (int, float))},
+            active_neurons=clean_neurons,
             recent_actions=recent_actions[-5:] if recent_actions else [],
             environmental_state=environment,
             outcome='positive' if brain_state.get('happiness', 50) > 60 else
-                   'negative' if brain_state.get('anxiety', 50) > 70 else
-                   'neutral',
+                    'negative' if brain_state.get('anxiety', 50) > 70 else
+                    'neutral',
             timestamp=time.time()
         )
-
-        # Buffer it only *after* the 3-second grace period
-        if time.time() - self._first_real_tick >= 3.0:
-            # Additional filter: Don't capture experiences during peaceful sleep with no actions
-            is_sleeping = brain_state.get('is_sleeping', False)
-            has_recent_actions = len(recent_actions) > 0 and any(action for action in recent_actions if action != 'none')
-            
-            # Skip buffering if:
-            # 1. Sleeping peacefully (low anxiety, high satisfaction)
-            # 2. No recent meaningful actions
-            # 3. Stats are all at extremes (nothing changing)
-            if is_sleeping and not has_recent_actions:
-                anxiety = brain_state.get('anxiety', 50)
-                satisfaction = brain_state.get('satisfaction', 50)
-                if anxiety < 20 and satisfaction > 80:
-                    # Skip this experience - just peaceful sleep
-                    return ctx
-            
-            self.experience_buffer.add_experience(ctx)
-
+        
+        # === GRACE PERIOD ENFORCEMENT ===
+        elapsed = time.time() - self._first_real_tick
+        if elapsed < 3.0:
+            print(f"   ⏳ Grace period: {elapsed:.1f}s elapsed, NOT buffering")
+            return ctx
+        
+        # === FILTER PEACEFUL SLEEP ===
+        # Don't create neurons during restful sleep with no significant actions
+        is_sleeping = brain_state.get('is_sleeping', False)
+        anxiety = brain_state.get('anxiety', 50)
+        satisfaction = brain_state.get('satisfaction', 50)
+        
+        # Check if truly peaceful (low anxiety) sleep
+        if is_sleeping and anxiety < 20 and satisfaction > 80:
+            print(f"   😴 Peaceful sleep detected, NOT buffering")
+            return ctx
+        
+        # === BUFFER THE EXPERIENCE ===
+        #print(f"   📝 Buffering experience: {ctx.get_pattern_signature()}")
+        self.experience_buffer.add_experience(ctx)
+        
         return ctx
+    
+    def _get_unique_neuron_name(self, base_name: str) -> str:
+        """
+        Generate truly unique names without creating duplicates.
+        Checks both functional_neurons AND brain_widget.neuron_positions
+        """
+        # First check if base name exists exactly
+        if base_name not in self.brain_widget.neuron_positions:
+            return base_name
+        
+        # Find the next available number (start from 2, not 1)
+        counter = 2
+        while True:
+            candidate = f"{base_name}_{counter}"
+            if candidate not in self.brain_widget.neuron_positions:
+                return candidate
+            counter += 1
+
     
     def should_create_neuron(self, ctx: ExperienceContext) -> bool:
         """
-        Prevents creation in optimal states, adds cooldown verification,
-        and validates pattern specificity.
+        STRICT checking with explicit logging for every failure reason.
         """
-        # 0. Never create on the very first game tick
+        current_time = time.time()
+        
+        # === BLOCK 0: Grace Period & Basic Checks ===
         if not hasattr(self, '_first_real_tick'):
+            print("   ❌ BLOCKED: No first tick recorded")
             return False
-
-        # 0½. Wait at least 10 s after the first real tick
-        if time.time() - self._first_real_tick < 10.0:
+            
+        elapsed_since_start = current_time - self._first_real_tick
+        if elapsed_since_start < 10.0:
+            #print(f"   ❌ BLOCKED: Only {elapsed_since_start:.1f}s elapsed (need 10s)")
             return False
-
-        # ===== NEW: BLOCK CREATION IN STABLE/OPTIMAL STATES =====
-        # If squid is already perfectly satisfied and calm, don't create neurons
+        
+        # === BLOCK 1: Pattern Specificity Check ===
+        pattern = ctx.get_pattern_signature()
+        if len(pattern.split('_')) < 5:  # Require at least 5 parts for specificity
+            print(f"   ❌ BLOCKED: Pattern too generic ({len(pattern.split('_'))} parts)")
+            return False
+        
+        # === BLOCK 2: Over-Clustering Check (AGGRESSIVE) ===
+        pattern_count = self.experience_buffer.pattern_counts.get(pattern, 0)
+        if pattern_count > 20:  # STRICTLY enforce the 20 limit
+            print(f"   ❌ BLOCKED: Pattern over-clustered ({pattern_count} > 20)")
+            print(f"      Pattern: {pattern}")
+            return False
+        
+        # === BLOCK 3: Parent Pattern Check ===
+        parent = ctx.get_parent_pattern()
+        parent_count = self.experience_buffer.parent_pattern_counts.get(parent, 0)
+        if parent_count > 50:
+            print(f"   ❌ BLOCKED: Parent pattern over-clustered ({parent_count} > 50)")
+            return False
+        
+        # === BLOCK 4: Optimal State Check ===
         satisfaction = ctx.active_neurons.get('satisfaction', 50)
         anxiety = ctx.active_neurons.get('anxiety', 50)
-        curiosity = ctx.active_neurons.get('curiosity', 50)
         
-        # If all key stats are within 20 points of optimal (100/0), block creation
-        if (satisfaction > 80 and anxiety < 20 and curiosity > 80):
-            print(f"    \033[92mSquid in optimal state\033[0m (sat={satisfaction}, anx={anxiety})")
+        # If squid is perfectly content, no need for new neurons
+        if satisfaction > 85 and anxiety < 15:
+            #print(f"   Neurogenesis blocked because squid is in optimal state (not needed)")
             return False
         
-        # If state hasn't changed meaningfully from baseline, block
-        total_deviation = abs(satisfaction - 50) + abs(anxiety - 50) + abs(curiosity - 50)
-        if total_deviation < 30:
-            #print(f"   ❌ BLOCKED: State too neutral (deviation: {total_deviation})")
-            return False
-        # ============================================================
-
-        # 4. Hard neuron-count ceiling (check early)
+        # === BLOCK 5: Max Neurons Check ===
         current_count = len(self.brain_widget.neuron_positions)
         max_neurons = self.config.neurogenesis.get('max_neurons', 32)
         if current_count >= max_neurons:
-            #print(f"   ❌ BLOCKED: Max neurons ({max_neurons}) reached")
+            print(f"   Max neurons reached ({current_count}/{max_neurons})")
             return False
-
-        # ===================================================================
-        # EMERGENCY BYPASS: Critical stress overrides ALL cooldowns
-        # ===================================================================
-        is_critical_stress = anxiety >= 95
-        if ctx.trigger_type == 'stress' and is_critical_stress:
-            print(f"   🚨 EMERGENCY: Anxiety {anxiety:.0f} >= 95")
-            pattern = ctx.get_pattern_signature()
-            for neuron in self.functional_neurons.values():
-                if neuron.creation_context.get_pattern_signature() == pattern:
-                    if neuron.utility_score > 0.3:
-                        print(f"   ⚠️ {neuron.name} handles this (utility={neuron.utility_score:.2f})")
-                        return False
-            #print(f"   ✅ Emergency neuron creation ")
-            return True
-        # ===================================================================
-
-        # ===== NEW: COOLDOWN VERIFICATION WITH EXPLICIT PRINTS =====
-        current_time = time.time()
+        
+        # === BLOCK 6: Cooldown Checks (ENFORCED) ===
+        global_cooldown = self.config.neurogenesis.get('cooldown', 120)
         last_creation = max(
             (n.creation_context.timestamp for n in self.functional_neurons.values()),
-            default=0
+            default=self._first_real_tick
         )
-        global_cooldown = self.config.neurogenesis.get('cooldown', 180)
         
-        # Only enforce global cooldown after first 5 minutes
-        if (current_time - self._first_real_tick) > 300.0:
-            time_since_last = current_time - last_creation
-            if time_since_last < global_cooldown:
-                remaining = global_cooldown - time_since_last
-                #print(f"   ❌ BLOCKED: Global cooldown - {remaining:.1f}s remaining")
-                return False
-            else:
-                print(f"   ✅ Global cooldown OK: {time_since_last:.1f}s elapsed")
-
-        trigger_type = ctx.trigger_type
-        last_type_creation = self.last_creation_by_type.get(trigger_type, 0)
+        time_since_last = current_time - last_creation
+        if time_since_last < global_cooldown:
+            remaining = global_cooldown - time_since_last
+            #print(f"   ❌ BLOCKED: Global cooldown ({remaining:.1f}s left)")
+            return False
+        
+        # Per-type cooldown
+        last_type = self.last_creation_by_type.get(ctx.trigger_type, 0)
         per_type_cooldown = self.config.neurogenesis.get('per_type_cooldown', 30)
+        time_since_type = current_time - last_type
         
-        time_since_type = current_time - last_type_creation
         if time_since_type < per_type_cooldown:
             remaining = per_type_cooldown - time_since_type
-            #print(f"   ❌ BLOCKED: Per-type cooldown - {remaining:.1f}s remaining")
+            print(f"   ❌ BLOCKED: Per-type cooldown ({remaining:.1f}s left)")
             return False
-        else:
-            print(f"   ✅ Per-type cooldown OK: {time_since_type:.1f}s elapsed")
-        # ============================================================
-
-        # -------------------------------------------------------------------
-        # Pattern recurrence checks (only for non-emergency)
-        # -------------------------------------------------------------------
-        pattern = ctx.get_pattern_signature()
-        self._validate_novelty_counter()
         
-        # ===== NEW: CHECK PATTERN SPECIFICITY =====
-        # If pattern is too generic (few variables), block creation
-        pattern_parts = pattern.split('_')
-        if len(pattern_parts) < 6:  # Too few distinguishing features
-            print(f"   ❌ BLOCKED: Pattern too generic ({len(pattern_parts)} parts)")
-            return False
-        # ===========================================
-
-        # Novelty-specific tolerance
+        # === BLOCK 7: Recurrence Threshold (VARIES BY TYPE) ===
         if ctx.trigger_type == 'novelty':
-            tolerance_threshold = 3 + self.novelty_neuron_count * 2
-            pattern_count = self.experience_buffer.pattern_counts.get(pattern, 0)
-            if pattern_count < tolerance_threshold:
-                #print(f"   ❌ BLOCKED: Novelty pattern count {pattern_count} < threshold {tolerance_threshold}")
+            # Novelty needs MORE repetition to be significant
+            needed = 5 + (self.novelty_neuron_count * 2)
+            if pattern_count < needed:
+                print(f"   ❌ BLOCKED: Novelty needs {needed} reps (has {pattern_count})")
                 return False
-        else:
-            recurrence_satisfied = self.experience_buffer.should_create_specialized_neuron(
-                pattern, threshold=3
-            )
-            if not recurrence_satisfied:
-                print(f"   ❌ Pattern recurrence threshold not met")
+        else:  # stress/reward
+            if pattern_count < 5:
+                print(f"   ❌ BLOCKED: Need 5 reps (has {pattern_count})")
                 return False
-
-        # 2. Avoid duplicates unless the old one is under-performing
-        for neuron in self.functional_neurons.values():
-            if neuron.creation_context.get_pattern_signature() == pattern:
-                if neuron.utility_score > 0.3:
-                    print(f"   Duplicate pattern with utility {neuron.utility_score:.2f}")
+        
+        # === BLOCK 8: Duplicate Prevention ===
+        for existing_name, existing_neuron in self.functional_neurons.items():
+            if existing_neuron.creation_context.get_pattern_signature() == pattern:
+                if existing_neuron.utility_score > 0.3:
+                    print(f"   ❌ BLOCKED: Duplicate with utility {existing_neuron.utility_score:.2f}")
                     return False
-
-        if ctx.trigger_type == 'novelty':
-            max_novelty = self.config.neurogenesis.get('max_novelty_neurons', 5)
-            if self.novelty_neuron_count >= max_novelty:
-                #print(f"   ❌ BLOCKED: Max novelty neurons ({max_novelty}) reached")
+        
+        # === BLOCK 9: Personality Starter Neuron Cap ===
+        if ctx.trigger_type == 'personality_starter':
+            # Only allow ONE starter neuron
+            starters = [n for n in self.functional_neurons.values() 
+                    if n.creation_context.trigger_type == 'personality_starter']
+            if len(starters) >= 1:
+                print(f"   ❌ BLOCKED: Already have personality starter")
                 return False
-
-        print(f"   ✅ ALLOWED: All checks passed for {ctx.trigger_type} neuron")
+        
+        # === ALLOW CREATION ===
+        print(f"   ✅ ALLOWED: All checks passed for '{pattern}'")
         return True
     
     def _preview_specialisation(self, ctx: ExperienceContext) -> str:
@@ -559,92 +705,151 @@ class EnhancedNeurogenesis:
         return 'undefined'
     
     def create_functional_neuron(self, context: ExperienceContext) -> Optional[str]:
-        """
-        Create a new neuron with a specific function based on experience context.
-        Now includes per-specialization caps to prevent duplicate functional neurons.
-        """
-        # Preview specialization before creating
-        spec = self._preview_specialization(context)
-        base_name = f"{context.trigger_type}_{spec}"
-        
-        # --- NEW: Check specialization cap ---
-        if context.trigger_type in ['reward', 'stress']:
+            """
+            Create a new neuron with a specific function based on experience context.
+            Now includes per-specialization caps for ALL trigger types.
+            Also strengthens existing neurons when caps are reached.
+            """
+            # Preview specialization before creating
+            spec = self._preview_specialisation(context)
+            base_name = f"{context.trigger_type}_{spec}"
+
+            # FIX: Apply specialization cap to ALL trigger types including novelty
             max_per_spec = self.config.neurogenesis.get('max_per_specialization', 3)
             current_count = sum(1 for name in self.brain_widget.neuron_positions.keys() 
-                            if name.startswith(f"{context.trigger_type}_{spec}"))
-            
+                                if name.startswith(f"{context.trigger_type}_{spec}"))
+
             if current_count >= max_per_spec:
-                #print(f"❌ Max {spec} neurons ({max_per_spec}) reached, skipping creation")
-                # Instead, strengthen existing neuron
+                # Strengthen existing neuron instead of creating duplicate
                 self._strengthen_existing_neuron(context.trigger_type, spec)
-                return None
-        # --- END NEW ---
-        
-        # Rest of method continues as before...
-        counter = 0
-        neuron_name = base_name
-        while neuron_name in self.brain_widget.neuron_positions:
-            counter += 1
-            neuron_name = f"{base_name}_{counter}"
+                return None  # Skip creation
 
-        # Novelty cap check (existing logic)
-        if context.trigger_type == 'novelty':
-            max_novelty = self.config.neurogenesis.get('max_novelty_neurons', 5)
-            self._validate_novelty_counter()
-            if self.novelty_neuron_count >= max_novelty:
-                #print(f"❌ Max novelty neurons ({max_novelty}) reached, skipping creation of {neuron_name}")
-                return None
+            # Novelty-specific cap check (existing logic)
+            if context.trigger_type == 'novelty':
+                max_novelty = self.config.neurogenesis.get('max_novelty_neurons', 5)
+                self._validate_novelty_counter()
+                if self.novelty_neuron_count >= max_novelty:
+                    return None
 
-        # Create and register the functional neuron
-        func_neuron = FunctionalNeuron(neuron_name, context.trigger_type, context)
-        self.functional_neurons[neuron_name] = func_neuron
+            # Create unique neuron name
+            counter = 0
+            neuron_name = self._get_unique_neuron_name(base_name)
 
-        if context.trigger_type == 'novelty':
-            self.novelty_neuron_count += 1
+            # Create and register the functional neuron
+            func_neuron = FunctionalNeuron(neuron_name, context.trigger_type, context)
+            self.functional_neurons[neuron_name] = func_neuron
 
-        self.last_creation_by_type[context.trigger_type] = time.time()
+            # Update novelty counter
+            if context.trigger_type == 'novelty':
+                self.novelty_neuron_count += 1
 
-        # Position, appearance, connections...
-        position = self._calculate_functional_position(func_neuron)
-        self.brain_widget.neuron_positions[neuron_name] = position
-        self._set_neuron_appearance(neuron_name, func_neuron)
+            # Record creation time
+            self.last_creation_by_type[context.trigger_type] = time.time()
 
-        all_neurons = list(self.brain_widget.neuron_positions.keys())
-        connections = func_neuron.get_functional_connections(all_neurons)
-        for target, weight in connections.items():
-            if target in self.brain_widget.neuron_positions:
-                self.brain_widget.weights[(neuron_name, target)] = weight
-                self.brain_widget.weights[(target, neuron_name)] = weight * 0.3
+            # Calculate position, appearance, and connections
+            position = self._calculate_functional_position(func_neuron)
+            self.brain_widget.neuron_positions[neuron_name] = position
+            self._set_neuron_appearance(neuron_name, func_neuron)
 
-        self.brain_widget.state[neuron_name] = 50.0
+            # Build connections
+            all_neurons = list(self.brain_widget.neuron_positions.keys())
+            connections = func_neuron.get_functional_connections(all_neurons)
+            for target, weight in connections.items():
+                if target in self.brain_widget.neuron_positions:
+                    self.brain_widget.weights[(neuron_name, target)] = weight
 
-        # Award points and highlight...
-        if neuron_name not in self._awarded_neurons:
-            self._awarded_neurons.add(neuron_name)
-            if hasattr(self.brain_widget, 'statistics_tab'):
-                self.brain_widget.statistics_tab.increment_stat('points', 500)
+            # Initialize state (once, not in loop)
+            self.brain_widget.state[neuron_name] = 50.0
+            
+            # Mark the new neuron as revealed so connections display immediately
+            # This must happen AFTER all original neurons are revealed to avoid hiding all connections
+            if hasattr(self.brain_widget, 'visible_neurons'):
+                self.brain_widget.visible_neurons.add(neuron_name)
 
-        is_emergency = context.trigger_type == 'stress' and context.active_neurons.get('anxiety', 50) > 80
-        self.brain_widget.neurogenesis_highlight = {
-            'neuron': neuron_name,
-            'start_time': time.time(),
-            'duration': 8.0 if is_emergency else 5.0,
-            'pulse_phase': 0,
-            'is_emergency': is_emergency
-        }
+            # Award points for new neuron creation
+            if neuron_name not in self._awarded_neurons:
+                self._awarded_neurons.add(neuron_name)
+                if hasattr(self.brain_widget, 'statistics_tab'):
+                    self.brain_widget.statistics_tab.increment_stat('points', 500)
 
-        print(f"🧠 Created functional neuron: {neuron_name}")
-        print(f"   Specialisation: {func_neuron.specialization}")
-        print(f"   Connections: {len(connections)}")
+            # NOTE: revealed_connections is ONLY for the initial egg-hatching tutorial animation.
+            # Neurogenesis neurons are created during normal gameplay and should not interact
+            # with tutorial mode tracking. Connections will display normally based on visible_neurons.
+            # The old code here was causing all connections to disappear when neurogenesis
+            # triggered while revealed_connections still existed. (BUG FIX)
 
-        return neuron_name
+            # Set up visual highlight
+            is_emergency = context.trigger_type == 'stress' and context.active_neurons.get('anxiety', 50) > 80
+            self.brain_widget.neurogenesis_highlight = {
+                'neuron': neuron_name,
+                'start_time': time.time(),
+                'duration': 8.0 if is_emergency else 5.0,
+                'pulse_phase': 0,
+                'is_emergency': is_emergency
+            }
+
+            # CRITICAL FIX: Force tutorial mode OFF and ensure connections are visible
+            # This overrides any lingering tutorial state that might be hiding connections
+            self.brain_widget.is_tutorial_mode = False
+            if hasattr(self.brain_widget, 'revealed_neurons'):
+                delattr(self.brain_widget, 'revealed_neurons')
+            if hasattr(self.brain_widget, 'revealed_connections'):
+                delattr(self.brain_widget, 'revealed_connections')
+            
+            # DELAYED LINK FADE ANIMATION: Fade out and back in with chaotic random timing
+            # This creates a visual "blink" effect that draws attention to the new neuron
+            
+            def trigger_fade_out():
+                """Trigger chaotic fade-out after 0.5 seconds"""
+                now = time.time()
+                for key in self.brain_widget.weights.keys():
+                    self.brain_widget._link_targets[key] = 0.0  # Fade to invisible
+                    # Random delay per link (0-800ms) for chaos
+                    self.brain_widget._link_start_times[key] = now + random.uniform(0.0, 0.8)
+                    # Random speed per link
+                    self.brain_widget._link_fade_speeds[key] = random.uniform(2.0, 4.5)
+                    # Initialize opacity if needed
+                    if key not in self.brain_widget._link_opacities:
+                        self.brain_widget._link_opacities[key] = 1.0
+                
+                # Start the fade timer
+                if not self.brain_widget._link_fade_timer.isActive():
+                    self.brain_widget._link_fade_timer.start()
+            
+            def trigger_fade_in():
+                """Trigger chaotic fade-in after 1.0 seconds total"""
+                now = time.time()
+                for key in self.brain_widget.weights.keys():
+                    self.brain_widget._link_targets[key] = 1.0  # Fade to visible
+                    # Random delay per link (0-800ms) for chaos
+                    self.brain_widget._link_start_times[key] = now + random.uniform(0.0, 0.8)
+                    # Random speed per link
+                    self.brain_widget._link_fade_speeds[key] = random.uniform(2.0, 4.5)
+                    # Initialize opacity if needed
+                    if key not in self.brain_widget._link_opacities:
+                        self.brain_widget._link_opacities[key] = 0.0
+                
+                # Start the fade timer
+                if not self.brain_widget._link_fade_timer.isActive():
+                    self.brain_widget._link_fade_timer.start()
+            
+            # Schedule the fade out/in sequence
+            QTimer.singleShot(500, trigger_fade_out)   # Fade out after 0.5 seconds
+            QTimer.singleShot(3000, trigger_fade_in)   # Fade in after 3.0 seconds total
+            
+            # Force a redraw to show connections
+            self.brain_widget.update()
+
+            print(f"🧠 Created functional neuron: {neuron_name}")
+            print(f"   Specialisation: {func_neuron.specialization}")
+            print(f"   Connections: {len(connections)}")
+            print(f"   Tutorial mode: {self.brain_widget.is_tutorial_mode}")
+            print(f"   Links will fade out/in with chaotic timing")
+
+            return neuron_name
     
     def _strengthen_existing_neuron(self, trigger_type: str, specialization: str):
-        """
-        When cap is reached, strengthen the most useful existing neuron
-        instead of creating a duplicate.
-        """
-        # Find existing neurons of this specialization
+        """Strengthen existing neuron instead of creating duplicate"""
         existing = []
         for name, neuron in self.functional_neurons.items():
             if name.startswith(f"{trigger_type}_{specialization}"):
@@ -653,13 +858,22 @@ class EnhancedNeurogenesis:
         if not existing:
             return
         
-        # Pick the one with highest utility score
+        # Pick the one with highest utility
         existing.sort(key=lambda x: x[1].utility_score, reverse=True)
         best_name, best_neuron = existing[0]
         
-        # Boost its utility score (makes it more likely to survive pruning)
+        # Increase multiplier by 0.5x (so 1.0 → 1.5 → 2.0 → etc.)
+        best_neuron.strength_multiplier += 0.5
         best_neuron.utility_score += 0.1
-        print(f"   💪 Strengthened {specialization} neuron: {best_name} (utility: {best_neuron.utility_score:.2f})")
+        
+        # Add visual pulse effect
+        self.brain_widget.communication_events[best_name] = time.time()
+        
+        print(f"   💪 Strengthened {specialization} neuron: {best_name}")
+        print(f"      New multiplier: {best_neuron.strength_multiplier:.1f}x")
+        
+        # Force visual update
+        self.brain_widget.update()
     
     def _preview_specialization(self, context: ExperienceContext) -> str:
         """Preview what specialization a neuron would get"""
@@ -1074,6 +1288,79 @@ class EnhancedNeurogenesis:
         print(f"   └─ {template['description']}")
         
         return template['name']
+    
+    def to_dict(self):
+        """Serialize neurogenesis system for saving"""
+        return {
+            'functional_neurons': {
+                name: neuron.to_dict() 
+                for name, neuron in self.functional_neurons.items()
+            },
+            'last_neurogenesis_time': self.last_neurogenesis_time,
+            'neurons_created_this_session': self.neurons_created_this_session,
+            #'novelty_neuron_count': self.novelty_neuron_count,
+            #'stress_neuron_count': self.stress_neuron_count,
+            #'reward_neuron_count': self.reward_neuron_count,
+        }
+    
+    def load_from_dict(self, data):
+        """Restore neurogenesis system from saved data"""
+        # Restore functional neurons as proper FunctionalNeuron objects
+        self.functional_neurons = {}
+        for name, neuron_data in data.get('functional_neurons', {}).items():
+            try:
+                neuron = FunctionalNeuron.from_dict(neuron_data)
+                self.functional_neurons[name] = neuron
+                
+                # Re-add to brain widget visualization if not already present
+                if name not in self.brain_widget.neuron_positions:
+                    position = self._calculate_functional_position(neuron)
+                    self.brain_widget.neuron_positions[name] = position
+                    self._set_neuron_appearance(name, neuron)
+                
+                # Ensure neuron has a state value
+                if name not in self.brain_widget.state:
+                    self.brain_widget.state[name] = 50.0
+                    
+            except Exception as e:
+                print(f"⚠️ Could not restore neuron {name}: {e}")
+        
+        # Restore counters
+        self.last_neurogenesis_time = data.get('last_neurogenesis_time', time.time())
+        self.neurons_created_this_session = data.get('neurons_created_this_session', 0)
+        self.novelty_neuron_count = data.get('novelty_neuron_count', 0)
+        self.stress_neuron_count = data.get('stress_neuron_count', 0)
+        self.reward_neuron_count = data.get('reward_neuron_count', 0)
+        
+        print(f"✅ Restored {len(self.functional_neurons)} functional neurons from save")
+    
+    def reset_all_state(self):
+        """
+        Reset all neurogenesis state for a new game.
+        Clears functional neurons, experience buffer, and resets counters.
+        """
+        # Clear functional neurons dictionary
+        self.functional_neurons.clear()
+        
+        # Reset experience buffer
+        if hasattr(self, 'experience_buffer'):
+            self.experience_buffer = ExperienceBuffer()
+        
+        # Reset counters
+        self.novelty_neuron_count = 0
+        self.last_neurogenesis_time = 0
+        self.neurons_created_this_session = 0
+        self.last_creation_by_type = {'novelty': 0, 'stress': 0, 'reward': 0}
+        
+        # Clear awarded neurons tracking
+        if hasattr(self, '_awarded_neurons'):
+            self._awarded_neurons.clear()
+        
+        # Reset first tick marker
+        if hasattr(self, '_first_real_tick'):
+            delattr(self, '_first_real_tick')
+        
+        print("🔄 Neurogenesis state reset for new game")
 
 
 
@@ -1167,7 +1454,7 @@ class NeurogenesisTriggerSystem:
         current_anxiety = current.get('anxiety', 50)
         previous_anxiety = previous.get('anxiety', 50)
         current_hunger = current.get('hunger', 50)
-        
+        a
         # Ignore if anxiety is at minimum (0-5) - can't go lower
         if current_anxiety <= 5:
             return False
@@ -1225,9 +1512,16 @@ class NeurogenesisTriggerSystem:
     
     def _build_context(self, trigger_type: str, current_state: Dict) -> ExperienceContext:
         """Build experience context from current situation"""
+        # Filter out binary state neurons AND neurogenesis metrics
+        filtered_neurons = {k: v for k, v in current_state.items() 
+                        if not k.startswith('is_') and k not in [
+                            'novelty_exposure', 'sustained_stress', 'recent_rewards', 
+                            'neurogenesis_active', 'personality', 'pursuing_food', 'direction',  
+                            'is_startled', 'is_fleeing', 'is_sick']}  # Add all binary flags here
+        
         return ExperienceContext(
             trigger_type=trigger_type,
-            active_neurons=current_state.copy(),
+            active_neurons=filtered_neurons,  # Now clean!
             recent_actions=list(self.recent_actions),
             environmental_state={
                 'food_count': len(self.logic.food_items),

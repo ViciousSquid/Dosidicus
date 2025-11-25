@@ -5,18 +5,38 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from .display_scaling import DisplayScaling
 import time
 
+
 class EnhancedBrainTooltips:
-    
+
     def __init__(self, brain_widget):
         self.brain_widget = brain_widget
         self.current_hover_neuron = None
         self.last_tooltip_time = 0
         self.tooltip_delay = 0.3  # seconds
-        
+
+    # ------------------------------------------------------------------
+    # Safe helpers for optional FunctionalNeuronData attributes
+    # ------------------------------------------------------------------
+    def _get_creation_time(self, func_neuron):
+        """
+        Return creation timestamp (float) for a functional neuron.
+        Fallback to 'now' if the field is missing.
+        """
+        if hasattr(func_neuron, 'creation_context'):
+            return func_neuron.creation_context.timestamp
+        # Fallback: current time (so age shows ~0 s)
+        return time.time()
+
+    def _get_last_activated(self, func_neuron):
+        """Return last_activated time or 0 if absent."""
+        return getattr(func_neuron, 'last_activated', 0)
+
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
     def show_tooltip_for_position(self, event):
         """Show tooltip for neuron at mouse position"""
         neuron = self._get_neuron_at_pos(event.pos())
-        #print(f"DBG  hover neuron = {neuron}")               # 1.  found?
 
         # hover-state change
         if neuron != self.current_hover_neuron:
@@ -24,32 +44,33 @@ class EnhancedBrainTooltips:
             self.last_tooltip_time = time.time()
 
         elapsed = time.time() - self.last_tooltip_time
-        #print(f"DBG  elapsed = {elapsed:.2f}s  delay = {self.tooltip_delay}")  # 2.  gate
 
         if neuron and elapsed > self.tooltip_delay:
             tooltip_html = self._generate_tooltip(neuron)
-            #print(f"DBG  html len = {len(tooltip_html)}")    # 3.  non-empty?
             QtWidgets.QToolTip.showText(event.globalPos(), tooltip_html)
         elif not neuron:
             QtWidgets.QToolTip.hideText()
-    
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
     def _get_neuron_at_pos(self, widget_pos):
         """Use the *same* coordinate mapper that the widget already proved works."""
         return self.brain_widget.get_neuron_at_pos(widget_pos)
-    
+
     def _generate_tooltip(self, neuron_name):
         """Generate rich HTML tooltip for neuron"""
         bw = self.brain_widget
-        
+
         # Check if functional neuron
-        is_functional = (hasattr(bw, 'enhanced_neurogenesis') and 
+        is_functional = (hasattr(bw, 'enhanced_neurogenesis') and
                         neuron_name in bw.enhanced_neurogenesis.functional_neurons)
-        
+
         if is_functional:
             return self._generate_functional_tooltip(neuron_name)
         else:
             return self._generate_basic_tooltip(neuron_name)
-    
+
     def _generate_functional_tooltip(self, neuron_name):
         """Generate detailed tooltip for functional neuron"""
         bw = self.brain_widget
@@ -58,20 +79,17 @@ class EnhancedBrainTooltips:
         # Get current state
         current_value = bw.state.get(neuron_name, 50)
 
-        # Calculate time since last activation
-        if func_neuron.last_activated > 0:
-            seconds_ago = int(time.time() - func_neuron.last_activated)
-            if seconds_ago < 60:
-                last_active = f"{seconds_ago}s ago"
-            elif seconds_ago < 3600:
-                last_active = f"{seconds_ago // 60}m ago"
-            else:
-                last_active = f"{seconds_ago // 3600}h ago"
+        # Calculate time since last activation (safe)
+        seconds_ago = int(time.time() - self._get_last_activated(func_neuron))
+        if seconds_ago < 60:
+            last_active = f"{seconds_ago}s ago"
+        elif seconds_ago < 3600:
+            last_active = f"{seconds_ago // 60}m ago"
         else:
-            last_active = "Never"
+            last_active = f"{seconds_ago // 3600}h ago"
 
-        # Calculate age
-        age_seconds = time.time() - func_neuron.creation_context.timestamp
+        # Calculate age (safe)
+        age_seconds = time.time() - self._get_creation_time(func_neuron)
         if age_seconds < 60:
             age = f"{int(age_seconds)}s"
         elif age_seconds < 3600:
@@ -137,7 +155,7 @@ class EnhancedBrainTooltips:
         </div>
         """
         return html
-    
+
     def _generate_basic_tooltip(self, neuron_name):
         """Generate basic tooltip for non-functional neuron"""
         bw = self.brain_widget
@@ -176,7 +194,7 @@ class EnhancedBrainTooltips:
         </div>
         """
         return html
-    
+
     def _get_connection_summary(self, neuron_name):
         """Get summary of connections"""
         bw = self.brain_widget
@@ -198,13 +216,13 @@ class EnhancedBrainTooltips:
         top_outgoing = sorted(outgoing, key=lambda x: abs(x[1]), reverse=True)[:3]
 
         html = "<div style='margin: 8px 0;'>"
-        html += f"<div style='color: #666; font-size: {DisplayScaling.font_size(12)}px; margin-bottom: 4px;'>"  # ← changed
+        html += f"<div style='color: #666; font-size: {DisplayScaling.font_size(12)}px; margin-bottom: 4px;'>"
         html += f"<b>Connections:</b> {len(incoming)} in, {len(outgoing)} out"
         html += "</div>"
 
         # Top incoming
         if top_incoming:
-            html += f"<div style='font-size: {DisplayScaling.font_size(14)}px; margin-left: 8px;'>"  # ← changed
+            html += f"<div style='font-size: {DisplayScaling.font_size(14)}px; margin-left: 8px;'>"
             html += "⬅️ <b>Top Incoming:</b><br>"
             for source, weight in top_incoming:
                 arrow = "→" if weight > 0 else "⊣"
@@ -214,7 +232,7 @@ class EnhancedBrainTooltips:
 
         # Top outgoing
         if top_outgoing:
-            html += f"<div style='font-size: {DisplayScaling.font_size(14)}px; margin-left: 8px; margin-top: 4px;'>"  # ← changed
+            html += f"<div style='font-size: {DisplayScaling.font_size(14)}px; margin-left: 8px; margin-top: 4px;'>"
             html += "➡️ <b>Top Outgoing:</b><br>"
             for target, weight in top_outgoing:
                 arrow = "→" if weight > 0 else "⊣"
@@ -224,7 +242,7 @@ class EnhancedBrainTooltips:
 
         html += "</div>"
         return html
-    
+
     def _get_utility_color(self, utility):
         """Get color for utility score"""
         if utility > 0.7:
@@ -235,7 +253,7 @@ class EnhancedBrainTooltips:
             return "#FF9800"  # Orange
         else:
             return "#F44336"  # Red
-    
+
     def _get_activation_color(self, activation):
         """Get color for activation level"""
         deviation = abs(activation - 50)
@@ -245,7 +263,7 @@ class EnhancedBrainTooltips:
             return "#FF9800"  # Orange
         else:
             return "#4CAF50"  # Green
-    
+
     def _get_utility_indicator(self, utility):
         """Get emoji indicator for utility"""
         if utility > 0.7:
@@ -256,4 +274,3 @@ class EnhancedBrainTooltips:
             return "⭐"
         else:
             return "⚠️"
-

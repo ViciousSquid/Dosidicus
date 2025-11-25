@@ -71,6 +71,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Create the brain widget first
         self.brain_widget = BrainWidget(self.config, self.debug_mode, tamagotchi_logic=tamagotchi_logic)
+        # Set parent so brain_widget can access network_tab via self.parent().network_tab
+        self.brain_widget.setParent(self)
 
         # Initialize tab widget
         self.init_tabs()
@@ -305,6 +307,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             if name not in self.brain_widget.neuron_positions:
                 self.brain_widget.neuron_positions[name] = pos
 
+
+        # Reveal all core neurons for loaded games (sets visible_neurons and disables tutorial mode)
+        self.brain_widget.reveal_all_core_neurons()
+        
+        # Trigger staggered link fade animation when loading a save
+        if self.brain_widget.show_links:
+            self.brain_widget._enable_links_after_reveal()
         self.brain_widget.update()  # Trigger a redraw of the brain widget
 
     def init_timers(self):

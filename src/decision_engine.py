@@ -1,8 +1,5 @@
 # Decision engine version 3.11 - June 2025
-#
-# changelog: 
-# 3.11 - Added vision
-#
+
 
 import random
 from .personality import Personality

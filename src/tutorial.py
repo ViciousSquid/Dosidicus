@@ -1,6 +1,7 @@
 # tutorial.py
 from PyQt5 import QtCore, QtGui, QtWidgets
 import logging
+import random
 
 class TutorialManager:
     """Manages tutorial overlays and sequences"""
@@ -39,6 +40,14 @@ class TutorialManager:
             if not hasattr(self.ui, 'scene') or not self.ui.scene:
                 logging.error("Scene not initialized, cannot start tutorial")
                 return
+            
+            # Enable tutorial mode in brain widget
+            if (hasattr(self.ui, 'squid_brain_window') and 
+                self.ui.squid_brain_window and 
+                hasattr(self.ui.squid_brain_window, 'brain_widget') and
+                self.ui.squid_brain_window.brain_widget):
+                self.ui.squid_brain_window.brain_widget.is_tutorial_mode = True
+                logging.debug("Tutorial mode enabled in brain widget")
             
             # Initialize the tutorial
             self.current_step = 0
@@ -138,6 +147,16 @@ class TutorialManager:
                 return
 
             self.clear_tutorial_elements()
+            
+            # Trigger glow effect on brain widget
+            if (hasattr(self.ui, 'squid_brain_window') and 
+                self.ui.squid_brain_window and 
+                hasattr(self.ui.squid_brain_window, 'brain_widget') and
+                self.ui.squid_brain_window.brain_widget):
+                # Start glowing border effect for 3 seconds
+                self.ui.squid_brain_window.brain_widget.start_tutorial_glow(duration_ms=3000)
+                logging.debug("Started tutorial glow on brain widget")
+            
             win_width = self.ui.window_width
             win_height = self.ui.window_height
             banner_height = 170
@@ -212,9 +231,12 @@ class TutorialManager:
             self.end_tutorial()
     
     def show_neurogenesis_tutorial(self):
-        """Show the third tutorial about neurogenesis"""
+        """Show the third tutorial about neurogenesis with example neurons"""
         # Clear previous tutorial elements
         self.clear_tutorial_elements()
+        
+        # Create example neurons for demonstration
+        self.create_tutorial_example_neurons()
         
         # Get current window dimensions
         win_width = self.ui.window_width
@@ -246,7 +268,7 @@ class TutorialManager:
         self.ui.scene.addItem(title_text)
         self.tutorial_elements.append(title_text)
         
-        # Create body text - STEP 3 content
+        # Create body text for STEP 3
         info_text = QtWidgets.QGraphicsTextItem(
             "The squid can generate new neurons in response to extreme environmental stimulus.\n"
             "These new neurons help the squid adapt to challenging situations."
@@ -289,6 +311,602 @@ class TutorialManager:
     
     def show_learning_tutorial(self):
         """Show the fourth tutorial about hebbian learning"""
+        # FORCE immediate Hebbian learning cycle to ensure data is visible
+        if (hasattr(self.ui, 'squid_brain_window') and 
+            self.ui.squid_brain_window and 
+            hasattr(self.ui.squid_brain_window, 'brain_widget')):
+            # Run Hebbian learning immediately to populate the learning tab
+            self.ui.squid_brain_window.brain_widget.perform_hebbian_learning()
+            logging.debug("Forced Hebbian learning cycle before learning tutorial step")
+        
+        # Switch to the learning tab first
+        if hasattr(self.ui, 'squid_brain_window') and self.ui.squid_brain_window:
+            if hasattr(self.ui.squid_brain_window, 'tabs'):
+                # Find the learning tab index
+                learning_tab_index = -1
+                for i in range(self.ui.squid_brain_window.tabs.count()):
+                    if self.ui.squid_brain_window.tabs.tabText(i) == "Learning":
+                        learning_tab_index = i
+                        break
+                
+                if learning_tab_index >= 0:
+                    self.ui.squid_brain_window.tabs.setCurrentIndex(learning_tab_index)
+        
+        # Clear previous tutorial elements
+        self.clear_tutorial_elements()
+        
+        # Get current window dimensions
+        win_width = self.ui.window_width
+        win_height = self.ui.window_height
+        
+        # Create banner (positioned higher as specified)
+        banner_height = 170
+        banner_y_offset = 40
+        banner_y = win_height - banner_height - banner_y_offset - 100
+        
+        banner = QtWidgets.QGraphicsRectItem(0, banner_y, win_width, banner_height)
+        banner.setBrush(QtGui.QColor(0, 100, 0, 230))  # Green, nearly opaque
+        banner.setPen(QtGui.QPen(QtGui.QColor(144, 238, 144, 150), 1))
+        banner.setZValue(2000)
+        setattr(banner, '_is_tutorial_element', True)
+        self.ui.scene.addItem(banner)
+        self.tutorial_elements.append(banner)
+        
+        # Get scaled font sizes
+        title_font_size, body_font_size = self.get_tutorial_font_sizes(12, 11)
+        
+        # Create title with icon
+        title_text = QtWidgets.QGraphicsTextItem("🧬")
+        title_text.setDefaultTextColor(QtGui.QColor(144, 238, 144))  # Light green
+        title_text.setFont(QtGui.QFont("Arial", title_font_size, QtGui.QFont.Bold))
+        title_text.setPos(20, banner_y + 10)
+        title_text.setZValue(2001)
+        setattr(title_text, '_is_tutorial_element', True)
+        self.ui.scene.addItem(title_text)
+        self.tutorial_elements.append(title_text)
+        
+        # Create body text for STEP 4
+        info_text = QtWidgets.QGraphicsTextItem(
+            "When a pair of neurons fire at the same time, their connection strengthens. "
+            "This allows the squid to learn associations between different stimuli and responses."
+        )
+        info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+        info_text.setFont(QtGui.QFont("Arial", body_font_size))
+        info_text.setPos(20, banner_y + 35)
+        info_text.setTextWidth(win_width - 150)
+        info_text.setZValue(2001)
+        setattr(info_text, '_is_tutorial_element', True)
+        self.ui.scene.addItem(info_text)
+        self.tutorial_elements.append(info_text)
+        
+        # Add a continue button
+        dismiss_button = QtWidgets.QPushButton("Next")
+        dismiss_button.setStyleSheet("""
+            QPushButton {
+                background-color: #228B22;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                font-size: 14px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #32CD32;
+            }
+        """)
+        dismiss_button.clicked.connect(self.advance_to_next_step)
+        
+        # Create a proxy widget for the button
+        dismiss_proxy = self.ui.scene.addWidget(dismiss_button)
+        dismiss_proxy.setPos(win_width - 120, banner_y + 35)
+        dismiss_proxy.setZValue(2002)
+        setattr(dismiss_proxy, '_is_tutorial_element', True)
+        self.tutorial_elements.append(dismiss_proxy)
+        
+        # Set auto-dismiss timer
+        self.start_auto_dismiss_timer(15000)
+    
+    def show_decisions_tutorial(self):
+        """Show the fifth tutorial about decision making"""
+        # Switch to the decisions tab first
+        if hasattr(self.ui, 'squid_brain_window') and self.ui.squid_brain_window:
+            if hasattr(self.ui.squid_brain_window, 'tabs'):
+                # Find the decisions tab index
+                decisions_tab_index = -1
+                for i in range(self.ui.squid_brain_window.tabs.count()):
+                    if self.ui.squid_brain_window.tabs.tabText(i) == "Decisions":
+                        decisions_tab_index = i
+                        break
+                
+                if decisions_tab_index >= 0:
+                    self.ui.squid_brain_window.tabs.setCurrentIndex(decisions_tab_index)
+        
+        # Clear previous tutorial elements
+        self.clear_tutorial_elements()
+        
+        # Get current window dimensions
+        win_width = self.ui.window_width
+        win_height = self.ui.window_height
+        
+        # Create banner (positioned higher as specified)
+        banner_height = 170
+        banner_y_offset = 40
+        banner_y = win_height - banner_height - banner_y_offset - 100
+        
+        banner = QtWidgets.QGraphicsRectItem(0, banner_y, win_width, banner_height)
+        banner.setBrush(QtGui.QColor(139, 69, 19, 230))  # Brown, nearly opaque
+        banner.setPen(QtGui.QPen(QtGui.QColor(222, 184, 135, 150), 1))
+        banner.setZValue(2000)
+        setattr(banner, '_is_tutorial_element', True)
+        self.ui.scene.addItem(banner)
+        self.tutorial_elements.append(banner)
+        
+        # Get scaled font sizes
+        title_font_size, body_font_size = self.get_tutorial_font_sizes(12, 11)
+        
+        # Create title with icon
+        title_text = QtWidgets.QGraphicsTextItem("🤔")
+        title_text.setDefaultTextColor(QtGui.QColor(222, 184, 135))  # Tan
+        title_text.setFont(QtGui.QFont("Arial", title_font_size, QtGui.QFont.Bold))
+        title_text.setPos(20, banner_y + 10)
+        title_text.setZValue(2001)
+        setattr(title_text, '_is_tutorial_element', True)
+        self.ui.scene.addItem(title_text)
+        self.tutorial_elements.append(title_text)
+        
+        # Create body text for STEP 5
+        info_text = QtWidgets.QGraphicsTextItem(
+            "The neural network makes decisions based on current needs and past memories.\n"
+            "Each decision affects the squid's state and shapes future behavior."
+        )
+        info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+        info_text.setFont(QtGui.QFont("Arial", body_font_size))
+        info_text.setPos(20, banner_y + 35)
+        info_text.setTextWidth(win_width - 150)
+        info_text.setZValue(2001)
+        setattr(info_text, '_is_tutorial_element', True)
+        self.ui.scene.addItem(info_text)
+        self.tutorial_elements.append(info_text)
+        
+        # Add a continue button
+        dismiss_button = QtWidgets.QPushButton("Next")
+        dismiss_button.setStyleSheet("""
+            QPushButton {
+                background-color: #8B4513;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                font-size: 14px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #A0522D;
+            }
+        """)
+        dismiss_button.clicked.connect(self.advance_to_next_step)
+        
+        # Create a proxy widget for the button
+        dismiss_proxy = self.ui.scene.addWidget(dismiss_button)
+        dismiss_proxy.setPos(win_width - 120, banner_y + 35)
+        dismiss_proxy.setZValue(2002)
+        setattr(dismiss_proxy, '_is_tutorial_element', True)
+        self.tutorial_elements.append(dismiss_proxy)
+        
+        # Set auto-dismiss timer
+        self.start_auto_dismiss_timer(15000)
+    
+    def show_decorations_tutorial(self):
+        """Show the sixth tutorial about decorations"""
+        # Position and show the decorations window in the bottom right
+        if hasattr(self.ui, 'decoration_window') and self.ui.decoration_window:
+            # Call the method to position and show the decoration window
+            self.main_window.position_and_show_decoration_window()
+            if hasattr(self.ui, 'decorations_action'):
+                self.ui.decorations_action.setChecked(True)
+        
+        # Switch to memory tab in brain window
+        if hasattr(self.ui, 'squid_brain_window') and self.ui.squid_brain_window:
+            if hasattr(self.ui.squid_brain_window, 'tabs'):
+                # Find the memory tab index
+                memory_tab_index = -1
+                for i in range(self.ui.squid_brain_window.tabs.count()):
+                    if self.ui.squid_brain_window.tabs.tabText(i) == "Memory":
+                        memory_tab_index = i
+                        break
+                
+                if memory_tab_index >= 0:
+                    self.ui.squid_brain_window.tabs.setCurrentIndex(memory_tab_index)
+        
+        # Clear previous tutorial elements
+        self.clear_tutorial_elements()
+        
+        # Get current window dimensions
+        win_width = self.ui.window_width
+        win_height = self.ui.window_height
+        
+        # Create banner (positioned higher as specified)
+        banner_height = 170
+        banner_y_offset = 40
+        banner_y = win_height - banner_height - banner_y_offset - 100
+        
+        banner = QtWidgets.QGraphicsRectItem(0, banner_y, win_width, banner_height)
+        banner.setBrush(QtGui.QColor(70, 130, 180, 230))  # Steel blue, nearly opaque
+        banner.setPen(QtGui.QPen(QtGui.QColor(173, 216, 230, 150), 1))
+        banner.setZValue(2000)
+        setattr(banner, '_is_tutorial_element', True)
+        self.ui.scene.addItem(banner)
+        self.tutorial_elements.append(banner)
+        
+        # Get scaled font sizes
+        title_font_size, body_font_size = self.get_tutorial_font_sizes(12, 11)
+        
+        # Create title with icon
+        title_text = QtWidgets.QGraphicsTextItem("🌿 ")
+        title_text.setDefaultTextColor(QtGui.QColor(173, 216, 230))  # Light blue
+        title_text.setFont(QtGui.QFont("Arial", title_font_size, QtGui.QFont.Bold))
+        title_text.setPos(20, banner_y + 10)
+        title_text.setZValue(2001)
+        setattr(title_text, '_is_tutorial_element', True)
+        self.ui.scene.addItem(title_text)
+        self.tutorial_elements.append(title_text)
+        
+        # Create body text for STEP 6
+        info_text = QtWidgets.QGraphicsTextItem(
+            "Drag and drop decorations into the environment and see how squid reacts to different things.\n"
+            "Each decoration affects the squid's mental state in unique ways."
+            "Click and use the mouse wheel to resize"
+        )
+        info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+        info_text.setFont(QtGui.QFont("Arial", body_font_size))
+        info_text.setPos(20, banner_y + 35)
+        info_text.setTextWidth(win_width - 150)
+        info_text.setZValue(2001)
+        setattr(info_text, '_is_tutorial_element', True)
+        self.ui.scene.addItem(info_text)
+        self.tutorial_elements.append(info_text)
+        
+        # Add a continue button
+        dismiss_button = QtWidgets.QPushButton("Next")
+        dismiss_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4682B4;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                font-size: 14px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #5F9EA0;
+            }
+        """)
+        dismiss_button.clicked.connect(self.advance_to_next_step)
+        
+        # Create a proxy widget for the button
+        dismiss_proxy = self.ui.scene.addWidget(dismiss_button)
+        dismiss_proxy.setPos(win_width - 120, banner_y + 35)
+        dismiss_proxy.setZValue(2002)
+        setattr(dismiss_proxy, '_is_tutorial_element', True)
+        self.tutorial_elements.append(dismiss_proxy)
+        
+        # Set auto-dismiss timer
+        self.start_auto_dismiss_timer(15000)
+    
+    def show_final_tutorial(self):
+        """Show the final tutorial step with concluding message"""
+        # Clear previous tutorial elements
+        self.clear_tutorial_elements()
+        
+        # Get current window dimensions
+        win_width = self.ui.window_width
+        win_height = self.ui.window_height
+        
+        # Create banner (positioned higher as specified)
+        banner_height = 170
+        banner_y_offset = 40
+        banner_y = win_height - banner_height - banner_y_offset - 100
+        
+        banner = QtWidgets.QGraphicsRectItem(0, banner_y, win_width, banner_height)
+        banner.setBrush(QtGui.QColor(75, 0, 130, 230))  # Indigo, nearly opaque
+        banner.setPen(QtGui.QPen(QtGui.QColor(147, 112, 219, 150), 1))
+        banner.setZValue(2000)
+        setattr(banner, '_is_tutorial_element', True)
+        self.ui.scene.addItem(banner)
+        self.tutorial_elements.append(banner)
+        
+        # Get scaled font sizes
+        title_font_size, body_font_size = self.get_tutorial_font_sizes(12, 11)
+        
+        # Create title with icon
+        title_text = QtWidgets.QGraphicsTextItem("✨")
+        title_text.setDefaultTextColor(QtGui.QColor(147, 112, 219))  # Medium purple
+        title_text.setFont(QtGui.QFont("Arial", title_font_size, QtGui.QFont.Bold))
+        title_text.setPos(20, banner_y + 10)
+        title_text.setZValue(2001)
+        setattr(title_text, '_is_tutorial_element', True)
+        self.ui.scene.addItem(title_text)
+        self.tutorial_elements.append(title_text)
+        
+        # Create body text for STEP 7
+        info_text = QtWidgets.QGraphicsTextItem(
+            "Keep satisfaction high and anxiety low.\n"
+            "Your squid will develop unique traits and behaviors based on how you raise him."
+        )
+        info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
+        info_text.setFont(QtGui.QFont("Arial", body_font_size))
+        info_text.setPos(20, banner_y + 35)
+        info_text.setTextWidth(win_width - 150)
+        info_text.setZValue(2001)
+        setattr(info_text, '_is_tutorial_element', True)
+        self.ui.scene.addItem(info_text)
+        self.tutorial_elements.append(info_text)
+        
+        # Add a finish button
+        dismiss_button = QtWidgets.QPushButton("Finish")
+        dismiss_button.setStyleSheet("""
+            QPushButton {
+                background-color: #9370DB;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                font-size: 14px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #8A2BE2;
+            }
+        """)
+        dismiss_button.clicked.connect(self.end_tutorial)
+        
+        # Create a proxy widget for the button
+        dismiss_proxy = self.ui.scene.addWidget(dismiss_button)
+        dismiss_proxy.setPos(win_width - 120, banner_y + 35)
+        dismiss_proxy.setZValue(2002)
+        setattr(dismiss_proxy, '_is_tutorial_element', True)
+        self.tutorial_elements.append(dismiss_proxy)
+        
+        # Set auto-dismiss timer
+        self.start_auto_dismiss_timer(15000)
+
+    def check_brain_window_ready(self):
+        if (hasattr(self.ui, 'squid_brain_window') and 
+            self.ui.squid_brain_window and 
+            hasattr(self.ui.squid_brain_window, 'tabs') and
+            self.ui.squid_brain_window.tabs):
+            self.show_second_tutorial()
+        else:
+            # Try again shortly
+            QtCore.QTimer.singleShot(500, self.check_brain_window_ready)
+    
+    def create_tutorial_example_neurons(self):
+        """Create 3 temporary example neurons in the brain widget"""
+        if not hasattr(self.ui, 'squid_brain_window') or not self.ui.squid_brain_window:
+            return
+        
+        brain_widget = self.ui.squid_brain_window.brain_widget
+        
+        # Create 3 example neurons
+        tutorial_positions = [(300, 200), (500, 350), (700, 250)]
+        
+        for i, (x, y) in enumerate(tutorial_positions):
+            neuron_name = f'tutorial_neuron_{i+1}'
+            
+            # Add to brain widget
+            brain_widget.neuron_positions[neuron_name] = (x, y)
+            brain_widget.state[neuron_name] = 80  # Make them active/visible
+            brain_widget.state_colors[neuron_name] = (255, 255, 0)  # Yellow color
+            
+            # Connect to some existing neurons
+            existing_neurons = [n for n in brain_widget.neuron_positions.keys() 
+                            if not n.startswith('tutorial_')]
+            if existing_neurons and len(existing_neurons) >= 2:
+                # Connect to 2 random existing neurons
+                targets = random.sample(existing_neurons, 2)
+                for target in targets:
+                    weight = random.uniform(0.5, 0.8)
+                    brain_widget.weights[(neuron_name, target)] = weight
+                    brain_widget.weights[(target, neuron_name)] = weight * 0.5
+        
+        # Force redraw
+        brain_widget.update()
+
+    def _create_tutorial_connections(self, example_neuron_name, example_x, example_y):
+        """Create temporary connections between tutorial neuron and existing neurons"""
+        if not hasattr(self.ui, 'brain_widget') or not self.ui.brain_widget:
+            return
+            
+        # Get existing neurons (excluding tutorial ones)
+        existing_neurons = []
+        for name, pos in self.ui.brain_widget.neuron_positions.items():
+            if not name.startswith('example_neuron_'):
+                existing_neurons.append((name, pos))
+        
+        if not existing_neurons:
+            return
+            
+        # Connect to 2-3 random existing neurons
+        target_neurons = random.sample(existing_neurons, min(3, len(existing_neurons)))
+        
+        for target_name, (target_x, target_y) in target_neurons:
+            # Create connection line
+            line = QtWidgets.QGraphicsLineItem(
+                example_x, example_y, target_x, target_y
+            )
+            line.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 128), 2, QtCore.Qt.DashLine))
+            line.setZValue(1499)
+            setattr(line, '_is_tutorial_element', True)
+            setattr(line, '_tutorial_connection', True)
+            
+            self.ui.scene.addItem(line)
+            self.tutorial_elements.append(line)
+        
+        # Also create a self-connection (loop)
+        loop_line = QtWidgets.QGraphicsPathItem()
+        path = QtGui.QPainterPath()
+        path.moveTo(example_x + 20, example_y)
+        path.cubicTo(example_x + 40, example_y - 30, example_x + 40, example_y + 30, example_x + 20, example_y)
+        
+        loop_line.setPath(path)
+        loop_line.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, 128), 2, QtCore.Qt.DashLine))
+        loop_line.setZValue(1499)
+        setattr(loop_line, '_is_tutorial_element', True)
+        
+        self.ui.scene.addItem(loop_line)
+        self.tutorial_elements.append(loop_line)
+
+    def _animate_tutorial_neurons(self, neuron_items):
+        """Animate the tutorial neurons with fade-in, pulse, and fade-out"""
+        if not neuron_items:
+            return
+        
+        # Store original opacities and create fade effect using timer
+        for item in neuron_items:
+            if item:
+                item.setOpacity(0.0)  # Start transparent
+        
+        # Create fade-in timer
+        self.fade_in_timer = QtCore.QTimer()
+        self.fade_in_timer.setInterval(50)  # Update every 50ms
+        fade_step = 0
+        
+        def fade_in_update():
+            nonlocal fade_step
+            fade_step += 1
+            opacity = min(1.0, fade_step / 20.0)  # 20 steps to full opacity
+            
+            for item in neuron_items:
+                if item and item.scene():
+                    item.setOpacity(opacity)
+            
+            if opacity >= 1.0:
+                self.fade_in_timer.stop()
+                # Start pulsing after fade-in
+                for item in neuron_items:
+                    self._start_pulse_animation(item)
+                # Schedule fade-out
+                QtCore.QTimer.singleShot(4000, lambda: self._fade_out_tutorial_neurons(neuron_items))
+        
+        self.fade_in_timer.timeout.connect(fade_in_update)
+        self.fade_in_timer.start()
+
+    def _start_pulse_animation(self, neuron_item):
+        """Start pulsing animation for a tutorial neuron"""
+        if not neuron_item:
+            return
+        
+        # Create pulse timer for this specific neuron
+        pulse_timer = QtCore.QTimer()
+        pulse_timer.setInterval(500)  # Pulse every 500ms
+        pulse_direction = 1
+        current_opacity = 1.0
+        
+        def pulse_update():
+            nonlocal pulse_direction, current_opacity
+            current_opacity += pulse_direction * 0.1
+            if current_opacity >= 1.0:
+                current_opacity = 1.0
+                pulse_direction = -1
+            elif current_opacity <= 0.7:
+                current_opacity = 0.7
+                pulse_direction = 1
+            
+            if neuron_item and neuron_item.scene():
+                neuron_item.setOpacity(current_opacity)
+            else:
+                pulse_timer.stop()
+        
+        pulse_timer.timeout.connect(pulse_update)
+        pulse_timer.start()
+        
+        # Store timer reference so we can stop it later
+        if not hasattr(self, 'pulse_timers'):
+            self.pulse_timers = []
+        self.pulse_timers.append(pulse_timer)
+
+    def _fade_out_tutorial_neurons(self, neuron_items):
+        """Fade out and clean up tutorial neurons"""
+        # Stop all pulse timers
+        if hasattr(self, 'pulse_timers'):
+            for timer in self.pulse_timers:
+                timer.stop()
+            self.pulse_timers = []
+        
+        # Create fade-out timer
+        self.fade_out_timer = QtCore.QTimer()
+        self.fade_out_timer.setInterval(50)  # Update every 50ms
+        fade_step = 20  # Start from full opacity
+        
+        def fade_out_update():
+            nonlocal fade_step
+            fade_step -= 1
+            opacity = max(0.0, fade_step / 20.0)  # 20 steps to transparent
+            
+            for item in neuron_items:
+                if item and item.scene():
+                    item.setOpacity(opacity)
+            
+            if opacity <= 0.0:
+                self.fade_out_timer.stop()
+                # Delete items after fade-out
+                for item in neuron_items:
+                    self._delete_tutorial_item(item)
+        
+        self.fade_out_timer.timeout.connect(fade_out_update)
+        self.fade_out_timer.start()
+
+    def _delete_tutorial_item(self, item):
+        """Safely delete a tutorial item from the scene"""
+        if item and item.scene():
+            item.scene().removeItem(item)
+            # Also remove from tutorial_elements list
+            if item in self.tutorial_elements:
+                self.tutorial_elements.remove(item)
+
+    def clear_tutorial_example_neurons(self):
+        """Remove tutorial neurons from brain widget"""
+        if not hasattr(self.ui, 'squid_brain_window') or not self.ui.squid_brain_window:
+            return
+        
+        brain_widget = self.ui.squid_brain_window.brain_widget
+        
+        # Find and remove tutorial neurons
+        tutorial_neurons = [name for name in brain_widget.neuron_positions.keys() 
+                        if name.startswith('tutorial_neuron_')]
+        
+        for neuron_name in tutorial_neurons:
+            # Remove from positions
+            if neuron_name in brain_widget.neuron_positions:
+                del brain_widget.neuron_positions[neuron_name]
+            # Remove from state
+            if neuron_name in brain_widget.state:
+                del brain_widget.state[neuron_name]
+            # Remove from colors
+            if neuron_name in brain_widget.state_colors:
+                del brain_widget.state_colors[neuron_name]
+            
+            # Remove connections involving this neuron
+            connections_to_remove = []
+            for (src, dst), weight in brain_widget.weights.items():
+                if src == neuron_name or dst == neuron_name:
+                    connections_to_remove.append((src, dst))
+            
+            for conn in connections_to_remove:
+                if conn in brain_widget.weights:
+                    del brain_widget.weights[conn]
+        
+        # Force redraw
+        brain_widget.update()
+    
+    def show_learning_tutorial(self):
+        """Show the fourth tutorial about hebbian learning"""
+        # FORCE immediate Hebbian learning cycle to ensure data is visible
+        if (hasattr(self.ui, 'squid_brain_window') and 
+            self.ui.squid_brain_window and 
+            hasattr(self.ui.squid_brain_window, 'brain_widget')):
+            # Run Hebbian learning immediately to populate the learning tab
+            self.ui.squid_brain_window.brain_widget.perform_hebbian_learning()
+            logging.debug("Forced Hebbian learning cycle before learning tutorial step")
+        
         # Switch to the learning tab first
         if hasattr(self.ui, 'squid_brain_window') and self.ui.squid_brain_window:
             if hasattr(self.ui.squid_brain_window, 'tabs'):
@@ -651,6 +1269,10 @@ class TutorialManager:
     def advance_to_next_step(self):
         logging.debug(f"Advancing to tutorial step {self.current_step + 1}")
         self.cancel_auto_dismiss_timer()
+        
+        # Clear tutorial example neurons when advancing
+        self.clear_tutorial_example_neurons()
+        
         self.clear_tutorial_elements()
         self.current_step += 1
 
@@ -699,6 +1321,14 @@ class TutorialManager:
         self.cancel_auto_dismiss_timer()
         self.clear_tutorial_elements()
         self.current_step = 0
+        
+        # Disable tutorial mode in brain widget
+        if (hasattr(self.ui, 'squid_brain_window') and 
+            self.ui.squid_brain_window and 
+            hasattr(self.ui.squid_brain_window, 'brain_widget') and
+            self.ui.squid_brain_window.brain_widget):
+            self.ui.squid_brain_window.brain_widget.is_tutorial_mode = False
+            logging.debug("Tutorial mode disabled in brain widget")
     
     def start_auto_dismiss_timer(self, ms_duration):
         """Start a timer to automatically dismiss the current tutorial step"""
@@ -719,14 +1349,16 @@ class TutorialManager:
     
     def clear_tutorial_elements(self):
         """Remove all tutorial elements from the scene"""
+        # Clear tutorial example neurons first
+        self.clear_tutorial_example_neurons()
+        
         # Remove any existing tutorial elements from the scene
-        for item in self.tutorial_elements:
-            if item in self.ui.scene.items():
-                self.ui.scene.removeItem(item)
+        for item in self.tutorial_elements[:]:  # Make a copy to avoid modification during iteration
+            if item and item.scene():
+                item.scene().removeItem(item)
         
         # Clear the list
         self.tutorial_elements = []
         
         # Force scene update
-
         self.ui.scene.update()

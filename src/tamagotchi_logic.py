@@ -235,7 +235,7 @@ class TamagotchiLogic:
 
     def reset_squid_status(self):
         """Reset squid status to default state after temporary actions"""
-        if self.squid and self.squid.status in ["eating cheese", "eating sushi"]:
+        if self.squid and "eating" in self.squid.status.lower():
             # Choose default status based on personality
             if self.squid.personality == Personality.TIMID:
                 self.squid.status = "cautiously exploring"
@@ -243,6 +243,9 @@ class TamagotchiLogic:
                 self.squid.status = "boldly exploring"
             else:
                 self.squid.status = "roaming"
+            
+            # Ensure is_eating flag is also cleared
+            self.squid.is_eating = False
 
 
 
@@ -824,6 +827,47 @@ class TamagotchiLogic:
                         # Scale cooldown inversely with simulation speed
                         neuro_system.config.neurogenesis['cooldown'] = max(10, int(neuro_system.base_cooldown / self.simulation_speed))
 
+
+    def stop(self):
+        """Stop all timers and clean up resources"""
+        # Stop main timers
+        if hasattr(self, 'simulation_timer') and self.simulation_timer:
+            self.simulation_timer.stop()
+        
+        if hasattr(self, 'score_update_timer') and self.score_update_timer:
+            self.score_update_timer.stop()
+        
+        if hasattr(self, 'brain_update_timer') and self.brain_update_timer:
+            self.brain_update_timer.stop()
+        
+        if hasattr(self, 'autosave_timer') and self.autosave_timer:
+            self.autosave_timer.stop()
+        
+        if hasattr(self, 'age_update_timer') and self.age_update_timer:
+            self.age_update_timer.stop()
+        
+        if hasattr(self, 'initial_delay_timer') and self.initial_delay_timer:
+            self.initial_delay_timer.stop()
+        
+        # Stop rock interaction timers
+        if hasattr(self, 'rock_interaction') and self.rock_interaction:
+            if hasattr(self.rock_interaction, 'rock_test_timer') and self.rock_interaction.rock_test_timer:
+                self.rock_interaction.rock_test_timer.stop()
+            if hasattr(self.rock_interaction, 'throw_animation_timer') and self.rock_interaction.throw_animation_timer:
+                self.rock_interaction.throw_animation_timer.stop()
+        
+        # Stop poop interaction timers
+        if hasattr(self, 'poop_interaction') and self.poop_interaction:
+            if hasattr(self.poop_interaction, 'poop_timer') and self.poop_interaction.poop_timer:
+                self.poop_interaction.poop_timer.stop()
+        
+        # Stop brain window timers
+        if hasattr(self, 'brain_window') and self.brain_window:
+            if hasattr(self.brain_window, 'hebbian_timer') and self.brain_window.hebbian_timer:
+                self.brain_window.hebbian_timer.stop()
+            if hasattr(self.brain_window, 'countdown_timer') and self.brain_window.countdown_timer:
+                self.brain_window.countdown_timer.stop()
+
     def check_for_startle(self):
         if not self.mental_states_enabled:
             return
@@ -1163,6 +1207,13 @@ class TamagotchiLogic:
             
             # 7. Update brain (will trigger neurogenesis checks)
             self.brain_window.update_brain(brain_state)
+
+            # 7a. Track current action for neurogenesis pattern signatures
+            if hasattr(self.brain_window, 'brain_widget') and \
+               hasattr(self.brain_window.brain_widget, 'neurogenesis_system'):
+                current_status = getattr(self.squid, 'status', 'roaming')
+                action_to_track = self._normalize_action_name(current_status)
+                self.brain_window.brain_widget.neurogenesis_system.track_action(action_to_track)
             
             # 8. Reset frame-specific flags
             self.new_object_encountered = False
@@ -1275,6 +1326,81 @@ class TamagotchiLogic:
         # Debug output if in debug mode
         if self.debug_mode:
             print(f"Neurogenesis triggers: {self.neurogenesis_triggers}")
+
+    def _normalize_action_name(self, status_string):
+        """
+        Convert verbose status strings into trackable action categories.
+        This prevents explosion of unique but semantically similar actions.
+        """
+        if not status_string:
+            return 'idle'
+            
+        status_lower = status_string.lower()
+        
+        # Food-related behaviors
+        if 'eating' in status_lower:
+            return 'eating'
+        elif 'eyeing food' in status_lower or 'approaching food' in status_lower:
+            return 'pursuing_food'
+        elif 'moving toward food' in status_lower:
+            return 'pursuing_food'
+        
+        # Rock interactions
+        elif 'rock' in status_lower:
+            if 'throwing' in status_lower or 'thrown' in status_lower:
+                return 'throwing_rock'
+            elif 'approaching' in status_lower or 'eyeing' in status_lower:
+                return 'investigating_rock'
+            elif 'carrying' in status_lower:
+                return 'carrying_rock'
+        
+        # Poop interactions
+        elif 'poop' in status_lower:
+            if 'throwing' in status_lower:
+                return 'throwing_poop'
+            elif 'approaching' in status_lower:
+                return 'investigating_poop'
+        
+        # Plant interactions
+        elif 'plant' in status_lower:
+            if 'hiding' in status_lower:
+                return 'hiding'
+            elif 'comfort' in status_lower or 'approaching' in status_lower or 'seeking' in status_lower:
+                return 'seeking_plant'
+            elif 'noticing' in status_lower:
+                return 'noticing_plant'
+        
+        # Emotional/mental states
+        elif 'startled' in status_lower or 'fleeing' in status_lower:
+            return 'fleeing'
+        elif 'anxious' in status_lower or 'nervous' in status_lower:
+            return 'anxious'
+        elif 'sleeping' in status_lower or 'drowsy' in status_lower or 'feeling drowsy' in status_lower:
+            return 'sleeping'
+        elif 'sick' in status_lower or 'ill' in status_lower or 'suffering' in status_lower:
+            return 'sick'
+        elif 'distressed' in status_lower:
+            return 'distressed'
+        
+        # Exploration behaviors
+        elif 'exploring' in status_lower:
+            return 'exploring'
+        elif 'roaming' in status_lower or 'wandering' in status_lower or 'patrolling' in status_lower:
+            return 'roaming'
+        elif 'zooming' in status_lower or 'buzzing' in status_lower:
+            return 'energetic_movement'
+        elif 'resting' in status_lower or 'lounging' in status_lower:
+            return 'resting'
+        elif 'watching' in status_lower:
+            return 'watching'
+        elif 'seeking adventure' in status_lower:
+            return 'seeking_adventure'
+        elif 'searching' in status_lower or 'scouting' in status_lower:
+            return 'searching'
+        
+        # Default fallback
+        else:
+            return 'idle'
 
     def make_squid_curious(self):
         self.squid.mental_state_manager.set_state("curious", True)
@@ -1499,6 +1625,9 @@ class TamagotchiLogic:
         if self.squid is not None and sushi_item.collidesWithItem(self.squid.squid_item):
             self.squid.eat(sushi_item)  # Pass the sushi_item as an argument
             self.remove_food(sushi_item)
+            
+            # Reset status after a short delay (matching cheese behavior)
+            QtCore.QTimer.singleShot(2000, self.reset_squid_status)
 
     def is_sushi(self, food_item):
         return getattr(food_item, 'is_sushi', False)     
@@ -1676,7 +1805,14 @@ class TamagotchiLogic:
             self.recent_actions.pop(0)
 
     def feed_squid(self):
-        self.track_action('feeding')
+        """Modified to track action for neurogenesis"""
+        # Track for neurogenesis FIRST
+        if hasattr(self.brain_window, 'brain_widget') and \
+           hasattr(self.brain_window.brain_widget, 'neurogenesis_system'):
+            self.brain_window.brain_widget.neurogenesis_system.track_action('user_feeding')
+        
+        self.track_action('feeding')  # Keep original tracking
+        
         # Get plugin results
         results = self.plugin_manager.trigger_hook("on_feed", 
                                                 tamagotchi_logic=self, 
@@ -1719,6 +1855,11 @@ class TamagotchiLogic:
         self.food_items.append(food_item)  # Single addition
 
     def clean_environment(self):
+        # Track for neurogenesis FIRST
+        if hasattr(self.brain_window, 'brain_widget') and \
+        hasattr(self.brain_window.brain_widget, 'neurogenesis_system'):
+            self.brain_window.brain_widget.neurogenesis_system.track_action('user_cleaning')
+        
         self.track_action('cleaning')
         current_time = time.time()
         if current_time - self.last_clean_time < self.clean_cooldown:
@@ -1845,6 +1986,16 @@ class TamagotchiLogic:
     def show_thought(self, text):
         """Display a squid 'thought' in yellow."""
         self.user_interface.show_message(f'<span style="color:#FFEB3B;">{text}</span>')
+
+
+    def update_score(self):
+        if self.squid is not None:
+            if not self.squid.is_sick and self.squid.happiness >= 80 and self.squid.cleanliness >= 80:
+                self.points += 1
+            elif self.squid.is_sick or self.squid.hunger >= 80 or self.squid.happiness <= 20:
+                self.points -= 1
+
+            self.user_interface.update_points(self.points)
 
     def toggle_debug_mode(self):
         """Toggle debug mode across all components without circular references"""
@@ -2036,6 +2187,20 @@ class TamagotchiLogic:
         self.last_clean_time          = tlog_data['last_clean_time']
         self.points                   = tlog_data['points']
 
+        # ---------- RESTORE NEUROGENESIS & EXPERIENCE BUFFER ----------
+        if 'neurogenesis' in save_data and 'experience_buffer' in save_data:
+            if (hasattr(self, 'brain_window') and
+                hasattr(self.brain_window, 'brain_widget') and
+                hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis')):
+
+                neurogenesis = self.brain_window.brain_widget.enhanced_neurogenesis
+                neurogenesis.load_from_dict(save_data['neurogenesis'])
+
+                buffer_data = save_data['experience_buffer']
+                if buffer_data:   # non-empty
+                    neurogenesis.experience_buffer.pattern_counts = buffer_data.get('pattern_counts', {})
+                    neurogenesis.experience_buffer.parent_pattern_counts = buffer_data.get('parent_pattern_counts', {})
+
         # ---------- plugin data ----------
         if 'plugin_data' in save_data:
             self.plugin_manager.trigger_hook(
@@ -2051,15 +2216,6 @@ class TamagotchiLogic:
 
         print("Game loaded successfully")
         self.set_simulation_speed(1)
-
-    def update_score(self):
-        if self.squid is not None:
-            if not self.squid.is_sick and self.squid.happiness >= 80 and self.squid.cleanliness >= 80:
-                self.points += 1
-            elif self.squid.is_sick or self.squid.hunger >= 80 or self.squid.happiness <= 20:
-                self.points -= 1
-
-            self.user_interface.update_points(self.points)
 
 
     def update_squid_brain(self):
@@ -2102,6 +2258,11 @@ class TamagotchiLogic:
         """
         Save the full game state to zip.
         """
+        # ---- 1)  ensure every squid has a UUID  ----
+        if not hasattr(squid, 'uuid') or squid.uuid is None:
+            import uuid
+            squid.uuid = uuid.uuid4()
+
         try:
             # ---------- plugin hook ----------
             plugin_data = {}
@@ -2122,7 +2283,6 @@ class TamagotchiLogic:
             if hasattr(self.brain_window, 'statistics_tab'):
                 stats_dict = self.brain_window.statistics_tab.statistics
 
-
             # ---------- score data from statistics window ----------
             score_data = {}
             if hasattr(self, 'statistics_window'):
@@ -2132,6 +2292,17 @@ class TamagotchiLogic:
                     'combo_timer': self.statistics_window.combo_timer,
                     'last_food_time': self.statistics_window.last_food_time
                 }
+
+            # ---------- NEUROGENESIS & EXPERIENCE BUFFER ----------
+            neurogenesis_dict = {}
+            experience_buffer_dict = {}
+            if (hasattr(self, 'brain_window') and
+                hasattr(self.brain_window, 'brain_widget') and
+                hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis')):
+
+                neurogenesis = self.brain_window.brain_widget.enhanced_neurogenesis
+                neurogenesis_dict = neurogenesis.to_dict()
+                experience_buffer_dict = neurogenesis.experience_buffer.to_dict()
 
             # ---------- main save bundle ----------
             save_data = {
@@ -2150,7 +2321,8 @@ class TamagotchiLogic:
                         'anxiety': squid.anxiety,
                         'curiosity': squid.curiosity,
                         'personality': squid.personality.value,
-                        'tint_color': squid.tint_color.getRgb() if squid.tint_color else None
+                        'tint_color': squid.tint_color.getRgb() if squid.tint_color else None,
+                        'uuid': str(squid.uuid)
                     },
                     'tamagotchi_logic': {
                         'cleanliness_threshold_time': self.cleanliness_threshold_time,
@@ -2175,6 +2347,8 @@ class TamagotchiLogic:
                 'plugin_data': plugin_data,
                 'statistics': stats_dict,
                 'score_data': score_data,
+                'neurogenesis': neurogenesis_dict,            #  NEW
+                'experience_buffer': experience_buffer_dict,  #  NEW
             }
 
             filepath = self.save_manager.save_game(save_data, is_autosave)
@@ -2204,7 +2378,7 @@ class TamagotchiLogic:
         self.autosave_timer.start(300000)  # 300000 ms = 5 minutes
 
     def autosave(self):
-        print("Autosaving...")
+        print("     Autosaving...")
         self.save_game(self.squid, self, is_autosave=True)
 
     # New methods to update the new neurons

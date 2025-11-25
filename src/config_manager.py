@@ -104,6 +104,11 @@ class ConfigManager:
         with open(self.config_path, 'w') as f:
             self.config.write(f)
 
+    def get_hebbian_pairs_per_cycle(self):
+        """Return the number of neuron pairs that should be updated each Hebbian cycle."""
+        # default 2
+        return self.config.getint('Neurogenesis', 'max_hebbian_pairs', fallback=2)
+
     def get_rock_config(self):
         return {
             'pickup_prob': float(self.config['RockInteractions']['pickup_probability']),

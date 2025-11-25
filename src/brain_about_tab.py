@@ -103,18 +103,25 @@ class AboutTab(BrainBaseTab):
         
         # Build About text with version info
         about_text.setHtml(f"""
-        <h1>Dosidicus electronicae</h1>
-        <p><a href="https://github.com/ViciousSquid/Dosidicus">github.com/ViciousSquid/Dosidicus</a></p>
-        <p>A Tamagotchi-style digital pet with a simple neural network</p>
-        <ul>
-            <li>by Rufus Pearce (ViciousSquid)</li><br><br>
-        <br>
-        <b>Dosidicus version: {version_info['dosidicus']}</b><br>
-        Brain Tool version: {version_info['brain_tool']}<br>
-        Decision engine version: {version_info['decision_engine']}<br><br>
-        Neurogenesis version: {version_info['neurogenesis']}<br><br>
-        <p>This is a research project. Please suggest features.</p><br><br>
-        </ul>
+            <h1>Dosidicus electronicae</h1>
+
+            <p>
+                <img src="images/string.png"
+                    width="128" height="128"
+                    style="float: right; margin: 10px;">
+                <a href="https://github.com/ViciousSquid/Dosidicus">github.com/ViciousSquid/Dosidicus</a><br>
+                A Tamagotchi-style digital pet with a simple neural network
+            </p>
+
+            <ul>
+                <li>by Rufus Pearce (ViciousSquid)</li><br><br>
+                <br>
+                <b>Dosidicus version: {version_info['dosidicus']}</b><br>
+                Brain Tool version: {version_info['brain_tool']}<br>
+                Decision engine version: {version_info['decision_engine']}<br><br>
+                Neurogenesis version: {version_info['neurogenesis']}<br><br>
+                <p>This is a research project. Please suggest features.</p><br><br>
+            </ul>
         """)
         
         # Create a custom widget for the badge
@@ -373,10 +380,10 @@ class AboutTab(BrainBaseTab):
     def get_version_info(self):
         """Read version information from the version file"""
         version_info = {
-            "dosidicus": "2.4.5.0_base",  # Default versions if file not found
-            "brain_tool": "N/A",
-            "decision_engine":"N/A",
-            "neurogenesis":   "N/A"         # fallback
+            "dosidicus": "2.4.5.1_release   |   Runs on string",  # Default versions
+            "brain_tool": "2",
+            "decision_engine":"3.11",
+            "neurogenesis":   "gen2_nov25"         # fallback
 }
 
         try:

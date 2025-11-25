@@ -363,6 +363,8 @@ class Ui:
         # Optimize animations
         self.optimize_animations()
 
+   
+
     def setup_neurogenesis_debug_shortcut(self):
         # Create a shortcut for neurogenesis debug window
         self.neurogenesis_debug_shortcut = QtWidgets.QShortcut(
