@@ -6,7 +6,6 @@ import json
 import math
 from .statistics_window import StatisticsWindow
 from .save_manager import SaveManager
-from .rps_game import RPSGame
 from .squid import Personality, Squid
 from .ui import ResizablePixmapItem
 from .brain_tool import SquidBrainWindow
@@ -2599,4 +2598,5 @@ class TamagotchiLogic:
                 direction = "left" if random.random() < 0.5 else "right"
                 if self.squid.throw_poop(direction):
                     self.squid.status = "roaming"
+
                     self.squid.current_poop_target = None
