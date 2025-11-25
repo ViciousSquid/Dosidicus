@@ -104,25 +104,21 @@ class AboutTab(BrainBaseTab):
         # Build About text with version info
         about_text.setHtml(f"""
             <h1>Dosidicus electronicae</h1>
-
             <p>
                 <img src="images/string.png"
                     width="128" height="128"
                     style="float: right; margin: 10px;">
-                <a href="https://github.com/ViciousSquid/Dosidicus">github.com/ViciousSquid/Dosidicus</a><br>
-                A Tamagotchi-style digital pet with a simple neural network
-            </p>
-
-            <ul>
-                <li>by Rufus Pearce (ViciousSquid)</li><br><br>
-                <br>
+                <p> <a href="https://github.com/ViciousSquid/Dosidicus">github.com/ViciousSquid/Dosidicus</a><br>
+                A Tamagotchi-style digital pet with a simple neural network </p> <br>
+                <div style="text-align: right;"><b>S</b>imulated <b>T</b>amagotchi <b>R</b>eactions via <b>I</b>nferencing and <b>N</b>eurogenesis (<b>STRINg</b>)
+                <br><br></div> <ul> <li>by Rufus Pearce (ViciousSquid)</li><br>
                 <b>Dosidicus version: {version_info['dosidicus']}</b><br>
                 Brain Tool version: {version_info['brain_tool']}<br>
-                Decision engine version: {version_info['decision_engine']}<br><br>
+                Decision engine version: {version_info['decision_engine']}<br>
                 Neurogenesis version: {version_info['neurogenesis']}<br><br>
                 <p>This is a research project. Please suggest features.</p><br><br>
-            </ul>
-        """)
+                </ul>
+                        """)
         
         # Create a custom widget for the badge
         badge_widget = QtWidgets.QWidget()
