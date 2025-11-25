@@ -62,9 +62,36 @@ class TamagotchiLogic:
         # Add action tracking - new in 2.4.5.0
         self.recent_actions = []
 
-        # Initialize plugin manager
+       # Initialize plugin manager
         self.plugin_manager = PluginManager()
-        self.plugin_manager.load_all_plugins()
+        self.plugin_manager.set_tamagotchi_logic(self)
+
+        # --- BLACKLIST MULTIPLAYER PLUGIN FROM AUTO-LOADING ---
+        blacklisted = {"multiplayer"}  # lowercase plugin key
+        discovered = self.plugin_manager.discover_plugins()
+        for name in list(discovered.keys()):
+            if name.lower() in blacklisted:
+                del discovered[name]
+                print(f"[PluginManager] Blacklisted '{name}' from auto-loading.")
+
+        # Manually populate plugins dict to skip blacklisted ones
+        self.plugin_manager.plugins.clear()
+        self.plugin_manager.enabled_plugins.clear()
+
+        for name, data in discovered.items():
+            success = self.plugin_manager.load_plugin(name)
+            if success and name != "multiplayer":
+                self.plugin_manager.enabled_plugins.add(name)
+
+        # Setup each loaded plugin (multiplayer is not in self.plugin_manager.plugins)
+        for plugin_name, plugin_data in self.plugin_manager.plugins.items():
+            instance = plugin_data.get('instance')
+            if instance and hasattr(instance, 'setup') and not plugin_data.get('is_setup', False):
+                try:
+                    instance.setup(self.plugin_manager, self)
+                    plugin_data['is_setup'] = True
+                except Exception as e:
+                    print(f"Error setting up plugin {plugin_name}: {e}")
 
         # Update status bar with plugin information
         self.update_status_bar()
