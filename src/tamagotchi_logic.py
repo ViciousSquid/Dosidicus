@@ -2158,90 +2158,57 @@ class TamagotchiLogic:
 
     def load_game(self):
         """
-        Load the full game state – including the StatisticsTab data – from zip.
+        Load the complete game state including decorations.
         """
+        # Load save data using SaveManager
         save_data = self.save_manager.load_game()
-        # --- NEW GUARD ---------------------------------------------------------
-        if save_data is None:          # no save file exists
-            return                     # keep all defaults and exit early
-        # -----------------------------------------------------------------------
-
-        if 'statistics' in save_data and hasattr(self.brain_window, 'statistics_tab'):
-            self.brain_window.statistics_tab.statistics.update(save_data['statistics'])
-            self.brain_window.statistics_tab.update_display()
-
-        # ---------- score data restoration ----------
-        if 'score_data' in save_data and hasattr(self, 'statistics_window'):
-            score_data = save_data['score_data']
-            self.statistics_window.score = score_data.get('score', 0)
-            self.statistics_window.combo_level = score_data.get('combo_level', 1)
-            self.statistics_window.combo_timer = score_data.get('combo_timer', 0)
-            self.statistics_window.last_food_time = score_data.get('last_food_time', 0)
-            # Update the score label immediately
-            self.statistics_window.display_score = self.statistics_window.score
-            self.statistics_window.score_label.setText(f"{int(self.statistics_window.display_score):04d}")
-
-        # ---------- basic state ----------
-        game_state = save_data['game_state']
-        squid_data = game_state['squid']
-        self.squid.load_state(squid_data)
-
-        # ---------- brain ----------
-        self.brain_window.set_brain_state(save_data['brain_state'])
-
-        # ---------- memories ----------
-        if 'ShortTerm' in save_data and save_data['ShortTerm']:
-            self.squid.memory_manager.short_term_memory = save_data['ShortTerm']
-        if 'LongTerm' in save_data and save_data['LongTerm']:
-            self.squid.memory_manager.long_term_memory = save_data['LongTerm']
-
-        # ---------- decorations ----------
-        decorations_data = game_state.get('decorations', [])
-        if decorations_data:
-            print(f"Loading {len(decorations_data)} decorations")
-            # clear old
-            for item in list(self.user_interface.scene.items()):
-                if hasattr(item, 'category') and item.category in ['rock', 'plant', 'decoration']:
-                    self.user_interface.scene.removeItem(item)
-            # load new
+        
+        if save_data is None:
+            print("No save data found")
+            return False
+        
+        try:
+            # Extract game state
+            game_state = save_data['game_state']
+            squid_data = game_state['squid']
+            
+            # Load squid state
+            self.squid.load_state(squid_data)
+            
+            # Load brain state
+            brain_state = save_data.get('brain_state', {})
+            self.brain_window.set_brain_state(brain_state)
+            
+            # Load memories
+            self.squid.memory_manager.short_term_memory = save_data.get('ShortTerm', [])
+            self.squid.memory_manager.long_term_memory = save_data.get('LongTerm', [])
+            
+            # CRITICAL: Load decoration data into UI
+            decorations_data = game_state.get('decorations', [])
             self.user_interface.load_decorations_data(decorations_data)
+            
+            # Load tamagotchi logic state
+            tamagotchi_logic_data = game_state['tamagotchi_logic']
+            self.cleanliness_threshold_time = tamagotchi_logic_data['cleanliness_threshold_time']
+            self.hunger_threshold_time = tamagotchi_logic_data['hunger_threshold_time']
+            self.last_clean_time = tamagotchi_logic_data['last_clean_time']
+            self.points = tamagotchi_logic_data['points']
+            
+            print(f"Game loaded successfully")
+            print(f"Loaded personality: {self.squid.personality.value}")
+            print(f"Loaded {len(decorations_data)} decoration(s)")
+            
+            # Reset simulation speed after loading
+            self.set_simulation_speed(1)
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error loading game: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
 
-        # ---------- TamagotchiLogic ----------
-        tlog_data = game_state['tamagotchi_logic']
-        self.cleanliness_threshold_time = tlog_data['cleanliness_threshold_time']
-        self.hunger_threshold_time    = tlog_data['hunger_threshold_time']
-        self.last_clean_time          = tlog_data['last_clean_time']
-        self.points                   = tlog_data['points']
-
-        # ---------- RESTORE NEUROGENESIS & EXPERIENCE BUFFER ----------
-        if 'neurogenesis' in save_data and 'experience_buffer' in save_data:
-            if (hasattr(self, 'brain_window') and
-                hasattr(self.brain_window, 'brain_widget') and
-                hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis')):
-
-                neurogenesis = self.brain_window.brain_widget.enhanced_neurogenesis
-                neurogenesis.load_from_dict(save_data['neurogenesis'])
-
-                buffer_data = save_data['experience_buffer']
-                if buffer_data:   # non-empty
-                    neurogenesis.experience_buffer.pattern_counts = buffer_data.get('pattern_counts', {})
-                    neurogenesis.experience_buffer.parent_pattern_counts = buffer_data.get('parent_pattern_counts', {})
-
-        # ---------- plugin data ----------
-        if 'plugin_data' in save_data:
-            self.plugin_manager.trigger_hook(
-                "on_load_game",
-                tamagotchi_logic=self,
-                squid=self.squid,
-                plugin_data=save_data['plugin_data']
-            )
-
-        # ---------- memory tab refresh ----------
-        if hasattr(self.brain_window, 'memory_tab'):
-            QtCore.QTimer.singleShot(1000, self.brain_window.memory_tab.update_memory_display)
-
-        print("Game loaded successfully")
-        self.set_simulation_speed(1)
 
 
     def update_squid_brain(self):
@@ -2280,112 +2247,70 @@ class TamagotchiLogic:
 
             self.brain_window.update_brain(brain_state)
 
-    def save_game(self, squid, tamagotchi_logic, is_autosave=False):
+    def save_game(self, is_autosave=False):
         """
-        Save the full game state to zip.
+        Save the complete game state including decorations.
+        
+        Args:
+            is_autosave: Whether this is an autosave (True) or manual save (False)
         """
-        # ---- 1)  ensure every squid has a UUID  ----
-        if not hasattr(squid, 'uuid') or squid.uuid is None:
-            import uuid
-            squid.uuid = uuid.uuid4()
-
-        try:
-            # ---------- plugin hook ----------
-            plugin_data = {}
-            hook_results = self.plugin_manager.trigger_hook(
-                "on_save_game",
-                tamagotchi_logic=self,
-                squid=self.squid
-            )
-            for result in hook_results:
-                if isinstance(result, dict):
-                    plugin_data.update(result)
-
-            # ---------- brain ----------
-            brain_state = self.brain_window.get_brain_state()
-
-            # ---------- statistics ----------
-            stats_dict = {}
-            if hasattr(self.brain_window, 'statistics_tab'):
-                stats_dict = self.brain_window.statistics_tab.statistics
-
-            # ---------- score data from statistics window ----------
-            score_data = {}
-            if hasattr(self, 'statistics_window'):
-                score_data = {
-                    'score': self.statistics_window.score,
-                    'combo_level': self.statistics_window.combo_level,
-                    'combo_timer': self.statistics_window.combo_timer,
-                    'last_food_time': self.statistics_window.last_food_time
-                }
-
-            # ---------- NEUROGENESIS & EXPERIENCE BUFFER ----------
-            neurogenesis_dict = {}
-            experience_buffer_dict = {}
-            if (hasattr(self, 'brain_window') and
-                hasattr(self.brain_window, 'brain_widget') and
-                hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis')):
-
-                neurogenesis = self.brain_window.brain_widget.enhanced_neurogenesis
-                neurogenesis_dict = neurogenesis.to_dict()
-                experience_buffer_dict = neurogenesis.experience_buffer.to_dict()
-
-            # ---------- main save bundle ----------
-            save_data = {
-                'game_state': {
-                    'squid': {
-                        'name': squid.name,
-                        'hunger': squid.hunger,
-                        'sleepiness': squid.sleepiness,
-                        'happiness': squid.happiness,
-                        'cleanliness': squid.cleanliness,
-                        'health': squid.health,
-                        'is_sick': squid.is_sick,
-                        'squid_x': squid.squid_x,
-                        'squid_y': squid.squid_y,
-                        'satisfaction': squid.satisfaction,
-                        'anxiety': squid.anxiety,
-                        'curiosity': squid.curiosity,
-                        'personality': squid.personality.value,
-                        'tint_color': squid.tint_color.getRgb() if squid.tint_color else None,
-                        'uuid': str(squid.uuid)
-                    },
-                    'tamagotchi_logic': {
-                        'cleanliness_threshold_time': self.cleanliness_threshold_time,
-                        'hunger_threshold_time': self.hunger_threshold_time,
-                        'last_clean_time': self.last_clean_time,
-                        'points': self.points
-                    },
-                    'decorations': [
-                        {
-                            'pixmap_data': self._get_pixmap_data(item),
-                            'pos': [item.pos().x(), item.pos().y()],
-                            'scale': item.scale(),
-                            'filename': item.filename
-                        }
-                        for item in self.user_interface.scene.items()
-                        if isinstance(item, ResizablePixmapItem)
-                    ]
-                },
-                'brain_state': brain_state,
-                'ShortTerm': squid.memory_manager.short_term_memory,
-                'LongTerm': squid.memory_manager.long_term_memory,
-                'plugin_data': plugin_data,
-                'statistics': stats_dict,
-                'score_data': score_data,
-                'neurogenesis': neurogenesis_dict,            #  NEW
-                'experience_buffer': experience_buffer_dict,  #  NEW
-            }
-
-            filepath = self.save_manager.save_game(save_data, is_autosave)
-            print(f"Game {'autosaved' if is_autosave else 'saved'} successfully to {filepath}")
-            return filepath
-
-        except Exception as e:
-            print(f"Error during save: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return None
+        # Collect squid state
+        squid_data = {
+            'hunger': self.squid.hunger,
+            'sleepiness': self.squid.sleepiness,
+            'happiness': self.squid.happiness,
+            'cleanliness': self.squid.cleanliness,
+            'health': self.squid.health,
+            'is_sick': self.squid.is_sick,
+            'squid_x': self.squid.squid_x,
+            'squid_y': self.squid.squid_y,
+            'satisfaction': self.squid.satisfaction,
+            'anxiety': self.squid.anxiety,
+            'curiosity': self.squid.curiosity,
+            'personality': self.squid.personality.value,
+            'uuid': self.squid.uuid  # Important for save validation
+        }
+        
+        # Collect tamagotchi logic state
+        tamagotchi_logic_data = {
+            'cleanliness_threshold_time': self.cleanliness_threshold_time,
+            'hunger_threshold_time': self.hunger_threshold_time,
+            'last_clean_time': self.last_clean_time,
+            'points': self.points
+        }
+        
+        # Collect brain state
+        brain_state = self.brain_window.get_brain_state()
+        
+        # Collect memory state
+        short_term_memory = self.squid.memory_manager.short_term_memory
+        long_term_memory = self.squid.memory_manager.long_term_memory
+        
+        # CRITICAL: Collect decoration data from UI
+        decorations_data = self.user_interface.get_decorations_data()
+        
+        # Assemble complete save data
+        save_data = {
+            'game_state': {
+                'squid': squid_data,
+                'tamagotchi_logic': tamagotchi_logic_data,
+                'decorations': decorations_data  # <-- This is the key line!
+            },
+            'brain_state': brain_state,
+            'ShortTerm': short_term_memory,
+            'LongTerm': long_term_memory
+        }
+        
+        # Save using SaveManager
+        filepath = self.save_manager.save_game(save_data, is_autosave)
+        
+        if filepath:
+            save_type = "autosaved" if is_autosave else "saved"
+            print(f"Game {save_type} successfully to {filepath}")
+            return True
+        else:
+            print(f"Failed to save game")
+            return False
         
     def _get_pixmap_data(self, item):
         """Get pixmap data from a QGraphicsPixmapItem for serialization"""
@@ -2405,7 +2330,7 @@ class TamagotchiLogic:
 
     def autosave(self):
         print("     Autosaving...")
-        self.save_game(self.squid, self, is_autosave=True)
+        self.save_game(is_autosave=True)
 
     # New methods to update the new neurons
     def update_satisfaction(self):

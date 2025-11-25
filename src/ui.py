@@ -5,6 +5,7 @@ import json
 import math
 import time
 import random
+import base64
 import uuid
 import traceback
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -1824,51 +1825,112 @@ class Ui:
         self.view_cone_action.triggered.connect(toggle_function)
 
     def get_decorations_data(self):
+        """
+        Serialize all decoration items in the scene for saving.
+        Returns a list of dictionaries containing decoration data.
+        """
         decorations_data = []
+        
+        # Iterate through all items in the scene
         for item in self.scene.items():
+            # Check if it's a ResizablePixmapItem (decoration)
             if isinstance(item, ResizablePixmapItem):
-                pixmap = item.pixmap()
-                buffer = QtCore.QBuffer()
-                buffer.open(QtCore.QIODevice.WriteOnly)
-                pixmap.save(buffer, "PNG")
-                pixmap_data = buffer.data().toBase64().data().decode()
-                decorations_data.append({
-                    'pixmap_data': pixmap_data,
-                    'pos': (item.pos().x(), item.pos().y()),  # Convert QPointF to tuple
-                    'scale': item.scale()
-                })
+                try:
+                    # Get the pixmap and convert to base64
+                    pixmap = item.pixmap()
+                    buffer = QtCore.QBuffer()
+                    buffer.open(QtCore.QIODevice.WriteOnly)
+                    pixmap.save(buffer, "PNG")
+                    pixmap_data = base64.b64encode(buffer.data()).decode('utf-8')
+                    
+                    # Get position as tuple (x, y) for JSON serialization
+                    pos = item.pos()
+                    pos_tuple = (pos.x(), pos.y())
+                    
+                    # Get scale factor
+                    scale = item.scale()
+                    
+                    # Get filename (important for stat lookups)
+                    filename = getattr(item, 'filename', 'unknown')
+                    
+                    # Create decoration data dictionary
+                    decoration_dict = {
+                        'pixmap_data': pixmap_data,
+                        'pos': pos_tuple,
+                        'scale': scale,
+                        'filename': filename
+                    }
+                    
+                    decorations_data.append(decoration_dict)
+                    
+                except Exception as e:
+                    print(f"Error serializing decoration: {e}")
+                    continue
+        
+        print(f"Saved {len(decorations_data)} decoration(s)")
         return decorations_data
 
     def load_decorations_data(self, decorations_data):
-        """Load decorations from saved data"""
-        for decoration_data in decorations_data:
+        """
+        Deserialize and recreate decoration items from saved data.
+        
+        Args:
+            decorations_data: List of dictionaries containing decoration data
+        """
+        if not decorations_data:
+            print("No decorations to load")
+            return
+        
+        # Clear existing decorations first
+        for item in list(self.scene.items()):
+            if isinstance(item, ResizablePixmapItem):
+                self.scene.removeItem(item)
+        
+        # Clear the decoration_window's item list
+        if hasattr(self, 'decoration_window'):
+            self.decoration_window.decoration_items.clear()
+        
+        # Recreate each decoration
+        loaded_count = 0
+        for decoration_dict in decorations_data:
             try:
-                # Get pixmap data
-                pixmap_data = decoration_data.get('pixmap_data')
-                if pixmap_data:
-                    # Convert base64 back to pixmap
-                    byte_array = QtCore.QByteArray.fromBase64(pixmap_data.encode('utf-8'))
-                    pixmap = QtGui.QPixmap()
-                    pixmap.loadFromData(byte_array, "PNG")
-                    
-                    # Create the decoration item
-                    if pixmap and not pixmap.isNull():
-                        item = ResizablePixmapItem(pixmap)
-                        item.setPos(QtCore.QPointF(decoration_data['pos'][0], decoration_data['pos'][1]))
-                        item.setScale(decoration_data['scale'])
-                        item.filename = decoration_data.get('filename', '')
-                        
-                        # Set category based on filename or other logic
-                        if 'plant' in item.filename.lower():
-                            item.category = 'plant'
-                        elif 'rock' in item.filename.lower():
-                            item.category = 'rock'
-                        else:
-                            item.category = 'decoration'
-                        
-                        self.scene.addItem(item)
+                # Decode base64 pixmap data
+                pixmap_data = decoration_dict['pixmap_data']
+                pixmap = QtGui.QPixmap()
+                pixmap.loadFromData(
+                    QtCore.QByteArray(base64.b64decode(pixmap_data.encode('utf-8')))
+                )
+                
+                # Get filename
+                filename = decoration_dict.get('filename', 'unknown')
+                
+                # Create ResizablePixmapItem
+                item = ResizablePixmapItem(pixmap, filename)
+                
+                # Restore position (convert tuple back to QPointF)
+                pos_tuple = decoration_dict['pos']
+                item.setPos(QtCore.QPointF(pos_tuple[0], pos_tuple[1]))
+                
+                # Restore scale
+                scale = decoration_dict.get('scale', 1.0)
+                item.setScale(scale)
+                
+                # Add to scene
+                self.scene.addItem(item)
+                
+                # Add to decoration_window's item tracking list
+                if hasattr(self, 'decoration_window'):
+                    self.decoration_window.add_decoration_item(item)
+                
+                loaded_count += 1
+                
             except Exception as e:
-                print(f"Error loading decoration: {str(e)}")
+                print(f"Error loading decoration: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        print(f"Loaded {loaded_count} decoration(s)")
 
     def get_pixmap_data(self, item):
         pixmap = item.pixmap()
