@@ -1,4 +1,4 @@
-dosidicus: 2.4.5.0_release
+dosidicus: 2.4.5.1_release | Runs on string
 brain_tool: 2.0
 decision_engine: 3.11
-neurogenesis: rev2_nov25
+neurogenesis: rev2.1_nov25

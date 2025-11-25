@@ -285,10 +285,9 @@ class MainWindow(QtWidgets.QMainWindow):
         sys.stderr = TeeStream(sys._original_stderr, console_log)
 
     def initialize_game(self):
-        """Initialize game based on save state"""
-        if self.save_manager.save_exists():
-            print("Save data exists, loading game...")
-            # Create initial squid placeholder
+        """Initialize the game based on whether save data exists"""
+        if self.save_manager.save_exists() and self.specified_personality is None:
+            print("\x1b[32mExisting save data found and will be loaded\x1b[0m")
             self.squid = Squid(self.user_interface, None, None)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
             
@@ -325,10 +324,10 @@ class MainWindow(QtWidgets.QMainWindow):
             # -- finally, show window and check menu item ----------------------
             self.brain_window.show()
             self.user_interface.brain_action.setChecked(True)
-
         else:
-            print("No save data found, creating new game...")
-            # Create the game but don't check for tutorial yet
+            print("\x1b[92m--------------  STARTING A NEW SIMULATION --------------\x1b[0m")
+            
+            # Create the game immediately
             self.create_new_game(self.specified_personality)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
             
@@ -340,12 +339,27 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
             
             # Schedule tutorial check for AFTER initialization
-            # This ensures the UI is fully responsive
-            if not self._initialization_complete:
+            if not self.save_manager.save_exists():
                 QtCore.QTimer.singleShot(500, self.delayed_tutorial_check)
         
         # Mark initialization as complete
         self._initialization_complete = True
+
+    def delayed_tutorial_check(self):
+        """Check if the user wants to see the tutorial after UI is responsive"""
+        # Process pending events to ensure UI is responsive
+        QtWidgets.QApplication.processEvents()
+        
+        # Now check tutorial preference
+        self.check_tutorial_preference()
+        
+        # If tutorial was chosen, schedule it for later
+        if self.show_tutorial:
+            # We'll show tutorial when the game starts
+            pass
+        else:
+            # Just open initial windows if no tutorial
+            QtCore.QTimer.singleShot(500, self.open_initial_windows)
 
     def create_new_game(self, specified_personality=None):
         """Create a new game instance"""
@@ -375,22 +389,6 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.squid.memory_manager.clear_all_memories()
         self.show_splash_screen()
-
-    def delayed_tutorial_check(self):
-        """Check if the user wants to see the tutorial after UI is responsive"""
-        if self._initialization_complete:
-            return
-        
-        # Now check tutorial preference
-        self.check_tutorial_preference()
-        
-        # If tutorial was chosen, schedule it for later
-        if self.show_tutorial:
-            # We'll show tutorial when the game starts
-            pass
-        else:
-            # Just open windows if no tutorial
-            pass
 
     def check_tutorial_preference(self):
         """Show a dialog asking if the user wants to see the tutorial with 5-second timeout"""
@@ -428,16 +426,100 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def start_new_game(self):
         """Start a new game, deleting any existing save"""
+        # First, ask for confirmation with a timed dialog
+        confirm_dialog = TimedMessageBox(
+            self,
+            "Confirm New Game",
+            "Are you sure you want to start a new game? This will delete all current progress and save data.",
+            timeout_seconds=10
+        )
+        confirm_dialog.exec_()
+        
+        # If user declined or let it timeout, abort
+        if confirm_dialog.get_result() != QtWidgets.QMessageBox.Yes:
+            print("New game cancelled by user")
+            return
+        
         print("Starting new game...")
+        
+        # Ask about tutorial
+        tutorial_dialog = TimedMessageBox(
+            self,
+            "Tutorial",
+            "Would you like to see the tutorial?",
+            timeout_seconds=5
+        )
+        tutorial_dialog.exec_()
+        self.show_tutorial = (tutorial_dialog.get_result() == QtWidgets.QMessageBox.Yes)
         
         # Stop current simulation if running
         if hasattr(self, 'tamagotchi_logic'):
             self.tamagotchi_logic.stop()
+            # Stop autosave timer if it exists
+            if hasattr(self.tamagotchi_logic, 'autosave_timer'):
+                self.tamagotchi_logic.autosave_timer.stop()
         
-        # Delete the save
+        # Delete all save files (both autosave and manual save)
         if self.save_manager.save_exists():
-            self.save_manager.delete_save()
-            print("Previous save deleted")
+            self.save_manager.delete_save(is_autosave=True)  # Delete autosave
+            self.save_manager.delete_save(is_autosave=False)  # Delete manual save
+            print("All save files deleted")
+        
+        # Clear memory files
+        memory_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '_memory')
+        if os.path.exists(memory_dir):
+            import shutil
+            shutil.rmtree(memory_dir)
+            print("Memory directory cleared")
+        
+        # Clear all neurons and state from brain window
+        if hasattr(self, 'brain_window') and hasattr(self.brain_window, 'brain_widget'):
+            brain_widget = self.brain_window.brain_widget
+            
+            # Clear visible neurons
+            brain_widget.visible_neurons = set()
+            
+            # Clear neurogenesis data
+            if hasattr(brain_widget, 'neurogenesis_data'):
+                brain_widget.neurogenesis_data = {
+                    'new_neurons': [],
+                    'new_neurons_details': {},
+                    'new_synapses': []
+                }
+            
+            # Clear enhanced neurogenesis tracking
+            if hasattr(brain_widget, 'enhanced_neurogenesis'):
+                brain_widget.enhanced_neurogenesis.reset_all_state()
+            
+            # Reset brain widget state
+            if hasattr(brain_widget, 'state'):
+                brain_widget.state = brain_widget.create_initial_state()
+            
+            # Clear hebbian learning state
+            if hasattr(brain_widget, 'hebbian'):
+                brain_widget.hebbian.reset()
+            
+            print("Brain state cleared")
+        
+        # Clear all decorations and items from the scene
+        if hasattr(self, 'user_interface') and hasattr(self.user_interface, 'scene'):
+            # Remove all items except the background (if it exists)
+            items_to_remove = []
+            background_item = getattr(self.user_interface, 'background', None)
+            
+            for item in self.user_interface.scene.items():
+                # Keep the background (if it exists) and remove everything else
+                if background_item is None or item != background_item:
+                    items_to_remove.append(item)
+            
+            for item in items_to_remove:
+                self.user_interface.scene.removeItem(item)
+            
+            # Clear decoration tracking
+            if hasattr(self.user_interface, 'awarded_decorations'):
+                self.user_interface.awarded_decorations = set()
+            
+            print("Scene cleared")
         
         # Create new game (creates squid but not tamagotchi_logic)
         self.create_new_game(self.specified_personality)
@@ -455,8 +537,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plugin_manager.tamagotchi_logic = self.tamagotchi_logic
         self.tamagotchi_logic.plugin_manager = self.plugin_manager
         
+        # Create personality starter neuron if needed
+        squid = self.tamagotchi_logic.squid
+        brain_widget = self.brain_window.brain_widget
+        if (squid and squid.personality and
+            brain_widget and hasattr(brain_widget, 'enhanced_neurogenesis')):
+            if not squid._has_personality_starter_neuron():
+                neuron = brain_widget.enhanced_neurogenesis.create_personality_starter_neuron(
+                    squid.personality.value,
+                    brain_widget.state
+                )
+                if neuron:
+                    print(f"🧬 Personality starter neuron created: {neuron}")
+        
         # Reload plugins to ensure they get the new tamagotchi_logic
         self.plugin_manager.reload_all_plugins()
+        
+        print("New game created successfully!")
 
     def load_game(self):
         """Delegate to tamagotchi_logic"""
@@ -491,39 +588,40 @@ class MainWindow(QtWidgets.QMainWindow):
         """Display splash screen animation with synchronized neuron reveal"""
         self.splash = SplashScreen(self)
         self.splash.finished.connect(self.start_simulation)
+        self.splash.finished.connect(lambda: self.tamagotchi_logic.statistics_window.award(1000))
         self.splash.second_frame.connect(self.show_hatching_notification)
-        
+
+        # NEW: award 1000 points the instant the splash ends
+        self.splash.finished.connect(
+            lambda: self.tamagotchi_logic.statistics_window.award(1000)
+        )
+
+       # After splash ends, wait 3 s then show the normal feeding hint
+        self.splash.finished.connect(lambda: QtCore.QTimer.singleShot(3000, self.show_feeding_hint))
+
         # Check if this is a brand new game (no save exists)
         is_new_game = not self.save_manager.save_exists()
         print(f"🎮 show_splash_screen: is_new_game={is_new_game}, save_exists={self.save_manager.save_exists()}")
-        
+
         if is_new_game:
             # Ensure brain widget starts empty
             if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'visible_neurons'):
                 self.brain_window.brain_widget.visible_neurons = set()
-                #print(f"🧠 Cleared visible neurons, starting fresh")
             
             # Show brain window first
-            #print("🧠 Opening brain window...")
             self.brain_window.show()
             self.user_interface.brain_action.setChecked(True)
-            #print(f"🧠 Brain window visible: {self.brain_window.isVisible()}")
             
             # Force immediate processing to ensure brain window is painted
             QtWidgets.QApplication.processEvents()
             
             # Give the brain window time to fully render (longer delay)
-            # This ensures users see the empty brain network before neurons start appearing
-            #print("⏳ Waiting for brain window to render before starting animation...")
             QtCore.QTimer.singleShot(1500, lambda: self._start_splash_with_reveals())
         else:
             # For loaded games, show brain window with all neurons visible
-            #print("📂 Loading existing game, showing brain window with all neurons")
-            
-            # Make all core neurons visible immediately for loaded games
             if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'visible_neurons'):
                 brain_widget = self.brain_window.brain_widget
-                # Add all original (core) neurons to visible set
+                # Add all core neurons to visible set
                 for neuron_name in brain_widget.original_neurons:
                     brain_widget.visible_neurons.add(neuron_name)
                 
@@ -531,14 +629,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 if hasattr(brain_widget, 'neurogenesis_data') and 'new_neurons_details' in brain_widget.neurogenesis_data:
                     for neuron_name in brain_widget.neurogenesis_data['new_neurons_details'].keys():
                         brain_widget.visible_neurons.add(neuron_name)
-                
-                #print(f"🧠 Made {len(brain_widget.visible_neurons)} neurons visible")
             
             # Show brain window immediately for loaded games
-            #print("🧠 Opening brain window for loaded game...")
             self.brain_window.show()
             self.user_interface.brain_action.setChecked(True)
-            #print(f"🧠 Brain window visible: {self.brain_window.isVisible()}")
             
             # Force immediate processing to ensure brain window is painted
             QtWidgets.QApplication.processEvents()
@@ -546,6 +640,11 @@ class MainWindow(QtWidgets.QMainWindow):
             # Show splash normally (no animated reveals needed for loaded games)
             self.splash.show()
             QtCore.QTimer.singleShot(1000, self.splash.start_animation)
+
+
+    def show_feeding_hint(self):
+        """Use the same strip as every other message."""
+        self.user_interface.show_message("Use the Actions menu to feed the squid")
     
     def _start_splash_with_reveals(self):
         """Start splash screen with neuron reveal synchronization (called after brain window is ready)"""
