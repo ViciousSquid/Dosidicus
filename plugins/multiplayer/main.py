@@ -2,7 +2,15 @@
 
 import os
 import sys
-import traceback # For initialize function error handling
+import traceback 
+
+# --- Plugin Metadata ---
+# These constants describe the plugin to the system and users.
+PLUGIN_NAME = "multiplayer"
+PLUGIN_VERSION = "1.2.0"
+PLUGIN_AUTHOR = "ViciousSquid"
+PLUGIN_DESCRIPTION = "Enables network sync for squids and objects (Experimental)"
+PLUGIN_REQUIRES = [] # Names of other plugins this one depends on
 
 # --- Python Path Setup ---
 # Adjust these paths if your project structure is different.
@@ -60,12 +68,11 @@ def initialize(plugin_manager_instance): # plugin_manager_instance is the actual
         # Create an instance of the main plugin class
         plugin_instance = MultiplayerPlugin() # This is MultiplayerPlugin from mp_plugin_logic.py
 
-        # --- MODIFICATION: Set plugin_manager on the instance ---
+        # --- Set plugin_manager on the instance ---
         # Explicitly set the plugin_manager on the plugin instance here.
         # This ensures it's available to the plugin instance's methods like enable() and particularly setup().
         # Assumes MultiplayerPlugin.__init__ defines self.plugin_manager = None
         plugin_instance.plugin_manager = plugin_manager_instance
-        # --- END MODIFICATION ---
 
         # Define a unique key for the plugin (e.g., based on its name from constants)
         plugin_key = mp_constants.PLUGIN_NAME.lower().replace(" ", "_") # Example: "multiplayer"
