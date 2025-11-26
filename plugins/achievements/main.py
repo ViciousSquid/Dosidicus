@@ -43,7 +43,7 @@ from .achievements_data import (
 # PLUGIN METADATA - Required by PluginManager
 # =============================================================================
 
-PLUGIN_NAME = "Achievements"
+PLUGIN_NAME = "achievements"
 PLUGIN_VERSION = "2.0.0"
 PLUGIN_AUTHOR = "ViciousSquid"
 PLUGIN_DESCRIPTION = "Track milestones and unlock achievements as your squid grows"
@@ -257,30 +257,44 @@ class AchievementsWindow(QtWidgets.QDialog):
 
     def _create_card(self, ach: Achievement, unlocked: bool, progress: int) -> QtWidgets.QFrame:
         card = QtWidgets.QFrame()
-        border_color = TIER_COLORS.get(ach.tier, "#CD7F32") if unlocked else "#555"
-        bg = "rgba(40, 50, 60, 200)" if unlocked else "rgba(30, 30, 35, 180)"
+        
+        # 🌟 NEW Lighter Colors 🌟
+        # Use the tier color for unlocked, or a light gray for locked.
+        border_color = TIER_COLORS.get(ach.tier, "#CD7F32") if unlocked else "#AAA"
+        # Use a very light, semi-transparent background for both.
+        bg = "rgba(255, 255, 255, 230)" if unlocked else "rgba(230, 230, 235, 200)"
+
         card.setStyleSheet(f"QFrame {{ background: {bg}; border: 2px solid {border_color}; border-radius: 8px; }}")
 
         layout = QtWidgets.QHBoxLayout(card)
 
+        # Icon styling - remains largely the same, but will appear clearer on the lighter background.
         icon = QtWidgets.QLabel(ach.icon if unlocked else "🔒")
         icon.setStyleSheet(f"font-size: {DisplayScaling.font_size(28)}px;")
         icon.setFixedWidth(DisplayScaling.scale(50))
         layout.addWidget(icon)
 
         info = QtWidgets.QVBoxLayout()
+        
+        # 🌟 NEW Name Text Color 🌟
+        # Black for unlocked, Dark Gray for locked (easier to read on light BG)
+        name_color = '#000' if unlocked else '#555' 
         name = QtWidgets.QLabel(ach.name if unlocked or not ach.hidden else "???")
-        name.setStyleSheet(f"color: {'white' if unlocked else '#888'}; "
-                           f"font-size: {DisplayScaling.font_size(14)}px; "
-                           f"font-weight: bold;")
+        name.setStyleSheet(f"color: {name_color}; "
+                        f"font-size: {DisplayScaling.font_size(14)}px; "
+                        f"font-weight: bold;")
         info.addWidget(name)
 
+        # 🌟 NEW Description Text Color 🌟
+        # Dark Gray for unlocked, Medium Gray for locked (easier to read on light BG)
+        desc_color = '#333' if unlocked else '#777'
         desc = QtWidgets.QLabel(ach.description if unlocked or not ach.hidden else "Hidden achievement")
-        desc.setStyleSheet(f"color: {'#aaa' if unlocked else '#666'}; "
-                           f"font-size: {DisplayScaling.font_size(11)}px;")
+        desc.setStyleSheet(f"color: {desc_color}; "
+                        f"font-size: {DisplayScaling.font_size(11)}px;")
         desc.setWordWrap(True)
         info.addWidget(desc)
 
+        # Progress bar logic remains the same
         if ach.target_count > 1 and not unlocked:
             pbar = QtWidgets.QProgressBar()
             pbar.setMaximum(ach.target_count)
@@ -291,10 +305,11 @@ class AchievementsWindow(QtWidgets.QDialog):
 
         layout.addLayout(info, 1)
 
+        # Points color remains the tier color, which will stand out well.
         pts = QtWidgets.QLabel(f"+{ach.points}")
         pts.setStyleSheet(f"color: {TIER_COLORS.get(ach.tier, '#CD7F32')}; "
-                          f"font-size: {DisplayScaling.font_size(12)}px; "
-                          f"font-weight: bold;")
+                        f"font-size: {DisplayScaling.font_size(12)}px; "
+                        f"font-weight: bold;")
         layout.addWidget(pts)
 
         return card

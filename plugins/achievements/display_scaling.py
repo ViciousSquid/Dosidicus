@@ -1,5 +1,5 @@
 """
-Portable copy of DisplayScaling for the Achievements plugin.
+Portable copy of DisplayScaling plugins.
 Keep this file in the same folder as main.py
 """
 
