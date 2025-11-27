@@ -83,6 +83,8 @@ class TimedMessageBox(QtWidgets.QDialog):
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.update_countdown)
         self.timer.start(1000)  # Update every second
+
+
         
     def update_countdown(self):
         """Update the countdown and auto-close when time runs out"""
@@ -189,6 +191,23 @@ class MainWindow(QtWidgets.QMainWindow):
         # Load and initialize plugins after core components
         logging.debug("Loading plugins")
         plugin_results = self.plugin_manager.load_all_plugins()
+        
+        # Setup plugins with tamagotchi_logic reference
+        for plugin_name, plugin_data in self.plugin_manager.plugins.items():
+            instance = plugin_data.get('instance')
+            if instance and hasattr(instance, 'setup') and not plugin_data.get('is_setup', False):
+                try:
+                    instance.setup(self.plugin_manager, self.tamagotchi_logic)
+                    plugin_data['is_setup'] = True
+                except Exception as e:
+                    print(f"Error setting up plugin {plugin_name}: {e}")
+        
+        # CRITICAL FIX: Re-load achievement data since plugin instances were replaced
+        # during load_all_plugins(), discarding any data loaded earlier
+        if self.save_manager.save_exists():
+            save_data = self.save_manager.load_game()
+            if save_data and 'achievements' in save_data:
+                self._restore_achievements_data(save_data['achievements'])
         
         # Update status bar with plugin information
         if hasattr(self.user_interface, 'status_bar'):
@@ -300,6 +319,10 @@ class MainWindow(QtWidgets.QMainWindow):
             
             # Now load from save data
             self.load_game()
+
+            # Force immediate statistics update to ensure score displays correctly
+            if hasattr(self.tamagotchi_logic, 'statistics_window'):
+                self.tamagotchi_logic.statistics_window.update_statistics()
 
             # ------------------------------------------------------------------
             #  NEW: reveal all neurons with the same fast animation used on
@@ -563,6 +586,25 @@ class MainWindow(QtWidgets.QMainWindow):
         """Delegate to tamagotchi_logic"""
         if self.squid and self.tamagotchi_logic:
             self.tamagotchi_logic.save_game()
+
+    def _restore_achievements_data(self, achievements_data):
+        """Restore achievement data to the achievements plugin after plugin reload.
+        
+        This is needed because plugin instances get replaced during initialization,
+        discarding any previously loaded save data.
+        """
+        if not achievements_data:
+            return
+        try:
+            if 'achievements' in self.plugin_manager.plugins:
+                plugin_info = self.plugin_manager.plugins['achievements']
+                instance = plugin_info.get('instance')
+                if instance and hasattr(instance, 'load_save_data'):
+                    instance.load_save_data(achievements_data)
+                    unlocked_count = len(achievements_data.get('unlocked', {}))
+                    print(f"✓ Restored {unlocked_count} achievements")
+        except Exception as e:
+            print(f"[Warning] Could not restore achievements: {e}")
 
     def closeEvent(self, event):
         """Handle window close event"""
