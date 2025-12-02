@@ -18,6 +18,7 @@ from src.save_manager import SaveManager
 from src.brain_tool import SquidBrainWindow
 from src.learning import LearningConfig
 from src.plugin_manager import PluginManager
+from src.brain_worker import BrainWorker
 
 os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
 os.makedirs('logs', exist_ok=True)
@@ -136,9 +137,6 @@ class MainWindow(QtWidgets.QMainWindow):
         logging.debug("Initializing SquidBrainWindow")
         self.brain_window = SquidBrainWindow(None, self.debug_mode, self.config)
         
-        # Important: Don't hide immediately for new games - will be shown in show_splash_screen
-        # self.brain_window.hide()
-        
         # Store the original window reference to prevent garbage collection
         self._brain_window_ref = self.brain_window
         
@@ -163,6 +161,17 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Track whether we want to show tutorial
         self.show_tutorial = False
+
+
+         # Init background worker thread
+        self.brain_worker = BrainWorker(brain_widget=self.brain_window.brain_widget)
+        self.brain_worker.start()
+         # After creating/assigning the worker
+        if self.brain_worker:
+            print(f"BrainWorker created: {self.brain_worker}")
+            print(f"Is running: {self.brain_worker.isRunning()}")
+        else:
+            print("😀😀😀😀😀😀😀 ERROR: BrainWorker is None!")
         
         # Initialize the game
         logging.debug("Initializing game")
