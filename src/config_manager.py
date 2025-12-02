@@ -1,0 +1,433 @@
+import configparser
+import os
+import random
+from PyQt5 import QtCore
+from ast import literal_eval
+
+class ConfigManager:
+    """
+    Configuration manager for Dosidicus-2.
+    
+    Handles loading/saving of config.ini and provides typed accessors
+    for all configuration values including animation styles.
+    """
+    
+    # Available animation styles – keep in sync with animation_styles.py
+    ANIMATION_STYLES = ['vibrant', 'subtle', 'neural', 'electric', 'zen', 'neon']
+    
+    def __init__(self, config_path="config.ini"):
+        self.config_path = config_path
+        self.config = configparser.ConfigParser()
+        self.load_config()
+
+    def load_config(self):
+        if not os.path.exists(self.config_path):
+            self.create_default_config()
+        self.config.read(self.config_path)
+
+    def create_default_config(self):
+        # Rock Interactions
+        self.config['RockInteractions'] = {
+            'pickup_probability': '0.7',
+            'throw_probability': '0.4',
+            'min_carry_duration': '3.0',
+            'max_carry_duration': '8.0',
+            'cooldown_after_throw': '10.0',
+            'happiness_boost': '9',
+            'satisfaction_boost': '11',
+            'anxiety_reduction': '9',
+            'memory_decay_rate': '0.95',
+            'max_rock_memories': '6'
+        }
+
+        # Neurogenesis
+        self.config['Neurogenesis'] = {
+            'enabled': 'True',
+            'showmanship': 'True',
+            'cooldown': '180.0',
+            'per_type_cooldown': '30.0',
+            'max_neurons': '50',
+            'initial_neuron_count': '7'
+        }
+
+        # Specialist Neuron Cap (Important!)
+        self.config['Neurogenesis.SpecialisationCaps'] = {
+            'novelty_object_investigation': '5',
+        }
+
+        # Neurogenesis Triggers
+        self.config['Neurogenesis.Novelty'] = {
+            'enabled': 'True',
+            'threshold': '3.0',
+            'decay_rate': '0.85',
+            'max_counter': '10.0',
+            'min_curiosity': '0.3',
+            'adventurous_modifier': '1.2',
+            'timid_modifier': '0.8'
+        }
+
+        self.config['Neurogenesis.Stress'] = {
+            'enabled': 'True',
+            'threshold': '2.0',
+            'decay_rate': '0.85',
+            'max_counter': '10.0',
+            'min_anxiety': '0.4',
+            'timid_modifier': '1.5',
+            'energetic_modifier': '0.7'
+        }
+
+        self.config['Neurogenesis.Reward'] = {
+            'enabled': 'True',
+            'threshold': '2.5',
+            'decay_rate': '0.88',
+            'max_counter': '10.0',
+            'min_satisfaction': '0.5',
+            'boost_multiplier': '1.1'
+        }
+
+        # Neuron Properties
+        self.config['Neurogenesis.NeuronProperties'] = {
+            'base_activation': '0.5',
+            'position_variance': '75',
+            'default_connections': 'True',
+            'connection_strength': '0.3',
+            'reciprocal_strength': '0.15'
+        }
+
+        # Appearance
+        self.config['Neurogenesis.Appearance'] = {
+            'novelty_color': '255,255,150',
+            'stress_color': '255,150,150',
+            'reward_color': '150,255,150',
+            'novelty_shape': 'triangle',
+            'stress_shape': 'square',
+            'reward_shape': 'circle'
+        }
+
+        # Visual Effects
+        self.config['Neurogenesis.VisualEffects'] = {
+            'highlight_duration': '5.0',
+            'highlight_radius': '40',
+            'pulse_effect': 'True',
+            'pulse_speed': '0.5'
+        }
+
+        # ----------  NEW STYLES  ----------
+        self.config['Animation.Electric'] = {
+            'use_thick_lines': 'True',
+            'line_base_width': '2.5',
+            'line_colour_positive': '0,255,255',
+            'line_colour_negative': '255,0,255',
+            'line_alpha': '255'
+        }
+
+        self.config['Animation.Zen'] = {
+            'use_thick_lines': 'False',
+            'line_base_width': '1.0',
+            'line_colour_positive': '60,60,60',
+            'line_colour_negative': '120,120,120',
+            'line_alpha': '120'
+        }
+
+        self.config['Animation.Neon'] = {
+            'use_thick_lines': 'True',
+            'line_base_width': '1.8',
+            'line_colour_positive': '0,255,120',
+            'line_colour_negative': '255,50,205',
+            'line_alpha': '240'
+        }
+
+        with open(self.config_path, 'w') as f:
+            self.config.write(f)
+
+    def get_hebbian_pairs_per_cycle(self):
+        """Return the number of neuron pairs that should be updated each Hebbian cycle."""
+        # default 2
+        return self.config.getint('Neurogenesis', 'max_hebbian_pairs', fallback=2)
+
+    def get_showmanship_enabled(self):
+        """Return whether showmanship (dramatic neuron creation) is enabled.
+        
+        When enabled, the ShowmanNeurogenesis wrapper will create neurons
+        during dramatic moments even if normal thresholds aren't met.
+        When disabled, only the base EnhancedNeurogenesis logic applies.
+        """
+        return self.config.getboolean('Neurogenesis', 'showmanship', fallback=True)
+
+    def get_rock_config(self):
+        return {
+            'pickup_prob': float(self.config['RockInteractions']['pickup_probability']),
+            'throw_prob': float(self.config['RockInteractions']['throw_probability']),
+            'min_carry_duration': float(self.config['RockInteractions']['min_carry_duration']),
+            'max_carry_duration': float(self.config['RockInteractions']['max_carry_duration']),
+            'cooldown_after_throw': float(self.config['RockInteractions']['cooldown_after_throw']),
+            'happiness_boost': int(self.config['RockInteractions']['happiness_boost']),
+            'satisfaction_boost': int(self.config['RockInteractions']['satisfaction_boost']),
+            'anxiety_reduction': int(self.config['RockInteractions']['anxiety_reduction']),
+            'memory_decay_rate': float(self.config['RockInteractions']['memory_decay_rate']),
+            'max_rock_memories': int(self.config['RockInteractions']['max_rock_memories'])
+        }
+    
+    def get_poop_config(self):
+        return {
+            'min_carry_duration': 2.0,
+            'max_carry_duration': 9.0,
+            'pickup_prob': 0.2,
+            'throw_prob': 0.3,
+            'happiness_penalty': 5,
+            'anxiety_increase': 10
+        }
+    
+    def get_specialisation_caps(self):
+        """Return dict {specialisation_name: int_max}"""
+        caps = {}
+        if self.config.has_section('Neurogenesis.SpecialisationCaps'):
+            for spec, val in self.config.items('Neurogenesis.SpecialisationCaps'):
+                caps[spec] = int(val)
+        return caps
+
+    def get_neurogenesis_config(self):
+        """Returns the complete neurogenesis configuration as a dictionary"""
+        return {
+            'general': {
+                'enabled': self.config.getboolean('Neurogenesis', 'enabled', fallback=True),
+                'showmanship': self.config.getboolean('Neurogenesis', 'showmanship', fallback=True),
+                'cooldown': self.config.getfloat('Neurogenesis', 'cooldown', fallback=180),
+                'per_type_cooldown': self.config.getfloat('Neurogenesis', 'per_type_cooldown', fallback=30),
+                'max_neurons': self.config.getint('Neurogenesis', 'max_neurons', fallback=20),
+                'initial_neuron_count': self.config.getint('Neurogenesis', 'initial_neuron_count', fallback=7)
+            },
+            'triggers': {
+                'novelty': {
+                    'enabled': self.config.getboolean('Neurogenesis.Novelty', 'enabled', fallback=True),
+                    'threshold': self.config.getfloat('Neurogenesis.Novelty', 'threshold', fallback=2.5),
+                    'decay_rate': self.config.getfloat('Neurogenesis.Novelty', 'decay_rate', fallback=0.95),
+                    'max_counter': self.config.getfloat('Neurogenesis.Novelty', 'max_counter', fallback=10.0),
+                    'min_curiosity': self.config.getfloat('Neurogenesis.Novelty', 'min_curiosity', fallback=0.3),
+                    'personality_modifiers': {
+                        'adventurous': self.config.getfloat('Neurogenesis.Novelty', 'adventurous_modifier', fallback=1.2),
+                        'timid': self.config.getfloat('Neurogenesis.Novelty', 'timid_modifier', fallback=0.8)
+                    }
+                },
+                'stress': {
+                    'enabled': self.config.getboolean('Neurogenesis.Stress', 'enabled', fallback=True),
+                    'threshold': self.config.getfloat('Neurogenesis.Stress', 'threshold', fallback=2.0),
+                    'decay_rate': self.config.getfloat('Neurogenesis.Stress', 'decay_rate', fallback=0.9),
+                    'max_counter': self.config.getfloat('Neurogenesis.Stress', 'max_counter', fallback=10.0),
+                    'min_anxiety': self.config.getfloat('Neurogenesis.Stress', 'min_anxiety', fallback=0.4),
+                    'personality_modifiers': {
+                        'timid': self.config.getfloat('Neurogenesis.Stress', 'timid_modifier', fallback=1.5),
+                        'energetic': self.config.getfloat('Neurogenesis.Stress', 'energetic_modifier', fallback=0.7)
+                    }
+                },
+                'reward': {
+                    'enabled': self.config.getboolean('Neurogenesis.Reward', 'enabled', fallback=True),
+                    'threshold': self.config.getfloat('Neurogenesis.Reward', 'threshold', fallback=1.8),
+                    'decay_rate': self.config.getfloat('Neurogenesis.Reward', 'decay_rate', fallback=0.85),
+                    'max_counter': self.config.getfloat('Neurogenesis.Reward', 'max_counter', fallback=10.0),
+                    'min_satisfaction': self.config.getfloat('Neurogenesis.Reward', 'min_satisfaction', fallback=0.5),
+                    'boost_multiplier': self.config.getfloat('Neurogenesis.Reward', 'boost_multiplier', fallback=1.1)
+                }
+            },
+            'neuron_properties': {
+                'base_activation': self.config.getfloat('Neurogenesis.NeuronProperties', 'base_activation', fallback=0.5),
+                'position_variance': self.config.getint('Neurogenesis.NeuronProperties', 'position_variance', fallback=50),
+                'default_connections': self.config.getboolean('Neurogenesis.NeuronProperties', 'default_connections', fallback=True),
+                'connection_strength': self.config.getfloat('Neurogenesis.NeuronProperties', 'connection_strength', fallback=0.3),
+                'reciprocal_strength': self.config.getfloat('Neurogenesis.NeuronProperties', 'reciprocal_strength', fallback=0.15)
+            },
+            'appearance': {
+                'colors': {
+                    'novelty': [int(x) for x in self.config.get('Neurogenesis.Appearance', 'novelty_color', fallback='255,255,150').split(',')],
+                    'stress': [int(x) for x in self.config.get('Neurogenesis.Appearance', 'stress_color', fallback='255,150,150').split(',')],
+                    'reward': [int(x) for x in self.config.get('Neurogenesis.Appearance', 'reward_color', fallback='150,255,150').split(',')]
+                },
+                'shapes': {
+                    'novelty': self.config.get('Neurogenesis.Appearance', 'novelty_shape', fallback='triangle'),
+                    'stress': self.config.get('Neurogenesis.Appearance', 'stress_shape', fallback='square'),
+                    'reward': self.config.get('Neurogenesis.Appearance', 'reward_shape', fallback='circle')
+                }
+            },
+            'visual_effects': {
+                'highlight_duration': self.config.getfloat('Neurogenesis.VisualEffects', 'highlight_duration', fallback=5.0),
+                'highlight_radius': self.config.getint('Neurogenesis.VisualEffects', 'highlight_radius', fallback=40),
+                'pulse_effect': self.config.getboolean('Neurogenesis.VisualEffects', 'pulse_effect', fallback=True),
+                'pulse_speed': self.config.getfloat('Neurogenesis.VisualEffects', 'pulse_speed', fallback=0.5)
+            }
+        }
+
+    def get_random_carry_duration(self):
+        """Returns random duration between min and max carry duration"""
+        config = self.get_rock_config()
+        return random.uniform(config['min_carry_duration'], config['max_carry_duration'])
+
+    def _parse_config_value(self, value):
+        """Parse configuration values that might contain comments"""
+        # Remove everything after comment markers
+        for comment_marker in [';', '#', '//']:
+            if comment_marker in value:
+                value = value.split(comment_marker)[0]
+        
+        value = value.strip()
+        
+        # Try to convert to appropriate type
+        if value.lower() == 'true':
+            return True
+        elif value.lower() == 'false':
+            return False
+        elif value.isdigit():
+            return int(value)
+        try:
+            return float(value)
+        except ValueError:
+            return value
+
+    # =========================================================================
+    # ANIMATION STYLE CONFIGURATION
+    # =========================================================================
+    
+    def get_animation_style(self) -> str:
+        """
+        Get the current animation style name.
+        
+        Returns one of: 'vibrant', 'subtle', 'neural', 'electric', 'zen', 'neon'
+        """
+        if not self.config.has_section('Animation'):
+            return 'vibrant'  # Default style
+        return self.config.get('Animation', 'style', fallback='vibrant').lower()
+    
+    def set_animation_style(self, style_name: str) -> bool:
+        """
+        Set the animation style and save to config.
+        
+        Args:
+            style_name: One of 'vibrant', 'subtle', 'neural', 'electric', 'zen', 'neon'
+            
+        Returns:
+            True if style was set, False if invalid style name
+        """
+        style_lower = style_name.lower()
+        if style_lower not in self.ANIMATION_STYLES:
+            print(f"⚠️ Invalid animation style: {style_name}. "
+                  f"Available: {self.ANIMATION_STYLES}")
+            return False
+        
+        if not self.config.has_section('Animation'):
+            self.config.add_section('Animation')
+        
+        self.config.set('Animation', 'style', style_lower)
+        self._save_config()
+        return True
+    
+    def get_animation_config(self, style_name: str = None) -> dict:
+        """
+        Get animation configuration for a specific style.
+        
+        This provides config values that can override the dataclass defaults
+        in animation_styles.py, allowing user customization via config.ini.
+        
+        Args:
+            style_name: Style to get config for (defaults to current style)
+            
+        Returns:
+            Dictionary of animation parameters
+        """
+        if style_name is None:
+            style_name = self.get_animation_style()
+        
+        section_name = f'Animation.{style_name.capitalize()}'
+        
+        # Default values for each style
+        defaults = {
+            'vibrant': {
+                'use_thick_lines': 'True',
+                'pulse_colour': '255,220,50',
+                'pulse_alpha': '240',
+                'pulse_duration': '1.8',
+                'pulse_speed': '1.0',
+                'line_base_width': '1.5',
+                'line_colour_positive': '50,220,50',
+                'line_colour_negative': '255,60,60',
+                'line_alpha': '220',
+            },
+            'subtle': {
+                'use_thick_lines': 'False',
+                'pulse_colour': '200,200,150',
+                'pulse_alpha': '160',
+                'pulse_duration': '2.5',
+                'pulse_speed': '0.8',
+                'line_base_width': '0.8',
+                'line_colour_positive': '80,160,80',
+                'line_colour_negative': '180,80,80',
+                'line_alpha': '140',
+            },
+            'neural': {
+                'use_thick_lines': 'False',
+                'pulse_colour': '180,230,255',
+                'pulse_alpha': '200',
+                'pulse_duration': '0.9',
+                'pulse_speed': '1.1',
+                'line_base_width': '1.0',
+                'line_colour_positive': '100,200,255',
+                'line_colour_negative': '255,120,100',
+                'line_alpha': '180',
+                'neural_base_colour_positive': '100,200,255',
+                'neural_base_colour_negative': '255,120,100',
+                'neural_base_alpha': '180',
+            },
+            'electric': {
+                'use_thick_lines': 'True',
+                'pulse_colour': '255,255,255',
+                'pulse_alpha': '255',
+                'pulse_duration': '0.15',
+                'pulse_speed': '4.0',
+                'line_base_width': '2.5',
+                'line_colour_positive': '0,255,255',
+                'line_colour_negative': '255,0,255',
+                'line_alpha': '255',
+            },
+            'zen': {
+                'use_thick_lines': 'False',
+                'pulse_colour': '200,200,200',
+                'pulse_alpha': '120',
+                'pulse_duration': '3.0',
+                'pulse_speed': '0.5',
+                'line_base_width': '1.0',
+                'line_colour_positive': '60,60,60',
+                'line_colour_negative': '120,120,120',
+                'line_alpha': '120',
+            },
+            'neon': {
+                'use_thick_lines': 'True',
+                'pulse_colour': '255,255,255',
+                'pulse_alpha': '255',
+                'pulse_duration': '0.3',
+                'pulse_speed': '3.5',
+                'line_base_width': '1.8',
+                'line_colour_positive': '0,255,120',
+                'line_colour_negative': '255,50,205',
+                'line_alpha': '240',
+            }
+        }
+        
+        style_defaults = defaults.get(style_name.lower(), defaults['vibrant'])
+        
+        # Override with config file values if section exists
+        if self.config.has_section(section_name):
+            for key in style_defaults:
+                if self.config.has_option(section_name, key):
+                    style_defaults[key] = self.config.get(section_name, key)
+        
+        return style_defaults
+    
+    def get_available_animation_styles(self) -> list:
+        """Return list of available animation style names."""
+        return list(self.ANIMATION_STYLES)
+    
+    def _save_config(self):
+        """Save the current configuration to file."""
+        try:
+            with open(self.config_path, 'w') as f:
+                self.config.write(f)
+        except Exception as e:
+            print(f"⚠️ Failed to save config: {e}")
