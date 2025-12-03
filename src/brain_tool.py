@@ -379,14 +379,26 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                     self.brain_widget.enhanced_neurogenesis.from_dict(state['enhanced_neurogenesis'])
                     fn_count = len(self.brain_widget.enhanced_neurogenesis.functional_neurons)
                     print(f"✅ Loaded full EnhancedNeurogenesis state ({fn_count} functional neurons)")
+                    
+                    # If from_dict failed to load neurons, try direct loading
+                    if fn_count == 0 and 'functional_neurons' in state['enhanced_neurogenesis']:
+                        print("⚠️  from_dict returned 0 neurons, attempting direct load...")
+                        self._direct_load_functional_neurons(state['enhanced_neurogenesis']['functional_neurons'])
                 except Exception as e:
                     print(f"⚠️  Error loading EnhancedNeurogenesis: {e}")
+                    import traceback
+                    traceback.print_exc()
                     # Fall back to legacy loading
                     self._load_legacy_functional_neurons(state)
             # Fallback: legacy 'functional_neurons' key only
             elif 'functional_neurons' in state:
                 self._load_legacy_functional_neurons(state)
                 print("ℹ️  Loaded legacy functional_neurons format")
+
+        # =====================================================================
+        # FORCIBLY REBUILD NEUROGENESIS NEURONS FROM functional_neurons OR state
+        # =====================================================================
+        self._force_rebuild_neurogenesis_neurons(state)
 
         # --- Critical Step: Ensure brain_widget consistency after loading ---
         all_neurons = list(self.brain_widget.neuron_positions.keys())
@@ -447,6 +459,189 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         
         self.brain_widget.enhanced_neurogenesis.functional_neurons = restored_neurons
         print(f"Loaded {len(restored_neurons)} functional neurons (legacy format)")
+
+    def _direct_load_functional_neurons(self, functional_neurons_data):
+        """
+        Directly load FunctionalNeuron objects from save data, bypassing from_dict.
+        This is a fallback when the normal loading path fails.
+        """
+        from .neurogenesis import FunctionalNeuron, ExperienceContext
+        
+        if not functional_neurons_data:
+            print("⚠️  No functional_neurons_data to load")
+            return
+        
+        loaded_count = 0
+        for name, data in functional_neurons_data.items():
+            try:
+                # Manually construct the FunctionalNeuron
+                creation_ctx = data.get('creation_context', {})
+                active_neurons_data = creation_ctx.get('active_neurons') or creation_ctx.get('brain_state', {})
+                
+                context = ExperienceContext(
+                    trigger_type=creation_ctx.get('trigger_type', 'stress'),
+                    active_neurons=active_neurons_data,
+                    recent_actions=creation_ctx.get('recent_actions', []),
+                    environmental_state=creation_ctx.get('environmental_state', {}),
+                    outcome=creation_ctx.get('outcome', 'neutral'),
+                    timestamp=creation_ctx.get('timestamp', time.time())
+                )
+                
+                neuron = FunctionalNeuron(
+                    name=data.get('name', name),
+                    neuron_type=data.get('neuron_type', 'stress'),
+                    creation_context=context
+                )
+                
+                # Restore additional attributes
+                neuron.specialization = data.get('specialization', neuron.specialization)
+                neuron.activation_count = data.get('activation_count', 0)
+                neuron.last_activated = data.get('last_activated', 0)
+                neuron.utility_score = data.get('utility_score', 0.0)
+                neuron.strength_multiplier = data.get('strength_multiplier', 1.0)
+                
+                self.brain_widget.enhanced_neurogenesis.functional_neurons[name] = neuron
+                loaded_count += 1
+                print(f"   ↪ Direct loaded: {name}")
+                
+            except Exception as e:
+                print(f"⚠️  Failed to direct load {name}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        print(f"✅ Direct loaded {loaded_count} functional neurons")
+
+    def _force_rebuild_neurogenesis_neurons(self, state=None):
+        """
+        Forcibly rebuild all neurogenesis neurons from functional_neurons data.
+        This ensures neurons are properly drawn after loading a save.
+        
+        Args:
+            state: Optional brain state dict to use as fallback data source
+        """
+        if not hasattr(self.brain_widget, 'enhanced_neurogenesis'):
+            return
+        
+        functional_neurons = self.brain_widget.enhanced_neurogenesis.functional_neurons
+        
+        # If no functional neurons loaded, try to load directly from state
+        if not functional_neurons and state:
+            print("⚠️  No functional neurons in enhanced_neurogenesis, loading from state...")
+            fn_data = None
+            if 'enhanced_neurogenesis' in state and 'functional_neurons' in state['enhanced_neurogenesis']:
+                fn_data = state['enhanced_neurogenesis']['functional_neurons']
+            elif 'functional_neurons' in state:
+                fn_data = state['functional_neurons']
+            
+            if fn_data:
+                self._direct_load_functional_neurons(fn_data)
+                functional_neurons = self.brain_widget.enhanced_neurogenesis.functional_neurons
+        
+        if not functional_neurons:
+            print("⚠️  No functional neurons to rebuild")
+            return
+        
+        core_neurons = {'hunger', 'happiness', 'cleanliness', 'sleepiness',
+                        'satisfaction', 'anxiety', 'curiosity'}
+        excluded = getattr(self.brain_widget, 'excluded_neurons', [])
+        
+        # Ensure neurogenesis_data structures exist
+        if not hasattr(self.brain_widget, 'neurogenesis_data'):
+            self.brain_widget.neurogenesis_data = {}
+        self.brain_widget.neurogenesis_data.setdefault('new_neurons', [])
+        self.brain_widget.neurogenesis_data.setdefault('new_neurons_details', {})
+        
+        # Ensure neuron_shapes exists
+        if not hasattr(self.brain_widget, 'neuron_shapes'):
+            self.brain_widget.neuron_shapes = {}
+        
+        rebuilt_count = 0
+        
+        for name, fn in functional_neurons.items():
+            if name in core_neurons or name in excluded:
+                continue
+            
+            rebuilt_count += 1
+            
+            # 1. Force add to new_neurons list
+            if name not in self.brain_widget.neurogenesis_data['new_neurons']:
+                self.brain_widget.neurogenesis_data['new_neurons'].append(name)
+            
+            # 2. Force add to new_neurons_details
+            if name not in self.brain_widget.neurogenesis_data['new_neurons_details']:
+                self.brain_widget.neurogenesis_data['new_neurons_details'][name] = {
+                    'created_at': fn.creation_context.timestamp,
+                    'trigger_type': fn.neuron_type,
+                    'trigger_value_at_creation': 0,
+                    'specialisation': fn.specialization
+                }
+            
+            # 3. Force add to neuron_positions (calculate if missing)
+            if name not in self.brain_widget.neuron_positions:
+                # Calculate position based on functional connections
+                all_neurons = list(self.brain_widget.neuron_positions.keys())
+                connections = fn.get_functional_connections(all_neurons)
+                
+                if connections:
+                    total_weight = 0
+                    center_x, center_y = 0, 0
+                    for target, weight in connections.items():
+                        if target in self.brain_widget.neuron_positions:
+                            pos = self.brain_widget.neuron_positions[target]
+                            abs_weight = abs(weight)
+                            center_x += pos[0] * abs_weight
+                            center_y += pos[1] * abs_weight
+                            total_weight += abs_weight
+                    if total_weight > 0:
+                        center_x /= total_weight
+                        center_y /= total_weight
+                        x = max(50, min(974, center_x + random.randint(-80, 80)))
+                        y = max(50, min(668, center_y + random.randint(-80, 80)))
+                        self.brain_widget.neuron_positions[name] = (x, y)
+                    else:
+                        self.brain_widget.neuron_positions[name] = (random.randint(100, 900), random.randint(100, 600))
+                else:
+                    self.brain_widget.neuron_positions[name] = (random.randint(100, 900), random.randint(100, 600))
+                print(f"   ↪ Rebuilt position for {name}")
+            
+            # 4. Force add to state
+            if name not in self.brain_widget.state:
+                self.brain_widget.state[name] = 50.0
+            
+            # 5. Force add to visible_neurons
+            if hasattr(self.brain_widget, 'visible_neurons'):
+                self.brain_widget.visible_neurons.add(name)
+            
+            # 6. Force set shape based on neuron type
+            shape_map = {'novelty': 'diamond', 'stress': 'square', 'reward': 'triangle'}
+            self.brain_widget.neuron_shapes[name] = shape_map.get(fn.neuron_type, 'circle')
+            
+            # 7. Force set color based on type and specialization
+            spec = fn.specialization
+            if 'stress' in spec or 'anxiety' in spec:
+                self.brain_widget.state_colors[name] = (255, 150, 150)
+            elif 'reward' in spec or 'satisfaction' in spec:
+                self.brain_widget.state_colors[name] = (150, 255, 150)
+            elif 'investigation' in spec or 'exploration' in spec:
+                self.brain_widget.state_colors[name] = (255, 215, 0)
+            else:
+                color_map = {'novelty': (255, 255, 150), 'stress': (255, 150, 150), 'reward': (173, 216, 230)}
+                self.brain_widget.state_colors[name] = color_map.get(fn.neuron_type, (200, 200, 255))
+            
+            # 8. Force add to communication_events
+            if hasattr(self.brain_widget, 'communication_events'):
+                if name not in self.brain_widget.communication_events:
+                    self.brain_widget.communication_events[name] = 0
+            
+            # 9. Ensure connections exist
+            all_neurons = list(self.brain_widget.neuron_positions.keys())
+            connections = fn.get_functional_connections(all_neurons)
+            for target, weight in connections.items():
+                if (name, target) not in self.brain_widget.weights:
+                    self.brain_widget.weights[(name, target)] = weight
+        
+        if rebuilt_count > 0:
+            print(f"🔧 Force rebuilt {rebuilt_count} neurogenesis neurons from save data")
 
     def sync_state_from_squid(self, squid):
         """

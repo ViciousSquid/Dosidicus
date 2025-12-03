@@ -2250,6 +2250,14 @@ class TamagotchiLogic:
             # This ensures core neuron values match the squid's actual stats
             self.brain_window.sync_state_from_squid(self.squid)
             
+            # CRITICAL: Re-sync neurogenesis neurons AFTER squid sync to ensure they're visible
+            # The squid sync may have reset state, so we need to restore neurogenesis neurons
+            if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis'):
+                neuro = self.brain_window.brain_widget.enhanced_neurogenesis
+                if neuro.functional_neurons:
+                    neuro.ensure_all_neurons_functional()
+                    print(f"✅ Re-synced {len(neuro.functional_neurons)} neurogenesis neurons after squid sync")
+            
             # Load memories
             self.squid.memory_manager.short_term_memory = save_data.get('ShortTerm', [])
             self.squid.memory_manager.long_term_memory = save_data.get('LongTerm', [])

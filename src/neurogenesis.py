@@ -949,7 +949,7 @@ class EnhancedNeurogenesis:
         
         return func_neuron
     
-    def ensure_all_neurons_functional(self):
+    def ensure_all_neurons_functional(self, force_sync=False):
         """
         Synchronize functional_neurons with brain_widget after loading a save.
         
@@ -958,6 +958,9 @@ class EnhancedNeurogenesis:
         2. Ensures neurons in functional_neurons are present in brain_widget structures
         
         Call this after loading a save or when synchronizing state.
+        
+        Args:
+            force_sync: If True, always update appearance even if neuron already exists
         """
         core_neurons = ['hunger', 'happiness', 'cleanliness', 'sleepiness',
                         'satisfaction', 'anxiety', 'curiosity']
@@ -971,6 +974,10 @@ class EnhancedNeurogenesis:
                 self._ensure_functional_neuron(name)
 
         # 2. CRITICAL: Ensure functional_neurons are restored to brain_widget structures
+        restored_positions = 0
+        restored_states = 0
+        restored_visible = 0
+        
         for name, fn in self.functional_neurons.items():
             if name in core_neurons or name in excluded:
                 continue
@@ -979,18 +986,22 @@ class EnhancedNeurogenesis:
             if name not in self.brain_widget.neuron_positions:
                 position = self._calculate_functional_position(fn)
                 self.brain_widget.neuron_positions[name] = position
-                print(f"   ↪ Restored position for {name}")
+                restored_positions += 1
+                print(f"   ↪ Restored position for {name}: {position}")
             
             # Add to state if missing
             if name not in self.brain_widget.state:
                 self.brain_widget.state[name] = 50.0
+                restored_states += 1
                 print(f"   ↪ Restored state for {name}")
             
-            # Add to visible_neurons if it exists
+            # ALWAYS add to visible_neurons (this is idempotent for sets)
             if hasattr(self.brain_widget, 'visible_neurons'):
+                if name not in self.brain_widget.visible_neurons:
+                    restored_visible += 1
                 self.brain_widget.visible_neurons.add(name)
             
-            # Set appearance (color) for the neuron
+            # ALWAYS set appearance (color/shape) - ensures correct rendering after load
             self._set_neuron_appearance(name, fn)
             
             # Restore connections if missing
@@ -1013,9 +1024,24 @@ class EnhancedNeurogenesis:
                     'specialisation': fn.specialization
                 }
         
+        # 4. CRITICAL: Rebuild new_neurons list from functional_neurons
+        # This list is used for drawing connections and identifying neurogenesis neurons
+        new_neurons_list = self.brain_widget.neurogenesis_data.setdefault('new_neurons', [])
+        restored_to_list = 0
+        for name, fn in self.functional_neurons.items():
+            if name in core_neurons or name in excluded:
+                continue
+            if name not in new_neurons_list:
+                new_neurons_list.append(name)
+                restored_to_list += 1
+        if restored_to_list > 0:
+            print(f"   ↪ Restored {restored_to_list} neurons to new_neurons list")
+        
         restored_count = len([n for n in self.functional_neurons if n not in core_neurons and n not in excluded])
         if restored_count > 0:
-            print(f"✅ Neurogenesis restore complete: {restored_count} functional neurons synchronized")
+            print(f"✅ Neurogenesis sync complete: {restored_count} functional neurons")
+            if restored_positions > 0 or restored_states > 0 or restored_visible > 0:
+                print(f"   Restored: {restored_positions} positions, {restored_states} states, {restored_visible} visibility flags")
     
     def set_achievement_callbacks(self, on_created=None, on_leveled=None):
         self._on_neuron_created_callback = on_created

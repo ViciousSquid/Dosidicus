@@ -1755,10 +1755,16 @@ class BrainWidget(QtWidgets.QWidget):
             if neuron in self.neuron_positions and neuron not in self.state:
                 self.state[neuron] = False  # Default boolean state
 
-        # Ensure visible_neurons is complete if not in tutorial mode
-        if not self.is_tutorial_mode and len(self.visible_neurons) < len(self.original_neurons):
-            print(f"⚠️  Loaded state had incomplete visible_neurons. Resetting to all core neurons.")
+        # Ensure visible_neurons is complete
+        # For loaded games, ALL neurons should be visible (not just original_neurons)
+        if not self.is_tutorial_mode:
+            # Add all core neurons
             self.visible_neurons = set(self.original_neurons)
+            # Also add any neurogenesis neurons from neuron_positions
+            for neuron in self.neuron_positions:
+                if neuron not in self.excluded_neurons and neuron not in self.original_neurons:
+                    self.visible_neurons.add(neuron)
+            print(f"📊 Loaded {len(self.neuron_positions)} neurons, {len(self.visible_neurons)} visible")
 
     def create_initial_state(self):
         """

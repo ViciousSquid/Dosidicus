@@ -384,14 +384,14 @@ class NetworkTab(BrainBaseTab):
         self.global_cooldown_label.setText(f"Cooldown: {remaining:.1f}s")
 
     def _create_functional_stats_area(self):
-        """Creates the container for functional stats label and the blue button."""
-        # This wrapper widget holds the functional label and the button side-by-side
+        """Creates the container for functional stats label and the two side-by-side emoji buttons."""
+        # Wrapper that holds the green card + button container
         self.functional_stats_area = QtWidgets.QWidget()
         self.stats_and_button_layout = QtWidgets.QHBoxLayout(self.functional_stats_area)
         self.stats_and_button_layout.setContentsMargins(0, 0, 0, 0)
         self.stats_and_button_layout.setSpacing(10)
 
-        # 1. Functional Stats Label (The green card)
+        # 1. Functional-stats label (green card)
         self.functional_stats_label = QtWidgets.QLabel()
         self.functional_stats_label.setWordWrap(True)
         self.functional_stats_label.setStyleSheet("""
@@ -403,25 +403,61 @@ class NetworkTab(BrainBaseTab):
                 margin: 5px;
             }
         """)
-        self.stats_and_button_layout.addWidget(self.functional_stats_label, 1) # Give the label maximum space
+        self.stats_and_button_layout.addWidget(self.functional_stats_label, 1)
 
-        # 2. The new 50x50 Button Container
+        # 2. Button container – 50 px high, wide enough for two 50×50 buttons
         self.new_button_container = QtWidgets.QWidget()
-        self.new_button_container.setFixedSize(DisplayScaling.scale(50), DisplayScaling.scale(50))
-        new_button_layout = QtWidgets.QVBoxLayout(self.new_button_container)
-        new_button_layout.setContentsMargins(0, 0, 0, 0)
+        self.new_button_container.setFixedSize(DisplayScaling.scale(104),  # 2×50 + 4 px gap
+                                            DisplayScaling.scale(50))
+        btn_layout = QtWidgets.QHBoxLayout(self.new_button_container)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(4)
 
-        # Create the 50x50 button
-        self.new_50x50_button = QtWidgets.QPushButton("🅱️")
+        # Neuron Laboratory
+        self.neuron_lab_button = QtWidgets.QPushButton("🧠")
+        self.neuron_lab_button.setFixedSize(DisplayScaling.scale(50), DisplayScaling.scale(50))
+        self.neuron_lab_button.setStyleSheet("""
+            QPushButton {
+                background-color: #c7ffc4;
+                color: white;
+                border-radius: 5px;
+                font-size: 22pt;
+            }
+            QToolTip {                      /* <-- only this button's tooltip */
+                font-size: 9pt;
+                color: #ffffff;
+                background: #2b2b2b;
+                border: 1px solid #444;
+            }
+        """)
+        self.neuron_lab_button.setToolTip("Open the Neuron Laboratory")
+        self.neuron_lab_button.clicked.connect(self._toggle_neuron_laboratory)
+        btn_layout.addWidget(self.neuron_lab_button)
+
+        # Experience buffer
+        self.new_50x50_button = QtWidgets.QPushButton("✳️")
         self.new_50x50_button.setFixedSize(DisplayScaling.scale(50), DisplayScaling.scale(50))
-        self.new_50x50_button.setStyleSheet("background-color: #3f51b5; color: white; border-radius: 5px; font-size: 26pt;")
+        self.new_50x50_button.setStyleSheet("""
+            QPushButton {
+                background-color: #3f51b5;
+                color: white;
+                border-radius: 5px;
+                font-size: 22pt;
+            }
+            QToolTip {
+                font-size: 9pt;
+                color: #ffffff;
+                background: #2b2b2b;
+                border: 1px solid #444;
+            }
+        """)
+        self.new_50x50_button.setToolTip("Show the Experience Buffer")
         self.new_50x50_button.clicked.connect(self._show_experience_buffer)
-
-        new_button_layout.addWidget(self.new_50x50_button)
+        btn_layout.addWidget(self.new_50x50_button)
 
         self.stats_and_button_layout.addWidget(self.new_button_container)
 
-        # Insert the new combined widget before the final layout stretch
+        # Insert the combined widget just before the final stretch
         self.layout.insertWidget(self.layout.count() - 1, self.functional_stats_area)
 
     def flash_emergency_creation(self, neuron_name):
@@ -439,7 +475,7 @@ class NetworkTab(BrainBaseTab):
 
         if self.neuron_lab_dialog is None:
             # Instantiate the dialog only once
-            self.neuron_lab_dialog = NeuronLaboratory(self.brain_widget, self.parent())
+            self.neuron_lab_dialog = NeuronLaboratory(self.brain_widget, parent=self)
 
         if self.neuron_lab_dialog.isVisible():
             self.neuron_lab_dialog.hide()
