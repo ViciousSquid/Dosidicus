@@ -13,11 +13,11 @@ What if a Tamagotchi had a neural network and could learn stuff?
 
 ### 🧠 Autonomous Behavior:
 
-* Neural network makes decisions based on current state (hunger, sleepiness, etc.).
+* Simple [Neural network](https://github.com/ViciousSquid/Dosidicus/wiki/Neural-Network:-Technical-Overview) makes decisions based on current state (hunger, sleepiness, etc.).
 * Implements a vision cone for food detection, simulating realistic foraging behavior.
-* Hebbian learning algorithm runs every 30 seconds (configurable)
-* Experiences from short-term and long-term memory can influence decision-making
-* Squid can create new neurons in response to his environment (Neurogenesis)
+* [Hebbian learning](https://github.com/ViciousSquid/Dosidicus/wiki/Hebbian-learning) algorithm runs every 30 seconds (configurable)
+* Experiences from short-term and long-term memory can influence [decision-making](https://github.com/ViciousSquid/Dosidicus/wiki/Decision-Engine)
+* Squid can create new neurons in response to his environment ([Neurogenesis](https://github.com/ViciousSquid/Dosidicus/wiki/Neurogenesis))
 
 
 ### Needs Management System:
@@ -32,10 +32,11 @@ What if a Tamagotchi had a neural network and could learn stuff?
 
 ### Decorate and customise!
 
-* Choose decorations to be placed into the environment which the squid will interact with!
+* Choose [decorations](https://github.com/ViciousSquid/Dosidicus/wiki/Decoration-window) to be placed into the environment which the squid will interact with!
 
 
   <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+
 
 
 
