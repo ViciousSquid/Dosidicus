@@ -162,16 +162,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # Track whether we want to show tutorial
         self.show_tutorial = False
 
-
-         # Init background worker thread
-        self.brain_worker = BrainWorker(brain_widget=self.brain_window.brain_widget)
-        self.brain_worker.start()
-         # After creating/assigning the worker
-        if self.brain_worker:
-            print(f"BrainWorker created: {self.brain_worker}")
-            print(f"Is running: {self.brain_worker.isRunning()}")
-        else:
-            print("😀😀😀😀😀😀😀 ERROR: BrainWorker is None!")
+        # ===== PERFORMANCE FIX: Single BrainWorker managed by brain_tool =====
+        # Don't create another worker here - SquidBrainWindow creates and shares it
+        # Access via self.brain_window.brain_worker if needed
+        self.brain_worker = None
+        print("ℹ️ BrainWorker managed by SquidBrainWindow")
         
         # Initialize the game
         logging.debug("Initializing game")
