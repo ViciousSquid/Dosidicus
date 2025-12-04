@@ -149,39 +149,58 @@ class DecisionsTab(BrainBaseTab):
         """Updates the content of the persistent step labels and the final action bar."""
         final_decision = data.get('final_decision', 'N/A')
 
-        self._update_state_step(data.get('inputs', {}))
-        self._update_urges_step(data.get('weights', {}))
+        self._update_state_step(data.get('inputs', {}), data.get('brain_state', {}))
+        self._update_urges_step(data.get('base_weights', {}))
         self._update_modifiers_step(data)
         self._update_final_decision_step(data, final_decision)
 
         # Update the bottom bar
-        self.final_action_label.setText(final_decision.capitalize())
+        self.final_action_label.setText(final_decision.replace('_', ' ').title())
 
-    def _update_state_step(self, inputs):
+    def _update_state_step(self, inputs, brain_state):
         text = "The squid assesses his current condition and visible objects:<br><ul>"
         if not inputs:
             text += "<li>No sensory data available.</li>"
         else:
+            # Show key stats first
+            key_stats = []
+            for stat in ['hunger', 'happiness', 'sleepiness', 'anxiety', 'curiosity']:
+                if stat in inputs:
+                    value = inputs[stat]
+                    color = "#dc3545" if value > 75 else "#ffc107" if value > 50 else "#28a745"
+                    key_stats.append(f"<span style='color:{color};'><b>{stat.capitalize()}:</b> {value:.0f}</span>")
+            
+            if key_stats:
+                text += f"<li>{'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(key_stats)}</li>"
+            
+            # Show visible objects
             visible_items = []
             if inputs.get("has_food_visible"):
-                visible_items.append("Food")
+                visible_items.append("🍖 Food")
             if inputs.get("has_rock_visible"):
-                visible_items.append("Rock")
+                visible_items.append("🪨 Rock")
             if inputs.get("has_poop_visible"):
-                visible_items.append("Poop")
+                visible_items.append("💩 Poop")
             if inputs.get("has_plant_visible"):
-                visible_items.append("Plant")
+                visible_items.append("🌿 Plant")
 
             if visible_items:
                 text += f"<li><b>Visible Objects:</b> {', '.join(visible_items)}</li>"
             else:
-                text += "<li><b>Visible Objects:</b> None</li>"
-
-            excluded_keys = {"has_food_visible", "has_rock_visible", "has_poop_visible", "has_plant_visible"}
-            for key, value in sorted(inputs.items()):
-                if key not in excluded_keys:
-                    formatted_value = f"{value:.2f}" if isinstance(value, float) else str(value)
-                    text += f"<li><b>{key.replace('_', ' ').capitalize()}:</b> {formatted_value}</li>"
+                text += "<li><b>Visible Objects:</b> <i>None in sight</i></li>"
+            
+            # Show if carrying anything
+            if inputs.get("carrying_rock"):
+                text += "<li>🪨 <b>Carrying a rock</b></li>"
+            if inputs.get("carrying_poop"):
+                text += "<li>💩 <b>Carrying poop</b></li>"
+            
+            # Show if sick or sleeping
+            if inputs.get("is_sick"):
+                text += "<li>🤒 <b>Is sick</b></li>"
+            if inputs.get("is_sleeping"):
+                text += "<li>💤 <b>Is sleeping</b></li>"
+                
         text += "</ul>"
         self.step1_label.setText(text)
 
@@ -190,31 +209,109 @@ class DecisionsTab(BrainBaseTab):
             self.step2_label.setText("No urges calculated.")
             return
 
-        strongest_urge = max(weights, key=weights.get)
-        text = f"Based on needs, the strongest urge is <b>{strongest_urge.capitalize()}</b>.<br><br>Initial scores:"
+        # Filter out zero weights for cleaner display
+        non_zero_weights = {k: v for k, v in weights.items() if v > 0}
+        
+        if not non_zero_weights:
+            self.step2_label.setText("<i>No urges active - all base desires are currently zero.</i>")
+            return
+        
+        strongest_urge = max(non_zero_weights, key=non_zero_weights.get)
+        text = f"Based on brain state and needs, the strongest urge is <b style='color: #007bff;'>{strongest_urge.replace('_', ' ').title()}</b>.<br><br>"
+        text += "Active urges (sorted by strength):"
         text += "<ul>"
-        for action, weight in sorted(weights.items(), key=lambda item: item[1], reverse=True):
-            text += f"<li><b>{action.capitalize()}:</b> {weight:.3f}</li>"
+        for action, weight in sorted(non_zero_weights.items(), key=lambda item: item[1], reverse=True):
+            # Highlight if this is the strongest
+            if action == strongest_urge:
+                text += f"<li style='background-color: #e7f3ff; padding: 2px; border-radius: 3px;'><b>➤ {action.replace('_', ' ').title()}:</b> {weight:.2f}</li>"
+            else:
+                text += f"<li><b>{action.replace('_', ' ').title()}:</b> {weight:.2f}</li>"
         text += "</ul>"
+        
+        # Show which urges are currently unavailable (zero weight)
+        zero_weights = {k: v for k, v in weights.items() if v == 0}
+        if zero_weights:
+            text += "<br><i style='color: #6c757d; font-size: 0.9em;'>Unavailable urges: "
+            unavailable_list = []
+            for action in zero_weights.keys():
+                reason = ""
+                if "eating" in action:
+                    reason = "(no food visible)"
+                elif "playing" in action:
+                    reason = "(no objects to play with)"
+                elif "rock" in action:
+                    reason = "(no rocks visible/available)"
+                elif "plant" in action:
+                    reason = "(no plants visible)"
+                elif "poop" in action:
+                    reason = "(no poop visible/available)"
+                unavailable_list.append(f"{action.replace('_', ' ').title()} {reason}")
+            text += ", ".join(unavailable_list)
+            text += "</i>"
+        
         self.step2_label.setText(text)
 
     def _update_modifiers_step(self, data):
-        weights = data.get('weights', {})
+        base_weights = data.get('base_weights', {})
         adj_weights = data.get('adjusted_weights', {})
-        text = "Personality traits and recent memories then adjust these urges:<br><ul>"
+        personality = data.get('personality', 'UNKNOWN')
+        memory_influences = data.get('memory_influences', {})
+        personality_modifiers = data.get('personality_modifiers', {})
+        
+        text = f"<b>Personality:</b> {personality}<br><br>"
+        text += "Now personality traits, memories, and urgency adjust these base urges:<br><ul>"
 
         modified = False
+        modifications = []
+        
         for action, final_score in adj_weights.items():
-            base_score = weights.get(action, final_score)
+            base_score = base_weights.get(action, final_score)
             delta = final_score - base_score
-            if abs(delta) > 0.001:
-                direction = "increased" if delta > 0 else "decreased"
+            
+            if abs(delta) > 0.01:  # Only show meaningful changes
+                direction = "↑ increased" if delta > 0 else "↓ decreased"
                 color = "#28a745" if delta > 0 else "#dc3545"
-                text += f"<li>The score for <b>{action.capitalize()}</b> {direction} by {abs(delta):.3f} <span style='color:{color};'>({delta:+.3f})</span></li>"
+                
+                # Try to explain why it changed
+                reasons = []
+                if action in personality_modifiers and personality_modifiers[action] != 1.0:
+                    modifier = personality_modifiers[action]
+                    if modifier > 1.0:
+                        reasons.append(f"personality boost ×{modifier:.2f}")
+                    else:
+                        reasons.append(f"personality reduction ×{modifier:.2f}")
+                
+                if action in memory_influences and memory_influences[action] != 1.0:
+                    modifier = memory_influences[action]
+                    if modifier > 1.0:
+                        reasons.append(f"positive memories ×{modifier:.2f}")
+                    else:
+                        reasons.append(f"negative memories ×{modifier:.2f}")
+                
+                reason_text = f" <i>({', '.join(reasons)})</i>" if reasons else ""
+                
+                modifications.append({
+                    'action': action,
+                    'direction': direction,
+                    'delta': delta,
+                    'color': color,
+                    'reason': reason_text,
+                    'base': base_score,
+                    'final': final_score
+                })
                 modified = True
+        
+        # Sort by magnitude of change
+        modifications.sort(key=lambda x: abs(x['delta']), reverse=True)
+        
+        for mod in modifications:
+            text += f"<li><b>{mod['action'].replace('_', ' ').title()}</b> {mod['direction']}: "
+            text += f"{mod['base']:.2f} → <span style='color:{mod['color']};'><b>{mod['final']:.2f}</b></span>"
+            text += f" <span style='color:{mod['color']};'>({mod['delta']:+.2f})</span>"
+            text += f"{mod['reason']}</li>"
 
         if not modified:
-            text += "<li>No significant adjustments from personality or memory this time.</li>"
+            text += "<li><i>No significant adjustments from personality or memory this time.</i></li>"
 
         text += "</ul>"
         self.step3_label.setText(text)
@@ -223,19 +320,40 @@ class DecisionsTab(BrainBaseTab):
         confidence = data.get('confidence', 0.0)
         adj_weights = data.get('adjusted_weights', {})
 
-        text = "After all calculations, the final scores are tallied. The highest score determines the action."
+        text = "After all calculations, the final scores determine the action.<br><br>"
+        text += "<b>Final Decision Scores:</b>"
         text += "<ul>"
         if not adj_weights:
             text += "<li>No final scores available.</li>"
         else:
-            for action, score in sorted(adj_weights.items(), key=lambda item: item[1], reverse=True):
-                item_text = f"<li><b>{action.capitalize()}:</b> {score:.3f}</li>"
-                if action == final_decision:
-                    item_text = f"<li style='background-color: #d4edda; border-radius: 4px; padding: 2px;'><b>▶ {action.capitalize()}: {score:.3f}</b></li>"
-                text += item_text
+            # Only show non-zero or relevant scores
+            relevant_scores = sorted(adj_weights.items(), key=lambda item: item[1], reverse=True)[:6]
+            
+            for action, score in relevant_scores:
+                # Check if this is the winning decision
+                is_winner = (action == final_decision)
+                
+                if is_winner:
+                    text += f"<li style='background-color: #d4edda; border-left: 4px solid #28a745; padding: 5px; margin: 3px 0; border-radius: 4px;'>"
+                    text += f"<b style='color: #155724; font-size: 1.1em;'>🏆 {action.replace('_', ' ').title()}: {score:.2f}</b>"
+                    text += f" <span style='color: #155724;'>← CHOSEN</span></li>"
+                elif score > 0:
+                    text += f"<li><b>{action.replace('_', ' ').title()}:</b> {score:.2f}</li>"
+                else:
+                    text += f"<li style='color: #6c757d;'><i>{action.replace('_', ' ').title()}: {score:.2f}</i></li>"
         text += "</ul>"
 
-        text += f"<hr>The squid has decided <b>{final_decision.capitalize()}</b> with a confidence level of <b>{confidence:.1%}</b>."
+        # Confidence display
+        conf_color = "#28a745" if confidence > 0.5 else "#ffc107" if confidence > 0.2 else "#dc3545"
+        conf_label = "High" if confidence > 0.5 else "Medium" if confidence > 0.2 else "Low"
+        
+        text += f"<hr style='margin: 10px 0;'>"
+        text += f"<b>Final Decision:</b> <span style='color: #007bff; font-size: 1.1em;'>{final_decision.replace('_', ' ').title()}</span><br>"
+        text += f"<b>Confidence:</b> <span style='color:{conf_color};'>{conf_label}</span> ({confidence:.1%})"
+        
+        if confidence < 0.2:
+            text += "<br><i style='color: #6c757d; font-size: 0.9em;'>Note: Low confidence means the squid is uncertain - multiple urges were similarly strong.</i>"
+        
         self.step4_label.setText(text)
 
     def _create_arrow(self):

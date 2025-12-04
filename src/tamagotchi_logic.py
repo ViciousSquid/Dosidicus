@@ -2210,6 +2210,10 @@ class TamagotchiLogic:
             
             # Load squid state
             self.squid.load_state(squid_data)
+            
+            # Restore squid name if it was saved
+            if 'name' in squid_data and squid_data['name']:
+                self.squid.name = squid_data['name']
 
             # Restore statistics from separate statistics.json
             stats_data = save_data.get('statistics', {})
@@ -2366,6 +2370,7 @@ class TamagotchiLogic:
             'curiosity': self.squid.curiosity,
             'personality': self.squid.personality.value,
             'uuid': self.squid.uuid,
+            'name': getattr(self.squid, 'name', None),  # Save squid name if it exists
         }
         
         # Collect statistics as separate file
