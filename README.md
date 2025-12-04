@@ -5,13 +5,11 @@ What if a Tamagotchi had a neural network and could learn stuff?
 * Includes tools for visualising and understanding neural networks, Hebbian learning and Neurogenesis
 
 * requires Python 3.9 or greater , `PyQt5` and `numpy`
-## [download v2.5.0.0 for Windows (Dec 04 2025)](https://github.com/ViciousSquid/Dosidicus/releases/tag/v2.5.0.0)
+## [Download](https://github.com/ViciousSquid/Dosidicus/releases/tag/v2.5.0.0)  |  [Wiki](https://github.com/ViciousSquid/Dosidicus/wiki)  |  [Changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog)
 
 
 <img width="2667" height="1002" alt="image" src="https://github.com/user-attachments/assets/12806118-377c-4cf9-9bc1-6a3018fc73ca" />
 
-
-## [View the wiki](https://github.com/ViciousSquid/Dosidicus/wiki) (32 pages and counting!) 
 
 ### 🧠 Autonomous Behavior:
 
@@ -38,6 +36,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 
 
   <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+
 
 
 
