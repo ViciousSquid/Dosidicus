@@ -46,7 +46,7 @@ class AnimationStyle:
     stress_anxiety_dashed: bool = True
     
     # ===== PULSE / TRAVELLING DOT ANIMATION =====
-    pulse_enabled: bool = True                                     # Disabled for vibrant
+    pulse_enabled: bool = False                                     # Disabled for vibrant
     pulse_colour: Tuple[int, int, int] = (255, 255, 0)             # Yellow dot
     pulse_alpha: int = 200
     pulse_duration: float = 2.0                                     # seconds
@@ -74,9 +74,6 @@ class AnimationStyle:
     neurogenesis_highlight_colour: Tuple[int, int, int] = (255, 215, 0)  # Gold
     neurogenesis_highlight_alpha: int = 200
     neurogenesis_highlight_duration: float = 5.0                    # seconds
-    
-    # ===== BACKGROUND =====
-    background_colour: Tuple[int, int, int] = (248, 248, 245)      # Warmer background
     
     # ===== VIBRANT STYLE: AMBIENT PULSING =====
     # When enabled, connections gently "breathe" at random individual rates
@@ -290,44 +287,93 @@ class NeuralStyle(AnimationStyle):
 
 @dataclass
 class NoneStyle(AnimationStyle):
-    """
-    Style 4: None - Static connections only.
-    Draws connection lines without any animation effects.
-    """
-    name: str = "none"
-    display_name: str = "None"
-    description: str = "Static connections with no animation effects"
-
-    # Disable all animations
-    pulse_enabled: bool = False
-    glow_enabled: bool = False
-    hover_enabled: bool = False
-    activity_highlight_enabled: bool = False
-    ambient_pulse_enabled: bool = False
-    comm_glow_enabled: bool = False
-    neural_pulse_enabled: bool = False
-
-    # Basic static line appearance
-    line_base_width: float = 1.0
-    line_colour_positive: Tuple[int, int, int] = (100, 200, 100)
-    line_colour_negative: Tuple[int, int, int] = (200, 100, 100)
-    line_alpha: int = 180
-    use_thick_lines: bool = False
-
-    # Disable stress-anxiety dashed styling
-    stress_anxiety_dashed: bool = False
-
-    # Neutral background
-    background_colour: Tuple[int, int, int] = (245, 247, 250)
+    '''No animations - maximum performance.'''
+    
+    name = 'none'
+    display_name = 'None'
+    description = 'No animations - maximum performance'
+    
+    # Disable ALL animation features
+    pulse_enabled = False
+    glow_enabled = False
+    hover_enabled = False
+    activity_highlight_enabled = False
+    ambient_pulse_enabled = False
+    comm_glow_enabled = False
+    neural_pulse_enabled = False
+    
+    # Basic visual settings (static only)
+    line_base_width = 2
+    line_colour_positive = (100, 200, 100, 180)
+    line_colour_negative = (200, 100, 100, 180)
+    line_alpha = 180
+    use_thick_lines = False
+    
+    stress_anxiety_width = 2
+    stress_anxiety_colour = (255, 100, 100, 180)
+    stress_anxiety_dashed = False
+    
+    background_colour = (240, 240, 245)
+    
+    # All animation values zeroed
+    pulse_colour = (255, 255, 255)
+    pulse_alpha = 0
+    pulse_duration = 0
+    pulse_speed = 0
+    pulse_diameter = 0
+    
+    glow_colour = (255, 255, 255)
+    glow_alpha = 0
+    glow_fade_threshold = 0
+    
+    hover_scale = 1.0
+    hover_animation_duration = 0
+    
+    activity_highlight_colour = (255, 255, 255)
+    activity_highlight_alpha = 0
+    activity_pulse_speed = 0
+    
+    neurogenesis_highlight_colour = (255, 200, 0)
+    neurogenesis_highlight_alpha = 200
+    neurogenesis_highlight_duration = 3.0  # Keep this so neurogenesis is still visible
+    
+    # Vibrant-specific (disabled)
+    ambient_pulse_width_range = (0, 0)
+    ambient_pulse_alpha_range = (0, 0)
+    ambient_pulse_freq_range = (0, 0)
+    ambient_pulse_phase_drift = 0
+    
+    # Subtle-specific (disabled)
+    comm_glow_colour = (255, 255, 255)
+    comm_glow_alpha = 0
+    comm_glow_size = 0
+    comm_glow_tail_length = 0
+    comm_glow_speed_range = (0, 0)
+    comm_glow_fade_in = 0
+    comm_glow_fade_out = 0
+    comm_glow_spawn_on_activity = False
+    comm_glow_spawn_on_weight_change = False
+    comm_glow_max_per_connection = 0
+    
+    # Neural-specific (disabled)
+    neural_pulse_duration = 0
+    neural_pulse_width = 0
+    neural_pulse_colour_positive = (255, 255, 255)
+    neural_pulse_colour_negative = (255, 255, 255)
+    neural_weight_thickness = False
+    neural_weight_thickness_mult = 1.0
+    neural_base_colour_positive = (100, 200, 100)
+    neural_base_colour_negative = (200, 100, 100)
+    neural_base_alpha = 180
 
 
 # ===== STYLE REGISTRY =====
 
 ANIMATION_STYLES = {
-    AnimationStyleName.VIBRANT.value: VibrantStyle(),
-    AnimationStyleName.SUBTLE.value: SubtleStyle(),
-    AnimationStyleName.NEURAL.value: NeuralStyle(),
-    AnimationStyleName.NONE.value: NoneStyle(),
+    'none': NoneStyle,
+    'vibrant': VibrantStyle,
+    'subtle': SubtleStyle,
+    'neural': NeuralStyle,
 }
 
 def get_animation_style(name: str) -> AnimationStyle:

@@ -88,7 +88,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         if hasattr(self, 'memory_tab'):
             self.memory_update_timer = QtCore.QTimer(self)
             self.memory_update_timer.timeout.connect(self.update_memory_tab)
-            self.memory_update_timer.start(2000)  # Update every 2 secs
+            self.memory_update_timer.start(5000)  # PERFORMANCE FIX: Update every 5 secs (was 2)
 
         
         # Set up worker thread
@@ -102,6 +102,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.brain_worker.hebbian_result.connect(self._on_worker_activity)
         self.brain_worker.state_update_result.connect(self._on_worker_activity)
         self.brain_worker.error_occurred.connect(self._on_worker_error)
+        
+        # ===== PERFORMANCE FIX: Share worker with brain_widget =====
+        # This prevents brain_widget from creating its own worker
+        if hasattr(self.brain_widget, 'set_brain_worker'):
+            self.brain_widget.set_brain_worker(self.brain_worker)
+            print("🔗 Shared BrainWorker with brain_widget")
         
         # Store reference to prevent garbage collection
         self._brain_worker_ref = self.brain_worker

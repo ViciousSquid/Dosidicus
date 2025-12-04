@@ -23,6 +23,13 @@ from .animation_styles import (
     ANIMATION_STYLES
 )
 
+# Performance tracking for Task Manager
+try:
+    from .task_manager import perf_tracker
+    _PERF_TRACKING_AVAILABLE = True
+except ImportError:
+    _PERF_TRACKING_AVAILABLE = False
+
 class BrainWidget(QtWidgets.QWidget):
     """
     Neural network visualization widget with theming support.
@@ -182,14 +189,11 @@ class BrainWidget(QtWidgets.QWidget):
         self.animation_timer = QtCore.QTimer(self)
         self.animation_timer.timeout.connect(self.update_animations)
 
-        # Initialize the background worker thread for heavy computations
-        self.brain_worker = BrainWorker(self)
-        self.brain_worker.neurogenesis_result.connect(self._on_neurogenesis_complete)
-        self.brain_worker.hebbian_result.connect(self._on_hebbian_complete)
-        self.brain_worker.state_update_result.connect(self._on_state_update_complete)
-        self.brain_worker.error_occurred.connect(self._on_worker_error)
-        self.brain_worker.start()
-        print("🧵 BrainWorker thread initialized and started")
+        # ===== PERFORMANCE FIX: Don't create BrainWorker here =====
+        # BrainWorker will be provided externally via set_brain_worker()
+        # This prevents multiple worker threads competing for CPU
+        self.brain_worker = None  # Will be set by SquidBrainWindow
+        print("🧵 BrainWorker will be set externally")
         
         # Threading control flags
         self._use_threaded_processing = True
@@ -201,7 +205,13 @@ class BrainWidget(QtWidgets.QWidget):
         self.neurogenesis_timer.timeout.connect(self._periodic_neurogenesis_check)
         self.neurogenesis_timer.start(2000)  # Check every 2 seconds
         print("🧬 Neurogenesis monitoring timer started")
-        self.animation_timer.start(50)  # 20 FPS
+        self.animation_timer.start(40)  # 2.5.0.0 performance fix
+        self._last_animation_update = 0  # For throttling
+        
+        # ===== PERFORMANCE FIX: Cache for expensive paint objects =====
+        self._cached_fonts = {}
+        self._cached_pens = {}
+        
         self.neuron_sizes = {}  # For smooth size transitions
         self.weight_animations = []  # Track multiple weight changes
         self.neurogenesis_highlight = {
@@ -245,6 +255,30 @@ class BrainWidget(QtWidgets.QWidget):
             'pursuing_food': (255, 229, 204),  # Pastel orange
             'direction': (229, 204, 255)  # Pastel purple
         }
+
+    def set_brain_worker(self, worker):
+        """
+        Accept an external BrainWorker instance.
+        PERFORMANCE FIX: Allows sharing a single worker across components.
+        """
+        if self.brain_worker is not None:
+            # Check if it's running (safely)
+            try:
+                if hasattr(self.brain_worker, 'isRunning') and self.brain_worker.isRunning():
+                    print("⚠️ BrainWidget already has a running worker, skipping")
+                    return
+            except RuntimeError:
+                pass  # Worker was deleted, continue with new one
+            
+        self.brain_worker = worker
+        
+        # Connect signals
+        self.brain_worker.neurogenesis_result.connect(self._on_neurogenesis_complete)
+        self.brain_worker.hebbian_result.connect(self._on_hebbian_complete)
+        self.brain_worker.state_update_result.connect(self._on_state_update_complete)
+        self.brain_worker.error_occurred.connect(self._on_worker_error)
+        
+        print("🧵 BrainWidget received external BrainWorker")
 
 
 
@@ -1071,69 +1105,121 @@ class BrainWidget(QtWidgets.QWidget):
             self._link_fade_timer.stop()
 
     def update_animations(self):
-        """Update all animation states"""
+        """Update all animation states with smarter dirty-checking."""
         current_time = time.time()
         
-        # Calculate dt for smooth animations
+        # Performance tracking (keep if using task manager)
+        if _PERF_TRACKING_AVAILABLE:
+            _anim_start = time.perf_counter()
+            perf_tracker.increment("animation_frames")
+        
+        # Frame rate limiting - skip if called too soon
+        if hasattr(self, '_last_animation_update'):
+            elapsed = current_time - self._last_animation_update
+            if elapsed < 0.04:  # 25fps cap (40ms) - reduced from 30fps
+                return
+        self._last_animation_update = current_time
+        
+        # Calculate dt
         if not hasattr(self, '_last_animation_time'):
             self._last_animation_time = current_time
-        dt = current_time - self._last_animation_time
+        dt = min(current_time - self._last_animation_time, 0.1)
         self._last_animation_time = current_time
-        
-        # Clamp dt to prevent huge jumps
-        dt = min(dt, 0.1)
 
-        # 1. update neurogenesis pulse
+        # SMARTER dirty tracking
+        needs_repaint = False
+
+        # 1. Neurogenesis pulse - only repaint if active
         if self.neurogenesis_highlight['neuron']:
             elapsed = current_time - self.neurogenesis_highlight['start_time']
             if elapsed < self.neurogenesis_highlight['duration']:
                 self.neurogenesis_highlight['pulse_phase'] = elapsed * 15
+                needs_repaint = True
             else:
                 self.neurogenesis_highlight['neuron'] = None
+                needs_repaint = True  # One final repaint to clear
 
-        # 2. update neuron reveal animations
-        completed_reveals = []
-        for neuron_name, anim_data in self.neuron_reveal_animations.items():
-            elapsed = current_time - anim_data['start_time']
-            duration = 0.4
-            if elapsed >= duration:
-                anim_data['progress'] = 1.0
-                completed_reveals.append(neuron_name)
-            else:
-                progress = elapsed / duration
-                anim_data['progress'] = 1 - (1 - progress) ** 3
+        # 2. Neuron reveal animations - only if we have any
+        if self.neuron_reveal_animations:
+            completed_reveals = []
+            for neuron_name, anim_data in self.neuron_reveal_animations.items():
+                elapsed = current_time - anim_data['start_time']
+                if elapsed >= 0.4:
+                    anim_data['progress'] = 1.0
+                    completed_reveals.append(neuron_name)
+                else:
+                    anim_data['progress'] = 1 - (1 - elapsed / 0.4) ** 3
 
-        for neuron_name in completed_reveals:
-            del self.neuron_reveal_animations[neuron_name]
+            for neuron_name in completed_reveals:
+                del self.neuron_reveal_animations[neuron_name]
+            
+            needs_repaint = True
+            
+            # Enable links after last reveal
+            if (len(self.visible_neurons) == len(self.original_neurons) and
+                not self.neuron_reveal_animations and not self.show_links):
+                self._enable_links_after_reveal()
 
-        # NEW: when the LAST neuron animation completes, immediately enable links
-        if (len(self.visible_neurons) == len(self.original_neurons) and
-            not self.neuron_reveal_animations and
-            not self.show_links):                    # only once
-            self._enable_links_after_reveal()
-
-        # 3. weight animations (unchanged)
-        self.weight_animations = [
-            anim for anim in self.weight_animations
-            if current_time - anim['start_time'] < anim['duration']
-        ]
+        # 3. Weight animations - check if any are active
+        if self.weight_animations:
+            old_count = len(self.weight_animations)
+            self.weight_animations = [
+                anim for anim in self.weight_animations
+                if current_time - anim['start_time'] < anim['duration']
+            ]
+            if self.weight_animations or old_count > 0:
+                needs_repaint = True
         
-        # 4. VIBRANT STYLE: Update ambient pulse phases
-        if self.anim_ambient_pulse_enabled:
+        # 4. VIBRANT: Ambient pulses - only update if enabled AND we have connections
+        if self.anim_ambient_pulse_enabled and self._ambient_pulse_state:
             self._update_ambient_pulses(dt)
+            needs_repaint = True
         
-        # 5. SUBTLE STYLE: Update communication glow packets
+        # 5. SUBTLE: Communication glows - only if packets exist
         if self.anim_comm_glow_enabled:
+            had_packets = bool(self._comm_glow_packets)
             self._update_comm_glows(dt)
-            # Spawn new glows based on neuron activity
             self._spawn_activity_glows(current_time)
+            # Only repaint if we had or now have packets
+            if had_packets or self._comm_glow_packets:
+                needs_repaint = True
         
-        # 6. NEURAL STYLE: Update activation pulses
+        # 6. NEURAL: Activation pulses - only if pulses exist  
         if self.anim_neural_pulse_enabled:
+            had_pulses = bool(self._neural_pulses)
             self._update_neural_pulses(current_time)
             self._spawn_neural_pulses_from_activity(current_time)
+            if had_pulses or self._neural_pulses:
+                needs_repaint = True
         
-        self.update()
+        # Only trigger repaint when needed
+        if needs_repaint:
+            self.update()
+        
+        # Performance tracking end
+        if _PERF_TRACKING_AVAILABLE:
+            _anim_elapsed = (time.perf_counter() - _anim_start) * 1000
+            perf_tracker.record("update_animations", _anim_elapsed)
+
+    def _get_cached_font(self, size, bold=False):
+        """Return cached QFont to avoid recreation every paint."""
+        key = (size, bold)
+        if key not in self._cached_fonts:
+            font = QtGui.QFont("Arial", size)
+            if bold:
+                font.setBold(True)
+            self._cached_fonts[key] = font
+        return self._cached_fonts[key]
+    
+    def _get_cached_pen(self, color_tuple, width=1):
+        """Return cached QPen to avoid recreation every paint."""
+        key = (*color_tuple, width)
+        if key not in self._cached_pens:
+            color = QtGui.QColor(*color_tuple[:3])
+            if len(color_tuple) > 3:
+                color.setAlpha(color_tuple[3])
+            self._cached_pens[key] = QtGui.QPen(color, width)
+        return self._cached_pens[key]
 
     def reveal_neuron(self, neuron_name):
         """Reveal a neuron with an expand animation – forces links OFF during reveal."""
@@ -2255,6 +2341,14 @@ class BrainWidget(QtWidgets.QWidget):
         if not self.show_links:
             return
 
+        # ===== PERFORMANCE FIX: Skip if widget is hidden =====
+        if not self.isVisible():
+            return
+
+        # ===== PERFORMANCE TRACKING =====
+        if _PERF_TRACKING_AVAILABLE:
+            _conn_start = time.perf_counter()
+
         # absolutely no connections until every core neuron is completely revealed (tutorial mode guard). 
         if self.is_tutorial_mode and len(self.visible_neurons) < len(self.original_neurons):
             return
@@ -2452,6 +2546,11 @@ class BrainWidget(QtWidgets.QWidget):
             print(f"🔴 NO CONNECTIONS DRAWN! tutorial_mode={self.is_tutorial_mode}, "
                 f"visible_neurons={len(self.visible_neurons)}, original_neurons={len(self.original_neurons)}, "
                 f"total_weights={len(self.weights)}, skipped={connections_skipped}")
+        
+        # ===== END PERFORMANCE TRACKING =====
+        if _PERF_TRACKING_AVAILABLE:
+            _conn_elapsed = (time.perf_counter() - _conn_start) * 1000
+            perf_tracker.record("draw_connections", _conn_elapsed)
 
     def _get_logical_coords(self, widget_pos):
         """Maps widget QPoint/QPointF to logical neuron coordinates."""
@@ -2478,6 +2577,11 @@ class BrainWidget(QtWidgets.QWidget):
 
 
     def paintEvent(self, event):
+        # ===== PERFORMANCE TRACKING =====
+        if _PERF_TRACKING_AVAILABLE:
+            _paint_start = time.perf_counter()
+            perf_tracker.increment("paint_calls")
+        
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         
@@ -2577,6 +2681,11 @@ class BrainWidget(QtWidgets.QWidget):
             painter.drawRect(0, 0, self.width(), self.height())
             
             painter.restore()
+
+        # ===== END PERFORMANCE TRACKING =====
+        if _PERF_TRACKING_AVAILABLE:
+            _paint_elapsed = (time.perf_counter() - _paint_start) * 1000
+            perf_tracker.record("paint_event", _paint_elapsed)
 
     def draw_neurons(self, painter, scale):
         """Draw all neurons with activity-based sizing and highlights"""
@@ -3112,3 +3221,40 @@ class BrainWidget(QtWidgets.QWidget):
     
     # Qt property for animation
     tutorial_glow_opacity = QtCore.pyqtProperty(float, get_tutorial_glow_opacity, set_tutorial_glow_opacity)
+
+import time
+
+class PerformanceProfiler:
+    """Lightweight profiler for identifying slow code paths."""
+    
+    def __init__(self):
+        self.timings = {}
+        self.call_counts = {}
+    
+    def start(self, name):
+        if name not in self.timings:
+            self.timings[name] = []
+            self.call_counts[name] = 0
+        self._current_start = time.perf_counter()
+        self._current_name = name
+    
+    def stop(self):
+        elapsed = (time.perf_counter() - self._current_start) * 1000
+        self.timings[self._current_name].append(elapsed)
+        self.call_counts[self._current_name] += 1
+        # Keep only last 100 samples
+        if len(self.timings[self._current_name]) > 100:
+            self.timings[self._current_name].pop(0)
+    
+    def report(self):
+        """Print performance report."""
+        print("\n" + "="*60)
+        print("PERFORMANCE REPORT")
+        print("="*60)
+        for name, times in sorted(self.timings.items()):
+            if times:
+                avg = sum(times) / len(times)
+                max_t = max(times)
+                calls = self.call_counts[name]
+                print(f"{name:30} avg={avg:6.2f}ms  max={max_t:6.2f}ms  calls={calls}")
+        print("="*60 + "\n")

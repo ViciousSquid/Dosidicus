@@ -15,6 +15,13 @@ from .interactions2 import PoopInteractionManager
 from .config_manager import ConfigManager
 from .plugin_manager import PluginManager
 
+# Performance tracking for Task Manager
+try:
+    from .task_manager import perf_tracker
+    _PERF_TRACKING_AVAILABLE = True
+except ImportError:
+    _PERF_TRACKING_AVAILABLE = False
+
 class TamagotchiLogic:
     def __init__(self, user_interface, squid, brain_window):
         self.config_manager = ConfigManager()
@@ -115,6 +122,12 @@ class TamagotchiLogic:
         self.poop_items = []
         self.max_poop = 3
         self.points = 0
+
+        # ===== PERFORMANCE FIX: Decoration cache =====
+        # Caches scene items to avoid iterating the entire scene every tick
+        self._decoration_cache = []
+        self._decoration_cache_time = 0
+        self._decoration_cache_interval = 0.3  # Rebuild cache every 300ms max
 
         # Flag to indicate the first instance of the application start
         self.is_first_instance = True
@@ -547,14 +560,40 @@ class TamagotchiLogic:
                     self.move_decoration(decoration, -5)  # Move left
 
     def get_nearby_decorations(self, x, y, radius=100):
+        """
+        Get decorations near a position.
+        
+        PERFORMANCE FIX: Uses cached decoration list to avoid
+        iterating through all scene items every frame.
+        """
+        current_time = time.time()
+        
+        # Rebuild cache if stale (every 300ms or on first call)
+        if (current_time - self._decoration_cache_time > self._decoration_cache_interval
+            or not self._decoration_cache):
+            self._decoration_cache = []
+            for item in self.user_interface.scene.items():
+                if isinstance(item, ResizablePixmapItem):
+                    # Cache both the item and its center point
+                    center = item.sceneBoundingRect().center()
+                    self._decoration_cache.append((item, center.x(), center.y()))
+            self._decoration_cache_time = current_time
+        
+        # Filter from cache using squared distance (avoids expensive sqrt)
         nearby_decorations = []
-        for item in self.user_interface.scene.items():
-            if isinstance(item, ResizablePixmapItem):
-                item_center = item.sceneBoundingRect().center()
-                distance = ((item_center.x() - x) ** 2 + (item_center.y() - y) ** 2) ** 0.5
-                if distance <= radius:
-                    nearby_decorations.append(item)
+        radius_sq = radius * radius
+        for item, cx, cy in self._decoration_cache:
+            dist_sq = (cx - x) ** 2 + (cy - y) ** 2
+            if dist_sq <= radius_sq:
+                nearby_decorations.append(item)
+        
         return nearby_decorations
+    
+    def invalidate_decoration_cache(self):
+        """
+        Call this when decorations are added/removed to force cache rebuild.
+        """
+        self._decoration_cache_time = 0
     
     def investigate_object(self):
         if self.detected_object_position:
@@ -787,8 +826,9 @@ class TamagotchiLogic:
         self.autosave_timer.timeout.connect(self.autosave)
         
         # Configure rock interaction timers
+        # ===== PERFORMANCE FIX: Increased interval from 100ms to 200ms =====
         if hasattr(self, 'rock_interaction'):
-            self.rock_interaction.setup_timers(interval=100)
+            self.rock_interaction.setup_timers(interval=200)
             self.rock_interaction.rock_test_timer.timeout.connect(
                 self.rock_interaction.update_rock_test
             )
@@ -797,8 +837,9 @@ class TamagotchiLogic:
             )
 
         # Set up poop interaction
+        # ===== PERFORMANCE FIX: Increased interval from 100ms to 200ms =====
         if hasattr(self, 'poop_interaction'):
-            self.poop_interaction.setup_timers(interval=100)
+            self.poop_interaction.setup_timers(interval=200)
         
         # Start the simulation timer
         self.simulation_timer.start()
@@ -1187,6 +1228,11 @@ class TamagotchiLogic:
 
 
     def update_simulation(self):
+        # ===== PERFORMANCE TRACKING =====
+        if _PERF_TRACKING_AVAILABLE:
+            _sim_start = time.perf_counter()
+            perf_tracker.increment("simulation_ticks")
+        
         # Trigger pre-update hook
         self.plugin_manager.trigger_hook("pre_update", 
                                         tamagotchi_logic=self, 
@@ -1284,6 +1330,11 @@ class TamagotchiLogic:
             # 9. Hunger scoring
         if self.squid.hunger == 0 or self.squid.hunger >= 99:
             self.statistics_window.update_score()   # triggers time-based hunger scoring
+        
+        # ===== END PERFORMANCE TRACKING =====
+        if _PERF_TRACKING_AVAILABLE:
+            _sim_elapsed = (time.perf_counter() - _sim_start) * 1000
+            perf_tracker.record("simulation_tick", _sim_elapsed)
 
     def check_for_sickness(self):
         # Existing sickness logic

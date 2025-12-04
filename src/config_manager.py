@@ -12,8 +12,8 @@ class ConfigManager:
     for all configuration values including animation styles.
     """
     
-    # Available animation styles – keep in sync with animation_styles.py
-    ANIMATION_STYLES = ['vibrant', 'subtle', 'neural', 'electric', 'zen', 'neon']
+    # Available animation styles
+    ANIMATION_STYLES = ['vibrant', 'subtle', 'neural', 'none']
     
     def __init__(self, config_path="config.ini"):
         self.config_path = config_path
