@@ -19,22 +19,45 @@ class SaveManager:
         os.makedirs(save_directory, exist_ok=True)
 
         self.autosave_path = os.path.join(save_directory, "autosave.zip")
-        self.manual_path   = os.path.join(save_directory, "save_data.zip")
-        self.backup_path   = os.path.join(save_directory, "autosave_backup.zip")
+        self.manual_path = os.path.join(save_directory, "save_data.zip")  # This will be updated dynamically
+        self.backup_path = os.path.join(save_directory, "autosave_backup.zip")
 
     # --------------------------------------------------
     # Public helpers
     # --------------------------------------------------
     def save_exists(self, autosave=False):
-        path = self.autosave_path if autosave else self.manual_path
-        return os.path.exists(path)
+        if autosave:
+            return os.path.exists(self.autosave_path)
+        else:
+            # For manual saves, we need to check if any UUID-based save exists
+            return self._get_manual_save_path() is not None
 
     def get_latest_save(self):
         if self.save_exists(autosave=True):
             return self.autosave_path
         if self.save_exists(autosave=False):
-            return self.manual_path
+            return self._get_manual_save_path()
         return None
+
+    def _get_manual_save_path(self):
+        """Find the most recent manual save file (UUID-based)"""
+        try:
+            # Look for any .zip files in save directory that aren't autosave or backup
+            save_files = [f for f in os.listdir(self.save_directory) 
+                         if f.endswith('.zip') and f not in ['autosave.zip', 'autosave_backup.zip']]
+            
+            if save_files:
+                # Return the most recently modified one
+                save_files = [os.path.join(self.save_directory, f) for f in save_files]
+                return max(save_files, key=os.path.getmtime)
+            return None
+        except (FileNotFoundError, ValueError):
+            return None
+
+    def _get_save_path_for_uuid(self, uuid_str):
+        """Generate save path for a specific UUID"""
+        safe_uuid = str(uuid_str).replace('-', '_')  # Make UUID filename-safe
+        return os.path.join(self.save_directory, f"{safe_uuid}.zip")
 
     # --------------------------------------------------
     # Save API
@@ -45,7 +68,16 @@ class SaveManager:
         try:
             from PyQt5.QtWidgets import QMessageBox
 
-            target_path = self.autosave_path if is_autosave else self.manual_path
+            # Extract UUID from save data
+            squid_uuid = save_data.get('game_state', {}).get('squid', {}).get('uuid')
+            if not squid_uuid and not is_autosave:
+                print("[SaveManager] Warning: No UUID found in save data for manual save")
+                return None
+
+            if is_autosave:
+                target_path = self.autosave_path
+            else:
+                target_path = self._get_save_path_for_uuid(squid_uuid)
 
             # ---- single autosave backup ----
             if is_autosave and os.path.exists(target_path):
@@ -55,7 +87,7 @@ class SaveManager:
             if not is_autosave and os.path.exists(target_path):
                 reply = QMessageBox.question(
                     None, "Overwrite save?",
-                    "A manual save already exists. Overwrite it?",
+                    "A save already exists for this squid. Overwrite it?",
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No
                 )
@@ -70,7 +102,7 @@ class SaveManager:
                     zf.writestr(f"{key}.json",
                                 json.dumps(data, indent=4, cls=DateTimeEncoder))
                 # 2) immutable squid UUID
-                zf.writestr("uuid.txt", f"SquidSignature    {save_data['game_state']['squid']['uuid']}")
+                zf.writestr("uuid.txt", f"SquidSignature    {squid_uuid}")
 
             if os.path.exists(target_path):
                 os.replace(target_path, target_path + ".old")
@@ -111,16 +143,28 @@ class SaveManager:
     # House-keeping
     # --------------------------------------------------
     def delete_save(self, is_autosave: bool = False) -> bool:
-        path = self.autosave_path if is_autosave else self.manual_path
-        if os.path.exists(path):
+        if is_autosave:
+            path = self.autosave_path
+        else:
+            path = self._get_manual_save_path()
+        
+        if path and os.path.exists(path):
             os.remove(path)
             return True
         return False
 
     def get_save_timestamp(self, is_autosave: bool = False) -> float | None:
-        path = self.autosave_path if is_autosave else self.manual_path
-        return os.path.getmtime(path) if os.path.exists(path) else None
+        if is_autosave:
+            path = self.autosave_path
+        else:
+            path = self._get_manual_save_path()
+        
+        return os.path.getmtime(path) if path and os.path.exists(path) else None
 
     def get_save_size(self, is_autosave: bool = False) -> int | None:
-        path = self.autosave_path if is_autosave else self.manual_path
-        return os.path.getsize(path) if os.path.exists(path) else None
+        if is_autosave:
+            path = self.autosave_path
+        else:
+            path = self._get_manual_save_path()
+        
+        return os.path.getsize(path) if path and os.path.exists(path) else None
