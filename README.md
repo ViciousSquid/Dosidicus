@@ -3,6 +3,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 # Dosidicus electronicae
 ### A digital pet squid with a simple neural network [research project]
 * Includes tools for visualising and understanding neural networks, Hebbian learning and Neurogenesis
+* **Design your own squid brain with GUI tools and watch it evolve and learn!**
 
 * requires Python 3.9 or greater , `PyQt5` and `numpy`
 ## [Download](https://github.com/ViciousSquid/Dosidicus/releases/tag/v2.5.0.0)  |  [Wiki](https://github.com/ViciousSquid/Dosidicus/wiki)  |  [Changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog)
@@ -18,7 +19,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 * [Hebbian learning](https://github.com/ViciousSquid/Dosidicus/wiki/Hebbian-learning) algorithm runs every 30 seconds (configurable)
 * Experiences from short-term and long-term memory can influence [decision-making](https://github.com/ViciousSquid/Dosidicus/wiki/Decision-Engine)
 * Squid can create new neurons in response to his environment ([Neurogenesis](https://github.com/ViciousSquid/Dosidicus/wiki/Neurogenesis))
-* **Design your own squid brain with GUI tools and watch it evolve and learn!**
+
 
 
 ### Needs Management System:
@@ -37,6 +38,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 
 
   <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+
 
 
 
