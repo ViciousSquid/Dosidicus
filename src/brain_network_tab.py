@@ -1,5 +1,8 @@
 import json
 import time
+import subprocess
+import os
+import sys
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .brain_dialogs import StimulateDialog, DiagnosticReportDialog
@@ -165,6 +168,9 @@ class NetworkTab(BrainBaseTab):
         self.checkbox_pruning.setChecked(True)
         self.checkbox_pruning.stateChanged.connect(self.toggle_pruning)
         checkbox_layout.addWidget(self.checkbox_pruning)
+         # Load brain button
+        from .custom_brain_loader import add_load_brain_button
+        add_load_brain_button(self, checkbox_layout)
 
         checkbox_layout.addStretch() 
 
@@ -221,6 +227,40 @@ class NetworkTab(BrainBaseTab):
                 sub_layout = item.layout()
                 if sub_layout is not None:
                     self._clear_layout_recursively(sub_layout)
+
+    def _open_brain_designer(self):
+        """
+        Locate and execute brain_designer.py using the system's python executable
+        in a new, non-blocking subprocess.
+        """
+        # Calculate the absolute path to brain_designer.py
+        # Current file (__file__) is in src/
+        # Brain Designer is in tools/ (i.e., ../tools/brain_designer.py)
+        
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(current_dir, os.pardir))
+        designer_path = os.path.join(project_root, 'tools', 'brain_designer.py')
+        
+        # Ensure the file exists before attempting to run
+        if not os.path.exists(designer_path):
+             QtWidgets.QMessageBox.critical(
+                self, "Error", 
+                f"Brain Designer not found at the expected path:\n{designer_path}\n"
+                f"Please ensure it is located in the 'tools/' directory."
+            )
+             return
+
+        try:
+            # Run the designer script using the same Python executable
+            # used to run the main application. This opens the tool separately.
+            subprocess.Popen([sys.executable, designer_path])
+            print(f"Opened Brain Designer: {designer_path}")
+            
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(
+                self, "Error", 
+                f"Could not launch Brain Designer:\n{e}"
+            )
 
     def _change_animation_style(self, index):
         """
@@ -407,32 +447,11 @@ class NetworkTab(BrainBaseTab):
 
         # 2. Button container – 50 px high, wide enough for two 50×50 buttons
         self.new_button_container = QtWidgets.QWidget()
-        self.new_button_container.setFixedSize(DisplayScaling.scale(104),  # 2×50 + 4 px gap
+        self.new_button_container.setFixedSize(DisplayScaling.scale(158),  # 3×50 + 2×4 px gaps
                                             DisplayScaling.scale(50))
         btn_layout = QtWidgets.QHBoxLayout(self.new_button_container)
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(4)
-
-        # Neuron Laboratory
-        self.neuron_lab_button = QtWidgets.QPushButton("🧠")
-        self.neuron_lab_button.setFixedSize(DisplayScaling.scale(50), DisplayScaling.scale(50))
-        self.neuron_lab_button.setStyleSheet("""
-            QPushButton {
-                background-color: #c7ffc4;
-                color: white;
-                border-radius: 5px;
-                font-size: 22pt;
-            }
-            QToolTip {                      /* <-- only this button's tooltip */
-                font-size: 9pt;
-                color: #ffffff;
-                background: #2b2b2b;
-                border: 1px solid #444;
-            }
-        """)
-        self.neuron_lab_button.setToolTip("Open the Neuron Laboratory")
-        self.neuron_lab_button.clicked.connect(self._toggle_neuron_laboratory)
-        btn_layout.addWidget(self.neuron_lab_button)
 
         # Experience buffer
         self.new_50x50_button = QtWidgets.QPushButton("✳️")
@@ -454,6 +473,27 @@ class NetworkTab(BrainBaseTab):
         self.new_50x50_button.setToolTip("Show the Experience Buffer")
         self.new_50x50_button.clicked.connect(self._show_experience_buffer)
         btn_layout.addWidget(self.new_50x50_button)
+
+        # Brain Designer button
+        self.brain_designer_button = QtWidgets.QPushButton("📐")
+        self.brain_designer_button.setFixedSize(DisplayScaling.scale(50), DisplayScaling.scale(50))
+        self.brain_designer_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 5px;
+                font-size: 22pt;
+            }
+            QToolTip {
+                font-size: 9pt;
+                color: #ffffff;
+                background: #2b2b2b;
+                border: 1px solid #444;
+            }
+        """)
+        self.brain_designer_button.setToolTip("Open Brain Designer")
+        self.brain_designer_button.clicked.connect(self._open_brain_designer)
+        btn_layout.addWidget(self.brain_designer_button)
 
         self.stats_and_button_layout.addWidget(self.new_button_container)
 
@@ -589,6 +629,12 @@ class NetworkTab(BrainBaseTab):
                     self.brain_widget.set_brain_state(state)
                 elif hasattr(self.brain_widget, 'update_state'):
                     self.brain_widget.update_state(state)
+                
+                # Force disable and re-enable links after loading brain state
+                if hasattr(self, 'checkbox_links') and self.checkbox_links.isChecked():
+                    self.checkbox_links.setChecked(False)
+                    QtCore.QTimer.singleShot(1000, self._restore_links_checkbox)
+                
                 self.update_metrics_display()
             except Exception as e:
                 print(f"Error loading brain state: {e}")
@@ -633,6 +679,26 @@ class NetworkTab(BrainBaseTab):
         self.experience_buffer_dialog.show()
         self.experience_buffer_dialog.raise_()
         self.experience_buffer_dialog.activateWindow()
+
+    def _show_decorations(self):
+        """Show the Decorations window"""
+        # Navigate up the parent hierarchy to find the main window/UI object
+        # Handle both cases: parent as a method (PyQt default) or as an attribute
+        parent = self.parent() if callable(self.parent) else self.parent
+        
+        while parent is not None:
+            # Check if this parent has the decoration_window attribute
+            if hasattr(parent, 'decoration_window'):
+                parent.decoration_window.show()
+                parent.decoration_window.raise_()
+                parent.decoration_window.activateWindow()
+                return
+            # Get the next parent (handle both method and attribute cases)
+            parent = parent.parent() if callable(parent.parent) else parent.parent
+        
+        # If we couldn't find it, show a warning
+        QtWidgets.QMessageBox.warning(self, "Decorations Unavailable", 
+                                     "Cannot open Decorations: Window is not available.")
 
 
 class ExperienceBufferDialog(QtWidgets.QDialog):

@@ -45,6 +45,7 @@ class MentalStateManager:
             if state.icon_item is None:
                 icon_pixmap = QtGui.QPixmap(os.path.join("images", state.icon_filename))
                 state.icon_item = QtWidgets.QGraphicsPixmapItem(icon_pixmap)
+                state.icon_item.setZValue(500)  # Below DIRTY text (z=1000) but above decorations
                 self.scene.addItem(state.icon_item)
             self.update_icon_position(state.icon_item)
         else:

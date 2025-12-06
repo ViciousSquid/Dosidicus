@@ -54,9 +54,10 @@ class StatBox(QtWidgets.QWidget):
 
 
 class StatisticsWindow(QtWidgets.QWidget):
-    def __init__(self, squid, arcade_font_path=None):
+    def __init__(self, squid, arcade_font_path=None, show_decorations_callback=None):
         super().__init__()
         self.squid = squid
+        self.show_decorations_callback = show_decorations_callback
 
         screen = QtWidgets.QApplication.primaryScreen()
         screen_size = screen.size()
@@ -186,8 +187,20 @@ class StatisticsWindow(QtWidgets.QWidget):
         self.roll_timer = QtCore.QTimer(self, timeout=self._tick, interval=16)
         self.roll_timer.start()
         
+        # Setup decorations window shortcut
+        self.setup_decorations_shortcut()
+        
 
     # ------------------------------------------------------------------
+
+    def setup_decorations_shortcut(self):
+        """Setup keyboard shortcut for decorations window (T key)"""
+        if self.show_decorations_callback:
+            self.decorations_shortcut = QtWidgets.QShortcut(
+                QtGui.QKeySequence(QtCore.Qt.Key_T), 
+                self
+            )
+            self.decorations_shortcut.activated.connect(self.show_decorations_callback)
     
     def _tick(self):
         # Update score display with smooth animation

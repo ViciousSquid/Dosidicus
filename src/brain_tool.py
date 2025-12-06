@@ -27,7 +27,7 @@ from .brain_statistics_tab import StatisticsTab
 from .task_manager import TaskManagerWindow
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
-    def __init__(self, tamagotchi_logic, debug_mode=False, config=None):
+    def __init__(self, tamagotchi_logic, debug_mode=False, config=None, show_decorations_callback=None):
         super().__init__()
 
         # Initialize font size FIRST
@@ -40,6 +40,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tamagotchi_logic = tamagotchi_logic
         self.initialized = False
         self.is_paused = False
+        self.show_decorations_callback = show_decorations_callback
 
         self.setWindowTitle("Brain Tool")
 
@@ -117,6 +118,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         
         # Initialize task manager AFTER worker is fully set up
         self.task_manager = TaskManagerWindow(self.brain_worker, parent=self)
+        
+        # Setup decorations window shortcut
+        self.setup_decorations_shortcut()
 
 
     def set_tamagotchi_logic(self, tamagotchi_logic):
@@ -134,6 +138,15 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 tab = getattr(self, tab_attr)
                 if hasattr(tab, 'set_tamagotchi_logic'):
                     tab.set_tamagotchi_logic(tamagotchi_logic)
+
+    def setup_decorations_shortcut(self):
+        """Setup keyboard shortcut for decorations window (T key)"""
+        if self.show_decorations_callback:
+            self.decorations_shortcut = QtWidgets.QShortcut(
+                QtGui.QKeySequence(QtCore.Qt.Key_T), 
+                self
+            )
+            self.decorations_shortcut.activated.connect(self.show_decorations_callback)
 
     def _keep_worker_alive(self):
         """Keep worker thread alive with periodic health checks"""

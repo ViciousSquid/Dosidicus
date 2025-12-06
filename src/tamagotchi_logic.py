@@ -15,6 +15,13 @@ from .interactions2 import PoopInteractionManager
 from .config_manager import ConfigManager
 from .plugin_manager import PluginManager
 
+from .custom_brain_loader import (
+    get_custom_brain_save_data, 
+    restore_custom_brain_from_save,
+    show_custom_brain_load_warning,
+    has_custom_brain
+)
+
 # Performance tracking for Task Manager
 try:
     from .task_manager import perf_tracker
@@ -2048,6 +2055,10 @@ class TamagotchiLogic:
         if self.squid:
             self.squid.cleanliness = 100
             self.squid.happiness = min(100, self.squid.happiness + 20)
+        
+        # Clear all DIRTY text immediately when cleaned
+        self.user_interface.clear_dirty_text()
+        
         self.show_message("Environment cleaned! Squid is happier!")
         self.user_interface.scene.update()
 
@@ -2145,13 +2156,10 @@ class TamagotchiLogic:
     def update_cleanliness_overlay(self):
         if self.squid is not None:
             cleanliness = self.squid.cleanliness
-            if cleanliness < 15:
-                opacity = 200
-            elif cleanliness < 50:
-                opacity = 100
-            else:
-                opacity = 0
-            self.user_interface.cleanliness_overlay.setBrush(QtGui.QBrush(QtGui.QColor(139, 69, 19, opacity)))
+            # Use the new DIRTY text system instead of brown overlay
+            self.user_interface.update_dirty_text(cleanliness)
+            # Keep the overlay transparent (no more brown color)
+            self.user_interface.cleanliness_overlay.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0, 0)))
     
     def spawn_sushi(self):
         if len(self.food_items) < self.max_food:
@@ -2228,6 +2236,9 @@ class TamagotchiLogic:
         for poop_item in self.poop_items:
             self.user_interface.scene.removeItem(poop_item)
         self.poop_items.clear()
+        
+        # Clear all DIRTY text on reset
+        self.user_interface.clear_dirty_text()
 
         # Reset squid position
         self.squid.squid_x = self.squid.center_x
@@ -2245,13 +2256,18 @@ class TamagotchiLogic:
 
     def load_game(self):
         """
-        Load the complete game state including decorations.
+        Load the complete game state including decorations and custom brains.
         """
         # Load save data using SaveManager
         save_data = self.save_manager.load_game()
         
         if save_data is None:
             print("No save data found")
+            return False
+        
+        # Check for custom brain and show warning if present
+        if not show_custom_brain_load_warning(self.user_interface, save_data):
+            print("Load cancelled by user (custom brain warning)")
             return False
         
         try:
@@ -2262,56 +2278,21 @@ class TamagotchiLogic:
             # Load squid state
             self.squid.load_state(squid_data)
             
-            # Restore squid name if it was saved
-            if 'name' in squid_data and squid_data['name']:
-                self.squid.name = squid_data['name']
-
-            # Restore statistics from separate statistics.json
-            stats_data = save_data.get('statistics', {})
-            if stats_data:
-                # Restore to squid.statistics (for age tracking)
-                if 'total_age_seconds' in stats_data:
-                    self.squid.statistics.total_age_seconds = stats_data['total_age_seconds']
-                    # Reset start_time so get_total_age_seconds() works correctly
-                    self.squid.statistics.start_time = time.time()
-                
-                # Restore to brain_window.statistics_tab (where UI displays from)
-                if hasattr(self, 'brain_window') and hasattr(self.brain_window, 'statistics_tab'):
-                    tab = self.brain_window.statistics_tab
-                    # Direct restore - keys match exactly now
-                    for key, value in stats_data.items():
-                        if key in tab.statistics:
-                            tab.statistics[key] = value
-                    tab.update_display()
+            # Load custom brain first (if present), then brain state
+            custom_brain_data = save_data.get('custom_brain')
+            if custom_brain_data and custom_brain_data.get('is_custom_brain'):
+                success, msg = restore_custom_brain_from_save(
+                    save_data, 
+                    self.brain_window.brain_widget
+                )
+                if success:
+                    print(f"✅ {msg}")
+                else:
+                    print(f"⚠️ {msg}")
             
-            # Load brain state
+            # Load brain state (neuron values)
             brain_state = save_data.get('brain_state', {})
             self.brain_window.set_brain_state(brain_state)
-
-            # CRITICAL: Load neurogenesis data to restore FunctionalNeuron objects
-            if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis'):
-                neuro_data = brain_state.get('enhanced_neurogenesis')
-                if neuro_data:
-                    try:
-                        self.brain_window.brain_widget.enhanced_neurogenesis.from_dict(neuro_data)
-                        restored_count = len(neuro_data.get('functional_neurons', {}))
-                        print(f"✅ Loaded {restored_count} functional neurons from save")
-                    except Exception as e:
-                        print(f"❌ Failed to load neurogenesis data: {e}")
-                        import traceback
-                        traceback.print_exc()
-
-            # CRITICAL: Sync brain_widget.state from squid (single source of truth)
-            # This ensures core neuron values match the squid's actual stats
-            self.brain_window.sync_state_from_squid(self.squid)
-            
-            # CRITICAL: Re-sync neurogenesis neurons AFTER squid sync to ensure they're visible
-            # The squid sync may have reset state, so we need to restore neurogenesis neurons
-            if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis'):
-                neuro = self.brain_window.brain_widget.enhanced_neurogenesis
-                if neuro.functional_neurons:
-                    neuro.ensure_all_neurons_functional()
-                    print(f"✅ Re-synced {len(neuro.functional_neurons)} neurogenesis neurons after squid sync")
             
             # Load memories
             self.squid.memory_manager.short_term_memory = save_data.get('ShortTerm', [])
@@ -2321,30 +2302,12 @@ class TamagotchiLogic:
             decorations_data = game_state.get('decorations', [])
             self.user_interface.load_decorations_data(decorations_data)
             
-            # Load achievement data into Achievements plugin (if enabled)
-            try:
-                achievements_data = save_data.get('achievements')
-                if achievements_data and hasattr(self, 'plugin_manager') and 'achievements' in self.plugin_manager.plugins:
-                    plugin_info = self.plugin_manager.plugins['achievements']
-                    if 'instance' in plugin_info:
-                        instance = plugin_info['instance']
-                        if hasattr(instance, 'load_save_data'):
-                            instance.load_save_data(achievements_data)
-                            print(f"Loaded achievement data")
-            except Exception as e:
-                # If plugin method fails, log warning and continue without achievements
-                print(f"[Warning] Could not restore achievement data: {e}")
-            
             # Load tamagotchi logic state
             tamagotchi_logic_data = game_state['tamagotchi_logic']
             self.cleanliness_threshold_time = tamagotchi_logic_data['cleanliness_threshold_time']
             self.hunger_threshold_time = tamagotchi_logic_data['hunger_threshold_time']
             self.last_clean_time = tamagotchi_logic_data['last_clean_time']
             self.points = tamagotchi_logic_data['points']
-
-            # Update statistics window with loaded score
-            if hasattr(self, 'statistics_window') and self.statistics_window:
-                self.statistics_window.set_score(self.points)
             
             print(f"Game loaded successfully")
             print(f"Loaded personality: {self.squid.personality.value}")
@@ -2511,7 +2474,8 @@ class TamagotchiLogic:
             'brain_state': brain_state,
             'statistics': statistics_data,
             'ShortTerm': short_term_memory,
-            'LongTerm': long_term_memory
+            'LongTerm': long_term_memory,
+            'custom_brain': get_custom_brain_save_data()
         }
         
         # Add achievements data if available (will be saved as achievements.json in the ZIP)

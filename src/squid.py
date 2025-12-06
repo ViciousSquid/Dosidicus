@@ -481,6 +481,7 @@ class Squid:
         """Show the startled icon above the squid's head"""
         if self.startled_icon is None:
             self.startled_icon = QtWidgets.QGraphicsPixmapItem(self.startled_image)
+            self.startled_icon.setZValue(500)  # Below DIRTY text (z=1000) but above decorations
             self.ui.scene.addItem(self.startled_icon)
         self.update_startled_icon_position()
 
@@ -1798,6 +1799,7 @@ class Squid:
         if self.sick_icon_item is None:
             sick_icon_pixmap = QtGui.QPixmap(os.path.join("images", "sick.png"))
             self.sick_icon_item = QtWidgets.QGraphicsPixmapItem(sick_icon_pixmap)
+            self.sick_icon_item.setZValue(500)  # Below DIRTY text (z=1000) but above decorations
             self.ui.scene.addItem(self.sick_icon_item)
         self.update_sick_icon_position()
 

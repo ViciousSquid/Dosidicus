@@ -55,6 +55,7 @@ class BrainWidget(QtWidgets.QWidget):
         # ===== ANIMATION STYLE INITIALIZATION =====
         self._animation_style_name = animation_style
         self._animation_style: AnimationStyle = get_animation_style(animation_style)
+        self.layers = []
         
         # Hover tracking (used by vibrant/subtle styles)
         self.hovered_neuron = None
@@ -1829,6 +1830,9 @@ class BrainWidget(QtWidgets.QWidget):
         self.neuron_positions = state['neuron_positions']
         # Load neuron states, defaulting to empty dict if not present
         self.state = state.get('neuron_states', {})
+        
+        # NEW: Load layer structure if present (from custom brain designs)
+        self.layers = state.get('layer_structure', [])
 
         # Ensure all neurons in neuron_positions exist in state
         for neuron in self.neuron_positions:
@@ -1851,6 +1855,54 @@ class BrainWidget(QtWidgets.QWidget):
                 if neuron not in self.excluded_neurons and neuron not in self.original_neurons:
                     self.visible_neurons.add(neuron)
             print(f"📊 Loaded {len(self.neuron_positions)} neurons, {len(self.visible_neurons)} visible")
+
+    def draw_layers(self, painter, scale):
+        """Draw background rectangles for custom layers (e.g., Hidden layers)."""
+        if not self.layers:
+            return
+
+        for layer in self.layers:
+            y_pos = layer.get('y_position', 0)
+            name = layer.get('name', 'Layer')
+            l_type = layer.get('layer_type', 'hidden')
+            
+            # Define logical dimensions for the layer background
+            # We assume a standard logical width of ~1024, but draw wider to ensure coverage
+            rect_height = 120 
+            rect_top = y_pos - (rect_height / 2)
+            rect_left = -200 # Start off-screen left
+            rect_width = 2000 # Extend past screen right
+            
+            rect = QtCore.QRectF(rect_left, rect_top, rect_width, rect_height)
+            
+            # Determine color based on layer type
+            if l_type == 'input':
+                color = QtGui.QColor(220, 255, 220, 40) # Very faint Green
+                border = QtGui.QColor(180, 220, 180, 80)
+            elif l_type == 'output':
+                color = QtGui.QColor(255, 220, 220, 40) # Very faint Red
+                border = QtGui.QColor(220, 180, 180, 80)
+            else: # Hidden
+                color = QtGui.QColor(230, 230, 255, 50) # Very faint Blue
+                border = QtGui.QColor(200, 200, 240, 80)
+
+            # Draw the Rectangle
+            painter.setBrush(QtGui.QBrush(color))
+            painter.setPen(QtCore.Qt.NoPen)
+            painter.drawRect(rect)
+            
+            # Draw top and bottom borders for structure
+            painter.setPen(QtGui.QPen(border, 1, QtCore.Qt.DashLine))
+            painter.drawLine(QtCore.QLineF(rect_left, rect_top, rect_width, rect_top))
+            painter.drawLine(QtCore.QLineF(rect_left, rect_top + rect_height, rect_width, rect_top + rect_height))
+
+            # Draw Label on the far left (visible area start approx x=0)
+            painter.setPen(QtGui.QPen(QtGui.QColor(150, 150, 170)))
+            font = painter.font()
+            font.setPointSize(int(10 * scale))
+            font.setBold(True)
+            painter.setFont(font)
+            painter.drawText(QtCore.QPointF(20, rect_top + 20), f"{name}")
 
     def create_initial_state(self):
         """
@@ -2005,7 +2057,8 @@ class BrainWidget(QtWidgets.QWidget):
     def update_state(self, new_state: Dict[str, float]):
         """
         COMPLETE: Update brain state with clamping, decay, and state change detection.
-        Prevents stagnation at extreme values.
+        Prevents stagnation at extreme values. String-valued neurons (like 'direction')
+        are stored without numeric processing.
         
         NOTE: Neurogenesis checks are handled by _periodic_neurogenesis_check(), 
         not here, to avoid redundancy.
@@ -2016,16 +2069,33 @@ class BrainWidget(QtWidgets.QWidget):
         current_time = time.time()  # Define once for timestamp updates
         
         # ===== PREVENT STAGNATION WITH NORMALIZATION =====
-        for neuron, value in new_state.items():
+        for neuron, raw_value in new_state.items():
             # Validate neuron exists
             if neuron not in self.neuron_positions:
                 continue
+            
+            # ===== NEW: Skip numeric processing for string values =====
+            if isinstance(raw_value, str):
+                # Store string values as-is (like 'direction': 'up')
+                self.state[neuron] = raw_value
                 
+                # Check if this was a meaningful change
+                old_value = old_state.get(neuron, "")
+                if raw_value != old_value:
+                    state_changed = True
+                continue  # Skip the rest of the numeric pipeline
+            
+            # Only apply numeric operations to non-string values
+            
+            # Convert raw value to numeric format first
+            value = self.get_neuron_value(raw_value)
+            
             # 1. Clamp to valid range (0-100)
             value = max(0, min(100, value))
             
             # 2. Apply gentle decay if stuck at extremes
-            current_value = self.state.get(neuron, 50)
+            current_raw_value = self.state.get(neuron, 50)
+            current_value = self.get_neuron_value(current_raw_value)
             if abs(current_value - 50) > 30:  # If far from baseline
                 decay_rate = 0.02  # 2% per update
                 if current_value > 50:
@@ -2044,24 +2114,19 @@ class BrainWidget(QtWidgets.QWidget):
             self.state[neuron] = value
             
             # Check if this was a meaningful change
-            if abs(value - old_state.get(neuron, 50)) > 2.0:  # Threshold: must change >2 points
+            old_numeric_value = self.get_neuron_value(old_state.get(neuron, 50))
+            if abs(value - old_numeric_value) > 2.0:  # Threshold: must change >2 points
                 state_changed = True
-        # =========================================================
         
         # Update communication events for visual feedback
         for neuron in self.state.keys():
             if neuron not in self.communication_events:
                 self.communication_events[neuron] = 0
             
+            # Get numeric value safely for activity check
             neuron_value = self.get_neuron_value(self.state[neuron])
             if abs(neuron_value - 50) > 20:  # If significantly active
                 self.communication_events[neuron] = current_time
-        
-        # ===== REMOVED: Redundant neurogenesis triggering =====
-        # Neurogenesis is now handled solely by _periodic_neurogenesis_check()
-        # which runs every 2 seconds via self.neurogenesis_timer
-        # This eliminates duplicate experience capture and potential conflicts
-        # ======================================================
         
         # ===== UPDATE FUNCTIONAL NEURONS =====
         # Let existing functional neurons calculate their activation
@@ -2075,7 +2140,8 @@ class BrainWidget(QtWidgets.QWidget):
         
         # ===== LOG MAJOR STATE CHANGES =====
         if self.debug_mode and state_changed:
-            active_neurons = {k: v for k, v in self.state.items() if abs(v - 50) > 25}
+            active_neurons = {k: v for k, v in self.state.items() 
+                            if not isinstance(v, str) and abs(self.get_neuron_value(v) - 50) > 25}
             if active_neurons:
                 print(f"🧠 State update: {len(active_neurons)} neurons active")
                 for neuron, value in active_neurons.items():
@@ -2645,6 +2711,10 @@ class BrainWidget(QtWidgets.QWidget):
 
         painter.translate(0, indicator_space_at_top)
         painter.scale(scale, scale)
+        
+        # === NEW: Draw Layers Background ===
+        # Drawn first so it appears behind connections and neurons
+        self.draw_layers(painter, 1.0)
         
         self.draw_neurons(painter, 1.0)
         
@@ -3258,3 +3328,179 @@ class PerformanceProfiler:
                 calls = self.call_counts[name]
                 print(f"{name:30} avg={avg:6.2f}ms  max={max_t:6.2f}ms  calls={calls}")
         print("="*60 + "\n")
+
+# =============================================================================
+# NETWORK RENDERING MIXIN (Add to brain_widget.py)
+# =============================================================================
+
+class NetworkRenderingMixin:
+    """
+    Mixin providing static network rendering methods extracted from BrainWidget.
+    Used by both BrainWidget and save viewer's NetworkCanvas for consistent visuals.
+    """
+    
+    @staticmethod
+    def draw_connections_static(painter, neuron_positions, weights, neuron_states, 
+                                excluded_neurons=None, scale=1.0, 
+                                line_width=1.5, show_weights=False):
+        """Static version of connection drawing without animations"""
+        if excluded_neurons is None:
+            excluded_neurons = set()
+            
+        # Pre-calculate scaled positions
+        scaled_positions = {}
+        for name, (x, y) in neuron_positions.items():
+            if name not in excluded_neurons:
+                scaled_positions[name] = (x * scale, y * scale)
+        
+        # Draw connections
+        for (src, dst), weight in weights.items():
+            if src not in scaled_positions or dst not in scaled_positions:
+                continue
+                
+            x1, y1 = scaled_positions[src]
+            x2, y2 = scaled_positions[dst]
+            
+            # Determine color and style based on weight
+            if weight > 0:
+                # Excitatory: Green
+                color = QtGui.QColor(0, int(200 * min(weight, 1.0)), 0, 180)
+                pen_style = QtCore.Qt.SolidLine
+            else:
+                # Inhibitory: Red
+                color = QtGui.QColor(int(200 * min(abs(weight), 1.0)), 0, 0, 180)
+                pen_style = QtCore.Qt.DashLine if abs(weight) < 0.3 else QtCore.Qt.SolidLine
+            
+            # Line thickness based on weight magnitude
+            thickness = max(1.0, line_width * (1.0 + abs(weight) * 2.0))
+            
+            painter.setPen(QtGui.QPen(color, thickness, pen_style))
+            painter.drawLine(QtCore.QLineF(x1, y1, x2, y2))
+            
+            # Draw weight labels if enabled
+            if show_weights and abs(weight) > 0.1:
+                midpoint = QtCore.QPointF((x1 + x2) / 2, (y1 + y2) / 2)
+                font = painter.font()
+                font.setPointSize(int(8 * scale))
+                painter.setFont(font)
+                
+                text = f"{weight:.2f}"
+                font_metrics = painter.fontMetrics()
+                text_width = font_metrics.horizontalAdvance(text)
+                
+                painter.setBrush(QtGui.QBrush(QtGui.QColor(30, 30, 30, 200)))
+                painter.setPen(QtCore.Qt.NoPen)
+                rect = QtCore.QRectF(midpoint.x() - text_width/2 - 4, 
+                                   midpoint.y() - 8, text_width + 8, 16)
+                painter.drawRect(rect)
+                
+                painter.setPen(QtGui.QColor(220, 220, 220))
+                painter.drawText(rect, QtCore.Qt.AlignCenter, text)
+    
+    @staticmethod
+    def draw_neurons_static(painter, neuron_positions, neuron_states, 
+                           visible_neurons=None, excluded_neurons=None,
+                           scale=1.0, base_font_size=8):
+        """Static neuron drawing with improved label sizing"""
+        if visible_neurons is None:
+            visible_neurons = set(neuron_positions.keys())
+        if excluded_neurons is None:
+            excluded_neurons = set()
+            
+        # Font for labels - smaller and more compact
+        label_font = QtGui.QFont("Arial", int(base_font_size * scale))
+        label_font.setBold(True)
+        painter.setFont(label_font)
+        font_metrics = painter.fontMetrics()
+        
+        for name, pos in neuron_positions.items():
+            if name in excluded_neurons or name not in visible_neurons:
+                continue
+                
+            x, y = pos[0] * scale, pos[1] * scale
+            
+            # Get neuron value for color
+            value = neuron_states.get(name, 50)
+            if isinstance(value, (int, float)):
+                # Color based on activation (green->yellow->red)
+                normalized = max(0, min(1, value / 100.0))
+                if normalized > 0.7:
+                    color = QtGui.QColor(76, 175, 80)  # Green
+                elif normalized > 0.4:
+                    color = QtGui.QColor(255, 193, 7)  # Yellow
+                else:
+                    color = QtGui.QColor(244, 67, 54)   # Red
+            else:
+                color = QtGui.QColor(150, 150, 150)    # Default for non-numeric
+                
+            # Draw neuron circle
+            radius = 20 * scale
+            painter.setBrush(QtGui.QBrush(color))
+            painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), max(1, int(2 * scale))))
+            painter.drawEllipse(QtCore.QPointF(x, y), radius, radius)
+            
+            # Draw neuron name below - with dynamic width calculation
+            display_name = name.replace('_', ' ').title()
+            text_width = font_metrics.horizontalAdvance(display_name)
+            
+            # Wider text field to prevent cutoff
+            padding = 10 * scale
+            rect_width = text_width + (padding * 2)
+            rect_height = font_metrics.height() + 4
+            
+            text_rect = QtCore.QRectF(
+                x - rect_width / 2,
+                y + radius + 5 * scale,
+                rect_width,
+                rect_height
+            )
+            
+            # Draw text background for better readability
+            painter.setBrush(QtGui.QBrush(QtGui.QColor(26, 26, 26, 200)))
+            painter.setPen(QtCore.Qt.NoPen)
+            painter.drawRect(text_rect)
+            
+            # Draw text
+            painter.setPen(QtGui.QColor(224, 224, 224))
+            painter.drawText(text_rect, QtCore.Qt.AlignCenter, display_name)
+    
+    @staticmethod
+    def draw_layers_static(painter, layers, scale=1.0):
+        """Draw layer background rectangles if layer structure exists"""
+        if not layers:
+            return
+            
+        for layer in layers:
+            y_pos = layer.get('y_position', 0)
+            name = layer.get('name', 'Layer')
+            layer_type = layer.get('layer_type', 'hidden')
+            
+            # Logical dimensions (match brain_widget's coordinate system)
+            rect_height = 120
+            rect_top = (y_pos - rect_height / 2)
+            rect_left = -200  # Extend beyond visible area
+            rect_width = 2000
+            
+            # Determine layer color based on type
+            if layer_type == 'input':
+                color = QtGui.QColor(220, 255, 220, 30)
+                border_color = QtGui.QColor(180, 220, 180, 60)
+            elif layer_type == 'output':
+                color = QtGui.QColor(255, 220, 220, 30)
+                border_color = QtGui.QColor(220, 180, 180, 60)
+            else:  # hidden
+                color = QtGui.QColor(230, 230, 255, 40)
+                border_color = QtGui.QColor(200, 200, 240, 60)
+            
+            # Draw rectangle
+            rect = QtCore.QRectF(rect_left, rect_top, rect_width, rect_height)
+            painter.setBrush(QtGui.QBrush(color))
+            painter.setPen(QtGui.QPen(border_color, 1, QtCore.Qt.DashLine))
+            painter.drawRect(rect)
+            
+            # Draw label
+            font = QtGui.QFont("Arial", int(10 * scale))
+            font.setBold(True)
+            painter.setFont(font)
+            painter.setPen(QtGui.QColor(150, 150, 170))
+            painter.drawText(QtCore.QPointF(20, rect_top + 20), name)

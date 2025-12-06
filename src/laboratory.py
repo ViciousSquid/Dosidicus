@@ -106,7 +106,6 @@ class NeuronLaboratory(QDialog):
         self._build_overview_tab()
         self._build_inspector_tab()
         self._build_edit_tab()
-        self._build_experience_buffer_tab()   #  <── NEW
 
         # ---- footer ----
         self.status_lbl = QLabel("Ready")
@@ -126,114 +125,6 @@ class NeuronLaboratory(QDialog):
 
         # ---- per-neuron manual lock table ----
         self.locked_neurons = {}   # name -> {locked: bool, slider, spin, button}
-
-    # ================================================================
-    #  Experience-Buffer tab
-    # ================================================================
-    def _build_experience_buffer_tab(self):
-        """Fourth tab: full human-readable experience buffer + pattern table"""
-        w = QWidget()
-        lay = QVBoxLayout(w)
-
-        splitter = QSplitter(Qt.Horizontal)
-
-        # Left side: chronological experience log
-        left = QWidget()
-        left_lay = QVBoxLayout(left)
-        left_lay.setContentsMargins(0, 0, 0, 0)
-        left_lay.addWidget(QLabel("<b>Chronological experience log</b>  (last 50)"))
-        self.exp_log_text = QTextEdit()
-        self.exp_log_text.setReadOnly(True)
-        left_lay.addWidget(self.exp_log_text)
-        splitter.addWidget(left)
-
-        # Right side: pattern-counter table
-        right = QWidget()
-        right_lay = QVBoxLayout(right)
-        right_lay.setContentsMargins(0, 0, 0, 0)
-        right_lay.addWidget(QLabel("<b>Pattern recurrence counts</b>"))
-        self.pattern_table = QTableWidget()
-        self.pattern_table.setColumnCount(2)
-        self.pattern_table.setHorizontalHeaderLabels(["Pattern signature", "Count"])
-        header = self.pattern_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        right_lay.addWidget(self.pattern_table)
-        splitter.addWidget(right)
-
-        lay.addWidget(splitter)
-
-        # Buttons to manipulate buffer
-        btn_bar = QHBoxLayout()
-        btn_bar.addWidget(QLabel("Actions:"))
-        self.clear_buffer_btn = QPushButton("Clear buffer")
-        self.clear_buffer_btn.clicked.connect(self._clear_buffer)
-        btn_bar.addWidget(self.clear_buffer_btn)
-
-        self.inject_btn = QPushButton("Inject artificial experience")
-        self.inject_btn.clicked.connect(self._inject_dummy)
-        btn_bar.addWidget(self.inject_btn)
-
-        btn_bar.addStretch()
-        lay.addLayout(btn_bar)
-
-        self.tabs.addTab(w, "🧾  Experience Buffer")
-
-    # ----------  helpers for experience buffer ----------------------
-    def _paint_experience_buffer(self):
-        """Fill the new tab with human-readable data."""
-        # 1.  Chronological log
-        html = ""
-        buffer = getattr(self.bw.enhanced_neurogenesis, 'experience_buffer', None)
-        if buffer and buffer.buffer:
-            for exp in reversed(buffer.buffer):   # newest first
-                age = int(time.time() - exp.timestamp)
-                html += f"<b>{age}s ago</b>  –  <b>{exp.trigger_type.upper()}</b>  –  outcome <b>{exp.outcome}</b><br>"
-                # Filter out None values before joining
-                valid_actions = [a for a in exp.recent_actions if a is not None]
-                html += f"Actions: {', '.join(valid_actions) or 'none'}<br>"
-                html += f"Environment: {exp.environmental_state}<br>"
-                # top 3 active neurons
-                top = sorted(exp.active_neurons.items(), key=lambda kv: abs(kv[1] - 50), reverse=True)[:3]
-                html += "Top active: " + ", ".join(f"{n}({v:.0f})" for n, v in top) + "<br><br>"
-        else:
-            html = "No experiences recorded yet."
-        self.exp_log_text.setHtml(html)
-
-        # 2.  Pattern table
-        self.pattern_table.setRowCount(0)
-        if buffer and buffer.pattern_counts:
-            for row, (pat, cnt) in enumerate(sorted(buffer.pattern_counts.items(),
-                                                    key=lambda kv: kv[1], reverse=True)):
-                self.pattern_table.insertRow(row)
-                self.pattern_table.setItem(row, 0, QTableWidgetItem(pat))
-                self.pattern_table.setItem(row, 1, QTableWidgetItem(str(cnt)))
-
-    def _clear_buffer(self):
-        buffer = getattr(self.bw.enhanced_neurogenesis, 'experience_buffer', None)
-        if buffer:
-            buffer.buffer.clear()
-            buffer.pattern_counts.clear()
-            self.status_lbl.setText("Experience buffer cleared")
-            self._paint_experience_buffer()
-
-    def _inject_dummy(self):
-        """Inject a fake but valid experience (for quick testing)."""
-        from .neurogenesis import ExperienceContext
-        buffer = getattr(self.bw.enhanced_neurogenesis, 'experience_buffer', None)
-        if not buffer:
-            return
-        fake = ExperienceContext(
-            trigger_type='novelty',
-            active_neurons={'curiosity': 85, 'anxiety': 20},
-            recent_actions=['approach_plant', 'hide'],
-            environmental_state={'plant': True, 'food_count': 0},
-            outcome='positive',
-            timestamp=time.time()
-        )
-        buffer.add_experience(fake)
-        self.status_lbl.setText("Injected artificial novelty experience")
-        self._paint_experience_buffer()
 
     # ================================================================
     #  Construction helpers (unchanged)
@@ -292,7 +183,6 @@ class NeuronLaboratory(QDialog):
         if idx >= 0:
             self.pick_neuron.setCurrentIndex(idx)
         self._paint_overview()
-        self._paint_experience_buffer()   #  <── NEW
         self._inspect_neuron(self.pick_neuron.currentText())
         self._paint_edit()
 
@@ -671,44 +561,6 @@ if __name__ == "__main__":
         }
         neurogenesis_config = {"novelty_threshold": 3, "stress_threshold": 0.7, "reward_threshold": 0.6,
                                "max_neurons": 32, "cooldown": 180}
-
-        # NEW: minimal dummy experience buffer so the tab shows something
-        class DummyExpBuffer:
-            def __init__(self):
-                from collections import deque
-                # NOTE: since this is a test class and the full package structure isn't here,
-                # we'll use a local type for the test's sake if .neurogenesis fails.
-                try:
-                    from .neurogenesis import ExperienceContext
-                except ImportError:
-                    print("Warning: Cannot import ExperienceContext from .neurogenesis. Using placeholder.")
-                    class ExperienceContext:
-                        def __init__(self, **kwargs):
-                            self.__dict__.update(kwargs)
-                        def get_pattern_signature(self):
-                            return f"p_{self.trigger_type}_o_{self.outcome}"
-                
-                self.buffer = deque(maxlen=50)
-                self.pattern_counts = {}
-                # seed with one dummy
-                dummy = ExperienceContext(
-                    trigger_type='novelty',
-                    active_neurons={'curiosity': 80, 'anxiety': 25},
-                    recent_actions=['approach_plant'],
-                    environmental_state={'plant': True, 'food_count': 0},
-                    outcome='positive',
-                    timestamp=time.time()
-                )
-                self.add_experience(dummy)
-
-            def add_experience(self, ctx):
-                self.buffer.append(ctx)
-                pat = ctx.get_pattern_signature()
-                self.pattern_counts[pat] = self.pattern_counts.get(pat, 0) + 1
-
-        enhanced_neurogenesis = type('obj', (object,), {
-            'experience_buffer': DummyExpBuffer()
-        })()
 
         def perform_hebbian_learning(self):
             print("Hebbian cycle triggered")

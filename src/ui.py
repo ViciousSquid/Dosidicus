@@ -286,6 +286,7 @@ class Ui:
         self.tamagotchi_logic = None
         self.debug_mode = debug_mode
         self.setup_neurogenesis_debug_shortcut()
+        self.setup_decorations_shortcut()
         
         # Get screen size and initialize scaling
         screen = QtWidgets.QApplication.primaryScreen()
@@ -391,6 +392,20 @@ class Ui:
         self._neurogenesis_debug_dialog.update_debug_info()
         self._neurogenesis_debug_dialog.show()
         self._neurogenesis_debug_dialog.raise_()
+
+    def setup_decorations_shortcut(self):
+        # Create a shortcut for decorations window (T key)
+        self.decorations_shortcut = QtWidgets.QShortcut(
+            QtGui.QKeySequence(QtCore.Qt.Key_T), 
+            self.window
+        )
+        self.decorations_shortcut.activated.connect(self.show_decorations_window)
+
+    def show_decorations_window(self):
+        # Always show and activate the decorations window when T is pressed
+        self.decoration_window.show()
+        self.decoration_window.activateWindow()
+        self.decoration_window.raise_()
 
     def optimize_animations(self):
         self.scene.setItemIndexMethod(QtWidgets.QGraphicsScene.NoIndex)  # Better for moving items
@@ -720,6 +735,10 @@ class Ui:
         # Create the cleanliness overlay
         self.cleanliness_overlay = self.scene.addRect(50, 50, self.window_width - 100, self.window_height - 100,
                                                     QtGui.QPen(QtCore.Qt.NoPen), QtGui.QBrush(QtGui.QColor(139, 69, 19, 0)))
+        
+        # Initialize DIRTY text system for low cleanliness visualization
+        self.dirty_text_items = []
+        self.dirty_text_target_count = 0  # Target number of DIRTY words based on cleanliness
 
         # Create the feeding message
         self.feeding_message = QtWidgets.QGraphicsTextItem("Squid requires feeding")
@@ -782,6 +801,105 @@ class Ui:
         
         # Always accept the event to prevent the view from scrolling
         event.accept()
+
+    def update_dirty_text(self, cleanliness):
+        """Update DIRTY text items based on cleanliness level.
+        
+        No text appears until cleanliness < 25.
+        Text fills from the bottom up.
+        Screen is completely full at cleanliness = 0.
+        """
+        # Don't show any DIRTY text until cleanliness drops below 25
+        if cleanliness >= 25:
+            if self.dirty_text_items:
+                self.clear_dirty_text()
+            return
+        
+        # Calculate how many DIRTY words should be visible
+        # At cleanliness = 24, just starting to show words
+        # At cleanliness = 0, screen should be full
+        
+        # Tank boundaries
+        tank_left = 50
+        tank_right = self.window_width - 50
+        tank_top = 50
+        tank_bottom = self.window_height - 50
+        tank_width = tank_right - tank_left
+        tank_height = tank_bottom - tank_top
+        
+        # Font size for DIRTY text (very small)
+        font_size = 8
+        word_width = font_size * 9  # Width of "DIRTY" plus generous horizontal spacing
+        word_height = font_size + 14  # Height with generous vertical spacing
+        
+        # Calculate grid dimensions
+        cols = max(1, int(tank_width / word_width))
+        rows = max(1, int(tank_height / word_height))
+        max_words = cols * rows  # Maximum DIRTY words that can fill the screen
+        
+        # Calculate target count based on cleanliness (0-24 range maps to max_words-0)
+        # Progress: 0.0 at cleanliness=25, 1.0 at cleanliness=0
+        progress = (25.0 - float(cleanliness)) / 25.0
+        target_count = int(progress * max_words)
+        
+        self.dirty_text_target_count = target_count
+        
+        # Add words if we need more
+        current_count = len(self.dirty_text_items)
+        
+        if current_count < target_count:
+            # Add new DIRTY words (fill from bottom up)
+            words_to_add = target_count - current_count
+            
+            for _ in range(words_to_add):
+                # Calculate position - fill from bottom row up
+                word_index = len(self.dirty_text_items)
+                row_from_bottom = word_index // cols
+                col = word_index % cols
+                
+                # Position: start from bottom of tank
+                x = tank_left + (col * word_width) + random.randint(-2, 2)  # Small random offset
+                y = tank_bottom - ((row_from_bottom + 1) * word_height) + random.randint(-1, 1)
+                
+                # Don't go above the tank
+                if y < tank_top:
+                    break
+                
+                # Create the DIRTY text item
+                dirty_text = QtWidgets.QGraphicsTextItem("DIRTY")
+                dirty_text.setDefaultTextColor(QtGui.QColor(101, 67, 33))  # Dark brown color
+                font = QtGui.QFont("Arial", font_size, QtGui.QFont.Bold)
+                dirty_text.setFont(font)
+                dirty_text.setPos(x, y)
+                dirty_text.setZValue(1000)  # High z-value to always be on top
+                
+                # Mark it as a dirty text item for easy identification
+                dirty_text.setData(0, "dirty_text")
+                
+                self.scene.addItem(dirty_text)
+                self.dirty_text_items.append(dirty_text)
+            
+            # Force scene update after adding items
+            self.scene.update()
+        
+        elif current_count > target_count:
+            # Remove words if we have too many (e.g., cleanliness improved slightly)
+            words_to_remove = current_count - target_count
+            for _ in range(words_to_remove):
+                if self.dirty_text_items:
+                    item = self.dirty_text_items.pop()
+                    self.scene.removeItem(item)
+            
+            # Force scene update after removing items
+            self.scene.update()
+    
+    def clear_dirty_text(self):
+        """Quickly remove all DIRTY text items when tank is cleaned."""
+        for item in self.dirty_text_items:
+            self.scene.removeItem(item)
+        self.dirty_text_items.clear()
+        self.dirty_text_target_count = 0
+        self.scene.update()
 
     def check_neurogenesis(self, state):
         """Handle neuron creation, with special debug mode that bypasses all checks"""
@@ -1770,7 +1888,7 @@ class Ui:
                 if hasattr(self.tamagotchi_logic, 'brain_window') and self.tamagotchi_logic.brain_window:
                     self.squid_brain_window = self.tamagotchi_logic.brain_window
                 else: # Fallback to create if necessary (might need self.tamagotchi_logic to be passed)
-                    self.squid_brain_window = SquidBrainWindow(self.tamagotchi_logic, current_debug_mode)
+                    self.squid_brain_window = SquidBrainWindow(self.tamagotchi_logic, current_debug_mode, show_decorations_callback=self.show_decorations_window)
                     if hasattr(self.tamagotchi_logic, 'set_brain_window'): # If your logic sets it
                          self.tamagotchi_logic.set_brain_window(self.squid_brain_window)
             else:
@@ -1822,7 +1940,7 @@ class Ui:
     def create_statistics_window(self):
         if hasattr(self, 'tamagotchi_logic'):
             if not hasattr(self.tamagotchi_logic, 'statistics_window'):
-                self.tamagotchi_logic.statistics_window = StatisticsWindow(self.tamagotchi_logic.squid)
+                self.tamagotchi_logic.statistics_window = StatisticsWindow(self.tamagotchi_logic.squid, show_decorations_callback=self.show_decorations_window)
             self.statistics_window = self.tamagotchi_logic.statistics_window
         else:
             print("TamagotchiLogic not initialized")
