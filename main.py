@@ -583,8 +583,19 @@ class MainWindow(QtWidgets.QMainWindow):
         print("New game created successfully!")
 
     def load_game(self):
-        """Delegate to tamagotchi_logic"""
-        self.tamagotchi_logic.load_game()
+        """Load game with selection dialog for multiple saves"""
+        if not hasattr(self, 'tamagotchi_logic') or not self.tamagotchi_logic:
+            print("⚠️  Cannot load: TamagotchiLogic not initialized")
+            return False
+        
+        success = self.tamagotchi_logic.load_game_with_selection()
+        
+        if success:
+            # Refresh statistics display
+            if hasattr(self.tamagotchi_logic, 'statistics_window'):
+                self.tamagotchi_logic.statistics_window.update_statistics()
+        
+        return success
 
     def save_game(self):
         """Delegate to tamagotchi_logic"""
