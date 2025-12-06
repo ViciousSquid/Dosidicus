@@ -1,5 +1,5 @@
 """
-Save File Viewer v1.0
+Dosidicus Save File Viewer v2.0
 A comprehensive GUI tool for viewing, analyzing, and converting save files
 """
 
@@ -12,9 +12,178 @@ import base64
 from datetime import datetime
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+class NetworkRenderingMixin:
+    """Mixin providing static network rendering methods"""
+    
+    @staticmethod
+    def draw_connections_static(painter, neuron_positions, weights, neuron_states, 
+                                excluded_neurons=None, scale=1.0, 
+                                line_width=1.5, show_weights=False):
+        """Static version of connection drawing without animations"""
+        if excluded_neurons is None:
+            excluded_neurons = set()
+            
+        # Pre-calculate scaled positions
+        scaled_positions = {}
+        for name, (x, y) in neuron_positions.items():
+            if name not in excluded_neurons:
+                scaled_positions[name] = (x * scale, y * scale)
+        
+        # Draw connections
+        for (src, dst), weight in weights.items():
+            if src not in scaled_positions or dst not in scaled_positions:
+                continue
+                
+            x1, y1 = scaled_positions[src]
+            x2, y2 = scaled_positions[dst]
+            
+            # Determine color and style based on weight
+            if weight > 0:
+                # Excitatory: Green
+                color = QtGui.QColor(0, int(200 * min(weight, 1.0)), 0, 180)
+                pen_style = QtCore.Qt.SolidLine
+            else:
+                # Inhibitory: Red
+                color = QtGui.QColor(int(200 * min(abs(weight), 1.0)), 0, 0, 180)
+                pen_style = QtCore.Qt.DashLine if abs(weight) < 0.3 else QtCore.Qt.SolidLine
+            
+            # Line thickness based on weight magnitude
+            thickness = max(1.0, line_width * (1.0 + abs(weight) * 2.0))
+            
+            painter.setPen(QtGui.QPen(color, thickness, pen_style))
+            painter.drawLine(QtCore.QLineF(x1, y1, x2, y2))
+            
+            # Draw weight labels if enabled
+            if show_weights and abs(weight) > 0.1:
+                midpoint = QtCore.QPointF((x1 + x2) / 2, (y1 + y2) / 2)
+                font = painter.font()
+                font.setPointSize(int(8 * scale))
+                painter.setFont(font)
+                
+                text = f"{weight:.2f}"
+                font_metrics = painter.fontMetrics()
+                text_width = font_metrics.horizontalAdvance(text)
+                
+                painter.setBrush(QtGui.QBrush(QtGui.QColor(30, 30, 30, 200)))
+                painter.setPen(QtCore.Qt.NoPen)
+                rect = QtCore.QRectF(midpoint.x() - text_width/2 - 4, 
+                                   midpoint.y() - 8, text_width + 8, 16)
+                painter.drawRect(rect)
+                
+                painter.setPen(QtGui.QColor(220, 220, 220))
+                painter.drawText(rect, QtCore.Qt.AlignCenter, text)
+    
+    @staticmethod
+    def draw_neurons_static(painter, neuron_positions, neuron_states, 
+                           visible_neurons=None, excluded_neurons=None,
+                           scale=1.0, base_font_size=8):
+        """Static neuron drawing with improved label sizing"""
+        if visible_neurons is None:
+            visible_neurons = set(neuron_positions.keys())
+        if excluded_neurons is None:
+            excluded_neurons = set()
+            
+        # Font for labels - smaller and more compact
+        label_font = QtGui.QFont("Arial", int(base_font_size * scale))
+        label_font.setBold(True)
+        painter.setFont(label_font)
+        font_metrics = painter.fontMetrics()
+        
+        for name, pos in neuron_positions.items():
+            if name in excluded_neurons or name not in visible_neurons:
+                continue
+                
+            x, y = pos[0] * scale, pos[1] * scale
+            
+            # Get neuron value for color
+            value = neuron_states.get(name, 50)
+            if isinstance(value, (int, float)):
+                # Color based on activation (green->yellow->red)
+                normalized = max(0, min(1, value / 100.0))
+                if normalized > 0.7:
+                    color = QtGui.QColor(76, 175, 80)  # Green
+                elif normalized > 0.4:
+                    color = QtGui.QColor(255, 193, 7)  # Yellow
+                else:
+                    color = QtGui.QColor(244, 67, 54)   # Red
+            else:
+                color = QtGui.QColor(150, 150, 150)    # Default for non-numeric
+                
+            # Draw neuron circle
+            radius = 20 * scale
+            painter.setBrush(QtGui.QBrush(color))
+            painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), max(1, int(2 * scale))))
+            painter.drawEllipse(QtCore.QPointF(x, y), radius, radius)
+            
+            # Draw neuron name below - with DYNAMIC width calculation
+            display_name = name.replace('_', ' ').title()
+            text_width = font_metrics.horizontalAdvance(display_name)
+            
+            # WIDER text field to prevent cutoff
+            padding = 12 * scale  # Increased padding
+            rect_width = text_width + (padding * 2)
+            rect_height = font_metrics.height() + 6  # Increased height
+            
+            text_rect = QtCore.QRectF(
+                x - rect_width / 2,
+                y + radius + 5 * scale,
+                rect_width,
+                rect_height
+            )
+            
+            # Draw text background for better readability
+            painter.setBrush(QtGui.QBrush(QtGui.QColor(26, 26, 26, 220)))
+            painter.setPen(QtCore.Qt.NoPen)
+            painter.drawRect(text_rect)
+            
+            # Draw text
+            painter.setPen(QtGui.QColor(224, 224, 224))
+            painter.drawText(text_rect, QtCore.Qt.AlignCenter, display_name)
+
+    @staticmethod
+    def draw_layers_static(painter, layers, scale=1.0):
+        """Draw layer background rectangles if layer structure exists"""
+        if not layers:
+            return
+            
+        for layer in layers:
+            y_pos = layer.get('y_position', 0)
+            name = layer.get('name', 'Layer')
+            layer_type = layer.get('layer_type', 'hidden')
+            
+            # Logical dimensions (match brain_widget's coordinate system)
+            rect_height = 120
+            rect_top = (y_pos - rect_height / 2)
+            rect_left = -200  # Extend beyond visible area
+            rect_width = 2000
+            
+            # Determine layer color based on type
+            if layer_type == 'input':
+                color = QtGui.QColor(220, 255, 220, 30)
+                border_color = QtGui.QColor(180, 220, 180, 60)
+            elif layer_type == 'output':
+                color = QtGui.QColor(255, 220, 220, 30)
+                border_color = QtGui.QColor(220, 180, 180, 60)
+            else:  # hidden
+                color = QtGui.QColor(230, 230, 255, 40)
+                border_color = QtGui.QColor(200, 200, 240, 60)
+            
+            # Draw rectangle
+            rect = QtCore.QRectF(rect_left, rect_top, rect_width, rect_height)
+            painter.setBrush(QtGui.QBrush(color))
+            painter.setPen(QtGui.QPen(border_color, 1, QtCore.Qt.DashLine))
+            painter.drawRect(rect)
+            
+            # Draw label
+            font = QtGui.QFont("Arial", int(10 * scale))
+            font.setBold(True)
+            painter.setFont(font)
+            painter.setPen(QtGui.QColor(150, 150, 170))
+            painter.drawText(QtCore.QPointF(20, rect_top + 20), name)
+
 
 # =============================================================================
-# GLOBAL SCALING 
+# GLOBAL SCALING SYSTEM
 # =============================================================================
 
 class ScaleManager:
@@ -477,6 +646,35 @@ class OverviewTab(QtWidgets.QScrollArea):
         version_banner.setStyleSheet(f"background-color: {version_color}; color: white; padding: {int(8 * s)}px {int(16 * s)}px; border-radius: {int(4 * s)}px; font-size: {int(14 * s)}px; font-weight: bold;")
         version_banner.setAlignment(QtCore.Qt.AlignCenter)
         layout.addWidget(version_banner)
+
+        # Custom Brain Banner
+        custom_brain_data = save_data.get('custom_brain', {})
+        if custom_brain_data.get('is_custom_brain'):
+            brain_name = custom_brain_data.get('brain_name', 'Custom Neural Network')
+            brain_author = custom_brain_data.get('author', '')
+            author_text = f" by {brain_author}" if brain_author else ""
+            
+            custom_banner = QtWidgets.QLabel(f"  🧬 CUSTOM BRAIN: {brain_name}{author_text}  ")
+            custom_banner.setStyleSheet(f"background-color: #9C27B0; color: white; padding: {int(10 * s)}px {int(20 * s)}px; border-radius: {int(4 * s)}px; font-size: {int(16 * s)}px; font-weight: bold; border: 2px solid #E1BEE7;")
+            custom_banner.setAlignment(QtCore.Qt.AlignCenter)
+            layout.addWidget(custom_banner)
+            
+            # Add custom brain details section
+            brain_section = CollapsibleSection("🧬 Custom Brain Details", start_expanded=True)
+            brain_section.add_widget(KeyValueRow("Brain Name", brain_name))
+            if brain_author:
+                brain_section.add_widget(KeyValueRow("Author", brain_author))
+            if custom_brain_data.get('version'):
+                brain_section.add_widget(KeyValueRow("Version", custom_brain_data.get('version')))
+            if custom_brain_data.get('description'):
+                brain_section.add_widget(KeyValueRow("Description", custom_brain_data.get('description')))
+            
+            neuron_count = custom_brain_data.get('neuron_count', 0)
+            connection_count = custom_brain_data.get('connection_count', 0)
+            brain_section.add_widget(KeyValueRow("Neurons", neuron_count))
+            brain_section.add_widget(KeyValueRow("Connections", connection_count))
+            
+            layout.addWidget(brain_section)
 
         # Basic Info Section
         basic_section = CollapsibleSection("🦑 Squid Information")
@@ -1121,6 +1319,193 @@ class ConversionDialog(QtWidgets.QDialog):
 # MAIN WINDOW
 # =============================================================================
 
+# =============================================================================
+# NETWORK VISUALIZATION TAB
+# =============================================================================
+
+# In save_viewer.py, update the NetworkVisualizationTab class
+
+class NetworkVisualizationTab(QtWidgets.QWidget):
+    """Tab for visualizing the neural network from brain_state"""
+    
+    def __init__(self, save_data, parent=None):
+        super().__init__(parent)
+        self.save_data = save_data
+        self.build_ui()
+    
+    def build_ui(self):
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Check if we have brain data
+        brain_state = self.save_data.get('brain_state', {})
+        custom_brain = self.save_data.get('custom_brain', {})
+        
+        if not brain_state:
+            # No brain data available
+            empty_widget = QtWidgets.QWidget()
+            empty_layout = QtWidgets.QVBoxLayout(empty_widget)
+            empty_layout.setAlignment(QtCore.Qt.AlignCenter)
+            
+            icon = QtWidgets.QLabel("🧠")
+            icon.setStyleSheet("font-size: 64px;")
+            icon.setAlignment(QtCore.Qt.AlignCenter)
+            empty_layout.addWidget(icon)
+            
+            label = QtWidgets.QLabel("No brain state data in this save file")
+            label.setStyleSheet("color: #888; font-size: 18px;")
+            label.setAlignment(QtCore.Qt.AlignCenter)
+            empty_layout.addWidget(label)
+            
+            layout.addWidget(empty_widget)
+            return
+        
+        # Create canvas for visualization with IMPROVED data passing
+        self.canvas = NetworkCanvas(brain_state, custom_brain)
+        layout.addWidget(self.canvas)
+        
+        # Add control panel
+        controls = QtWidgets.QHBoxLayout()
+        
+        # Show/hide weight labels
+        self.show_weights_cb = QtWidgets.QCheckBox("Show Weight Values")
+        self.show_weights_cb.setChecked(True)
+        self.show_weights_cb.stateChanged.connect(self.toggle_weights)
+        controls.addWidget(self.show_weights_cb)
+        
+        controls.addStretch()
+        layout.addLayout(controls)
+    
+    def toggle_weights(self, state):
+        self.canvas.show_weights = (state == QtCore.Qt.Checked)
+        self.canvas.update()
+
+
+class NetworkCanvas(QtWidgets.QWidget, NetworkRenderingMixin):
+    """Enhanced canvas using extracted rendering logic from BrainWidget"""
+    
+    def __init__(self, brain_state, custom_brain, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(800, 600)
+        self.setStyleSheet("background-color: #1a1a1a;")
+        
+        # CRITICAL FIX: Load neuron positions
+        self.neuron_positions = brain_state.get('neuron_positions', {})
+        if not self.neuron_positions:
+            # Fallback: try to reconstruct from state keys
+            self.neuron_positions = {k: (100 + i*120, 100) for i, k in enumerate(brain_state.get('state', {}).keys()) if k not in {'is_sick', 'is_eating'}}
+        
+        # CRITICAL FIX: Convert weights_list to weights dict
+        # The save file stores weights as a list: [['n1', 'n2', 0.5], ...]
+        # BrainWidget uses a dict: {('n1', 'n2'): 0.5, ...}
+        weights_list = brain_state.get('weights_list', [])
+        self.weights = {}
+        for item in weights_list:
+            if isinstance(item, list) and len(item) == 3:
+                src, dst, weight = item
+                # Ensure the neurons exist in positions before adding weight
+                if src in self.neuron_positions and dst in self.neuron_positions:
+                    self.weights[(src, dst)] = float(weight)
+        
+        # Load neuron states
+        self.state = brain_state.get('state', {})
+        
+        # Load layer structure from custom brain if available
+        self.layers = []
+        if custom_brain and isinstance(custom_brain, dict):
+            self.layers = custom_brain.get('layer_structure', [])
+        
+        # State tracking for performance
+        self._cached_scale = 1.0
+        self.show_weights = True  # Toggleable in UI if desired
+        
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        
+        # Fill background
+        bg_color = QtGui.QColor(26, 26, 26)
+        painter.fillRect(self.rect(), bg_color)
+        
+        # Calculate scale factor (matching brain_widget coordinate system)
+        indicator_space = 60  # Space for status indicators (not used but keeps coords consistent)
+        base_width_logical = 1024
+        base_height_logical = 768 - indicator_space
+        
+        scale_x = self.width() / base_width_logical
+        drawable_height = self.height() - indicator_space
+        scale_y = drawable_height / base_height_logical if drawable_height > 0 else 1.0
+        
+        scale = max(0.1, min(scale_x, scale_y))
+        self._cached_scale = scale
+        
+        # Transform coordinate system to match brain_widget's logical coords
+        painter.translate(0, indicator_space)
+        painter.scale(scale, scale)
+        
+        # Draw layer backgrounds (if custom brain has layer structure)
+        self.draw_layers_static(painter, self.layers, 1.0)
+        
+        # Draw connections FIRST (so they appear behind neurons)
+        self.draw_connections_static(
+            painter, self.neuron_positions, self.weights, self.state,
+            excluded_neurons={'is_sick', 'is_eating', 'is_sleeping', 
+                            'pursuing_food', 'direction'},
+            scale=1.0, line_width=2.0, show_weights=self.show_weights
+        )
+        
+        # Draw neurons on top
+        self.draw_neurons_static(
+            painter, self.neuron_positions, self.state,
+            visible_neurons=set(self.neuron_positions.keys()),
+            excluded_neurons={'is_sick', 'is_eating', 'is_sleeping', 
+                            'pursuing_food', 'direction'},
+            scale=1.0, 
+            base_font_size=7  # SMALLER font size for better fit
+        )
+        
+        # Draw info panel in widget coordinates
+        self.draw_info_panel(painter)
+        
+        painter.restore()
+    
+    def draw_info_panel(self, painter):
+        """Draw network statistics in the corner"""
+        painter.save()
+        painter.resetTransform()  # Back to widget coordinates
+        
+        s = self._cached_scale
+        stats_text = f"Neurons: {len(self.neuron_positions)} | Connections: {len(self.weights)}"
+        
+        painter.setPen(QtGui.QColor(180, 180, 180))
+        font = QtGui.QFont("Arial", int(9 * s))
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(10, 20, stats_text)
+        
+        # Draw legend
+        legend_y = 40
+        painter.setFont(QtGui.QFont("Arial", int(8 * s)))
+        
+        # Green line + label
+        painter.setPen(QtGui.QPen(QtGui.QColor(0, 200, 0), 3))
+        painter.drawLine(10, legend_y, 30, legend_y)
+        painter.setPen(QtGui.QColor(180, 180, 180))
+        painter.drawText(35, legend_y + 5, "Excitatory (+)")
+        
+        # Red line + label
+        painter.setPen(QtGui.QPen(QtGui.QColor(200, 0, 0), 3))
+        painter.drawLine(10, legend_y + 20, 30, legend_y + 20)
+        painter.setPen(QtGui.QColor(180, 180, 180))
+        painter.drawText(35, legend_y + 25, "Inhibitory (-)")
+        
+        painter.restore()
+
+
+# =============================================================================
+# SAVE VIEWER WINDOW
+# =============================================================================
+
 class SaveViewerWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1262,10 +1647,15 @@ class SaveViewerWindow(QtWidgets.QMainWindow):
         overview = OverviewTab(self.save_data)
         self.tabs.addTab(overview, "📋 Overview")
 
+        # Add Network Visualization tab if brain_state exists
+        if 'brain_state' in self.save_data:
+            network_viz = NetworkVisualizationTab(self.save_data)
+            self.tabs.addTab(network_viz, "🕸️ Network")
+
         raw_mode = self.raw_checkbox.isChecked()
 
-        file_order = ['game_state', 'brain_state', 'statistics', 'ShortTerm', 'LongTerm', 'achievements']
-        icons = {'game_state': '🦑', 'brain_state': '🧠', 'statistics': '📊', 'ShortTerm': '💭', 'LongTerm': '🧠', 'achievements': '🏆', 'plugin_data': '🔌'}
+        file_order = ['game_state', 'brain_state', 'custom_brain', 'statistics', 'ShortTerm', 'LongTerm', 'achievements']
+        icons = {'game_state': '🦑', 'brain_state': '🧠', 'custom_brain': '🧬', 'statistics': '📊', 'ShortTerm': '💭', 'LongTerm': '🧠', 'achievements': '🏆', 'plugin_data': '🔌'}
 
         for key in file_order:
             if key in self.save_data and key not in ['_files', '_uuid_txt']:
