@@ -4,6 +4,7 @@ import zipfile
 import shutil
 from datetime import datetime
 from uuid import UUID
+from PyQt5.QtCore import QDateTime
 
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -58,6 +59,67 @@ class SaveManager:
         """Generate save path for a specific UUID"""
         safe_uuid = str(uuid_str).replace('-', '_')  # Make UUID filename-safe
         return os.path.join(self.save_directory, f"{safe_uuid}.zip")
+    
+    def get_manual_save_list(self):
+        """Get list of manual save files with metadata for selection dialog"""
+        saves = []
+        try:
+            for f in os.listdir(self.save_directory):
+                if f.endswith('.zip') and f not in ['autosave.zip', 'autosave_backup.zip']:
+                    filepath = os.path.join(self.save_directory, f)
+                    try:
+                        with zipfile.ZipFile(filepath, 'r') as zf:
+                            name = "Unnamed Squid"
+                            personality = "Unknown"
+                            
+                            if 'game_state.json' in zf.namelist():
+                                game_data = json.loads(zf.read('game_state.json').decode('utf-8'))
+                                squid_data = game_data.get('squid', {})
+                                name = squid_data.get('name', 'Unnamed Squid')
+                                personality = squid_data.get('personality', 'Unknown')
+                            
+                            saves.append({
+                                'path': filepath,
+                                'filename': f,
+                                'name': name,
+                                'personality': personality,
+                                'modified': os.path.getmtime(filepath),
+                                'size': os.path.getsize(filepath)
+                            })
+                    except Exception as e:
+                        print(f"[SaveManager] Error reading {f}: {e}")
+        except:
+            pass
+        
+        return sorted(saves, key=lambda x: x['modified'], reverse=True)
+    
+    def load_from_path(self, path):
+        """Load save data from a specific file path"""
+        return self._load_zip_data(path)
+    
+    def _load_zip_data(self, path):
+        """Internal: Load data from zip file"""
+        if not os.path.exists(path):
+            return None
+        
+        data = {}
+        squid_uuid = None
+        with zipfile.ZipFile(path, 'r') as zf:
+            for fname in zf.namelist():
+                if fname == "uuid.txt":
+                    squid_uuid = zf.read(fname).decode().strip()
+                    if 'SquidSignature' in squid_uuid:
+                        squid_uuid = squid_uuid.split('SquidSignature    ')[-1]
+                    continue
+                with zf.open(fname) as f:
+                    raw = f.read()
+                    if not raw:
+                        continue
+                    key = os.path.splitext(fname)[0]
+                    data[key] = json.loads(raw.decode('utf-8'))
+        
+        data["_uuid"] = squid_uuid
+        return data
 
     # --------------------------------------------------
     # Save API

@@ -1,4 +1,5 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtCore import QDateTime
 import random
 import os
 import time
@@ -2253,6 +2254,138 @@ class TamagotchiLogic:
 
         # Save the game state after resetting
         self.save_game()
+
+    def load_game_with_selection(self):
+        """Load game: show dialog if multiple saves exist"""
+        # Always prefer autosave if available
+        if self.save_manager.save_exists(autosave=True):
+            print("[TamagotchiLogic] Loading autosave...")
+            return self.load_game()
+        
+        # Get manual saves
+        saves = self.save_manager.get_manual_save_list()
+        
+        if not saves:
+            print("[TamagotchiLogic] No saves found")
+            return False
+        
+        # Single save: load directly
+        if len(saves) == 1:
+            print(f"[TamagotchiLogic] Loading: {saves[0]['filename']}")
+            return self.load_game_from_path(saves[0]['path'])
+        
+        # Multiple saves: show dialog
+        return self._show_save_selection_dialog(saves)
+    
+    def _show_save_selection_dialog(self, saves):
+        """Display dialog for selecting which save to load"""
+        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QListWidget, QListWidgetItem,
+                                QDialogButtonBox, QLabel)
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        
+        dialog = QDialog(self.user_interface.window)
+        dialog.setWindowTitle("Select Save File")
+        dialog.resize(500, 350)
+        
+        layout = QVBoxLayout()
+        
+        title = QLabel("Multiple save files found. Select one to load:")
+        title_font = QFont()
+        title_font.setBold(True)
+        title.setFont(title_font)
+        layout.addWidget(title)
+        
+        # Create list with save info
+        list_widget = QListWidget()
+        list_widget.setAlternatingRowColors(True)
+        
+        for save in saves:
+            dt = QDateTime.fromSecsSinceEpoch(int(save['modified']))
+            time_str = dt.toString("yyyy-MM-dd hh:mm:ss")
+            
+            display_text = f"{save['name']} ({save['personality']}) - {time_str}"
+            item = QListWidgetItem(display_text)
+            item.setData(Qt.UserRole, save['path'])
+            list_widget.addItem(item)
+        
+        list_widget.setCurrentRow(0)
+        layout.addWidget(list_widget)
+        
+        # Buttons
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_box.accepted.connect(dialog.accept)
+        btn_box.rejected.connect(dialog.reject)
+        list_widget.itemDoubleClicked.connect(dialog.accept)
+        layout.addWidget(btn_box)
+        
+        dialog.setLayout(layout)
+        
+        if dialog.exec_() == QDialog.Rejected:
+            print("[TamagotchiLogic] Load cancelled by user")
+            return False
+        
+        selected = list_widget.currentItem()
+        if not selected:
+            return False
+        
+        return self.load_game_from_path(selected.data(Qt.UserRole))
+    
+    def _apply_save_data(self, save_data):
+        """Apply loaded save data to game state"""
+        if not save_data:
+            return False
+        
+        # Check custom brain warning
+        if not show_custom_brain_load_warning(self.user_interface, save_data):
+            return False
+        
+        try:
+            # Extract and apply game state
+            game_state = save_data['game_state']
+            squid_data = game_state['squid']
+            
+            self.squid.load_state(squid_data)
+            
+            # Load custom brain
+            custom_brain_data = save_data.get('custom_brain')
+            if custom_brain_data and custom_brain_data.get('is_custom_brain'):
+                success, msg = restore_custom_brain_from_save(save_data, self.brain_window.brain_widget)
+                print(f"✅ {msg}" if success else f"⚠️ {msg}")
+            
+            # Load brain state
+            brain_state = save_data.get('brain_state', {})
+            self.brain_window.set_brain_state(brain_state)
+            
+            # Load memories
+            self.squid.memory_manager.short_term_memory = save_data.get('ShortTerm', [])
+            self.squid.memory_manager.long_term_memory = save_data.get('LongTerm', [])
+            
+            # Load decorations
+            decorations_data = game_state.get('decorations', [])
+            self.user_interface.load_decorations_data(decorations_data)
+            
+            # Load game state
+            logic_data = game_state['tamagotchi_logic']
+            self.cleanliness_threshold_time = logic_data['cleanliness_threshold_time']
+            self.hunger_threshold_time = logic_data['hunger_threshold_time']
+            self.last_clean_time = logic_data['last_clean_time']
+            self.points = logic_data['points']
+            
+            print(f"✅ Loaded {len(decorations_data)} decorations")
+            self.set_simulation_speed(1)
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error loading game: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def load_game_from_path(self, path):
+        """Load and apply save data from a specific path"""
+        save_data = self.save_manager.load_from_path(path)
+        return self._apply_save_data(save_data)
 
     def load_game(self):
         """
