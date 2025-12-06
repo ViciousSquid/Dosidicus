@@ -2314,25 +2314,28 @@ class TamagotchiLogic:
                 self.squid.statistics.load_statistics(statistics_data)
 
             # -----------------------------------------------------------
-            #  RESTORE SCORE / POINTS
+            #  FIX: RESTORE SCORE / POINTS CORRECTLY
             # -----------------------------------------------------------
-            loaded_points = tamagotchi_logic_data.get('points', 0)  # ← Changed from statistics_data
-            self.points = loaded_points
-            if hasattr(self, 'statistics_window') and self.statistics_window:
-                self.statistics_window.set_score(loaded_points)
-
-            # NEW: Load achievements data
-            achievements_data = save_data.get('achievements')
-            if achievements_data:
-                self._restore_achievements_data(achievements_data)
-            
-            # Load tamagotchi logic state
+            # Load score from tamagotchi_logic_data (where it's saved)
             tamagotchi_logic_data = game_state['tamagotchi_logic']
+            loaded_points = tamagotchi_logic_data.get('points', 0)
+            
+            # Set the points in tamagotchi_logic
+            self.points = loaded_points
+            
+            # Update the statistics window score display
+            if hasattr(self, 'statistics_window') and self.statistics_window:
+                # First set the actual score value
+                self.statistics_window.score = loaded_points
+                # Then update the display to match
+                self.statistics_window.set_score(loaded_points)
+                
+            print(f"✓ Loaded score: {loaded_points}")
+                
+            # Load tamagotchi logic state
             self.cleanliness_threshold_time = tamagotchi_logic_data['cleanliness_threshold_time']
             self.hunger_threshold_time = tamagotchi_logic_data['hunger_threshold_time']
             self.last_clean_time = tamagotchi_logic_data['last_clean_time']
-            # points is already restored above, do NOT overwrite here
-            # self.points = tamagotchi_logic_data['points']   <-- REMOVED
             
             print(f"Game loaded successfully")
             print(f"Loaded personality: {self.squid.personality.value}")
