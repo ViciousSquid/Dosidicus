@@ -6,42 +6,38 @@ DISTANCE_ROLLOVER_LIMIT = 999_999_999  # ~1 billion pixels before rollover
 
 class SquidStatistics:
     def __init__(self, squid):
+
         self.squid = squid
         self.start_time = time.time()
         self.total_age_seconds = 0
-        
-        # Food consumption
         self.sushi_consumed = 0
         self.cheese_consumed = 0
-        
-        # Memory and mental stats
         self.total_memories_formed = 0
         self.highest_anxiety = 0
         self.lowest_happiness = 100
         self.highest_satisfaction = 0
-        
-        # Movement and interactions
         self.distance_swam = 0
-        self.distance_swam_multiplier = 1  # Rollover multiplier (2x, 3x, etc.)
+        self.distance_swam_multiplier = 1
         self.other_squids_encountered = 0
-        
-        # Object interactions
         self.total_rocks_thrown = 0
         self.total_poops_thrown = 0
         self.total_env_interactions = 0
         self.ink_clouds_created = 0
         self.plants_interacted = 0
-        
-        # Time tracking
         self.time_spent_asleep = 0
-        
-        # Neurogenesis tracking
         self.peak_novelty = 0
         self.peak_stress = 0
         self.peak_reward = 0
         self.novelty_neurons_created = 0
         self.stress_neurons_created = 0
         self.reward_neurons_created = 0
+        self.poops_created = 0
+        self.max_poops_cleaned = 0
+        self.startles_experienced = 0
+        self.times_colour_changed = 0
+        self.sickness_episodes = 0
+        self.max_neurons_reached = 0
+        self.current_neurons = 7
 
     def get_total_age_seconds(self):
         """Calculates the total persistent age in seconds."""
@@ -91,6 +87,47 @@ class SquidStatistics:
 
         hours_str = f"{whole_hours}" if half_hour == 0 else f"{whole_hours}.5"
         return f"{hours_str} hr" + ("s" if whole_hours + half_hour != 1 else "")
+    
+    def load_statistics(self, data):
+        """Load statistics from saved data dictionary"""
+        if not data:
+            return
+            
+        # Core stats
+        self.total_age_seconds = data.get('total_age_seconds', 0)
+        self.distance_swam = data.get('distance_swam', 0)
+        self.distance_swam_multiplier = data.get('distance_swam_multiplier', 1)
+        
+        # Food consumption
+        self.sushi_consumed = data.get('sushi_eaten', 0)
+        self.cheese_consumed = data.get('cheese_eaten', 0)
+        
+        # Mental states
+        self.highest_anxiety = data.get('highest_anxiety', 0)
+        self.lowest_happiness = data.get('lowest_happiness', 100)
+        
+        # Object interactions
+        self.total_rocks_thrown = data.get('rocks_thrown', 0)
+        self.total_poops_thrown = data.get('poops_thrown', 0)
+        self.ink_clouds_created = data.get('ink_clouds_created', 0)
+        self.plants_interacted = data.get('plants_interacted', 0)
+        
+        # Other tracked stats
+        self.times_colour_changed = data.get('times_colour_changed', 0)
+        self.poops_created = data.get('poops_created', 0)
+        self.max_poops_cleaned = data.get('max_poops_cleaned', 0)
+        self.startles_experienced = data.get('startles_experienced', 0)
+        
+        # Time and health
+        self.time_spent_asleep = data.get('total_sleep_time', 0)
+        self.sickness_episodes = data.get('sickness_episodes', 0)
+        
+        # Neurogenesis
+        self.novelty_neurons_created = data.get('novelty_neurons_created', 0)
+        self.stress_neurons_created = data.get('stress_neurons_created', 0)
+        self.reward_neurons_created = data.get('reward_neurons_created', 0)
+        self.max_neurons_reached = data.get('max_neurons_reached', 0)
+        self.current_neurons = data.get('current_neurons', 7)
 
     def update(self):
         # Update peak mental states

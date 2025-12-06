@@ -1,5 +1,4 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtCore import QDateTime
 import random
 import os
 import time
@@ -2255,138 +2254,6 @@ class TamagotchiLogic:
         # Save the game state after resetting
         self.save_game()
 
-    def load_game_with_selection(self):
-        """Load game: show dialog if multiple saves exist"""
-        # Always prefer autosave if available
-        if self.save_manager.save_exists(autosave=True):
-            print("[TamagotchiLogic] Loading autosave...")
-            return self.load_game()
-        
-        # Get manual saves
-        saves = self.save_manager.get_manual_save_list()
-        
-        if not saves:
-            print("[TamagotchiLogic] No saves found")
-            return False
-        
-        # Single save: load directly
-        if len(saves) == 1:
-            print(f"[TamagotchiLogic] Loading: {saves[0]['filename']}")
-            return self.load_game_from_path(saves[0]['path'])
-        
-        # Multiple saves: show dialog
-        return self._show_save_selection_dialog(saves)
-    
-    def _show_save_selection_dialog(self, saves):
-        """Display dialog for selecting which save to load"""
-        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QListWidget, QListWidgetItem,
-                                QDialogButtonBox, QLabel)
-        from PyQt5.QtCore import Qt
-        from PyQt5.QtGui import QFont
-        
-        dialog = QDialog(self.user_interface.window)
-        dialog.setWindowTitle("Select Save File")
-        dialog.resize(500, 350)
-        
-        layout = QVBoxLayout()
-        
-        title = QLabel("Multiple save files found. Select one to load:")
-        title_font = QFont()
-        title_font.setBold(True)
-        title.setFont(title_font)
-        layout.addWidget(title)
-        
-        # Create list with save info
-        list_widget = QListWidget()
-        list_widget.setAlternatingRowColors(True)
-        
-        for save in saves:
-            dt = QDateTime.fromSecsSinceEpoch(int(save['modified']))
-            time_str = dt.toString("yyyy-MM-dd hh:mm:ss")
-            
-            display_text = f"{save['name']} ({save['personality']}) - {time_str}"
-            item = QListWidgetItem(display_text)
-            item.setData(Qt.UserRole, save['path'])
-            list_widget.addItem(item)
-        
-        list_widget.setCurrentRow(0)
-        layout.addWidget(list_widget)
-        
-        # Buttons
-        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.accepted.connect(dialog.accept)
-        btn_box.rejected.connect(dialog.reject)
-        list_widget.itemDoubleClicked.connect(dialog.accept)
-        layout.addWidget(btn_box)
-        
-        dialog.setLayout(layout)
-        
-        if dialog.exec_() == QDialog.Rejected:
-            print("[TamagotchiLogic] Load cancelled by user")
-            return False
-        
-        selected = list_widget.currentItem()
-        if not selected:
-            return False
-        
-        return self.load_game_from_path(selected.data(Qt.UserRole))
-    
-    def _apply_save_data(self, save_data):
-        """Apply loaded save data to game state"""
-        if not save_data:
-            return False
-        
-        # Check custom brain warning
-        if not show_custom_brain_load_warning(self.user_interface, save_data):
-            return False
-        
-        try:
-            # Extract and apply game state
-            game_state = save_data['game_state']
-            squid_data = game_state['squid']
-            
-            self.squid.load_state(squid_data)
-            
-            # Load custom brain
-            custom_brain_data = save_data.get('custom_brain')
-            if custom_brain_data and custom_brain_data.get('is_custom_brain'):
-                success, msg = restore_custom_brain_from_save(save_data, self.brain_window.brain_widget)
-                print(f"✅ {msg}" if success else f"⚠️ {msg}")
-            
-            # Load brain state
-            brain_state = save_data.get('brain_state', {})
-            self.brain_window.set_brain_state(brain_state)
-            
-            # Load memories
-            self.squid.memory_manager.short_term_memory = save_data.get('ShortTerm', [])
-            self.squid.memory_manager.long_term_memory = save_data.get('LongTerm', [])
-            
-            # Load decorations
-            decorations_data = game_state.get('decorations', [])
-            self.user_interface.load_decorations_data(decorations_data)
-            
-            # Load game state
-            logic_data = game_state['tamagotchi_logic']
-            self.cleanliness_threshold_time = logic_data['cleanliness_threshold_time']
-            self.hunger_threshold_time = logic_data['hunger_threshold_time']
-            self.last_clean_time = logic_data['last_clean_time']
-            self.points = logic_data['points']
-            
-            print(f"✅ Loaded {len(decorations_data)} decorations")
-            self.set_simulation_speed(1)
-            return True
-            
-        except Exception as e:
-            print(f"❌ Error loading game: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-    
-    def load_game_from_path(self, path):
-        """Load and apply save data from a specific path"""
-        save_data = self.save_manager.load_from_path(path)
-        return self._apply_save_data(save_data)
-
     def load_game(self):
         """
         Load the complete game state including decorations and custom brains.
@@ -2435,12 +2302,37 @@ class TamagotchiLogic:
             decorations_data = game_state.get('decorations', [])
             self.user_interface.load_decorations_data(decorations_data)
             
+            # NEW: Load statistics data
+            statistics_data = save_data.get('statistics', {})
+            if hasattr(self.brain_window, 'statistics_tab') and hasattr(self.brain_window.statistics_tab, 'statistics'):
+                self.brain_window.statistics_tab.statistics.update(statistics_data)
+                if hasattr(self.brain_window.statistics_tab, 'update_display'):
+                    self.brain_window.statistics_tab.update_display()
+
+            # Also load into squid statistics for consistency
+            if hasattr(self, 'squid') and hasattr(self.squid, 'statistics'):
+                self.squid.statistics.load_statistics(statistics_data)
+
+            # -----------------------------------------------------------
+            #  RESTORE SCORE / POINTS
+            # -----------------------------------------------------------
+            loaded_points = tamagotchi_logic_data.get('points', 0)  # ← Changed from statistics_data
+            self.points = loaded_points
+            if hasattr(self, 'statistics_window') and self.statistics_window:
+                self.statistics_window.set_score(loaded_points)
+
+            # NEW: Load achievements data
+            achievements_data = save_data.get('achievements')
+            if achievements_data:
+                self._restore_achievements_data(achievements_data)
+            
             # Load tamagotchi logic state
             tamagotchi_logic_data = game_state['tamagotchi_logic']
             self.cleanliness_threshold_time = tamagotchi_logic_data['cleanliness_threshold_time']
             self.hunger_threshold_time = tamagotchi_logic_data['hunger_threshold_time']
             self.last_clean_time = tamagotchi_logic_data['last_clean_time']
-            self.points = tamagotchi_logic_data['points']
+            # points is already restored above, do NOT overwrite here
+            # self.points = tamagotchi_logic_data['points']   <-- REMOVED
             
             print(f"Game loaded successfully")
             print(f"Loaded personality: {self.squid.personality.value}")
@@ -2456,8 +2348,6 @@ class TamagotchiLogic:
             import traceback
             traceback.print_exc()
             return False
-
-
 
     def update_squid_brain(self):
         if self.squid and self.brain_window.isVisible():
@@ -2498,7 +2388,7 @@ class TamagotchiLogic:
     def save_game(self, is_autosave=False):
         """
         Save the complete game state including decorations.
-        
+
         Args:
             is_autosave: Whether this is an autosave (True) or manual save (False)
         """
@@ -2519,44 +2409,44 @@ class TamagotchiLogic:
             'uuid': self.squid.uuid,
             'name': getattr(self.squid, 'name', None),  # Save squid name if it exists
         }
-        
+
         # Collect statistics as separate file
         # Primary source: brain_window.statistics_tab (where gameplay updates go)
         # Fallback: squid.statistics (legacy)
         tab_stats = {}
         if hasattr(self, 'brain_window') and hasattr(self.brain_window, 'statistics_tab'):
             tab_stats = getattr(self.brain_window.statistics_tab, 'statistics', {})
-        
+
         squid_stats = self.squid.statistics
-        
+
         # Save using exact keys from StatisticsTab
         statistics_data = {
             # Age tracking
             'total_age_seconds': squid_stats.get_total_age_seconds(),
             'squid_age_minutes': tab_stats.get('squid_age_minutes', 0),
-            
+
             # Movement
             'distance_swam': tab_stats.get('distance_swam', 0),
-            
+
             # Food consumption
             'cheese_eaten': tab_stats.get('cheese_eaten', 0),
             'sushi_eaten': tab_stats.get('sushi_eaten', 0),
-            
+
             # Poop tracking
             'poops_created': tab_stats.get('poops_created', 0),
             'max_poops_cleaned': tab_stats.get('max_poops_cleaned', 0),
-            
+
             # Interactions
             'startles_experienced': tab_stats.get('startles_experienced', 0),
             'ink_clouds_created': tab_stats.get('ink_clouds_created', 0),
             'times_colour_changed': tab_stats.get('times_colour_changed', 0),
             'rocks_thrown': tab_stats.get('rocks_thrown', 0),
             'plants_interacted': tab_stats.get('plants_interacted', 0),
-            
+
             # Health/Sleep
             'total_sleep_time': tab_stats.get('total_sleep_time', 0),
             'sickness_episodes': tab_stats.get('sickness_episodes', 0),
-            
+
             # Neurogenesis
             'novelty_neurons_created': tab_stats.get('novelty_neurons_created', 0),
             'stress_neurons_created': tab_stats.get('stress_neurons_created', 0),
@@ -2564,7 +2454,7 @@ class TamagotchiLogic:
             'max_neurons_reached': tab_stats.get('max_neurons_reached', 0),
             'current_neurons': tab_stats.get('current_neurons', 7),
         }
-        
+
         # Collect tamagotchi logic state
         tamagotchi_logic_data = {
             'cleanliness_threshold_time': self.cleanliness_threshold_time,
@@ -2572,17 +2462,17 @@ class TamagotchiLogic:
             'last_clean_time': self.last_clean_time,
             'points': self.statistics_window.score
         }
-        
+
         # Collect brain state
         brain_state = self.brain_window.get_brain_state()
-        
+
         # Collect memory state
         short_term_memory = self.squid.memory_manager.short_term_memory
         long_term_memory = self.squid.memory_manager.long_term_memory
-        
+
         # CRITICAL: Collect decoration data from UI
         decorations_data = self.user_interface.get_decorations_data()
-        
+
         # Collect achievement data from Achievements plugin (if enabled)
         achievements_data = None
         try:
@@ -2596,7 +2486,7 @@ class TamagotchiLogic:
             # If plugin method fails, log warning and continue without achievements
             print(f"[Warning] Could not collect achievement data: {e}")
             achievements_data = None
-        
+
         # Assemble complete save data
         save_data = {
             'game_state': {
@@ -2610,20 +2500,95 @@ class TamagotchiLogic:
             'LongTerm': long_term_memory,
             'custom_brain': get_custom_brain_save_data()
         }
-        
+
         # Add achievements data if available (will be saved as achievements.json in the ZIP)
         if achievements_data is not None:
             save_data['achievements'] = achievements_data
-        
+
         # Save using SaveManager
         filepath = self.save_manager.save_game(save_data, is_autosave)
-        
+
         if filepath:
             save_type = "autosaved" if is_autosave else "saved"
             print(f"Game {save_type} successfully to {filepath}")
             return True
         else:
             print(f"Failed to save game")
+            return False
+        
+    def _restore_achievements_data(self, achievements_data):
+        """Restore achievement data to the achievements plugin after loading save."""
+        if not achievements_data:
+            return
+        try:
+            if 'achievements' in self.plugin_manager.plugins:
+                plugin_info = self.plugin_manager.plugins['achievements']
+                instance = plugin_info.get('instance')
+                if instance and hasattr(instance, 'load_save_data'):
+                    instance.load_save_data(achievements_data)
+                    unlocked_count = len(achievements_data.get('unlocked', {}))
+                    print(f"✓ Restored {unlocked_count} achievements")
+        except Exception as e:
+            print(f"[Warning] Could not restore achievements: {e}")
+
+    def _apply_save_data(self, save_data):
+        """Apply loaded save data to game state"""
+        if not save_data:
+            return False
+        
+        # Check custom brain warning
+        if not show_custom_brain_load_warning(self.user_interface, save_data):
+            return False
+        
+        try:
+            # Extract and apply game state
+            game_state = save_data['game_state']
+            squid_data = game_state['squid']
+            
+            self.squid.load_state(squid_data)
+            
+            # Load custom brain
+            custom_brain_data = save_data.get('custom_brain')
+            if custom_brain_data and custom_brain_data.get('is_custom_brain'):
+                success, msg = restore_custom_brain_from_save(save_data, self.brain_window.brain_widget)
+                print(f"✅ {msg}" if success else f"⚠️ {msg}")
+            
+            # Load brain state
+            brain_state = save_data.get('brain_state', {})
+            self.brain_window.set_brain_state(brain_state)
+            
+            # Load memories
+            self.squid.memory_manager.short_term_memory = save_data.get('ShortTerm', [])
+            self.squid.memory_manager.long_term_memory = save_data.get('LongTerm', [])
+            
+            # Load decorations
+            decorations_data = game_state.get('decorations', [])
+            self.user_interface.load_decorations_data(decorations_data)
+            
+            # Load game state
+            logic_data = game_state['tamagotchi_logic']
+            self.cleanliness_threshold_time = logic_data['cleanliness_threshold_time']
+            self.hunger_threshold_time = logic_data['hunger_threshold_time']
+            self.last_clean_time = logic_data['last_clean_time']
+            self.points = logic_data['points']
+            
+            # UPDATE SCORE DISPLAY
+            if hasattr(self, 'statistics_window'):
+                self.statistics_window.set_score(self.points)
+            
+            print(f"✅ Loaded {len(decorations_data)} decorations")
+            
+            # UPDATE STATISTICS DISPLAY
+            if hasattr(self, 'statistics_window'):
+                self.statistics_window.update_statistics()
+            
+            self.set_simulation_speed(1)
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error loading game: {e}")
+            import traceback
+            traceback.print_exc()
             return False
         
     def _get_pixmap_data(self, item):

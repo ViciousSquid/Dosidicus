@@ -914,19 +914,19 @@ class Squid:
         self.personality = Personality(state['personality'])
 
         # Restore statistics if saved
-        if 'statistics' in state:
+        if 'statistics' in state and hasattr(self, 'statistics'):
             stats_data = state['statistics']
             for key, value in stats_data.items():
                 if hasattr(self.statistics, key):
                     setattr(self.statistics, key, value)
-        
+
         # Load the squid's name if it exists in the saved state
         self.name = state.get('name', 'Squid')
         if 'tint_color' in state and state['tint_color']:
             self.tint_color = QtGui.QColor(*state['tint_color'])
         else:
             self.tint_color = None
-        
+
         self.squid_item.setPos(self.squid_x, self.squid_y)
         self.update_squid_image()
 
