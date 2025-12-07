@@ -5,6 +5,7 @@
     "description": "Starting point with 7 core neurons - add your own connections",
     "version": "1.0"
   },
+  "is_default_template": true,
   "neurons": {
     "hunger": {
       "name": "hunger",

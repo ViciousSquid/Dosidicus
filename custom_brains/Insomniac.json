@@ -1,0 +1,247 @@
+{
+  "version": "2.0",
+  "is_default_template": true,
+  "adapter_type": "NetworkAdapter",
+  "neurons": {
+    "hunger": {
+      "type": "hidden",
+      "position": [
+        300,
+        80
+      ],
+      "attributes": {
+        "color": [
+          150,
+          150,
+          220
+        ],
+        "description": "Core neuron - required for Dosidicus-2"
+      }
+    },
+    "happiness": {
+      "type": "hidden",
+      "position": [
+        700,
+        320
+      ],
+      "attributes": {
+        "color": [
+          150,
+          150,
+          220
+        ],
+        "description": "Core neuron - required for Dosidicus-2"
+      }
+    },
+    "cleanliness": {
+      "type": "hidden",
+      "position": [
+        500,
+        80
+      ],
+      "attributes": {
+        "color": [
+          150,
+          150,
+          220
+        ],
+        "description": "Core neuron - required for Dosidicus-2"
+      }
+    },
+    "sleepiness": {
+      "type": "hidden",
+      "position": [
+        400,
+        200
+      ],
+      "attributes": {
+        "color": [
+          150,
+          150,
+          220
+        ],
+        "description": "Core neuron - required for Dosidicus-2"
+      }
+    },
+    "satisfaction": {
+      "type": "hidden",
+      "position": [
+        200,
+        320
+      ],
+      "attributes": {
+        "color": [
+          150,
+          150,
+          220
+        ],
+        "description": "Core neuron - required for Dosidicus-2"
+      }
+    },
+    "anxiety": {
+      "type": "hidden",
+      "position": [
+        600,
+        200
+      ],
+      "attributes": {
+        "color": [
+          150,
+          150,
+          220
+        ],
+        "description": "Core neuron - required for Dosidicus-2"
+      }
+    },
+    "curiosity": {
+      "type": "hidden",
+      "position": [
+        400,
+        440
+      ],
+      "attributes": {
+        "color": [
+          150,
+          150,
+          220
+        ],
+        "description": "Core neuron - required for Dosidicus-2"
+      }
+    },
+    "restlessness": {
+      "type": "hidden",
+      "position": [
+        600,
+        320
+      ],
+      "attributes": {
+        "color": [
+          255,
+          150,
+          150
+        ],
+        "description": "Primary inhibitor of sleep; maintains wakefulness"
+      }
+    },
+    "sleep_inhibitor": {
+      "type": "hidden",
+      "position": [
+        500,
+        200
+      ],
+      "attributes": {
+        "color": [
+          180,
+          150,
+          200
+        ],
+        "description": "Directly suppresses sleep drive and sleepiness"
+      }
+    },
+    "hyperarousal": {
+      "type": "hidden",
+      "position": [
+        300,
+        320
+      ],
+      "attributes": {
+        "color": [
+          255,
+          180,
+          180
+        ],
+        "description": "Maintains high arousal state; prevents sleep onset"
+      }
+    }
+  },
+  "connections": {
+    "anxiety->sleepiness": -0.35,
+    "sleepiness->anxiety": 0.25,
+    "sleepiness->curiosity": -0.15,
+    "sleepiness->happiness": -0.45,
+    "sleepiness->satisfaction": -0.35,
+    "restlessness->sleepiness": -0.8,
+    "restlessness->anxiety": 0.55,
+    "restlessness->curiosity": 0.4,
+    "sleep_inhibitor->sleepiness": -0.85,
+    "hunger->sleep_inhibitor": 0.45,
+    "curiosity->sleep_inhibitor": 0.35,
+    "anxiety->sleep_inhibitor": 0.3,
+    "hyperarousal->restlessness": 0.5,
+    "hyperarousal->sleep_inhibitor": 0.4,
+    "hyperarousal->anxiety": 0.35,
+    "satisfaction->hyperarousal": 0.25,
+    "curiosity->restlessness": 0.45,
+    "happiness->restlessness": 0.35,
+    "curiosity->hyperarousal": 0.3
+  },
+  "state": {
+    "hunger": 50.0,
+    "happiness": 50.0,
+    "cleanliness": 50.0,
+    "sleepiness": 50.0,
+    "satisfaction": 50.0,
+    "anxiety": 50.0,
+    "curiosity": 50.0,
+    "restlessness": 50.0,
+    "sleep_inhibitor": 50.0,
+    "hyperarousal": 50.0
+  },
+  "config": {
+    "hebbian": {
+      "base_learning_rate": 0.1,
+      "learning_interval": 30000,
+      "weight_decay": 0.01
+    },
+    "neurogenesis": {
+      "max_neurons": 50,
+      "cooldown": 180
+    }
+  },
+  "layer_structure": [
+    {
+      "name": "Wake_Stimuli",
+      "neuron_names": [
+        "hunger",
+        "cleanliness"
+      ],
+      "layer_type": "input",
+      "y_position": 80
+    },
+    {
+      "name": "Sleep_Disorder",
+      "neuron_names": [
+        "sleepiness",
+        "anxiety",
+        "sleep_inhibitor"
+      ],
+      "layer_type": "hidden",
+      "y_position": 200
+    },
+    {
+      "name": "Hyperarousal",
+      "neuron_names": [
+        "happiness",
+        "satisfaction",
+        "restlessness",
+        "hyperarousal"
+      ],
+      "layer_type": "hidden",
+      "y_position": 320
+    },
+    {
+      "name": "Exhausted_Output",
+      "neuron_names": [
+        "curiosity"
+      ],
+      "layer_type": "output",
+      "y_position": 440
+    }
+  ],
+  "excluded_neurons": [],
+  "neurogenesis_data": {
+    "new_neurons": [],
+    "last_neuron_time": 0,
+    "new_neurons_details": {}
+  }
+}
