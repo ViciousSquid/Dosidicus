@@ -1583,28 +1583,38 @@ class TemplateLibraryPanel(QWidget):
     TEMPLATES = {
         # ✅ COMPATIBLE TEMPLATES
         'dosidicus_default': {
-            'name': '⭐ Dosidicus Default',
+            'name': '🟥 Dosidicus Default',
             'description': 'Standard flat network - 7 core neurons at original positions',
             'has_core_neurons': True,
         },
         'core_only': {
-            'name': '⭐ Core Only', 
+            'name': ' 🟧  Core Only', 
             'description': 'Blank slate with just the 7 core neurons - build from scratch',
             'has_core_neurons': True,
         },
         'layered_dosidicus': {
-            'name': '⭐ Layered Dosidicus',
+            'name': '🟨 Layered Dosidicus',
             'description': 'Core neurons reorganized into Input→Hidden→Output layers + external stimulus',
             'has_core_neurons': True,
         },
         'sensory_enhanced': {
-            'name': '⭐ Sensory Enhanced',
+            'name': '🟩 Sensory Enhanced',
             'description': 'Core + environmental sensors (food proximity, threat detection, etc.)',
             'has_core_neurons': True,
         },
         'cognitive_complex': {
-            'name': '⭐ Cognitive Complex', 
+            'name': '🟦 Cognitive Complex', 
             'description': 'Deep 4-layer network with memory & prediction processors',
+            'has_core_neurons': True,
+        },
+        'timid_anxious': {
+            'name': '🟪 Timid Anxious',
+            'description': 'Highly anxious brain with strong inhibitory pathways and threat detection',
+            'has_core_neurons': True,
+        },
+        'insomniac': {
+            'name': '⬜ Insomniac',
+            'description': 'Sleep-disrupted brain with reduced sleep drive and chronic restlessness',
             'has_core_neurons': True,
         },
     }
@@ -2285,6 +2295,10 @@ class BrainDesignerWindow(QMainWindow):
         QMessageBox.information(self, "Core Neuron Check", msg)
     
     def load_template(self, template_key: str):
+        """
+        Load a brain template by key.
+        Only templates marked with ⭐ are compatible with Dosidicus-2.
+        """
         info = TemplateLibraryPanel.TEMPLATES.get(template_key, {})
         
         if not info.get('has_core_neurons', False):
@@ -2294,6 +2308,17 @@ class BrainDesignerWindow(QMainWindow):
                 f"Only templates marked with ⭐ are compatible with Dosidicus-2."
             )
             return
+        
+        # Confirm with user before replacing current design
+        if self.design.neurons or self.design.connections:
+            reply = QMessageBox.question(
+                self, "Replace Current Design?",
+                f"Load '{info.get('name', template_key)}' template?\n\n"
+                f"This will replace your current brain design.",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
         
         # Proceed with loading...
         self.design = BrainDesign()
@@ -2308,8 +2333,26 @@ class BrainDesignerWindow(QMainWindow):
             self._create_sensory_enhanced()
         elif template_key == 'cognitive_complex':
             self._create_cognitive_complex()
+        elif template_key == 'timid_anxious':
+            self._create_timid_anxious()
+        elif template_key == 'insomniac':
+            self._create_insomniac()
+        else:
+            QMessageBox.warning(
+                self, "Unknown Template",
+                f"Template '{template_key}' not recognized."
+            )
+            return
         
+        # Refresh all UI panels with the new design
         self.refresh_all_panels()
+        
+        # Show success message
+        QMessageBox.information(
+            self, "Template Loaded",
+            f"Successfully loaded '{info.get('name', template_key)}' template.\n\n"
+            f"Neurons: {len(self.design.neurons)} | Connections: {len(self.design.connections)}"
+        )
     
     def _create_dosidicus_default(self):
         """Create the default flat Dosidicus brain - matches brain_widget.py exactly."""
@@ -2634,6 +2677,207 @@ class BrainDesignerWindow(QMainWindow):
         ))
         
         self.design.add_connection("input", "output", 0.5)
+
+    def _create_timid_anxious(self):
+        """Create a highly anxious brain with strong inhibitory pathways"""
+        self.design.metadata['name'] = 'Timid Anxious'
+        self.design.metadata['description'] = 'Anxiety-driven brain that avoids exploration and has heightened threat detection'
+        
+        # Start with core neurons in a protective configuration
+        self._create_core_only()
+        
+        # Reorganize into layers that emphasize threat processing
+        self.design.layers = [
+            DesignerLayer("Stress_Input", NeuronType.INPUT, 100, (255, 240, 240)),
+            DesignerLayer("Threat_Center", NeuronType.HIDDEN, 220, (255, 220, 220)),
+            DesignerLayer("Inhibitory", NeuronType.HIDDEN, 340, (240, 200, 200)),
+            DesignerLayer("Anxious_Output", NeuronType.OUTPUT, 460, (255, 200, 180)),
+        ]
+        
+        # Position core neurons in threat-sensitive arrangement
+        threat_positions = {
+            "hunger": (200, 100),      # Input layer - basic needs
+            "cleanliness": (400, 100), # Input layer - environmental comfort
+            "sleepiness": (600, 100),  # Input layer - rest need
+            "anxiety": (300, 220),     # Threat center - processes fears
+            "satisfaction": (500, 220), # Threat center - measures relief
+            "happiness": (400, 460),   # Output - but inhibited
+            "curiosity": (600, 460),   # Output - strongly inhibited
+        }
+        
+        for name, pos in CORE_NEURONS.items():
+            if name in threat_positions:
+                self.design.neurons[name].position = threat_positions[name]
+                # Assign layer indices based on y-position
+                y = threat_positions[name][1]
+                if y < 150:
+                    self.design.neurons[name].layer_index = 0
+                elif y < 280:
+                    self.design.neurons[name].layer_index = 1
+                elif y < 400:
+                    self.design.neurons[name].layer_index = 2
+                else:
+                    self.design.neurons[name].layer_index = 3
+        
+        # Add threat detector neuron
+        self.design.add_neuron(DesignerNeuron(
+            name="threat_detector",
+            neuron_type=NeuronType.HIDDEN,
+            position=(700, 220),
+            layer_index=1,
+            color=(255, 100, 100),
+            description="Detects potential threats; high activation increases anxiety"
+        ))
+        
+        # Add a neuron for environmental wariness
+        self.design.add_neuron(DesignerNeuron(
+            name="environmental_wariness",
+            neuron_type=NeuronType.HIDDEN,
+            position=(200, 340),
+            layer_index=2,
+            color=(220, 180, 180),
+            description="General wariness that inhibits exploration"
+        ))
+        
+        # Create strong inhibitory pathways
+        anxious_connections = [
+            # Major inhibition from anxiety
+            ("anxiety", "curiosity", -0.85),
+            ("anxiety", "happiness", -0.65),
+            ("anxiety", "satisfaction", -0.45),
+            
+            # Threat detection amplifies anxiety
+            ("threat_detector", "anxiety", 0.75),
+            ("environmental_wariness", "anxiety", 0.40),
+            
+            # Basic needs increase anxiety
+            ("hunger", "anxiety", 0.35),
+            ("sleepiness", "anxiety", 0.25),
+            ("cleanliness", "anxiety", 0.15),
+            
+            # Reduced exploration drive
+            ("sleepiness", "curiosity", -0.55),
+            ("environmental_wariness", "curiosity", -0.60),
+            
+            # Self-reinforcing anxiety loops
+            ("anxiety", "anxiety", 0.25),
+            ("anxiety", "environmental_wariness", 0.35),
+            
+            # Minimal positive reinforcement (hard to achieve)
+            ("satisfaction", "happiness", 0.30),
+            ("cleanliness", "happiness", 0.20),
+        ]
+        
+        for src, tgt, weight in anxious_connections:
+            self.design.add_connection(src, tgt, weight)
+
+    def _create_insomniac(self):
+        """Create a sleep-disrupted brain"""
+        self.design.metadata['name'] = 'Insomniac'
+        self.design.metadata['description'] = 'Sleep-deprived brain with dysfunctional sleep-wake regulation'
+        
+        # Start with core neurons
+        self._create_core_only()
+        
+        # Minimal layers focused on wakefulness
+        self.design.layers = [
+            DesignerLayer("Wake_Stimuli", NeuronType.INPUT, 80, (240, 240, 255)),
+            DesignerLayer("Sleep_Disorder", NeuronType.HIDDEN, 200, (200, 200, 255)),
+            DesignerLayer("Hyperarousal", NeuronType.HIDDEN, 320, (255, 220, 220)),
+            DesignerLayer("Exhausted_Output", NeuronType.OUTPUT, 440, (220, 200, 200)),
+        ]
+        
+        # Position neurons in wake-promoting configuration
+        insomniac_positions = {
+            "hunger": (300, 80),       # Wake stimuli
+            "cleanliness": (500, 80),  # Wake stimuli  
+            "sleepiness": (400, 200),  # Sleep disorder layer - where sleep should be processed
+            "anxiety": (600, 200),     # Sleep disorder layer
+            "satisfaction": (200, 320), # Hyperarousal - even satisfaction keeps squid awake
+            "happiness": (700, 320),    # Hyperarousal
+            "curiosity": (400, 440),    # Exhausted output - curiosity when tired
+        }
+        
+        for name, pos in CORE_NEURONS.items():
+            if name in insomniac_positions:
+                self.design.neurons[name].position = insomniac_positions[name]
+                # Assign layer indices
+                y = insomniac_positions[name][1]
+                if y < 140:
+                    self.design.neurons[name].layer_index = 0
+                elif y < 260:
+                    self.design.neurons[name].layer_index = 1
+                elif y < 380:
+                    self.design.neurons[name].layer_index = 2
+                else:
+                    self.design.neurons[name].layer_index = 3
+        
+        # Add restlessness neuron (primary sleep inhibitor)
+        self.design.add_neuron(DesignerNeuron(
+            name="restlessness",
+            neuron_type=NeuronType.HIDDEN,
+            position=(600, 320),
+            layer_index=2,
+            color=(255, 150, 150),
+            description="Primary inhibitor of sleep; maintains wakefulness"
+        ))
+        
+        # Add sleep inhibitor neuron (direct suppression)
+        self.design.add_neuron(DesignerNeuron(
+            name="sleep_inhibitor",
+            neuron_type=NeuronType.HIDDEN,
+            position=(500, 200),
+            layer_index=1,
+            color=(180, 150, 200),
+            description="Directly suppresses sleep drive and sleepiness"
+        ))
+        
+        # Add hyperarousal neuron (maintains high activation)
+        self.design.add_neuron(DesignerNeuron(
+            name="hyperarousal",
+            neuron_type=NeuronType.HIDDEN,
+            position=(300, 320),
+            layer_index=2,
+            color=(255, 180, 180),
+            description="Maintains high arousal state; prevents sleep onset"
+        ))
+        
+        # Insomniac pathways - disrupted sleep regulation
+        insomnia_connections = [
+            # Anxiety reduces sleep pressure (paradoxical)
+            ("anxiety", "sleepiness", -0.35),
+            ("sleepiness", "anxiety", 0.25),
+            
+            # Very weak sleep drive
+            ("sleepiness", "curiosity", -0.15),
+            ("sleepiness", "happiness", -0.45),
+            ("sleepiness", "satisfaction", -0.35),
+            
+            # Restlessness strongly prevents sleep
+            ("restlessness", "sleepiness", -0.80),
+            ("restlessness", "anxiety", 0.55),
+            ("restlessness", "curiosity", 0.40),
+            
+            # Sleep inhibitor active
+            ("sleep_inhibitor", "sleepiness", -0.85),
+            ("hunger", "sleep_inhibitor", 0.45),
+            ("curiosity", "sleep_inhibitor", 0.35),
+            ("anxiety", "sleep_inhibitor", 0.30),
+            
+            # Hyperarousal maintains wakefulness
+            ("hyperarousal", "restlessness", 0.50),
+            ("hyperarousal", "sleep_inhibitor", 0.40),
+            ("hyperarousal", "anxiety", 0.35),
+            ("satisfaction", "hyperarousal", 0.25),
+            
+            # Awake self-reinforcement loops
+            ("curiosity", "restlessness", 0.45),
+            ("happiness", "restlessness", 0.35),
+            ("curiosity", "hyperarousal", 0.30),
+        ]
+        
+        for src, tgt, weight in insomnia_connections:
+            self.design.add_connection(src, tgt, weight)
     
     def refresh_all_panels(self):
         """Refresh all UI panels with current design."""
