@@ -9,7 +9,7 @@ class StatisticsTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
         super().__init__(parent, tamagotchi_logic, brain_widget, config, debug_mode)
         self.initialize_ui()
-        
+
         # Statistics tracking
         self.statistics = {
             'distance_swam': 0,
@@ -27,16 +27,15 @@ class StatisticsTab(BrainBaseTab):
             'novelty_neurons_created': 0,
             'stress_neurons_created': 0,
             'reward_neurons_created': 0,
-            'max_neurons_reached': 0,
             'current_neurons': 7,
             'squid_age_minutes': 0,
             'last_position': None,
             'last_update_time': time.time()
         }
-        
+
         # Load existing statistics if available
         self.load_statistics()
-        
+
         # Setup update timer
         self.update_timer = QtCore.QTimer(self)
         self.update_timer.timeout.connect(self.update_statistics)
@@ -45,6 +44,9 @@ class StatisticsTab(BrainBaseTab):
         self.is_visible = False
         self.pending_distance = 0  # Store distance when tab not visible
 
+        # Connect to neuron creation events for real-time updates
+        if self.brain_widget and hasattr(self.brain_widget, 'neuronCreated'):
+            self.brain_widget.neuronCreated.connect(self._on_neuron_created_update_stats)
 
     def showEvent(self, event):
         """Called when tab becomes visible"""
@@ -65,19 +67,15 @@ class StatisticsTab(BrainBaseTab):
         """Called by main window after TamagotchiLogic (and squid) exist."""
         self.tamagotchi_logic = logic
 
-
     def update_current_neurons(self, count):
         """Update the current neuron count in the UI."""
         if hasattr(self, 'stat_labels') and 'current_neurons' in self.stat_labels:
             self.stat_labels['current_neurons'].setText(str(count))
+            self.statistics['current_neurons'] = count
 
-    def track_max_neurons(self, current_count):
-        """Track the maximum number of neurons observed."""
-        if not hasattr(self, 'max_neurons'):
-            self.max_neurons = 0
-        self.max_neurons = max(self.max_neurons, current_count)
-        if hasattr(self, 'stat_labels') and 'max_neurons_reached' in self.stat_labels:
-            self.stat_labels['max_neurons_reached'].setText(str(self.max_neurons))
+    def _on_neuron_created_update_stats(self, neuron_name: str):
+        """Update current neuron count when a new neuron is created"""
+        self.update_statistics()
 
     def track_distance(self, distance):
         """Track distance swam - only updates if tab is visible"""
@@ -140,7 +138,6 @@ class StatisticsTab(BrainBaseTab):
             ('novelty_neurons_created', 'Novelty Neurons Created'),
             ('stress_neurons_created', 'Stress Neurons Created'),
             ('reward_neurons_created', 'Reward Neurons Created'),
-            ('max_neurons_reached', 'Max Neurons Reached'),
             ('current_neurons', 'Current Neurons'),
         ]
 
@@ -168,7 +165,6 @@ class StatisticsTab(BrainBaseTab):
 
         self.layout.addWidget(stats_container)
         self.layout.addStretch()
-
 
     def update_from_brain_state(self, state):
         """Update tab based on brain state"""
@@ -205,26 +201,18 @@ class StatisticsTab(BrainBaseTab):
             return
 
         squid = self.tamagotchi_logic.squid
-        
-        # Track current and max neurons
-        if self.brain_widget and hasattr(self.brain_widget, 'neurons'):
-            current_neuron_count = len(self.brain_widget.neurons)
+
+        # FIX: Use neuron_positions instead of non-existent 'neurons' attribute
+        if self.brain_widget and hasattr(self.brain_widget, 'neuron_positions'):
+            current_neuron_count = len(self.brain_widget.neuron_positions)
             self.statistics['current_neurons'] = current_neuron_count
             
-            # Track maximum neurons ever reached (ignoring pruning)
-            if current_neuron_count > self.statistics.get('max_neurons_reached', 0):
-                self.statistics['max_neurons_reached'] = current_neuron_count
-                
             # Update display labels immediately
             if hasattr(self, 'stat_labels'):
                 if 'current_neurons' in self.stat_labels:
                     self.stat_labels['current_neurons'].setText(str(current_neuron_count))
-                if 'max_neurons_reached' in self.stat_labels:
-                    self.stat_labels['max_neurons_reached'].setText(
-                        str(self.statistics['max_neurons_reached'])
-                    )
 
-        # ✅ Track sleep time
+        # Track sleep time
         if squid.is_sleeping:
             time_elapsed = time.time() - self.statistics['last_update_time']
             self.statistics['total_sleep_time'] += time_elapsed

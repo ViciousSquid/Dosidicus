@@ -30,6 +30,7 @@ except ImportError:
     _PERF_TRACKING_AVAILABLE = False
 
 class TamagotchiLogic:
+
     def __init__(self, user_interface, squid, brain_window):
         self.config_manager = ConfigManager()
         self._propagating_debug_mode = False
@@ -44,13 +45,11 @@ class TamagotchiLogic:
             logic=self,
             scene=self.user_interface.scene,
             message_callback=self.show_message,
-            config_manager=self.config_manager  # Add this line
+            config_manager=self.config_manager
         )
-        self.user_interface = user_interface
-        self.squid = squid
-        self.brain_window = brain_window
+        
         self.window_resize_cooldown = 0
-        self.window_resize_cooldown_max = 30  # 30 updates before another resize can startle
+        self.window_resize_cooldown_max = 20  # 20 updates before another resize can startle
         self.has_been_resized = False
         self.was_big = False
         self.debug_mode = False
@@ -76,9 +75,21 @@ class TamagotchiLogic:
         # Add action tracking - new in 2.4.5.0
         self.recent_actions = []
 
-       # Initialize plugin manager
+        # Initialize save manager FIRST (before plugins)
+        self.save_manager = SaveManager()
+        
+        # Initialize plugin manager
         self.plugin_manager = PluginManager()
         self.plugin_manager.set_tamagotchi_logic(self)
+
+        # Store save data that will be loaded later (we need it for achievements)
+        self._pending_save_data = None
+        
+        # Load save data FIRST (but don't apply it yet)
+        save_data = self.save_manager.load_game()
+        if save_data:
+            self._pending_save_data = save_data
+            print("✓ Save data loaded and cached for plugin initialization")
 
         # --- BLACKLIST MULTIPLAYER PLUGIN FROM AUTO-LOADING ---
         blacklisted = {"multiplayer"}  # lowercase plugin key
@@ -104,12 +115,13 @@ class TamagotchiLogic:
                 try:
                     instance.setup(self.plugin_manager, self)
                     plugin_data['is_setup'] = True
+                    print(f"✓ Setup plugin: {plugin_name}")
                 except Exception as e:
                     print(f"Error setting up plugin {plugin_name}: {e}")
 
         # Update status bar with plugin information
         self.update_status_bar()
-                
+                    
         # Trigger startup hook
         self.plugin_manager.trigger_hook("on_startup", 
                                         tamagotchi_logic=self,
@@ -166,9 +178,6 @@ class TamagotchiLogic:
             self.thought_log = []
             self.add_thought = self._log_thought
 
-        # Initialize save manager (but don't load yet)
-        self.save_manager = SaveManager()
-
         # Connect menu actions
         self.user_interface.feed_action.triggered.connect(self.feed_squid)
         self.user_interface.clean_action.triggered.connect(self.clean_environment)
@@ -192,7 +201,7 @@ class TamagotchiLogic:
         squid.statistics_window = self.statistics_window
         self.statistics_window.show()
         
-        # NOW load the game after statistics_window exists
+        # NOW load the game after statistics_window exists AND plugins are initialized
         self.load_game()
 
         # Setup additional timers
@@ -212,6 +221,47 @@ class TamagotchiLogic:
         self.squid.anxiety = 10
         self.squid.curiosity = 55
 
+
+    def _initialize_plugins(self):
+        """Initialize all plugins before loading game data"""
+        # --- BLACKLIST MULTIPLAYER PLUGIN FROM AUTO-LOADING ---
+        blacklisted = {"multiplayer"}  # lowercase plugin key
+        discovered = self.plugin_manager.discover_plugins()
+        
+        for name in list(discovered.keys()):
+            if name.lower() in blacklisted:
+                del discovered[name]
+                print(f"[PluginManager] Blacklisted '{name}' from auto-loading.")
+
+        # Clear existing plugins
+        self.plugin_manager.plugins.clear()
+        self.plugin_manager.enabled_plugins.clear()
+
+        # Load all discovered plugins (except multiplayer)
+        for name, data in discovered.items():
+            success = self.plugin_manager.load_plugin(name)
+            if success and name != "multiplayer":
+                self.plugin_manager.enabled_plugins.add(name)
+
+        # Setup each loaded plugin
+        for plugin_name, plugin_data in self.plugin_manager.plugins.items():
+            instance = plugin_data.get('instance')
+            if instance and hasattr(instance, 'setup') and not plugin_data.get('is_setup', False):
+                try:
+                    instance.setup(self.plugin_manager, self)
+                    plugin_data['is_setup'] = True
+                    print(f"✓ Setup plugin: {plugin_name}")
+                except Exception as e:
+                    print(f"Error setting up plugin {plugin_name}: {e}")
+
+        # Update status bar with plugin information
+        self.update_status_bar()
+                    
+        # Trigger startup hook
+        self.plugin_manager.trigger_hook("on_startup", 
+                                        tamagotchi_logic=self,
+                                        squid=self.squid,
+                                        user_interface=self.user_interface)
         
 
     def update_squid_age(self):
@@ -2258,12 +2308,15 @@ class TamagotchiLogic:
         """
         Load the complete game state including decorations and custom brains.
         """
-        # Load save data using SaveManager
-        save_data = self.save_manager.load_game()
-        
-        if save_data is None:
-            print("No save data found")
-            return False
+        # Use cached save data if available, otherwise load fresh
+        if self._pending_save_data is None:
+            save_data = self.save_manager.load_game()
+            if save_data is None:
+                print("No save data found")
+                return False
+        else:
+            save_data = self._pending_save_data
+            self._pending_save_data = None
         
         # Check for custom brain and show warning if present
         if not show_custom_brain_load_warning(self.user_interface, save_data):
@@ -2292,31 +2345,46 @@ class TamagotchiLogic:
             
             # Load brain state (neuron values)
             brain_state = save_data.get('brain_state', {})
-            self.brain_window.set_brain_state(brain_state)
+            if hasattr(self.brain_window, 'set_brain_state'):
+                self.brain_window.set_brain_state(brain_state)
             
             # Load memories
             self.squid.memory_manager.short_term_memory = save_data.get('ShortTerm', [])
             self.squid.memory_manager.long_term_memory = save_data.get('LongTerm', [])
             
-            # CRITICAL: Load decoration data into UI
+            # Load decoration data into UI
             decorations_data = game_state.get('decorations', [])
             self.user_interface.load_decorations_data(decorations_data)
             
-            # NEW: Load statistics data
+            # Load statistics data
             statistics_data = save_data.get('statistics', {})
             if hasattr(self.brain_window, 'statistics_tab') and hasattr(self.brain_window.statistics_tab, 'statistics'):
                 self.brain_window.statistics_tab.statistics.update(statistics_data)
+                
+                # FIX: Sync current neurons with actual brain state
+                if hasattr(self.brain_window, 'brain_widget'):
+                    brain_widget = self.brain_window.brain_widget
+                    # Count actual neurons from brain widget (ground truth)
+                    actual_neuron_count = len(getattr(brain_widget, 'neuron_positions', {}))
+                    # Override loaded value to ensure consistency with Network tab
+                    self.brain_window.statistics_tab.statistics['current_neurons'] = actual_neuron_count
+                
+                # Refresh the display
                 if hasattr(self.brain_window.statistics_tab, 'update_display'):
                     self.brain_window.statistics_tab.update_display()
 
-            # Also load into squid statistics for consistency
+            # Also update squid statistics for consistency
             if hasattr(self, 'squid') and hasattr(self.squid, 'statistics'):
                 self.squid.statistics.load_statistics(statistics_data)
+                # Sync squid statistics too
+                if hasattr(self.brain_window, 'brain_widget'):
+                    brain_widget = self.brain_window.brain_widget
+                    actual_neuron_count = len(getattr(brain_widget, 'neuron_positions', {}))
+                    self.squid.statistics.current_neurons = actual_neuron_count
 
             # -----------------------------------------------------------
-            #  FIX: RESTORE SCORE / POINTS CORRECTLY
+            #  RESTORE SCORE / POINTS
             # -----------------------------------------------------------
-            # Load score from tamagotchi_logic_data (where it's saved)
             tamagotchi_logic_data = game_state['tamagotchi_logic']
             loaded_points = tamagotchi_logic_data.get('points', 0)
             
@@ -2325,9 +2393,6 @@ class TamagotchiLogic:
             
             # Update the statistics window score display
             if hasattr(self, 'statistics_window') and self.statistics_window:
-                # First set the actual score value
-                self.statistics_window.score = loaded_points
-                # Then update the display to match
                 self.statistics_window.set_score(loaded_points)
                 
             print(f"✓ Loaded score: {loaded_points}")
@@ -2336,6 +2401,13 @@ class TamagotchiLogic:
             self.cleanliness_threshold_time = tamagotchi_logic_data['cleanliness_threshold_time']
             self.hunger_threshold_time = tamagotchi_logic_data['hunger_threshold_time']
             self.last_clean_time = tamagotchi_logic_data['last_clean_time']
+            
+            # CRITICAL: Restore achievements data NOW (plugins are already initialized)
+            achievements_data = save_data.get('achievements')
+            if achievements_data:
+                self._restore_achievements_data(achievements_data)
+            else:
+                print("ℹ️ No achievements data found in save")
             
             print(f"Game loaded successfully")
             print(f"Loaded personality: {self.squid.personality.value}")
@@ -2563,6 +2635,38 @@ class TamagotchiLogic:
             # Load memories
             self.squid.memory_manager.short_term_memory = save_data.get('ShortTerm', [])
             self.squid.memory_manager.long_term_memory = save_data.get('LongTerm', [])
+
+            # Sync neurogenesis neuron counts with actual brain state
+            if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis'):
+                eng = self.brain_window.brain_widget.enhanced_neurogenesis
+                if hasattr(eng, 'functional_neurons'):
+                    # Count neurons by specialization type
+                    novelty_count = 0
+                    stress_count = 0
+                    reward_count = 0
+                    
+                    for neuron in eng.functional_neurons.values():
+                        if hasattr(neuron, 'specialization'):
+                            if neuron.specialization == 'novelty':
+                                novelty_count += 1
+                            elif neuron.specialization == 'stress':
+                                stress_count += 1
+                            elif neuron.specialization == 'reward':
+                                reward_count += 1
+                    
+                    # Update statistics tab with ground truth values
+                    if hasattr(self.brain_window, 'statistics_tab') and hasattr(self.brain_window.statistics_tab, 'statistics'):
+                        self.brain_window.statistics_tab.statistics['novelty_neurons_created'] = novelty_count
+                        self.brain_window.statistics_tab.statistics['stress_neurons_created'] = stress_count
+                        self.brain_window.statistics_tab.statistics['reward_neurons_created'] = reward_count
+                        self.brain_window.statistics_tab.update_display()
+                        print(f"✓ Synced neuron counts: {novelty_count} novelty, {stress_count} stress, {reward_count} reward")
+                    
+                    # Also sync with squid's internal statistics for consistency
+                    if hasattr(self, 'squid') and hasattr(self.squid, 'statistics'):
+                        self.squid.statistics.novelty_neurons_created = novelty_count
+                        self.squid.statistics.stress_neurons_created = stress_count
+                        self.squid.statistics.reward_neurons_created = reward_count
             
             # Load decorations
             decorations_data = game_state.get('decorations', [])

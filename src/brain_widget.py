@@ -895,7 +895,7 @@ class BrainWidget(QtWidgets.QWidget):
         if not neuron_type:
             return
         
-        print(f"🧵 Worker signaled neurogenesis: type={neuron_type}, emergency={is_emergency}")
+        # print(f"🧵 Worker signaled neurogenesis: type={neuron_type}, emergency={is_emergency}")
         
         # Build environment from state context
         environment = {

@@ -51,10 +51,10 @@ def add_load_brain_button(network_tab, checkbox_layout):
     
     checkbox_layout.addWidget(load_btn)
     
-    # Add reset button
+    # --- RESET BUTTON (with “Are you sure?” guard) ---
     reset_btn = QtWidgets.QPushButton("↺")
     reset_btn.setToolTip("Reset to default brain")
-    reset_btn.setFixedSize(50, 50) 
+    reset_btn.setFixedSize(50, 50)
     reset_btn.setStyleSheet("""
         QPushButton {
             background-color: #78909c;
@@ -65,10 +65,21 @@ def add_load_brain_button(network_tab, checkbox_layout):
         }
         QPushButton:hover { background-color: #90a4ae; }
     """)
-    reset_btn.clicked.connect(loader.reset_to_default)
+
+    def _confirm_reset():
+        ans = QtWidgets.QMessageBox.question(
+            network_tab,           # parent widget
+            "Confirm Reset",
+            "Reset the brain to the default architecture?\n\n"
+            "This cannot be undone.",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+        if ans == QtWidgets.QMessageBox.Yes:
+            loader.reset_to_default()
+
+    reset_btn.clicked.connect(_confirm_reset)
     checkbox_layout.addWidget(reset_btn)
-    
-    print("🧠 Load Brain button added")
 
 
 # =============================================================================
