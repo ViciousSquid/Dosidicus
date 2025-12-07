@@ -1616,7 +1616,14 @@ class SaveViewerWindow(QtWidgets.QMainWindow):
                             content = f.read().decode('utf-8')
                             if content.strip():
                                 key = os.path.splitext(fname)[0]
-                                self.save_data[key] = json.loads(content)
+                                parsed = json.loads(content)
+                                
+                                # If the JSON file contains 'null', turn it into an empty dict
+                                if parsed is None:
+                                    parsed = {}
+                                
+                                self.save_data[key] = parsed
+
                     elif fname == 'uuid.txt':
                         with zf.open(fname) as f:
                             self.save_data['_uuid_txt'] = f.read().decode('utf-8').strip()
