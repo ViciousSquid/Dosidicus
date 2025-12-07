@@ -313,14 +313,14 @@ class MainWindow(QtWidgets.QMainWindow):
             print("\x1b[32mExisting save data found and will be loaded\x1b[0m")
             self.squid = Squid(self.user_interface, None, None)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
-            
+
             # Set up connections
             self.squid.tamagotchi_logic = self.tamagotchi_logic
             self.user_interface.tamagotchi_logic = self.tamagotchi_logic
             self.brain_window.tamagotchi_logic = self.tamagotchi_logic
             if hasattr(self.brain_window, 'set_tamagotchi_logic'):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
-            
+
             # Now load from save data
             self.load_game()
 
@@ -353,22 +353,22 @@ class MainWindow(QtWidgets.QMainWindow):
             self.user_interface.brain_action.setChecked(True)
         else:
             print("\x1b[92m--------------  STARTING A NEW SIMULATION --------------\x1b[0m")
-            
+
             # Create the game immediately
             self.create_new_game(self.specified_personality)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
-            
+
             # Connect components
             self.squid.tamagotchi_logic = self.tamagotchi_logic
             self.user_interface.tamagotchi_logic = self.tamagotchi_logic
             self.brain_window.tamagotchi_logic = self.tamagotchi_logic
             if hasattr(self.brain_window, 'set_tamagotchi_logic'):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
-            
+
             # Schedule tutorial check for AFTER initialization
             if not self.save_manager.save_exists():
                 QtCore.QTimer.singleShot(500, self.delayed_tutorial_check)
-        
+
         # Mark initialization as complete
         self._initialization_complete = True
 
@@ -583,19 +583,8 @@ class MainWindow(QtWidgets.QMainWindow):
         print("New game created successfully!")
 
     def load_game(self):
-        """Load game with selection dialog for multiple saves"""
-        if not hasattr(self, 'tamagotchi_logic') or not self.tamagotchi_logic:
-            print("⚠️  Cannot load: TamagotchiLogic not initialized")
-            return False
-        
-        success = self.tamagotchi_logic.load_game_with_selection()
-        
-        if success:
-            # Refresh statistics display
-            if hasattr(self.tamagotchi_logic, 'statistics_window'):
-                self.tamagotchi_logic.statistics_window.update_statistics()
-        
-        return success
+        """Delegate to tamagotchi_logic"""
+        self.tamagotchi_logic.load_game()
 
     def save_game(self):
         """Delegate to tamagotchi_logic"""
