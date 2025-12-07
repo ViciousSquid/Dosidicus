@@ -1,11 +1,11 @@
 [tool.poetry]
 name = "dosidicus"
-version = "2.5.0.0"
+version = "2.6.0.0"
 description = "Tamagotchi-style digital pet with a neural network"
 authors = ["ViciousSquid"]
 readme = "README.md"
 packages = [{include = "src"}]
-include = ["images/**/*", "main.py", "config.ini"]
+include = ["images/**/*", "plugins/**/*", "tools/**/*", "main.py", "config.ini"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
