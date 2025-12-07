@@ -216,12 +216,6 @@ def show_custom_brain_load_warning(parent, save_data: Dict) -> bool:
     if not custom_brain_data or not custom_brain_data.get('is_custom_brain'):
         return True  # No custom brain, no warning needed
     
-    # NEW: Check if this is a default template that should bypass warning
-    brain_definition = custom_brain_data.get('brain_definition', {})
-    if brain_definition.get('is_default_template') is True:
-        print(f"✓ Loading default template brain '{custom_brain_data.get('brain_name', 'Unknown')}' - skipping warning")
-        return True  # Skip warning for default templates
-    
     brain_name = custom_brain_data.get('brain_name', 'Unknown')
     source_file = custom_brain_data.get('source_file', 'Unknown')
     
@@ -239,10 +233,10 @@ def show_custom_brain_load_warning(parent, save_data: Dict) -> bool:
         )
         return False
     
-    # Show info dialog for non-template custom brains
+    # Show info dialog
     reply = QtWidgets.QMessageBox.question(
         parent,
-        "Custom Brain",
+        "Custom Brain Save",
         f"This save uses a custom brain architecture:\n\n"
         f"🧠 Brain: {brain_name}\n"
         f"📁 Original file: {source_file}\n\n"

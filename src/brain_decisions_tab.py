@@ -3,361 +3,696 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .display_scaling import DisplayScaling
+from .personality import Personality
+import time
+import hashlib
 
 class DecisionsTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
+        # FIX: Initialize with None, update later
+        self.decision_engine = None
+        self.last_decision_hash = None
+        self.update_counter = 0  # For performance logging
+        
         super().__init__(parent, tamagotchi_logic, brain_widget, config, debug_mode)
         self.initialize_ui()
+        
+    def set_tamagotchi_logic(self, tamagotchi_logic):
+        """CRITICAL FIX: Update decision engine reference when logic is set"""
+        super().set_tamagotchi_logic(tamagotchi_logic)
+        if tamagotchi_logic and hasattr(tamagotchi_logic, 'squid') and hasattr(tamagotchi_logic.squid, 'decision_engine'):
+            self.decision_engine = tamagotchi_logic.squid.decision_engine
+            print(f"✅ DecisionsTab: Connected to DecisionEngine ({self.decision_engine is not None})")
+        else:
+            print("⚠️ DecisionsTab: No DecisionEngine available")
 
     def initialize_ui(self):
-        """
-        Initializes the UI with a persistent, non-flickering layout for the decision path
-        and a fixed bar at the bottom for the final action.
-        """
-        self.layout.setContentsMargins(DisplayScaling.scale(15), DisplayScaling.scale(15), DisplayScaling.scale(15), DisplayScaling.scale(15))
-        self.layout.setSpacing(DisplayScaling.scale(10))
-
-        # Main container
-        main_container = QtWidgets.QWidget()
-        main_container.setObjectName("mainContainer")
-        main_container.setStyleSheet("background-color: #f8f9fa; border-radius: 10px;")
-        main_layout = QtWidgets.QVBoxLayout(main_container)
-        main_layout.setContentsMargins(DisplayScaling.scale(10), DisplayScaling.scale(10), DisplayScaling.scale(10), DisplayScaling.scale(10))
-        self.layout.addWidget(main_container)
-
-        # Title
-        title_layout = QtWidgets.QHBoxLayout()
-        title_icon = QtWidgets.QLabel("🧠")
-        title_icon.setStyleSheet(f"font-size: {DisplayScaling.font_size(34)}px;")
-        title_label = QtWidgets.QLabel("Squid's Thought Process")
-        title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(30)}px; font-weight: bold; color: #343a40;")
-        title_layout.addWidget(title_icon)
-        title_layout.addWidget(title_label)
-        title_layout.addStretch()
-        main_layout.addLayout(title_layout)
-
-        # Scroll area for the decision path (takes up the expandable space)
-        path_scroll_area = QtWidgets.QScrollArea()
-        path_scroll_area.setWidgetResizable(True)
-        path_scroll_area.setStyleSheet("QScrollArea { border: none; background-color: #f8f9fa; }")
-        main_layout.addWidget(path_scroll_area, 1) # Set stretch factor to 1
+        """Modern, responsive dashboard layout"""
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
         
-        path_container = QtWidgets.QWidget()
-        self.path_layout = QtWidgets.QVBoxLayout(path_container)
-        self.path_layout.setSpacing(DisplayScaling.scale(15))
-        self.path_layout.setAlignment(QtCore.Qt.AlignTop)
-        path_scroll_area.setWidget(path_container)
-
-        # --- Create persistent widgets and labels for each step ---
-        # Step 1: Current State
-        step1, self.step1_label = self._create_path_step_widget(1, "Sensing the World", "📡")
-        self.path_layout.addWidget(step1)
-        self.path_layout.addWidget(self._create_arrow())
-
-        # Step 2: Base Urges
-        step2, self.step2_label = self._create_path_step_widget(2, "Calculating Base Urges", "⚖️")
-        self.path_layout.addWidget(step2)
-        self.path_layout.addWidget(self._create_arrow())
+        # Header with gradient and live status
+        self.header = self._create_header()
+        self.layout.addWidget(self.header)
         
-        # Step 3: Personality & Memory
-        step3, self.step3_label = self._create_path_step_widget(3, "Applying Personality & Memories", "🎭")
-        self.path_layout.addWidget(step3)
-        self.path_layout.addWidget(self._create_arrow())
+        # Main scrollable timeline
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("""
+            QScrollArea { border: none; background: #f5f7fa; }
+            QScrollBar:vertical { width: 8px; background: transparent; }
+            QScrollBar::handle:vertical { background: #bdc3c7; border-radius: 4px; }
+        """)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        
+        self.timeline_widget = QtWidgets.QWidget()
+        self.timeline_layout = QtWidgets.QVBoxLayout(self.timeline_widget)
+        self.timeline_layout.setSpacing(20)
+        self.timeline_layout.setAlignment(QtCore.Qt.AlignTop)
+        self.timeline_layout.setContentsMargins(15, 20, 15, 20)
+        
+        scroll.setWidget(self.timeline_widget)
+        self.layout.addWidget(scroll)
+        
+        # Sticky winner card at bottom
+        self.winner_card = self._create_winner_card()
+        self.layout.addWidget(self.winner_card)
+        
+        # Initialize empty state
+        self._render_empty_state()
 
-        # Step 4: Final Decision
-        step4, self.step4_label = self._create_path_step_widget(4, "Making the Final Decision", "✅")
-        self.path_layout.addWidget(step4)
-
-        # --- Final Action Bar (at the bottom) ---
-        final_action_bar = QtWidgets.QFrame()
-        final_action_bar.setObjectName("finalActionBar")
-        final_action_bar.setStyleSheet("""
-            #finalActionBar {
-                background-color: #e9ecef;
-                border: 1px solid #ced4da;
-                border-radius: 8px;
+    def _create_header(self):
+        """Animated header with personality and connection status"""
+        header = QtWidgets.QFrame()
+        header.setObjectName("decisionHeader")
+        header.setStyleSheet("""
+            #decisionHeader {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #667eea, stop:1 #764ba2);
+                padding: 20px;
+                min-height: 80px;
             }
         """)
-        final_action_bar.setFixedHeight(DisplayScaling.scale(60))
         
-        bar_layout = QtWidgets.QHBoxLayout(final_action_bar)
-        bar_layout.setContentsMargins(DisplayScaling.scale(15), DisplayScaling.scale(5), DisplayScaling.scale(15), DisplayScaling.scale(5))
+        layout = QtWidgets.QHBoxLayout(header)
         
-        action_title_label = QtWidgets.QLabel("<b>Final Action:</b>")
-        action_title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(22)}px; color: #495057;")
+        # Title with animation
+        title_container = QtWidgets.QWidget()
+        title_layout = QtWidgets.QHBoxLayout(title_container)
+        title_layout.setSpacing(10)
         
-        self.final_action_label = QtWidgets.QLabel("...")
-        self.final_action_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(22)}px; font-weight: bold; color: #007bff;")
-
-        bar_layout.addWidget(action_title_label)
-        bar_layout.addWidget(self.final_action_label)
-        bar_layout.addStretch()
-
-        main_layout.addWidget(final_action_bar) # Add bar to the main layout
+        self.brain_icon = QtWidgets.QLabel("🧠")
+        self.brain_icon.setStyleSheet("font-size: 32px;")
+        # Add subtle pulsing animation
+        self.pulse_animation = QtCore.QPropertyAnimation(self.brain_icon, b"scale")
+        self.pulse_animation.setLoopCount(-1)
         
-        self.update_path_with_placeholder()
-
-    def _create_path_step_widget(self, step_number, title, icon):
-        """Creates a styled widget for a single step and returns it and its content label."""
-        step_widget = QtWidgets.QWidget()
-        step_widget.setObjectName("stepWidget")
-        step_widget.setStyleSheet(f"""
-            #stepWidget {{
-                background-color: #ffffff;
-                border: 1px solid #dee2e6;
-                border-radius: 8px;
-                padding: {DisplayScaling.scale(10)}px;
-            }}
+        title = QtWidgets.QLabel("Neural Decision Pathway")
+        title.setStyleSheet("font-size: 24px; font-weight: 800; color: white;")
+        
+        title_layout.addWidget(self.brain_icon)
+        title_layout.addWidget(title)
+        layout.addWidget(title_container)
+        
+        layout.addStretch()
+        
+        # Status indicators
+        self.status_container = QtWidgets.QWidget()
+        status_layout = QtWidgets.QVBoxLayout(self.status_container)
+        status_layout.setSpacing(5)
+        
+        self.personality_badge = QtWidgets.QLabel("UNKNOWN")
+        self.personality_badge.setStyleSheet("""
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
         """)
-        step_layout = QtWidgets.QVBoxLayout(step_widget)
-
-        header_layout = QtWidgets.QHBoxLayout()
-        icon_label = QtWidgets.QLabel(icon)
-        icon_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(30)}px;")
-        title_label = QtWidgets.QLabel(f"<b>Step {step_number}: {title}</b>")
-        title_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(22)}px; color: #495057;")
-        header_layout.addWidget(icon_label)
-        header_layout.addWidget(title_label)
-        header_layout.addStretch()
-        step_layout.addLayout(header_layout)
-
-        content_label = QtWidgets.QLabel("...")
-        content_label.setWordWrap(True)
-        content_label.setAlignment(QtCore.Qt.AlignTop)
-        content_label.setStyleSheet(f"padding-left: {DisplayScaling.scale(10)}px; padding-top: {DisplayScaling.scale(5)}px; font-size: {DisplayScaling.font_size(19)}px;")
-        step_layout.addWidget(content_label)
         
-        return step_widget, content_label
+        self.connection_status = QtWidgets.QLabel("● DISCONNECTED")
+        self.connection_status.setStyleSheet("color: #ff6b6b; font-size: 11px; font-weight: bold;")
+        
+        status_layout.addWidget(self.personality_badge)
+        status_layout.addWidget(self.connection_status)
+        
+        layout.addWidget(self.status_container)
+        
+        return header
 
-    def update_path_with_placeholder(self):
-        """Sets initial placeholder content on the persistent labels."""
-        placeholder_text = f"<i style='color: #6c757d; font-size: {DisplayScaling.font_size(19)}px;'>Awaiting the squid's next thought...</i>"
-        self.step1_label.setText(placeholder_text)
-        self.step2_label.setText(placeholder_text)
-        self.step3_label.setText(placeholder_text)
-        self.step4_label.setText(placeholder_text)
-        self.final_action_label.setText("Awaiting Decision...")
+    def _create_winner_card(self):
+        """Professional winner card with confidence meter"""
+        card = QtWidgets.QFrame()
+        card.setObjectName("winnerCard")
+        card.setStyleSheet("""
+            #winnerCard {
+                background: #ffffff;
+                border: 2px solid #e3f2fd;
+                border-radius: 12px;
+                padding: 15px;
+                min-height: 90px;
+                margin: 0 15px 15px 15px;
+            }
+        """)
+        
+        layout = QtWidgets.QHBoxLayout(card)
+        
+        # Trophy icon with glow effect
+        icon = QtWidgets.QLabel("🏆")
+        icon.setStyleSheet("font-size: 40px;")
+        layout.addWidget(icon)
+        
+        # Decision text
+        decision_layout = QtWidgets.QVBoxLayout()
+        
+        self.winner_title = QtWidgets.QLabel("Final Action")
+        self.winner_title.setStyleSheet("font-size: 14px; color: #666; font-weight: 600;")
+        
+        self.winner_label = QtWidgets.QLabel("Awaiting Decision...")
+        self.winner_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #1976d2;")
+        
+        decision_layout.addWidget(self.winner_title)
+        decision_layout.addWidget(self.winner_label)
+        
+        # Confidence bar
+        self.confidence_container = QtWidgets.QWidget()
+        confidence_layout = QtWidgets.QVBoxLayout(self.confidence_container)
+        confidence_layout.setSpacing(3)
+        
+        confidence_header = QtWidgets.QHBoxLayout()
+        confidence_label = QtWidgets.QLabel("Confidence:")
+        confidence_label.setStyleSheet("font-size: 12px; color: #666;")
+        
+        self.confidence_value = QtWidgets.QLabel("--")
+        self.confidence_value.setStyleSheet("font-size: 12px; font-weight: bold; color: #28a745;")
+        
+        confidence_header.addWidget(confidence_label)
+        confidence_header.addWidget(self.confidence_value)
+        confidence_header.addStretch()
+        
+        self.confidence_bar = QtWidgets.QProgressBar()
+        self.confidence_bar.setRange(0, 100)
+        self.confidence_bar.setTextVisible(False)
+        self.confidence_bar.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                background: #e0e0e0;
+                height: 8px;
+                border-radius: 4px;
+            }
+            QProgressBar::chunk {
+                border-radius: 4px;
+            }
+        """)
+        
+        confidence_layout.addLayout(confidence_header)
+        confidence_layout.addWidget(self.confidence_bar)
+        
+        decision_layout.addWidget(self.confidence_container)
+        layout.addLayout(decision_layout, 1)
+        
+        return card
+
+    def _render_empty_state(self):
+        """Show friendly empty state"""
+        self._clear_timeline()
+        
+        empty = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(empty)
+        layout.setAlignment(QtCore.Qt.AlignCenter)
+        
+        icon = QtWidgets.QLabel("🤔")
+        icon.setStyleSheet("font-size: 64px; opacity: 0.5;")
+        icon.setAlignment(QtCore.Qt.AlignCenter)
+        
+        text = QtWidgets.QLabel(
+            "Awaiting the squid's next thought...\n\n"
+            "Make sure the game is running and the squid is active."
+        )
+        text.setStyleSheet("color: #94a3b8; font-size: 16px; text-align: center;")
+        text.setAlignment(QtCore.Qt.AlignCenter)
+        text.setWordWrap(True)
+        
+        layout.addStretch()
+        layout.addWidget(icon)
+        layout.addWidget(text)
+        layout.addStretch()
+        
+        self.timeline_layout.addWidget(empty)
+
+    def _clear_timeline(self):
+        """Clear timeline safely"""
+        while self.timeline_layout.count():
+            child = self.timeline_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
 
     def update_from_brain_state(self, state):
-        """Update visualization based on brain state."""
-        if hasattr(self.tamagotchi_logic, 'get_decision_data'):
-            decision_data = self.tamagotchi_logic.get_decision_data()
-            if decision_data:
-                self.update_decision_path(decision_data)
+        """FIXED: Robust update with connection monitoring"""
+        if not hasattr(self, 'decision_engine') or self.decision_engine is None:
+            self.connection_status.setText("● DISCONNECTED")
+            self.connection_status.setStyleSheet("color: #ff6b6b; font-size: 11px; font-weight: bold;")
+            if self.update_counter % 60 == 0:  # Log every ~60 frames
+                print("⚠️ DecisionsTab: DecisionEngine not connected")
+            self.update_counter += 1
+            return
+        
+        try:
+            decision_data = self.decision_engine.get_decision_data()
+            if decision_data and isinstance(decision_data, dict):
+                # Check if data is new (prevent redundant rendering)
+                data_hash = hashlib.md5(str(sorted(decision_data.items())).encode()).hexdigest()
+                if data_hash != self.last_decision_hash:
+                    self.last_decision_hash = data_hash
+                    self._render_decision_timeline(decision_data)
+                    self._update_winner_card(decision_data)
+                    
+                    # Update status
+                    self.connection_status.setText("● LIVE")
+                    self.connection_status.setStyleSheet("color: #28a745; font-size: 11px; font-weight: bold;")
+                    
+                    if self.debug_mode and self.update_counter % 30 == 0:
+                        print(f"🧠 DecisionsTab: Rendered new decision data (counter: {self.update_counter})")
+                
+                self.update_counter += 1
+            else:
+                # Empty but connected
+                self.connection_status.setText("● IDLE")
+                self.connection_status.setStyleSheet("color: #ffc107; font-size: 11px; font-weight: bold;")
+                
+        except Exception as e:
+            print(f"❌ DecisionsTab.update_from_brain_state error: {e}")
+            self.connection_status.setText("● ERROR")
+            self.connection_status.setStyleSheet("color: #dc3545; font-size: 11px; font-weight: bold;")
 
-    def update_decision_path(self, data):
-        """Updates the content of the persistent step labels and the final action bar."""
-        final_decision = data.get('final_decision', 'N/A')
+    def _render_decision_timeline(self, data):
+        """Render the decision pipeline as interactive cards"""
+        self._clear_timeline()
+        
+        steps = [
+            (1, "Sensory Input", "📡", self._render_sensory_step, data.get('inputs', {})),
+            (2, "Base Urges", "⚡", self._render_urges_step, data.get('base_weights', {})),
+            (3, "Memory & Personality", "🧬", self._render_modifiers_step, data),
+            (4, "Final Scoring", "🎯", self._render_scoring_step, data),
+        ]
+        
+        for i, (num, title, icon, renderer, step_data) in enumerate(steps):
+            card = self._create_timeline_card(num, title, icon, renderer, step_data)
+            self.timeline_layout.addWidget(card)
+            
+            # Add connector line
+            if i < len(steps) - 1:
+                self.timeline_layout.addWidget(self._create_connector())
 
-        self._update_state_step(data.get('inputs', {}), data.get('brain_state', {}))
-        self._update_urges_step(data.get('base_weights', {}))
-        self._update_modifiers_step(data)
-        self._update_final_decision_step(data, final_decision)
+    def _create_timeline_card(self, num, title, icon, renderer, data):
+        """Create modern card with expandable content"""
+        card = QtWidgets.QFrame()
+        card.setObjectName(f"stepCard{num}")
+        card.setStyleSheet("""
+            QFrame {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+                padding: 0px;
+            }
+            QFrame:hover {
+                border-color: #cbd5e0;
+                background: #f8fafc;
+            }
+        """)
+        
+        layout = QtWidgets.QVBoxLayout(card)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Header (clickable to expand/collapse)
+        header = QtWidgets.QWidget()
+        header.setObjectName("cardHeader")
+        header.setStyleSheet("""
+            #cardHeader {
+                background: transparent;
+                padding: 15px 20px;
+                border-radius: 12px 12px 0 0;
+            }
+            #cardHeader:hover {
+                background: #f1f5f9;
+            }
+        """)
+        header_layout = QtWidgets.QHBoxLayout(header)
+        
+        # Step number badge
+        step_num = QtWidgets.QLabel(str(num))
+        step_num.setStyleSheet("""
+            background: #e3f2fd;
+            color: #1976d2;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 15px;
+            min-width: 30px;
+            max-width: 30px;
+            height: 30px;
+            qproperty-alignment: AlignCenter;
+        """)
+        
+        title_label = QtWidgets.QLabel(f"{icon} {title}")
+        title_label.setStyleSheet("font-size: 17px; font-weight: 600; color: #1e293b;")
+        
+        header_layout.addWidget(step_num)
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        
+        # Expand indicator
+        self.expand_indicators = getattr(self, 'expand_indicators', {})
+        expand_label = QtWidgets.QLabel("▼")
+        expand_label.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        self.expand_indicators[num] = expand_label
+        header_layout.addWidget(expand_label)
+        
+        layout.addWidget(header)
+        
+        # Content area (collapsible)
+        content = renderer(data)
+        content.setObjectName(f"cardContent{num}")
+        content.setMinimumHeight(0)
+        content.setMaximumHeight(16777215)
+        layout.addWidget(content)
+        
+        # Make header clickable for collapse/expand
+        header.mousePressEvent = lambda e, n=num, c=content: self._toggle_card(n, c)
+        
+        return card
 
-        # Update the bottom bar
-        self.final_action_label.setText(final_decision.replace('_', ' ').title())
+    def _toggle_card(self, num, content):
+        """Toggle card expansion state"""
+        current_height = content.maximumHeight()
+        is_expanded = current_height > 0
+        
+        if is_expanded:
+            content.setMaximumHeight(0)
+            self.expand_indicators[num].setText("▶")
+        else:
+            content.setMaximumHeight(16777215)
+            self.expand_indicators[num].setText("▼")
 
-    def _update_state_step(self, inputs, brain_state):
-        text = "The squid assesses his current condition and visible objects:<br><ul>"
+    def _create_connector(self):
+        """Elegant connector line"""
+        container = QtWidgets.QWidget()
+        container.setFixedHeight(20)
+        layout = QtWidgets.QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.VLine)
+        line.setStyleSheet("background: #e2e8f0; width: 2px; margin: 0 auto;")
+        layout.addWidget(line)
+        
+        arrow = QtWidgets.QLabel("⬇")
+        arrow.setStyleSheet("color: #cbd5e0; font-size: 14px; margin: -5px 0;")
+        arrow.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addWidget(arrow)
+        
+        return container
+
+    def _render_sensory_step(self, inputs):
+        """Visual sensory input rendering"""
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(widget)
+        layout.setSpacing(15)
+        
         if not inputs:
-            text += "<li>No sensory data available.</li>"
+            layout.addWidget(QtWidgets.QLabel("<i>No sensory data available</i>"))
+            return widget
+        
+        # Stats bars
+        stats_grid = QtWidgets.QGridLayout()
+        stats = ['hunger', 'happiness', 'sleepiness', 'anxiety', 'curiosity', 'cleanliness']
+        
+        for i, stat in enumerate(stats):
+            if stat in inputs:
+                self._create_stat_bar(stats_grid, i, stat, inputs[stat])
+        
+        layout.addLayout(stats_grid)
+        
+        # Visible objects
+        self._add_visible_objects(layout, inputs)
+        
+        # Status badges
+        self._add_status_badges(layout, inputs)
+        
+        return widget
+
+    def _create_stat_bar(self, grid, index, stat, value):
+        """Create a modern stat bar"""
+        bar_container = QtWidgets.QWidget()
+        bar_layout = QtWidgets.QVBoxLayout(bar_container)
+        bar_layout.setSpacing(3)
+        
+        label = QtWidgets.QLabel(stat.capitalize())
+        label.setStyleSheet("font-size: 11px; color: #64748b; font-weight: 500;")
+        
+        bar = QtWidgets.QProgressBar()
+        bar.setRange(0, 100)
+        bar.setValue(int(value))
+        bar.setFormat(f"%v%")
+        
+        # Color gradient based on value
+        if value > 75:
+            color = "#ef4444"  # Red (critical)
+        elif value > 50:
+            color = "#f59e0b"  # Orange (moderate)
         else:
-            # Show key stats first
-            key_stats = []
-            for stat in ['hunger', 'happiness', 'sleepiness', 'anxiety', 'curiosity']:
-                if stat in inputs:
-                    value = inputs[stat]
-                    color = "#dc3545" if value > 75 else "#ffc107" if value > 50 else "#28a745"
-                    key_stats.append(f"<span style='color:{color};'><b>{stat.capitalize()}:</b> {value:.0f}</span>")
-            
-            if key_stats:
-                text += f"<li>{'&nbsp;&nbsp;|&nbsp;&nbsp;'.join(key_stats)}</li>"
-            
-            # Show visible objects
-            visible_items = []
-            if inputs.get("has_food_visible"):
-                visible_items.append("🍖 Food")
-            if inputs.get("has_rock_visible"):
-                visible_items.append("🪨 Rock")
-            if inputs.get("has_poop_visible"):
-                visible_items.append("💩 Poop")
-            if inputs.get("has_plant_visible"):
-                visible_items.append("🌿 Plant")
-
-            if visible_items:
-                text += f"<li><b>Visible Objects:</b> {', '.join(visible_items)}</li>"
-            else:
-                text += "<li><b>Visible Objects:</b> <i>None in sight</i></li>"
-            
-            # Show if carrying anything
-            if inputs.get("carrying_rock"):
-                text += "<li>🪨 <b>Carrying a rock</b></li>"
-            if inputs.get("carrying_poop"):
-                text += "<li>💩 <b>Carrying poop</b></li>"
-            
-            # Show if sick or sleeping
-            if inputs.get("is_sick"):
-                text += "<li>🤒 <b>Is sick</b></li>"
-            if inputs.get("is_sleeping"):
-                text += "<li>💤 <b>Is sleeping</b></li>"
-                
-        text += "</ul>"
-        self.step1_label.setText(text)
-
-    def _update_urges_step(self, weights):
-        if not weights:
-            self.step2_label.setText("No urges calculated.")
-            return
-
-        # Filter out zero weights for cleaner display
-        non_zero_weights = {k: v for k, v in weights.items() if v > 0}
+            color = "#10b981"  # Green (good)
         
-        if not non_zero_weights:
-            self.step2_label.setText("<i>No urges active - all base desires are currently zero.</i>")
-            return
+        bar.setStyleSheet(f"""
+            QProgressBar {{
+                border: none;
+                background: #f1f5f9;
+                height: 8px;
+                border-radius: 4px;
+            }}
+            QProgressBar::chunk {{
+                background: {color};
+                border-radius: 4px;
+            }}
+        """)
         
-        strongest_urge = max(non_zero_weights, key=non_zero_weights.get)
-        text = f"Based on brain state and needs, the strongest urge is <b style='color: #007bff;'>{strongest_urge.replace('_', ' ').title()}</b>.<br><br>"
-        text += "Active urges (sorted by strength):"
-        text += "<ul>"
-        for action, weight in sorted(non_zero_weights.items(), key=lambda item: item[1], reverse=True):
-            # Highlight if this is the strongest
-            if action == strongest_urge:
-                text += f"<li style='background-color: #e7f3ff; padding: 2px; border-radius: 3px;'><b>➤ {action.replace('_', ' ').title()}:</b> {weight:.2f}</li>"
-            else:
-                text += f"<li><b>{action.replace('_', ' ').title()}:</b> {weight:.2f}</li>"
-        text += "</ul>"
-        
-        # Show which urges are currently unavailable (zero weight)
-        zero_weights = {k: v for k, v in weights.items() if v == 0}
-        if zero_weights:
-            text += "<br><i style='color: #6c757d; font-size: 0.9em;'>Unavailable urges: "
-            unavailable_list = []
-            for action in zero_weights.keys():
-                reason = ""
-                if "eating" in action:
-                    reason = "(no food visible)"
-                elif "playing" in action:
-                    reason = "(no objects to play with)"
-                elif "rock" in action:
-                    reason = "(no rocks visible/available)"
-                elif "plant" in action:
-                    reason = "(no plants visible)"
-                elif "poop" in action:
-                    reason = "(no poop visible/available)"
-                unavailable_list.append(f"{action.replace('_', ' ').title()} {reason}")
-            text += ", ".join(unavailable_list)
-            text += "</i>"
-        
-        self.step2_label.setText(text)
+        bar_layout.addWidget(label)
+        bar_layout.addWidget(bar)
+        grid.addWidget(bar_container, index // 3, index % 3)
 
-    def _update_modifiers_step(self, data):
-        base_weights = data.get('base_weights', {})
-        adj_weights = data.get('adjusted_weights', {})
+    def _add_visible_objects(self, layout, inputs):
+        """Add visible objects section"""
+        visible = []
+        if inputs.get("has_food_visible"): visible.append("🍖 Food")
+        if inputs.get("has_rock_visible"): visible.append("🪨 Rock")
+        if inputs.get("has_poop_visible"): visible.append("💩 Poop")
+        if inputs.get("has_plant_visible"): visible.append("🌿 Plant")
+        
+        if visible:
+            obj_label = QtWidgets.QLabel(f"<b>Visual Field:</b> {', '.join(visible)}")
+            obj_label.setStyleSheet("font-size: 13px; color: #374151; padding-top: 10px;")
+            layout.addWidget(obj_label)
+
+    def _add_status_badges(self, layout, inputs):
+        """Add status badges"""
+        status_layout = QtWidgets.QHBoxLayout()
+        status_layout.setSpacing(8)
+        
+        badges = [
+            ("🪨 Carrying Rock", inputs.get("carrying_rock"), "#e0f2fe"),
+            ("💩 Carrying Poop", inputs.get("carrying_poop"), "#fce7f3"),
+            ("🤒 Sick", inputs.get("is_sick"), "#fee2e2"),
+            ("💤 Sleeping", inputs.get("is_sleeping"), "#ecfdf5"),
+        ]
+        
+        for text, active, color in badges:
+            if active:
+                badge = self._create_badge(text, color)
+                status_layout.addWidget(badge)
+        
+        status_layout.addStretch()
+        layout.addLayout(status_layout)
+
+    def _render_urges_step(self, weights):
+        """Render base urges as sorted bars"""
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(widget)
+        layout.setSpacing(8)
+        
+        non_zero = {k: v for k, v in weights.items() if v > 0.01}
+        
+        if not non_zero:
+            layout.addWidget(QtWidgets.QLabel("<i>No active urges - squid is content</i>"))
+            return widget
+        
+        # Sort by weight
+        sorted_weights = sorted(non_zero.items(), key=lambda x: x[1], reverse=True)
+        
+        for action, weight in sorted_weights:
+            row = QtWidgets.QHBoxLayout()
+            
+            # Action name with icon
+            icon = self._get_action_icon(action)
+            name = QtWidgets.QLabel(f"{icon} {action.replace('_', ' ').title()}")
+            name.setStyleSheet("font-size: 13px; min-width: 140px; font-weight: 500;")
+            
+            # Visual bar
+            bar = QtWidgets.QProgressBar()
+            bar.setRange(0, int(max(non_zero.values()) * 1.2))
+            bar.setValue(int(weight))
+            bar.setFormat(f"{weight:.2f}")
+            bar.setStyleSheet("""
+                QProgressBar {
+                    border: none;
+                    background: #e2e8f0;
+                    height: 6px;
+                    border-radius: 3px;
+                    text-align: right;
+                    padding-right: 5px;
+                }
+                QProgressBar::chunk {
+                    background: #3b82f6;
+                    border-radius: 3px;
+                }
+            """)
+            
+            row.addWidget(name)
+            row.addWidget(bar, 1)
+            layout.addLayout(row)
+        
+        return widget
+
+    def _render_modifiers_step(self, data):
+        """Render personality and memory influences"""
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(widget)
+        layout.setSpacing(12)
+        
+        # Personality
         personality = data.get('personality', 'UNKNOWN')
-        memory_influences = data.get('memory_influences', {})
-        personality_modifiers = data.get('personality_modifiers', {})
+        pers_label = QtWidgets.QLabel(f"<b>Personality:</b> {personality}")
+        pers_label.setStyleSheet("font-size: 14px; color: #1e293b;")
+        layout.addWidget(pers_label)
         
-        text = f"<b>Personality:</b> {personality}<br><br>"
-        text += "Now personality traits, memories, and urgency adjust these base urges:<br><ul>"
-
-        modified = False
-        modifications = []
+        # Memory influences
+        memory_inf = data.get('memory_influences', {})
+        if memory_inf:
+            layout.addWidget(QtWidgets.QLabel("<b>Memory Effects:</b>"))
+            for action, multiplier in memory_inf.items():
+                if multiplier != 1.0:
+                    effect = "✓ Boosted" if multiplier > 1.0 else "✗ Reduced"
+                    color = "#10b981" if multiplier > 1.0 else "#ef4444"
+                    label = QtWidgets.QLabel(f"  {effect} {action.replace('_', ' ').title()} (×{multiplier:.2f})")
+                    label.setStyleSheet(f"color: {color}; font-size: 12px;")
+                    layout.addWidget(label)
         
-        for action, final_score in adj_weights.items():
-            base_score = base_weights.get(action, final_score)
-            delta = final_score - base_score
-            
-            if abs(delta) > 0.01:  # Only show meaningful changes
-                direction = "↑ increased" if delta > 0 else "↓ decreased"
-                color = "#28a745" if delta > 0 else "#dc3545"
-                
-                # Try to explain why it changed
-                reasons = []
-                if action in personality_modifiers and personality_modifiers[action] != 1.0:
-                    modifier = personality_modifiers[action]
-                    if modifier > 1.0:
-                        reasons.append(f"personality boost ×{modifier:.2f}")
-                    else:
-                        reasons.append(f"personality reduction ×{modifier:.2f}")
-                
-                if action in memory_influences and memory_influences[action] != 1.0:
-                    modifier = memory_influences[action]
-                    if modifier > 1.0:
-                        reasons.append(f"positive memories ×{modifier:.2f}")
-                    else:
-                        reasons.append(f"negative memories ×{modifier:.2f}")
-                
-                reason_text = f" <i>({', '.join(reasons)})</i>" if reasons else ""
-                
-                modifications.append({
-                    'action': action,
-                    'direction': direction,
-                    'delta': delta,
-                    'color': color,
-                    'reason': reason_text,
-                    'base': base_score,
-                    'final': final_score
-                })
-                modified = True
+        # Personality modifiers
+        pers_mod = data.get('personality_modifiers', {})
+        if pers_mod:
+            layout.addWidget(QtWidgets.QLabel("<b>Personality Modifiers:</b>"))
+            for action, multiplier in pers_mod.items():
+                if multiplier != 1.0:
+                    effect = "↑" if multiplier > 1.0 else "↓"
+                    label = QtWidgets.QLabel(f"  {effect} {action.replace('_', ' ').title()} (×{multiplier:.2f})")
+                    label.setStyleSheet("font-size: 12px;")
+                    layout.addWidget(label)
         
-        # Sort by magnitude of change
-        modifications.sort(key=lambda x: abs(x['delta']), reverse=True)
+        return widget
+
+    def _render_scoring_step(self, data):
+        """Render final scoring comparison"""
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(widget)
+        layout.setSpacing(10)
         
-        for mod in modifications:
-            text += f"<li><b>{mod['action'].replace('_', ' ').title()}</b> {mod['direction']}: "
-            text += f"{mod['base']:.2f} → <span style='color:{mod['color']};'><b>{mod['final']:.2f}</b></span>"
-            text += f" <span style='color:{mod['color']};'>({mod['delta']:+.2f})</span>"
-            text += f"{mod['reason']}</li>"
-
-        if not modified:
-            text += "<li><i>No significant adjustments from personality or memory this time.</i></li>"
-
-        text += "</ul>"
-        self.step3_label.setText(text)
-
-    def _update_final_decision_step(self, data, final_decision):
-        confidence = data.get('confidence', 0.0)
         adj_weights = data.get('adjusted_weights', {})
-
-        text = "After all calculations, the final scores determine the action.<br><br>"
-        text += "<b>Final Decision Scores:</b>"
-        text += "<ul>"
+        final = data.get('final_decision', '')
+        
         if not adj_weights:
-            text += "<li>No final scores available.</li>"
-        else:
-            # Only show non-zero or relevant scores
-            relevant_scores = sorted(adj_weights.items(), key=lambda item: item[1], reverse=True)[:6]
+            layout.addWidget(QtWidgets.QLabel("<i>No scoring data available</i>"))
+            return widget
+        
+        # Show top scores
+        top_scores = sorted(adj_weights.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        for action, score in top_scores:
+            row = QtWidgets.QHBoxLayout()
             
-            for action, score in relevant_scores:
-                # Check if this is the winning decision
-                is_winner = (action == final_decision)
-                
-                if is_winner:
-                    text += f"<li style='background-color: #d4edda; border-left: 4px solid #28a745; padding: 5px; margin: 3px 0; border-radius: 4px;'>"
-                    text += f"<b style='color: #155724; font-size: 1.1em;'>🏆 {action.replace('_', ' ').title()}: {score:.2f}</b>"
-                    text += f" <span style='color: #155724;'>← CHOSEN</span></li>"
-                elif score > 0:
-                    text += f"<li><b>{action.replace('_', ' ').title()}:</b> {score:.2f}</li>"
-                else:
-                    text += f"<li style='color: #6c757d;'><i>{action.replace('_', ' ').title()}: {score:.2f}</i></li>"
-        text += "</ul>"
+            # Winner highlight
+            is_winner = action == final
+            if is_winner:
+                name = QtWidgets.QLabel(f"🏆 {action.replace('_', ' ').title()}")
+                name.setStyleSheet("font-size: 14px; font-weight: bold; color: #059669;")
+            else:
+                name = QtWidgets.QLabel(action.replace('_', ' ').title())
+                name.setStyleSheet("font-size: 13px;")
+            
+            # Score
+            score_label = QtWidgets.QLabel(f"{score:.2f}")
+            score_label.setStyleSheet("font-weight: bold;" if is_winner else "")
+            
+            row.addWidget(name)
+            row.addStretch()
+            row.addWidget(score_label)
+            
+            if is_winner:
+                winner_badge = QtWidgets.QLabel("✓ CHOSEN")
+                winner_badge.setStyleSheet("background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold;")
+                row.addWidget(winner_badge)
+            
+            layout.addLayout(row)
+        
+        return widget
 
-        # Confidence display
-        conf_color = "#28a745" if confidence > 0.5 else "#ffc107" if confidence > 0.2 else "#dc3545"
-        conf_label = "High" if confidence > 0.5 else "Medium" if confidence > 0.2 else "Low"
+    def _update_winner_card(self, data):
+        """Update winner card with animation"""
+        final_decision = data.get('final_decision', 'N/A')
+        confidence = data.get('confidence', 0.0) * 100
         
-        text += f"<hr style='margin: 10px 0;'>"
-        text += f"<b>Final Decision:</b> <span style='color: #007bff; font-size: 1.1em;'>{final_decision.replace('_', ' ').title()}</span><br>"
-        text += f"<b>Confidence:</b> <span style='color:{conf_color};'>{conf_label}</span> ({confidence:.1%})"
+        # Update personality
+        personality = data.get('personality', 'UNKNOWN')
+        self.personality_badge.setText(personality)
         
-        if confidence < 0.2:
-            text += "<br><i style='color: #6c757d; font-size: 0.9em;'>Note: Low confidence means the squid is uncertain - multiple urges were similarly strong.</i>"
+        # Animate decision change
+        if self.winner_label.text() != final_decision.replace('_', ' ').title():
+            # Fade out
+            self.winner_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #e5e7eb;")
+            QtCore.QTimer.singleShot(100, lambda: self._fade_in_winner(final_decision))
         
-        self.step4_label.setText(text)
+        # Update confidence
+        self.confidence_value.setText(f"{confidence:.1f}%")
+        self.confidence_bar.setValue(int(confidence))
+        
+        # Color code confidence bar
+        if confidence > 50:
+            self.confidence_bar.setStyleSheet("""
+                QProgressBar { border: none; background: #e5e7eb; height: 8px; border-radius: 4px; }
+                QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10b981, stop:1 #34d399); border-radius: 4px; }
+            """)
+            self.confidence_value.setStyleSheet("font-size: 12px; font-weight: bold; color: #059669;")
+        elif confidence > 20:
+            self.confidence_bar.setStyleSheet("""
+                QProgressBar { border: none; background: #e5e7eb; height: 8px; border-radius: 4px; }
+                QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #f59e0b, stop:1 #fbbf24); border-radius: 4px; }
+            """)
+            self.confidence_value.setStyleSheet("font-size: 12px; font-weight: bold; color: #d97706;")
+        else:
+            self.confidence_bar.setStyleSheet("""
+                QProgressBar { border: none; background: #e5e7eb; height: 8px; border-radius: 4px; }
+                QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ef4444, stop:1 #f87171); border-radius: 4px; }
+            """)
+            self.confidence_value.setStyleSheet("font-size: 12px; font-weight: bold; color: #dc2626;")
 
-    def _create_arrow(self):
-        arrow_label = QtWidgets.QLabel("⬇️")
-        arrow_label.setAlignment(QtCore.Qt.AlignCenter)
-        arrow_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(24)}px; color: #adb5bd; margin: -5px 0 -5px 0;")
-        return arrow_label
+    def _fade_in_winner(self, decision):
+        """Fade in animation for winner"""
+        self.winner_label.setText(decision.replace('_', ' ').title())
+        self.winner_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #1976d2;")
+
+    def _create_badge(self, text, bg_color):
+        """Create modern badge"""
+        badge = QtWidgets.QLabel(text)
+        badge.setStyleSheet(f"""
+            background: {bg_color};
+            color: #1f2937;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        """)
+        return badge
+
+    def _get_action_icon(self, action):
+        """Get appropriate icon for action"""
+        icon_map = {
+            'eating': '🍖',
+            'exploring': '🔍',
+            'playing': '🎾',
+            'sleeping': '💤',
+            'approaching_rock': '🪨',
+            'throwing_rock': '🎯',
+            'approaching_plant': '🌿',
+            'approaching_poop': '💩',
+            'throwing_poop': '😈',
+            'organizing': '📦',
+        }
+        return icon_map.get(action, '⚡')

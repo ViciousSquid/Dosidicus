@@ -128,36 +128,6 @@ class TamagotchiLogic:
                                         squid=self.squid,
                                         user_interface=self.user_interface)
 
-        # Connect multiplayer signal if plugin is loaded
-        if hasattr(self.plugin_manager.plugins.get('multiplayer', {}), 'instance'):
-            mp_instance = self.plugin_manager.plugins['multiplayer']['instance']
-            if hasattr(mp_instance, 'squid_died_while_guarding'):
-                mp_instance.squid_died_while_guarding.connect(self.handle_guarding_death)
-
-    def handle_guarding_death(self, memorial_item, squid_name, position):
-        """
-        Handle the death of a squid that was guarding an egg.
-        You can add logic here like:
-        - Triggering a game over if it's the player's last squid
-        - Awarding achievements
-        - Spawning a new egg after a delay
-        - Logging the event
-        """
-        print(f"\n[SQUID DEATH EVENT] {squid_name} died at position {position} while guarding egg.")
-        print(f"Memorial item created: {memorial_item}")
-        
-        # Example: Check if this was the last squid
-        if hasattr(self, 'squid') and self.squid.name == squid_name:
-            print("WARNING: Player's main squid has died!")
-            # Could trigger game over logic here
-        
-        # Example: Award achievement via plugin manager
-        self.plugin_manager.trigger_hook(
-            "on_squid_sacrificed",
-            squid_name=squid_name,
-            memorial=memorial_item
-        )
-
         # Initialize core attributes first
         self.simulation_speed = 1  # Default to 1x speed
         self.base_interval = 1000  # 1000ms = 1 second base interval
@@ -653,15 +623,6 @@ class TamagotchiLogic:
         PERFORMANCE FIX: Uses cached decoration list to avoid
         iterating through all scene items every frame.
         """
-        # --- ENSURE INITIALIZATION ---
-        if not hasattr(self, '_decoration_cache'):
-            self._decoration_cache = []
-        if not hasattr(self, '_decoration_cache_time'):
-            self._decoration_cache_time = 0
-        if not hasattr(self, '_decoration_cache_interval'):
-            self._decoration_cache_interval = 0.3
-        # --- END FIX ---
-        
         current_time = time.time()
         
         # Rebuild cache if stale (every 300ms or on first call)
@@ -2976,28 +2937,3 @@ class TamagotchiLogic:
                 if self.squid.throw_poop(direction):
                     self.squid.status = "roaming"
                     self.squid.current_poop_target = None
-
-    def spawn_egg(self, x, y, parent_ids):
-        """Spawn a breedable egg at the squid's position"""
-        egg_pixmap = QtGui.QPixmap(os.path.join("images", "egg.png"))
-        if egg_pixmap.isNull():
-            # Fallback: create colored ellipse as egg
-            egg_pixmap = QtGui.QPixmap(64, 64)
-            egg_pixmap.fill(QtCore.Qt.transparent)
-            painter = QtGui.QPainter(egg_pixmap)
-            painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 215, 0)))
-            painter.drawEllipse(0, 0, 64, 64)
-            painter.end()
-        
-        egg_item = QtWidgets.QGraphicsPixmapItem(egg_pixmap)
-        egg_item.setPos(x, y)
-        egg_item.setZValue(15)  # Above other items
-        
-        # Mark as special breeding egg
-        setattr(egg_item, 'category', 'egg')
-        setattr(egg_item, 'parent_ids', parent_ids)
-        setattr(egg_item, 'is_stealable', True)  # Allows autopilot to pick it up
-        setattr(egg_item, 'hatch_time', time.time() + 300)  # 5 minutes incubation
-        
-        self.user_interface.scene.addItem(egg_item)
-        return egg_item
