@@ -230,37 +230,53 @@ class NetworkTab(BrainBaseTab):
 
     def _open_brain_designer(self):
         """
-        Locate and execute brain_designer.py using the system's python executable
-        in a new, non-blocking subprocess.
+        Launch Brain Designer tool. Automatically detects if running from a compiled
+        bundle and launches BrainDesigner.exe, otherwise falls back to the Python script.
         """
-        # Calculate the absolute path to brain_designer.py
-        # Current file (__file__) is in src/
-        # Brain Designer is in tools/ (i.e., ../tools/brain_designer.py)
-        
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.abspath(os.path.join(current_dir, os.pardir))
-        designer_path = os.path.join(project_root, 'tools', 'brain_designer.py')
-        
-        # Ensure the file exists before attempting to run
-        if not os.path.exists(designer_path):
-             QtWidgets.QMessageBox.critical(
-                self, "Error", 
-                f"Brain Designer not found at the expected path:\n{designer_path}\n"
-                f"Please ensure it is located in the 'tools/' directory."
-            )
-             return
-
         try:
-            # Run the designer script using the same Python executable
-            # used to run the main application. This opens the tool separately.
-            subprocess.Popen([sys.executable, designer_path])
-            print(f"Opened Brain Designer: {designer_path}")
-            
+            # Check if running from PyInstaller bundle
+            if getattr(sys, 'frozen', False):
+                # Running as compiled EXE
+                # sys.executable is Dosidicus.exe, so we navigate to the tools subdirectory
+                base_dir = os.path.dirname(sys.executable)
+                designer_exe = os.path.join(base_dir, '_internal', 'tools', 'BrainDesigner.exe')
+                
+                # Verify the executable exists
+                if not os.path.exists(designer_exe):
+                    raise FileNotFoundError(
+                        f"BrainDesigner.exe not found at:\n{designer_exe}\n\n"
+                        f"Please ensure it was compiled and included in the _internal/tools directory."
+                    )
+                
+                # Launch the executable with correct working directory
+                subprocess.Popen([designer_exe], cwd=os.path.dirname(designer_exe))
+                print(f"[INFO] Launched Brain Designer (EXE): {designer_exe}")
+                
+            else:
+                # Running from source code - launch the Python script
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                project_root = os.path.abspath(os.path.join(current_dir, os.pardir))
+                designer_script = os.path.join(project_root, 'tools', 'brain_designer.py')
+                
+                if not os.path.exists(designer_script):
+                    QtWidgets.QMessageBox.critical(
+                        self, "Error",
+                        f"Brain Designer script not found at:\n{designer_script}"
+                    )
+                    return
+                
+                # Launch with Python interpreter
+                subprocess.Popen([sys.executable, designer_script])
+                print(f"[INFO] Launched Brain Designer (script): {designer_script}")
+
         except Exception as e:
             QtWidgets.QMessageBox.critical(
-                self, "Error", 
-                f"Could not launch Brain Designer:\n{e}"
+                self, "Launch Failed",
+                f"Could not launch Brain Designer:\n\n{e}"
             )
+            print(f"[ERROR] Brain Designer launch error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _change_animation_style(self, index):
         """

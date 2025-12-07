@@ -242,5 +242,4 @@ class DecisionsTab(BrainBaseTab):
         arrow_label = QtWidgets.QLabel("⬇️")
         arrow_label.setAlignment(QtCore.Qt.AlignCenter)
         arrow_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(24)}px; color: #adb5bd; margin: -5px 0 -5px 0;")
-
         return arrow_label
