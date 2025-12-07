@@ -207,11 +207,16 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         super().mouseReleaseEvent(event)
 
     def get_decoration_info(self):
+        """Get decoration stats from JSON file using basename as key"""
         try:
             file_path = os.path.join(os.path.dirname(__file__), 'decoration_stats.json')
             with open(file_path, 'r') as f:
                 stats = json.load(f)
-            info = stats.get(self.filename, {})
+            
+            # Use basename as key for stats lookup
+            basename = os.path.basename(self.filename) if self.filename else ''
+            info = stats.get(basename, {})
+            
             stat_multipliers = {k: v for k, v in info.items() if k != 'category'}
             category = info.get('category', 'plant')
             return stat_multipliers, category
@@ -1957,38 +1962,42 @@ class Ui:
     def get_decorations_data(self):
         """
         Serialize all decoration items in the scene for saving.
+        Stores only filename references to avoid duplicate image data.
         Returns a list of dictionaries containing decoration data.
         """
         decorations_data = []
+        
+        # Get the decoration directory path for relative path conversion
+        decoration_dir = os.path.abspath(os.path.join("images", "decoration"))
         
         # Iterate through all items in the scene
         for item in self.scene.items():
             # Check if it's a ResizablePixmapItem (decoration)
             if isinstance(item, ResizablePixmapItem):
                 try:
-                    # Get the pixmap and convert to base64
-                    pixmap = item.pixmap()
-                    buffer = QtCore.QBuffer()
-                    buffer.open(QtCore.QIODevice.WriteOnly)
-                    pixmap.save(buffer, "PNG")
-                    pixmap_data = base64.b64encode(buffer.data()).decode('utf-8')
+                    # Get filename (reference to image file)
+                    filename = getattr(item, 'filename', 'unknown')
+                    
+                    # Convert to relative path if it's in the decoration directory
+                    if filename and os.path.exists(filename):
+                        abs_filename = os.path.abspath(filename)
+                        if abs_filename.startswith(decoration_dir):
+                            # Make it relative to the game directory
+                            filename = os.path.relpath(abs_filename)
                     
                     # Get position as tuple (x, y) for JSON serialization
                     pos = item.pos()
                     pos_tuple = (pos.x(), pos.y())
                     
-                    # Get scale factor
-                    scale = item.scale()
+                    # Get the current pixmap size (this is what matters for scaling)
+                    pixmap = item.pixmap()
+                    pixmap_size = (pixmap.width(), pixmap.height()) if pixmap else (0, 0)
                     
-                    # Get filename (important for stat lookups)
-                    filename = getattr(item, 'filename', 'unknown')
-                    
-                    # Create decoration data dictionary
+                    # Create decoration data dictionary - store pixmap dimensions
                     decoration_dict = {
-                        'pixmap_data': pixmap_data,
+                        'filename': filename,
                         'pos': pos_tuple,
-                        'scale': scale,
-                        'filename': filename
+                        'pixmap_size': pixmap_size  # Save actual pixmap dimensions
                     }
                     
                     decorations_data.append(decoration_dict)
@@ -2024,26 +2033,54 @@ class Ui:
         loaded_count = 0
         for decoration_dict in decorations_data:
             try:
-                # Decode base64 pixmap data
-                pixmap_data = decoration_dict['pixmap_data']
-                pixmap = QtGui.QPixmap()
-                pixmap.loadFromData(
-                    QtCore.QByteArray(base64.b64decode(pixmap_data.encode('utf-8')))
-                )
-                
                 # Get filename
                 filename = decoration_dict.get('filename', 'unknown')
                 
-                # Create ResizablePixmapItem
-                item = ResizablePixmapItem(pixmap, filename)
+                # Load original pixmap from file
+                original_pixmap = QtGui.QPixmap()
+                
+                # Try the stored path first
+                if filename and os.path.exists(filename):
+                    original_pixmap.load(filename)
+                else:
+                    # Try as relative path from game root
+                    rel_path = filename
+                    if not os.path.isabs(filename):
+                        rel_path = os.path.join(os.getcwd(), filename)
+                    
+                    if os.path.exists(rel_path):
+                        original_pixmap.load(rel_path)
+                    else:
+                        # Try basename in decoration directory
+                        basename = os.path.basename(filename)
+                        decoration_path = os.path.join("images", "decoration", basename)
+                        if os.path.exists(decoration_path):
+                            original_pixmap.load(decoration_path)
+                
+                # If we couldn't load the pixmap, skip
+                if original_pixmap.isNull():
+                    print(f"Error: Could not load decoration image from {filename}")
+                    continue
+                
+                # Get saved pixmap size
+                saved_width, saved_height = decoration_dict.get('pixmap_size', (original_pixmap.width(), original_pixmap.height()))
+                
+                # Scale the original pixmap to the saved size
+                scaled_pixmap = original_pixmap.scaled(
+                    saved_width, saved_height,
+                    QtCore.Qt.KeepAspectRatio,
+                    QtCore.Qt.SmoothTransformation
+                )
+                
+                # Create ResizablePixmapItem with the scaled pixmap
+                item = ResizablePixmapItem(scaled_pixmap, filename)
+                
+                # Store the original pixmap for future scaling operations
+                item.original_pixmap = original_pixmap
                 
                 # Restore position (convert tuple back to QPointF)
                 pos_tuple = decoration_dict['pos']
                 item.setPos(QtCore.QPointF(pos_tuple[0], pos_tuple[1]))
-                
-                # Restore scale
-                scale = decoration_dict.get('scale', 1.0)
-                item.setScale(scale)
                 
                 # Add to scene
                 self.scene.addItem(item)
