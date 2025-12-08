@@ -16,7 +16,7 @@ class BrainNeuronHooks:
         # Registry mapping neuron names to their calculation functions
         self.handlers: Dict[str, Callable] = {
         'external_stimulus': self.calculate_external_stimulus,
-        'food_proximity': self.calculate_food_proximity,
+        'can_see_food': self.calculate_can_see_food,
         'plant_proximity': self.calculate_plant_proximity,
         'threat_level': self.calculate_threat_level,
         'pursuing_food': self.calculate_pursuing_food,
@@ -167,21 +167,14 @@ class BrainNeuronHooks:
         
         return max(0, min(100, activation))
     
-    def calculate_food_proximity(self) -> float:
-        """Calculate activation based on distance to nearest food item."""
+    def calculate_can_see_food(self) -> float:
+        """Return 100.0 if food is visible in vision cone, 0.0 otherwise."""
         if not hasattr(self.logic, 'food_items') or not self.logic.food_items:
-            return 0
+            return 0.0
         
-        squid_x = self.logic.squid.squid_x
-        squid_y = self.logic.squid.squid_y  # This was the problematic line
-        min_distance = min(
-            math.hypot(food.pos().x() - squid_x, food.pos().y() - squid_y)
-            for food in self.logic.food_items
-        )
-        
-        # Convert distance to activation (closer = higher activation)
-        max_range = 300
-        return max(0, 100 - (min_distance / max_range * 100))
+        # Check if any food is visible using the squid's vision system
+        visible_food = self.logic.squid.get_visible_food()
+        return 100.0 if visible_food else 0.0
     
     def calculate_plant_proximity(self) -> float:
         """Calculate activation based on distance to nearest plant decoration."""
@@ -235,7 +228,7 @@ class BrainNeuronHooks:
 
 DEFAULT_INPUT_SENSORS = (
     'external_stimulus',
-    'food_proximity',
+    'can_see_food',
     'plant_proximity',
     'threat_level',
     'pursuing_food',
@@ -244,24 +237,3 @@ DEFAULT_INPUT_SENSORS = (
     'is_eating',
     'is_sleeping',
 )
-
-# =========================================================================
-# EXTENSION GUIDE - How to add new input neurons
-# =========================================================================
-
-"""
-To add a new input neuron:
-
-1. **Define the neuron:
-   ```json
-   {
-     "temperature": {
-       "name": "temperature",
-       "type": "input",
-       "position": [850, 130],
-       "color": [180, 180, 250],
-       "description": "Environmental temperature sensor"
-     }
-   }
-
-"""

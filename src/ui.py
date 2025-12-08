@@ -514,6 +514,49 @@ class Ui:
         # Force scene update
         self.scene.update()
 
+    def open_brain_designer(self):
+        """Open the Brain Designer tool in a separate process (same as Ruler button)"""
+        import multiprocessing
+        
+        try:
+            from .brain_designer_launcher import launch_brain_designer_process
+        except ImportError as e:
+            QtWidgets.QMessageBox.critical(
+                self.window,
+                "Missing Launcher",
+                "Cannot find brain_designer_launcher.py!\n\n"
+                "Make sure the file exists in the 'src' folder."
+            )
+            print(f"Import error: {e}")
+            return
+
+        # Prevent multiple instances
+        if hasattr(self, '_brain_designer_process') and \
+           getattr(self._brain_designer_process, 'is_alive', lambda: False)():
+            QtWidgets.QMessageBox.information(
+                self.window,
+                "Already Running",
+                "Brain Designer is already open!"
+            )
+            return
+
+        try:
+            self._brain_designer_process = multiprocessing.Process(
+                target=launch_brain_designer_process,
+                daemon=True
+            )
+            self._brain_designer_process.start()
+            print(f"Brain Designer launched (PID: {self._brain_designer_process.pid})")
+            self.show_message("Brain Designer opened in a new window")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(
+                self.window,
+                "Launch Failed",
+                f"Could not start Brain Designer:\n\n{e}"
+            )
+
 
     def setup_plugin_menu(self, plugin_manager_instance): #
         # This method is called during initial UI setup (Ui.setup_menu_bar).
@@ -1628,14 +1671,22 @@ class Ui:
 
         # View Menu
         view_menu = self.menu_bar.addMenu('View')
-        self.stats_window_action = QtWidgets.QAction('Statistics', self.window)
-        self.stats_window_action.triggered.connect(self.toggle_statistics_window)
-        view_menu.addAction(self.stats_window_action)
+
+        self.brain_designer_action = QtWidgets.QAction("Brain Designer", self.window)
+        self.brain_designer_action.setIcon(self.window.style().standardIcon(QtWidgets.QStyle.SP_FileDialogDetailedView))
+        self.brain_designer_action.triggered.connect(self.open_brain_designer)
+        self.brain_designer_action.setShortcut("Ctrl+Shift+B")
+        self.brain_designer_action.setToolTip("Open the visual neural network designer")
+        view_menu.addAction(self.brain_designer_action)
 
         self.decorations_action = QtWidgets.QAction('Decorations', self.window)
         self.decorations_action.setCheckable(True)
         self.decorations_action.triggered.connect(self.toggle_decoration_window)
         view_menu.addAction(self.decorations_action)
+
+        self.stats_window_action = QtWidgets.QAction('Statistics', self.window)
+        self.stats_window_action.triggered.connect(self.toggle_statistics_window)
+        view_menu.addAction(self.stats_window_action)
 
         self.brain_action = QtWidgets.QAction('Toggle Brain Tool', self.window)
         self.brain_action.setCheckable(True)
@@ -1681,7 +1732,7 @@ class Ui:
         self.speed_action_group.addAction(self.very_fast_speed_action)
 
         # Actions Menu
-        actions_menu = self.menu_bar.addMenu('Actions')
+        actions_menu = self.menu_bar.addMenu('ACTIONS')
         self.feed_action = QtWidgets.QAction('Feed', self.window)
         actions_menu.addAction(self.feed_action)
 

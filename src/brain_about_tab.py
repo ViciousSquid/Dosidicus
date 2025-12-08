@@ -376,7 +376,7 @@ class AboutTab(BrainBaseTab):
     def get_version_info(self):
         """Read version information from the version file"""
         version_info = {
-            "dosidicus": "2.6.0.1_release",  # Default versions
+            "dosidicus": "2.6.0.2_release",  # Default versions
             "brain_tool": "STRINg 2",
             "decision_engine":"3.12",
             "neurogenesis":   "ver3_unified"         # fallback

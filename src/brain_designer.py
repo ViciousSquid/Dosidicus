@@ -1,10 +1,14 @@
 import sys
 import os
+# Ensure we can import from the same directory
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+if _current_dir not in sys.path:
+    sys.path.insert(0, _current_dir)
 # When launched from src/ we still want imports like
-from brain_neuron_hooks import *
-_repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _repo_root not in sys.path:
-    sys.path.insert(0, _repo_root)
+try:
+    from brain_neuron_hooks import DEFAULT_INPUT_SENSORS
+except ImportError:
+    DEFAULT_INPUT_SENSORS = ()
 import json
 import math
 import random
@@ -51,6 +55,7 @@ BINARY_STATE_NEURONS = {
     "is_fleeing",
     "is_eating",
     "is_sleeping",
+    "can_see_food",
 }
 
 
@@ -64,6 +69,10 @@ class NeuronType(Enum):
     OUTPUT = "output"
     STATUS = "status"
     BOOLEAN = "boolean"
+    # Neurogenesis neuron types
+    NEUROGENESIS_STRESS = "neurogenesis_stress"
+    NEUROGENESIS_NOVELTY = "neurogenesis_novelty"
+    NEUROGENESIS_REWARD = "neurogenesis_reward"
 
 MAX_VISIBLE_SUFFIX = 10
 OVERFLOW_TEMPLATE  = "⋯ ({:d} more)"
@@ -111,6 +120,11 @@ class DesignerNeuron:
     color: Tuple[int, int, int] = (150, 150, 220)
     activation: float = 50.0
     description: str = ""
+    # Neurogenesis-specific fields
+    specialization: str = ""
+    strength_multiplier: float = 1.0
+    creation_context: Optional[Dict] = None
+    utility_score: float = 0.0
     
     def to_dict(self) -> Dict:
         return {
@@ -120,7 +134,11 @@ class DesignerNeuron:
             'layer_index': self.layer_index,
             'color': list(self.color),
             'activation': self.activation,
-            'description': self.description
+            'description': self.description,
+            'specialization': self.specialization,
+            'strength_multiplier': self.strength_multiplier,
+            'creation_context': self.creation_context,
+            'utility_score': self.utility_score
         }
     
     @classmethod
@@ -132,7 +150,11 @@ class DesignerNeuron:
             layer_index=data.get('layer_index', 0),
             color=tuple(data.get('color', (150, 150, 220))),
             activation=data.get('activation', 50.0),
-            description=data.get('description', '')
+            description=data.get('description', ''),
+            specialization=data.get('specialization', ''),
+            strength_multiplier=data.get('strength_multiplier', 1.0),
+            creation_context=data.get('creation_context'),
+            utility_score=data.get('utility_score', 0.0)
         )
 
 
@@ -408,9 +430,9 @@ class BrainDesign:
         }
     
     def to_dosidicus_format(self) -> Dict:
-        """Export in format compatible with NetworkAdapter."""
+        """Export in format compatible with NetworkAdapter and neurogenesis."""
         return {
-            'version': '2.0',
+            'version': '3.0',
             'adapter_type': 'NetworkAdapter',
             'neurons': {
                 name: {
@@ -418,7 +440,11 @@ class BrainDesign:
                     'position': list(n.position),
                     'attributes': {
                         'color': list(n.color),
-                        'description': n.description
+                        'description': n.description,
+                        'specialization': n.specialization,
+                        'strength_multiplier': n.strength_multiplier,
+                        'utility_score': n.utility_score,
+                        'creation_context': n.creation_context
                     }
                 }
                 for name, n in self.neurons.items()
@@ -441,11 +467,79 @@ class BrainDesign:
             ],
             'excluded_neurons': list(self.excluded_neurons),
             'neurogenesis_data': {
-                'new_neurons': [],
-                'last_neuron_time': 0,
-                'new_neurons_details': {}
+                'new_neurons': [n.name for n in self.neurons.values() 
+                            if n.neuron_type in (NeuronType.NEUROGENESIS_STRESS,
+                                                NeuronType.NEUROGENESIS_NOVELTY,
+                                                NeuronType.NEUROGENESIS_REWARD)],
+                'functional_neurons': {
+                    name: {
+                        'specialization': n.specialization,
+                        'strength_multiplier': n.strength_multiplier,
+                        'utility_score': n.utility_score
+                    }
+                    for name, n in self.neurons.items()
+                    if n.neuron_type in (NeuronType.NEUROGENESIS_STRESS,
+                                        NeuronType.NEUROGENESIS_NOVELTY,
+                                        NeuronType.NEUROGENESIS_REWARD)
+                }
             }
         }
+    
+    def apply_to_brain_widget(self, brain_widget):
+        """Load this design into a brain_widget, creating FunctionalNeurons for neurogenesis types."""
+        # Clear existing neurogenesis neurons
+        brain_widget.enhanced_neurogenesis.reset_state()
+        
+        # Load core neurons (original 7)
+        for name, pos in CORE_NEURONS.items():
+            if name in self.neurons:
+                brain_widget.neuron_positions[name] = self.neurons[name].position
+                brain_widget.state[name] = self.neurons[name].activation
+        
+        # Load neurogenesis neurons as FunctionalNeurons
+        for name, neuron in self.neurons.items():
+            if neuron.neuron_type in (NeuronType.NEUROGENESIS_STRESS,
+                                    NeuronType.NEUROGENESIS_NOVELTY,
+                                    NeuronType.NEUROGENESIS_REWARD):
+                
+                # Build creation context
+                ctx = ExperienceContext(
+                    trigger_type=neuron.neuron_type.value.split('_')[1],  # stress/novelty/reward
+                    active_neurons=brain_widget.state.copy(),
+                    recent_actions=[],
+                    environmental_state={},
+                    outcome='neutral',
+                    timestamp=time.time()
+                )
+                
+                # Create functional neuron
+                func_neuron = FunctionalNeuron(name, ctx.trigger_type, ctx)
+                func_neuron.specialization = neuron.specialization
+                func_neuron.strength_multiplier = neuron.strength_multiplier
+                func_neuron.utility_score = neuron.utility_score
+                
+                brain_widget.enhanced_neurogenesis.functional_neurons[name] = func_neuron
+                brain_widget.neuron_positions[name] = neuron.position
+                brain_widget.state[name] = neuron.activation
+                brain_widget.neuron_shapes[name] = {
+                    'stress': 'square',
+                    'novelty': 'diamond',
+                    'reward': 'triangle'
+                }[ctx.trigger_type]
+                brain_widget.visible_neurons.add(name)
+        
+        # Load connections
+        brain_widget.weights = {}
+        for (src, tgt), conn in self.connections.items():
+            brain_widget.weights[(src, tgt)] = conn.weight
+        
+        # Update neurogenesis data
+        brain_widget.neurogenesis_data['new_neurons'] = [
+            name for name, n in self.neurons.items()
+            if n.neuron_type in (NeuronType.NEUROGENESIS_STRESS,
+                            NeuronType.NEUROGENESIS_NOVELTY,
+                            NeuronType.NEUROGENESIS_REWARD)
+        ]
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'BrainDesign':
@@ -475,7 +569,7 @@ class BrainDesign:
 
 
 # =============================================================================
-# CANVAS WIDGET - Main visualization and editing area
+# CANVAS WIDGET
 # =============================================================================
 
 class BrainCanvas(QWidget):
@@ -484,25 +578,34 @@ class BrainCanvas(QWidget):
     neuronSelected = pyqtSignal(str)  # Emitted when a neuron is selected
     connectionSelected = pyqtSignal(str, str)  # Emitted when connection selected
     designChanged = pyqtSignal()  # Emitted when design is modified
+    guide_text_clicked = pyqtSignal()
     
     # Visual constants
     NEURON_RADIUS = 30
     LAYER_HEIGHT = 40
     GRID_SIZE = 20
     
-    # Colors
+    # Colours
     COLORS = {
         NeuronType.INPUT: QColor(150, 220, 150),
         NeuronType.HIDDEN: QColor(150, 150, 220),
         NeuronType.OUTPUT: QColor(220, 150, 150),
         NeuronType.STATUS: QColor(180, 180, 180),
         NeuronType.BOOLEAN: QColor(255, 200, 100),
+        # Neurogenesis colors
+        NeuronType.NEUROGENESIS_STRESS: QColor(255, 100, 100),   # Red
+        NeuronType.NEUROGENESIS_NOVELTY: QColor(255, 255, 150), # Yellow
+        NeuronType.NEUROGENESIS_REWARD: QColor(150, 255, 150),  # Green
     }
     
     def __init__(self, parent=None, valid_input_names=None):
         super().__init__(parent)
         self.design = BrainDesign()
         self.valid_input_names = valid_input_names or []
+
+        # Guide text state
+        self.show_guide_text = True
+        self.guide_text_rect = None
         
         # Interaction state
         self.selected_neuron: Optional[str] = None
@@ -563,10 +666,49 @@ class BrainCanvas(QWidget):
         json_names = {n for n, data in self.design.neurons.items()
                     if data.neuron_type is NeuronType.INPUT}
         self.valid_input_names = sorted(code_names | json_names)
+
+    def _draw_guide_text(self, painter: QPainter):
+        """Draw guide text when canvas is empty."""
+        if not self.show_guide_text or (self.design and self.design.neurons):
+            return
+
+        # Draw in screen coordinates (centered)
+        screen_center = QPointF(self.width() / 2, self.height() / 2)
+
+        font = QFont("Segoe UI", 14)
+        painter.setFont(font)
+        fm = painter.fontMetrics()
+
+        # Text components
+        line1 = "Select a template"
+        line2 = "or start building"
+
+        # Calculate positions
+        line_height = fm.height()
+        total_width = max(fm.horizontalAdvance(line1),
+                        fm.horizontalAdvance(line2))
+        x = screen_center.x() - total_width / 2
+        y = screen_center.y() + 50
+
+        # Draw first line (blue hyperlink)
+        painter.setPen(QPen(QColor(0, 100, 255)))
+        painter.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        painter.drawText(QPointF(x, y), line1)
+
+        # Store rect for hit-testing (only the first line)
+        self.guide_text_rect = QRectF(x, y - line_height + 5,
+                                    total_width, line_height + 10)
+
+        # Draw second line (grey)
+        painter.setPen(QPen(QColor(150, 150, 150)))
+        painter.setFont(QFont("Segoe UI", 14))
+        painter.drawText(QPointF(x, y + line_height), line2)
     
     def set_design(self, design: BrainDesign):
         """Set the brain design to display/edit."""
         self.design = design
+        self.show_guide_text = not design.neurons  # Hide if neurons exist
+        self.guide_text_rect = None
         self.selected_neuron = None
         self._rebuild_valid_input_names()
         self._ensure_boolean_neurons_have_correct_type()
@@ -640,6 +782,12 @@ class BrainCanvas(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.fillRect(self.rect(), QColor(250, 250, 255))
+
+        # Draw guide text if canvas is empty
+        if self.show_guide_text and (not self.design or not self.design.neurons):
+            self._draw_guide_text(painter)
+            # Don't draw anything else when showing guide
+            return
 
         if not self.design:
             return
@@ -1019,6 +1167,13 @@ class BrainCanvas(QWidget):
     # =========================================================================
     
     def mousePressEvent(self, event):
+        # Check if guide text hyperlink was clicked
+        if (self.show_guide_text and 
+            self.guide_text_rect and 
+            self.guide_text_rect.contains(QPointF(event.pos()))):
+            self.guide_text_clicked.emit()
+            return  # Don't process other mouse events
+        
         world_pos = self.screen_to_world(QPointF(event.pos()))
         
         if event.button() == Qt.LeftButton:
@@ -1225,18 +1380,30 @@ class BrainCanvas(QWidget):
         if not name:
             return  # user cancelled
 
+        # Use provided position or center of view
+        if position is None:
+            centre_screen = QPointF(self.canvas.width() / 2, self.canvas.height() / 2)
+            centre_world = self.canvas.screen_to_world(centre_screen)
+            x, y = centre_world.x(), centre_world.y()
+        else:
+            x, y = position
+
+        snapped = self.canvas.snap_position((x, y))
+
         neuron = DesignerNeuron(
             name=name,
             neuron_type=neuron_type,
-            position=position,
+            position=snapped,
             layer_index=layer_idx,
             color=self.COLORS[neuron_type].getRgb()[:3]
         )
-        self.design.add_neuron(neuron)
-        self.selected_neuron = name
-        self.neuronSelected.emit(name)
-        self.designChanged.emit()
-        self.update()
+        if self.design.add_neuron(neuron):
+            self.canvas.show_guide_text = False  # Hide guide text
+            self.canvas.guide_text_rect = None
+            self.canvas.selected_neuron = name
+            self.canvas.neuronSelected.emit(name)
+            self.on_design_changed()
+            self.canvas.update()
 
 
 # =============================================================================
@@ -1331,6 +1498,26 @@ class NeuronPropertiesPanel(QWidget):
         self.description_edit.setMaximumHeight(80)
         self.description_edit.textChanged.connect(self.on_description_changed)
         layout.addWidget(self.description_edit)
+
+        # Neurogenesis-specific fields (show only for neurogenesis neurons)
+        self.neurogenesis_group = QGroupBox("Neurogenesis Properties")
+        neuro_layout = QFormLayout(self.neurogenesis_group)
+                
+        self.specialization_edit = QLineEdit()
+        self.specialization_edit.editingFinished.connect(self.on_specialization_changed)
+        neuro_layout.addRow("Specialization:", self.specialization_edit)
+                
+        self.strength_spin = QDoubleSpinBox()
+        self.strength_spin.setRange(0.1, 5.0)
+        self.strength_spin.setSingleStep(0.1)
+        self.strength_spin.valueChanged.connect(self.on_strength_changed)
+        neuro_layout.addRow("Strength Multiplier:", self.strength_spin)
+                
+        self.utility_label = QLabel("Utility: 0.0")
+        self.utility_label.setStyleSheet("color: #666;")
+        neuro_layout.addRow("Utility Score:", self.utility_label)
+                
+        layout.addWidget(self.neurogenesis_group)
         
         # Delete button
         self.delete_btn = QPushButton("Delete Neuron")
@@ -1341,6 +1528,20 @@ class NeuronPropertiesPanel(QWidget):
         layout.addStretch()
         
         self.set_enabled(False)
+
+    def on_specialization_changed(self):
+        if not self.current_neuron or not self.design:
+            return
+        neuron = self.design.neurons[self.current_neuron]
+        neuron.specialization = self.specialization_edit.text()
+        self.propertiesChanged.emit()
+
+    def on_strength_changed(self):
+        if not self.current_neuron or not self.design:
+            return
+        neuron = self.design.neurons[self.current_neuron]
+        neuron.strength_multiplier = self.strength_spin.value()
+        self.propertiesChanged.emit()
     
     def set_enabled(self, enabled: bool):
         """Enable/disable all controls."""
@@ -1408,6 +1609,19 @@ class NeuronPropertiesPanel(QWidget):
         self.color_preview.setStyleSheet(
             f"background-color: rgb({r}, {g}, {b}); border: 1px solid black;"
         )
+
+        # Show/hide neurogenesis fields based on neuron type
+        is_neurogenesis = neuron.neuron_type in (
+            NeuronType.NEUROGENESIS_STRESS,
+            NeuronType.NEUROGENESIS_NOVELTY,
+            NeuronType.NEUROGENESIS_REWARD
+        )
+        self.neurogenesis_group.setVisible(is_neurogenesis)
+        
+        if is_neurogenesis:
+            self.specialization_edit.setText(neuron.specialization)
+            self.strength_spin.setValue(neuron.strength_multiplier)
+            self.utility_label.setText(f"{neuron.utility_score:.2f}")
 
         # unblock
         self.name_edit.blockSignals(False)
@@ -1963,7 +2177,12 @@ class TemplateLibraryPanel(QWidget):
         },
         'sensory_enhanced': {
             'name': '🟩 Sensory Enhanced',
-            'description': 'Core + environmental sensors (food proximity, threat detection, etc.)',
+            'description': 'Core + environmental sensors (can see food, threat detection, etc.)',
+            'has_core_neurons': True,
+        },
+        'neurogenesis_enhanced': {
+            'name': '🟦  Neurogenesis Enhanced',
+            'description': 'Core neurons + functional neurogenesis neurons (stress, novelty, reward) with specializations',
             'has_core_neurons': True,
         },
         'cognitive_complex': {
@@ -2107,7 +2326,7 @@ class ExportDialog(QDialog):
         design_layout.addWidget(self.design_preview)
         
         design_btn = QPushButton("Export as Designer JSON...")
-        design_btn.clicked.connect(self.export_designer)
+        design_btn.clicked.connect(self.export_designer_json)
         design_layout.addWidget(design_btn)
         
         tabs.addTab(design_tab, "Designer Format")
@@ -2140,6 +2359,11 @@ class ExportDialog(QDialog):
         
         # Generate previews
         self.generate_previews()
+
+
+    def copy_code(self):
+        QApplication.clipboard().setText(self.code_preview.toPlainText())
+        QMessageBox.information(self, "Copied", "Python code copied to clipboard!")
     
     def generate_previews(self):
         # Dosidicus format
@@ -2229,9 +2453,28 @@ class ExportDialog(QDialog):
             QMessageBox.information(self, "Export Complete",
                                     f"Brain exported to:\n{filepath}")
         
-        def copy_code(self):
-            QApplication.clipboard().setText(self.code_preview.toPlainText())
-            QMessageBox.information(self, "Copied", "Python code copied to clipboard!")
+    def copy_code(self):
+        QApplication.clipboard().setText(self.code_preview.toPlainText())
+        QMessageBox.information(self, "Copied", "Python code copied to clipboard!")
+    
+    def export_designer_json(self):
+        """Save the designer-native JSON file."""
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Designer JSON",
+            f"{self.design.metadata.get('name', 'brain')}_designer.json",
+            "JSON Files (*.json)"
+        )
+        if not filepath:
+            return
+        try:
+            data = self.design.to_dict()
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            QMessageBox.information(self, "Export Complete",
+                                    f"Designer file saved to:\n{filepath}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", str(e))
 
 
 # =============================================================================
@@ -2277,18 +2520,19 @@ class BrainDesignerWindow(QMainWindow):
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
         
-        left_tabs = QTabWidget()
+        self.left_tabs = QTabWidget()
+
+        self.layer_panel = LayerManagerPanel()
+        self.layer_panel.layersChanged.connect(self.on_design_changed)
+        self.left_tabs.addTab(self.layer_panel, "Layers")
         
         self.template_panel = TemplateLibraryPanel()
         self.template_panel.templateSelected.connect(self.load_template)
-        left_tabs.addTab(self.template_panel, "Templates")
+        self.left_tabs.addTab(self.template_panel, "Templates")
         
-        self.layer_panel = LayerManagerPanel()
-        self.layer_panel.layersChanged.connect(self.on_design_changed)
-        left_tabs.addTab(self.layer_panel, "Layers")
-        
-        left_layout.addWidget(left_tabs)
-        left_panel.setMinimumWidth(200)
+        self.left_tabs.setCurrentIndex(0)
+        left_layout.addWidget(self.left_tabs)
+        left_panel.setMinimumWidth(220)
         
         # Center - Canvas
         self.canvas = BrainCanvas()
@@ -2296,6 +2540,10 @@ class BrainDesignerWindow(QMainWindow):
         self.canvas.neuronSelected.connect(self.on_neuron_selected)
         self.canvas.connectionSelected.connect(self.on_connection_selected)
         self.canvas.designChanged.connect(self.on_design_changed)
+
+        # connect guide-text click to switch tabs
+        self.canvas.guide_text_clicked.connect(
+            lambda: self.left_tabs.setCurrentIndex(1))
         
         # Right panel - Properties
         right_panel = QWidget()
@@ -2346,6 +2594,14 @@ class BrainDesignerWindow(QMainWindow):
         self.connection_panel.set_design(self.design)
         self.layer_panel.set_design(self.design)
 
+    def validate_design(self):
+        """Run all validation checks: core neurons and orphaned neurons"""
+        # First check core neuron status (shows its own dialog)
+        self.check_core_neurons()
+        
+        # Then check for orphaned neurons (shows dialog if any found)
+        self.check_orphan_neurons_now()
+
     def check_orphan_neurons_now(self):
         """
         User-triggered orphan check.
@@ -2374,51 +2630,73 @@ class BrainDesignerWindow(QMainWindow):
         design = self.design
         used = set(design.neurons.keys())
 
-        if neuron_type is NeuronType.INPUT:
-            # ---- INPUT neurons – must come from the live sensor registry ----
-            self.canvas._rebuild_valid_input_names()
-            pool = self.canvas.valid_input_names
+        # ------------------------------------------------------------------
+        # INPUT – use ONLY the registered sensor names
+        # ------------------------------------------------------------------
+        if neuron_type == NeuronType.INPUT:
+            try:
+                from brain_neuron_hooks import DEFAULT_INPUT_SENSORS
+            except ImportError:
+                DEFAULT_INPUT_SENSORS = ()
 
-            if not pool:
+            available = [n for n in DEFAULT_INPUT_SENSORS if n not in used]
+            if not available:
                 QMessageBox.warning(
-                    self, "No Input Sensors",
-                    "No registered input sensors found in BrainNeuronHooks.\n"
-                    "You cannot create INPUT neurons until sensors are defined."
+                    self, "No Input Sensors Available",
+                    "All registered input sensors are already used.\n"
+                    "You can rename an existing neuron or add a non-sensor input."
                 )
                 return None
-
-            # Offer only unused registered names + a custom option
-            choices = [n for n in pool if n not in used]
-            choices.append("Custom name…")
 
             name, ok = QInputDialog.getItem(
-                self, "Create Input Neuron",
-                "Choose a registered sensor name:",
-                choices, 0, False
+                self,
+                "Select Input Sensor",
+                "Choose a registered input sensor:",
+                sorted(available),
+                0, False
             )
-            if not ok or not name:
-                return None
-            if name == "Custom name…":
-                name, ok = QInputDialog.getText(
-                    self, "Custom Input Name",
-                    "Enter a sensor name that exists in BrainNeuronHooks:"
-                )
-                if not ok or not name.strip():
-                    return None
-            return name.strip() if name in pool else None
+            return name if ok and name else None
 
-        # ---- All other types (HIDDEN, OUTPUT, STATUS) ----
-        base_to_prefix = {
-            NeuronType.HIDDEN: "hidden",
-            NeuronType.OUTPUT: "output",
-            NeuronType.STATUS: "status",
+        # ------------------------------------------------------------------
+        # NEUROGENESIS – stress / novelty / reward
+        # ------------------------------------------------------------------
+        if neuron_type in (NeuronType.NEUROGENESIS_STRESS,
+                           NeuronType.NEUROGENESIS_NOVELTY,
+                           NeuronType.NEUROGENESIS_REWARD):
+            type_map = {
+                NeuronType.NEUROGENESIS_STRESS: "stress",
+                NeuronType.NEUROGENESIS_NOVELTY: "novelty",
+                NeuronType.NEUROGENESIS_REWARD: "reward"
+            }
+            prefix = type_map[neuron_type]
+
+            # generate numbered names prefix_01 … prefix_99
+            for i in range(1, 100):
+                candidate = f"{prefix}_{i:02d}"
+                if candidate not in used:
+                    return candidate
+
+            # fallback to custom name
+            name, ok = QInputDialog.getText(
+                self, f"Create {prefix.capitalize()} Neuron",
+                f"Enter a unique {prefix} neuron name:"
+            )
+            return name.strip() if ok and name and name.strip() not in used else None
+
+        # ------------------------------------------------------------------
+        # HIDDEN / OUTPUT / STATUS – classic numbered pool
+        # ------------------------------------------------------------------
+        prefix_map = {
+            NeuronType.HIDDEN:  "hidden",
+            NeuronType.OUTPUT:  "output",
+            NeuronType.STATUS:  "status",
         }
-        prefix = base_to_prefix[neuron_type]               # safe – KeyError only if a new type is added
-        pool = [f"{prefix}_{i:02d}" for i in range(10)]     # plenty of numbered names
+        prefix = prefix_map[neuron_type]
+        pool = [f"{prefix}_{i:02d}" for i in range(10)]   # 00 … 09
 
-        # keep only the ones that are still free
+        # keep only unused
         choices = [n for n in pool if n not in used]
-        choices = _trim_enum_pool(prefix, choices)        # shows … (12 more) when the list is long
+        choices = _trim_enum_pool(prefix, choices)        # shows “⋯ (X more)” if >10
         choices.append("Custom name…")
 
         name, ok = QInputDialog.getItem(
@@ -2436,7 +2714,8 @@ class BrainDesignerWindow(QMainWindow):
                 f"Enter a unique {neuron_type.value} neuron name:"
             )
             if not ok or not name.strip() or name.strip() in used:
-                QMessageBox.warning(self, "Invalid Name", "Name is empty or already used.")
+                QMessageBox.warning(self, "Invalid Name",
+                                    "Name is empty or already used.")
                 return None
             return name.strip()
 
@@ -2444,11 +2723,12 @@ class BrainDesignerWindow(QMainWindow):
             QMessageBox.information(
                 self, "More names available",
                 "There are more numbered names than shown.\n"
-                "Use “Custom name…” if you need a higher index."
+                "Use 'Custom name…' if you need a higher index."
             )
             return None
 
         return name
+
     
     def setup_menu(self):
         menubar = self.menuBar()
@@ -2465,16 +2745,6 @@ class BrainDesignerWindow(QMainWindow):
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_design)
         file_menu.addAction(open_action)
-        
-        save_action = QAction("&Save", self)
-        save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self.save_design)
-        file_menu.addAction(save_action)
-        
-        save_as_action = QAction("Save &As...", self)
-        save_as_action.setShortcut("Ctrl+Shift+S")
-        save_as_action.triggered.connect(self.save_design_as)
-        file_menu.addAction(save_as_action)
         
         file_menu.addSeparator()
         
@@ -2512,6 +2782,13 @@ class BrainDesignerWindow(QMainWindow):
         check_orphans_action = QAction("&Check for Orphaned Neurons…", self)
         check_orphans_action.triggered.connect(self.check_orphan_neurons_now)
         edit_menu.addAction(check_orphans_action)
+
+        # NEW: Validate action that runs both checks
+        validate_action = QAction("&Validate...", self)
+        validate_action.setShortcut("Ctrl+Shift+V")
+        validate_action.setToolTip("Run all validation checks: core neurons and orphaned neurons")
+        validate_action.triggered.connect(self.validate_design)
+        edit_menu.addAction(validate_action)
         
         # View menu
         view_menu = menubar.addMenu("&View")
@@ -2589,19 +2866,6 @@ class BrainDesignerWindow(QMainWindow):
         
         toolbar.addSeparator()
         
-        # Template dropdown
-        #toolbar.addWidget(QLabel("  Template: "))
-        #self.template_combo = QComboBox()
-        #self.template_combo.setMinimumWidth(150)
-        #for key, info in TemplateLibraryPanel.TEMPLATES.items():
-        #    self.template_combo.addItem(info['name'], key)
-        #self.template_combo.currentIndexChanged.connect(
-        #    lambda: self.load_template(self.template_combo.currentData())
-        #)
-        #toolbar.addWidget(self.template_combo)
-        
-        #toolbar.addSeparator()
-        
         # Snap to grid
         self.snap_check = QCheckBox("Snap to Grid")
         self.snap_check.setChecked(True)
@@ -2609,11 +2873,18 @@ class BrainDesignerWindow(QMainWindow):
         toolbar.addWidget(self.snap_check)
         
         toolbar.addSeparator()
+
+        # Validate button
+        validate_btn = QToolButton()
+        validate_btn.setText("✓ Validate")
+        validate_btn.setToolTip("Run all validation checks (core neurons and orphans)")
+        validate_btn.clicked.connect(self.validate_design)
+        toolbar.addWidget(validate_btn)
         
         # Export button
         export_btn = QToolButton()
         export_btn.setText("Export")
-        export_btn.setToolTip("Export brain for Dosidicus-2")
+        export_btn.setToolTip("Export brain for Dosidicus")
         export_btn.clicked.connect(self.show_export_dialog)
         toolbar.addWidget(export_btn)
     
@@ -2670,6 +2941,8 @@ class BrainDesignerWindow(QMainWindow):
                 
                 self.design = BrainDesign.from_dict(data)
                 self.current_file = filepath
+                self.canvas.show_guide_text = False  # Hide guide text
+                self.canvas.guide_text_rect = None
                 self.refresh_all_panels()
                 
             except Exception as e:
@@ -2777,6 +3050,11 @@ class BrainDesignerWindow(QMainWindow):
         dialog.exec_()
     
     def add_neuron_dialog(self, position: Optional[Tuple[float, float]] = None):
+        # ---- Defend against invalid position arguments ----
+        if not isinstance(position, (tuple, type(None))) or (isinstance(position, tuple) and len(position) != 2):
+            # Signal passed a bool or wrong type; ignore and use canvas centre
+            position = None
+
         # ask for type first
         items = [NeuronType.INPUT, NeuronType.HIDDEN, NeuronType.OUTPUT, NeuronType.STATUS]
         txt = [t.value.capitalize() for t in items]
@@ -2789,7 +3067,7 @@ class BrainDesignerWindow(QMainWindow):
         if not name:
             return
 
-        # Use provided position or center of view
+        # Use provided position or centre of view
         if position is None:
             centre_screen = QPointF(self.canvas.width() / 2, self.canvas.height() / 2)
             centre_world = self.canvas.screen_to_world(centre_screen)
@@ -2903,7 +3181,10 @@ class BrainDesignerWindow(QMainWindow):
             )
             return
         
-        # Refresh all UI panels with the new design
+        # Hide guide text after loading
+        self.canvas.show_guide_text = False
+        self.canvas.guide_text_rect = None
+        
         self.refresh_all_panels()
     
     def _create_dosidicus_default(self):
@@ -3051,16 +3332,17 @@ class BrainDesignerWindow(QMainWindow):
         
         # Add sensory input neurons that feed into the core network
         sensors = [
-            ("food_proximity", (800, 80), "Distance to nearest food item"),
+            ("can_see_food", (800, 80), "Boolean: True when food is visible"),
             ("threat_level", (900, 80), "Detected danger/predator presence"),
             ("light_intensity", (850, 130), "Environmental light level"),
             ("temperature", (750, 130), "Temperature sensing")
         ]
         
+        # When creating the neuron, ensure it's marked as BOOLEAN
         for name, pos, desc in sensors:
             self.design.add_neuron(DesignerNeuron(
                 name=name,
-                neuron_type=NeuronType.INPUT,
+                neuron_type=NeuronType.BOOLEAN if name == "can_see_food" else NeuronType.INPUT,  # Set as BOOLEAN
                 position=pos,
                 layer_index=0,
                 color=(170, 230, 170),
@@ -3076,6 +3358,36 @@ class BrainDesignerWindow(QMainWindow):
         
         for src, tgt, w in sensor_conns:
             self.design.add_connection(src, tgt, w)
+
+    def _create_neurogenesis_enhanced(self):
+        """Create a brain with core neurons plus neurogenesis examples"""
+        self._create_layered_dosidicus()  # Start with layered core
+        
+        # Add neurogenesis neurons with functional specializations
+        neuro_neurons = [
+            ("stress_hunger_response", (300, 200), NeuronType.NEUROGENESIS_STRESS, 
+            "hunger_stress_response", 1.2),
+            ("novelty_explorer", (600, 200), NeuronType.NEUROGENESIS_NOVELTY,
+            "exploration_memory", 1.0),
+            ("reward_satisfaction", (450, 500), NeuronType.NEUROGENESIS_REWARD,
+            "feeding_satisfaction", 1.5),
+        ]
+        
+        for name, pos, n_type, spec, strength in neuro_neurons:
+            self.design.add_neuron(DesignerNeuron(
+                name=name,
+                neuron_type=n_type,
+                position=pos,
+                layer_index=1,  # Hidden layer
+                specialization=spec,
+                strength_multiplier=strength,
+                description=f"Functional {n_type.value} neuron"
+            ))
+            
+            # Add typical connections for this specialization
+            if "hunger" in spec:
+                self.design.add_connection(name, "hunger", 0.7)
+                self.design.add_connection(name, "anxiety", -0.5)
 
     def _create_cognitive_complex(self):
         """Core + internal processing layers for memory & prediction"""
@@ -3488,7 +3800,7 @@ class BrainDesignerWindow(QMainWindow):
 <li><b>Shift+drag</b> from one neuron to another to create a connection</li>
 <li><b>Right-drag</b> to pan the view</li>
 <li><b>Scroll wheel</b> to zoom in/out</li>
-<li><b>Delete key</b> to remove selected neuron</li>
+<li><b>Delete</b> to remove selected neuron</li>
 <li><b>Middle-click</b> on a connection to edit its weight</li>
 </ul>
 
@@ -3499,7 +3811,7 @@ class BrainDesignerWindow(QMainWindow):
 <li><b>W</b> - Toggle weight labels</li>
 <li><b>Home</b> - Reset view</li>
 <li><b>Ctrl+S</b> - Save design</li>
-<li><b>Ctrl+E</b> - Export for Dosidicus-2</li>
+<li><b>Ctrl+E</b> - Export for Dosidicus</li>
 </ul>
 
 <h3>Workflow</h3>
@@ -3511,19 +3823,6 @@ class BrainDesignerWindow(QMainWindow):
 <li>Adjust connection weights in the Connections tab</li>
 <li>Export using File → Export</li>
 </ol>
-
-<h3>Dosidicus-2 Integration</h3>
-<p>After exporting, use this code to load your brain:</p>
-<pre>
-from network_adapter import NetworkAdapter
-from brain_integration import BrainIntegrator
-
-# Load your custom brain
-brain = NetworkAdapter.load('my_brain_dosidicus.json')
-
-# Inject into BrainWidget
-BrainIntegrator.full_integration(brain_widget, brain, brain_worker)
-</pre>
         """
         
         dialog = QDialog(self)
@@ -3547,16 +3846,9 @@ BrainIntegrator.full_integration(brain_widget, brain, brain_worker)
         QMessageBox.about(
             self, "About Brain Designer",
             "<h2>Brain Designer</h2>"
-            "<p>Version 1.0.0</p>"
+            "<p>Version 1.0.1.0</p>"
             "<p>A visual neural network editor for creating custom brains "
-            "compatible with the Dosidicus-2 tamagotchi simulation.</p>"
-            "<p>Features:</p>"
-            "<ul>"
-            "<li>Drag-and-drop neuron placement</li>"
-            "<li>Visual connection editing</li>"
-            "<li>Layer management</li>"
-            "<li>Template library</li>"
-            "<li>Direct export to Dosidicus-2 format</li>"
+            "ViciousSquid 2025"
             "</ul>"
         )
 
@@ -3575,6 +3867,7 @@ def main():
     
     window = BrainDesignerWindow()
     window.show()
+    window.show_instructions()
     
     sys.exit(app.exec_())
 

@@ -1,3 +1,8 @@
+try:
+    from .brain_designer_launcher import launch_brain_designer_process
+except ImportError:
+    # Fallback if path is wrong (should never happen with the fix above)
+    launch_brain_designer_process = None
 import json
 import time
 import subprocess
@@ -229,27 +234,34 @@ class NetworkTab(BrainBaseTab):
                     self._clear_layout_recursively(sub_layout)
 
     def _open_brain_designer(self):
+        """Launch Brain Designer in a separate process – safe & reliable"""
+        import multiprocessing
+        from src.brain_designer_launcher import launch_brain_designer_process
 
-        import subprocess
-        import sys
-        import os
-
-        designer_path = os.path.join(
-            os.path.dirname(__file__),          # src/
-            "brain_designer.py"
-        )
-        if not os.path.isfile(designer_path):
-            QtWidgets.QMessageBox.critical(
-                self, "Not found",
-                f"Brain-Designer script missing:\n{designer_path}"
+        # Prevent multiple instances
+        if hasattr(self, '_brain_designer_process') and \
+           getattr(self._brain_designer_process, 'is_alive', lambda: False)():
+            QtWidgets.QMessageBox.information(
+                self, "Already Open", "Brain Designer is already running!"
             )
             return
 
-        # Launch with the *same* Python interpreter that is running Dosidicus
-        # cwd = repo-root so relative imports inside designer work
-        repo_root = os.path.dirname(os.path.dirname(designer_path))
-        subprocess.Popen([sys.executable, designer_path], cwd=repo_root)
-        print(f"[INFO] Launched Brain Designer (script): {designer_path}")
+        try:
+            self._brain_designer_process = multiprocessing.Process(
+                target=launch_brain_designer_process,
+                name="BrainDesignerProcess",
+                daemon=True
+            )
+            self._brain_designer_process.start()
+            print(f"Brain Designer launched! PID: {self._brain_designer_process.pid}")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Launch Failed",
+                f"Could not start Brain Designer:\n\n{e}"
+            )
 
     def _change_animation_style(self, index):
         """
