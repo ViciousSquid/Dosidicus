@@ -45,6 +45,14 @@ CORE_NEURONS = {
 
 CORE_NEURON_NAMES = set(CORE_NEURONS.keys())
 
+BINARY_STATE_NEURONS = {
+    "pursuing_food",
+    "is_sick",
+    "is_fleeing",
+    "is_eating",
+    "is_sleeping",
+}
+
 
 # =============================================================================
 # DATA STRUCTURES
@@ -55,8 +63,9 @@ class NeuronType(Enum):
     HIDDEN = "hidden"
     OUTPUT = "output"
     STATUS = "status"
+    BOOLEAN = "boolean"
 
-MAX_VISIBLE_SUFFIX = 40          # XX_00 … XX_39  (40 items)
+MAX_VISIBLE_SUFFIX = 10
 OVERFLOW_TEMPLATE  = "⋯ ({:d} more)"
 
 
@@ -203,7 +212,7 @@ class BrainDesign:
         
         # Prevent deletion of core neurons
         if name in CORE_NEURON_NAMES:
-            return False, f"Cannot delete core neuron '{name}' - required for Dosidicus-2 compatibility"
+            return False, f"Cannot delete core neuron '{name}' - required for compatibility"
         
         del self.neurons[name]
         # Remove associated connections
@@ -226,6 +235,94 @@ class BrainDesign:
         """Check if all 7 core neurons exist in the design."""
         return all(name in self.neurons for name in CORE_NEURON_NAMES)
     
+    def find_orphan_neurons(self) -> list[str]:
+        """
+        Return a list of neuron names that have *zero* connections
+        (neither source nor target of any connection).
+        """
+        connected = set()
+        for src, tgt in self.connections:
+            connected.add(src)
+            connected.add(tgt)
+
+        orphans = [name for name in self.neurons if name not in connected]
+        return orphans
+    
+    def _find_nearest_neurons(
+        self, source_name: str, candidate_names: list[str], max_conn: int = 2
+    ) -> list[str]:
+        """
+        Return the `max_conn` nearest neurons (by Euclidean distance)
+        from `candidate_names` to `source_name`.
+        """
+        src_pos = self.neurons[source_name].position
+        distances = []
+        for name in candidate_names:
+            pos = self.neurons[name].position
+            dist = math.sqrt((src_pos[0] - pos[0]) ** 2 + (src_pos[1] - pos[1]) ** 2)
+            distances.append((dist, name))
+
+        distances.sort()
+        return [name for _, name in distances[:max_conn]]
+    
+    def auto_wire_orphan(self, neuron_name: str) -> list[DesignerConnection]:
+        """
+        Intelligently create connections for a single orphan neuron.
+        Returns a list of new `DesignerConnection` objects.
+        """
+        new_conns = []
+        neuron = self.neurons[neuron_name]
+        all_others = [n for n in self.neurons if n != neuron_name]
+
+        # ── Strategy depends on neuron type ──────────────────────────────────
+        if neuron.neuron_type == NeuronType.INPUT:
+            # Input → hidden/output with moderate excitation
+            targets = [
+                n
+                for n in all_others
+                if self.neurons[n].neuron_type in (NeuronType.HIDDEN, NeuronType.OUTPUT)
+            ]
+            if targets:
+                targets = self._find_nearest_neurons(neuron_name, targets, max_conn=3)
+                for tgt in targets:
+                    weight = random.uniform(0.2, 0.5)  # excitatory
+                    new_conns.append(DesignerConnection(neuron_name, tgt, weight))
+
+        elif neuron.neuron_type == NeuronType.OUTPUT:
+            # Input/hidden → output with strong mixed influence
+            sources = [
+                n for n in all_others if self.neurons[n].neuron_type in (NeuronType.INPUT, NeuronType.HIDDEN)
+            ]
+            if sources:
+                sources = self._find_nearest_neurons(neuron_name, sources, max_conn=3)
+                for src in sources:
+                    weight = random.uniform(-0.6, 0.6)  # mixed influence
+                    new_conns.append(DesignerConnection(src, neuron_name, weight))
+
+        else:  # HIDDEN or STATUS/BOOLEAN
+            # Hidden gets 1‑2 inputs and 1‑2 outputs
+            # Inbound from inputs or other hiddens
+            inbound = [
+                n for n in all_others if self.neurons[n].neuron_type in (NeuronType.INPUT, NeuronType.HIDDEN)
+            ]
+            if inbound:
+                inbound = self._find_nearest_neurons(neuron_name, inbound, max_conn=2)
+                for src in inbound:
+                    weight = random.uniform(-0.4, 0.4)
+                    new_conns.append(DesignerConnection(src, neuron_name, weight))
+
+            # Outbound to outputs or other hiddens
+            outbound = [
+                n for n in all_others if self.neurons[n].neuron_type in (NeuronType.HIDDEN, NeuronType.OUTPUT)
+            ]
+            if outbound:
+                outbound = self._find_nearest_neurons(neuron_name, outbound, max_conn=2)
+                for tgt in outbound:
+                    weight = random.uniform(-0.4, 0.4)
+                    new_conns.append(DesignerConnection(neuron_name, tgt, weight))
+
+        return new_conns
+    
     def add_missing_core_neurons(self) -> List[str]:
         """
         Add any missing core neurons to the design.
@@ -239,7 +336,7 @@ class BrainDesign:
                     neuron_type=NeuronType.HIDDEN,
                     position=position,
                     color=(150, 150, 220),
-                    description=f"Core neuron - required for Dosidicus-2"
+                    description=f"Core neuron - required for Dosidicus"
                 )
                 added.append(name)
         return added
@@ -399,15 +496,17 @@ class BrainCanvas(QWidget):
         NeuronType.HIDDEN: QColor(150, 150, 220),
         NeuronType.OUTPUT: QColor(220, 150, 150),
         NeuronType.STATUS: QColor(180, 180, 180),
+        NeuronType.BOOLEAN: QColor(255, 200, 100),
     }
     
-    def __init__(self, parent=None, valid_input_names=None):  # ← MODIFIED
+    def __init__(self, parent=None, valid_input_names=None):
         super().__init__(parent)
         self.design = BrainDesign()
-        self.valid_input_names = valid_input_names or []  # ← NEW
+        self.valid_input_names = valid_input_names or []
         
         # Interaction state
         self.selected_neuron: Optional[str] = None
+        self.selected_connection: Optional[Tuple[str, str]] = None
         self.hovered_neuron: Optional[str] = None
         self.dragging_neuron: Optional[str] = None
         self.drag_offset = QPointF(0, 0)
@@ -440,6 +539,10 @@ class BrainCanvas(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumSize(600, 400)
 
+    def is_boolean_neuron(self, name: str) -> bool:
+        """Return True if the neuron is one of the hard-coded binary state neurons."""
+        return name in BINARY_STATE_NEURONS
+
     def _rebuild_valid_input_names(self):
         """
         Rebuild self.valid_input_names from the *live* BrainNeuronHooks registry
@@ -466,6 +569,7 @@ class BrainCanvas(QWidget):
         self.design = design
         self.selected_neuron = None
         self._rebuild_valid_input_names()
+        self._ensure_boolean_neurons_have_correct_type()
         self.update()
     
     def screen_to_world(self, pos: QPointF) -> QPointF:
@@ -520,6 +624,14 @@ class BrainCanvas(QWidget):
         y = round(pos[1] / self.GRID_SIZE) * self.GRID_SIZE
         return (x, y)
     
+    def _ensure_boolean_neurons_have_correct_type(self):
+        """Run after loading a design or creating a template."""
+        for name, neuron in self.design.neurons.items():
+            if self.is_boolean_neuron(name):
+                neuron.neuron_type = NeuronType.BOOLEAN
+                # also snap activation to 0 or 100 (in case a saved file has something else)
+                neuron.activation = 100.0 if neuron.activation >= 50.0 else 0.0
+    
     # =========================================================================
     # PAINTING
     # =========================================================================
@@ -527,37 +639,157 @@ class BrainCanvas(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Background
         painter.fillRect(self.rect(), QColor(250, 250, 255))
-        
-        # Apply view transform
-        painter.translate(self.pan_offset)
-        painter.scale(self.zoom, self.zoom)
-        
-        # Draw grid
-        if self.show_grid:
-            self.draw_grid(painter)
-        
+
+        if not self.design:
+            return
+
+        # World → screen transform
+        world_to_screen = lambda p: QPointF(p[0] * self.zoom + self.pan_offset.x(),
+                                        p[1] * self.zoom + self.pan_offset.y())
+
         # Draw layers
         if self.show_layers:
-            self.draw_layers(painter)
-        
+            for layer in self.design.layers:
+                y_screen = layer.y_position * self.zoom + self.pan_offset.y()
+                rect = QRectF(0, y_screen - self.LAYER_HEIGHT/2 * self.zoom,
+                            self.width(), self.LAYER_HEIGHT * self.zoom)
+                color = QColor(*layer.color)
+                color.setAlpha(60)
+                painter.fillRect(rect, color)
+                painter.setPen(QPen(QColor(180, 180, 200), 1))
+                painter.drawLine(0, int(y_screen), self.width(), int(y_screen))
+                painter.setPen(QPen(QColor(80, 80, 100)))
+                painter.setFont(QFont("Segoe UI", 10))
+                painter.drawText(rect, Qt.AlignCenter, layer.name)
+
+        # Draw grid
+        if self.show_grid:
+            painter.setPen(QPen(QColor(220, 220, 240), 1))
+            grid_step = self.GRID_SIZE * self.zoom
+            start_x = (0 - self.pan_offset.x()) % grid_step
+            start_y = (0 - self.pan_offset.y()) % grid_step
+            for x in range(int(start_x), self.width(), int(grid_step)):
+                painter.drawLine(x, 0, x, self.height())
+            for y in range(int(start_y), self.height(), int(grid_step)):
+                painter.drawLine(0, y, self.width(), y)
+
         # Draw connections
-        self.draw_connections(painter)
-        
+        for (source, target), conn in self.design.connections.items():
+            if source not in self.design.neurons or target not in self.design.neurons:
+                continue
+            
+            p1 = world_to_screen(self.design.neurons[source].position)
+            p2 = world_to_screen(self.design.neurons[target].position)
+
+            # Line thickness and color based on weight
+            weight = conn.weight
+            thickness = max(1, abs(weight) * 4)
+            if weight > 0:
+                color = QColor(0, 180, 0, 180)
+            else:
+                color = QColor(200, 0, 0, 180)
+            pen = QPen(color, thickness)
+            pen.setCapStyle(Qt.RoundCap)
+            painter.setPen(pen)
+
+            # Draw line
+            painter.drawLine(p1, p2)
+
+            # Draw weight label if enabled
+            if self.show_weights:
+                mid = (p1 + p2) / 2
+                painter.setPen(QPen(Qt.black))
+                painter.setFont(QFont("Segoe UI", 8))
+                painter.drawText(mid + QPointF(4, -4), f"{weight:+.2f}")
+
+            # Highlight selected connection
+            if self.selected_connection == (source, target):
+                painter.setPen(QPen(QColor(255, 200, 0), 4))
+                painter.drawLine(p1, p2)
+
+        # Draw neurons
+        for name, neuron in self.design.neurons.items():
+            center = world_to_screen(neuron.position)
+            radius = self.NEURON_RADIUS * self.zoom
+
+            # Determine color
+            base_color = self.COLORS.get(neuron.neuron_type, QColor(150, 150, 220))
+            if self.is_boolean_neuron(name):  # ← Special handling
+                base_color = self.COLORS[NeuronType.BOOLEAN]
+
+            # Activation intensity overlay
+            activation = neuron.activation
+            intensity = max(0.0, min(1.0, activation / 100.0))
+
+            # Gradient for activation
+            gradient = QRadialGradient(center, radius)
+            gradient.setColorAt(0, QColor(255, 255, 255, 200))
+            if self.is_boolean_neuron(name):
+                # Boolean: full green if ON, dim if OFF
+                if activation >= 50:
+                    gradient.setColorAt(1, base_color.darker(120))
+                else:
+                    gradient.setColorAt(1, base_color.darker(300))
+            else:
+                # Normal neurons: brighter = more active
+                active_color = base_color.lighter(100 + int(100 * intensity))
+                gradient.setColorAt(1, active_color.darker(150 - int(100 * intensity)))
+
+            painter.setBrush(QBrush(gradient))
+            painter.setPen(QPen(QColor(60, 60, 80), 2 * self.zoom))
+
+            # Draw circle
+            painter.drawEllipse(center, radius, radius)
+
+            # Highlight selected/hovered
+            if name == self.selected_neuron:
+                painter.setPen(QPen(QColor(255, 200, 0), 4 * self.zoom))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawEllipse(center, radius + 4, radius + 4)
+            elif name == self.hovered_neuron:
+                painter.setPen(QPen(QColor(100, 180, 255), 3 * self.zoom))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawEllipse(center, radius + 2, radius + 2)
+
+            # Draw name
+            painter.setPen(QPen(Qt.black))
+            painter.setFont(QFont("Segoe UI", max(8, int(10 * self.zoom))))
+            painter.drawText(QRectF(center.x() - radius, center.y() + radius + 5,
+                                    radius * 8, 20), Qt.AlignCenter, name)
+
+            # --- Activation value text (BOOLEAN vs NORMAL) ---
+            if self.show_activation:
+                if self.is_boolean_neuron(name) or neuron.neuron_type == NeuronType.BOOLEAN:
+                    display_text = "ON" if activation >= 50 else "OFF"
+                    text_color = QColor(0, 0, 0) if activation >= 50 else QColor(100, 100, 100)
+                else:
+                    display_text = f"{activation:.0f}"
+                    text_color = QColor(255, 255, 255) if activation < 40 else QColor(0, 0, 0)
+
+                painter.setPen(QPen(text_color))
+                painter.setFont(QFont("Segoe UI", max(10, int(12 * self.zoom)), QFont.Bold))
+                text_rect = QRectF(center.x() - radius, center.y() - 12 * self.zoom,
+                                radius * 2, 24 * self.zoom)
+                painter.drawText(text_rect, Qt.AlignCenter, display_text)
+
         # Draw connection being created
         if self.creating_connection and self.connection_start and self.connection_end_pos:
-            self.draw_pending_connection(painter)
-        
-        # Draw neurons
-        self.draw_neurons(painter)
-        
-        # Draw selection highlight
-        if self.selected_neuron and self.selected_neuron in self.design.neurons:
-            self.draw_selection(painter, self.selected_neuron)
-        
-        painter.end()
+            p1 = world_to_screen(self.design.neurons[self.connection_start].position)
+            painter.setPen(QPen(QColor(100, 150, 255), 3, Qt.DashLine))
+            painter.drawLine(p1, self.connection_end_pos)
+
+        # Animation pulse for active neurons
+        if self.animation_phase % 120 < 60:
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QBrush(QColor(255, 255, 200, 40)))
+            for name, neuron in self.design.neurons.items():
+                if neuron.activation > 70:
+                    center = world_to_screen(neuron.position)
+                    radius = self.NEURON_RADIUS * self.zoom * (1.1 + 0.1 * math.sin(self.animation_phase / 10))
+                    painter.drawEllipse(center, radius, radius)
+
+        self.animation_phase += 1
     
     def draw_grid(self, painter: QPainter):
         """Draw background grid."""
@@ -790,38 +1022,38 @@ class BrainCanvas(QWidget):
         world_pos = self.screen_to_world(QPointF(event.pos()))
         
         if event.button() == Qt.LeftButton:
-            # Check if clicking on neuron
             neuron_name = self.get_neuron_at_pos(world_pos)
             
             if neuron_name:
                 if event.modifiers() & Qt.ShiftModifier:
-                    # Start creating connection
                     self.creating_connection = True
                     self.connection_start = neuron_name
                     self.connection_end_pos = QPointF(event.pos())
                 else:
-                    # Start dragging or select
                     self.selected_neuron = neuron_name
+                    self.selected_connection = None  # ← Clear connection selection
                     self.dragging_neuron = neuron_name
                     neuron = self.design.neurons[neuron_name]
                     self.drag_offset = QPointF(*neuron.position) - world_pos
                     self.neuronSelected.emit(neuron_name)
             else:
-                # Click on empty space - deselect
                 self.selected_neuron = None
+                self.selected_connection = None  # ← Clear selection on empty space
             
             self.update()
         
         elif event.button() == Qt.RightButton:
-            # Start panning
             self.panning = True
             self.last_pan_pos = QPointF(event.pos())
         
         elif event.button() == Qt.MiddleButton:
-            # Check for connection to select/delete
             conn = self.get_connection_at_pos(world_pos)
             if conn:
+                self.selected_connection = conn  # ← Set connection selection
                 self.connectionSelected.emit(conn[0], conn[1])
+            else:
+                self.selected_connection = None  # ← Clear if miss
+            self.update()
     
     def mouseMoveEvent(self, event):
         world_pos = self.screen_to_world(QPointF(event.pos()))
@@ -871,24 +1103,27 @@ class BrainCanvas(QWidget):
         self.update()
     
     def mouseDoubleClickEvent(self, event):
-        """Double-click to add neuron or edit connection."""
         world_pos = self.screen_to_world(QPointF(event.pos()))
-        
-        # Check if double-clicking a neuron
+
+        # Edit existing?
         neuron_name = self.get_neuron_at_pos(world_pos)
         if neuron_name:
             self.neuronSelected.emit(neuron_name)
             return
-        
-        # Check if double-clicking a connection
+
         conn = self.get_connection_at_pos(world_pos)
         if conn:
             self.connectionSelected.emit(conn[0], conn[1])
             return
-        
-        # Double-click on empty space - add neuron
-        snapped = self.snap_position((world_pos.x(), world_pos.y()))
-        self.add_neuron_at_position(snapped)
+
+        # Add new neuron at this exact position using full dialog flow
+        window = self.window()
+        if hasattr(window, 'add_neuron_dialog'):
+            window.add_neuron_dialog(position=(world_pos.x(), world_pos.y()))
+        else:
+            # Fallback
+            snapped = self.snap_position((world_pos.x(), world_pos.y()))
+            self.add_neuron_at_position(snapped)
     
     def wheelEvent(self, event):
         """Zoom with mouse wheel."""
@@ -1013,8 +1248,9 @@ class NeuronPropertiesPanel(QWidget):
     
     propertiesChanged = pyqtSignal()
     
-    def __init__(self, parent=None, valid_input_names=None):  # ← MODIFIED
+    def __init__(self, parent=None, valid_input_names=None, canvas=None):
         super().__init__(parent)
+        self.canvas = canvas
         self.design = None
         self.current_neuron = None
         self.valid_input_names = valid_input_names or []  # ← NEW
@@ -1022,50 +1258,57 @@ class NeuronPropertiesPanel(QWidget):
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
-        
+
         # Title
         self.title_label = QLabel("Neuron Properties")
         self.title_label.setFont(QFont("Arial", 12, QFont.Bold))
         layout.addWidget(self.title_label)
-        
+
         # Form
         form_layout = QFormLayout()
-        
+
         self.name_edit = QLineEdit()
         self.name_edit.editingFinished.connect(self.on_name_changed)
         form_layout.addRow("Name:", self.name_edit)
-        
+
         self.type_combo = QComboBox()
         for nt in NeuronType:
             self.type_combo.addItem(nt.value, nt)
         self.type_combo.currentIndexChanged.connect(self.on_type_changed)
         form_layout.addRow("Type:", self.type_combo)
-        
+
         self.layer_spin = QSpinBox()
         self.layer_spin.setRange(0, 10)
         self.layer_spin.valueChanged.connect(self.on_layer_changed)
         form_layout.addRow("Layer:", self.layer_spin)
-        
+
+        # regular activation spin-box
         self.activation_spin = QDoubleSpinBox()
         self.activation_spin.setRange(0, 100)
         self.activation_spin.setValue(50)
         self.activation_spin.valueChanged.connect(self.on_activation_changed)
         form_layout.addRow("Activation:", self.activation_spin)
-        
+
+        # ON/OFF checkbox for boolean neurons
+        self.on_off_check = QCheckBox("ON / OFF")
+        self.on_off_check.setTristate(False)
+        self.on_off_check.stateChanged.connect(self.on_on_off_changed)
+        form_layout.addRow("Activation:", self.on_off_check)
+
         self.pos_x_spin = QDoubleSpinBox()
         self.pos_x_spin.setRange(-10000, 10000)
         self.pos_x_spin.valueChanged.connect(self.on_position_changed)
         form_layout.addRow("X Position:", self.pos_x_spin)
-        
+
         self.pos_y_spin = QDoubleSpinBox()
         self.pos_y_spin.setRange(-10000, 10000)
         self.pos_y_spin.valueChanged.connect(self.on_position_changed)
         form_layout.addRow("Y Position:", self.pos_y_spin)
-        
+
         self.excluded_check = QCheckBox("Excluded from Learning")
         self.excluded_check.stateChanged.connect(self.on_excluded_changed)
         form_layout.addRow("", self.excluded_check)
-        
+
         layout.addLayout(form_layout)
         
         # Color picker
@@ -1117,71 +1360,73 @@ class NeuronPropertiesPanel(QWidget):
     
     def set_neuron(self, neuron_name: Optional[str]):
         self.current_neuron = neuron_name
-        
+
         if not neuron_name or not self.design or neuron_name not in self.design.neurons:
             self.set_enabled(False)
             self.title_label.setText("Neuron Properties")
             return
-        
+
         self.set_enabled(True)
         neuron = self.design.neurons[neuron_name]
-        
-        # Check if this is a core neuron
-        is_core = self.design.is_core_neuron(neuron_name)
-        
-        # Update title with core indicator
-        if is_core:
-            self.title_label.setText(f"Neuron: {neuron_name} ⭐ (Core)")
-        else:
-            self.title_label.setText(f"Neuron: {neuron_name}")
-        
-        # Disable delete button for core neurons
-        self.delete_btn.setEnabled(not is_core)
-        if is_core:
-            self.delete_btn.setToolTip("Core neurons cannot be deleted - required for Dosidicus-2")
-            self.delete_btn.setStyleSheet("background-color: #dddddd;")
-        else:
-            self.delete_btn.setToolTip("Delete this neuron")
-            self.delete_btn.setStyleSheet("background-color: #ffcccc;")
-        
-        # Disable name editing for core neurons (names must match exactly)
-        self.name_edit.setEnabled(not is_core)
-        if is_core:
-            self.name_edit.setToolTip("Core neuron names cannot be changed")
-        else:
-            self.name_edit.setToolTip("")
-        
-        # Block signals while updating
+
+        # block signals while updating
         self.name_edit.blockSignals(True)
         self.type_combo.blockSignals(True)
         self.layer_spin.blockSignals(True)
         self.activation_spin.blockSignals(True)
+        self.on_off_check.blockSignals(True)
         self.pos_x_spin.blockSignals(True)
         self.pos_y_spin.blockSignals(True)
         self.excluded_check.blockSignals(True)
         self.description_edit.blockSignals(True)
-        
+
+        # --- decide which activation editor to show ---
+        is_bool = (
+            neuron.neuron_type == NeuronType.BOOLEAN or
+            (self.canvas and self.canvas.is_boolean_neuron(neuron_name))
+        )
+        self.activation_spin.setVisible(not is_bool)
+        self.on_off_check.setVisible(is_bool)
+
+        # fill values
         self.name_edit.setText(neuron.name)
         self.type_combo.setCurrentIndex(self.type_combo.findData(neuron.neuron_type))
         self.layer_spin.setValue(neuron.layer_index)
-        self.activation_spin.setValue(neuron.activation)
+
+        if is_bool:
+            self.on_off_check.setChecked(neuron.activation >= 50)
+        else:
+            self.activation_spin.setValue(neuron.activation)
+
         self.pos_x_spin.setValue(neuron.position[0])
         self.pos_y_spin.setValue(neuron.position[1])
         self.excluded_check.setChecked(neuron.name in self.design.excluded_neurons)
         self.description_edit.setPlainText(neuron.description)
-        
-        # Update color preview
+
+        # colour preview
         r, g, b = neuron.color
-        self.color_preview.setStyleSheet(f"background-color: rgb({r}, {g}, {b}); border: 1px solid black;")
-        
+        self.color_preview.setStyleSheet(
+            f"background-color: rgb({r}, {g}, {b}); border: 1px solid black;"
+        )
+
+        # unblock
         self.name_edit.blockSignals(False)
         self.type_combo.blockSignals(False)
         self.layer_spin.blockSignals(False)
         self.activation_spin.blockSignals(False)
+        self.on_off_check.blockSignals(False)
         self.pos_x_spin.blockSignals(False)
         self.pos_y_spin.blockSignals(False)
         self.excluded_check.blockSignals(False)
         self.description_edit.blockSignals(False)
+
+    def on_on_off_changed(self, state: int):
+        """Toggle activation between 0 (OFF) and 100 (ON) for boolean neurons."""
+        if not self.current_neuron or not self.design:
+            return
+        neuron = self.design.neurons[self.current_neuron]
+        neuron.activation = 100.0 if state == Qt.Checked else 0.0
+        self.propertiesChanged.emit()
 
     
     def on_name_changed(self):
@@ -1300,7 +1545,7 @@ class NeuronPropertiesPanel(QWidget):
         if self.design.is_core_neuron(self.current_neuron):
             QMessageBox.warning(
                 self, "Cannot Delete",
-                f"'{self.current_neuron}' is a core neuron required for Dosidicus-2 compatibility."
+                f"'{self.current_neuron}' is a core neuron required for compatibility."
             )
             return
         
@@ -1964,16 +2209,14 @@ class ExportDialog(QDialog):
         return "\n".join(lines)
     
     def export_dosidicus(self):
-        # --- GUARD -------------------------------------------------
+
         valid, issues = self.validate_for_export()
         if not valid:
             msg = "Cannot export – the following problems must be fixed:\n\n• " + \
                 "\n• ".join(issues)
             QMessageBox.critical(self, "Export Blocked", msg)
             return
-        # -----------------------------------------------------------
 
-        # ... rest of the method remains unchanged ...
         filepath, _ = QFileDialog.getSaveFileName(
             self, "Export Dosidicus Brain",
             f"{self.design.metadata.get('name', 'brain')}_dosidicus.json",
@@ -1998,9 +2241,17 @@ class ExportDialog(QDialog):
 class BrainDesignerWindow(QMainWindow):
     """Main application window."""
     
+    COLORS = {
+        NeuronType.INPUT:   QColor(150, 220, 150),
+        NeuronType.HIDDEN:  QColor(150, 150, 220),
+        NeuronType.OUTPUT:  QColor(220, 150, 150),
+        NeuronType.STATUS:  QColor(180, 180, 180),
+        NeuronType.BOOLEAN: QColor(255, 200, 100),   # Orange for booleans
+    }
+    
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DOSIDICUS Brain Designer")
+        self.setWindowTitle("Brain Designer (Beta)")
         self.setMinimumSize(1280, 800)
         
         self.design = BrainDesign()
@@ -2012,7 +2263,7 @@ class BrainDesignerWindow(QMainWindow):
         self.setup_statusbar()
         
         # Load default template
-        self.load_template('layered_dosidicus')
+        #self.load_template('layered_dosidicus')
     
     def setup_ui(self):
         # Central widget with splitter
@@ -2053,7 +2304,7 @@ class BrainDesignerWindow(QMainWindow):
         
         right_tabs = QTabWidget()
         
-        self.neuron_panel = NeuronPropertiesPanel()
+        self.neuron_panel = NeuronPropertiesPanel(canvas=self.canvas)
         self.neuron_panel.propertiesChanged.connect(self.on_design_changed)
         right_tabs.addTab(self.neuron_panel, "Neuron")
         
@@ -2095,61 +2346,108 @@ class BrainDesignerWindow(QMainWindow):
         self.connection_panel.set_design(self.design)
         self.layer_panel.set_design(self.design)
 
+    def check_orphan_neurons_now(self):
+        """
+        User-triggered orphan check.
+        Same flow as save-time validation, but *without* actually saving.
+        """
+        orphans = self.design.find_orphan_neurons()
+        if not orphans:
+            QtWidgets.QMessageBox.information(
+                self, "No Orphans",
+                "All neurons are already connected.  \n"
+                "Nothing to fix."
+            )
+            return
+
+        # Re-use the existing prompt / auto-wire routine
+        reply = self._show_orphan_dialog(orphans)
+        if reply == QtWidgets.QMessageBox.Cancel:
+            return  # user aborted
+        if reply == QtWidgets.QMessageBox.Yes:
+            self._auto_wire_orphans(orphans)
+            # Force canvas refresh
+            self.on_design_changed()
+
     def _pick_name_for_type(self, neuron_type: NeuronType) -> Optional[str]:
-        """Return an *unused* legal name for the requested type, or None."""
+        """Ask the user for a legal, unused name of the requested type."""
         design = self.design
+        used = set(design.neurons.keys())
+
         if neuron_type is NeuronType.INPUT:
+            # ---- INPUT neurons – must come from the live sensor registry ----
             self.canvas._rebuild_valid_input_names()
             pool = self.canvas.valid_input_names
+
             if not pool:
                 QMessageBox.warning(
-                    self, "No Input Sensors Available",
-                    "No valid input neuron names are registered in BrainNeuronHooks."
+                    self, "No Input Sensors",
+                    "No registered input sensors found in BrainNeuronHooks.\n"
+                    "You cannot create INPUT neurons until sensors are defined."
                 )
                 return None
-        else:
-            base = {NeuronType.HIDDEN:  "hidden",
-                    NeuronType.OUTPUT:  "output",
-                    NeuronType.STATUS:  "status"}[neuron_type]
-            pool = [f"{base}_{i:02d}" for i in range(99)]
 
-        used = set(design.neurons.keys())
+            # Offer only unused registered names + a custom option
+            choices = [n for n in pool if n not in used]
+            choices.append("Custom name…")
+
+            name, ok = QInputDialog.getItem(
+                self, "Create Input Neuron",
+                "Choose a registered sensor name:",
+                choices, 0, False
+            )
+            if not ok or not name:
+                return None
+            if name == "Custom name…":
+                name, ok = QInputDialog.getText(
+                    self, "Custom Input Name",
+                    "Enter a sensor name that exists in BrainNeuronHooks:"
+                )
+                if not ok or not name.strip():
+                    return None
+            return name.strip() if name in pool else None
+
+        # ---- All other types (HIDDEN, OUTPUT, STATUS) ----
+        base_to_prefix = {
+            NeuronType.HIDDEN: "hidden",
+            NeuronType.OUTPUT: "output",
+            NeuronType.STATUS: "status",
+        }
+        prefix = base_to_prefix[neuron_type]               # safe – KeyError only if a new type is added
+        pool = [f"{prefix}_{i:02d}" for i in range(10)]     # plenty of numbered names
+
+        # keep only the ones that are still free
         choices = [n for n in pool if n not in used]
-
-        # slim the list down if it is huge and uniform
-        choices = _trim_enum_pool(
-            {NeuronType.HIDDEN:  "hidden",
-            NeuronType.OUTPUT:  "output",
-            NeuronType.STATUS:  "status"}[neuron_type],
-            choices
-        )
-
-        if neuron_type is not NeuronType.INPUT:
-            choices.append("Custom...")
+        choices = _trim_enum_pool(prefix, choices)        # shows … (12 more) when the list is long
+        choices.append("Custom name…")
 
         name, ok = QInputDialog.getItem(
             self,
-            f"Pick {neuron_type.value} neuron",
+            f"Create {neuron_type.value.capitalize()} Neuron",
             f"Available {neuron_type.value} names:",
             choices, 0, False
         )
-        if not ok:
+        if not ok or not name:
             return None
 
-        if name == "Custom...":
+        if name == "Custom name…":
             name, ok = QInputDialog.getText(
-                self, "Custom name",
-                f"Enter custom {neuron_type.value} neuron name:"
+                self, "Custom Name",
+                f"Enter a unique {neuron_type.value} neuron name:"
             )
-            if not ok or not name or name in used:
+            if not ok or not name.strip() or name.strip() in used:
+                QMessageBox.warning(self, "Invalid Name", "Name is empty or already used.")
                 return None
-        elif name.startswith("⋯"):          # user selected the overflow placeholder
+            return name.strip()
+
+        if name.startswith("⋯"):
             QMessageBox.information(
                 self, "More names available",
-                "There are more enumerated names than shown.\n"
-                "Use the ‘Custom...’ option if you need a specific higher index."
+                "There are more numbered names than shown.\n"
+                "Use “Custom name…” if you need a higher index."
             )
             return None
+
         return name
     
     def setup_menu(self):
@@ -2192,8 +2490,8 @@ class BrainDesignerWindow(QMainWindow):
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
         
-        # Edit menu
-        edit_menu = menubar.addMenu("&Edit")
+        # Operations menu
+        edit_menu = menubar.addMenu("&Operations")
         
         add_neuron_action = QAction("Add &Neuron", self)
         add_neuron_action.setShortcut("Ctrl+N")
@@ -2210,6 +2508,10 @@ class BrainDesignerWindow(QMainWindow):
         check_core_action = QAction("&Check Core Neuron Status", self)
         check_core_action.triggered.connect(self.check_core_neurons)
         edit_menu.addAction(check_core_action)
+
+        check_orphans_action = QAction("&Check for Orphaned Neurons…", self)
+        check_orphans_action.triggered.connect(self.check_orphan_neurons_now)
+        edit_menu.addAction(check_orphans_action)
         
         # View menu
         view_menu = menubar.addMenu("&View")
@@ -2261,22 +2563,44 @@ class BrainDesignerWindow(QMainWindow):
         add_btn.setText("+ Neuron")
         add_btn.setToolTip("Add a new neuron (double-click canvas)")
         add_btn.clicked.connect(self.add_neuron_dialog)
+
+        # --- make it green and prominent ---
+        add_btn.setStyleSheet("""
+            QToolButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                            stop:0 #4CAF50, stop:1 #388E3C);
+                border: 1px solid #2E7D32;
+                border-radius: 4px;
+                padding: 6px 12px;
+                color: white;
+                font-weight: bold;
+                font-size: 10pt;
+            }
+            QToolButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                            stop:0 #66BB6A, stop:1 #43A047);
+            }
+            QToolButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                            stop:0 #388E3C, stop:1 #2E7D32);
+            }
+        """)
         toolbar.addWidget(add_btn)
         
         toolbar.addSeparator()
         
         # Template dropdown
-        toolbar.addWidget(QLabel("  Template: "))
-        self.template_combo = QComboBox()
-        self.template_combo.setMinimumWidth(150)
-        for key, info in TemplateLibraryPanel.TEMPLATES.items():
-            self.template_combo.addItem(info['name'], key)
-        self.template_combo.currentIndexChanged.connect(
-            lambda: self.load_template(self.template_combo.currentData())
-        )
-        toolbar.addWidget(self.template_combo)
+        #toolbar.addWidget(QLabel("  Template: "))
+        #self.template_combo = QComboBox()
+        #self.template_combo.setMinimumWidth(150)
+        #for key, info in TemplateLibraryPanel.TEMPLATES.items():
+        #    self.template_combo.addItem(info['name'], key)
+        #self.template_combo.currentIndexChanged.connect(
+        #    lambda: self.load_template(self.template_combo.currentData())
+        #)
+        #toolbar.addWidget(self.template_combo)
         
-        toolbar.addSeparator()
+        #toolbar.addSeparator()
         
         # Snap to grid
         self.snap_check = QCheckBox("Snap to Grid")
@@ -2358,33 +2682,105 @@ class BrainDesignerWindow(QMainWindow):
             self.save_design_as()
     
     def save_design_as(self):
-        filepath, _ = QFileDialog.getSaveFileName(
-            self, "Save Design",
+        filepath, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Save Design As",
             f"{self.design.metadata.get('name', 'brain')}_design.json",
             "JSON Files (*.json)"
         )
-        
         if filepath:
             self._save_to_file(filepath)
             self.current_file = filepath
     
     def _save_to_file(self, filepath: str):
+        """
+        Save the design to disk.
+        If orphan neurons are found, ask the user whether to auto‑wire them.
+        """
+        orphans = self.design.find_orphan_neurons()
+        if orphans:
+            reply = self._show_orphan_dialog(orphans)
+            if reply == QtWidgets.QMessageBox.Cancel:
+                self.statusbar.showMessage("Save cancelled – orphan neurons present.", 3000)
+                return
+            if reply == QtWidgets.QMessageBox.Yes:
+                self._auto_wire_orphans(orphans)
+
         try:
             with open(filepath, 'w') as f:
                 json.dump(self.design.to_dict(), f, indent=2)
             self.statusbar.showMessage(f"Saved to {filepath}", 3000)
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save:\n{e}")
+            QtWidgets.QMessageBox.critical(self, "Save Error", f"Failed to save:\n{e}")
+
+    def _show_orphan_dialog(self, orphans: list[str]) -> int:
+        """
+        Build a modal dialog that lists the orphan neurons and asks the user
+        whether to auto‑wire them, skip them, or abort the operation.
+        Returns the standard QMessageBox button code.
+        """
+        msg = QtWidgets.QMessageBox(self)
+        msg.setIcon(QtWidgets.QMessageBox.Warning)
+        msg.setWindowTitle("⚠️ Orphan Neurons Detected")
+
+        txt = f"Found {len(orphans)} neuron(s) that are not connected:\n\n"
+        orphan_list = "\n".join(f"  • {name}" for name in orphans[:5])
+        if len(orphans) > 5:
+            orphan_list += f"\n  … and {len(orphans) - 5} more"
+        txt += orphan_list
+
+        txt += (
+            "\n\nThese neurons cannot influence the squid because they have "
+            "no incoming or outgoing connections.\n\n"
+            "Would you like the designer to add sensible connections automatically?"
+        )
+
+        msg.setText(txt)
+        msg.setStandardButtons(
+            QtWidgets.QMessageBox.Yes |  # Auto‑wire
+            QtWidgets.QMessageBox.No |   # Save as‑is (user will wire later)
+            QtWidgets.QMessageBox.Cancel  # Abort save/export
+        )
+        msg.setDefaultButton(QtWidgets.QMessageBox.Yes)
+        return msg.exec_()
+    
+    def _auto_wire_orphans(self, orphans: list[str]):
+        """Add connections for every orphan neuron and refresh the UI."""
+        total_new = 0
+        for name in orphans:
+            new_conns = self.design.auto_wire_orphan(name)
+            for conn in new_conns:
+                self.design.add_connection(conn.source, conn.target, conn.weight)
+                total_new += 1
+
+        # Refresh the canvas and property panels
+        self.on_design_changed()
+        self.canvas.update()
+
+        QtWidgets.QMessageBox.information(
+            self,
+            "Auto‑Wiring Complete",
+            f"Added {total_new} connection(s) for {len(orphans)} orphan neuron(s).\n\n"
+            "Review the new wires in the canvas or the Connections tab."
+        )
     
     def show_export_dialog(self):
+        """Export the brain after ensuring no orphans exist."""
+        orphans = self.design.find_orphan_neurons()
+        if orphans:
+            reply = self._show_orphan_dialog(orphans)
+            if reply == QtWidgets.QMessageBox.Cancel:
+                return  # Abort export
+            if reply == QtWidgets.QMessageBox.Yes:
+                self._auto_wire_orphans(orphans)
+
         dialog = ExportDialog(self.design, self)
         dialog.exec_()
     
-    def add_neuron_dialog(self):   # called by Ctrl-N
+    def add_neuron_dialog(self, position: Optional[Tuple[float, float]] = None):
         # ask for type first
         items = [NeuronType.INPUT, NeuronType.HIDDEN, NeuronType.OUTPUT, NeuronType.STATUS]
-        txt = [t.value for t in items]
-        choice, ok = QInputDialog.getItem(self, "Add Neuron", "Type:", txt, 1, False)
+        txt = [t.value.capitalize() for t in items]
+        choice, ok = QInputDialog.getItem(self, "Add Neuron", "Neuron type:", txt, 0, False)
         if not ok:
             return
         neuron_type = items[txt.index(choice)]
@@ -2393,21 +2789,28 @@ class BrainDesignerWindow(QMainWindow):
         if not name:
             return
 
-        # --- use the canvas coordinate helpers -----------------------------
-        centre_screen = QPointF(self.canvas.width() / 2,
-                                self.canvas.height() / 2)
-        centre_world  = self.canvas.screen_to_world(centre_screen)
-        x, y = centre_world.x(), centre_world.y()
-        # -------------------------------------------------------------------
+        # Use provided position or center of view
+        if position is None:
+            centre_screen = QPointF(self.canvas.width() / 2, self.canvas.height() / 2)
+            centre_world = self.canvas.screen_to_world(centre_screen)
+            x, y = centre_world.x(), centre_world.y()
+        else:
+            x, y = position
+
+        snapped = self.canvas.snap_position((x, y))
 
         neuron = DesignerNeuron(
             name=name,
             neuron_type=neuron_type,
-            position=(x, y),
-            layer_index=0,  # default
+            position=snapped,
+            layer_index=0,  # will be corrected by layer detection if needed
             color=self.COLORS[neuron_type].getRgb()[:3]
         )
         self.design.add_neuron(neuron)
+
+        # Auto-select the new neuron
+        self.canvas.selected_neuron = name
+        self.canvas.neuronSelected.emit(name)
         self.on_design_changed()
     
     def reset_view(self):
@@ -2505,6 +2908,7 @@ class BrainDesignerWindow(QMainWindow):
     
     def _create_dosidicus_default(self):
         """Create the default flat Dosidicus brain - matches brain_widget.py exactly."""
+        self.canvas._ensure_boolean_neurons_have_correct_type()
         self.design.layers = [
             DesignerLayer("Main", NeuronType.HIDDEN, 200)
         ]
@@ -2542,6 +2946,7 @@ class BrainDesignerWindow(QMainWindow):
     def _create_core_only(self):
         """Create minimal brain with just the 7 core neurons and no connections."""
         self.design.metadata['name'] = 'Core Only'
+        self.canvas._ensure_boolean_neurons_have_correct_type()
         self.design.metadata['description'] = 'Starting point with 7 core neurons - add your own connections'
         
         self.design.layers = [
@@ -2605,6 +3010,7 @@ class BrainDesignerWindow(QMainWindow):
         self.design.neurons["curiosity"].position = (550, 420)
         self.design.neurons["curiosity"].neuron_type = NeuronType.OUTPUT
         self.design.neurons["curiosity"].layer_index = 2
+        self.canvas._ensure_boolean_neurons_have_correct_type()
         
         # ADD MEANINGFUL sensory neuron (replaces arbitrary "stimulation")
         self.design.add_neuron(DesignerNeuron(
@@ -2641,6 +3047,7 @@ class BrainDesignerWindow(QMainWindow):
         
         # Start with the layered dosidicus as base
         self._create_layered_dosidicus()
+        self.canvas._ensure_boolean_neurons_have_correct_type()
         
         # Add sensory input neurons that feed into the core network
         sensors = [
@@ -2673,6 +3080,7 @@ class BrainDesignerWindow(QMainWindow):
     def _create_cognitive_complex(self):
         """Core + internal processing layers for memory & prediction"""
         self._create_layered_dosidicus()
+        self.canvas._ensure_boolean_neurons_have_correct_type()
         
         # Add internal processing neurons in hidden layers
         processors = [
@@ -2727,6 +3135,7 @@ class BrainDesignerWindow(QMainWindow):
     def _create_deep_processor(self):
         """Create a 4-layer deep processor."""
         self.design.metadata['name'] = 'Deep Processor'
+        self.canvas._ensure_boolean_neurons_have_correct_type()
         
         self.design.layers = [
             DesignerLayer("Input", NeuronType.INPUT, 60),
@@ -2763,6 +3172,7 @@ class BrainDesignerWindow(QMainWindow):
     def _create_emotion_engine(self):
         """Create an emotion-focused brain."""
         self.design.metadata['name'] = 'Emotion Engine'
+        self.canvas._ensure_boolean_neurons_have_correct_type()
         
         self.design.layers = [
             DesignerLayer("Stimuli", NeuronType.INPUT, 80),
@@ -2810,6 +3220,7 @@ class BrainDesignerWindow(QMainWindow):
     def _create_minimal(self):
         """Create minimal 2-neuron brain."""
         self.design.metadata['name'] = 'Minimal'
+        self.canvas._ensure_boolean_neurons_have_correct_type()
         
         self.design.layers = [
             DesignerLayer("Input", NeuronType.INPUT, 100),
@@ -2831,6 +3242,7 @@ class BrainDesignerWindow(QMainWindow):
         """Create a highly anxious brain with strong inhibitory pathways"""
         self.design.metadata['name'] = 'Timid Anxious'
         self.design.metadata['description'] = 'Anxiety-driven brain that avoids exploration and has heightened threat detection'
+        self.canvas._ensure_boolean_neurons_have_correct_type()
         
         # Start with core neurons in a protective configuration
         self._create_core_only()
@@ -2924,6 +3336,7 @@ class BrainDesignerWindow(QMainWindow):
         """Create a sleep-disrupted brain"""
         self.design.metadata['name'] = 'Insomniac'
         self.design.metadata['description'] = 'Sleep-deprived brain with dysfunctional sleep-wake regulation'
+        self.canvas._ensure_boolean_neurons_have_correct_type()
         
         # Start with core neurons
         self._create_core_only()

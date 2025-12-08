@@ -97,6 +97,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.brain_worker.start()
         self._last_worker_activity = time.time()
         self._worker_healthy = True
+
+        # Start periodic worker health monitoring
+        self.health_timer = QtCore.QTimer(self)
+        self.health_timer.timeout.connect(self.check_worker_health)
+        self.health_timer.start(10000)  # Every 10 seconds
         
         # Connect worker signals for health monitoring
         self.brain_worker.neurogenesis_result.connect(self._on_worker_activity)
@@ -173,24 +178,64 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         print(f"Brain window debug mode set to: {enabled}")
 
     def check_worker_health(self):
-        """Check if brain worker is healthy and restart if needed"""
-        if not self.brain_worker or not self.brain_worker.isRunning():
-            print("⚠️ BrainWorker appears dead, attempting restart...")
-            
-            # Create new worker
-            self.brain_worker = BrainWorker(brain_widget=self.brain_widget)
-            self.brain_worker.start()
-            
-            # Update task manager reference
-            if hasattr(self, 'task_manager'):
-                self.task_manager.brain_worker = self.brain_worker
-                
-            print("✅ BrainWorker restarted")
-            return False
-        return True
+        """
+        Periodically check if the BrainWorker thread is alive and responsive.
+        If it's dead or completely stalled, restart it safely.
+        """
+        if not hasattr(self, 'brain_worker') or not self.brain_worker:
+            print("BrainWorker missing – creating new one")
+            self._restart_brain_worker()
+            return
 
-        # Call this periodically
-        QtCore.QTimer.singleShot(5000, self.check_worker_health)
+        # Case 1: Thread object exists but is not running
+        if not self.brain_worker.isRunning():
+            print("BrainWorker thread not running – restarting")
+            self._restart_brain_worker()
+            return
+
+        # Case 2: Thread is running but has been completely silent for too long
+        if not self.is_worker_healthy():
+            print("BrainWorker stalled (no activity in 15s) – forcing restart")
+            self._restart_brain_worker()
+            return
+
+        # Everything looks fine
+        # print("BrainWorker healthy")  # Uncomment only for deep debugging
+
+    def _restart_brain_worker(self):
+        """Safely stop the old worker and start a fresh one"""
+        # Stop old worker if it exists
+        if hasattr(self, 'brain_worker') and self.brain_worker:
+            print("Stopping old BrainWorker...")
+            self.brain_worker.stop()
+            self.brain_worker.wait(3000)  # Give it up to 3 seconds to quit
+
+        # Create brand new worker
+        print("Creating new BrainWorker instance...")
+        self.brain_worker = BrainWorker(brain_widget=self.brain_widget)
+        
+        # Reconnect all signals
+        self.brain_worker.neurogenesis_result.connect(self._on_worker_activity)
+        self.brain_worker.hebbian_result.connect(self._on_worker_activity)
+        self.brain_worker.state_update_result.connect(self._on_worker_activity)
+        self.brain_worker.error_occurred.connect(self._on_worker_error)
+        
+        # Start it
+        self.brain_worker.start()
+        
+        # Update task manager reference
+        if hasattr(self, 'task_manager') and self.task_manager:
+            self.task_manager.brain_worker = self.brain_worker
+            print("Task manager reference updated")
+
+        # Reset health tracking
+        self._last_worker_activity = time.time()
+        self._worker_healthy = True
+        
+        # Keep it alive with periodic pings
+        QtCore.QTimer.singleShot(1000, lambda: self._keep_worker_alive())
+        
+        print("BrainWorker successfully restarted and reconnected")
 
     def _on_worker_activity(self, result):
         """Update worker health when activity is detected"""
@@ -236,12 +281,14 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             self.status_bar.showMessage(f"Worker error: {error_msg}", 5000)
 
     def closeEvent(self, event):
-        """Stop worker when window closes"""
+        """Stop worker and timers when window closes"""
+        if hasattr(self, 'health_timer') and self.health_timer.isActive():
+            self.health_timer.stop()
+
         if hasattr(self, 'brain_worker') and self.brain_worker:
-            # Graceful shutdown
             self.brain_worker.stop()
             if self.brain_worker.isRunning():
-                self.brain_worker.wait(5000)  # Wait up to 5 seconds
+                self.brain_worker.wait(5000)
         event.accept()
 
     def on_hebbian_countdown_finished(self):

@@ -57,8 +57,11 @@ class BrainWidget(QtWidgets.QWidget):
         self._animation_style: AnimationStyle = get_animation_style(animation_style)
         self.layers = []
         
-        # Hover tracking (used by vibrant/subtle styles)
+        # Hover tracking
         self.hovered_neuron = None
+        self.hover_value_display_active = False
+        self.hover_value_opacity = 0.0
+        self.hover_value_animation_time = 0.0
         self.hover_animation_time = 0
         if not hasattr(self.config, 'hebbian'): #
             self.config.hebbian = { #
@@ -2650,10 +2653,11 @@ class BrainWidget(QtWidgets.QWidget):
         if _PERF_TRACKING_AVAILABLE:
             _paint_start = time.perf_counter()
             perf_tracker.increment("paint_calls")
-        
+
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        
+        painter.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
+
         # Fill background (uses animation style color)
         bg_color = QtGui.QColor(*self.anim_background_colour)
         painter.fillRect(self.rect(), bg_color)
@@ -2663,9 +2667,8 @@ class BrainWidget(QtWidgets.QWidget):
         indicator_font = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
         painter.setFont(indicator_font)
         font_metrics = painter.fontMetrics()
-        
+
         active_indicators_data = []
-        # Collect state data for statistics window
         if self.state.get('is_fleeing', False): 
             active_indicators_data.append({"text": "Fleeing!", "color": QtGui.QColor(220, 20, 60)})
         if self.state.get('is_startled', False): 
@@ -2686,70 +2689,131 @@ class BrainWidget(QtWidgets.QWidget):
             active_indicators_data.append({"text": "Anxious", "color": QtGui.QColor(231, 76, 60)})
         if self.state.get('curiosity', 0) > 80 or 'curious' in squid_status:
             active_indicators_data.append({"text": "Curious", "color": QtGui.QColor(52, 152, 219)})
-        
+
         indicators_to_display = active_indicators_data[:3]
-        
-            
+
         painter.save()
-        
+
         # Calculate space - no indicators displayed, so no space needed
         fixed_indicator_area_height = 0
         indicator_space_at_top = indicator_y_position + fixed_indicator_area_height
-        
+
         base_width_logical = 1024
         base_height_logical = 768 - indicator_space_at_top
         if base_height_logical <= 0: 
             base_height_logical = 1
-            
+
         scale_x = self.width() / base_width_logical
-        
         drawable_height_for_neurons = self.height() - indicator_space_at_top
         if drawable_height_for_neurons <= 0: 
             drawable_height_for_neurons = 1
-            
+
         scale_y = drawable_height_for_neurons / base_height_logical
         scale_y = max(0.01, scale_y)
-        
+
         scale = max(0.01, min(scale_x, scale_y))
 
-        painter.translate(0, indicator_space_at_top)
+        # Center horizontally if letterboxed
+        offset_x = 0
+        if scale_x > scale_y:
+            content_width = base_width_logical * scale
+            offset_x = (self.width() - content_width) / 2
+
+        painter.translate(offset_x, indicator_space_at_top)
         painter.scale(scale, scale)
-        
+
+        # === DRAW LAYERS ===
         self.draw_layers(painter, 1.0)
-        self.draw_neurons(painter, 1.0)
-        
+
+        # === DRAW NEURONS (with hover value label) ===
+        current_time = time.time()
+
+        for name, pos in self.neuron_positions.items():
+            x_logical, y_logical = pos
+            x = x_logical
+            y = y_logical
+
+            value = self.state.get(name, 50.0)
+            if not isinstance(value, (int, float)):
+                value = 50.0
+
+            # === HOVER VALUE LABEL (NEW FEATURE) ===
+            if getattr(self, 'hovered_neuron', None) == name and getattr(self, 'hover_value_display_active', False):
+                value_str = f"{value:.1f}"
+
+                # Smooth fade-in
+                elapsed = current_time - getattr(self, 'hover_animation_time', current_time)
+                opacity = min(1.0, elapsed * 5.0)  # Fast fade-in (200ms)
+
+                label_y = y - 50  # Position above neuron
+
+                font = QtGui.QFont("Arial", 16, QtGui.QFont.Bold)
+                painter.setFont(font)
+                fm = painter.fontMetrics()
+                text_width = fm.horizontalAdvance(value_str)
+
+                padding = 12
+                badge_width = text_width + 2 * padding
+                badge_height = fm.height() + 12
+
+                badge_rect = QtCore.QRectF(
+                    x - badge_width / 2,
+                    label_y - badge_height / 2,
+                    badge_width,
+                    badge_height
+                )
+
+                # Background badge (dark semi-transparent)
+                bg_color = QtGui.QColor(0, 0, 0, int(220 * opacity))
+                border_color = QtGui.QColor(100, 255, 150, int(255 * opacity))
+                painter.setBrush(QtGui.QBrush(bg_color))
+                painter.setPen(QtGui.QPen(border_color, 3))
+                painter.drawRoundedRect(badge_rect, 12, 12)
+
+                # Value text
+                text_color = QtGui.QColor(255, 255, 255, int(255 * opacity))
+                painter.setPen(text_color)
+                painter.drawText(badge_rect, QtCore.Qt.AlignCenter, value_str)
+
+                # Optional: subtle pulse glow under the badge
+                if opacity > 0.8:
+                    pulse = 0.5 + 0.5 * math.sin(elapsed * 10)
+                    glow_alpha = int(60 * pulse * opacity)
+                    painter.setBrush(QtGui.QBrush(QtGui.QColor(100, 255, 150, glow_alpha)))
+                    painter.setPen(QtCore.Qt.NoPen)
+                    painter.drawEllipse(QtCore.QPointF(x, y), 30, 30)
+
+            # Continue with normal neuron drawing (your existing method)
+            self.draw_neurons(painter, 1.0)  # This will draw the actual neuron
+
+        # === DRAGGING INDICATOR ===
         if self.dragging and self.dragged_neuron:
-            pos = self.neuron_positions[self.dragged_neuron]
+            pos = self.neuron_positions.get(self.dragged_neuron, (0, 0))
             painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3 / scale))
             painter.setBrush(QtCore.Qt.NoBrush)
-            painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 30, 30) 
-            
+            painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 30, 30)
+
+        # === NEUROGENESIS HIGHLIGHTS ===
         self.draw_neurogenesis_highlights(painter, 1.0)
-        
+
+        # === CONNECTIONS ===
         if self.show_links:
             self.draw_connections(painter, 1.0)
-            
-        # FIX: Draw strength multipliers on top of neurons
+
+        # === STRENGTH MULTIPLIERS ===
         self.draw_strength_multiplier(painter, 1.0)
-            
+
         painter.restore()
-        
-        # Draw tutorial glow as pulsing background (after restore, so it's in widget coordinates)
+
+        # === TUTORIAL GLOW OVERLAY (full-screen pulse) ===
         if self.tutorial_glow_active:
             painter.save()
-            
-            # Light blue pulsing background
-            glow_color = QtGui.QColor(48, 197, 255)  # Highighter blue
-            
-            # Calculate alpha based on pulsing opacity
-            alpha = int(100 * self._tutorial_glow_opacity)  # Max 100 alpha for subtle effect
+            glow_color = QtGui.QColor(48, 197, 255)
+            alpha = int(100 * self._tutorial_glow_opacity)
             glow_color.setAlpha(alpha)
-            
-            # Fill entire widget with pulsing light blue
             painter.setBrush(glow_color)
             painter.setPen(QtCore.Qt.NoPen)
             painter.drawRect(0, 0, self.width(), self.height())
-            
             painter.restore()
 
         # ===== END PERFORMANCE TRACKING =====
@@ -3084,34 +3148,36 @@ class BrainWidget(QtWidgets.QWidget):
 
     def mouseMoveEvent(self, event):
         """Handle mouse movement for tooltips, hover tracking, and dragging"""
-
         if hasattr(self, 'tooltip_manager'):
             self.tooltip_manager.show_tooltip_for_position(event)
 
         # Track hover state for neurons (if hover effects enabled)
         if self.anim_hover_enabled:
             neuron = self.get_neuron_at_pos(event.pos())
+            was_hovered = self.hovered_neuron is not None
+            
             if neuron != self.hovered_neuron:
                 self.hovered_neuron = neuron
                 self.hover_animation_time = time.time()
-                self.update()
+                self.hover_value_opacity = 0.0  # Reset fade-in
+                self.hover_value_display_active = neuron is not None
+                self.update()  # Trigger repaint
 
-        # Only allow dragging neurogenesis neurons
+        # Dragging logic...
         if self.dragging and self.dragged_neuron:
             if self.is_neurogenesis_neuron(self.dragged_neuron):
                 logical_pos = self._get_logical_coords(event.pos())
                 self.neuron_positions[self.dragged_neuron] = (logical_pos.x(), logical_pos.y())
                 self.update()
-            else:
-                # This shouldn't happen but let's log it if it does
-                print(f"")
 
         super().mouseMoveEvent(event)
 
     def leaveEvent(self, event):
         """Clear hover state when mouse leaves widget."""
-        if self.hovered_neuron:
+        if self.hovered_neuron is not None:
             self.hovered_neuron = None
+            self.hover_value_display_active = False
+            self.hover_value_opacity = 0.0
             self.update()
         super().leaveEvent(event)
 

@@ -15,13 +15,16 @@ class BrainNeuronHooks:
         
         # Registry mapping neuron names to their calculation functions
         self.handlers: Dict[str, Callable] = {
-            'external_stimulus': self.calculate_external_stimulus,
-            'food_proximity': self.calculate_food_proximity,      # ← ACTIVE
-            'plant_proximity': self.calculate_plant_proximity,    # ← NEW
-            'threat_level': self.calculate_threat_level,          # ← ACTIVE
-            
-            # REMOVED: 'light_intensity', 'boundary_proximity'
-        }
+        'external_stimulus': self.calculate_external_stimulus,
+        'food_proximity': self.calculate_food_proximity,
+        'plant_proximity': self.calculate_plant_proximity,
+        'threat_level': self.calculate_threat_level,
+        'pursuing_food': self.calculate_pursuing_food,
+        'is_sick': self.calculate_is_sick,
+        'is_fleeing': self.calculate_is_fleeing,
+        'is_eating': self.calculate_is_eating,
+        'is_sleeping': self.calculate_is_sleeping,
+    }
         
         # Environmental event history for temporal calculations
         self.event_tracker = {
@@ -34,9 +37,33 @@ class BrainNeuronHooks:
             'last_poop_spawn_time': 0,
         }
     
+
+    # ------------------------------------------------------------
+
+    def calculate_pursuing_food(self) -> float:
+        """Return 100.0 if squid is pursuing food, 0.0 otherwise."""
+        if not hasattr(self.logic, 'squid'):
+            return 0.0
+        return 100.0 if getattr(self.logic.squid, 'pursuing_food', False) else 0.0
+
+    def calculate_is_sick(self) -> float:
+        """Return 100.0 if squid is sick, 0.0 otherwise."""
+        if not hasattr(self.logic, 'squid'):
+            return 0.0
+        return 100.0 if getattr(self.logic.squid, 'is_sick', False) else 0.0
+
+    def calculate_is_fleeing(self) -> float:
+        """Return 100.0 if squid is fleeing, 0.0 otherwise."""
+        if not hasattr(self.logic, 'squid'):
+            return 0.0
+        return 100.0 if getattr(self.logic.squid, 'is_fleeing', False) else 0.0
+
+
     # =========================================================================
     # PUBLIC API - Called from tamagotchi_logic.py
     # =========================================================================
+
+    
     
     def get_input_neuron_values(self) -> Dict[str, float]:
         """
@@ -145,7 +172,8 @@ class BrainNeuronHooks:
         if not hasattr(self.logic, 'food_items') or not self.logic.food_items:
             return 0
         
-        squid_x, squid_y = self.logic.squid.squid_x, self.logic.squid_y
+        squid_x = self.logic.squid.squid_x
+        squid_y = self.logic.squid.squid_y  # This was the problematic line
         min_distance = min(
             math.hypot(food.pos().x() - squid_x, food.pos().y() - squid_y)
             for food in self.logic.food_items
@@ -190,6 +218,18 @@ class BrainNeuronHooks:
         threat_level += random.uniform(-5, 5)
         
         return max(0, min(100, threat_level))
+    
+    def calculate_is_eating(self) -> float:
+        """Return 100.0 if squid is eating, 0.0 otherwise."""
+        if not hasattr(self.logic, 'squid'):
+            return 0.0
+        return 100.0 if getattr(self.logic.squid, 'is_eating', False) else 0.0
+
+    def calculate_is_sleeping(self) -> float:
+        """Return 100.0 if squid is sleeping, 0.0 otherwise."""
+        if not hasattr(self.logic, 'squid'):
+            return 0.0
+        return 100.0 if getattr(self.logic.squid, 'is_sleeping', False) else 0.0
 
 
 
@@ -198,6 +238,11 @@ DEFAULT_INPUT_SENSORS = (
     'food_proximity',
     'plant_proximity',
     'threat_level',
+    'pursuing_food',
+    'is_sick',
+    'is_fleeing',
+    'is_eating',
+    'is_sleeping',
 )
 
 # =========================================================================
