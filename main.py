@@ -6,6 +6,7 @@ import sys
 import json
 import os
 import traceback
+import multiprocessing
 import logging
 from PyQt5 import QtWidgets, QtCore
 import random
@@ -19,6 +20,17 @@ from src.brain_tool import SquidBrainWindow
 from src.learning import LearningConfig
 from src.plugin_manager import PluginManager
 from src.brain_worker import BrainWorker
+
+def launch_brain_designer_process():
+    """Entry point for Brain Designer in a separate process"""
+    import sys
+    from PyQt5.QtWidgets import QApplication
+    from src.brain_designer import BrainDesignerWindow
+    
+    app = QApplication(sys.argv)
+    window = BrainDesignerWindow()
+    window.show()
+    sys.exit(app.exec_())
 
 os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
 os.makedirs('logs', exist_ok=True)
@@ -35,6 +47,7 @@ def global_exception_handler(exctype, value, tb):
     logging.error("Unhandled exception:\n%s", error_message)
     QtWidgets.QMessageBox.critical(None, "Error", 
                                  "An unexpected error occurred. Please check dosidicus_log.txt for details.")
+
 
 class TeeStream:
     """Duplicate output to both console and file"""
@@ -111,6 +124,8 @@ class TimedMessageBox(QtWidgets.QDialog):
     def get_result(self):
         """Get the result after dialog closes"""
         return self.result_value
+    
+
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, specified_personality=None, debug_mode=False, neuro_cooldown=None):
@@ -853,6 +868,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
 def main():
     """Main entry point"""
+    # CRITICAL for PyInstaller + multiprocessing on Windows
+    multiprocessing.freeze_support()
+    
     sys.excepthook = global_exception_handler
 
     parser = argparse.ArgumentParser(description="Dosidicus digital squid with a neural network")
