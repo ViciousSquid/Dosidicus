@@ -14,6 +14,7 @@ from .interactions import RockInteractionManager
 from .interactions2 import PoopInteractionManager
 from .config_manager import ConfigManager
 from .plugin_manager import PluginManager
+from .brain_neuron_hooks import BrainNeuronHooks
 
 from .custom_brain_loader import (
     get_custom_brain_save_data, 
@@ -38,6 +39,7 @@ class TamagotchiLogic:
         self.mental_states_enabled = True
         self.squid = squid
         self.brain_window = brain_window
+        self.brain_hooks = BrainNeuronHooks(self)
         
         # Initialize rock interaction manager with config
         self.rock_interaction = RockInteractionManager(
@@ -1303,7 +1305,7 @@ class TamagotchiLogic:
         self.move_objects()
         self.animate_poops()
         self.update_statistics()
-
+        
         # Add poop interaction check
         self.check_poop_interaction()
         
@@ -1350,12 +1352,18 @@ class TamagotchiLogic:
                 "personality": self.squid.personality.value
             }
             
+            # ===== CALCULATE INPUT NEURON VALUES =====
+            # This automatically populates values for all registered input neurons
+            # like external_stimulus, food_proximity, threat_level, etc.
+            input_values = self.brain_hooks.get_input_neuron_values()
+            brain_state.update(input_values)
+            
             # 7. Update brain (will trigger neurogenesis checks)
             self.brain_window.update_brain(brain_state)
-
+            
             # 7a. Track state and check for neurogenesis experiences - FIX: Added full integration
             if hasattr(self.brain_window, 'brain_widget') and \
-               hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis'):
+            hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis'):
                 neuro = self.brain_window.brain_widget.enhanced_neurogenesis
                 
                 # Track current action
@@ -1383,15 +1391,18 @@ class TamagotchiLogic:
             # 8. Reset frame-specific flags
             self.new_object_encountered = False
             self.recent_positive_outcome = False
-
+            
             # 9. Hunger scoring
-        if self.squid.hunger == 0 or self.squid.hunger >= 99:
-            self.statistics_window.update_score()   # triggers time-based hunger scoring
+            if self.squid.hunger == 0 or self.squid.hunger >= 99:
+                self.statistics_window.update_score()   # triggers time-based hunger scoring
         
         # ===== END PERFORMANCE TRACKING =====
         if _PERF_TRACKING_AVAILABLE:
             _sim_elapsed = (time.perf_counter() - _sim_start) * 1000
             perf_tracker.record("simulation_tick", _sim_elapsed)
+        
+        # Decay environmental trackers each tick
+        self.brain_hooks.update_decay()
 
     def check_for_sickness(self):
         # Existing sickness logic
@@ -1901,6 +1912,9 @@ class TamagotchiLogic:
         width_change = new_width - current_width
         height_change = new_height - current_height
         
+        # Create new_size tuple for brain hooks
+        new_size = (new_width, new_height)  # ADD THIS LINE
+        
         # Update window dimensions in UI
         self.user_interface.window_width = new_width
         self.user_interface.window_height = new_height
@@ -1909,10 +1923,11 @@ class TamagotchiLogic:
         self.user_interface.handle_window_resize(event)
         
         # Notify logic about resize with size change info
+        self.brain_hooks.on_window_resize(width_change, height_change, new_size)
         self.handle_window_resize_event(
             width_change, 
             height_change,
-            (new_width, new_height)
+            new_size
         )
 
     def allow_initial_startle(self):
@@ -1982,6 +1997,7 @@ class TamagotchiLogic:
             self.brain_window.brain_widget.enhanced_neurogenesis.track_action('user_feeding')
         
         self.track_action('feeding')  # Keep original tracking
+        self.brain_hooks.on_user_interaction('feed')
         
         # Get plugin results
         results = self.plugin_manager.trigger_hook("on_feed", 
@@ -2023,12 +2039,15 @@ class TamagotchiLogic:
         # Add to scene and tracking list
         self.user_interface.scene.addItem(food_item)
         self.food_items.append(food_item)  # Single addition
+        self.brain_hooks.on_object_spawned('food')
 
     def clean_environment(self):
         # Track for neurogenesis FIRST
         if hasattr(self.brain_window, 'brain_widget') and \
         hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis'):
             self.brain_window.brain_widget.enhanced_neurogenesis.track_action('user_cleaning')
+
+        self.brain_hooks.on_user_interaction('clean')
         
         self.track_action('cleaning')
         current_time = time.time()
@@ -2233,6 +2252,7 @@ class TamagotchiLogic:
             poop_item.setPos(x - self.squid.poop_width // 2, y)
             self.user_interface.scene.addItem(poop_item)
             self.poop_items.append(poop_item)
+            self.brain_hooks.on_object_spawned('poop')
 
     def animate_poops(self):
         if self.squid is not None:

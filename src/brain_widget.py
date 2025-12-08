@@ -1856,53 +1856,7 @@ class BrainWidget(QtWidgets.QWidget):
                     self.visible_neurons.add(neuron)
             print(f"📊 Loaded {len(self.neuron_positions)} neurons, {len(self.visible_neurons)} visible")
 
-    def draw_layers(self, painter, scale):
-        """Draw background rectangles for custom layers (e.g., Hidden layers)."""
-        if not self.layers:
-            return
 
-        for layer in self.layers:
-            y_pos = layer.get('y_position', 0)
-            name = layer.get('name', 'Layer')
-            l_type = layer.get('layer_type', 'hidden')
-            
-            # Define logical dimensions for the layer background
-            # We assume a standard logical width of ~1024, but draw wider to ensure coverage
-            rect_height = 120 
-            rect_top = y_pos - (rect_height / 2)
-            rect_left = -200 # Start off-screen left
-            rect_width = 2000 # Extend past screen right
-            
-            rect = QtCore.QRectF(rect_left, rect_top, rect_width, rect_height)
-            
-            # Determine color based on layer type
-            if l_type == 'input':
-                color = QtGui.QColor(220, 255, 220, 40) # Very faint Green
-                border = QtGui.QColor(180, 220, 180, 80)
-            elif l_type == 'output':
-                color = QtGui.QColor(255, 220, 220, 40) # Very faint Red
-                border = QtGui.QColor(220, 180, 180, 80)
-            else: # Hidden
-                color = QtGui.QColor(230, 230, 255, 50) # Very faint Blue
-                border = QtGui.QColor(200, 200, 240, 80)
-
-            # Draw the Rectangle
-            painter.setBrush(QtGui.QBrush(color))
-            painter.setPen(QtCore.Qt.NoPen)
-            painter.drawRect(rect)
-            
-            # Draw top and bottom borders for structure
-            painter.setPen(QtGui.QPen(border, 1, QtCore.Qt.DashLine))
-            painter.drawLine(QtCore.QLineF(rect_left, rect_top, rect_width, rect_top))
-            painter.drawLine(QtCore.QLineF(rect_left, rect_top + rect_height, rect_width, rect_top + rect_height))
-
-            # Draw Label on the far left (visible area start approx x=0)
-            painter.setPen(QtGui.QPen(QtGui.QColor(150, 150, 170)))
-            font = painter.font()
-            font.setPointSize(int(10 * scale))
-            font.setBold(True)
-            painter.setFont(font)
-            painter.drawText(QtCore.QPointF(20, rect_top + 20), f"{name}")
 
     def create_initial_state(self):
         """
@@ -2400,6 +2354,55 @@ class BrainWidget(QtWidgets.QWidget):
         idx1 = list(self.neuron_positions.keys()).index(neuron1)
         idx2 = list(self.neuron_positions.keys()).index(neuron2)
         return self.associations[idx1][idx2]
+    
+    def draw_layers(self, painter, scale):
+        """Draw background rectangles for custom layers (matches BrainDesigner)."""
+        if not self.layers:                       # ← already stored by load_brain_state
+            return
+
+        for layer in self.layers:
+            y_pos   = layer.get('y_position', 0)
+            name    = layer.get('name', 'Layer')
+            l_type  = layer.get('layer_type', 'hidden')
+
+            # ---- same metrics as BrainDesigner ----
+            rect_height = 120
+            rect_top    = y_pos - rect_height / 2
+            rect_left   = -200
+            rect_width  = 2000
+
+            # ---- same colours / alpha ----
+            if l_type == 'input':
+                color = QtGui.QColor(200, 255, 200, 80)
+                border_color = QtGui.QColor(150, 220, 150, 120)
+            elif l_type == 'output':
+                color = QtGui.QColor(255, 200, 200, 80)
+                border_color = QtGui.QColor(220, 150, 150, 120)
+            else:   # hidden
+                color = QtGui.QColor(230, 230, 255, 80)
+                border_color = QtGui.QColor(200, 200, 240, 120)
+
+            # ---- filled background ----
+            painter.setBrush(QtGui.QBrush(color))
+            painter.setPen(QtCore.Qt.NoPen)
+            painter.drawRect(QtCore.QRectF(rect_left, rect_top,
+                                         rect_width, rect_height))
+
+            # ---- top & bottom border lines ----
+            painter.setPen(QtGui.QPen(border_color, 2))
+            painter.drawLine(QtCore.QLineF(rect_left, rect_top,
+                                         rect_left + rect_width, rect_top))
+            painter.drawLine(QtCore.QLineF(rect_left, rect_top + rect_height,
+                                         rect_left + rect_width, rect_top + rect_height))
+
+            # ---- layer label ----
+            font = painter.font()
+            font.setPointSize(int(10 * scale))
+            font.setBold(True)
+            painter.setFont(font)
+            painter.setPen(QtGui.QColor(100, 100, 120))
+            painter.drawText(QtCore.QPointF(10, rect_top + 20),
+                           f"{name} ({l_type})")
 
     def draw_connections(self, painter, scale):
         """Draw connections with extended 2-second weight-change animations.
@@ -2712,10 +2715,7 @@ class BrainWidget(QtWidgets.QWidget):
         painter.translate(0, indicator_space_at_top)
         painter.scale(scale, scale)
         
-        # === NEW: Draw Layers Background ===
-        # Drawn first so it appears behind connections and neurons
         self.draw_layers(painter, 1.0)
-        
         self.draw_neurons(painter, 1.0)
         
         if self.dragging and self.dragged_neuron:

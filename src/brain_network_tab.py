@@ -229,54 +229,27 @@ class NetworkTab(BrainBaseTab):
                     self._clear_layout_recursively(sub_layout)
 
     def _open_brain_designer(self):
-        """
-        Launch Brain Designer tool. Automatically detects if running from a compiled
-        bundle and launches BrainDesigner.exe, otherwise falls back to the Python script.
-        """
-        try:
-            # Check if running from PyInstaller bundle
-            if getattr(sys, 'frozen', False):
-                # Running as compiled EXE
-                # sys.executable is Dosidicus.exe, so we navigate to the tools subdirectory
-                base_dir = os.path.dirname(sys.executable)
-                designer_exe = os.path.join(base_dir, '_internal', 'tools', 'BrainDesigner.exe')
-                
-                # Verify the executable exists
-                if not os.path.exists(designer_exe):
-                    raise FileNotFoundError(
-                        f"BrainDesigner.exe not found at:\n{designer_exe}\n\n"
-                        f"Please ensure it was compiled and included in the _internal/tools directory."
-                    )
-                
-                # Launch the executable with correct working directory
-                subprocess.Popen([designer_exe], cwd=os.path.dirname(designer_exe))
-                print(f"[INFO] Launched Brain Designer (EXE): {designer_exe}")
-                
-            else:
-                # Running from source code - launch the Python script
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                project_root = os.path.abspath(os.path.join(current_dir, os.pardir))
-                designer_script = os.path.join(project_root, 'tools', 'brain_designer.py')
-                
-                if not os.path.exists(designer_script):
-                    QtWidgets.QMessageBox.critical(
-                        self, "Error",
-                        f"Brain Designer script not found at:\n{designer_script}"
-                    )
-                    return
-                
-                # Launch with Python interpreter
-                subprocess.Popen([sys.executable, designer_script])
-                print(f"[INFO] Launched Brain Designer (script): {designer_script}")
 
-        except Exception as e:
+        import subprocess
+        import sys
+        import os
+
+        designer_path = os.path.join(
+            os.path.dirname(__file__),          # src/
+            "brain_designer.py"
+        )
+        if not os.path.isfile(designer_path):
             QtWidgets.QMessageBox.critical(
-                self, "Launch Failed",
-                f"Could not launch Brain Designer:\n\n{e}"
+                self, "Not found",
+                f"Brain-Designer script missing:\n{designer_path}"
             )
-            print(f"[ERROR] Brain Designer launch error: {e}")
-            import traceback
-            traceback.print_exc()
+            return
+
+        # Launch with the *same* Python interpreter that is running Dosidicus
+        # cwd = repo-root so relative imports inside designer work
+        repo_root = os.path.dirname(os.path.dirname(designer_path))
+        subprocess.Popen([sys.executable, designer_path], cwd=repo_root)
+        print(f"[INFO] Launched Brain Designer (script): {designer_path}")
 
     def _change_animation_style(self, index):
         """
