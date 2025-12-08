@@ -5,7 +5,6 @@
     "description": "Starting point with 7 core neurons - add your own connections",
     "version": "1.0"
   },
-  "is_default_template": true,
   "neurons": {
     "hunger": {
       "name": "hunger",
@@ -139,7 +138,7 @@
       "name": "memory_buffer",
       "type": "hidden",
       "position": [
-        650,
+        600,
         180
       ],
       "layer_index": 1,
@@ -155,8 +154,8 @@
       "name": "pattern_recognizer",
       "type": "hidden",
       "position": [
-        750,
-        180
+        760,
+        200
       ],
       "layer_index": 1,
       "color": [
@@ -171,8 +170,8 @@
       "name": "outcome_predictor",
       "type": "hidden",
       "position": [
-        650,
-        320
+        620,
+        340
       ],
       "layer_index": 2,
       "color": [
@@ -187,8 +186,8 @@
       "name": "risk_assessor",
       "type": "hidden",
       "position": [
-        750,
-        320
+        740,
+        300
       ],
       "layer_index": 2,
       "color": [
