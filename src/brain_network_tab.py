@@ -167,8 +167,6 @@ class NetworkTab(BrainBaseTab):
             self.checkbox_weights.stateChanged.connect(self.brain_widget.toggle_weights)
         checkbox_layout.addWidget(self.checkbox_weights)
 
-        checkbox_layout.addSpacing(DisplayScaling.scale(60))
-
         self.checkbox_pruning = QtWidgets.QCheckBox("Enable pruning")
         self.checkbox_pruning.setChecked(True)
         self.checkbox_pruning.stateChanged.connect(self.toggle_pruning)
@@ -235,6 +233,17 @@ class NetworkTab(BrainBaseTab):
 
     def _open_brain_designer(self):
         """Launch Brain Designer in a separate process – safe & reliable"""
+        
+        # === NEW: Pause simulation via UI ===
+        # Try to find the UI instance to trigger the full pause effect (overlay + logic)
+        if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'user_interface'):
+            self.tamagotchi_logic.user_interface.set_simulation_speed(0)
+            self.tamagotchi_logic.user_interface.show_message("Paused for Brain Designer")
+        elif self.tamagotchi_logic:
+            # Fallback if UI link is missing
+            self.tamagotchi_logic.set_simulation_speed(0)
+        # ====================================
+
         import multiprocessing
         from src.brain_designer_launcher import launch_brain_designer_process
 
@@ -250,7 +259,7 @@ class NetworkTab(BrainBaseTab):
             self._brain_designer_process = multiprocessing.Process(
                 target=launch_brain_designer_process,
                 name="BrainDesignerProcess",
-                daemon=True
+                daemon=False
             )
             self._brain_designer_process.start()
             print(f"Brain Designer launched! PID: {self._brain_designer_process.pid}")
@@ -323,6 +332,18 @@ class NetworkTab(BrainBaseTab):
 
     def _on_every_second(self):
         """Called every second by the single QTimer."""
+        # === NEW: Check pause state ===
+        is_paused = False
+        if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'simulation_speed'):
+            is_paused = (self.tamagotchi_logic.simulation_speed == 0)
+            
+        if is_paused:
+            if hasattr(self, 'hebbian_timer_label'):
+                self.hebbian_timer_label.setText("Hebbian: PAUSED")
+            # Don't decrement counter
+            return
+        # ==============================
+
         # 1. Update Hebbian counter (count down to 0, show 0 for one full second)
         if self.hebbian_timer_value > 0:
             self.hebbian_timer_value -= 1
@@ -446,23 +467,23 @@ class NetworkTab(BrainBaseTab):
         """)
         self.stats_and_button_layout.addWidget(self.functional_stats_label, 1)
 
-        # 2. Button container – 50 px high, wide enough for two 50×50 buttons
+        # 2. Button container
         self.new_button_container = QtWidgets.QWidget()
-        self.new_button_container.setFixedSize(DisplayScaling.scale(158),  # 3×50 + 2×4 px gaps
-                                            DisplayScaling.scale(50))
+        self.new_button_container.setFixedSize(DisplayScaling.scale(90),
+                                            DisplayScaling.scale(90))
         btn_layout = QtWidgets.QHBoxLayout(self.new_button_container)
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(4)
 
-        # Experience buffer
-        self.new_50x50_button = QtWidgets.QPushButton("✳️")
-        self.new_50x50_button.setFixedSize(DisplayScaling.scale(50), DisplayScaling.scale(50))
+        # Brain Designer
+        self.new_50x50_button = QtWidgets.QPushButton("🧠")
+        self.new_50x50_button.setFixedSize(DisplayScaling.scale(90), DisplayScaling.scale(90))
         self.new_50x50_button.setStyleSheet("""
             QPushButton {
-                background-color: #3f51b5;
+                background-color: #0041C2;
                 color: white;
                 border-radius: 5px;
-                font-size: 22pt;
+                font-size: 26pt;
             }
             QToolTip {
                 font-size: 9pt;
@@ -471,34 +492,10 @@ class NetworkTab(BrainBaseTab):
                 border: 1px solid #444;
             }
         """)
-        self.new_50x50_button.setToolTip("Show the Experience Buffer")
-        self.new_50x50_button.clicked.connect(self._show_experience_buffer)
+        self.new_50x50_button.setToolTip("Show Brain Designer")
+        self.new_50x50_button.clicked.connect(self._open_brain_designer)
         btn_layout.addWidget(self.new_50x50_button)
-
-        # Brain Designer button
-        self.brain_designer_button = QtWidgets.QPushButton("📐")
-        self.brain_designer_button.setFixedSize(DisplayScaling.scale(50), DisplayScaling.scale(50))
-        self.brain_designer_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border-radius: 5px;
-                font-size: 22pt;
-            }
-            QToolTip {
-                font-size: 9pt;
-                color: #ffffff;
-                background: #2b2b2b;
-                border: 1px solid #444;
-            }
-        """)
-        self.brain_designer_button.setToolTip("Open Brain Designer")
-        self.brain_designer_button.clicked.connect(self._open_brain_designer)
-        btn_layout.addWidget(self.brain_designer_button)
-
         self.stats_and_button_layout.addWidget(self.new_button_container)
-
-        # Insert the combined widget just before the final stretch
         self.layout.insertWidget(self.layout.count() - 1, self.functional_stats_area)
 
     def flash_emergency_creation(self, neuron_name):

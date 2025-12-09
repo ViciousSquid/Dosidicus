@@ -110,10 +110,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.brain_worker.error_occurred.connect(self._on_worker_error)
         
         # ===== PERFORMANCE FIX: Share worker with brain_widget =====
-        # This prevents brain_widget from creating its own worker
         if hasattr(self.brain_widget, 'set_brain_worker'):
             self.brain_widget.set_brain_worker(self.brain_worker)
             print("🔗 Shared BrainWorker with brain_widget")
+            
+            # CRITICAL: Immediately update cache with current state
+            self.brain_widget._update_worker_cache()
+            print("📦 Initial worker cache populated")
         
         # Store reference to prevent garbage collection
         self._brain_worker_ref = self.brain_worker
@@ -202,40 +205,46 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Everything looks fine
         # print("BrainWorker healthy")  # Uncomment only for deep debugging
 
+    # SquidBrainWindow._restart_brain_worker
     def _restart_brain_worker(self):
-        """Safely stop the old worker and start a fresh one"""
-        # Stop old worker if it exists
+        # --- stop old worker
         if hasattr(self, 'brain_worker') and self.brain_worker:
             print("Stopping old BrainWorker...")
+            # Disconnect signals BEFORE stopping to prevent duplicate connections
+            try:
+                self.brain_worker.neurogenesis_result.disconnect(self._on_worker_activity)
+                self.brain_worker.hebbian_result.disconnect(self._on_worker_activity)
+                self.brain_worker.state_update_result.disconnect(self._on_worker_activity)
+                self.brain_worker.error_occurred.disconnect(self._on_worker_error)
+            except:
+                pass  # Ignore if signals weren't connected
+            
             self.brain_worker.stop()
-            self.brain_worker.wait(3000)  # Give it up to 3 seconds to quit
+            self.brain_worker.wait(3000)
 
-        # Create brand new worker
-        print("Creating new BrainWorker instance...")
+        # --- create & start new worker
         self.brain_worker = BrainWorker(brain_widget=self.brain_widget)
         
-        # Reconnect all signals
+        # Reconnect signals for new worker
         self.brain_worker.neurogenesis_result.connect(self._on_worker_activity)
         self.brain_worker.hebbian_result.connect(self._on_worker_activity)
         self.brain_worker.state_update_result.connect(self._on_worker_activity)
         self.brain_worker.error_occurred.connect(self._on_worker_error)
         
-        # Start it
         self.brain_worker.start()
-        
-        # Update task manager reference
-        if hasattr(self, 'task_manager') and self.task_manager:
-            self.task_manager.brain_worker = self.brain_worker
-            print("Task manager reference updated")
 
-        # Reset health tracking
-        self._last_worker_activity = time.time()
-        self._worker_healthy = True
+        # Update cache for new worker
+        if hasattr(self.brain_widget, 'set_brain_worker'):
+            self.brain_widget.set_brain_worker(self.brain_worker)
+            self.brain_widget._update_worker_cache()
         
-        # Keep it alive with periodic pings
+        # --- CRITICAL: Update TaskManager's worker reference ---
+        if hasattr(self, 'task_manager') and self.task_manager:
+            self.task_manager.update_worker_reference(self.brain_worker)
+        
+        # --- Keep-alive timer ---
         QtCore.QTimer.singleShot(1000, lambda: self._keep_worker_alive())
-        
-        print("BrainWorker successfully restarted and reconnected")
+        print("BrainWorker successfully restarted and re-cached")
 
     def _on_worker_activity(self, result):
         """Update worker health when activity is detected"""
@@ -296,14 +305,22 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         pass
 
     def set_pause_state(self, is_paused):
-        """Set pause state for the brain window"""
-        # Only manage internal state but don't apply visual overlay
+        """Set pause state for the brain window and worker thread"""
         self.is_paused = is_paused
         
         # Set brain widget pause state
         if hasattr(self, 'brain_widget'):
             self.brain_widget.is_paused = is_paused
         
+        # Control worker thread - CRITICAL for freezing everything
+        if hasattr(self, 'brain_worker') and self.brain_worker:
+            if is_paused:
+                self.brain_worker.pause()
+                print("⏸️ BrainWorker paused")
+            else:
+                self.brain_worker.resume()
+                print("▶️ BrainWorker resumed")
+
         # Manage timers based on pause state
         if is_paused:
             if hasattr(self, 'hebbian_timer'):
@@ -335,6 +352,54 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Update stimulate button state
         if hasattr(self, 'stimulate_button'):
             self.stimulate_button.setEnabled(enabled)
+
+    def init_tabs(self):
+        # Create tab widget
+        self.tabs = QtWidgets.QTabWidget()
+        self.layout.addWidget(self.tabs)
+
+        # Set base font for all tab content
+        base_font = QtGui.QFont()
+        base_font.setPointSize(self.base_font_size)
+        self.tabs.setFont(base_font)
+
+        # Create and add existing tabs
+        self.network_tab = NetworkTab(self, self.tamagotchi_logic, self.brain_widget, self.config_manager, self.debug_mode)
+        self.tabs.addTab(self.network_tab, "Network")
+
+        # Add our Neural Network Visualizer tab as the Learning tab
+        self.nn_viz_tab = NeuralNetworkVisualizerTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
+        self.tabs.addTab(self.nn_viz_tab, "Learning")
+
+        self.memory_tab = MemoryTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
+        self.tabs.addTab(self.memory_tab, "Memory")
+
+        self.decisions_tab = DecisionsTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
+        self.tabs.addTab(self.decisions_tab, "Decisions")
+
+        self.personality_tab = PersonalityTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
+        self.tabs.addTab(self.personality_tab, "Personality")
+
+        # ADD THE NEW STATISTICS TAB HERE
+        self.statistics_tab = StatisticsTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
+        self.tabs.addTab(self.statistics_tab, "Statistics")
+
+        self.about_tab = AboutTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
+        self.tabs.addTab(self.about_tab, "About")
+
+        # Make sure all tabs have correct tamagotchi_logic reference
+        # ADD 'statistics_tab' TO THIS LIST
+        for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'decisions_tab', 'personality_tab', 'statistics_tab', 'about_tab']:
+            if hasattr(self, tab_name):
+                tab = getattr(self, tab_name)
+                if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:
+                    tab.set_tamagotchi_logic(self.tamagotchi_logic)
+                print(f"Set tamagotchi_logic for {tab_name}")
+
+        # Pre-load the learning tab to make it responsive on first click
+        if hasattr(self, 'nn_viz_tab'):
+            if hasattr(self.nn_viz_tab, 'pre_load_data'):
+                QtCore.QTimer.singleShot(700, self.nn_viz_tab.pre_load_data)
 
     def get_brain_state(self):
         """
@@ -377,7 +442,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             'neuron_positions': {str(k): v for k, v in self.brain_widget.neuron_positions.items()},
             'neuron_states': non_core_states,  # Only non-core states
             'neurogenesis_data': self.brain_widget.neurogenesis_data,
-            'state_colors': self.brain_widget.state_colors,
+            'state_colors': getattr(self.brain_widget, 'state_colors', {}),
             'enhanced_neurogenesis': enhanced_neurogenesis_data,  # Full neurogenesis state
             # Legacy key for backward compatibility (subset of enhanced_neurogenesis)
             'functional_neurons': enhanced_neurogenesis_data.get('functional_neurons', {})
@@ -762,54 +827,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.last_update_time = time.time()
         self.update_threshold = 5  # Minimum seconds between updates
 
-    def init_tabs(self):
-        # Create tab widget
-        self.tabs = QtWidgets.QTabWidget()
-        self.layout.addWidget(self.tabs)
-
-        # Set base font for all tab content
-        base_font = QtGui.QFont()
-        base_font.setPointSize(self.base_font_size)
-        self.tabs.setFont(base_font)
-
-        # Create and add existing tabs
-        self.network_tab = NetworkTab(self, self.tamagotchi_logic, self.brain_widget, self.config_manager, self.debug_mode)
-        self.tabs.addTab(self.network_tab, "Network")
-
-        # Add our Neural Network Visualizer tab as the Learning tab
-        self.nn_viz_tab = NeuralNetworkVisualizerTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.nn_viz_tab, "Learning")
-
-        self.memory_tab = MemoryTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.memory_tab, "Memory")
-
-        self.decisions_tab = DecisionsTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.decisions_tab, "Decisions")
-
-        self.personality_tab = PersonalityTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.personality_tab, "Personality")
-
-        # ADD THE NEW STATISTICS TAB HERE
-        self.statistics_tab = StatisticsTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.statistics_tab, "Statistics")
-
-        self.about_tab = AboutTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.about_tab, "About")
-
-        # Make sure all tabs have correct tamagotchi_logic reference
-        # ADD 'statistics_tab' TO THIS LIST
-        for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'decisions_tab', 'personality_tab', 'statistics_tab', 'about_tab']:
-            if hasattr(self, tab_name):
-                tab = getattr(self, tab_name)
-                if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:
-                    tab.set_tamagotchi_logic(self.tamagotchi_logic)
-                print(f"Set tamagotchi_logic for {tab_name}")
-
-        # Pre-load the learning tab to make it responsive on first click
-        if hasattr(self, 'nn_viz_tab'):
-            if hasattr(self.nn_viz_tab, 'pre_load_data'):
-                QtCore.QTimer.singleShot(700, self.nn_viz_tab.pre_load_data)
-
 
     def update_randomness_factors(self, randomness):
         """Update the randomness factors table"""
@@ -935,23 +952,62 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             if widget is not None:
                 widget.deleteLater()
 
-    def set_pause_state(self, paused=None):
-        """Set or toggle the pause state"""
-        if paused is not None:
-            self.is_paused = paused
+    def set_pause_state(self, is_paused):
+        """Set pause state for the brain window and worker thread"""
+        self.is_paused = is_paused
+        
+        # Set brain widget pause state
+        if hasattr(self, 'brain_widget'):
+            self.brain_widget.is_paused = is_paused
+        
+        # Control worker thread - CRITICAL for freezing everything
+        if hasattr(self, 'brain_worker') and self.brain_worker:
+            if is_paused:
+                self.brain_worker.pause()
+                self._pause_start_time = time.time() # Capture time when paused
+                print("⏸️ BrainWorker paused")
+            else:
+                self.brain_worker.resume()
+                
+                # Adjust timestamps to account for pause duration
+                if hasattr(self, '_pause_start_time'):
+                    pause_duration = time.time() - self._pause_start_time
+                    
+                    # 1. Adjust Hebbian timer reference
+                    if hasattr(self.brain_widget, 'last_hebbian_time'):
+                        self.brain_widget.last_hebbian_time += pause_duration
+                        
+                    # 2. Adjust Neurogenesis timer reference
+                    if hasattr(self.brain_widget, 'neurogenesis_data'):
+                        self.brain_widget.neurogenesis_data['last_neuron_time'] += pause_duration
+                        
+                    # 3. Adjust Animation timer references in brain_widget to prevent jumps
+                    if hasattr(self.brain_widget, '_last_animation_time'):
+                        self.brain_widget._last_animation_time += pause_duration
+                    
+                    # 4. Adjust running weight animations
+                    if hasattr(self.brain_widget, 'weight_animations'):
+                        for anim in self.brain_widget.weight_animations:
+                            anim['start_time'] += pause_duration
+                            
+                    # 5. Adjust reveal animations
+                    if hasattr(self.brain_widget, 'neuron_reveal_animations'):
+                        for anim in self.brain_widget.neuron_reveal_animations.values():
+                            anim['start_time'] += pause_duration
+                            
+                    # 6. Adjust neurogenesis highlight
+                    if hasattr(self.brain_widget, 'neurogenesis_highlight'):
+                        self.brain_widget.neurogenesis_highlight['start_time'] += pause_duration
+
+                print("▶️ BrainWorker resumed")
+
+        # Manage timers based on pause state
+        if is_paused:
+            if hasattr(self, 'hebbian_timer'):
+                self.hebbian_timer.stop()
         else:
-            self.is_paused = not self.is_paused
-        
-        # Update brain widget pause state if it exists
-        if hasattr(self, 'brain_widget') and self.brain_widget:
-            self.brain_widget.is_paused = self.is_paused
-        
-        # Update UI
-        self.update_paused_overlay()
-        
-        # Update status label if it exists
-        if hasattr(self, 'status_label'):
-            self.status_label.setText("Paused" if self.is_paused else "Running")
+            if hasattr(self, 'hebbian_timer'):
+                self.hebbian_timer.start(self.config.hebbian['learning_interval'])
 
     def _create_memory_card(self, memory):
         """Create a styled HTML memory card with tooltip"""

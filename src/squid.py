@@ -104,6 +104,11 @@ class Squid:
         self.pursuing_food = False
         self.target_food = None
 
+        # View cone periodic scanning
+        self.view_cone_timer = QtCore.QTimer()
+        self.view_cone_timer.timeout.connect(self.update_view_direction)
+        self.view_cone_timer.start(1000)  # Every 1 second
+
         # Goal neurons
         self.satisfaction = 50
         self.anxiety = 0
@@ -116,39 +121,6 @@ class Squid:
             self.personality = personality
             
         self.uuid = uuid.uuid4()
-
-    def _has_personality_starter_neuron(self):
-        """Check if a personality-specific starter neuron already exists"""
-        if not hasattr(self, 'tamagotchi_logic') or not self.tamagotchi_logic:
-            return False
-        
-        brain_window = self.tamagotchi_logic.brain_window
-        if not brain_window or not hasattr(brain_window, 'brain_widget'):
-            return False
-        
-        brain_widget = brain_window.brain_widget
-        if not hasattr(brain_widget, 'enhanced_neurogenesis'):
-            return False
-        
-        # Check for personality-specific neuron names
-        personality_neuron_names = {
-            'timid': 'timid_caution',
-            'adventurous': 'explorer_drive',
-            'lazy': 'energy_conservation',
-            'energetic': 'restless_activity',
-            'introvert': 'solitude_preference',
-            'greedy': 'insatiable_hunger',
-            'stubborn': 'sushi_preference'
-        }
-        
-        personality_key = self.personality.value.lower()
-        expected_neuron_name = personality_neuron_names.get(personality_key)
-        
-        if not expected_neuron_name:
-            return False
-        
-        # Check if this neuron exists in the functional neurons
-        return expected_neuron_name in brain_widget.enhanced_neurogenesis.functional_neurons
 
     @property
     def carrying_rock(self):
@@ -385,9 +357,67 @@ class Squid:
 
         existing = self.brain_widget.neuron_positions.keys()
         return any(n.startswith(prefix) for n in existing)
+    
+    def update_view_direction(self):
+        """
+        Called every 1 second by a QTimer.
+        Makes the squid actively scan its environment by changing gaze direction.
+        Includes smart hunger-based food bias + instant brain refresh.
+        """
+        # Don't interrupt important states
+        if (getattr(self, 'is_sleeping', False) or 
+            getattr(self, 'is_fleeing', False) or 
+            getattr(self, 'pursuing_food', False)):
+            return
+
+        if not hasattr(self, 'tamagotchi_logic') or not self.tamagotchi_logic:
+            return
+
+        old_angle = self.current_view_angle
+
+        # === Normal scanning: random direction ===
+        self.current_view_angle = random.uniform(0, 2 * math.pi)
+
+        # === Hunger override: high chance to look toward nearest food ===
+        if self.hunger > 65 and self.tamagotchi_logic.food_items:
+            nearest_food = min(
+                self.tamagotchi_logic.food_items,
+                key=lambda f: self.distance_to(f.pos().x(), f.pos().y()),
+                default=None
+            )
+            if nearest_food:
+                fx = nearest_food.pos().x() + nearest_food.boundingRect().width() / 2
+                fy = nearest_food.pos().y() + nearest_food.boundingRect().height() / 2
+                sx = self.squid_x + self.squid_width / 2
+                sy = self.squid_y + self.squid_height / 2
+
+                target_angle = math.atan2(fy - sy, fx - sx)
+
+                # The hungrier, the more likely to snap gaze directly at food
+                hunger_factor = (self.hunger - 65) / 35.0  # 0.0 → 1.0 as hunger goes 65→100
+                if random.random() < hunger_factor:
+                    self.current_view_angle = target_angle
+                else:
+                    # Look near the food (curious glancing)
+                    self.current_view_angle = target_angle + random.uniform(-0.8, 0.8)
+
+        # === Force immediate brain update so 'can_see_food' neuron reacts instantly ===
+        if old_angle != self.current_view_angle:
+            # Option 1: Direct brain hook refresh (most reliable)
+            if hasattr(self.tamagotchi_logic, 'brain_hooks'):
+                # This recalculates all input neurons including can_see_food
+                QtCore.QTimer.singleShot(10, lambda: self.tamagotchi_logic.brain_hooks.get_input_neuron_values())
+
+            # Option 2: Trigger full brain tick (fallback, also works)
+            if hasattr(self.tamagotchi_logic, 'update_squid_brain'):
+                QtCore.QTimer.singleShot(20, self.tamagotchi_logic.update_squid_brain)
+
+            # Optional: Visual feedback in VisionWindow
+            if hasattr(self.tamagotchi_logic, 'vision_window') and self.tamagotchi_logic.vision_window:
+                self.tamagotchi_logic.vision_window.update_view()
 
     def apply_tint(self, color):
-        """Apply a color tint to the squid's image."""
+        """Squid can change colour!"""
         self.tint_color = color
         self.update_squid_image()
 
@@ -912,6 +942,13 @@ class Squid:
         self.anxiety = state['anxiety']
         self.curiosity = state['curiosity']
         self.personality = Personality(state['personality'])
+        
+        # Load the UUID if it exists in the saved state
+        if 'uuid' in state:
+            self.uuid = uuid.UUID(state['uuid'])  # Convert string back to UUID object
+        else:
+            # For backward compatibility with old saves
+            self.uuid = uuid.uuid4()
 
         # Restore statistics if saved
         if 'statistics' in state and hasattr(self, 'statistics'):

@@ -1,27 +1,34 @@
-# Decision engine version 3.12 - Enhanced with decision tracking for visualization
+# decision_engine.py
+# Version 4.0 — Fully Neural-Driven Decision Making
 # December 2025
+# Uses BrainNeuronHooks as the single source of perception
 
 import random
-from .personality import Personality
 import math
+from .personality import Personality
+
 
 class DecisionEngine:
+    """
+    Neural-first decision engine.
+    All perception flows through BrainNeuronHooks → no manual vision checks.
+    Behavior emerges purely from the current brain state + memory + personality.
+    """
+
     def __init__(self, squid):
         self.squid = squid
-        # Track decision data for visualization
         self.last_decision_data = {}
 
     def get_decision_data(self):
-        """Return the last decision data for visualization"""
+        """Return last decision trace for visualization in Brain Tool → Decisions tab"""
         return self.last_decision_data.copy()
 
     def make_decision(self):
-        """
-        Decision-making process designed for emergent behavior.
-        Actions are not chosen from a simple weighted list but emerge from the interplay
-        of physiological needs, memories, personality, and environmental context.
-        """
-        # Initialize decision tracking
+        logic = self.squid.tamagotchi_logic
+
+        # =================================================================
+        # 1. BUILD FULL BRAIN STATE FROM HOOKS
+        # =================================================================
         decision_data = {
             'inputs': {},
             'brain_state': {},
@@ -32,350 +39,275 @@ class DecisionEngine:
             'adjusted_weights': {},
             'final_decision': '',
             'confidence': 0.0,
-            'personality': str(self.squid.personality).split('.')[-1],
-            'randomness_applied': True
+            'personality': self.squid.personality.value if isinstance(self.squid.personality, Personality) else str(self.squid.personality),
+            'timestamp': time.time()
         }
-        
-        # =================================================================
-        # 1. GATHER SENSORY AND INTERNAL STATE DATA
-        # =================================================================
-        # This creates a complete snapshot of the squid's current condition.
 
-        # Gather all relevant world objects to check for visibility
-        all_world_objects = []
-        if hasattr(self.squid.tamagotchi_logic, 'food_items'):
-            all_world_objects.extend(self.squid.tamagotchi_logic.food_items)
-        if hasattr(self.squid.tamagotchi_logic, 'poop_items'):
-            all_world_objects.extend(self.squid.tamagotchi_logic.poop_items)
-        if hasattr(self.squid.tamagotchi_logic, 'user_interface') and hasattr(self.squid.tamagotchi_logic.user_interface, 'scene'):
-            all_decorations = [item for item in self.squid.tamagotchi_logic.user_interface.scene.items() if hasattr(item, 'category')]
-            all_world_objects.extend(all_decorations)
+        # --- Get dynamic perceptual inputs via hooks ---
+        if not hasattr(logic, 'brain_hooks'):
+            perceptual_inputs = {}
+        else:
+            try:
+                perceptual_inputs = logic.brain_hooks.get_input_neuron_values()
+                logic.brain_hooks.update_decay()  # Critical: decay temporal sensors
+            except Exception as e:
+                print(f"[DecisionEngine] Hook error: {e}")
+                perceptual_inputs = {}
 
-        # Use the squid's vision to get what it can actually see
-        visible_objects = self.squid.get_visible_objects(all_world_objects)
+        decision_data['inputs'] = perceptual_inputs
 
-        visible_rocks = [obj for obj in visible_objects if getattr(obj, 'category', '') == 'rock']
-        visible_poops = [obj for obj in visible_objects if getattr(obj, 'category', '') == 'poop']
-        visible_food = [obj for obj in visible_objects if getattr(obj, 'category', None) == 'food']
-        visible_plants = [obj for obj in visible_objects if getattr(obj, 'category', '') == 'plant']
+        # --- Get full current brain state (core + learned + input neurons) ---
+        try:
+            brain_state = logic.brain_window.brain_widget.state.copy()
+        except:
+            brain_state = {}
 
-        current_state = {
-            "hunger": self.squid.hunger,
-            "happiness": self.squid.happiness,
-            "cleanliness": self.squid.cleanliness,
-            "sleepiness": self.squid.sleepiness,
-            "satisfaction": self.squid.satisfaction,
-            "anxiety": self.squid.anxiety,
-            "curiosity": self.squid.curiosity,
-            "is_sick": self.squid.is_sick,
-            "is_sleeping": self.squid.is_sleeping,
-            "has_food_visible": bool(visible_food),
-            "has_rock_visible": bool(visible_rocks),
-            "has_poop_visible": bool(visible_poops),
-            "has_plant_visible": bool(visible_plants),
-            "carrying_rock": self.squid.carrying_rock,
-            "carrying_poop": self.squid.carrying_poop,
-            "rock_throw_cooldown": getattr(self.squid, 'rock_throw_cooldown', 0),
-            "poop_throw_cooldown": getattr(self.squid, 'poop_throw_cooldown', 0)
-        }
-        
-        # Store inputs for visualization
-        decision_data['inputs'] = current_state.copy()
-        
-        # The brain's neural network state provides the foundation for desires.
-        brain_state = self.squid.tamagotchi_logic.squid_brain_window.brain_widget.state
-        decision_data['brain_state'] = brain_state.copy()
-        
+        # Ensure perceptual inputs are present even if brain_widget hasn't updated yet
+        brain_state.update(perceptual_inputs)
+        decision_data['brain_state'] = brain_state
+
         # =================================================================
-        # 2. APPLY MEMORY INFLUENCE
+        # 2. MEMORY INFLUENCE
         # =================================================================
-        # Past experiences dynamically alter the squid's current motivations.
-        # This makes the squid learn and adapt based on what has happened to it.
-        active_memories = self.squid.memory_manager.get_active_memories_data(5)
-        memory_influence_weights = {
-            "exploring": 1.0,
+        active_memories = self.squid.memory_manager.get_active_memories_data(6)
+        memory_mod = {
             "eating": 1.0,
-            "approaching_rock": 1.0,
             "playing": 1.0,
-            "organizing": 1.0,
-            "social": 1.0,
-            "approaching_plant": 1.0
+            "exploring": 1.0,
+            "approaching_plant": 1.0,
+            "throwing": 1.0,
         }
 
-        for memory in active_memories:
-            # Determine if the memory was positive, negative, or neutral
-            total_effect = 0
-            if isinstance(memory.get('raw_value'), dict):
-                # Sum the numerical effects in the memory's raw value
-                total_effect = sum(float(val) for val in memory['raw_value'].values() if isinstance(val, (int, float)))
-            
-            # Apply influence based on memory category
-            if memory['category'] == 'food' and total_effect > 0:
-                memory_influence_weights['eating'] *= 1.2
-            elif memory['category'] == 'interaction' and 'pickup' in memory['key'] and total_effect > 0:
-                memory_influence_weights['approaching_rock'] *= 1.1
-                memory_influence_weights['playing'] *= 1.15
-            elif memory['category'] == 'play' and total_effect > 0:
-                memory_influence_weights['playing'] *= 1.3
-            elif memory['category'] == 'mental_state' and 'startled' in memory['key']:
-                memory_influence_weights['exploring'] *= 0.8
-                memory_influence_weights['approaching_plant'] *= 1.2  # Seek comfort when startled
-            elif memory['category'] == 'interaction' and 'plant' in memory['key'] and total_effect > 0:
-                memory_influence_weights['approaching_plant'] *= 1.2
+        for mem in active_memories:
+            effect = sum(v for v in mem.get('raw_value', {}).values() if isinstance(v, (int, float))) if isinstance(mem.get('raw_value'), dict) else 0
 
-        # Store memory influences for visualization
-        decision_data['memory_influences'] = memory_influence_weights.copy()
+            if mem['category'] == 'food' and effect > 0:
+                memory_mod['eating'] *= 1.25
+            if 'rock' in mem['key'] and effect > 0:
+                memory_mod['playing'] *= 1.2
+                memory_mod['throwing'] *= 1.15
+            if 'poop' in mem['key'] and effect > 0:
+                memory_mod['playing'] *= 1.1
+            if 'plant' in mem['key'] and effect > 0:
+                memory_mod['approaching_plant'] *= 1.3
+            if 'startled' in mem['key']:
+                memory_mod['exploring'] *= 0.7
+                memory_mod['approaching_plant'] *= 1.4
+
+        decision_data['memory_influences'] = memory_mod
 
         # =================================================================
-        # 3. CALCULATE PHYSIOLOGICAL URGENCY
+        # 3. URGENCY (NON-LINEAR PHYSIOLOGICAL DRIVE)
         # =================================================================
-        # Instead of a linear influence, critical needs create a powerful, non-linear urge to act.
-        urgency_multipliers = {
-            "eating": math.pow(1.5, current_state['hunger'] / 25),
-            "sleeping": math.pow(1.5, current_state['sleepiness'] / 25)
+        hunger_level = brain_state.get('hunger', 50)
+        sleepiness = brain_state.get('sleepiness', 50)
+
+        urgency = {
+            "eating": math.pow(1.6, hunger_level / 25),
+            "sleeping": math.pow(1.7, sleepiness / 25),
         }
-        
-        # Store urgency multipliers for visualization
-        decision_data['urgency_multipliers'] = urgency_multipliers.copy()
+        decision_data['urgency_multipliers'] = urgency
 
-        # Check for extreme conditions that should result in an immediate, overriding action.
-        if self.squid.sleepiness >= 95:
+        # Immediate overrides
+        if sleepiness >= 95:
+            self.squid.go_to_sleep()
             decision_data['final_decision'] = "exhausted"
             decision_data['confidence'] = 1.0
             self.last_decision_data = decision_data
-            self.squid.go_to_sleep()
             return "exhausted"
-        
+
         if self.squid.is_sleeping:
             decision_data['final_decision'] = "sleeping peacefully"
             decision_data['confidence'] = 1.0
             self.last_decision_data = decision_data
             return "sleeping peacefully"
-        
-        # Emotional states can also override standard decision-making
-        if self.squid.curiosity > 80:
-            decision_data['final_decision'] = "extremely curious"
+
+        if brain_state.get('external_stimulus', 0) > 90:
+            decision_data['final_decision'] = "startled!"
             decision_data['confidence'] = 1.0
             self.last_decision_data = decision_data
-            return "extremely curious"
-        if self.squid.happiness < 20 and self.squid.anxiety > 50:
-            decision_data['final_decision'] = "distressed"
-            decision_data['confidence'] = 1.0
-            self.last_decision_data = decision_data
-            return "distressed"
-            
+            return "startled!"
+
         # =================================================================
-        # 4. CALCULATE BASE DECISION WEIGHTS
+        # 4. BUILD DECISION WEIGHTS FROM BRAIN STATE
         # =================================================================
-        # These are the initial "desires" based on the brain's neural state.
-        
-        # Check if there are playable objects (rocks, poop when not carrying)
-        has_playable_objects = (
-            current_state['has_rock_visible'] or 
-            current_state['has_poop_visible'] or
-            self.squid.carrying_rock or 
-            self.squid.carrying_poop
+        weights = {}
+
+        # Exploration
+        threat = brain_state.get('threat_level', brain_state.get('anxiety', 50))
+        external = brain_state.get('external_stimulus', 0)
+        weights["exploring"] = (
+            brain_state.get("curiosity", 50) *
+            max(0.1, 1.0 - threat / 140) *
+            (0.2 if external > 80 else 1.0)
         )
-        
-        decision_weights = {
-            "exploring": brain_state.get("curiosity", 50) * (1 - (brain_state.get("anxiety", 50) / 120)),
-            "eating": brain_state.get("hunger", 50) if current_state['has_food_visible'] else 0,
-            "approaching_rock": brain_state.get("curiosity", 50) * 0.7 if current_state['has_rock_visible'] and not self.squid.carrying_rock else 0,
-            "throwing_rock": brain_state.get("satisfaction", 50) * 0.7 if self.squid.carrying_rock else 0,
-            "approaching_poop": brain_state.get("curiosity", 50) * 0.5 if current_state['has_poop_visible'] and not self.squid.carrying_poop and len(self.squid.tamagotchi_logic.poop_items) > 0 else 0,
-            "throwing_poop": brain_state.get("satisfaction", 50) * 0.6 if self.squid.carrying_poop else 0,
-            "approaching_plant": brain_state.get("curiosity", 20) * 0.8 if current_state['has_plant_visible'] else 0,
-            "playing": brain_state.get("satisfaction", 50) * brain_state.get("happiness", 50) / 100 if has_playable_objects else 0,
-            "organizing": brain_state.get("satisfaction", 50) * 0.5,
-            "sleeping": brain_state.get("sleepiness", 50)
-        }
-        
-        # Store base weights for visualization
-        decision_data['base_weights'] = decision_weights.copy()
+
+        # Eating
+        can_see_food = brain_state.get('can_see_food', 0)
+        weights["eating"] = (
+            hunger_level *
+            (3.0 if can_see_food > 80 else 0.3) *
+            urgency["eating"]
+        )
+
+        # Plant seeking (comfort)
+        near_plant = brain_state.get('plant_proximity', 0) > 40
+        weights["approaching_plant"] = (
+            (brain_state.get("anxiety", 50) / 40) *
+            (3.0 if near_plant else 0.5) *
+            (4.0 if self.squid.personality == Personality.TIMID else 1.8)
+        )
+
+        # Play / Object interaction
+        carrying = self.squid.carrying_rock or self.squid.carrying_poop
+        weights["playing"] = (
+            brain_state.get("satisfaction", 50) *
+            brain_state.get("curiosity", 50) / 50 *
+            (2.2 if carrying else 1.0) *
+            (0.4 if brain_state.get('is_sick', 0) > 50 else 1.0)
+        )
+
+        # Throwing (only if carrying)
+        weights["throwing"] = (
+            brain_state.get("satisfaction", 50) * 1.3
+            if carrying else 0
+        )
+
+        # Sleeping (non-exhausted)
+        weights["sleeping"] = sleepiness * urgency["sleeping"] * 0.6
+
+        # Fleeing from threat
+        if threat > 75 or external > 85:
+            weights["fleeing"] = threat * 1.8
+
+        decision_data['base_weights'] = weights.copy()
 
         # =================================================================
-        # 5. DYNAMICALLY MODIFY WEIGHTS FOR EMERGENT BEHAVIOR
+        # 5. APPLY MEMORY + PERSONALITY MODIFIERS
         # =================================================================
-        
-        # Apply Physiological Urgency
-        decision_weights["eating"] *= urgency_multipliers.get("eating", 1.0)
-        decision_weights["sleeping"] *= urgency_multipliers.get("sleeping", 1.0)
+        for action, mod in memory_mod.items():
+            if action in weights:
+                weights[action] *= mod
 
-        # Apply Memory Influence
-        for action, weight in memory_influence_weights.items():
-            if action in decision_weights:
-                decision_weights[action] *= weight
-
-        # Apply Personality and State Modifiers
-        personality_modifiers = {action: 1.0 for action in decision_weights.keys()}
-        
-        if self.squid.personality == Personality.TIMID:
-            personality_modifiers["exploring"] = 0.7
-            personality_modifiers["approaching_plant"] = 2.2  # Timid squids strongly prefer hiding in plants
-            personality_modifiers["playing"] = personality_modifiers.get("playing", 1.0) * 0.7  # Less playful when timid
-        elif self.squid.personality == Personality.ADVENTUROUS:
-            personality_modifiers["exploring"] = 1.3
-            personality_modifiers["approaching_rock"] = 1.2
-            personality_modifiers["playing"] = 1.2
+        # Apply personality
+        if self.squid.personality == Personality.ADVENTUROUS:
+            weights["exploring"] *= 1.4
+            weights["playing"] *= 1.3
+        elif self.squid.personality == Personality.TIMID:
+            weights["exploring"] *= 0.6
+            weights["approaching_plant"] *= 1.5
         elif self.squid.personality == Personality.GREEDY:
-            personality_modifiers["eating"] = 1.5
-        elif self.squid.personality == Personality.ENERGETIC:
-            personality_modifiers["playing"] = 1.4
-            personality_modifiers["exploring"] = 1.2
+            weights["eating"] *= 1.6
         elif self.squid.personality == Personality.LAZY:
-            personality_modifiers["playing"] = 0.6
-            personality_modifiers["exploring"] = 0.8
-        
-        # Anxiety makes plants more attractive (comfort seeking)
-        if self.squid.anxiety > 50:
-            anxiety_multiplier = 1.6 + (self.squid.anxiety - 50) / 100  # Scales from 1.6 to 2.1
-            if self.squid.personality == Personality.TIMID:
-                anxiety_multiplier *= 1.3  # Timid squids seek shelter even more strongly
-            personality_modifiers["approaching_plant"] = personality_modifiers.get("approaching_plant", 1.0) * anxiety_multiplier
-            personality_modifiers["exploring"] = personality_modifiers.get("exploring", 1.0) * 0.7
-            personality_modifiers["playing"] = personality_modifiers.get("playing", 1.0) * 0.8
+            weights["playing"] *= 0.5
+            weights["exploring"] *= 0.7
+        elif self.squid.personality == Personality.ENERGETIC:
+            weights["playing"] *= 1.5
+            weights["exploring"] *= 1.2
 
-        # Apply personality modifiers to weights
-        for action, modifier in personality_modifiers.items():
-            if action in decision_weights:
-                decision_weights[action] *= modifier
-        
-        # Store personality modifiers for visualization
-        decision_data['personality_modifiers'] = personality_modifiers
+        # Anxiety amplifies comfort-seeking
+        if brain_state.get("anxiety", 50) > 60:
+            weights["approaching_plant"] *= 1.8 + (brain_state.get("anxiety", 0) - 60) / 80
 
-        # Add randomness to prevent deterministic behavior
-        for key in decision_weights:
-            decision_weights[key] *= random.uniform(0.9, 1.1)
-        
-        # Store final adjusted weights
-        decision_data['adjusted_weights'] = decision_weights.copy()
-        
+        decision_data['personality_modifiers'] = {k: v/weights.get(k,1) for k,v in weights.items() if k in weights}
+
+        # Add randomness
+        for k in weights:
+            weights[k] *= random.uniform(0.88, 1.12)
+
+        decision_data['adjusted_weights'] = weights.copy()
+
         # =================================================================
-        # 6. MAKE AND EXECUTE THE FINAL DECISION
+        # 6. SELECT AND EXECUTE DECISION
         # =================================================================
-        if not any(decision_weights.values()):
-            best_decision = "exploring"
+        if not any(weights.values()):
+            final = "exploring"
         else:
-            best_decision = max(decision_weights, key=decision_weights.get)
-        
-        # Calculate confidence (how much better is the top choice than the second best)
-        sorted_weights = sorted(decision_weights.values(), reverse=True)
-        if len(sorted_weights) > 1 and sorted_weights[0] > 0:
-            confidence = (sorted_weights[0] - sorted_weights[1]) / sorted_weights[0]
-        else:
-            confidence = 1.0
-        
-        decision_data['final_decision'] = best_decision
+            final = max(weights, key=weights.get)
+
+        # Confidence calculation
+        sorted_w = sorted(weights.values(), reverse=True)
+        confidence = 1.0 if len(sorted_w) < 2 else (sorted_w[0] - sorted_w[1]) / sorted_w[0]
+
+        decision_data['final_decision'] = final
         decision_data['confidence'] = confidence
-        
-        # Store decision data for visualization
         self.last_decision_data = decision_data
-        
-        # Execute the chosen action
-        result = self._execute_decision(best_decision, visible_food, visible_rocks, visible_plants)
-        
-        # Update final decision with the actual result
-        self.last_decision_data['final_decision'] = result
-        
+
+        result = self._execute_neural_decision(final, brain_state)
+        self.last_decision_data['final_decision'] = result  # actual outcome
         return result
 
-    def _execute_decision(self, decision, visible_food, visible_rocks, visible_plants):
-        """Execute the chosen decision and return the status string"""
-        # --- Behavioral Chaining Example: EATING ---
-        if decision == "eating" and visible_food:
-            closest_food = min(visible_food, 
-                            key=lambda f: self.squid.distance_to(f.pos().x(), f.pos().y()))
-            self.squid.move_towards(closest_food.pos().x(), closest_food.pos().y())
-            
-            food_distance = self.squid.distance_to(closest_food.pos().x(), closest_food.pos().y())
-            if food_distance > 100:
-                return "eyeing food"
-            elif food_distance > 50:
-                return "approaching food eagerly" if self.squid.hunger > 70 else "cautiously approaching food"
-            else:
-                return "moving toward food"
+    def _execute_neural_decision(self, decision: str, brain_state: dict):
+        """Execute decision based purely on neural signals — no redundant scanning"""
+        s = self.squid
 
-        # --- SLEEPING DECISION ---
-        elif decision == "sleeping" and self.squid.sleepiness > 70:
-            self.squid.go_to_sleep()
-            return "feeling drowsy"
+        if decision == "eating" and brain_state.get('can_see_food', 0) > 70:
+            # Find closest food using existing logic method
+            food = s.tamagotchi_logic.food_items
+            if food:
+                closest = min(food, key=lambda f: s.distance_to(f.pos().x(), f.pos().y()))
+                s.move_towards(closest.pos().x(), closest.pos().y())
+                dist = s.distance_to(closest.pos().x(), closest.pos().y())
+                if dist < 60:
+                    return "eating"
+                elif dist < 120:
+                    return "approaching food"
+                else:
+                    return "eyeing food"
 
-        # --- PLAYING BEHAVIOR ---
-        elif decision == "playing":
-            # If carrying something, throw it playfully
-            if self.squid.carrying_rock:
-                if self.squid.throw_rock(random.choice(["left", "right"])):
+        elif decision == "approaching_plant" and brain_state.get('plant_proximity', 0) > 30:
+            # Use decoration cache or scene scan fallback
+            plants = [item for item in s.tamagotchi_logic.user_interface.scene.items()
+                      if getattr(item, 'category', '') == 'plant']
+            if plants:
+                closest = min(plants, key=lambda p: s.distance_to(p.sceneBoundingRect().center().x(),
+                                                                 p.sceneBoundingRect().center().y()))
+                s.move_towards(closest.sceneBoundingRect().center().x(),
+                               closest.sceneBoundingRect().center().y())
+                return "seeking comfort in plant"
+
+        elif decision in ("playing", "throwing"):
+            if s.carrying_rock:
+                if s.throw_rock(random.choice(["left", "right"])):
                     return "playfully tossing rock"
-            elif self.squid.carrying_poop:
-                if self.squid.throw_poop(random.choice(["left", "right"])):
-                    return "playfully flinging poop"
-            # Otherwise, approach nearest playable object
-            elif visible_rocks:
-                closest_rock = min(visible_rocks, key=lambda r: self.squid.distance_to(r.pos().x(), r.pos().y()))
-                self.squid.move_towards(closest_rock.pos().x(), closest_rock.pos().y())
-                return "seeking toy to play with"
-            else:
-                return "looking for something to play with"
+            elif s.carrying_poop:
+                if s.throw_poop(random.choice(["left", "right"])):
+                    return "flinging poop playfully"
+            # Approach nearest rock/poop if visible via brain
+            elif brain_state.get('can_see_food', 0) == 0:  # crude proxy, but better than nothing
+                targets = [item for item in s.tamagotchi_logic.user_interface.scene.items()
+                          if getattr(item, 'category', '') in ('rock', 'poop')]
+                if targets:
+                    closest = min(targets, key=lambda t: s.distance_to(t.sceneBoundingRect().center().x(),
+                                                                     t.sceneBoundingRect().center().y()))
+                    s.move_towards(closest.sceneBoundingRect().center().x(),
+                                   closest.sceneBoundingRect().center().y())
+                    return "seeking toy"
 
-        # --- PLANT APPROACH (Comfort Seeking) ---
-        elif decision == "approaching_plant" and visible_plants:
-            closest_plant = min(visible_plants, key=lambda p: self.squid.distance_to(p.pos().x(), p.pos().y()))
-            self.squid.move_towards(closest_plant.pos().x(), closest_plant.pos().y())
-            
-            plant_distance = self.squid.distance_to(closest_plant.pos().x(), closest_plant.pos().y())
-            is_timid = self.squid.personality == Personality.TIMID
-            
-            if plant_distance > 100:
-                return "noticing plant"
-            elif plant_distance > 50:
-                if self.squid.anxiety > 50:
-                    return "seeking shelter in plant"
-                elif is_timid:
-                    return "cautiously approaching safe spot"
-                else:
-                    return "curiously approaching plant"
-            elif plant_distance < 30:
-                if is_timid or self.squid.anxiety > 40:
-                    return "hiding behind plant"
-                else:
-                    return "resting near plant"
-            else:
-                return "moving toward plant"
+        elif decision == "sleeping":
+            s.go_to_sleep()
+            return "settling down to sleep"
 
-        # --- ROCK APPROACH ---
-        elif decision == "approaching_rock" and visible_rocks:
-            closest_rock = min(visible_rocks, key=lambda r: self.squid.distance_to(r.pos().x(), r.pos().y()))
-            self.squid.move_towards(closest_rock.pos().x(), closest_rock.pos().y())
-            
-            rock_distance = self.squid.distance_to(closest_rock.pos().x(), closest_rock.pos().y())
-            if rock_distance > 100:
-                return "eyeing rock"
-            elif rock_distance > 50:
-                return "curiously approaching rock"
-            else:
-                return "moving toward rock"
-        
-        elif decision == "throwing_rock" and self.squid.carrying_rock:
-            if self.squid.throw_rock(random.choice(["left", "right"])):
-                return "playfully throwing rock"
+        elif decision == "fleeing" or brain_state.get('external_stimulus', 0) > 85:
+            s.flee_from_center()
+            return "fleeing!"
 
-        # --- DEFAULT EXPLORATION BEHAVIOR ---
-        exploration_options = {
-            Personality.TIMID: ["cautiously exploring", "nervously watching"],
+        # Default: explore with personality flavor
+        flavors = {
+            Personality.TIMID: ["cautiously peeking", "nervously watching"],
             Personality.ADVENTUROUS: ["boldly exploring", "seeking adventure"],
-            Personality.GREEDY: ["searching for treasures", "scouting for food"],
-            Personality.STUBBORN: ["stubbornly patrolling", "surveying domain"],
-            Personality.LAZY: ["resting comfortably", "lounging lazily"],
-            Personality.ENERGETIC: ["zooming around", "buzzing with energy"]
-        }.get(self.squid.personality, ["exploring surroundings", "wandering aimlessly"])
-        
-        exploration_style = random.choice(exploration_options)
-        
-        if exploration_style in ["resting comfortably", "lounging lazily"]:
-            self.squid.move_slowly()
-        elif exploration_style in ["zooming around", "buzzing with energy"]:
-            self.squid.move_erratically()
+            Personality.GREEDY: ["hunting for food", "scouting"],
+            Personality.LAZY: ["lounging", "drifting lazily"],
+            Personality.ENERGETIC: ["zooming around", "bouncing energetically"],
+            Personality.STUBBORN: ["patrolling territory", "standing ground"],
+        }.get(s.personality, ["wandering", "exploring curiously"])
+
+        style = random.choice(flavors)
+        if "zoom" in style or "bounc" in style:
+            s.move_erratically()
+        elif "loung" in style or "drift" in style:
+            s.move_slowly()
         else:
-            self.squid.move_randomly()
-        
-        return exploration_style
+            s.move_randomly()
+
+        return style

@@ -1,5 +1,3 @@
-# enhanced_brain_tooltips.py
-# Add rich, DISPLAY-SCALED tooltips to the brain network view.
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .display_scaling import DisplayScaling
@@ -176,12 +174,18 @@ class EnhancedBrainTooltips:
         </div>
         """
 
+
     def _generate_basic_tooltip(self, neuron_name):
         bw = self.brain_widget
         current_value = bw.state.get(neuron_name, 50)
         is_core = neuron_name in bw.original_neuron_positions
         shape = bw.neuron_shapes.get(neuron_name, 'circle')
         activation_color = self._get_activation_color(current_value)
+
+        if neuron_name == 'can_see_food':
+            val_display = "OFF" if current_value > 50 else "ON"
+        else:
+            val_display = f"{current_value:.1f}"
 
         min_width = DisplayScaling.scale(250)
 
@@ -192,7 +196,7 @@ class EnhancedBrainTooltips:
             </h3>
             <table style='width: 100%;' cellpadding='3'>
                 <tr><td style='color: #666;'>Type:</td><td><b>{'Core' if is_core else 'Generated'}</b></td></tr>
-                <tr><td style='color: #666;'>Current:</td><td><span style='color: {activation_color}; font-weight: bold;'>{current_value:.1f}</span></td></tr>
+                <tr><td style='color: #666;'>Current:</td><td><span style='color: {activation_color}; font-weight: bold;'>{val_display}</span></td></tr>
             </table>
             {self._get_connection_summary(neuron_name)}
             <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd; color: #888; font-size: {DisplayScaling.font_size(12)}px;'>
@@ -202,7 +206,7 @@ class EnhancedBrainTooltips:
         """
 
     # ------------------------------------------------------------------
-    # Helpers (unchanged logic, only added DisplayScaling.font_size)
+    # Helpers 
     # ------------------------------------------------------------------
     def _get_connection_summary(self, neuron_name):
         bw = self.brain_widget

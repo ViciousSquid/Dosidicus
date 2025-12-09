@@ -516,6 +516,13 @@ class Ui:
 
     def open_brain_designer(self):
         """Open the Brain Designer tool in a separate process (same as Ruler button)"""
+        
+        # === NEW: Pause simulation immediately ===
+        # This stops the loop, shows the pause overlay, and pauses the BrainWorker via logic
+        self.set_simulation_speed(0)
+        self.show_message("Simulation paused for Brain Designer")
+        # =========================================
+
         import multiprocessing
         
         try:
@@ -543,11 +550,11 @@ class Ui:
         try:
             self._brain_designer_process = multiprocessing.Process(
                 target=launch_brain_designer_process,
-                daemon=True
+                daemon=False
             )
             self._brain_designer_process.start()
             print(f"Brain Designer launched (PID: {self._brain_designer_process.pid})")
-            self.show_message("Brain Designer opened in a new window")
+            
         except Exception as e:
             import traceback
             traceback.print_exc()

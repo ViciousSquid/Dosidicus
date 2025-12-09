@@ -6,7 +6,8 @@ Swap or edit these dataclasses to change the visual style without touching rende
 Style 1 (Vibrant): Living, breathing connections that pulse organically (default)
 Style 2 (Subtle): Communication glows travel along connections like neural signals
 Style 3 (Neural): Synaptic activation pulses with weight-scaled connections
-Style 4 (None): Static connections with no animation effects
+Style 4 (Designer): Fat weight-scaled lines with traveling orbs (matches Brain Designer)
+Style 5 (None): Static connections with no animation effects
 """
 
 from dataclasses import dataclass, field
@@ -19,6 +20,7 @@ class AnimationStyleName(Enum):
     VIBRANT = "vibrant"
     SUBTLE = "subtle"
     NEURAL = "neural"
+    DESIGNER = "designer"
     NONE = "none"
 
 
@@ -286,6 +288,93 @@ class NeuralStyle(AnimationStyle):
 
 
 @dataclass
+class DesignerStyle(AnimationStyle):
+    """
+    Style 5: Designer - Matches the Brain Designer visualization.
+    Features weight-scaled line thickness (fat lines for strong connections),
+    dashed lines for inhibitory connections, and traveling pulse orbs.
+    Mimics the SmartConnectionItem rendering from designer_canvas.py.
+    """
+    name: str = "designer"
+    display_name: str = "Designer"
+    description: str = "Fat weight-scaled lines with traveling orbs (matches Brain Designer)"
+    
+    # ===== CONNECTION LINE APPEARANCE =====
+    # Designer uses: base_thickness = 2.0 + (abs_weight * 20.0)
+    # We set base_width low, thickness scaling is handled via neural_weight_thickness
+    line_base_width: float = 2.0
+    line_colour_positive: Tuple[int, int, int] = (50, 205, 50)     # Lime green (matches designer)
+    line_colour_negative: Tuple[int, int, int] = (220, 20, 60)     # Crimson red (matches designer)
+    line_alpha: int = 255                                          # Full opacity
+    use_thick_lines: bool = True
+    
+    # Stress-anxiety inherits standard handling
+    stress_anxiety_width: float = 4.0
+    stress_anxiety_colour: Tuple[int, int, int] = (255, 50, 50)
+    stress_anxiety_dashed: bool = True
+    
+    # ===== DESIGNER'S SIGNATURE: WEIGHT-SCALED THICKNESS + PULSE ORBS =====
+    # Disable ambient pulse (we use designer-style traveling orbs instead)
+    ambient_pulse_enabled: bool = False
+    
+    # Enable neural-style weight thickness (this gives us the fat lines)
+    neural_weight_thickness: bool = True
+    neural_weight_thickness_mult: float = 20.0  # 2px base + weight * 20 = up to 22px
+    neural_base_colour_positive: Tuple[int, int, int] = (50, 205, 50)
+    neural_base_colour_negative: Tuple[int, int, int] = (220, 20, 60)
+    neural_base_alpha: int = 255
+    
+    # Enable traveling pulse orbs (designer's animated dot)
+    pulse_enabled: bool = True
+    pulse_colour: Tuple[int, int, int] = (255, 255, 255)          # White core
+    pulse_alpha: int = 255
+    pulse_duration: float = 3.0                                    # Slower travel
+    pulse_speed: float = 0.6                                       # Moderate speed
+    pulse_diameter: float = 10.0                                   # Larger orb
+    
+    # Communication glows styled as designer orbs
+    comm_glow_enabled: bool = True
+    comm_glow_colour: Tuple[int, int, int] = (255, 255, 255)      # White glow center
+    comm_glow_alpha: int = 220
+    comm_glow_size: float = 12.0                                   # Matches designer orb_size
+    comm_glow_tail_length: float = 0.0                             # No tail, just orb
+    comm_glow_speed_range: Tuple[float, float] = (2.0, 3.5)       # Steady travel
+    comm_glow_fade_in: float = 0.05                                # Quick fade in
+    comm_glow_fade_out: float = 0.1                                # Quick fade out
+    comm_glow_spawn_on_activity: bool = True
+    comm_glow_spawn_on_weight_change: bool = True
+    comm_glow_max_per_connection: int = 2                          # Allow multiple orbs
+    
+    # No neural pulse (we use comm_glow for orbs)
+    neural_pulse_enabled: bool = False
+    
+    # Keep glow effect for weight changes
+    glow_enabled: bool = True
+    glow_colour: Tuple[int, int, int] = (255, 255, 100)
+    glow_alpha: int = 80
+    glow_fade_threshold: float = 0.7
+    
+    # Enable hover for interactivity
+    hover_enabled: bool = True
+    hover_scale: float = 1.15
+    hover_animation_duration: float = 0.15
+    
+    # Activity highlight
+    activity_highlight_enabled: bool = True
+    activity_highlight_colour: Tuple[int, int, int] = (255, 255, 150)
+    activity_highlight_alpha: int = 180
+    activity_pulse_speed: float = 8.0
+    
+    # Neurogenesis highlight (gold flash)
+    neurogenesis_highlight_colour: Tuple[int, int, int] = (255, 215, 0)
+    neurogenesis_highlight_alpha: int = 220
+    neurogenesis_highlight_duration: float = 5.0
+    
+    # Background - neutral gray like designer
+    background_colour: Tuple[int, int, int] = (248, 248, 248)
+
+
+@dataclass
 class NoneStyle(AnimationStyle):
     '''No animations - maximum performance.'''
     
@@ -374,6 +463,7 @@ ANIMATION_STYLES = {
     'vibrant': VibrantStyle,
     'subtle': SubtleStyle,
     'neural': NeuralStyle,
+    'designer': DesignerStyle,
 }
 
 def get_animation_style(name: str) -> AnimationStyle:
@@ -381,7 +471,7 @@ def get_animation_style(name: str) -> AnimationStyle:
     Get an animation style by name.
     
     Args:
-        name: Style name ('vibrant', 'subtle', 'neural', or 'none')
+        name: Style name ('vibrant', 'subtle', 'neural', 'designer', or 'none')
         
     Returns:
         AnimationStyle instance

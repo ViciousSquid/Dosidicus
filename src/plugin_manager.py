@@ -147,6 +147,7 @@ class PluginManager:
         self.register_hook("on_ink_cloud")
         
         # Neural/memory hooks
+        self.register_hook("on_brain_state_update")
         self.register_hook("on_neurogenesis")
         self.register_hook("on_memory_created")
         self.register_hook("on_memory_to_long_term")

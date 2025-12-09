@@ -600,11 +600,11 @@ class EnhancedNeurogenesis:
 
         # 1. HARD TYPE CAP  (authoritative, survives showman renames)
         max_per_type = self.config.neurogenesis.get('max_per_type', {
-            'stress': 3,
-            'novelty': 5,
-            'reward': 4
+            'stress': 5,
+            'novelty': 6,
+            'reward': 6
         })
-        max_for_this_type = max_per_type.get(trigger_type, 3)
+        max_for_this_type = max_per_type.get(trigger_type, 5)
         current_type_count = len([
             name for name, fn in self.functional_neurons.items()
             if fn.neuron_type == trigger_type
@@ -618,7 +618,7 @@ class EnhancedNeurogenesis:
         # 2. SPECIALIZATION CAP  (name-based, optional extra guard)
         spec = self._preview_specialization(ctx)
         base_name = f"{trigger_type}_{spec}"
-        max_per_spec = self.config.neurogenesis.get('max_per_specialization', 3)
+        max_per_spec = self.config.neurogenesis.get('max_per_specialization', 5)
         current_spec_count = len([
             name for name in self.brain_widget.neuron_positions.keys()
             if name.startswith(base_name)
@@ -1114,9 +1114,14 @@ class EnhancedNeurogenesis:
         return None
 
     def capture_experience_context(self, trigger_type: str, brain_state: dict,
-                                   recent_actions: list, environment: dict) -> ExperienceContext:
+                               recent_actions: list, environment: dict) -> ExperienceContext:
         if self._first_real_tick is None:
             self._first_real_tick = time.time()
+        
+        # FIX: Ensure recent_actions is a list to prevent TypeError
+        if not isinstance(recent_actions, list):
+            print(f"⚠️ Warning: recent_actions was {type(recent_actions)}, expected list. Using empty list.")
+            recent_actions = []
         
         ctx = self._build_context(trigger_type, brain_state, environment)
         ctx.recent_actions = recent_actions[-5:] if recent_actions else []

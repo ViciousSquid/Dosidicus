@@ -24,6 +24,7 @@ class BrainNeuronHooks:
         'is_fleeing': self.calculate_is_fleeing,
         'is_eating': self.calculate_is_eating,
         'is_sleeping': self.calculate_is_sleeping,
+        'is_startled': self.calculate_is_startled,
     }
         
         # Environmental event history for temporal calculations
@@ -51,6 +52,14 @@ class BrainNeuronHooks:
         if not hasattr(self.logic, 'squid'):
             return 0.0
         return 100.0 if getattr(self.logic.squid, 'is_sick', False) else 0.0
+    
+    def calculate_is_startled(self) -> float:
+        if not hasattr(self.logic, 'squid'):
+            return 0.0
+        # Use same logic as above
+        if hasattr(self.logic.squid, 'mental_state_manager') and self.logic.squid.mental_state_manager:
+            return 100.0 if self.logic.squid.mental_state_manager.is_state_active('startled') else 0.0
+        return 100.0 if getattr(self.logic.squid, 'status', '').lower() == 'startled' else 0.0
 
     def calculate_is_fleeing(self) -> float:
         """Return 100.0 if squid is fleeing, 0.0 otherwise."""
@@ -58,12 +67,9 @@ class BrainNeuronHooks:
             return 0.0
         return 100.0 if getattr(self.logic.squid, 'is_fleeing', False) else 0.0
 
-
     # =========================================================================
     # PUBLIC API - Called from tamagotchi_logic.py
     # =========================================================================
-
-    
     
     def get_input_neuron_values(self) -> Dict[str, float]:
         """
@@ -169,11 +175,16 @@ class BrainNeuronHooks:
     
     def calculate_can_see_food(self) -> float:
         """Return 100.0 if food is visible in vision cone, 0.0 otherwise."""
-        if not hasattr(self.logic, 'food_items') or not self.logic.food_items:
+        if not hasattr(self.logic, 'squid') or not self.logic.squid:
             return 0.0
-        
-        # Check if any food is visible using the squid's vision system
+
+        # Force fresh visibility check
         visible_food = self.logic.squid.get_visible_food()
+        
+        # Debug log (remove later if desired)
+        # if visible_food:
+        #     print(f"[Vision] Food visible: {len(visible_food)} items")
+
         return 100.0 if visible_food else 0.0
     
     def calculate_plant_proximity(self) -> float:

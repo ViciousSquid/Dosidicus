@@ -11,33 +11,42 @@ if getattr(sys, 'frozen', False):
 else:
     base_path = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
+# Add the 'src' folder (or base_path) to sys.path so we can find the 'designer' package
 if base_path not in sys.path:
     sys.path.insert(0, base_path)
 
 def launch_brain_designer_process():
     """Launch the Brain Designer window in a separate process."""
+    
+    # 1. Initialize QApplication FIRST so we can show error dialogs if imports fail
     try:
-        from PyQt5.QtWidgets import QApplication
-        from src.brain_designer import BrainDesignerWindow
-
+        from PyQt5.QtWidgets import QApplication, QMessageBox
         app = QApplication(sys.argv)
-        app.setStyle('Fusion')  # Optional: matches main app style
-        
+        app.setStyle('Fusion')
+    except ImportError:
+        print("CRITICAL: PyQt5 is missing. Cannot launch GUI.")
+        return
+
+    try:
+        # 2. Correct Import: Point to the actual location of the class
+        # (It is in 'designer.designer_window', NOT 'src.brain_designer')
+        from designer.designer_window import BrainDesignerWindow
+
+        # 3. Create and show the window
         window = BrainDesignerWindow()
         window.show()
         
+        # 4. Execute the application loop
         sys.exit(app.exec_())
+        
     except Exception as e:
         import traceback
-        print("Failed to launch Brain Designer:")
         traceback.print_exc()
-        # Show error dialog if possible
-        try:
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.critical(None, "Brain Designer Error", f"Could not start Brain Designer:\n\n{e}")
-        except:
-            pass
-
+        
+        # Now this will work because 'app' is guaranteed to exist
+        QMessageBox.critical(None, "Brain Designer Error", 
+                             f"Could not start Brain Designer:\n\n{e}\n\n"
+                             f"Check console for full traceback.")
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()

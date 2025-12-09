@@ -144,7 +144,7 @@ class NeuronLaboratory(QDialog):
         self.pick_neuron.currentTextChanged.connect(self._inspect_neuron)
         lay.addWidget(QLabel("Pick a neuron to inspect:"))
         self.pick_neuron.setStyleSheet("""
-            QComboBox { font-size: 16px; min-height: 36px; padding: 4px; }
+            QComboBox { font-size: 18px; min-height: 36px; padding: 4px; }
         """)
         lay.addWidget(self.pick_neuron)
         self.inspector_scroll = QScrollArea()
@@ -194,7 +194,7 @@ class NeuronLaboratory(QDialog):
         if not hasattr(self, 'pick_neuron'):
             # pick_neuron is defined in _build_inspector_tab
             return
-            
+                
         # 1. Select the neuron in the dropdown
         idx = self.pick_neuron.findText(neuron_name)
         if idx >= 0:
@@ -202,11 +202,14 @@ class NeuronLaboratory(QDialog):
             self.pick_neuron.blockSignals(True)
             self.pick_neuron.setCurrentIndex(idx)
             self.pick_neuron.blockSignals(False)
-            
+                
             # 2. Force the inspection of the newly selected neuron
             self._inspect_neuron(neuron_name)
-            
-            # 3. Update the view to reflect the change
+                
+            # 3. Switch to the "Deep Inspector" tab
+            self.tabs.setCurrentIndex(1)  # Index 1 corresponds to the "Deep Inspector" tab
+                
+            # 4. Update the view to reflect the change
             self.update()
 
     # ================================================================

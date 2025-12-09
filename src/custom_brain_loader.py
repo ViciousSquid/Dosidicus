@@ -70,16 +70,18 @@ def add_load_brain_button(network_tab, checkbox_layout):
         ans = QtWidgets.QMessageBox.question(
             network_tab,           # parent widget
             "Confirm Reset",
-            "Reset the brain to the default architecture?\n\n"
-            "This cannot be undone.",
+            "Reset all neuron positions to their default locations?\n\n"
+            "Network structure (connections and weights) will be preserved.",
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
             QtWidgets.QMessageBox.No
         )
         if ans == QtWidgets.QMessageBox.Yes:
-            loader.reset_to_default()
-
-    reset_btn.clicked.connect(_confirm_reset)
-    checkbox_layout.addWidget(reset_btn)
+            try:
+                loader.reset_positions_to_default()
+            except Exception as e:
+                QtWidgets.QMessageBox.critical(
+                    network_tab, "Error", f"Failed to reset positions:\n{e}"
+                )
 
 
 # =============================================================================
@@ -555,6 +557,26 @@ class BrainLoader:
         except Exception as e:
             print(f"⚠️ Could not update BrainWorker: {e}")
             # Non-fatal - brain still loads, just learning might need restart
+
+    def reset_positions_to_default(self):
+        """Reset only neuron positions to defaults, preserving network structure"""
+        bw = self.brain_widget
+        if not bw or not hasattr(bw, '_orig_backup'):
+            raise ValueError("No original brain backup available")
+        
+        # Reset positions only
+        for neuron in list(bw.neuron_positions.keys()):
+            if neuron in bw._orig_backup['positions']:
+                bw.neuron_positions[neuron] = bw._orig_backup['positions'][neuron]
+        
+        # Update displays
+        if hasattr(self.network_tab, 'update_metrics_display'):
+            self.network_tab.update_metrics_display()
+        
+        # Repaint
+        bw.update()
+        
+        print("✅ Neuron positions reset to defaults")
 
 
 # =============================================================================

@@ -47,6 +47,7 @@ class BrainWorker(QThread):
     hebbian_result = pyqtSignal(dict)
     state_update_result = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
+    state_update_result = pyqtSignal(dict)
     
     def __init__(self, brain_widget, parent=None):
         super().__init__(parent)
@@ -140,11 +141,11 @@ class BrainWorker(QThread):
         )
         self._enqueue_work(work_item)
         
-    def queue_state_update(self, new_state: Dict):
-        """Queue a state update for background processing"""
+    def queue_state_update(self, state_snapshot: Dict):
+        """Queue heavy state calculations for background processing"""
         work_item = WorkItem(
             work_type='state_update',
-            data=new_state.copy(),
+            data=state_snapshot.copy(),
             timestamp=time.time()
         )
         self._enqueue_work(work_item)
@@ -158,45 +159,49 @@ class BrainWorker(QThread):
         finally:
             self._queue_mutex.unlock()
             
+
     def run(self):
         print("🧵 BrainWorker thread started and entering main loop")
-        
+
         while self._running:
             try:
                 work_item = None
-                
-                # Wait for work with longer timeout
+
+                # wait up to 1 s for work (keeps thread responsive)
                 self._queue_mutex.lock()
                 try:
                     if not self._work_queue and self._running:
-                        # Wait up to 1 second for work
                         self._work_available.wait(self._queue_mutex, 1000)
-                    
                     if self._work_queue and not self._paused:
                         work_item = self._work_queue.popleft()
                 finally:
                     self._queue_mutex.unlock()
-                
+
                 if work_item:
                     self._process_work_item(work_item)
                 else:
-                    # No work available, do a health check
-                    if self._running and not self._paused:
-                        time.sleep(0.1)  # Small sleep to prevent CPU spinning
-                        
-                # Send heartbeat periodically
-                current_time = time.time()
-                if current_time - self._last_heartbeat > 5.0:  # Every 5 seconds
-                    self._last_heartbeat = current_time
-                        
+                    # no work – emit a heartbeat so monitors know we’re alive
+                    now = time.time()
+                    if now - self._last_heartbeat > 5.0:
+                        self._last_heartbeat = now
+                        self.state_update_result.emit({
+                            'processed_state': {},
+                            'communication_events': {},
+                            'timestamp': now,
+                            'health_check': True          # flag for SquidBrainWindow
+                        })
+
+                # tiny sleep to avoid spinning CPU when idle
+                if not work_item and self._running and not self._paused:
+                    time.sleep(0.01)
+
             except Exception as e:
-                print(f"🧵 BrainWorker main loop error: {e}")
+                print(f"🧵 BrainWorker main-loop error: {e}")
                 import traceback
                 traceback.print_exc()
                 self.error_occurred.emit(str(e))
-                # Continue running despite errors
-                time.sleep(1)  # Brief pause before continuing
-        
+                time.sleep(1)          # brief pause before continuing
+
         print("🧵 BrainWorker thread exiting cleanly")
         
     def _process_work_item(self, work_item: WorkItem):
@@ -344,12 +349,18 @@ class BrainWorker(QThread):
                 excluded_neurons = self._cached_excluded_neurons.copy()
                 learning_rate = self._cached_learning_rate
                 new_neurons = self._cached_new_neurons.copy()
-            
-            if not config or not weights:
-                print("   [Worker] Hebbian: No config or weights cached")
+        
+            if not state:
+                print("   [Worker] ⚠️ Warning: State cache is empty. Skipping Hebbian cycle.")
+                print("   [Worker] This usually means update_cache() wasn't called.")
                 self.hebbian_result.emit(result)
                 return
             
+            if not config or not weights:
+                print("   [Worker] ⚠️ Warning: Config or weights missing from cache")
+                self.hebbian_result.emit(result)
+                return
+                
             print(f"++ [Worker] Hebbian learning cycle triggered")
             
             # Get neurons excluding the excluded ones
@@ -450,23 +461,100 @@ class BrainWorker(QThread):
             except ValueError:
                 return 50.0
         return 50.0
+    
+                                                        ##### PROCESS STATE UPDATE - THREADED #
 
-    def _process_state_update(self, new_state: Dict):
-        """Process state update in background thread"""
+    def _process_state_update(self, data: Dict):
+        """Process state updates using cached brain data"""
         result = {
-            'processed_state': new_state.copy(),
-            'timestamp': time.time(),
-            'is_health_check': new_state.get('health_check', False)
+            'processed_state': {},
+            'communication_events': {},
+            'timestamp': time.time()
         }
         
         try:
-            # Process the state update
-            self.state_update_result.emit(result)
+            # Get all data from cache (the thread-safe approach)
+            with QMutexLocker(self._cache_mutex):
+                state = self._cached_state.copy()
+                weights = self._cached_weights.copy()
+                config = self._cached_config
+                excluded = self._cached_excluded_neurons.copy()
+            
+            if not state:
+                # Normal during startup - just return
+                self.state_update_result.emit(result)
+                return
+            
+            # Get optional context from work item
+            input_neurons = data.get('input_neurons', {})
+            
+            # Update with any input neurons
+            if input_neurons:
+                state.update(input_neurons)
+            
+            # Simple communication event tracking
+            current_time = time.time()
+            comm_events = {}
+            for neuron, val in state.items():
+                if isinstance(val, (int, float)) and abs(val - 50) > 20:
+                    comm_events[neuron] = current_time
+            
+            result['processed_state'] = state
+            result['communication_events'] = comm_events
             
         except Exception as e:
-            print(f"Error in state update: {e}")
+            print(f"State update processing error: {e}")
             self.error_occurred.emit(f"State update error: {e}")
-            self.state_update_result.emit(result)
+        
+        self.state_update_result.emit(result)
+
+    def _apply_personality_effects(self, updated_state, personality):
+        """Apply personality-based adjustments"""
+        if personality == "timid":
+            if "anxiety" in updated_state:
+                updated_state["anxiety"] = min(100, updated_state["anxiety"] * 1.1)
+            if "curiosity" in updated_state:
+                updated_state["curiosity"] = max(0, updated_state["curiosity"] * 0.9)
+        elif personality == "adventurous":
+            if "curiosity" in updated_state:
+                updated_state["curiosity"] = min(100, updated_state["curiosity"] * 1.2)
+            if "anxiety" in updated_state:
+                updated_state["anxiety"] = max(0, updated_state["anxiety"] * 0.8)
+        elif personality == "greedy":
+            if "hunger" in updated_state:
+                updated_state["hunger"] = min(100, updated_state["hunger"] * 1.15)
+
+    def _apply_environmental_effects(self, updated_state, food_count, poop_count):
+        """Apply environmental influences"""
+        if food_count > 0:
+            if "can_see_food" in updated_state:
+                updated_state["can_see_food"] = min(100, updated_state["can_see_food"] + 25)
+            if "hunger" in updated_state and updated_state["hunger"] > 50:
+                updated_state["hunger"] = min(100, updated_state["hunger"] + 10)
+        
+        if poop_count > 0:
+            if "anxiety" in updated_state:
+                updated_state["anxiety"] = min(100, updated_state["anxiety"] + 15)
+            if "cleanliness" in updated_state:
+                updated_state["cleanliness"] = max(0, updated_state["cleanliness"] - 5)
+
+    def _handle_binary_neurons(self, updated_state):
+        """Handle binary neurons with exact values"""
+        BINARY_NEURONS = {
+            "can_see_food", "is_eating", "is_sleeping", "is_sick",
+            "pursuing_food", "is_fleeing", "is_startled"
+        }
+        
+        for neuron, val in updated_state.items():
+            if neuron in BINARY_NEURONS:
+                updated_state[neuron] = 100.0 if val > 50 else 0.0
+            else:
+                updated_state[neuron] = max(min(val, 100), -100)
+
+
+
+
+
 
     # Health monitoring methods
     def get_health_status(self):
