@@ -2,8 +2,8 @@
   "version": "2.0",
   "format": "dosidicus",
   "metadata": {
-    "name": "With Extra Sensors",
-    "description": "Required + threat_level and external_stimulus",
+    "name": "Emotion Engine",
+    "description": "Specialized for emotional processing",
     "author": "",
     "version": "1.0",
     "created": "",
@@ -11,58 +11,65 @@
   },
   "neuron_positions": {
     "hunger": [
-      127,
-      81
+      150,
+      150
     ],
     "happiness": [
-      361,
-      81
+      400,
+      300
     ],
     "cleanliness": [
-      627,
-      81
+      300,
+      150
     ],
     "sleepiness": [
-      840,
-      81
+      450,
+      150
     ],
     "satisfaction": [
-      271,
-      380
+      250,
+      300
     ],
     "anxiety": [
-      491,
-      389
+      550,
+      300
     ],
     "curiosity": [
-      701,
-      386
+      400,
+      420
     ],
     "can_see_food": [
       350,
-      200
+      50
     ],
     "threat_level": [
-      450,
-      200
+      300,
+      50
+    ],
+    "is_sick": [
+      500,
+      50
     ],
     "external_stimulus": [
-      550,
-      200
+      700,
+      50
     ]
   },
   "weights": {
-    "can_see_food|hunger": 0.3,
-    "can_see_food|happiness": 0.2,
-    "hunger|satisfaction": -0.5,
-    "hunger|anxiety": 0.3,
-    "happiness|satisfaction": 0.6,
-    "cleanliness|happiness": 0.3,
-    "sleepiness|anxiety": 0.2,
-    "satisfaction|curiosity": 0.4,
-    "threat_level|anxiety": 0.5,
+    "threat_level|anxiety": 0.7,
     "threat_level|happiness": -0.3,
-    "external_stimulus|curiosity": 0.3
+    "is_sick|happiness": -0.5,
+    "is_sick|anxiety": 0.4,
+    "external_stimulus|curiosity": 0.4,
+    "external_stimulus|anxiety": 0.15,
+    "can_see_food|hunger": 0.5,
+    "can_see_food|happiness": 0.3,
+    "hunger|satisfaction": -0.5,
+    "happiness|satisfaction": 0.6,
+    "satisfaction|curiosity": 0.3,
+    "anxiety|curiosity": -0.4,
+    "cleanliness|threat_level": 0.3328165881043524,
+    "sleepiness|threat_level": 0.4181193354079575
   },
   "neuron_states": {
     "hunger": 50,
@@ -74,13 +81,14 @@
     "curiosity": 50,
     "can_see_food": false,
     "threat_level": 0,
+    "is_sick": false,
     "external_stimulus": false
   },
   "layer_structure": [
     {
-      "name": "Vision",
+      "name": "Perception",
       "layer_type": "input",
-      "y_position": 200,
+      "y_position": 50,
       "color": [
         200,
         200,
@@ -89,9 +97,9 @@
       ]
     },
     {
-      "name": "Stats",
+      "name": "Needs",
       "layer_type": "hidden",
-      "y_position": 81,
+      "y_position": 150,
       "color": [
         200,
         200,
@@ -102,7 +110,18 @@
     {
       "name": "Emotions",
       "layer_type": "output",
-      "y_position": 385,
+      "y_position": 300,
+      "color": [
+        200,
+        200,
+        220,
+        80
+      ]
+    },
+    {
+      "name": "Drives",
+      "layer_type": "output",
+      "y_position": 420,
       "color": [
         200,
         200,
@@ -116,8 +135,8 @@
       "name": "hunger",
       "neuron_type": "core",
       "position": [
-        127,
-        81
+        150,
+        150
       ],
       "layer_index": 0,
       "color": [
@@ -133,8 +152,8 @@
       "name": "happiness",
       "neuron_type": "core",
       "position": [
-        361,
-        81
+        400,
+        300
       ],
       "layer_index": 0,
       "color": [
@@ -150,8 +169,8 @@
       "name": "cleanliness",
       "neuron_type": "core",
       "position": [
-        627,
-        81
+        300,
+        150
       ],
       "layer_index": 0,
       "color": [
@@ -167,8 +186,8 @@
       "name": "sleepiness",
       "neuron_type": "core",
       "position": [
-        840,
-        81
+        450,
+        150
       ],
       "layer_index": 0,
       "color": [
@@ -184,8 +203,8 @@
       "name": "satisfaction",
       "neuron_type": "core",
       "position": [
-        271,
-        380
+        250,
+        300
       ],
       "layer_index": 0,
       "color": [
@@ -201,8 +220,8 @@
       "name": "anxiety",
       "neuron_type": "core",
       "position": [
-        491,
-        389
+        550,
+        300
       ],
       "layer_index": 0,
       "color": [
@@ -218,8 +237,8 @@
       "name": "curiosity",
       "neuron_type": "core",
       "position": [
-        701,
-        386
+        400,
+        420
       ],
       "layer_index": 0,
       "color": [
@@ -236,7 +255,7 @@
       "neuron_type": "sensor",
       "position": [
         350,
-        200
+        50
       ],
       "layer_index": 0,
       "color": [
@@ -244,7 +263,7 @@
         180,
         100
       ],
-      "description": "Vision sensor - REQUIRED",
+      "description": "",
       "is_binary": true,
       "category": "required"
     },
@@ -252,8 +271,8 @@
       "name": "threat_level",
       "neuron_type": "sensor",
       "position": [
-        450,
-        200
+        300,
+        50
       ],
       "layer_index": 0,
       "color": [
@@ -265,12 +284,29 @@
       "is_binary": false,
       "category": "sensor"
     },
+    "is_sick": {
+      "name": "is_sick",
+      "neuron_type": "sensor",
+      "position": [
+        500,
+        50
+      ],
+      "layer_index": 0,
+      "color": [
+        150,
+        200,
+        220
+      ],
+      "description": "Input sensor - receives value from BrainNeuronHooks",
+      "is_binary": true,
+      "category": "sensor"
+    },
     "external_stimulus": {
       "name": "external_stimulus",
       "neuron_type": "sensor",
       "position": [
-        550,
-        200
+        700,
+        50
       ],
       "layer_index": 0,
       "color": [
@@ -286,6 +322,7 @@
   "sensors_used": [
     "can_see_food",
     "threat_level",
+    "is_sick",
     "external_stimulus"
   ],
   "required_complete": true,

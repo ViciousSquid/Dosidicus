@@ -2,8 +2,8 @@
   "version": "2.0",
   "format": "dosidicus",
   "metadata": {
-    "name": "With Extra Sensors",
-    "description": "Required + threat_level and external_stimulus",
+    "name": "Layered Basic",
+    "description": "3-layer sensors\u2192processing\u2192output",
     "author": "",
     "version": "1.0",
     "created": "",
@@ -11,58 +11,57 @@
   },
   "neuron_positions": {
     "hunger": [
-      127,
-      81
-    ],
-    "happiness": [
-      361,
-      81
-    ],
-    "cleanliness": [
-      627,
-      81
-    ],
-    "sleepiness": [
-      840,
-      81
-    ],
-    "satisfaction": [
-      271,
-      380
-    ],
-    "anxiety": [
-      491,
-      389
-    ],
-    "curiosity": [
-      701,
-      386
-    ],
-    "can_see_food": [
-      350,
+      150,
       200
     ],
-    "threat_level": [
+    "happiness": [
+      300,
+      200
+    ],
+    "cleanliness": [
       450,
       200
     ],
-    "external_stimulus": [
-      550,
+    "sleepiness": [
+      600,
       200
+    ],
+    "satisfaction": [
+      225,
+      350
+    ],
+    "anxiety": [
+      375,
+      350
+    ],
+    "curiosity": [
+      525,
+      350
+    ],
+    "can_see_food": [
+      350,
+      50
+    ],
+    "threat_level": [
+      400,
+      50
+    ],
+    "external_stimulus": [
+      600,
+      50
     ]
   },
   "weights": {
-    "can_see_food|hunger": 0.3,
-    "can_see_food|happiness": 0.2,
-    "hunger|satisfaction": -0.5,
-    "hunger|anxiety": 0.3,
-    "happiness|satisfaction": 0.6,
-    "cleanliness|happiness": 0.3,
-    "sleepiness|anxiety": 0.2,
-    "satisfaction|curiosity": 0.4,
     "threat_level|anxiety": 0.5,
     "threat_level|happiness": -0.3,
-    "external_stimulus|curiosity": 0.3
+    "threat_level|curiosity": -0.2,
+    "external_stimulus|curiosity": 0.3,
+    "external_stimulus|anxiety": 0.15,
+    "can_see_food|hunger": 0.4,
+    "hunger|satisfaction": -0.4,
+    "happiness|satisfaction": 0.5,
+    "cleanliness|threat_level": 0.33024619927634696,
+    "sleepiness|external_stimulus": 0.46137219490183945
   },
   "neuron_states": {
     "hunger": 50,
@@ -78,8 +77,19 @@
   },
   "layer_structure": [
     {
-      "name": "Vision",
+      "name": "Input",
       "layer_type": "input",
+      "y_position": 50,
+      "color": [
+        200,
+        200,
+        220,
+        80
+      ]
+    },
+    {
+      "name": "Processing",
+      "layer_type": "hidden",
       "y_position": 200,
       "color": [
         200,
@@ -89,20 +99,9 @@
       ]
     },
     {
-      "name": "Stats",
-      "layer_type": "hidden",
-      "y_position": 81,
-      "color": [
-        200,
-        200,
-        220,
-        80
-      ]
-    },
-    {
-      "name": "Emotions",
+      "name": "Output",
       "layer_type": "output",
-      "y_position": 385,
+      "y_position": 350,
       "color": [
         200,
         200,
@@ -116,8 +115,8 @@
       "name": "hunger",
       "neuron_type": "core",
       "position": [
-        127,
-        81
+        150,
+        200
       ],
       "layer_index": 0,
       "color": [
@@ -133,8 +132,8 @@
       "name": "happiness",
       "neuron_type": "core",
       "position": [
-        361,
-        81
+        300,
+        200
       ],
       "layer_index": 0,
       "color": [
@@ -150,8 +149,8 @@
       "name": "cleanliness",
       "neuron_type": "core",
       "position": [
-        627,
-        81
+        450,
+        200
       ],
       "layer_index": 0,
       "color": [
@@ -167,8 +166,8 @@
       "name": "sleepiness",
       "neuron_type": "core",
       "position": [
-        840,
-        81
+        600,
+        200
       ],
       "layer_index": 0,
       "color": [
@@ -184,8 +183,8 @@
       "name": "satisfaction",
       "neuron_type": "core",
       "position": [
-        271,
-        380
+        225,
+        350
       ],
       "layer_index": 0,
       "color": [
@@ -201,8 +200,8 @@
       "name": "anxiety",
       "neuron_type": "core",
       "position": [
-        491,
-        389
+        375,
+        350
       ],
       "layer_index": 0,
       "color": [
@@ -218,8 +217,8 @@
       "name": "curiosity",
       "neuron_type": "core",
       "position": [
-        701,
-        386
+        525,
+        350
       ],
       "layer_index": 0,
       "color": [
@@ -236,7 +235,7 @@
       "neuron_type": "sensor",
       "position": [
         350,
-        200
+        50
       ],
       "layer_index": 0,
       "color": [
@@ -244,7 +243,7 @@
         180,
         100
       ],
-      "description": "Vision sensor - REQUIRED",
+      "description": "",
       "is_binary": true,
       "category": "required"
     },
@@ -252,8 +251,8 @@
       "name": "threat_level",
       "neuron_type": "sensor",
       "position": [
-        450,
-        200
+        400,
+        50
       ],
       "layer_index": 0,
       "color": [
@@ -269,8 +268,8 @@
       "name": "external_stimulus",
       "neuron_type": "sensor",
       "position": [
-        550,
-        200
+        600,
+        50
       ],
       "layer_index": 0,
       "color": [
