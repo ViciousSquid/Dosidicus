@@ -5,6 +5,7 @@ import time
 import sys
 import json
 import os
+import shutil
 import traceback
 import multiprocessing
 import logging
@@ -32,14 +33,39 @@ def launch_brain_designer_process():
     window.show()
     sys.exit(app.exec_())
 
-os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
-os.makedirs('logs', exist_ok=True)
+def setup_logging_configuration():
+    """Initialize logging configuration"""
+    os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
+    os.makedirs('logs', exist_ok=True)
 
-logging.basicConfig(
-    filename='logs/dosidicus_log.txt',
-    level=logging.ERROR,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+    logging.basicConfig(
+        filename='logs/dosidicus_log.txt',
+        level=logging.ERROR,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+
+def perform_cleanup_and_exit():
+    """Recursively delete __pycache__ and logs directories."""
+    print("🧹 Cleaning environment...")
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    deleted_count = 0
+    
+    for root, dirs, files in os.walk(root_dir, topdown=True):
+        # Filter and remove specific directories
+        # We iterate over a copy of dirs so we can modify the original list safely
+        for name in list(dirs):
+            if name in ['__pycache__', 'logs']:
+                path = os.path.join(root, name)
+                try:
+                    shutil.rmtree(path)
+                    print(f"   Deleted: {path}")
+                    dirs.remove(name)  # Prevent os.walk from trying to enter this dir
+                    deleted_count += 1
+                except Exception as e:
+                    print(f"   ❌ Failed to delete {path}: {e}")
+                    
+    print(f"✨ Cleanup complete. Removed {deleted_count} directories.")
 
 def global_exception_handler(exctype, value, tb):
     """Global exception handler to log unhandled exceptions"""
@@ -324,6 +350,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def initialize_game(self):
         """Initialize the game based on whether save data exists"""
+        # Clean up any duplicate saves first
+        if hasattr(self.save_manager, 'cleanup_duplicate_saves'):
+            self.save_manager.cleanup_duplicate_saves()
+        
         if self.save_manager.save_exists() and self.specified_personality is None:
             print("\x1b[32mExisting save data found and will be loaded\x1b[0m")
             self.squid = Squid(self.user_interface, None, None)
@@ -343,29 +373,27 @@ class MainWindow(QtWidgets.QMainWindow):
             if hasattr(self.tamagotchi_logic, 'statistics_window'):
                 self.tamagotchi_logic.statistics_window.update_statistics()
 
-            # ------------------------------------------------------------------
-            #  NEW: reveal all neurons with the same fast animation used on
-            #       first-run, so saved-game startups also get the fade-in effect.
-            # ------------------------------------------------------------------
-            brain_widget = self.brain_window.brain_widget
+                # NEW: reveal all neurons with the same fast animation used on
+                #       first-run, so saved-game startups also get the fade-in effect.
+                brain_widget = self.brain_window.brain_widget
 
-            # -- make every neuron visible -------------------------------------
-            # core neurons
-            for name in brain_widget.original_neurons:
-                brain_widget.visible_neurons.add(name)
-            # neurogenesis neurons
-            if hasattr(brain_widget, 'neurogenesis_data'):
-                for name in brain_widget.neurogenesis_data.get('new_neurons_details', {}):
+                # -- make every neuron visible -------------------------------------
+                # core neurons
+                for name in brain_widget.original_neurons:
                     brain_widget.visible_neurons.add(name)
+                # neurogenesis neurons
+                if hasattr(brain_widget, 'neurogenesis_data'):
+                    for name in brain_widget.neurogenesis_data.get('new_neurons_details', {}):
+                        brain_widget.visible_neurons.add(name)
 
-            # -- animate them (0.5 s apart) ------------------------------------
-            core = brain_widget.original_neurons
-            for idx, name in enumerate(core):
-                QtCore.QTimer.singleShot(idx * 500, lambda n=name: brain_widget.reveal_neuron(n))
+                # -- animate them (0.5 s apart) ------------------------------------
+                core = brain_widget.original_neurons
+                for idx, name in enumerate(core):
+                    QtCore.QTimer.singleShot(idx * 500, lambda n=name: brain_widget.reveal_neuron(n))
 
-            # -- finally, show window and check menu item ----------------------
-            self.brain_window.show()
-            self.user_interface.brain_action.setChecked(True)
+                # -- finally, show window and check menu item ----------------------
+                self.brain_window.show()
+                self.user_interface.brain_action.setChecked(True)
         else:
             print("\x1b[92m--------------  STARTING A NEW SIMULATION --------------\x1b[0m")
 
@@ -726,14 +754,14 @@ class MainWindow(QtWidgets.QMainWindow):
         brain_widget = self.brain_window.brain_widget
         core_neurons = brain_widget.original_neurons
         
-        # Distribution: 1-2 neurons per frame to reveal all 7 core neurons quickly
+        # Distribution: 1-2 neurons per frame. Now revised for 8 core neurons (indices 0-7)
         reveal_map = {
-            0: [0],       # First frame: reveal hunger
-            1: [1],       # Second frame: reveal happiness  
-            2: [2],       # Third frame: reveal cleanliness
-            3: [3],       # Fourth frame: reveal sleepiness
-            4: [4],    # Fifth frame: reveal satisfaction & anxiety
-            5: [5, 6]        # Sixth frame: reveal curiosity
+            0: [0],       # First frame
+            1: [1],       # Second frame
+            2: [2],       # Third frame
+            3: [3],       # Fourth frame
+            4: [4, 5],    # Fifth frame
+            5: [6, 7]     # Sixth frame
         }
         
         # Reveal mapped neurons for this frame
@@ -753,10 +781,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tamagotchi_logic.set_simulation_speed(1)
         self.tamagotchi_logic.start_autosave()
 
+        # Get brain widget reference
+        brain_widget = self.brain_window.brain_widget
+
         # Show tutorial if enabled
         if self.show_tutorial:
             QtCore.QTimer.singleShot(1000, self.user_interface.show_tutorial_overlay)
         else:
+            # === FIX START: Manual cleanup if tutorial is skipped ===
+            if hasattr(brain_widget, 'is_tutorial_mode'):
+                # Set the flag to False, which allows connections to draw
+                brain_widget.is_tutorial_mode = False 
+                
+                # OPTIONAL: If setting the flag doesn't immediately refresh the links,
+                # you may need to force a repaint. If the links are set to show,
+                # a simple repaint will usually draw them once the block is gone.
+                brain_widget.update() # Force repaint
+            # === FIX END ===
+
             # Only open decoration window automatically (brain window already visible for new games)
             QtCore.QTimer.singleShot(500, self.position_and_show_decoration_window)
 
@@ -881,7 +923,16 @@ def main():
                        help='Enable debug mode with console logging')
     parser.add_argument('-nc', '--neurocooldown', type=int, 
                        help='Set neurogenesis cooldown in seconds')
+    parser.add_argument('-c', '--clean', action='store_true',
+                       help='Clean __pycache__ and logs folders before starting')
     args = parser.parse_args()
+
+    # Perform cleanup if requested before logging setup
+    if args.clean:
+        perform_cleanup_and_exit()
+
+    # Initialize logging (replaces previous global setup)
+    setup_logging_configuration()
 
     print(f"Personality: {args.personality}")
     print(f"Debug mode: {args.debug}")
