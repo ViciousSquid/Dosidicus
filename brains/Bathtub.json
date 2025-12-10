@@ -1,0 +1,330 @@
+{
+  "version": "2.0",
+  "format": "dosidicus",
+  "metadata": {
+    "name": "Bathtub",
+    "description": "",
+    "author": "Rufus Pearce",
+    "version": "1.0",
+    "created": "",
+    "modified": ""
+  },
+  "neurons": {
+    "hunger": {
+      "position": [
+        127.0,
+        81.0
+      ],
+      "type": "core",
+      "is_binary": false,
+      "is_core": true,
+      "is_sensor": false,
+      "activation": 50.0
+    },
+    "happiness": {
+      "position": [
+        392.0,
+        63.0
+      ],
+      "type": "core",
+      "is_binary": false,
+      "is_core": true,
+      "is_sensor": false,
+      "activation": 50.0
+    },
+    "cleanliness": {
+      "position": [
+        627.0,
+        81.0
+      ],
+      "type": "core",
+      "is_binary": false,
+      "is_core": true,
+      "is_sensor": false,
+      "activation": 50.0
+    },
+    "sleepiness": {
+      "position": [
+        840.0,
+        81.0
+      ],
+      "type": "core",
+      "is_binary": false,
+      "is_core": true,
+      "is_sensor": false,
+      "activation": 50.0
+    },
+    "satisfaction": {
+      "position": [
+        271.0,
+        380.0
+      ],
+      "type": "core",
+      "is_binary": false,
+      "is_core": true,
+      "is_sensor": false,
+      "activation": 50.0
+    },
+    "anxiety": {
+      "position": [
+        491.0,
+        389.0
+      ],
+      "type": "core",
+      "is_binary": false,
+      "is_core": true,
+      "is_sensor": false,
+      "activation": 50.0
+    },
+    "curiosity": {
+      "position": [
+        701.0,
+        386.0
+      ],
+      "type": "core",
+      "is_binary": false,
+      "is_core": true,
+      "is_sensor": false,
+      "activation": 50.0
+    },
+    "can_see_food": {
+      "position": [
+        260.0,
+        151.0
+      ],
+      "type": "sensor",
+      "is_binary": true,
+      "is_core": false,
+      "is_sensor": true,
+      "activation": 0.0
+    }
+  },
+  "connections": {
+    "sleepiness->anxiety": 0.125,
+    "hunger->satisfaction": -0.344,
+    "cleanliness->happiness": 0.296,
+    "sleepiness->happiness": -0.355,
+    "can_see_food->hunger": 0.25,
+    "happiness->satisfaction": 0.164,
+    "anxiety->curiosity": -0.375,
+    "sleepiness->curiosity": -0.17,
+    "satisfaction->hunger": -0.064,
+    "curiosity->happiness": 0.299,
+    "satisfaction->anxiety": -0.34,
+    "can_see_food->curiosity": 0.191,
+    "anxiety->happiness": -0.418,
+    "hunger->happiness": -0.189,
+    "happiness->anxiety": -0.228,
+    "anxiety->satisfaction": -0.13,
+    "satisfaction->happiness": 0.364,
+    "anxiety->sleepiness": 0.096
+  },
+  "state": {
+    "hunger": 50.0,
+    "happiness": 50.0,
+    "cleanliness": 50.0,
+    "sleepiness": 50.0,
+    "satisfaction": 50.0,
+    "anxiety": 50.0,
+    "curiosity": 50.0,
+    "can_see_food": false
+  },
+  "excluded_neurons": [],
+  "neuron_positions": {
+    "hunger": [
+      127.0,
+      81.0
+    ],
+    "happiness": [
+      392.0,
+      63.0
+    ],
+    "cleanliness": [
+      627.0,
+      81.0
+    ],
+    "sleepiness": [
+      840.0,
+      81.0
+    ],
+    "satisfaction": [
+      271.0,
+      380.0
+    ],
+    "anxiety": [
+      491.0,
+      389.0
+    ],
+    "curiosity": [
+      701.0,
+      386.0
+    ],
+    "can_see_food": [
+      260.0,
+      151.0
+    ]
+  },
+  "weights": {
+    "sleepiness|anxiety": 0.125,
+    "hunger|satisfaction": -0.344,
+    "cleanliness|happiness": 0.296,
+    "sleepiness|happiness": -0.355,
+    "can_see_food|hunger": 0.25,
+    "happiness|satisfaction": 0.164,
+    "anxiety|curiosity": -0.375,
+    "sleepiness|curiosity": -0.17,
+    "satisfaction|hunger": -0.064,
+    "curiosity|happiness": 0.299,
+    "satisfaction|anxiety": -0.34,
+    "can_see_food|curiosity": 0.191,
+    "anxiety|happiness": -0.418,
+    "hunger|happiness": -0.189,
+    "happiness|anxiety": -0.228,
+    "anxiety|satisfaction": -0.13,
+    "satisfaction|happiness": 0.364,
+    "anxiety|sleepiness": 0.096
+  },
+  "layer_structure": [],
+  "neuron_details": {
+    "hunger": {
+      "name": "hunger",
+      "neuron_type": "core",
+      "position": [
+        127.0,
+        81.0
+      ],
+      "layer_index": 0,
+      "color": [
+        150,
+        150,
+        220
+      ],
+      "description": "Required neuron",
+      "is_binary": false,
+      "category": "core"
+    },
+    "happiness": {
+      "name": "happiness",
+      "neuron_type": "core",
+      "position": [
+        392.0,
+        63.0
+      ],
+      "layer_index": 0,
+      "color": [
+        150,
+        150,
+        220
+      ],
+      "description": "Required neuron",
+      "is_binary": false,
+      "category": "core"
+    },
+    "cleanliness": {
+      "name": "cleanliness",
+      "neuron_type": "core",
+      "position": [
+        627.0,
+        81.0
+      ],
+      "layer_index": 0,
+      "color": [
+        150,
+        150,
+        220
+      ],
+      "description": "Required neuron",
+      "is_binary": false,
+      "category": "core"
+    },
+    "sleepiness": {
+      "name": "sleepiness",
+      "neuron_type": "core",
+      "position": [
+        840.0,
+        81.0
+      ],
+      "layer_index": 0,
+      "color": [
+        150,
+        150,
+        220
+      ],
+      "description": "Required neuron",
+      "is_binary": false,
+      "category": "core"
+    },
+    "satisfaction": {
+      "name": "satisfaction",
+      "neuron_type": "core",
+      "position": [
+        271.0,
+        380.0
+      ],
+      "layer_index": 0,
+      "color": [
+        150,
+        150,
+        220
+      ],
+      "description": "Required neuron",
+      "is_binary": false,
+      "category": "core"
+    },
+    "anxiety": {
+      "name": "anxiety",
+      "neuron_type": "core",
+      "position": [
+        491.0,
+        389.0
+      ],
+      "layer_index": 0,
+      "color": [
+        150,
+        150,
+        220
+      ],
+      "description": "Required neuron",
+      "is_binary": false,
+      "category": "core"
+    },
+    "curiosity": {
+      "name": "curiosity",
+      "neuron_type": "core",
+      "position": [
+        701.0,
+        386.0
+      ],
+      "layer_index": 0,
+      "color": [
+        150,
+        150,
+        220
+      ],
+      "description": "Required neuron",
+      "is_binary": false,
+      "category": "core"
+    },
+    "can_see_food": {
+      "name": "can_see_food",
+      "neuron_type": "sensor",
+      "position": [
+        260.0,
+        151.0
+      ],
+      "layer_index": 0,
+      "color": [
+        100,
+        180,
+        100
+      ],
+      "description": "Required neuron",
+      "is_binary": true,
+      "category": "required"
+    }
+  },
+  "sensors_used": [
+    "can_see_food"
+  ],
+  "required_complete": true
+}
