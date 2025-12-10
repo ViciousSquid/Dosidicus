@@ -2,7 +2,7 @@
   "version": "2.0",
   "format": "dosidicus",
   "metadata": {
-    "name": "Bathtub",
+    "name": "L'insomniaque",
     "description": "",
     "author": "Rufus Pearce",
     "version": "1.0",
@@ -23,8 +23,8 @@
     },
     "happiness": {
       "position": [
-        392.0,
-        63.0
+        361.0,
+        81.0
       ],
       "type": "core",
       "is_binary": false,
@@ -89,8 +89,8 @@
     },
     "can_see_food": {
       "position": [
-        260.0,
-        151.0
+        50.0,
+        200.0
       ],
       "type": "sensor",
       "is_binary": true,
@@ -100,24 +100,13 @@
     }
   },
   "connections": {
-    "sleepiness->anxiety": 0.125,
-    "hunger->satisfaction": -0.344,
-    "cleanliness->happiness": 0.296,
-    "sleepiness->happiness": -0.355,
-    "can_see_food->hunger": 0.25,
-    "happiness->satisfaction": 0.164,
-    "anxiety->curiosity": -0.375,
-    "sleepiness->curiosity": -0.17,
-    "satisfaction->hunger": -0.064,
-    "curiosity->happiness": 0.299,
-    "satisfaction->anxiety": -0.34,
-    "can_see_food->curiosity": 0.191,
-    "anxiety->happiness": -0.418,
-    "hunger->happiness": -0.189,
-    "happiness->anxiety": -0.228,
-    "anxiety->satisfaction": -0.13,
-    "satisfaction->happiness": 0.364,
-    "anxiety->sleepiness": 0.096
+    "anxiety->sleepiness": -0.95,
+    "curiosity->sleepiness": -0.8,
+    "hunger->sleepiness": -0.5,
+    "can_see_food->sleepiness": -0.5,
+    "sleepiness->anxiety": 0.2,
+    "happiness->satisfaction": 0.10000000000000007,
+    "satisfaction->happiness": 0.10000000000000007
   },
   "state": {
     "hunger": 50.0,
@@ -136,8 +125,8 @@
       81.0
     ],
     "happiness": [
-      392.0,
-      63.0
+      361.0,
+      81.0
     ],
     "cleanliness": [
       627.0,
@@ -160,31 +149,54 @@
       386.0
     ],
     "can_see_food": [
-      260.0,
-      151.0
+      50.0,
+      200.0
     ]
   },
   "weights": {
-    "sleepiness|anxiety": 0.125,
-    "hunger|satisfaction": -0.344,
-    "cleanliness|happiness": 0.296,
-    "sleepiness|happiness": -0.355,
-    "can_see_food|hunger": 0.25,
-    "happiness|satisfaction": 0.164,
-    "anxiety|curiosity": -0.375,
-    "sleepiness|curiosity": -0.17,
-    "satisfaction|hunger": -0.064,
-    "curiosity|happiness": 0.299,
-    "satisfaction|anxiety": -0.34,
-    "can_see_food|curiosity": 0.191,
-    "anxiety|happiness": -0.418,
-    "hunger|happiness": -0.189,
-    "happiness|anxiety": -0.228,
-    "anxiety|satisfaction": -0.13,
-    "satisfaction|happiness": 0.364,
-    "anxiety|sleepiness": 0.096
+    "anxiety|sleepiness": -0.95,
+    "curiosity|sleepiness": -0.8,
+    "hunger|sleepiness": -0.5,
+    "can_see_food|sleepiness": -0.5,
+    "sleepiness|anxiety": 0.2,
+    "happiness|satisfaction": 0.10000000000000007,
+    "satisfaction|happiness": 0.10000000000000007
   },
-  "layer_structure": [],
+  "layer_structure": [
+    {
+      "name": "Sensors",
+      "layer_type": "input",
+      "y_position": 150,
+      "color": [
+        200,
+        200,
+        220,
+        80
+      ]
+    },
+    {
+      "name": "Racing Mind",
+      "layer_type": "hidden",
+      "y_position": 200,
+      "color": [
+        200,
+        200,
+        220,
+        80
+      ]
+    },
+    {
+      "name": "State",
+      "layer_type": "output",
+      "y_position": 350,
+      "color": [
+        200,
+        200,
+        220,
+        80
+      ]
+    }
+  ],
   "neuron_details": {
     "hunger": {
       "name": "hunger",
@@ -207,8 +219,8 @@
       "name": "happiness",
       "neuron_type": "core",
       "position": [
-        392.0,
-        63.0
+        361.0,
+        81.0
       ],
       "layer_index": 0,
       "color": [
@@ -309,8 +321,8 @@
       "name": "can_see_food",
       "neuron_type": "sensor",
       "position": [
-        260.0,
-        151.0
+        50.0,
+        200.0
       ],
       "layer_index": 0,
       "color": [
