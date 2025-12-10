@@ -12,6 +12,17 @@ from designer_constants import (
     is_required_neuron, is_input_sensor
 )
 
+# Optional: Import sensor discovery for plugin sensors
+try:
+    from designer_sensor_discovery import get_all_available_sensors, is_plugin_sensor
+    _HAS_SENSOR_DISCOVERY = True
+except ImportError:
+    _HAS_SENSOR_DISCOVERY = False
+    def get_all_available_sensors():
+        return dict(INPUT_SENSORS)
+    def is_plugin_sensor(name):
+        return False
+
 class AddNeuronDialog(QDialog):
     def __init__(self, design: BrainDesign, position=None, parent=None):
         super().__init__(parent)
@@ -26,18 +37,24 @@ class AddNeuronDialog(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout(self)
         
-        type_group = QGroupBox("What type of neuron?")
+        # 1. Selection Group
+        type_group = QGroupBox("Select Neuron Type")
         type_layout = QVBoxLayout(type_group)
         
-        custom_btn = QPushButton("🔧 Custom Neuron")
+        # Custom Neuron Button (The "Magic" one)
+        custom_btn = QPushButton("✨ Custom / Plugin Neuron")
+        custom_btn.setToolTip("Create a neuron with a specific name to link with game plugins")
         custom_btn.clicked.connect(lambda: self.select_type('custom'))
         type_layout.addWidget(custom_btn)
         
+        # Sensor Button
         sensor_btn = QPushButton("📡 Input Sensor")
         sensor_btn.clicked.connect(lambda: self.select_type('sensor'))
         type_layout.addWidget(sensor_btn)
+        
         layout.addWidget(type_group)
         
+        # 2. Sensor Selection Group (Hidden by default)
         self.sensor_group = QGroupBox("Select Sensor")
         sensor_layout = QVBoxLayout(self.sensor_group)
         self.sensor_list = QListWidget()
@@ -46,13 +63,28 @@ class AddNeuronDialog(QDialog):
         layout.addWidget(self.sensor_group)
         self.sensor_group.hide()
         
-        self.custom_group = QGroupBox("Custom Neuron")
+        # 3. Custom Neuron Entry Group (Hidden by default)
+        self.custom_group = QGroupBox("Define Custom Neuron")
         custom_layout = QFormLayout(self.custom_group)
+        
+        # Magic Link Instruction
+        info_label = QLabel(
+            "<i>To affect the squid, the <b>Name</b> must match a plugin ID.<br>"
+            "Example: Name it <b>'jet_boost'</b> to activate a jetpack plugin.</i>"
+        )
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #666; margin-bottom: 5px;")
+        custom_layout.addRow(info_label)
+        
         self.name_edit = QLineEdit()
-        custom_layout.addRow("Name:", self.name_edit)
-        add_custom_btn = QPushButton("Create")
+        self.name_edit.setPlaceholderText("e.g. turbo_mode")
+        custom_layout.addRow("Plugin ID / Name:", self.name_edit)
+        
+        add_custom_btn = QPushButton("Create Link")
+        add_custom_btn.setStyleSheet("font-weight: bold; background-color: #E0F7FA; color: #006064;")
         add_custom_btn.clicked.connect(self.accept_custom)
         custom_layout.addRow(add_custom_btn)
+        
         layout.addWidget(self.custom_group)
         self.custom_group.hide()
     
@@ -69,8 +101,19 @@ class AddNeuronDialog(QDialog):
     def populate_sensor_list(self):
         self.sensor_list.clear()
         existing = set(self.design.neurons.keys())
-        all_sensors = dict(INPUT_SENSORS)
-        if 'can_see_food' not in existing: all_sensors['can_see_food'] = REQUIRED_NEURONS['can_see_food']
+        
+        # Get all available sensors (built-in + plugin)
+        all_sensors = get_all_available_sensors()
+        
+        # Also ensure can_see_food is included
+        if 'can_see_food' not in all_sensors and 'can_see_food' in REQUIRED_NEURONS:
+            all_sensors['can_see_food'] = {
+                'description': REQUIRED_NEURONS['can_see_food'].get('description', ''),
+                'is_binary': True,
+                'plugin': None
+            }
+        
+        # Filter to available sensors
         available = {k: v for k, v in all_sensors.items() if k not in existing}
         
         if not available:
@@ -78,8 +121,23 @@ class AddNeuronDialog(QDialog):
             return
 
         for name in sorted(available.keys()):
-            item = QListWidgetItem(name.replace('_', ' ').title())
+            info = available[name]
+            display_name = name.replace('_', ' ').title()
+            
+            # Add plugin indicator
+            if info.get('plugin'):
+                display_name = f"🔌 {display_name}"
+            
+            item = QListWidgetItem(display_name)
             item.setData(Qt.UserRole, name)
+            
+            # Add tooltip
+            tooltip = info.get('description', '')
+            if info.get('plugin'):
+                tooltip += f"\n[Plugin: {info['plugin']}]"
+            if tooltip:
+                item.setToolTip(tooltip.strip())
+            
             self.sensor_list.addItem(item)
 
     def accept_sensor(self):
@@ -224,30 +282,114 @@ class LayersPanel(QWidget):
             self.layersChanged.emit()
 
 class SensorsPanel(QWidget):
+    """
+    Panel showing available input sensors.
+    
+    Supports both built-in sensors from INPUT_SENSORS and
+    custom sensors registered by plugins via the PluginManager.
+    """
     sensorsChanged = pyqtSignal()
+    
     def __init__(self, design, parent=None):
         super().__init__(parent)
         self.design = design
+        self._scroll_widget = None  # Store reference for dynamic updates
+        self._scroll_layout = None
         self.setup_ui()
     
     def setup_ui(self):
         l = QVBoxLayout(self)
+        
+        # Header with refresh button for plugin sensors
+        header = QHBoxLayout()
+        header.addWidget(QLabel("Input Sensors:"))
+        header.addStretch()
+        
+        refresh_btn = QPushButton("🔄")
+        refresh_btn.setToolTip("Refresh sensor list (includes plugin-registered sensors)")
+        refresh_btn.setMaximumWidth(30)
+        refresh_btn.clicked.connect(self.rebuild_sensor_list)
+        header.addWidget(refresh_btn)
+        l.addLayout(header)
+        
+        # Scrollable sensor list
         scroll = QScrollArea()
-        w = QWidget()
-        sl = QVBoxLayout(w)
+        self._scroll_widget = QWidget()
+        self._scroll_layout = QVBoxLayout(self._scroll_widget)
         self.checks = {}
-        for name in sorted(INPUT_SENSORS.keys()):
-            cb = QCheckBox(name)
-            cb.setProperty('n', name)
-            cb.stateChanged.connect(self.toggled)
-            self.checks[name] = cb
-            sl.addWidget(cb)
-        scroll.setWidget(w)
+        
+        # Build initial sensor list
+        self._populate_sensors()
+        
+        scroll.setWidget(self._scroll_widget)
         scroll.setWidgetResizable(True)
         l.addWidget(scroll)
         self.refresh()
+    
+    def _populate_sensors(self):
+        """Populate the sensor checkboxes from all available sources."""
+        # Clear existing checkboxes
+        self.checks.clear()
+        while self._scroll_layout.count():
+            item = self._scroll_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Get all available sensors (built-in + plugin)
+        all_sensors = get_all_available_sensors()
+        
+        # Group by category
+        categories = {}
+        for name, info in all_sensors.items():
+            cat = info.get('category', 'other')
+            if cat not in categories:
+                categories[cat] = {}
+            categories[cat][name] = info
+        
+        # Add sensors grouped by category
+        for cat_name in sorted(categories.keys()):
+            cat_sensors = categories[cat_name]
+            
+            # Add category label if there are multiple categories
+            if len(categories) > 1:
+                cat_label = QLabel(f"── {cat_name.title()} ──")
+                cat_label.setStyleSheet("color: #888; font-size: 10px;")
+                self._scroll_layout.addWidget(cat_label)
+            
+            for name in sorted(cat_sensors.keys()):
+                info = cat_sensors[name]
+                
+                # Create checkbox with plugin indicator
+                display_name = name
+                if info.get('plugin'):
+                    display_name = f"🔌 {name}"  # Plugin indicator
+                
+                cb = QCheckBox(display_name)
+                cb.setProperty('n', name)
+                cb.stateChanged.connect(self.toggled)
+                
+                # Add tooltip with description
+                tooltip = info.get('description', '')
+                if info.get('plugin'):
+                    tooltip += f"\n[From plugin: {info['plugin']}]"
+                if info.get('is_binary'):
+                    tooltip += "\n[Binary: 0 or 100]"
+                if tooltip:
+                    cb.setToolTip(tooltip.strip())
+                
+                self.checks[name] = cb
+                self._scroll_layout.addWidget(cb)
+        
+        # Add stretch at end
+        self._scroll_layout.addStretch()
+    
+    def rebuild_sensor_list(self):
+        """Rebuild the sensor list to pick up newly registered plugin sensors."""
+        self._populate_sensors()
+        self.refresh()
         
     def refresh(self):
+        """Update checkbox states based on current design."""
         current = set(self.design.get_sensors_in_design())
         for name, cb in self.checks.items():
             cb.blockSignals(True)
@@ -256,8 +398,10 @@ class SensorsPanel(QWidget):
 
     def toggled(self, state):
         name = self.sender().property('n')
-        if state: self.design.add_sensor(name)
-        else: self.design.remove_neuron(name)
+        if state: 
+            self.design.add_sensor(name)
+        else: 
+            self.design.remove_neuron(name)
         self.sensorsChanged.emit()
 
 class ConnectionsTable(QWidget):

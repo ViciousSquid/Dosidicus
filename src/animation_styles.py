@@ -165,12 +165,12 @@ class VibrantStyle(AnimationStyle):
     comm_glow_alpha: int = 200
     comm_glow_size: float = 4.0
     comm_glow_tail_length: float = 0.15
-    comm_glow_speed_range: Tuple[float, float] = (0.8, 1.5)  # Pulse Speed
+    comm_glow_speed_range: Tuple[float, float] = (0.5, 1.0)  # Pulse Speed
     comm_glow_fade_in: float = 0.1
     comm_glow_fade_out: float = 0.25
     comm_glow_spawn_on_activity: bool = True
     comm_glow_spawn_on_weight_change: bool = True
-    comm_glow_max_per_connection: int = 1  # ← Less frequent: only 1 glow per link
+    comm_glow_max_per_connection: int = 0.9
 
 
 @dataclass
@@ -243,7 +243,7 @@ class NeuralStyle(AnimationStyle):
     with cyan for excitatory and warm red for inhibitory connections.
     """
     name: str = "neural"
-    display_name: str = "Heatmap"
+    display_name: str = "Activations"
     description: str = "Highlights most active connections"
     
     # Base lines are colored by weight sign, thickness by weight magnitude
@@ -296,7 +296,7 @@ class DesignerStyle(AnimationStyle):
     Mimics the SmartConnectionItem rendering from designer_canvas.py.
     """
     name: str = "designer"
-    display_name: str = "Designer"
+    display_name: str = "Mono"
     description: str = "Fat weight-scaled lines with traveling orbs (matches Brain Designer)"
     
     # ===== CONNECTION LINE APPEARANCE =====

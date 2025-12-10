@@ -80,6 +80,10 @@ class PluginManager:
         self.enabled_plugins: set[str] = set()    # Names of enabled plugins (use lowercase)
         self.auto_load_blacklist: set[str] = {"multiplayer"}  ### FIX: Stop Multiplayer plugin freaking out at startup  ** ESSENTIAL **
         
+        # Custom neuron handlers registered by plugins
+        # Maps neuron_name -> {'handler': callable, 'plugin': plugin_name, 'metadata': dict}
+        self._neuron_handlers: Dict[str, Dict] = {}
+        
         # Configure the logger for PluginManager
         self.logger = logging.getLogger("PluginManager")
         
@@ -158,6 +162,37 @@ class PluginManager:
         
         # Custom menu action hooks
         self.register_hook("register_menu_actions")
+        
+        # Custom neuron hooks - allows plugins to register input neuron handlers
+        self.register_hook("register_neuron_handlers")
+        
+        # Neuron output hooks - triggered when neurons fire above threshold
+        # Movement behaviors
+        self.register_hook("neuron_output_flee")
+        self.register_hook("neuron_output_seek_food")
+        self.register_hook("neuron_output_seek_plant")
+        self.register_hook("neuron_output_approach_rock")
+        self.register_hook("neuron_output_wander")
+        
+        # Action behaviors
+        self.register_hook("neuron_output_throw_rock")
+        self.register_hook("neuron_output_pick_up_rock")
+        self.register_hook("neuron_output_ink_cloud")
+        self.register_hook("neuron_output_eat")
+        
+        # State changes
+        self.register_hook("neuron_output_sleep")
+        self.register_hook("neuron_output_wake")
+        self.register_hook("neuron_output_startle")
+        self.register_hook("neuron_output_calm")
+        
+        # Stat modifications
+        self.register_hook("neuron_output_boost_happiness")
+        self.register_hook("neuron_output_boost_curiosity")
+        self.register_hook("neuron_output_reduce_anxiety")
+        
+        # Custom/plugin-defined outputs
+        self.register_hook("neuron_output_custom")
     
     def register_hook(self, hook_name: str) -> None:
         """
@@ -584,3 +619,146 @@ class PluginManager:
         """Allows setting a reference to the main TamagotchiLogic instance."""
         setattr(self, 'tamagotchi_logic', tamagotchi_logic_instance)
         self.logger.info("TamagotchiLogic instance has been linked to PluginManager.")
+
+    # =========================================================================
+    # CUSTOM NEURON HANDLER REGISTRATION
+    # =========================================================================
+    
+    def register_neuron_handler(
+        self, 
+        neuron_name: str, 
+        handler: Callable, 
+        plugin_name: str,
+        metadata: Dict = None
+    ) -> bool:
+        """
+        Register a custom handler for a brain input neuron.
+        
+        This allows plugins to add new sensor neurons that can be wired into
+        the squid's neural network via the brain designer.
+        
+        Args:
+            neuron_name: Unique name for the neuron (e.g., 'music_beat_detector')
+            handler: A callable that returns a float (0-100) activation value.
+                     Should take no arguments and return the current activation.
+            plugin_name: Name of the plugin registering this handler
+            metadata: Optional dict with additional info:
+                - 'description': Human-readable description
+                - 'is_binary': True if neuron only outputs 0 or 100
+                - 'category': Category for grouping (e.g., 'environmental', 'social')
+                - 'default_connections': List of neurons to auto-connect to
+                
+        Returns:
+            True if registered successfully, False if neuron name already exists
+            
+        Example:
+            def my_beat_handler():
+                # Return 100 when beat detected, 0 otherwise
+                return 100.0 if detect_beat() else 0.0
+            
+            plugin_manager.register_neuron_handler(
+                'music_beat', 
+                my_beat_handler, 
+                'MusicPlugin',
+                metadata={
+                    'description': 'Detects music beats',
+                    'is_binary': True,
+                    'category': 'audio'
+                }
+            )
+        """
+        plugin_name_lower = plugin_name.lower()
+        
+        if neuron_name in self._neuron_handlers:
+            existing = self._neuron_handlers[neuron_name]
+            self.logger.warning(
+                f"Neuron handler '{neuron_name}' already registered by "
+                f"'{existing.get('plugin', 'unknown')}'. Overwriting with '{plugin_name}'."
+            )
+        
+        self._neuron_handlers[neuron_name] = {
+            'handler': handler,
+            'plugin': plugin_name_lower,
+            'metadata': metadata or {}
+        }
+        
+        self.logger.info(f"Registered neuron handler: '{neuron_name}' from plugin '{plugin_name}'")
+        return True
+    
+    def unregister_neuron_handler(self, neuron_name: str, plugin_name: str) -> bool:
+        """
+        Unregister a neuron handler.
+        
+        Args:
+            neuron_name: Name of the neuron to unregister
+            plugin_name: Name of the plugin that registered it (for verification)
+            
+        Returns:
+            True if unregistered successfully, False otherwise
+        """
+        plugin_name_lower = plugin_name.lower()
+        
+        if neuron_name not in self._neuron_handlers:
+            self.logger.warning(f"Cannot unregister '{neuron_name}': not found")
+            return False
+        
+        existing = self._neuron_handlers[neuron_name]
+        if existing.get('plugin') != plugin_name_lower:
+            self.logger.warning(
+                f"Cannot unregister '{neuron_name}': registered by "
+                f"'{existing.get('plugin')}', not '{plugin_name}'"
+            )
+            return False
+        
+        del self._neuron_handlers[neuron_name]
+        self.logger.info(f"Unregistered neuron handler: '{neuron_name}'")
+        return True
+    
+    def get_neuron_handlers(self) -> Dict[str, Callable]:
+        """
+        Get all registered neuron handlers as a dict of name -> callable.
+        
+        This is called by BrainNeuronHooks to merge plugin handlers with
+        built-in handlers.
+        
+        Returns:
+            Dict mapping neuron names to their handler callables
+        """
+        return {
+            name: data['handler'] 
+            for name, data in self._neuron_handlers.items()
+        }
+    
+    def get_neuron_handler_info(self, neuron_name: str) -> Dict | None:
+        """
+        Get full info about a registered neuron handler.
+        
+        Returns:
+            Dict with 'handler', 'plugin', and 'metadata' keys, or None if not found
+        """
+        return self._neuron_handlers.get(neuron_name)
+    
+    def get_all_neuron_handler_info(self) -> Dict[str, Dict]:
+        """
+        Get info about all registered neuron handlers.
+        
+        Returns:
+            Dict mapping neuron names to their full registration info
+        """
+        return dict(self._neuron_handlers)
+    
+    def get_plugin_neuron_handlers(self, plugin_name: str) -> List[str]:
+        """
+        Get list of neuron handlers registered by a specific plugin.
+        
+        Args:
+            plugin_name: Name of the plugin
+            
+        Returns:
+            List of neuron names registered by that plugin
+        """
+        plugin_name_lower = plugin_name.lower()
+        return [
+            name for name, data in self._neuron_handlers.items()
+            if data.get('plugin') == plugin_name_lower
+        ]

@@ -94,10 +94,26 @@ class DesignerNeuron:
             neuron_type = NeuronType[type_str]
         except KeyError:
             neuron_type = NeuronType.HIDDEN
+        
+        # Safely handle position - might be invalid in corrupted files
+        pos = data.get('position', (0, 0))
+        try:
+            # Ensure it's a tuple with 2 numeric values
+            if isinstance(pos, (list, tuple)) and len(pos) == 2:
+                x, y = pos
+                if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+                    position = tuple(pos)
+                else:
+                    position = (0, 0)  # Will be fixed by add_neuron validation
+            else:
+                position = (0, 0)  # Will be fixed by add_neuron validation
+        except (TypeError, ValueError):
+            position = (0, 0)  # Will be fixed by add_neuron validation
+        
         return cls(
             name=data['name'],
             neuron_type=neuron_type,
-            position=tuple(data['position']),
+            position=position,
             layer_index=data.get('layer_index', 0),
             color=tuple(data.get('color', (150, 150, 220))),
             description=data.get('description', ''),
@@ -122,13 +138,58 @@ class BrainDesign:
         self.neurons: Dict[str, DesignerNeuron] = {}
         self.connections: List[DesignerConnection] = []
         self.layers: List[DesignerLayer] = []
+        self.output_bindings: List[Dict] = []  # Neuron output bindings for actuators
         self.metadata: Dict = {
             'name': 'Untitled', 'description': '', 'author': '',
             'version': '1.0', 'created': '', 'modified': ''
         }
+        self._next_custom_neuron_x = 400  # For auto-positioning custom neurons
+        self._next_custom_neuron_y = 200
+    
+    def _validate_and_fix_position(self, position: any) -> Tuple[float, float]:
+        """Validate and fix neuron position, generating a default if invalid."""
+        # Check if position is None
+        if position is None:
+            return self._generate_custom_position()
+        
+        # Check if it's a tuple/list with 2 elements
+        try:
+            if not isinstance(position, (tuple, list)) or len(position) != 2:
+                return self._generate_custom_position()
+            
+            x, y = position
+            
+            # Validate that x and y are numbers
+            if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                return self._generate_custom_position()
+            
+            # Check for None or invalid values
+            if x is None or y is None:
+                return self._generate_custom_position()
+            
+            return (float(x), float(y))
+            
+        except (TypeError, ValueError):
+            return self._generate_custom_position()
+    
+    def _generate_custom_position(self) -> Tuple[float, float]:
+        """Generate a default position for custom neurons."""
+        pos = (self._next_custom_neuron_x, self._next_custom_neuron_y)
+        
+        # Move position for next neuron (wrap after 3 neurons per row)
+        self._next_custom_neuron_x += 120
+        if self._next_custom_neuron_x > 600:
+            self._next_custom_neuron_x = 400
+            self._next_custom_neuron_y += 100
+        
+        return pos
     
     def add_neuron(self, neuron: DesignerNeuron) -> bool:
         if neuron.name in self.neurons: return False
+        
+        # CRITICAL FIX: Validate and fix position before adding
+        neuron.position = self._validate_and_fix_position(neuron.position)
+        
         self.neurons[neuron.name] = neuron
         return True
     
@@ -427,6 +488,8 @@ class BrainDesign:
             'connections': connections,
             'state': state,
             'excluded_neurons': [],
+            # Output bindings for actuator neurons
+            'output_bindings': self.output_bindings,
             # Legacy fields for backward compatibility
             'neuron_positions': {n: tuple(obj.position) for n, obj in self.neurons.items()},
             'weights': {f"{c.source}|{c.target}": c.weight for c in self.connections},
@@ -467,6 +530,7 @@ class BrainDesign:
             'connections': connections,  # List format
             'layers': [l.to_dict() for l in self.layers],
             'excluded_neurons': [],
+            'output_bindings': self.output_bindings,  # Actuator neuron bindings
         }
     
     @classmethod
@@ -483,14 +547,20 @@ class BrainDesign:
             for name, n in neurons_data.items():
                 if 'name' not in n:
                     n['name'] = name
-                design.neurons[name] = DesignerNeuron.from_dict(n)
+                neuron = DesignerNeuron.from_dict(n)
+                design.add_neuron(neuron)  # Use add_neuron for position validation
         else:
             # Old format: list
             for n in neurons_data:
-                design.neurons[n['name']] = DesignerNeuron.from_dict(n)
+                neuron = DesignerNeuron.from_dict(n)
+                design.add_neuron(neuron)  # Use add_neuron for position validation
         
         for c in data.get('connections', []):
             design.connections.append(DesignerConnection.from_dict(c))
+        
+        # Load output bindings
+        design.output_bindings = data.get('output_bindings', [])
+        
         return design
     
     @classmethod
@@ -513,23 +583,26 @@ class BrainDesign:
                     ntype = NeuronType.CORE if is_core_neuron(name) else (
                         NeuronType.SENSOR if is_input_sensor(name) else NeuronType.HIDDEN
                     )
-                design.neurons[name] = DesignerNeuron(
+                neuron = DesignerNeuron(
                     name=name,
                     neuron_type=ntype,
                     position=tuple(pos) if isinstance(pos, list) else pos,
                     is_binary=nd.get('is_binary', False)
                 )
+                design.add_neuron(neuron)  # Use add_neuron for position validation
         else:
             # Old format: neuron_positions + neuron_details
             details = data.get('neuron_details', {})
             for name, pos in data.get('neuron_positions', {}).items():
                 if name in details:
-                    design.neurons[name] = DesignerNeuron.from_dict(details[name])
+                    neuron = DesignerNeuron.from_dict(details[name])
+                    design.add_neuron(neuron)  # Use add_neuron for position validation
                 else:
                     ntype = NeuronType.CORE if is_core_neuron(name) else (
                         NeuronType.SENSOR if is_input_sensor(name) else NeuronType.HIDDEN
                     )
-                    design.neurons[name] = DesignerNeuron(name=name, neuron_type=ntype, position=tuple(pos))
+                    neuron = DesignerNeuron(name=name, neuron_type=ntype, position=tuple(pos))
+                    design.add_neuron(neuron)  # Use add_neuron for position validation
         
         # Handle connections - new format has '->' keys, old format has '|' keys
         connections_data = data.get('connections', {})
@@ -556,6 +629,9 @@ class BrainDesign:
                 if '|' in k:
                     s, t = k.split('|')
                     design.connections.append(DesignerConnection(s, t, w))
+        
+        # Load output bindings
+        design.output_bindings = data.get('output_bindings', [])
         
         return design
         

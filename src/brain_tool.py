@@ -148,13 +148,18 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                     tab.set_tamagotchi_logic(tamagotchi_logic)
 
     def setup_decorations_shortcut(self):
-        """Setup keyboard shortcut for decorations window (T key)"""
+        """Setup keyboard shortcut for decorations window (D key)"""
         if self.show_decorations_callback:
             self.decorations_shortcut = QtWidgets.QShortcut(
-                QtGui.QKeySequence(QtCore.Qt.Key_T), 
+                QtGui.QKeySequence(QtCore.Qt.Key_D), 
                 self
             )
             self.decorations_shortcut.activated.connect(self.show_decorations_callback)
+
+    def show_decorations_window(self):
+        # Always show and activate the decorations window when D is pressed
+        self.decoration_window.show()
+        self.decoration_window.activateWindow()
 
     def _keep_worker_alive(self):
         """Keep worker thread alive with periodic health checks"""

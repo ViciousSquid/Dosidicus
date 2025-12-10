@@ -11,7 +11,7 @@ if getattr(sys, 'frozen', False):
 else:
     base_path = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
-# Add the 'src' folder (or base_path) to sys.path so we can find the 'designer' package
+# Add the base_path to sys.path so we can find the designer modules
 if base_path not in sys.path:
     sys.path.insert(0, base_path)
 
@@ -30,7 +30,7 @@ def launch_brain_designer_process():
     try:
         # 2. Correct Import: Point to the actual location of the class
         # (It is in 'designer.designer_window', NOT 'src.brain_designer')
-        from designer.designer_window import BrainDesignerWindow
+        from designer_window import BrainDesignerWindow
 
         # 3. Create and show the window
         window = BrainDesignerWindow()

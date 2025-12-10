@@ -147,39 +147,10 @@ class NetworkTab(BrainBaseTab):
 
         values_display_layout.addWidget(values_container)
 
-        # --------------------  BOTTOM BAR (CHECK-BOXES + COUNTERS)  --------------------
+        # --------------------  BOTTOM BAR --------------------
         bottom_bar = QtWidgets.QHBoxLayout()
 
-        # left – check-boxes
-        checkbox_layout = QtWidgets.QHBoxLayout()
-        # ... (existing checkbox setup) ...
-        self.checkbox_links = QtWidgets.QCheckBox("Show links")
-        self.checkbox_links.setChecked(True)
-        if self.brain_widget:
-            self.checkbox_links.stateChanged.connect(self.brain_widget.toggle_links)
-            # Connect to neurogenesis signal to refresh links display when new neuron is created
-            self.brain_widget.neuronCreated.connect(self._on_neuron_created)
-        checkbox_layout.addWidget(self.checkbox_links)
-
-        self.checkbox_weights = QtWidgets.QCheckBox("Show weights")
-        self.checkbox_weights.setChecked(False)
-        if self.brain_widget:
-            self.checkbox_weights.stateChanged.connect(self.brain_widget.toggle_weights)
-        checkbox_layout.addWidget(self.checkbox_weights)
-
-        self.checkbox_pruning = QtWidgets.QCheckBox("Enable pruning")
-        self.checkbox_pruning.setChecked(True)
-        self.checkbox_pruning.stateChanged.connect(self.toggle_pruning)
-        checkbox_layout.addWidget(self.checkbox_pruning)
-         # Load brain button
-        from .custom_brain_loader import add_load_brain_button
-        add_load_brain_button(self, checkbox_layout)
-
-        checkbox_layout.addStretch() 
-
-        bottom_bar.addLayout(checkbox_layout)
-
-        # ---- animation style chooser ----
+        # 1. STYLE DROPDOWN (Far Left)
         self.anim_combo = QtWidgets.QComboBox()
         # Populate with actual style names from animation_styles.py
         style_info = get_style_info()  # [(name, display_name, description), ...]
@@ -197,8 +168,38 @@ class NetworkTab(BrainBaseTab):
         
         self.anim_combo.currentIndexChanged.connect(self._change_animation_style)
 
-        checkbox_layout.addWidget(QtWidgets.QLabel("Style:"))
-        checkbox_layout.addWidget(self.anim_combo)
+        bottom_bar.addWidget(QtWidgets.QLabel("Style:"))
+        bottom_bar.addWidget(self.anim_combo)
+
+        # Spacing
+        bottom_bar.addSpacing(20)
+
+        # 2. CHECKBOXES (Center-Left)
+        self.checkbox_links = QtWidgets.QCheckBox("Show links")
+        self.checkbox_links.setChecked(True)
+        if self.brain_widget:
+            self.checkbox_links.stateChanged.connect(self.brain_widget.toggle_links)
+            # Connect to neurogenesis signal to refresh links display when new neuron is created
+            self.brain_widget.neuronCreated.connect(self._on_neuron_created)
+        bottom_bar.addWidget(self.checkbox_links)
+
+        self.checkbox_weights = QtWidgets.QCheckBox("Show weights")
+        self.checkbox_weights.setChecked(False)
+        if self.brain_widget:
+            self.checkbox_weights.stateChanged.connect(self.brain_widget.toggle_weights)
+        bottom_bar.addWidget(self.checkbox_weights)
+
+        self.checkbox_pruning = QtWidgets.QCheckBox("Enable pruning")
+        self.checkbox_pruning.setChecked(True)
+        self.checkbox_pruning.stateChanged.connect(self.toggle_pruning)
+        bottom_bar.addWidget(self.checkbox_pruning)
+
+        # 3. STRETCH (Pushes everything else to the far right)
+        bottom_bar.addStretch()
+
+        # 4. LOAD BRAIN BUTTON (Far Right)
+        from .custom_brain_loader import add_load_brain_button
+        add_load_brain_button(self, bottom_bar)
 
         self.layout.addLayout(bottom_bar)
 

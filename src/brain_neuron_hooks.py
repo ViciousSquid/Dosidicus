@@ -2,12 +2,14 @@
 import math
 import random
 import time
-from typing import Dict, Callable, Any
+from typing import Dict, Callable, Any, Optional
 
 class BrainNeuronHooks:
     """
     Generic system for wiring input neurons to actual game events.
     Keeps tamagotchi_logic clean by encapsulating all neuron calculation logic.
+    
+    Supports plugin-registered custom neuron handlers via the plugin manager.
     """
     
     def __init__(self, tamagotchi_logic):
@@ -15,17 +17,17 @@ class BrainNeuronHooks:
         
         # Registry mapping neuron names to their calculation functions
         self.handlers: Dict[str, Callable] = {
-        'external_stimulus': self.calculate_external_stimulus,
-        'can_see_food': self.calculate_can_see_food,
-        'plant_proximity': self.calculate_plant_proximity,
-        'threat_level': self.calculate_threat_level,
-        'pursuing_food': self.calculate_pursuing_food,
-        'is_sick': self.calculate_is_sick,
-        'is_fleeing': self.calculate_is_fleeing,
-        'is_eating': self.calculate_is_eating,
-        'is_sleeping': self.calculate_is_sleeping,
-        'is_startled': self.calculate_is_startled,
-    }
+            'external_stimulus': self.calculate_external_stimulus,
+            'can_see_food': self.calculate_can_see_food,
+            'plant_proximity': self.calculate_plant_proximity,
+            'threat_level': self.calculate_threat_level,
+            'pursuing_food': self.calculate_pursuing_food,
+            'is_sick': self.calculate_is_sick,
+            'is_fleeing': self.calculate_is_fleeing,
+            'is_eating': self.calculate_is_eating,
+            'is_sleeping': self.calculate_is_sleeping,
+            'is_startled': self.calculate_is_startled,
+        }
         
         # Environmental event history for temporal calculations
         self.event_tracker = {
@@ -38,6 +40,61 @@ class BrainNeuronHooks:
             'last_poop_spawn_time': 0,
         }
     
+    # =========================================================================
+    # PLUGIN INTEGRATION
+    # =========================================================================
+    
+    def register_handler(self, neuron_name: str, handler: Callable[[], float]) -> bool:
+        """
+        Register a custom handler for a neuron.
+        
+        Args:
+            neuron_name: The name of the neuron to wire up
+            handler: A callable that returns a float (0-100) activation value
+            
+        Returns:
+            True if registered successfully, False if neuron already has a built-in handler
+        """
+        if neuron_name in self.handlers:
+            print(f"[BrainNeuronHooks] Warning: Overwriting existing handler for '{neuron_name}'")
+        
+        self.handlers[neuron_name] = handler
+        print(f"[BrainNeuronHooks] Registered handler for neuron: {neuron_name}")
+        return True
+    
+    def unregister_handler(self, neuron_name: str) -> bool:
+        """Remove a custom handler for a neuron."""
+        if neuron_name in self.handlers:
+            # Don't remove built-in handlers
+            built_ins = {
+                'external_stimulus', 'can_see_food', 'plant_proximity', 
+                'threat_level', 'pursuing_food', 'is_sick', 'is_fleeing',
+                'is_eating', 'is_sleeping', 'is_startled'
+            }
+            if neuron_name in built_ins:
+                print(f"[BrainNeuronHooks] Cannot unregister built-in handler: {neuron_name}")
+                return False
+            
+            del self.handlers[neuron_name]
+            print(f"[BrainNeuronHooks] Unregistered handler for neuron: {neuron_name}")
+            return True
+        return False
+    
+    def get_registered_neurons(self) -> list:
+        """Return list of all neurons with registered handlers."""
+        return list(self.handlers.keys())
+    
+    def _get_plugin_handlers(self) -> Dict[str, Callable]:
+        """
+        Get any custom neuron handlers registered via the plugin manager.
+        """
+        if not hasattr(self.logic, 'plugin_manager'):
+            return {}
+        
+        pm = self.logic.plugin_manager
+        if hasattr(pm, 'get_neuron_handlers'):
+            return pm.get_neuron_handlers()
+        return {}
 
     # ------------------------------------------------------------
 
@@ -86,6 +143,11 @@ class BrainNeuronHooks:
         config = getattr(brain_widget, 'config', {})
         neurons_config = config.get_neurogenesis_config().get('neurons', {})
         
+        # Merge plugin-registered handlers with built-in handlers
+        all_handlers = {**self.handlers}
+        plugin_handlers = self._get_plugin_handlers()
+        all_handlers.update(plugin_handlers)
+        
         for neuron_name in brain_widget.neuron_positions.keys():
             # Skip core stat neurons
             if neuron_name in ['hunger', 'happiness', 'cleanliness', 'sleepiness', 
@@ -94,10 +156,14 @@ class BrainNeuronHooks:
             
             # Check if neuron is marked as input type OR has a handler
             neuron_cfg = neurons_config.get(neuron_name, {})
-            if neuron_cfg.get('type') == 'input' or neuron_name in self.handlers:
+            if neuron_cfg.get('type') == 'input' or neuron_name in all_handlers:
                 # Call handler if exists, otherwise default background noise
-                if neuron_name in self.handlers:
-                    input_values[neuron_name] = self.handlers[neuron_name]()
+                if neuron_name in all_handlers:
+                    try:
+                        input_values[neuron_name] = all_handlers[neuron_name]()
+                    except Exception as e:
+                        print(f"[BrainNeuronHooks] Error in handler for '{neuron_name}': {e}")
+                        input_values[neuron_name] = 0.0
                 else:
                     input_values[neuron_name] = random.uniform(5, 10)
         
@@ -181,30 +247,65 @@ class BrainNeuronHooks:
         # Force fresh visibility check
         visible_food = self.logic.squid.get_visible_food()
         
-        # Debug log (remove later if desired)
-        # if visible_food:
-        #     print(f"[Vision] Food visible: {len(visible_food)} items")
-
         return 100.0 if visible_food else 0.0
     
     def calculate_plant_proximity(self) -> float:
-        """Calculate activation based on distance to nearest plant decoration."""
-        if not hasattr(self.logic, 'user_interface'):
-            return 0
+        """
+        Calculate activation based on squid's proximity to plant decorations.
         
-        squid_x, squid_y = self.logic.squid.squid_x, self.logic.squid_y
+        Returns:
+            100.0 if squid body overlaps with any plant's bounding box (touching)
+            0-99 scaled by distance to nearest plant edge if not touching
+            0.0 if no plants exist
+        """
+        if not hasattr(self.logic, 'user_interface') or not hasattr(self.logic, 'squid'):
+            return 0.0
+        
+        squid = self.logic.squid
+        if not hasattr(squid, 'squid_item') or not squid.squid_item:
+            return 0.0
+        
+        # Get squid's bounding rect in scene coordinates
+        squid_rect = squid.squid_item.sceneBoundingRect()
+        
         min_distance = float('inf')
+        is_touching = False
         
         # Scan scene for plant decorations
         for item in self.logic.user_interface.scene.items():
+            # Check if item has category attribute and is a plant
             if hasattr(item, 'category') and item.category == 'plant':
-                plant_pos = item.sceneBoundingRect().center()
-                dist = math.hypot(plant_pos.x() - squid_x, plant_pos.y() - squid_y)
+                plant_rect = item.sceneBoundingRect()
+                
+                # Check if squid overlaps with plant bounding box
+                if squid_rect.intersects(plant_rect):
+                    is_touching = True
+                    break
+                
+                # Calculate distance from squid center to plant edge
+                squid_center = squid_rect.center()
+                
+                # Find closest point on plant rect to squid center
+                closest_x = max(plant_rect.left(), min(squid_center.x(), plant_rect.right()))
+                closest_y = max(plant_rect.top(), min(squid_center.y(), plant_rect.bottom()))
+                
+                # Distance from squid center to that closest point
+                dist = math.hypot(squid_center.x() - closest_x, squid_center.y() - closest_y)
                 min_distance = min(min_distance, dist)
         
-        # Convert to activation (closer = higher)
-        max_range = 300
-        return max(0, 100 - (min_distance / max_range * 100))
+        # If touching any plant, return max activation
+        if is_touching:
+            return 100.0
+        
+        # If no plants found, return 0
+        if min_distance == float('inf'):
+            return 0.0
+        
+        # Scale activation by distance (closer = higher, max range ~300px)
+        max_range = 300.0
+        activation = max(0.0, 100.0 - (min_distance / max_range * 100.0))
+        
+        return activation
     
     def calculate_threat_level(self) -> float:
         """Calculate activation based on current anxiety and startle state."""
@@ -236,7 +337,7 @@ class BrainNeuronHooks:
         return 100.0 if getattr(self.logic.squid, 'is_sleeping', False) else 0.0
 
 
-
+# Default sensors that have built-in handlers
 DEFAULT_INPUT_SENSORS = (
     'external_stimulus',
     'can_see_food',
@@ -247,4 +348,5 @@ DEFAULT_INPUT_SENSORS = (
     'is_fleeing',
     'is_eating',
     'is_sleeping',
+    'is_startled',
 )
