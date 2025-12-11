@@ -667,6 +667,12 @@ class MainWindow(QtWidgets.QMainWindow):
             elif hasattr(self.tamagotchi_logic, 'timer') and self.tamagotchi_logic.timer:
                 self.tamagotchi_logic.timer.stop()
         
+        # Clean up brain state bridge for designer sync
+        if hasattr(self, 'brain_window') and self.brain_window:
+            if hasattr(self.brain_window, 'brain_widget') and self.brain_window.brain_widget:
+                if hasattr(self.brain_window.brain_widget, 'cleanup_brain_bridge'):
+                    self.brain_window.brain_widget.cleanup_brain_bridge()
+        
         # Close brain window
         if hasattr(self, 'brain_window') and self.brain_window:
             self.brain_window.close()
