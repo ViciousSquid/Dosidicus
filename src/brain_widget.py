@@ -18,6 +18,28 @@ from .learning import LearningConfig
 from .laboratory import NeuronLaboratory
 from .brain_worker import BrainWorker  # Threading support
 from typing import Dict, Optional
+
+# Brain state bridge for designer communication
+try:
+    from .brain_state_bridge import (
+        export_brain_state,
+        set_game_running,
+        update_brain_state_from_widget
+    )
+    _HAS_BRAIN_BRIDGE = True
+except ImportError:
+    try:
+        # Try without relative import for standalone testing
+        from brain_state_bridge import (
+            export_brain_state,
+            set_game_running,
+            update_brain_state_from_widget
+        )
+        _HAS_BRAIN_BRIDGE = True
+    except ImportError:
+        _HAS_BRAIN_BRIDGE = False
+        print("[BrainWidget] Warning: brain_state_bridge not found, designer sync disabled")
+
 from .animation_styles import (
     AnimationStyle, VibrantStyle, SubtleStyle,
     get_animation_style, get_available_styles, get_style_info,
@@ -228,6 +250,15 @@ class BrainWidget(QtWidgets.QWidget):
         self.neurogenesis_timer.timeout.connect(self._periodic_neurogenesis_check)
         self.neurogenesis_timer.start(2000)  # Check every 2 seconds
         print("🧬 Neurogenesis monitoring timer started")
+        
+        # Brain state bridge: export state for designer synchronization
+        if _HAS_BRAIN_BRIDGE:
+            self._brain_export_timer = QtCore.QTimer(self)
+            self._brain_export_timer.timeout.connect(self._export_brain_state_for_designer)
+            self._brain_export_timer.start(5000)  # Export every 5 seconds
+            set_game_running(True)  # Mark game as running
+            print("🔗 Brain state export enabled for designer sync")
+        
         self.animation_timer.start(40)  # 2.5.0.0 performance fix
         self._last_animation_update = 0  # For throttling
         
@@ -296,6 +327,42 @@ class BrainWidget(QtWidgets.QWidget):
         self.brain_worker.error_occurred.connect(self._on_worker_error)
         
         print("🧵 BrainWidget received external BrainWorker")
+
+    # =========================================================================
+    # BRAIN STATE BRIDGE METHODS (for designer synchronization)
+    # =========================================================================
+    
+    def _export_brain_state_for_designer(self):
+        """
+        Export current brain state to shared file for designer import.
+        Called periodically by timer when brain_state_bridge is available.
+        """
+        if not _HAS_BRAIN_BRIDGE:
+            return
+        
+        try:
+            update_brain_state_from_widget(self)
+        except Exception as e:
+            # Silent failure - don't spam console
+            pass
+    
+    def cleanup_brain_bridge(self):
+        """
+        Clean up brain bridge files when widget is destroyed.
+        Should be called when the game exits.
+        """
+        if _HAS_BRAIN_BRIDGE:
+            try:
+                set_game_running(False)
+                print("🔗 Brain state bridge cleaned up")
+            except Exception:
+                pass
+    
+    def closeEvent(self, event):
+        """Handle widget close - clean up brain bridge."""
+        self.cleanup_brain_bridge()
+        super().closeEvent(event) if hasattr(super(), 'closeEvent') else None
+        event.accept()
 
 
 

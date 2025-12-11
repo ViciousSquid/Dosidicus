@@ -1,3 +1,16 @@
 plugins.achievements.display_scaling
 plugins.achievements.achievements_data
 uuid
+brain_designer
+brain_designer_launcher
+designer_window
+designer_core
+designer_canvas
+designer_canvas_utils
+designer_constants
+designer_network_generator
+designer_logging
+designer_panels
+designer_dialogs
+designer_templates
+brain_state_bridge

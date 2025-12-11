@@ -246,6 +246,12 @@ class StatisticsWindow(QtWidgets.QWidget):
         self.display_score = self.score
         self.score_label.setText(f"{int(self.display_score):04d}")
 
+    def update_score(self):
+        """Update the score display (called by tamagotchi_logic)"""
+        # The score is already updated via the _tick timer which handles smooth animation
+        # This method exists for compatibility - explicit calls can force an immediate update
+        self.score_label.setText(f"{int(self.display_score):04d}")
+
     # -------------- specific helpers ---------------------------------
     def add_score_for_food_eaten(self):
         self.award(100)

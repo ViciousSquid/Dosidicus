@@ -92,6 +92,8 @@ def main():
     parser = argparse.ArgumentParser(description="Brain Designer - Visual Neural Network Designer")
     parser.add_argument('-c', '--clean', action='store_true',
                        help='Clean __pycache__ folders from designer directory before starting')
+    parser.add_argument('-d', '--debug', action='store_true',
+                       help='Enable debug mode with logging')
     
     # Use parse_known_args so we don't choke if Qt arguments are passed implicitly
     args, _ = parser.parse_known_args()
@@ -110,61 +112,62 @@ def main():
         OperationLogger
     )
     
-    # Initialize error handling and logging
-    crash_reporter = initialize_error_handling()
+    # Initialize error handling and logging (only create log files in debug mode)
+    crash_reporter = initialize_error_handling(enable_logging=args.debug)
     logger = get_logger()
     
     # Set up error dialog callback
     crash_reporter.set_error_dialog_callback(show_error_dialog)
     
-    logger.info("Starting Brain Designer application")
+    if args.debug:
+        logger.info("Starting Brain Designer application (debug mode)")
     
     try:
         from PyQt5.QtWidgets import QApplication
         from PyQt5.QtGui import QColor, QPalette
         from PyQt5.QtCore import Qt
         
-        with OperationLogger("Creating QApplication"):
-            app = QApplication(sys.argv)
-            app.setApplicationName("Brain Designer (Beta)")
-            app.setApplicationVersion("1.1.0")
+        app = QApplication(sys.argv)
+        app.setApplicationName("Brain Designer (Beta)")
+        app.setApplicationVersion("1.1.0")
         
-        with OperationLogger("Applying theme"):
-            # Light theme setup
-            app.setStyle('Fusion')
-            
-            palette = app.palette()
-            palette.setColor(QPalette.Window, QColor(240, 240, 245))
-            palette.setColor(QPalette.WindowText, QColor(40, 40, 50))
-            palette.setColor(QPalette.Base, QColor(255, 255, 255))
-            palette.setColor(QPalette.AlternateBase, QColor(245, 245, 250))
-            palette.setColor(QPalette.ToolTipBase, QColor(255, 255, 230))
-            palette.setColor(QPalette.ToolTipText, QColor(40, 40, 50))
-            palette.setColor(QPalette.Text, QColor(40, 40, 50))
-            palette.setColor(QPalette.Button, QColor(240, 240, 245))
-            palette.setColor(QPalette.ButtonText, QColor(40, 40, 50))
-            palette.setColor(QPalette.BrightText, QColor(255, 0, 0))
-            palette.setColor(QPalette.Highlight, QColor(70, 130, 200))
-            palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
-            app.setPalette(palette)
+        # Light theme setup
+        app.setStyle('Fusion')
         
-        with OperationLogger("Importing designer window"):
-            from designer_window import BrainDesignerWindow
+        palette = app.palette()
+        palette.setColor(QPalette.Window, QColor(240, 240, 245))
+        palette.setColor(QPalette.WindowText, QColor(40, 40, 50))
+        palette.setColor(QPalette.Base, QColor(255, 255, 255))
+        palette.setColor(QPalette.AlternateBase, QColor(245, 245, 250))
+        palette.setColor(QPalette.ToolTipBase, QColor(255, 255, 230))
+        palette.setColor(QPalette.ToolTipText, QColor(40, 40, 50))
+        palette.setColor(QPalette.Text, QColor(40, 40, 50))
+        palette.setColor(QPalette.Button, QColor(240, 240, 245))
+        palette.setColor(QPalette.ButtonText, QColor(40, 40, 50))
+        palette.setColor(QPalette.BrightText, QColor(255, 0, 0))
+        palette.setColor(QPalette.Highlight, QColor(70, 130, 200))
+        palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
+        app.setPalette(palette)
         
-        with OperationLogger("Creating main window"):
-            window = BrainDesignerWindow()
+        from designer_window import BrainDesignerWindow
         
-        logger.info("Showing main window")
+        window = BrainDesignerWindow()
+        
+        if args.debug:
+            logger.info("Showing main window")
         window.show()
         
-        logger.info("Entering event loop")
+        if args.debug:
+            logger.info("Entering event loop")
         exit_code = app.exec_()
         
-        logger.info(f"Application exited with code {exit_code}")
+        if args.debug:
+            logger.info(f"Application exited with code {exit_code}")
         sys.exit(exit_code)
         
     except ImportError as e:
-        logger.critical(f"Import error: {e}")
+        if args.debug:
+            logger.critical(f"Import error: {e}")
         show_error_dialog(
             "Import Error",
             f"Failed to import required module:\n\n{e}\n\n"
@@ -173,11 +176,12 @@ def main():
         sys.exit(1)
         
     except Exception as e:
-        logger.critical(f"Startup error: {e}", exc_info=True)
+        if args.debug:
+            logger.critical(f"Startup error: {e}", exc_info=True)
         show_error_dialog(
             "Startup Error",
             f"Failed to start Brain Designer:\n\n{e}\n\n"
-            f"Check the logs folder for details."
+            f"Check the logs folder for details." if args.debug else f"Failed to start Brain Designer:\n\n{e}"
         )
         sys.exit(1)
 

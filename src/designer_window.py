@@ -22,6 +22,18 @@ from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QRectF, QSizeF
 from designer_logging import get_logger, log_exceptions, safe_call, OperationLogger
 from designer_core import BrainDesign
 from designer_canvas import BrainCanvas
+
+# Import brain state bridge for game communication
+try:
+    from brain_state_bridge import (
+        is_game_running,
+        import_brain_state_for_designer,
+        convert_to_brain_design
+    )
+    _HAS_BRAIN_BRIDGE = True
+except ImportError:
+    _HAS_BRAIN_BRIDGE = False
+    print("[BrainDesigner] Warning: brain_state_bridge not found, live import disabled")
 from designer_panels import (
     LayersPanel, SensorsPanel, NeuronPropertiesPanel, ConnectionsTable, AddNeuronDialog
 )
@@ -128,12 +140,20 @@ class BrainDesignerWindow(QMainWindow):
             with OperationLogger("Setting up toolbar", self.logger):
                 self.setup_toolbar()
 
-            # Generate a random network on startup so the user sees immediate activity
-            with OperationLogger("Generating initial network", self.logger):
-                self.generate_initial_network()
+            # Check if game is running and import its brain state
+            # Otherwise generate a random network
+            with OperationLogger("Initializing brain network", self.logger):
+                self._imported_from_game = False
+                if not self._try_import_from_game():
+                    # No game running, generate random network
+                    self.generate_initial_network()
 
             # Force UI refresh
             self.refresh_all()
+            
+            # Show import notification if applicable
+            if self._imported_from_game:
+                self._show_import_notification()
 
             self.update_status()
             self.logger.info("BrainDesignerWindow initialized successfully")
@@ -332,6 +352,13 @@ class BrainDesignerWindow(QMainWindow):
         validate_btn.setToolTip("Check design for issues")
         validate_btn.clicked.connect(self.check_status)
         layout.addWidget(validate_btn)
+
+        # Placeholder for sync button - will be added later if game is detected
+        self._sync_btn_container = QFrame()
+        self._sync_btn_layout = QHBoxLayout(self._sync_btn_container)
+        self._sync_btn_layout.setContentsMargins(0, 0, 0, 0)
+        self._sync_btn_container.hide()  # Hidden by default
+        layout.addWidget(self._sync_btn_container)
 
         layout.addStretch()
 
@@ -548,6 +575,168 @@ class BrainDesignerWindow(QMainWindow):
             self.logger.debug(f"Generated initial network ({mode}) with {count} connections")
         except Exception as e:
             self.logger.warning(f"Could not generate initial network: {e}")
+
+    def _try_import_from_game(self) -> bool:
+        """
+        Attempt to import brain state from a running game instance.
+        
+        Returns:
+            True if import was successful, False otherwise
+        """
+        if not _HAS_BRAIN_BRIDGE:
+            return False
+        
+        try:
+            # Check if game is running
+            if not is_game_running():
+                self.logger.debug("No running game detected, will generate random network")
+                return False
+            
+            self.logger.info("Detected running game, attempting to import brain state...")
+            
+            # Import the brain state
+            live_state = import_brain_state_for_designer()
+            if live_state is None:
+                self.logger.warning("Could not import brain state from game")
+                return False
+            
+            # Convert to BrainDesign
+            imported_design = convert_to_brain_design(live_state)
+            if imported_design is None:
+                self.logger.warning("Could not convert imported state to BrainDesign")
+                return False
+            
+            # Replace current design with imported one
+            self.design = imported_design
+            
+            # Update canvas reference
+            if hasattr(self, 'canvas'):
+                self.canvas.design = self.design
+            
+            self._imported_from_game = True
+            self.logger.info(
+                f"Successfully imported brain from game: "
+                f"{len(self.design.neurons)} neurons, "
+                f"{len(self.design.connections)} connections"
+            )
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error importing from game: {e}", exc_info=True)
+            return False
+
+    def _show_import_notification(self):
+        """Show notification that brain was imported from running game."""
+        from PyQt5.QtWidgets import QMessageBox
+        from PyQt5.QtCore import QTimer
+        
+        # Show the sync button now that we know game is running
+        self._show_sync_button()
+        
+        # Create a non-modal notification
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Information)
+        msg.setWindowTitle("Live Brain Import")
+        msg.setText("🧠 Active brain imported from running game")
+        msg.setInformativeText(
+            f"The designer is now showing the exact neural network "
+            f"from your running Dosidicus game.\n\n"
+            f"• {len(self.design.neurons)} neurons\n"
+            f"• {len(self.design.connections)} connections\n\n"
+            f"Changes made here will NOT affect the running game."
+        )
+        msg.setStandardButtons(QMessageBox.Ok)
+        
+        # Show and auto-close after 5 seconds
+        msg.show()
+        QTimer.singleShot(5000, msg.close)
+        
+        # Update window title to indicate imported state
+        self.setWindowTitle("Brain Designer - Dosidicus-2 [Imported from Game]")
+        
+        # Update status bar
+        self.status_bar.showMessage(
+            "✨ Active brain imported from running game", 10000
+        )
+
+    def _show_sync_button(self):
+        """Show the sync button when game connection is established."""
+        if not _HAS_BRAIN_BRIDGE:
+            return
+        
+        # Clear any existing content
+        while self._sync_btn_layout.count():
+            item = self._sync_btn_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Add divider
+        divider = QFrame()
+        divider.setFrameShape(QFrame.VLine)
+        divider.setFrameShadow(QFrame.Sunken)
+        self._sync_btn_layout.addWidget(divider)
+        
+        # Add sync button
+        sync_btn = QPushButton("🔄 Sync from Game")
+        sync_btn.setToolTip("Refresh brain state from running Dosidicus game")
+        sync_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #9C27B0;
+                color: white;
+                font-weight: bold;
+                padding: 6px 12px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #7B1FA2;
+            }
+        """)
+        sync_btn.clicked.connect(self.sync_from_running_game)
+        self._sync_btn_layout.addWidget(sync_btn)
+        
+        # Show the container
+        self._sync_btn_container.show()
+
+    def sync_from_running_game(self):
+        """
+        Manually sync brain state from running game.
+        Called when user clicks the Sync from Game button.
+        """
+        # Check if game is still running
+        if not is_game_running():
+            QMessageBox.information(
+                self, "Game Not Running",
+                "The Dosidicus game is no longer running.\n\n"
+                "Start the game again to sync."
+            )
+            # Hide the sync button since game is gone
+            self._sync_btn_container.hide()
+            self.setWindowTitle("Brain Designer - Dosidicus-2")
+            return
+        
+        # Confirm before replacing current design
+        reply = QMessageBox.question(
+            self, "Sync from Game",
+            "Replace current design with the latest brain state from the game?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        # Try to import
+        if self._try_import_from_game():
+            self.refresh_all()
+            self.status_bar.showMessage(
+                f"✨ Synced: {len(self.design.neurons)} neurons, "
+                f"{len(self.design.connections)} connections", 5000
+            )
+        else:
+            QMessageBox.warning(
+                self, "Sync Failed",
+                "Could not import brain state from game."
+            )
 
     def show_sparse_network_dialog(self):
         """Show the sparse network generation dialog."""

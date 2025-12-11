@@ -1,53 +1,33 @@
-# src/brain_designer_launcher.py
-# This file exists solely to safely launch Brain Designer in a separate process
+"""
+Brain Designer Launcher - Spawns the designer in a subprocess
 
-import multiprocessing
+This module provides a function to launch the Brain Designer tool
+from the main game process, optionally passing debug mode.
+"""
+
 import sys
 import os
 
-# Fix path issues when running from PyInstaller bundle
-if getattr(sys, 'frozen', False):
-    base_path = sys._MEIPASS
-else:
-    base_path = os.path.abspath(os.path.join(os.path.dirname(__file__)))
 
-# Add the base_path to sys.path so we can find the designer modules
-if base_path not in sys.path:
-    sys.path.insert(0, base_path)
-
-def launch_brain_designer_process():
-    """Launch the Brain Designer window in a separate process."""
+def launch_brain_designer_process(debug_mode: bool = False):
+    """
+    Entry point for Brain Designer when launched as a subprocess.
     
-    # 1. Initialize QApplication FIRST so we can show error dialogs if imports fail
-    try:
-        from PyQt5.QtWidgets import QApplication, QMessageBox
-        app = QApplication(sys.argv)
-        app.setStyle('Fusion')
-    except ImportError:
-        print("CRITICAL: PyQt5 is missing. Cannot launch GUI.")
-        return
-
-    try:
-        # 2. Correct Import: Point to the actual location of the class
-        # (It is in 'designer.designer_window', NOT 'src.brain_designer')
-        from designer_window import BrainDesignerWindow
-
-        # 3. Create and show the window
-        window = BrainDesignerWindow()
-        window.show()
-        
-        # 4. Execute the application loop
-        sys.exit(app.exec_())
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        
-        # Now this will work because 'app' is guaranteed to exist
-        QMessageBox.critical(None, "Brain Designer Error", 
-                             f"Could not start Brain Designer:\n\n{e}\n\n"
-                             f"Check console for full traceback.")
-
-if __name__ == "__main__":
-    multiprocessing.freeze_support()
-    launch_brain_designer_process()
+    Args:
+        debug_mode: If True, enables logging in the designer
+    """
+    # Everything is in src/ folder
+    script_dir = os.path.dirname(os.path.abspath(__file__))  # src/
+    
+    # Ensure src/ is in path
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    
+    # Build command line args
+    if debug_mode:
+        if '-d' not in sys.argv:
+            sys.argv.append('-d')
+    
+    # Import and run the designer's main function
+    from brain_designer import main as designer_main
+    designer_main()

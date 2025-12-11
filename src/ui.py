@@ -548,12 +548,16 @@ class Ui:
             return
 
         try:
+            # Pass debug mode to the designer
+            debug_mode = getattr(self, 'debug_mode', False)
             self._brain_designer_process = multiprocessing.Process(
                 target=launch_brain_designer_process,
+                args=(debug_mode,),
                 daemon=False
             )
             self._brain_designer_process.start()
-            print(f"Brain Designer launched (PID: {self._brain_designer_process.pid})")
+            print(f"Brain Designer launched (PID: {self._brain_designer_process.pid})"
+                  f"{' [debug mode]' if debug_mode else ''}")
             
         except Exception as e:
             import traceback
