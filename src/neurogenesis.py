@@ -190,24 +190,31 @@ class ExperienceBuffer:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> 'ExperienceBuffer':
-        buffer = cls()
-        buffer.pattern_counts = data.get('pattern_counts', {})
-        buffer.parent_pattern_counts = data.get('parent_pattern_counts', {})
-        buffer.core_pattern_counts = data.get('core_pattern_counts', {})
-        
-        for exp_data in data.get('recent_experiences', []):
+    def from_dict(cls, data):
+        buf = cls(max_size=data.get('buffer_size', 50))
+
+        # Restore pattern tables
+        buf.pattern_counts = dict(data.get('pattern_counts', {}))
+        buf.parent_pattern_counts = dict(data.get('parent_pattern_counts', {}))
+        buf.core_pattern_counts = dict(data.get('core_pattern_counts', {}))
+
+        # Restore recent experiences
+        for exp in data.get('recent_experiences', []):
             ctx = ExperienceContext(
-                trigger_type=exp_data['trigger_type'],
-                active_neurons=exp_data['active_neurons'],
-                recent_actions=exp_data['recent_actions'],
-                environmental_state=exp_data['environmental_state'],
-                outcome=exp_data['outcome'],
-                timestamp=exp_data['timestamp']
+                trigger_type=exp['trigger_type'],
+                active_neurons={
+                    k: float(v) if isinstance(v, (int, float)) else 50.0
+                    for k, v in exp.get('active_neurons', {}).items()
+                },
+                recent_actions=exp.get('recent_actions', []),
+                environmental_state=exp.get('environmental_state', {}),
+                outcome=exp.get('outcome', 'neutral'),
+                timestamp=exp.get('timestamp', time.time())
             )
-            buffer.buffer.append(ctx)
-        
-        return buffer
+            buf.buffer.append(ctx)
+
+        return buf
+
 
 
 class FunctionalNeuron:

@@ -221,6 +221,13 @@ STANDARD_OUTPUT_HOOKS = {
         'category': 'stats',
         'default_threshold': 30.0,
     },
+
+     # Colour change
+    'neuron_output_change_color': {
+        'description': 'Change the squid body color when triggered',
+        'category': 'action',
+        'default_threshold': 60.0,
+    },
     
     # Custom/plugin hooks
     'neuron_output_custom': {
@@ -251,33 +258,39 @@ class NeuronOutputMonitor:
         self._register_default_handlers()
     
     def _register_default_handlers(self):
-        """Register the built-in output hook handlers with the plugin manager."""
+        """Register all standard output hooks and subscribe to available handlers."""
         if not hasattr(self.logic, 'plugin_manager'):
             return
         
         pm = self.logic.plugin_manager
         
-        # Register all standard output hooks
+        # Register ALL standard output hooks from the dictionary
         for hook_name in STANDARD_OUTPUT_HOOKS.keys():
             pm.register_hook(hook_name)
         
-        # Subscribe our handlers to the hooks
-        pm.subscribe_to_hook('neuron_output_flee', 'NeuronOutputMonitor', self._handle_flee)
-        pm.subscribe_to_hook('neuron_output_seek_food', 'NeuronOutputMonitor', self._handle_seek_food)
-        pm.subscribe_to_hook('neuron_output_seek_plant', 'NeuronOutputMonitor', self._handle_seek_plant)
-        pm.subscribe_to_hook('neuron_output_ink_cloud', 'NeuronOutputMonitor', self._handle_ink_cloud)
-        pm.subscribe_to_hook('neuron_output_startle', 'NeuronOutputMonitor', self._handle_startle)
-        pm.subscribe_to_hook('neuron_output_calm', 'NeuronOutputMonitor', self._handle_calm)
-        pm.subscribe_to_hook('neuron_output_sleep', 'NeuronOutputMonitor', self._handle_sleep)
-        pm.subscribe_to_hook('neuron_output_wake', 'NeuronOutputMonitor', self._handle_wake)
-        pm.subscribe_to_hook('neuron_output_boost_happiness', 'NeuronOutputMonitor', self._handle_boost_happiness)
-        pm.subscribe_to_hook('neuron_output_reduce_anxiety', 'NeuronOutputMonitor', self._handle_reduce_anxiety)
-        pm.subscribe_to_hook('neuron_output_wander', 'NeuronOutputMonitor', self._handle_wander)
-        pm.subscribe_to_hook('neuron_output_approach_rock', 'NeuronOutputMonitor', self._handle_approach_rock)
-        pm.subscribe_to_hook('neuron_output_throw_rock', 'NeuronOutputMonitor', self._handle_throw_rock)
-        pm.subscribe_to_hook('neuron_output_pick_up_rock', 'NeuronOutputMonitor', self._handle_pick_up_rock)
-        pm.subscribe_to_hook('neuron_output_eat', 'NeuronOutputMonitor', self._handle_eat)
-        pm.subscribe_to_hook('neuron_output_boost_curiosity', 'NeuronOutputMonitor', self._handle_boost_curiosity)
+        # Automatically subscribe to any _handle_* methods that correspond to hooks
+        import inspect
+        
+        # Get all methods that start with _handle_
+        for method_name, method in inspect.getmembers(self, predicate=inspect.ismethod):
+            if method_name.startswith('_handle_'):
+                # Convert _handle_flee -> neuron_output_flee
+                base_name = method_name[8:]  # Remove '_handle_' prefix
+                hook_name = f"neuron_output_{base_name}"
+                
+                # Only subscribe if the hook is defined in STANDARD_OUTPUT_HOOKS
+                if hook_name in STANDARD_OUTPUT_HOOKS:
+                    success = pm.subscribe_to_hook(hook_name, 'NeuronOutputMonitor', method)
+                    if success:
+                        print(f"[NeuronOutputMonitor] Auto-subscribed: {hook_name}")
+                    else:
+                        print(f"[NeuronOutputMonitor] Failed to subscribe to {hook_name}")
+        
+        # Debug: List all registered hooks
+        if self.logic.debug_mode:
+            print(f"[NeuronOutputMonitor] Registered {len(STANDARD_OUTPUT_HOOKS)} output hooks:")
+            for hook in sorted(STANDARD_OUTPUT_HOOKS.keys()):
+                print(f"  ✓ {hook}")
     
     # =========================================================================
     # BINDING MANAGEMENT
@@ -446,6 +459,22 @@ class NeuronOutputMonitor:
             squid.release_ink()
         elif squid and hasattr(squid, 'mental_state_manager'):
             squid.mental_state_manager.activate_state('inking')
+
+    def _handle_change_color(self, neuron_name, activation, squid, **kwargs):
+        """Handle color change when neuron fires."""
+        if squid and hasattr(squid, 'apply_tint'):
+            import random
+            # Generate a random color
+            colors = [
+                (255, 100, 100),  # Red
+                (100, 255, 100),  # Green
+                (100, 100, 255),  # Blue
+                (255, 255, 100),  # Yellow
+                (255, 100, 255),  # Magenta
+            ]
+            random_color = random.choice(colors)
+            squid.apply_tint(random_color)
+            print(f"[NeuronOutput] {neuron_name} → change_color activated!")
     
     def _handle_startle(self, neuron_name, activation, squid, **kwargs):
         """Handle startle response."""
