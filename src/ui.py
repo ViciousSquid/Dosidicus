@@ -20,6 +20,71 @@ from .vision import VisionWindow
 from .task_manager import TaskManagerWindow
 from .laboratory import NeurogenesisDebugDialog
 
+class ActionButton(QtWidgets.QPushButton):
+    """Custom button with hover and press color states"""
+    def __init__(self, text, hover_color, pressed_color, font_size=16, parent=None):
+        super().__init__(text, parent)
+        self.hover_color = hover_color
+        self.pressed_color = pressed_color
+        self.font_size = font_size
+        self.is_pressed = False
+        self.is_hovered = False
+        
+        # Set initial style
+        self.update_style()
+    
+    def update_style(self):
+        """Update button style based on current state"""
+        if self.is_pressed:
+            # Pressed state
+            bg_color = self.pressed_color
+            text_color = "white"
+        elif self.is_hovered:
+            # Hover state
+            bg_color = self.hover_color
+            text_color = "black"
+        else:
+            # Normal state
+            bg_color = "white"
+            text_color = "black"
+        
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {bg_color};
+                color: {text_color};
+                border: 2px solid black;
+                font-weight: bold;
+                font-size: {self.font_size}px;
+            }}
+        """)
+    
+    def enterEvent(self, event):
+        """Mouse entered the button"""
+        self.is_hovered = True
+        self.update_style()
+        super().enterEvent(event)
+    
+    def leaveEvent(self, event):
+        """Mouse left the button"""
+        self.is_hovered = False
+        self.update_style()
+        super().leaveEvent(event)
+    
+    def mousePressEvent(self, event):
+        """Mouse button pressed"""
+        if event.button() == QtCore.Qt.LeftButton:
+            self.is_pressed = True
+            self.update_style()
+        super().mousePressEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        """Mouse button released"""
+        if event.button() == QtCore.Qt.LeftButton:
+            self.is_pressed = False
+            self.update_style()
+        super().mouseReleaseEvent(event)
+
+
 class DecorationItem(QtWidgets.QLabel):
     def __init__(self, pixmap, filename):
         super().__init__()
@@ -226,7 +291,7 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
 class DecorationWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent, QtCore.Qt.Window)
-        self.setWindowTitle("Decorations")
+        self.setWindowTitle("Decorations (Press D)")
         
         # Scale window size
         from .display_scaling import DisplayScaling
@@ -336,7 +401,7 @@ class Ui:
         self.debug_text.setFont(font)
         self.debug_text.setRotation(-90)
         self.debug_text.setPos(DisplayScaling.scale(75), DisplayScaling.scale(75))
-        self.debug_text.setZValue(100)
+        self.debug_text.setZValue(999)
         self.debug_text.setVisible(self.debug_mode)
         self.scene.addItem(self.debug_text)
 
@@ -394,15 +459,15 @@ class Ui:
         self._neurogenesis_debug_dialog.raise_()
 
     def setup_decorations_shortcut(self):
-        # Create a shortcut for decorations window (T key)
+        # Create a shortcut for decorations window (D key)
         self.decorations_shortcut = QtWidgets.QShortcut(
-            QtGui.QKeySequence(QtCore.Qt.Key_T), 
+            QtGui.QKeySequence(QtCore.Qt.Key_D), 
             self.window
         )
         self.decorations_shortcut.activated.connect(self.show_decorations_window)
 
     def show_decorations_window(self):
-        # Always show and activate the decorations window when T is pressed
+        # Always show and activate the decorations window when D is pressed
         self.decoration_window.show()
         self.decoration_window.activateWindow()
         self.decoration_window.raise_()
@@ -494,11 +559,11 @@ class Ui:
         dismiss_proxy.setZValue(2002)
         setattr(dismiss_proxy, '_is_tutorial_element', True)
         
-        # Auto-dismiss after 20 seconds
+        # Auto-dismiss after 12 seconds
         self.tutorial_timer = QtCore.QTimer()
         self.tutorial_timer.timeout.connect(self.close_tutorial_completely)
         self.tutorial_timer.setSingleShot(True)
-        self.tutorial_timer.start(20000)  # 20 seconds
+        self.tutorial_timer.start(12000)  # 12 seconds
 
     def close_tutorial_completely(self):
         """Final cleanup of all tutorial elements"""
@@ -515,7 +580,7 @@ class Ui:
         self.scene.update()
 
     def open_brain_designer(self):
-        """Open the Brain Designer tool in a separate process (same as Ruler button)"""
+        """Open the Brain Designer tool in a separate process"""
         
         # === NEW: Pause simulation immediately ===
         # This stops the loop, shows the pause overlay, and pauses the BrainWorker via logic
@@ -833,6 +898,9 @@ class Ui:
         # Check if tamagotchi_logic exists before accessing debug_mode
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic is not None:
             self.debug_text.setVisible(getattr(self.tamagotchi_logic, 'debug_mode', False))
+        
+        # Create action buttons at top middle
+        self.create_action_buttons()
 
     def custom_wheel_event(self, event):
         # Get selected items
@@ -855,6 +923,82 @@ class Ui:
         
         # Always accept the event to prevent the view from scrolling
         event.accept()
+
+    def create_action_buttons(self):
+        """Create FEED, CLEAN, and MEDICINE buttons at the top middle of the window"""
+        from .display_scaling import DisplayScaling
+        
+        # Load display settings from config
+        try:
+            from .config_manager import ConfigManager
+            config = ConfigManager()
+            display_config = config.get_display_config()
+            
+            # Get button settings from config (these are design values, will be scaled)
+            button_width = display_config['button_width']
+            button_height = display_config['button_height']
+            button_spacing = display_config['button_spacing']
+            button_font_size = display_config['button_font_size']
+        except Exception as e:
+            print(f"Warning: Could not load display config, using defaults: {e}")
+            # Fallback to reasonable defaults
+            button_width = 140
+            button_height = 50
+            button_spacing = 20
+            button_font_size = 16
+        
+        # Scale all button dimensions for current display
+        button_width = DisplayScaling.scale(button_width)
+        button_height = DisplayScaling.scale(button_height)
+        button_spacing = DisplayScaling.scale(button_spacing)
+        button_font_size = DisplayScaling.font_size(button_font_size)
+        
+        # Calculate total width of all buttons
+        total_width = (button_width * 3) + (button_spacing * 2)
+        start_x = (self.window_width - total_width) / 2
+        y_pos = DisplayScaling.scale(15)  # Scaled top margin
+        
+        # Button configurations: (text, hover_color, pressed_color, action_reference)
+        button_configs = [
+            ("FEED", "#C8E6C9", "#4CAF50", "feed_action"),      # pastel green, green
+            ("CLEAN", "#B3E5FC", "#2196F3", "clean_action"),    # pastel blue, blue
+            ("MEDICINE", "#FFCDD2", "#F44336", "medicine_action") # pastel red, red
+        ]
+        
+        self.action_buttons = []
+        
+        for i, (text, hover_color, pressed_color, action_name) in enumerate(button_configs):
+            x_pos = start_x + (i * (button_width + button_spacing))
+            
+            # Create ActionButton with custom styling
+            button = ActionButton(text, hover_color, pressed_color, button_font_size)
+            button.setFixedSize(button_width, button_height)
+            
+            # Store action name for later connection
+            button.action_name = action_name
+            
+            # Add button to scene as a proxy widget
+            proxy = self.scene.addWidget(button)
+            proxy.setPos(x_pos, y_pos)
+            proxy.setZValue(10000)  # Highest Z-value
+            
+            self.action_buttons.append((button, proxy))
+        
+        # Connect buttons to menu actions after they're created
+        # This will be done in set_tamagotchi_logic or after menu_bar is set up
+        
+    def connect_action_buttons(self):
+        """Connect action buttons to their corresponding menu actions"""
+        if not hasattr(self, 'action_buttons'):
+            return
+        
+        for button, proxy in self.action_buttons:
+            if hasattr(button, 'action_name'):
+                action = getattr(self, button.action_name, None)
+                if action:
+                    # Connect button click to action trigger
+                    button.clicked.connect(action.trigger)
+
 
     def update_dirty_text(self, cleanliness):
         """Update DIRTY text items based on cleanliness level.
@@ -1662,11 +1806,85 @@ class Ui:
     def delete_selected_items(self):
         for item in self.scene.selectedItems():
             if isinstance(item, ResizablePixmapItem):
+                # Check if this is a poop being deleted
+                is_poop = (hasattr(item, 'category') and item.category == 'poop') or \
+                          (hasattr(item, 'filename') and item.filename and 'poop' in item.filename.lower())
+                
+                if is_poop:
+                    # Award 5 points for manual poop deletion
+                    if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic and \
+                       hasattr(self.tamagotchi_logic, 'statistics_window') and self.tamagotchi_logic.statistics_window:
+                        self.tamagotchi_logic.statistics_window.award(5)
+                    
+                    # Show floating "+5" text above the poop
+                    self.show_floating_score(item, "+5")
+                
                 # Remove from awarded set if it was awarded
                 if hasattr(item, '_decoration_id'):
                     self.awarded_decorations.discard(item._decoration_id)
                 self.scene.removeItem(item)
         self.scene.update()
+
+    def show_floating_score(self, item, text, color=QtGui.QColor(50, 205, 50)):
+        """Show floating score text above an item that fades out after 1 second"""
+        # Get item position
+        item_rect = item.sceneBoundingRect()
+        center_x = item_rect.center().x()
+        top_y = item_rect.top() - 30  # Position above the item
+        
+        # Create the floating text
+        score_text = QtWidgets.QGraphicsTextItem(text)
+        score_text.setDefaultTextColor(color)
+        
+        # Set font
+        from .display_scaling import DisplayScaling
+        font = QtGui.QFont("Arial", DisplayScaling.font_size(16), QtGui.QFont.Bold)
+        score_text.setFont(font)
+        
+        # Center the text
+        text_width = score_text.boundingRect().width()
+        score_text.setPos(center_x - text_width / 2, top_y)
+        score_text.setZValue(1000)  # Ensure it's on top
+        
+        # Add to scene
+        self.scene.addItem(score_text)
+        
+        # Create float-up animation
+        start_pos = score_text.pos()
+        end_pos = QtCore.QPointF(start_pos.x(), start_pos.y() - 40)
+        
+        # Position animation
+        pos_animation = QtCore.QVariantAnimation()
+        pos_animation.setStartValue(start_pos)
+        pos_animation.setEndValue(end_pos)
+        pos_animation.setDuration(1000)
+        pos_animation.setEasingCurve(QtCore.QEasingCurve.OutQuad)
+        pos_animation.valueChanged.connect(score_text.setPos)
+        
+        # Opacity animation (fade out in the last 500ms)
+        opacity_animation = QtCore.QPropertyAnimation(score_text, b"opacity")
+        opacity_animation.setStartValue(1.0)
+        opacity_animation.setEndValue(0.0)
+        opacity_animation.setDuration(1000)
+        opacity_animation.setEasingCurve(QtCore.QEasingCurve.InQuad)
+        
+        # Remove text when animation finishes
+        def cleanup():
+            try:
+                if score_text.scene():
+                    self.scene.removeItem(score_text)
+            except:
+                pass
+        
+        opacity_animation.finished.connect(cleanup)
+        
+        # Store animations to prevent garbage collection
+        score_text._pos_animation = pos_animation
+        score_text._opacity_animation = opacity_animation
+        
+        # Start both animations
+        pos_animation.start()
+        opacity_animation.start()
 
     def setup_menu_bar(self):
         self.menu_bar = self.window.menuBar()
@@ -1689,6 +1907,8 @@ class Ui:
         self.brain_designer_action.setShortcut("Ctrl+Shift+B")
         self.brain_designer_action.setToolTip("Open the visual neural network designer")
         view_menu.addAction(self.brain_designer_action)
+
+        view_menu.addSeparator()
 
         self.decorations_action = QtWidgets.QAction('Decorations', self.window)
         self.decorations_action.setCheckable(True)
@@ -1743,7 +1963,7 @@ class Ui:
         self.speed_action_group.addAction(self.very_fast_speed_action)
 
         # Actions Menu
-        actions_menu = self.menu_bar.addMenu('ACTIONS')
+        actions_menu = self.menu_bar.addMenu('Actions')
         self.feed_action = QtWidgets.QAction('Feed', self.window)
         actions_menu.addAction(self.feed_action)
 
@@ -1765,6 +1985,7 @@ class Ui:
         # View Cone Toggle
         self.view_cone_action = QtWidgets.QAction('Toggle View Cone', self.window)
         self.view_cone_action.setCheckable(True)
+        self.view_cone_action.setShortcut('V')
         if hasattr(self.tamagotchi_logic, 'connect_view_cone_action'): # This check is good practice
             self.view_cone_action.triggered.connect(self.tamagotchi_logic.connect_view_cone_action)
         elif hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'squid') and hasattr(self.tamagotchi_logic.squid, 'toggle_view_cone'): # Fallback if connect_view_cone_action is not on logic
@@ -1783,6 +2004,9 @@ class Ui:
         # Add Plugins Menu
         self.plugins_menu = self.menu_bar.addMenu('Plugins')
         # This menu will be populated later when the plugin manager is available
+        
+        # Connect action buttons to menu actions
+        self.connect_action_buttons()
 
     def show_task_manager(self):
         if not hasattr(self, '_task_manager') or not self._task_manager:
@@ -2012,6 +2236,46 @@ class Ui:
             self.squid_brain_window.show()
         else:
             self.squid_brain_window.hide()
+
+    def toggle_designer_mode(self, checked=None):
+        """Toggle designer mode in the Brain Tool window.
+        
+        This enables interactive editing of neurons and connections
+        directly in the brain visualization.
+        """
+        # Ensure brain window exists
+        if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
+            self.show_message("Brain Tool not initialized")
+            if hasattr(self, 'designer_mode_action'):
+                self.designer_mode_action.setChecked(False)
+            return
+        
+        # Check if designer controller is integrated
+        if not hasattr(self.squid_brain_window, 'designer_controller') or \
+           not self.squid_brain_window.designer_controller:
+            self.show_message("Designer mode not available - integration required")
+            if hasattr(self, 'designer_mode_action'):
+                self.designer_mode_action.setChecked(False)
+            return
+        
+        # Show brain window if not visible
+        if not self.squid_brain_window.isVisible():
+            self.squid_brain_window.show()
+            if hasattr(self, 'brain_action'):
+                self.brain_action.setChecked(True)
+        
+        # Toggle designer mode
+        controller = self.squid_brain_window.designer_controller
+        controller.toggle_designer_mode()
+        
+        # Sync checkbox state with actual designer mode state
+        is_active = controller.designer_mode_active
+        if hasattr(self, 'designer_mode_action'):
+            self.designer_mode_action.setChecked(is_active)
+        
+        # Show status message
+        status = "enabled" if is_active else "disabled"
+        self.show_message(f"Designer mode {status}")
 
     def connect_view_cone_action(self, toggle_function):
         self.view_cone_action.triggered.connect(toggle_function)

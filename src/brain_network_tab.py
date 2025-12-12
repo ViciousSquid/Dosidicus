@@ -235,15 +235,20 @@ class NetworkTab(BrainBaseTab):
     def _open_brain_designer(self):
         """Launch Brain Designer in a separate process – safe & reliable"""
         
-        # === NEW: Pause simulation via UI ===
-        # Try to find the UI instance to trigger the full pause effect (overlay + logic)
+        # === 1. Force Immediate State Export ===
+        # This ensures the 'active_brain_state.json' file is fresh and exists 
+        # BEFORE the designer process starts and tries to read it.
+        if self.brain_widget and hasattr(self.brain_widget, 'export_brain_state_for_designer'):
+            print("🧠 Force-exporting brain state for Designer...")
+            self.brain_widget.export_brain_state_for_designer()
+        # =======================================
+
+        # === Pause simulation via UI ===
         if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'user_interface'):
             self.tamagotchi_logic.user_interface.set_simulation_speed(0)
             self.tamagotchi_logic.user_interface.show_message("Paused for Brain Designer")
         elif self.tamagotchi_logic:
-            # Fallback if UI link is missing
             self.tamagotchi_logic.set_simulation_speed(0)
-        # ====================================
 
         import multiprocessing
         from src.brain_designer_launcher import launch_brain_designer_process

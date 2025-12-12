@@ -70,14 +70,22 @@ class RockInteractionManager:
             return False
         if hasattr(rock, 'is_being_carried') and rock.is_being_carried:
             return False
+        # Check if rock is in cooldown after being thrown
+        if hasattr(rock, 'throw_cooldown_until'):
+            if time.time() < rock.throw_cooldown_until:
+                return False
         return True
 
     def attach_rock_to_squid(self, rock):
         """Visually attach rock to squid at tentacle position"""
         rock.setParentItem(self.squid.squid_item)
         
-        # Set random hold duration between 3-9 seconds
-        self.squid.rock_hold_duration = random.uniform(2.0, 9.0)
+        # Use config values for hold duration
+        config = self.rock_config
+        self.squid.rock_hold_duration = random.uniform(
+            config['min_carry_duration'],
+            config['max_carry_duration']
+        )
         self.squid.rock_hold_start_time = time.time()
         self.squid.rock_decision_made = False
         
@@ -154,8 +162,9 @@ class RockInteractionManager:
         self.cleanup()  # Reset everything first
         
         if rock is None:
+            # Filter rocks that are valid, visible, and not on cooldown
             rocks = [item for item in self.scene.items() 
-                    if self.is_valid_rock(item) and item.isVisible()]
+                    if self.is_valid_rock(item) and item.isVisible() and self.can_pick_up_rock(item)]
             if not rocks:
                 if self.show_message:
                     self.show_message("No available rocks!")
@@ -164,6 +173,10 @@ class RockInteractionManager:
                 r.sceneBoundingRect().center().x() - self.squid.squid_x,
                 r.sceneBoundingRect().center().y() - self.squid.squid_y
             ))
+        elif not self.can_pick_up_rock(rock):
+            if self.show_message:
+                self.show_message("Rock is on cooldown!")
+            return False
         
         self.target_rock = rock
         self.rock_test_phase = 0
@@ -343,18 +356,25 @@ class RockInteractionManager:
             new_x = scene_rect.right() - rock_rect.width()
             self.throw_velocity_x *= -0.2
 
-        # Top/bottom boundaries
+        # Top boundary - small bounce
         if new_y < scene_rect.top():
             new_y = scene_rect.top()
             self.throw_velocity_y *= -0.2
+        # Bottom boundary - stop immediately (no sliding)
         elif new_y > scene_rect.bottom() - rock_rect.height() - 50:
             new_y = scene_rect.bottom() - rock_rect.height() - 50
-            self.throw_velocity_y *= -0.2
+            # Stop all momentum when hitting the bottom
+            self.throw_velocity_x = 0
+            self.throw_velocity_y = 0
+            rock.setPos(new_x, new_y)
+            self.throw_animation_timer.stop()
+            self.cleanup_after_throw()
+            return
 
         rock.setPos(new_x, new_y)
 
         # Stop the animation if the rock has slowed down enough
-        if abs(self.throw_velocity_x) < 0.1 and abs(self.throw_velocity_y) < 0.1 and new_y >= scene_rect.bottom() - rock_rect.height() - 51:
+        if abs(self.throw_velocity_x) < 0.1 and abs(self.throw_velocity_y) < 0.1:
             self.throw_animation_timer.stop()
             self.cleanup_after_throw()
 
@@ -374,8 +394,12 @@ class RockInteractionManager:
 
     def cleanup_after_throw(self):
         if hasattr(self.squid, 'carried_rock') and self.squid.carried_rock:
+            rock = self.squid.carried_rock
+            # Set cooldown on the rock so it can't be picked up immediately
+            cooldown = self.rock_config.get('cooldown_after_throw', 10.0)
+            rock.throw_cooldown_until = time.time() + cooldown
             # Make sure to reset all rock-related states
-            self.squid.carried_rock.is_being_carried = False
+            rock.is_being_carried = False
             self.squid.carried_rock = None
         
         # Reset squid states

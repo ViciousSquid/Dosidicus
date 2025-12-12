@@ -1093,7 +1093,7 @@ def main():
     from PyQt5.QtWidgets import QApplication
     
     app = QApplication(sys.argv)
-    app.setApplicationName("Brain Designer")
+    app.setApplicationName("Brain Designer (Beta)")
     app.setOrganizationName("Dosidicus")
     
     window = BrainDesignerWindow()

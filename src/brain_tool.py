@@ -129,6 +129,19 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         
         # Setup decorations window shortcut
         self.setup_decorations_shortcut()
+        
+        # Initialize designer mode integration
+        self.designer_controller = None
+        try:
+            from .brain_tool_designer_integration import integrate_designer_mode, add_designer_menu
+            self.designer_controller = integrate_designer_mode(self)
+            if self.designer_controller:
+                add_designer_menu(self)
+                print("🎨 Designer mode integration loaded")
+        except ImportError as e:
+            print(f"Designer mode not available: {e}")
+        except Exception as e:
+            print(f"Designer mode integration error: {e}")
 
 
     def set_tamagotchi_logic(self, tamagotchi_logic):

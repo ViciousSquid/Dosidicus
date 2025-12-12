@@ -6,17 +6,20 @@ import math
 import random
 import numpy as np
 import json
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QSplitter
-from PyQt5.QtGui import QPixmap, QFont
+from PyQt5.QtGui import QPixmap, QFont, QImage
 from datetime import datetime
+
+from .brain_render_worker import BrainRenderWorker, create_render_state_from_widget, RenderState
+from .brain_worker import BrainWorker
 from .neurogenesis import EnhancedNeurogenesis, ExperienceBuffer
 from .brain_tooltips import EnhancedBrainTooltips
 from .brain_constants import CORE_NEURONS, INPUT_SENSORS, is_core_neuron
 from .personality import Personality
 from .learning import LearningConfig
 from .laboratory import NeuronLaboratory
-from .brain_worker import BrainWorker  # Threading support
 from typing import Dict, Optional
 
 # Brain state bridge for designer communication
@@ -54,16 +57,6 @@ except ImportError:
     _PERF_TRACKING_AVAILABLE = False
 
 class BrainWidget(QtWidgets.QWidget):
-    """
-    Neural network visualization widget with theming support.
-    
-    Supports 3 animation styles:
-    - 'classic': Original clean animation style (default)
-    - 'vibrant': Enhanced colors with hover effects
-    - 'subtle': Muted tones with smooth transitions
-    
-    Switch styles at runtime using set_animation_style().
-    """
     
     neuronClicked = QtCore.pyqtSignal(str)
     animationStyleChanged = QtCore.pyqtSignal(str)  # Emitted when style changes
@@ -102,7 +95,9 @@ class BrainWidget(QtWidgets.QWidget):
             }
         super().__init__() #
 
-        self.base_font_size = 10
+        # Get neuron label font size from config (single source of truth)
+        display_config = self.config.get_display_config()
+        self.neuron_label_font_size = display_config['neuron_label_font_size']
 
         # Tutorial glow effect properties
         self.tutorial_glow_active = False
@@ -254,7 +249,7 @@ class BrainWidget(QtWidgets.QWidget):
         # Brain state bridge: export state for designer synchronization
         if _HAS_BRAIN_BRIDGE:
             self._brain_export_timer = QtCore.QTimer(self)
-            self._brain_export_timer.timeout.connect(self._export_brain_state_for_designer)
+            self._brain_export_timer.timeout.connect(self.export_brain_state_for_designer)
             self._brain_export_timer.start(5000)  # Export every 5 seconds
             set_game_running(True)  # Mark game as running
             print("🔗 Brain state export enabled for designer sync")
@@ -305,6 +300,28 @@ class BrainWidget(QtWidgets.QWidget):
         self.weights[("can_see_food", "happiness")] = 0.5
         _link_fade_speed = 3.0   # opacity units per second (tweak for faster/slower)
 
+         # ===== OFFSCREEN RENDERING SETUP =====
+        # Initialize render worker for background rendering
+        self._render_worker = BrainRenderWorker(self)
+        self._render_worker.render_complete.connect(self._on_render_complete)
+        self._render_worker.start()
+        
+        # Cached rendered image
+        self._cached_render: Optional[QImage] = None
+        self._render_dirty = True
+        
+        # Render throttling
+        self._last_render_request = 0.0
+        self._render_interval = 1.0 / 10.0  # 10 FPS target
+        
+        # State change tracking for smart re-rendering
+        self._last_state_hash = None
+        
+        # Timer for periodic render requests (catches animation updates)
+        self._render_timer = QtCore.QTimer(self)
+        self._render_timer.timeout.connect(self._request_render_if_dirty)
+        self._render_timer.start(33)  # ~30 FPS
+
     def set_brain_worker(self, worker):
         """Accept an external BrainWorker instance."""
         
@@ -332,15 +349,19 @@ class BrainWidget(QtWidgets.QWidget):
     # BRAIN STATE BRIDGE METHODS (for designer synchronization)
     # =========================================================================
     
-    def _export_brain_state_for_designer(self):
+    def export_brain_state_for_designer(self):
         """
         Export current brain state to shared file for designer import.
-        Called periodically by timer when brain_state_bridge is available.
+        Public method - can be called by NetworkTab before launching designer.
         """
         if not _HAS_BRAIN_BRIDGE:
             return
         
         try:
+            # Ensure the game lock exists
+            set_game_running(True)
+            
+            # Export the actual data
             update_brain_state_from_widget(self)
         except Exception as e:
             # Silent failure - don't spam console
@@ -361,9 +382,9 @@ class BrainWidget(QtWidgets.QWidget):
     def closeEvent(self, event):
         """Handle widget close - clean up brain bridge."""
         self.cleanup_brain_bridge()
+        self._cleanup_render_worker()
         super().closeEvent(event) if hasattr(super(), 'closeEvent') else None
         event.accept()
-
 
 
     def set_debug_mode(self, enabled):
@@ -391,6 +412,67 @@ class BrainWidget(QtWidgets.QWidget):
             self.stimulate_button.setEnabled(enabled)
 
         print(f"Brain window debug mode set to: {enabled}")
+
+    
+    def _request_render_if_dirty(self):
+        """Called by timer to request render if state has changed"""
+        if self._render_dirty or self._has_active_animations():
+            self._request_render()
+
+    def _has_active_animations(self) -> bool:
+        """Check if there are active animations requiring re-render"""
+        current_time = time.time()
+        
+        # Check communication events (connection animations)
+        for neuron, event_time in self.communication_events.items():
+            if current_time - event_time < 0.5:  # 500ms animation
+                return True
+        
+        # Check link fade animations
+        for key, opacity in getattr(self, '_link_opacities', {}).items():
+            target = getattr(self, '_link_targets', {}).get(key, opacity)
+            if abs(opacity - target) > 0.01:
+                return True
+        
+        return False
+    
+    def _request_render(self):
+        """Request a new render from the worker thread"""
+        current_time = time.time()
+        
+        # Throttle requests
+        if current_time - self._last_render_request < self._render_interval:
+            return
+        
+        self._last_render_request = current_time
+        
+        # Create state snapshot and send to worker
+        try:
+            state = create_render_state_from_widget(self)
+            self._render_worker.request_render(state)
+            self._render_dirty = False
+        except Exception as e:
+            print(f"Error creating render state: {e}")
+
+    def _on_render_complete(self, image: QImage, render_time: float):
+        """Called when render worker completes a frame"""
+        self._cached_render = image
+        # Trigger a lightweight repaint to show the new image
+        self.update()
+
+    def mark_render_dirty(self):
+        """Call this when state changes that require re-render"""
+        self._render_dirty = True
+
+    def _cleanup_render_worker(self):
+        """Clean up the render worker - call on widget destruction"""
+        if hasattr(self, '_render_worker') and self._render_worker:
+            self._render_worker.stop()
+            self._render_worker.wait(1000)  # Wait up to 1 second
+            self._render_worker = None
+        
+        if hasattr(self, '_render_timer') and self._render_timer:
+            self._render_timer.stop()
 
     # =========================================================================
     # ANIMATION STYLE METHODS
@@ -1343,6 +1425,8 @@ class BrainWidget(QtWidgets.QWidget):
 
     def reveal_neuron(self, neuron_name):
         """Reveal a neuron with an expand animation – forces links OFF during reveal."""
+        import time
+        
         if neuron_name not in self.original_neurons:
             return
         if neuron_name in self.visible_neurons:
@@ -1351,17 +1435,15 @@ class BrainWidget(QtWidgets.QWidget):
             print(f"❌ ERROR: Neuron {neuron_name} has no position defined!")
             return
 
-        # ┌----------------------------------------------------------┐
-        # │ 1.  FIRST REVEAL → force links OFF  (any game mode)      │
-        # └----------------------------------------------------------┘
-        if not self.visible_neurons:                       # very first neuron
+        # First reveal → force links OFF
+        if not self.visible_neurons:
             self.show_links = False
             if hasattr(self, 'parent') and hasattr(self.parent(), 'network_tab'):
                 nt = self.parent().network_tab
                 nt.checkbox_links.setChecked(False)
-                nt.checkbox_links.setEnabled(False)      # user can’t turn it on
+                nt.checkbox_links.setEnabled(False)
 
-        # ---------- staggered start ----------
+        # Staggered start
         stagger = 0.4
         delay = len(self.visible_neurons) * stagger
 
@@ -1370,10 +1452,9 @@ class BrainWidget(QtWidgets.QWidget):
         # Track this neuron as revealed for count display (tutorial only)
         if self.is_tutorial_mode:
             self.revealed_neurons.add(neuron_name)
-            # Reveal connections between already-revealed neurons
             self._reveal_connections_for_neuron(neuron_name)
 
-        # Trigger immediate metrics update to show new counts
+        # Trigger immediate metrics update
         self._update_network_metrics()
 
         self.neuron_reveal_animations[neuron_name] = {
@@ -1382,16 +1463,15 @@ class BrainWidget(QtWidgets.QWidget):
         }
 
         pos = self.neuron_positions[neuron_name]
-        # (any existing logging / diagnostics you had can stay here)
+        self.mark_render_dirty()
 
     def _enable_links_after_reveal(self):
         """Re-enable checkbox, tick it, and kick off the existing link-fade engine."""
         self.show_links = True
         
-        # Populate link targets for all weights (like toggle_links does)
+        # Populate link targets for all weights
         for key in self.weights.keys():
-            self._link_targets[key] = 1.0  # Target full opacity
-            # Initialize opacity if not already set
+            self._link_targets[key] = 1.0
             if key not in self._link_opacities:
                 self._link_opacities[key] = 0.0
         
@@ -1407,6 +1487,8 @@ class BrainWidget(QtWidgets.QWidget):
         # Start the fade timer
         if not self._link_fade_timer.isActive():
             self._link_fade_timer.start()
+        
+        self.mark_render_dirty()
     
     def reveal_all_core_neurons(self):
         """Make all core neurons visible immediately (for loaded games)"""
@@ -1419,7 +1501,10 @@ class BrainWidget(QtWidgets.QWidget):
             delattr(self, 'revealed_connections')
         # Ensure tutorial mode is disabled for loaded games
         self.is_tutorial_mode = False
-        #print("🧠 All core neurons revealed")
+        
+        # Mark render dirty and trigger update
+        self.mark_render_dirty()
+        self.update()
     
     def _reveal_connections_for_neuron(self, neuron_name):
         """Reveal connections between this neuron and other revealed neurons
@@ -1648,44 +1733,39 @@ class BrainWidget(QtWidgets.QWidget):
                 if created_at and (time.time() - created_at) < newness_duration_sec:
                     return True # It's new based on details
             else:
-                 # If no details but in list, assume it might be new (fallback)
-                 # You might want to refine this based on how 'new_neurons' is managed.
-                 # For now, if it's in the list and < 5 mins, assume new.
-                 # A better check is needed if 'new_neurons' isn't pruned.
-                 # Let's rely *only* on details for a stricter check.
+                 # If it's in the list and < 5 mins, assume new.
                  pass
         return False
 
 
     def update_connection(self, neuron1, neuron2, value1, value2):
         """Update connection weight and trigger animations"""
+        import time
+        
         current_time = time.time()
         pair = (neuron1, neuron2)
         reverse_pair = (neuron2, neuron1)
 
         # Check if the pair or its reverse exists in weights, if not, initialize it
         if pair not in self.weights and reverse_pair not in self.weights:
-            # Only add if both neurons exist
             if neuron1 in self.neuron_positions and neuron2 in self.neuron_positions:
-                self.weights[pair] = 0.0  # Start with 0 weight
+                self.weights[pair] = 0.0
                 print(f"      🆕 Created new connection: {neuron1} ↔ {neuron2}")
             else:
                 print(f"      ⚠️  Cannot create connection: {neuron1} or {neuron2} doesn't exist in neuron_positions")
-                return  # Don't create connection if a neuron doesn't exist
+                return
 
-        # Use the correct pair order
         use_pair = pair if pair in self.weights else reverse_pair
         
-        # Ensure the pair still exists before proceeding (might be pruned)
         if use_pair not in self.weights:
             print(f"      ⚠️  Connection was pruned, skipping update for {neuron1} ↔ {neuron2}")
             return
 
         prev_weight = self.weights[use_pair]
 
-        # --- Learning Rate Calculation ---
+        # Learning Rate Calculation
         base_lr = self.learning_rate
-        newness_boost = 2.0  # New neurons learn 2x faster
+        newness_boost = 2.0
         effective_lr = base_lr
 
         is_n1_new = self.is_new_neuron(neuron1)
@@ -1693,13 +1773,12 @@ class BrainWidget(QtWidgets.QWidget):
 
         if is_n1_new or is_n2_new:
             effective_lr = base_lr * newness_boost
-        # --- End Learning Rate ---
 
         # Calculate weight change (basic Hebbian)
         weight_change = effective_lr * (value1 / 100.0) * (value2 / 100.0)
         
-        # Add weight decay (optional but good for stability)
-        decay_rate = self.config.hebbian.get('weight_decay', 0.01) * 0.1  # Slow decay during learning
+        # Add weight decay
+        decay_rate = self.config.hebbian.get('weight_decay', 0.01) * 0.1
         new_weight = prev_weight + weight_change - (prev_weight * decay_rate)
         
         # Clamp weight to [-1, 1] range
@@ -1710,55 +1789,47 @@ class BrainWidget(QtWidgets.QWidget):
         self.add_weight_animation(neuron1, neuron2, prev_weight, new_weight)
 
         # Record weight change time for both neurons
-        if abs(new_weight - prev_weight) > 0.001:  # Only if significant change
+        if abs(new_weight - prev_weight) > 0.001:
             self.weight_change_events[neuron1] = current_time
             self.weight_change_events[neuron2] = current_time
             
-            # Add to recently updated for visualization/logging
             if (neuron1, neuron2) not in self.recently_updated_neuron_pairs and \
             (neuron2, neuron1) not in self.recently_updated_neuron_pairs:
                 self.recently_updated_neuron_pairs.append((neuron1, neuron2))
             
-            # Trigger visual update
+            # Mark render dirty before update
+            self.mark_render_dirty()
             self.update()
 
         # Record communication time for both neurons
         self.communication_events[neuron1] = current_time
         self.communication_events[neuron2] = current_time
 
-        # Debug output with color coding
+        # Debug output
         lr_indicator = " (\x1b[35mBOOSTED\x1b[0m)" if effective_lr > base_lr else ""
         direction = "\x1b[32m↑\x1b[0m" if new_weight > prev_weight else "\x1b[31m↓\x1b[0m"
         print(f"      \x1b[42mUpdated\x1b[0m {direction} {neuron1} ↔ {neuron2}: "
             f"\x1b[31m{prev_weight:.3f}\x1b[0m → \x1b[32m{new_weight:.3f}\x1b[0m "
             f"(Δ={weight_change:.3f}, LR={effective_lr:.3f}{lr_indicator})")
 
-    def prune_weak_connections(self, threshold=0.05, min_age_sec=600): # Prune if < 0.05 abs weight & > 10 mins old
+    def prune_weak_connections(self, threshold=0.05, min_age_sec=600):
         """Removes connections with absolute weight below the threshold, ignoring new neurons."""
-        if not self.pruning_enabled: # Respect the global pruning flag
+        if not self.pruning_enabled:
             return 0
 
+        import time
         current_time = time.time()
         to_delete = []
 
-        # Iterate over a copy of keys to allow deletion during iteration
         for pair, weight in list(self.weights.items()):
-            # Ensure pair is a valid tuple
             if not (isinstance(pair, tuple) and len(pair) == 2):
-                # print(f"Skipping invalid weight key during pruning: {pair}") # Optional Debug
                 continue
 
             neuron1, neuron2 = pair
 
-            # Don't prune if either neuron is "new" (gives them time to establish)
             if self.is_new_neuron(neuron1, min_age_sec) or self.is_new_neuron(neuron2, min_age_sec):
                 continue
-            
-            # Don't prune connections involving core/original neurons (optional, but safer)
-            # if neuron1 in self.original_neuron_positions or neuron2 in self.original_neuron_positions:
-            #    continue
 
-            # Check if absolute weight is below the threshold
             if abs(weight) < threshold:
                 to_delete.append(pair)
 
@@ -1768,9 +1839,11 @@ class BrainWidget(QtWidgets.QWidget):
 
         if len(to_delete) > 0:
             print(f"\x1b[33mPruned {len(to_delete)} weak connections (Threshold: {threshold}).\x1b[0m")
-            self.update() # Update visualization if connections changed
+            # Mark render dirty before update
+            self.mark_render_dirty()
+            self.update()
         
-        return len(to_delete) # Return how many were pruned
+        return len(to_delete)   # Return the number 
 
 
     def perform_hebbian_learning(self):
@@ -1950,33 +2023,33 @@ class BrainWidget(QtWidgets.QWidget):
         """Load the brain state from a saved state dictionary"""
         self.weights = state['weights']
         self.neuron_positions = state['neuron_positions']
-        # Load neuron states, defaulting to empty dict if not present
         self.state = state.get('neuron_states', {})
         
-        # NEW: Load layer structure if present (from custom brain designs)
+        # Load layer structure if present (from custom brain designs)
         self.layers = state.get('layer_structure', [])
 
         # Ensure all neurons in neuron_positions exist in state
         for neuron in self.neuron_positions:
             if neuron not in self.state:
-                # Initialize missing neurons with default value
-                self.state[neuron] = 50  # Default activation value
+                self.state[neuron] = 50
 
         # Explicitly update excluded neurons if they exist in positions
         for neuron in self.excluded_neurons:
             if neuron in self.neuron_positions and neuron not in self.state:
-                self.state[neuron] = False  # Default boolean state
+                self.state[neuron] = False
 
         # Ensure visible_neurons is complete
-        # For loaded games, ALL neurons should be visible (not just original_neurons)
         if not self.is_tutorial_mode:
-            # Add all core neurons
             self.visible_neurons = set(self.original_neurons)
-            # Also add any neurogenesis neurons from neuron_positions
             for neuron in self.neuron_positions:
                 if neuron not in self.excluded_neurons and neuron not in self.original_neurons:
                     self.visible_neurons.add(neuron)
             print(f"📊 Loaded {len(self.neuron_positions)} neurons, {len(self.visible_neurons)} visible")
+        
+        # Mark render dirty and trigger update
+        self.mark_render_dirty()
+        self.update()
+
 
 
 
@@ -2135,15 +2208,17 @@ class BrainWidget(QtWidgets.QWidget):
             except Exception as e:
                 print(f"\x1b[31mNeurogenesis logging failed: {str(e)}\x1b[0m")
 
-    def update_state(self, new_state: Optional[Dict[str, float]] = None):
+    def update_state(self, new_state=None):
         """
         Update neuron activations based on connections and random noise,
         but also accept an external `new_state` dict to overwrite widget state.
 
         If `new_state` is provided, it will be merged into self.state with
         strict handling for binary neurons (keeps them 0 or 100). If None,
-        the original neuron activation update logic runs (preserved below).
+        the activation update logic 2 runs (below).
         """
+        import time
+        import random
 
         # If an external state is supplied, merge it and update bookkeeping
         if new_state is not None:
@@ -2181,43 +2256,35 @@ class BrainWidget(QtWidgets.QWidget):
                 try:
                     self.enhanced_neurogenesis.update_neuron_activations(self.state)
                 except Exception:
-                    # Defensive: don't allow neurogenesis failures to crash update
                     pass
 
             # CRITICAL: After updating internal state, refresh worker cache
             if hasattr(self, 'brain_worker') and self.brain_worker:
                 self._update_worker_cache()
 
-            # Trigger a repaint to reflect new state
+            # Mark render dirty before update
+            self.mark_render_dirty()
             self.update()
             return
 
         # -----------------------
-        # Original internal logic
-        # -----------------------
-        # (Preserved exactly from the previous implementation:
-        # update neuron activations based on self.neurons, connections, decay, noise.)
-        # List of neurons that must stay strictly binary (0 or 100)
-        BINARY_NEURONS = {"can_see_food"}
+        # Activation update logic 2
 
+        BINARY_NEURONS = {"can_see_food"}
         updated = {}
 
         # First pass: calculate raw new activations
         for neuron, props in self.neurons.items():
             value = props.get('activation', 0.0)
 
-            # Protect binary neurons from ANY modification
             if neuron in BINARY_NEURONS:
-                updated[neuron] = value  # Keep EXACTLY 0 or 100
+                updated[neuron] = value
                 continue
 
-            # Standard neurons get noise & decay
             decay = props.get('decay', 1.0)
             noise = props.get('noise', 0.0)
-
             value *= decay
             value += random.uniform(-noise, noise)
-
             updated[neuron] = value
 
         # Second pass: apply connection effects
@@ -2226,32 +2293,23 @@ class BrainWidget(QtWidgets.QWidget):
             dst = conn.get("to")
             weight = conn.get("weight", 0)
 
-            # Defensive checks for keys
             if src not in updated or dst not in updated:
-                # Skip if positions missing (pruned/unknown)
                 continue
-
-            # Skip binary neurons—they must not be influenced
             if dst in BINARY_NEURONS:
                 continue
 
             try:
                 updated[dst] += updated[src] * weight
             except Exception:
-                # Defensive: skip malformed connections
                 continue
 
         # Final pass: clamp values and write back
         for neuron, val in updated.items():
-
-            # Binary neurons must remain 0 or 100 EXACTLY
             if neuron in BINARY_NEURONS:
-                # Ensure it's exactly 0 or 100 (snap)
                 snap = 100.0 if val > 50 else 0.0
                 try:
                     self.neurons[neuron]["activation"] = snap
                 except Exception:
-                    # If neurons dict doesn't have the expected structure, store safely
                     if neuron in self.state:
                         self.state[neuron] = snap
                     else:
@@ -2259,17 +2317,19 @@ class BrainWidget(QtWidgets.QWidget):
                 continue
 
             clamped = max(min(val, 100), -100)
-            # Write back to neurons dict if present, otherwise to state
             if isinstance(self.neurons.get(neuron, {}).get('activation', None), (int, float)):
                 self.neurons[neuron]['activation'] = clamped
             else:
-                # Fallback to self.state
                 self.state[neuron] = clamped
 
-        # Also add cache update at the end if state changed
-        state_changed = bool(updated)  # Simple check - True if any neurons updated
+        # Cache update at the end if state changed
+        state_changed = bool(updated)
         if state_changed and hasattr(self, 'brain_worker') and self.brain_worker:
             self._update_worker_cache()
+        
+        # Mark render dirty if state changed <<<
+        if state_changed:
+            self.mark_render_dirty()
 
 
     def _fast_apply_external_state(self, new_state):
@@ -2279,15 +2339,10 @@ class BrainWidget(QtWidgets.QWidget):
                 if self.is_binary_neuron(k):
                     self.state[k] = 100.0 if (v if isinstance(v, bool) else float(v) > 50) else 0.0
                 else:
-                    self.state[k] = float(v) if isinstance(v, (int, float, bool)) else v
+                    self.state[k] = float(v) if isinstance(v, (int, float)) else v
         
-        # Update communication events for glow effects
-        current_time = time.time()
-        for neuron, val in self.state.items():
-            if isinstance(val, (int, float)) and abs(val - 50) > 20:
-                self.communication_events[neuron] = current_time
-        
-        self.update()
+        # >>> ADDED: Mark render dirty <<<
+        self.mark_render_dirty()
 
     def _perform_state_update_sync(self):
         """Synchronous fallback when worker is unavailable"""
@@ -2463,8 +2518,10 @@ class BrainWidget(QtWidgets.QWidget):
 
         if candidates:
             neuron_to_remove = candidates[0][0]
-            if neuron_to_remove in self.neuron_positions: del self.neuron_positions[neuron_to_remove]
-            if neuron_to_remove in self.state: del self.state[neuron_to_remove]
+            if neuron_to_remove in self.neuron_positions:
+                del self.neuron_positions[neuron_to_remove]
+            if neuron_to_remove in self.state:
+                del self.state[neuron_to_remove]
             for conn in list(self.weights.keys()):
                 if isinstance(conn, tuple) and (conn[0] == neuron_to_remove or conn[1] == neuron_to_remove):
                     del self.weights[conn]
@@ -2472,6 +2529,10 @@ class BrainWidget(QtWidgets.QWidget):
                 self.neurogenesis_data['new_neurons'].remove(neuron_to_remove)
             reason = "weak connections/activity"
             self.log_neurogenesis_event(neuron_to_remove, "pruned", reason)
+            
+            # >>> ADDED: Mark render dirty and trigger update <<<
+            self.mark_render_dirty()
+            self.update()
             return True
         return False
 
@@ -2529,19 +2590,14 @@ class BrainWidget(QtWidgets.QWidget):
            self.update()
 
     def update_weights(self):
-        """
-        Update weights by adding small random noise. 
-        WARNING: This adds noise and might counteract Hebbian learning.
-        """
+
         if self.frozen_weights is not None:
             return
 
-        # --- MODIFIED: Iterate over a copy of the actual weight keys ---
+        # Iterate over a copy of the actual weight keys ---
         for conn in list(self.weights.keys()):
             # Check if the connection still exists (it might be pruned concurrently)
             if conn in self.weights:
-                # Add a very small amount of noise/drift
-                self.weights[conn] += random.uniform(-0.01, 0.01) # Reduced noise
                 # Clamp the weight to stay within [-1, 1]
                 self.weights[conn] = max(-1, min(1, self.weights[conn]))
 
@@ -2559,6 +2615,9 @@ class BrainWidget(QtWidgets.QWidget):
         use_pair = pair if pair in self.weights else reverse_pair
         self.weights[use_pair] += amount
         self.weights[use_pair] = max(-1, min(1, self.weights[use_pair]))
+        
+        # Mark render dirty before update
+        self.mark_render_dirty()
         self.update()
 
     def capture_training_data(self, state):
@@ -2884,182 +2943,121 @@ class BrainWidget(QtWidgets.QWidget):
     # ------------------------------------------------------------------
 
     def paintEvent(self, event):
-        # ===== PERFORMANCE TRACKING =====
+        """
+        Optimized paintEvent that uses cached offscreen render.
+        
+        The heavy rendering is done in BrainRenderWorker. This method
+        just blits the cached image and draws any overlay elements
+        that need to be responsive (like hover effects).
+        """
+        # Performance tracking
         if _PERF_TRACKING_AVAILABLE:
             _paint_start = time.perf_counter()
             perf_tracker.increment("paint_calls")
-
+        
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        painter.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
-
-        # Fill background (uses animation style color)
-        bg_color = QtGui.QColor(*self.anim_background_colour)
-        painter.fillRect(self.rect(), bg_color)
-
-        # HIDDEN: Deprecated State indicator pills (functionality retained, display disabled)
-        indicator_y_position = 10
-        indicator_font = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
-        painter.setFont(indicator_font)
-        font_metrics = painter.fontMetrics()
-
-        active_indicators_data = []
-        if self.state.get('is_fleeing', False): 
-            active_indicators_data.append({"text": "Fleeing!", "color": QtGui.QColor(220, 20, 60)})
-        if self.state.get('is_startled', False): 
-            active_indicators_data.append({"text": "Startled!", "color": QtGui.QColor(255, 165, 0)})
-        if self.state.get('pursuing_food', False): 
-            active_indicators_data.append({"text": "Pursuing Food", "color": QtGui.QColor(60, 179, 113)})
-
-        status_value = self.state.get('status', '')
-        squid_status = str(status_value).lower() if status_value is not None else ''
-        if self.state.get('is_eating', False) or 'eating' in squid_status:
-            active_indicators_data.append({"text": "Eating", "color": QtGui.QColor(46, 204, 113)})
-        if self.state.get('is_sleeping', False):
-            active_indicators_data.append({"text": "Sleeping", "color": QtGui.QColor(142, 68, 173)})
-        if 'rock' in squid_status or 'play' in squid_status:
-            active_indicators_data.append({"text": "Playing", "color": QtGui.QColor(241, 196, 15)})
-        if 'hiding' in squid_status:
-            active_indicators_data.append({"text": "Hiding", "color": QtGui.QColor(22, 160, 133)})
-        if self.state.get('anxiety', 0) > 70 or 'anxious' in squid_status:
-            active_indicators_data.append({"text": "Anxious", "color": QtGui.QColor(231, 76, 60)})
-        if self.state.get('curiosity', 0) > 80 or 'curious' in squid_status:
-            active_indicators_data.append({"text": "Curious", "color": QtGui.QColor(52, 152, 219)})
-
-        indicators_to_display = active_indicators_data[:3]
-
-        painter.save()
-
-        # Calculate space - no indicators displayed, so no space needed
-        fixed_indicator_area_height = 0
-        indicator_space_at_top = indicator_y_position + fixed_indicator_area_height
-
-        base_width_logical = 1024
-        base_height_logical = 768 - indicator_space_at_top
-        if base_height_logical <= 0: 
-            base_height_logical = 1
-
-        scale_x = self.width() / base_width_logical
-        drawable_height_for_neurons = self.height() - indicator_space_at_top
-        if drawable_height_for_neurons <= 0: 
-            drawable_height_for_neurons = 1
-
-        scale_y = drawable_height_for_neurons / base_height_logical
-        scale_y = max(0.01, scale_y)
-
-        scale = max(0.01, min(scale_x, scale_y))
-
-        # Center horizontally if letterboxed
-        offset_x = 0
-        if scale_x > scale_y:
-            content_width = base_width_logical * scale
-            offset_x = (self.width() - content_width) / 2
-
-        painter.translate(offset_x, indicator_space_at_top)
-        painter.scale(scale, scale)
-
-        # === DRAW LAYERS ===
-        self.draw_layers(painter, 1.0)
-
-        # === DRAW NEURONS (with hover value label) ===
-        current_time = time.time()
-
-        for name, pos in self.neuron_positions.items():
-            x_logical, y_logical = pos
-            x = x_logical
-            y = y_logical
-
-            value = self.state.get(name, 50.0)
-            if not isinstance(value, (int, float)):
-                value = 50.0
-
-            # === HOVER VALUE LABEL
-            if getattr(self, 'hovered_neuron', None) == name and getattr(self, 'hover_value_display_active', False):
-                
-                if name == 'can_see_food':
-                    value_str = "ON" if value > 50 else "OFF"
-                else:
-                    value_str = f"{value:.1f}"
-
-                # Smooth fade-in
-                elapsed = current_time - getattr(self, 'hover_animation_time', current_time)
-                opacity = min(1.0, elapsed * 5.0)  # Fast fade-in (200ms)
-
-                label_y = y - 50  # Position above neuron
-
-                font = QtGui.QFont("Arial", 16, QtGui.QFont.Bold)
-                painter.setFont(font)
-                fm = painter.fontMetrics()
-                text_width = fm.horizontalAdvance(value_str)
-
-                padding = 12
-                badge_width = text_width + 2 * padding
-                badge_height = fm.height() + 12
-
-                badge_rect = QtCore.QRectF(
-                    x - badge_width / 2,
-                    label_y - badge_height / 2,
-                    badge_width,
-                    badge_height
+        
+        # Draw cached render if available
+        if self._cached_render and not self._cached_render.isNull():
+            # Scale cached image to widget size if needed
+            if (self._cached_render.width() != self.width() or 
+                self._cached_render.height() != self.height()):
+                # Request new render at correct size
+                self._render_dirty = True
+                # Draw scaled version for now
+                scaled = self._cached_render.scaled(
+                    self.width(), self.height(),
+                    QtCore.Qt.KeepAspectRatio,
+                    QtCore.Qt.SmoothTransformation
                 )
-
-                # Background badge (dark semi-transparent)
-                bg_color = QtGui.QColor(0, 0, 0, int(220 * opacity))
-                border_color = QtGui.QColor(100, 255, 150, int(255 * opacity))
-                painter.setBrush(QtGui.QBrush(bg_color))
-                painter.setPen(QtGui.QPen(border_color, 3))
-                painter.drawRoundedRect(badge_rect, 12, 12)
-
-                # Value text
-                text_color = QtGui.QColor(255, 255, 255, int(255 * opacity))
-                painter.setPen(text_color)
-                painter.drawText(badge_rect, QtCore.Qt.AlignCenter, value_str)
-
-                # Optional: subtle pulse glow under the badge
-                if opacity > 0.8:
-                    pulse = 0.5 + 0.5 * math.sin(elapsed * 10)
-                    glow_alpha = int(60 * pulse * opacity)
-                    painter.setBrush(QtGui.QBrush(QtGui.QColor(100, 255, 150, glow_alpha)))
-                    painter.setPen(QtCore.Qt.NoPen)
-                    painter.drawEllipse(QtCore.QPointF(x, y), 30, 30)
-
-            # Continue with normal neuron drawing (your existing method)
-            self.draw_neurons(painter, 1.0)  # This will draw the actual neuron
-
-        # === DRAGGING INDICATOR ===
-        if self.dragging and self.dragged_neuron:
-            pos = self.neuron_positions.get(self.dragged_neuron, (0, 0))
-            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), 3 / scale))
-            painter.setBrush(QtCore.Qt.NoBrush)
-            painter.drawEllipse(QtCore.QPointF(pos[0], pos[1]), 30, 30)
-
-        # === NEUROGENESIS HIGHLIGHTS ===
-        self.draw_neurogenesis_highlights(painter, 1.0)
-
-        # === CONNECTIONS ===
-        if self.show_links:
-            self.draw_connections(painter, 1.0)
-
-        # === STRENGTH MULTIPLIERS ===
-        self.draw_strength_multiplier(painter, 1.0)
-
-        painter.restore()
-
-        # === TUTORIAL GLOW OVERLAY (full-screen pulse) ===
-        if self.tutorial_glow_active:
-            painter.save()
-            glow_color = QtGui.QColor(48, 197, 255)
-            alpha = int(100 * self._tutorial_glow_opacity)
-            glow_color.setAlpha(alpha)
-            painter.setBrush(glow_color)
-            painter.setPen(QtCore.Qt.NoPen)
-            painter.drawRect(0, 0, self.width(), self.height())
-            painter.restore()
-
-        # ===== END PERFORMANCE TRACKING =====
+                painter.drawImage(0, 0, scaled)
+            else:
+                painter.drawImage(0, 0, self._cached_render)
+        else:
+            # No cached render yet - draw background and request render
+            bg_color = QtGui.QColor(*self.anim_background_colour)
+            painter.fillRect(self.rect(), bg_color)
+            self._render_dirty = True
+        
+        # Draw overlay elements that need immediate response
+        self._draw_overlays(painter)
+        
+        painter.end()
+        
+        # Performance tracking
         if _PERF_TRACKING_AVAILABLE:
             _paint_elapsed = (time.perf_counter() - _paint_start) * 1000
             perf_tracker.record("paint_event", _paint_elapsed)
+
+    def _draw_overlays(self, painter):
+        """
+        Draw overlay elements that need immediate response.
+        These are drawn on top of the cached render.
+        """
+        # Tutorial glow effect
+        if getattr(self, 'tutorial_glow_active', False):
+            self._draw_tutorial_glow(painter)
+        
+        # Neurogenesis highlights
+        if hasattr(self, 'neurogenesis_highlight'):
+            nh = self.neurogenesis_highlight
+            if nh.get('neuron') and time.time() - nh.get('start_time', 0) < nh.get('duration', 0):
+                self._draw_neurogenesis_highlight(painter)
+        
+        # Drag preview if dragging a neuron
+        if getattr(self, 'dragging', False) and getattr(self, 'dragged_neuron', None):
+            self._draw_drag_preview(painter)
+
+    def _draw_tutorial_glow(self, painter):
+        """Draw tutorial glow border effect"""
+        opacity = getattr(self, '_tutorial_glow_opacity', 0.0)
+        if opacity > 0:
+            glow_color = QtGui.QColor(255, 215, 0, int(150 * opacity))
+            pen = QtGui.QPen(glow_color, 4)
+            painter.setPen(pen)
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.drawRect(self.rect().adjusted(2, 2, -2, -2))
+
+    def _draw_neurogenesis_highlight(self, painter):
+        """Draw highlight around newly created neurons"""
+        # Calculate scale (same as in render worker)
+        indicator_space = 0
+        base_width = 1024
+        base_height = 768 - indicator_space
+        scale_x = self.width() / base_width
+        scale_y = (self.height() - indicator_space) / max(1, base_height)
+        scale = max(0.01, min(scale_x, scale_y))
+        
+        offset_x = 0
+        if scale_x > scale_y:
+            content_width = base_width * scale
+            offset_x = (self.width() - content_width) / 2
+        
+        nh = self.neurogenesis_highlight
+        neuron_name = nh.get('neuron')
+        if neuron_name and neuron_name in self.neuron_positions:
+            pos = self.neuron_positions[neuron_name]
+            x = pos[0] * scale + offset_x
+            y = pos[1] * scale + indicator_space
+            
+            # Pulsing effect
+            elapsed = time.time() - nh.get('start_time', 0)
+            pulse = 0.5 + 0.5 * math.sin(elapsed * 4)
+            
+            radius = 40 * scale * (1 + pulse * 0.2)
+            alpha = int(200 * (1 - elapsed / nh.get('duration', 1)))
+            
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, alpha), 3))
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.drawEllipse(QtCore.QPointF(x, y), radius, radius)
+
+    def _draw_drag_preview(self, painter):
+        """Draw preview when dragging a neuron"""
+        # This could show a ghost of the neuron at cursor position
+        pass
+
+    
 
     def draw_neurons(self, painter, scale=1.0):
         """Main neuron drawing routine."""
@@ -3071,7 +3069,8 @@ class BrainWidget(QtWidgets.QWidget):
             "is_sick", "is_fleeing", "pursuing_food", "is_startled",
         }
 
-        label_font = QtGui.QFont("Arial", int(self.base_font_size * scale))
+        # Font size for labels - use config value directly
+        label_font = QtGui.QFont("Arial", self.neuron_label_font_size)
         label_font.setBold(True)
         painter.setFont(label_font)
         font_metrics = painter.fontMetrics()
@@ -3149,7 +3148,7 @@ class BrainWidget(QtWidgets.QWidget):
             if name in self.state_colors:
                 color = QtGui.QColor(*self.state_colors[name])
             else:
-                color = QtGui.QColor(64, 64, 64)  # Dark grey
+                color = QtGui.QColor(220, 220, 220)  # Grey
 
             # Draw Circle
             painter.setBrush(QtGui.QBrush(color))
@@ -3164,13 +3163,13 @@ class BrainWidget(QtWidgets.QWidget):
         display_name = name.replace("_", " ").title()
         text_width = font_metrics.horizontalAdvance(display_name)
 
-        padding = 10 * scale
+        padding = 4 * scale  # Reduced padding
         rect_width = text_width + (padding * 2)
-        rect_height = font_metrics.height() + 4
+        rect_height = font_metrics.height() + (2 * scale)
 
         text_rect = QtCore.QRectF(
             x - rect_width / 2,
-            y + radius + 5 * scale,
+            y + radius + (3 * scale), # Closer to neuron
             rect_width,
             rect_height,
         )
@@ -3188,7 +3187,7 @@ class BrainWidget(QtWidgets.QWidget):
         painter.setBrush(QtGui.QBrush(QtGui.QColor(*color))); painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
         x_scaled, y_scaled, size = int(x * scale), int(y * scale), int(30 * scale)
         painter.drawRect(x_scaled - size//2, y_scaled - size//2, size, size)
-        font = painter.font(); font.setPointSize(int(8 * scale)); painter.setFont(font)
+        font = painter.font(); font.setPointSize(max(4, int(5 * scale))); painter.setFont(font)  # Reduced from 6, added max
         label_width, label_height = int(150 * scale), int(20 * scale)
         painter.drawText(x_scaled - label_width//2, y_scaled + int(30 * scale), label_width, label_height, QtCore.Qt.AlignCenter, label)
 
@@ -3240,7 +3239,7 @@ class BrainWidget(QtWidgets.QWidget):
         label_color.setAlpha(alpha)
         painter.setPen(label_color)
         font = painter.font()
-        font.setPointSize(int(8 * scale))
+        font.setPointSize(self.neuron_label_font_size)  # Use config value directly
         painter.setFont(font)
         label_y = y + radius + 15 * scale
 
@@ -3281,32 +3280,47 @@ class BrainWidget(QtWidgets.QWidget):
     def toggle_links(self, state):
         """
         Public slot connected to the checkbox.
-        Instead of flipping a boolean immediately we only *request* the
-        new target opacity; the timer will do the actual fade with
-        per-link random delays and speeds for maximum chaos.
+        Triggers a staggered, organic fade animation for connections.
         """
+        from PyQt5 import QtCore
+        import time
+        import random
+        
         want_visible = (state == QtCore.Qt.Checked)
+        
+        # CRITICAL: We must enable the render loop immediately so the fade animation can play
+        if want_visible:
+            self.show_links = True
+            
         now = time.time()
         
-        for key in self.weights.keys():
+        # Calculate staggering based on number of connections to ensure smooth waves
+        count = len(self.weights)
+        
+        for i, key in enumerate(self.weights.keys()):
             self._link_targets[key] = 1.0 if want_visible else 0.0
             
-            # Random delay per link (0-800ms)
-            self._link_start_times[key] = now + random.uniform(0.0, 0.8)
+            # Organic staggering: 0.0 to 1.2 seconds delay based on randomness
+            # This creates the \"not all at once\" effect
+            delay = random.uniform(0.0, 1.2)
             
-            # Random speed per link for individual character
-            self._link_fade_speeds[key] = random.uniform(2.0, 4.5)
+            self._link_start_times[key] = now + delay
+            self._link_fade_speeds[key] = random.uniform(1.5, 4.0) # Variable fade speeds
             
-            # Initialize opacity if not already set
+            # Initialize opacity if tracking is missing
             if key not in self._link_opacities:
                 self._link_opacities[key] = 0.0 if want_visible else 1.0
-
-        # Kick the timer (safe to call multiple times)
+        
+        # Ensure the fade timer is running to process the animation frames
         if not self._link_fade_timer.isActive():
             self._link_fade_timer.start()
+            
+        self.mark_render_dirty()
+
 
     def toggle_weights(self, state):
-        self.show_weights = state == QtCore.Qt.Checked
+        self.show_weights = (state == QtCore.Qt.Checked)
+        self.mark_render_dirty()
         self.update()
 
     def toggle_capture_training_data(self, state):
@@ -3805,23 +3819,41 @@ class NetworkRenderingMixin:
                     painter, scale, key, start_point, end_point
                 )
 
-            # weight text (optional)
-            if self.show_weights and abs(weight) > 0.1:
+            # weight text overlay
+            if self.show_weights:
                 midpoint = QtCore.QPointF((start_point.x() + end_point.x()) / 2,
                                         (start_point.y() + end_point.y()) / 2)
-                text_area_width  = 80.0 * scale
-                text_area_height = 22.0 * scale
+                
+                # Dynamic sizing based on scale
+                font_size = max(7, int(8 * scale))
+                padding = 4 * scale
+                
+                # Configure font
                 font = painter.font()
-                font.setPointSize(max(8, int(8 * scale)))
+                font.setPointSize(font_size)
+                font.setBold(True)
                 painter.setFont(font)
-                rect = QtCore.QRectF(midpoint.x() - text_area_width / 2,
-                                    midpoint.y() - text_area_height / 2,
-                                    text_area_width, text_area_height)
-                painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0)))
-                painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
-                painter.drawRect(rect)
-                painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255)))
-                painter.drawText(rect, QtCore.Qt.AlignCenter, f"{weight:.2f}")
+                
+                # Measure text
+                text_str = f"{weight:.2f}"
+                fm = painter.fontMetrics()
+                text_w = fm.horizontalAdvance(text_str)
+                text_h = fm.height()
+                
+                # Draw background pill/rect
+                rect = QtCore.QRectF(midpoint.x() - text_w/2 - padding,
+                                   midpoint.y() - text_h/2 - padding/2,
+                                   text_w + padding*2, text_h + padding)
+                                   
+                # Semi-transparent white background for high contrast
+                painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 255, 220)))
+                painter.setPen(QtGui.QPen(QtGui.QColor(100, 100, 100, 150), 1))
+                painter.drawRoundedRect(rect, 4, 4)
+                
+                # Draw weight text
+                text_color = QtGui.QColor(0, 100, 0) if weight >= 0 else QtGui.QColor(150, 0, 0)
+                painter.setPen(text_color)
+                painter.drawText(rect, QtCore.Qt.AlignCenter, text_str)
 
             connections_drawn += 1
 
@@ -3840,7 +3872,7 @@ class NetworkRenderingMixin:
     def draw_neurons_static(
         painter, neuron_positions, neuron_states,
         visible_neurons=None, excluded_neurons=None,
-        scale=1.0, base_font_size=8):
+        scale=1.0, base_font_size=6):  # Reduced from 8
         """
         Static neuron drawing – now correctly handles binary neurons even when
         no tamagotchi_logic reference is available (e.g. during save load).

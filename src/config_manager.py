@@ -137,6 +137,17 @@ class ConfigManager:
             'line_alpha': '240'
         }
 
+        # Display Settings
+        self.config['Display'] = {
+            'neuron_label_font_size': '8',
+            'neuron_radius': '20',
+            'connection_line_width': '1.5',
+            'button_font_size': '16',
+            'button_width': '140',
+            'button_height': '50',
+            'button_spacing': '20'
+        }
+
         with open(self.config_path, 'w') as f:
             self.config.write(f)
 
@@ -423,6 +434,18 @@ class ConfigManager:
     def get_available_animation_styles(self) -> list:
         """Return list of available animation style names."""
         return list(self.ANIMATION_STYLES)
+    
+    def get_display_config(self):
+        """Get display configuration settings"""
+        return {
+            'neuron_label_font_size': self.config.getint('Display', 'neuron_label_font_size', fallback=8),
+            'neuron_radius': self.config.getint('Display', 'neuron_radius', fallback=20),
+            'connection_line_width': self.config.getfloat('Display', 'connection_line_width', fallback=1.5),
+            'button_font_size': self.config.getint('Display', 'button_font_size', fallback=16),
+            'button_width': self.config.getint('Display', 'button_width', fallback=140),
+            'button_height': self.config.getint('Display', 'button_height', fallback=50),
+            'button_spacing': self.config.getint('Display', 'button_spacing', fallback=20)
+        }
     
     def _save_config(self):
         """Save the current configuration to file."""

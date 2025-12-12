@@ -552,9 +552,10 @@ class TutorialManager:
         
         # Create body text for STEP 6
         info_text = QtWidgets.QGraphicsTextItem(
-            "Drag and drop decorations into the environment and see how squid reacts to different things.\n"
-            "Each decoration affects the squid's mental state in unique ways."
-            "Click and use the mouse wheel to resize"
+            "Press D at any time to open the Decorations window\n"
+            "Drag and drop decorations into the environment and see how squid reacts to different things."
+            "Each decoration type affects the squid's mental state in unique ways."
+            "Click and use the mouse wheel to resize/DEL to delete"
         )
         info_text.setDefaultTextColor(QtGui.QColor(255, 255, 255))
         info_text.setFont(QtGui.QFont("Arial", body_font_size))
@@ -1140,7 +1141,8 @@ class TutorialManager:
         
         # Create body text for STEP 6
         info_text = QtWidgets.QGraphicsTextItem(
-            "Drag and drop decorations into the environment and see how squid reacts to different things.\n"
+            "Press D to open the Decorations window\n"
+            "Drag and drop decorations into the environment and see how squid reacts to different things."
             "Each decoration affects the squid's mental state in unique ways."
             "Click and use the mouse wheel to resize"
         )
