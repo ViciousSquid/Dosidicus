@@ -1,7 +1,3 @@
-# File: main.py
-# Entry point for the Achievements Plugin
-# This file is required by the PluginManager
-
 import os
 import json
 import time
@@ -38,16 +34,25 @@ from .achievements_data import (
     get_achievement,
 )
 
+# Import localisation
+from src import localisation 
+
+# Assign the core translation function 't' from the imported module
+_t = localisation.loc
 
 # =============================================================================
 # PLUGIN METADATA - Required by PluginManager
 # =============================================================================
 
 PLUGIN_NAME = "achievements"
-PLUGIN_VERSION = "2.0.0"
+PLUGIN_VERSION = "2.1.0" # Version bump for localisation support
 PLUGIN_AUTHOR = "ViciousSquid"
 PLUGIN_DESCRIPTION = "Track milestones and unlock achievements as your squid grows"
 PLUGIN_REQUIRES = []  # No dependencies
+
+# Default language setting (can be changed via main menu or config)
+LANGUAGE = "en"  # Options: "en", "es", "fr"
+localisation.CURRENT_LANGUAGE = LANGUAGE
 
 
 # =============================================================================
@@ -113,7 +118,7 @@ class AchievementNotification(QtWidgets.QWidget):
         text_layout.setSpacing(DisplayScaling.scale(4))
 
         # Header "Achievement Unlocked!"
-        header = QtWidgets.QLabel("Achievement Unlocked!")
+        header = QtWidgets.QLabel(_t("ui_achievement_unlocked"))
         header.setStyleSheet(f"""
             color: {tier_color}; 
             font-size: {DisplayScaling.font_size(14)}px; 
@@ -122,8 +127,8 @@ class AchievementNotification(QtWidgets.QWidget):
         """)
         text_layout.addWidget(header)
 
-        # Achievement name
-        name_label = QtWidgets.QLabel(self.achievement.name)
+        # Achievement name - Translated
+        name_label = QtWidgets.QLabel(_t(self.achievement.name))
         name_label.setStyleSheet(f"""
             color: white; 
             font-size: {DisplayScaling.font_size(22)}px; 
@@ -132,8 +137,8 @@ class AchievementNotification(QtWidgets.QWidget):
         """)
         text_layout.addWidget(name_label)
 
-        # Achievement DESCRIPTION - the key addition!
-        desc_label = QtWidgets.QLabel(self.achievement.description)
+        # Achievement DESCRIPTION - Translated
+        desc_label = QtWidgets.QLabel(_t(self.achievement.description))
         desc_label.setStyleSheet(f"""
             color: #cccccc; 
             font-size: {DisplayScaling.font_size(13)}px; 
@@ -144,7 +149,7 @@ class AchievementNotification(QtWidgets.QWidget):
         text_layout.addWidget(desc_label)
 
         # Points earned
-        points_label = QtWidgets.QLabel(f"+{self.achievement.points} points")
+        points_label = QtWidgets.QLabel(f"+{self.achievement.points} {_t('ui_points_gained')}")
         points_label.setStyleSheet(f"""
             color: {tier_color}; 
             font-size: {DisplayScaling.font_size(12)}px; 
@@ -209,14 +214,14 @@ class AchievementsWindow(QtWidgets.QDialog):
         total_unlocked = len(self.plugin.unlocked)
         total_available = len([a for a in ACHIEVEMENT_DEFINITIONS.values() if not a.hidden])
 
-        points_label = QtWidgets.QLabel(f"🏆 {total_points} Points")
+        points_label = QtWidgets.QLabel(f"🏆 {total_points} {_t('ui_points')}")
         points_label.setStyleSheet(f"color: gold; "
                                    f"font-size: {DisplayScaling.font_size(18)}px; "
                                    f"font-weight: bold;")
         header_layout.addWidget(points_label)
         header_layout.addStretch()
 
-        progress_label = QtWidgets.QLabel(f"📊 {total_unlocked}/{total_available} Unlocked")
+        progress_label = QtWidgets.QLabel(f"📊 {total_unlocked}/{total_available} {_t('ui_unlocked')}")
         progress_label.setStyleSheet(f"color: white; "
                                      f"font-size: {DisplayScaling.font_size(14)}px;")
         header_layout.addWidget(progress_label)
@@ -225,11 +230,12 @@ class AchievementsWindow(QtWidgets.QDialog):
 
         # Tabs
         tabs = QtWidgets.QTabWidget()
-        tabs.addTab(self._create_list(None), "All")
+        tabs.addTab(self._create_list(None), _t("ui_all"))
         for cat in AchievementCategory:
             cat_achievements = [a for a in ACHIEVEMENT_DEFINITIONS.values() if a.category == cat.value]
             if cat_achievements:  # Only add tab if category has achievements
-                tabs.addTab(self._create_list(cat.value), cat.value.title())
+                # Use translated category name
+                tabs.addTab(self._create_list(cat.value), _t(f"cat_{cat.value}"))
         layout.addWidget(tabs)
 
     def _create_list(self, category_filter: Optional[str]) -> QtWidgets.QScrollArea:
@@ -279,7 +285,11 @@ class AchievementsWindow(QtWidgets.QDialog):
         # 🌟 NEW Name Text Color 🌟
         # Black for unlocked, Dark Gray for locked (easier to read on light BG)
         name_color = '#000' if unlocked else '#555' 
-        name = QtWidgets.QLabel(ach.name if unlocked or not ach.hidden else "???")
+        
+        # Translate the name key
+        display_name = _t(ach.name) if unlocked or not ach.hidden else "???"
+        
+        name = QtWidgets.QLabel(display_name)
         name.setStyleSheet(f"color: {name_color}; "
                         f"font-size: {DisplayScaling.font_size(14)}px; "
                         f"font-weight: bold;")
@@ -288,7 +298,11 @@ class AchievementsWindow(QtWidgets.QDialog):
         # 🌟 NEW Description Text Color 🌟
         # Dark Gray for unlocked, Medium Gray for locked (easier to read on light BG)
         desc_color = '#333' if unlocked else '#777'
-        desc = QtWidgets.QLabel(ach.description if unlocked or not ach.hidden else "Hidden achievement")
+        
+        # Translate the description key
+        display_desc = _t(ach.description) if unlocked or not ach.hidden else _t("ui_hidden")
+        
+        desc = QtWidgets.QLabel(display_desc)
         desc.setStyleSheet(f"color: {desc_color}; "
                         f"font-size: {DisplayScaling.font_size(11)}px;")
         desc.setWordWrap(True)
@@ -360,7 +374,9 @@ class AchievementsPlugin:
         try:
             log_path = Path(self._get_save_path()).with_name("achievements_log.txt")
             time_stamp = datetime.now().strftime("%A, %B %d, %Y @ %H%M%S")
-            line = f"{ach.id} | {time_stamp} | {ach.name}\n"
+            # Translate name for log file using current language
+            translated_name = _t(ach.name)
+            line = f"{ach.id} | {time_stamp} | {translated_name}\n"
             with log_path.open("a", encoding="utf-8") as fh:
                 fh.write(line)
         except Exception as e:
@@ -815,8 +831,10 @@ class AchievementsPlugin:
             notified=silent
         )
 
+        # Log with translated name for console/logger (optional, or keep English)
         if self.logger:
-            self.logger.info(f"🏆 Unlocked: {ach.name}")
+            # Using English key here might be safer for logs, or translated:
+            self.logger.info(f"🏆 Unlocked: {_t(ach.name)}")
 
         self._log_unlock_to_text_file(ach)
 
