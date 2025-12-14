@@ -1,15 +1,13 @@
 """
-Neurogenesis ver3_unified | 3.0.0
+Neurogenesis ver3.2_unified | 3.2.0
 
 UNIFIED neuron creation system - ALL neurons go through this module.
 EnhancedNeurogenesis is the SINGLE AUTHORITY for creating neurons.
 
-Key changes from 2.5.0:
-- Single create_neuron() entry point for ALL neuron creation
-- All neurons are FunctionalNeurons (even "simple" ones)
-- Removed duplicate creation paths
-- brain_widget delegates ALL creation here
-- BrainWorker results processed through this system
+Key changes from 3.1.0:
+- Fixed Localisation integration: display_name now prioritizes translated strings.
+- Added explicit display_name storage in neurogenesis_data for UI compatibility.
+- formatting fallback removes snake_case if translation keys are missing.
 """
 
 import time
@@ -19,6 +17,14 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional, Set, Any
 from PyQt5.QtCore import QTimer
+
+# Import localisation with robust fallback
+try:
+    from localisation import loc
+except ImportError:
+    # Fallback if localisation module is missing
+    def loc(key, default=None, **kwargs):
+        return default if default is not None else key.replace('_', ' ').title()
 
 
 @dataclass
@@ -192,13 +198,10 @@ class ExperienceBuffer:
     @classmethod
     def from_dict(cls, data):
         buf = cls(max_size=data.get('buffer_size', 50))
-
-        # Restore pattern tables
         buf.pattern_counts = dict(data.get('pattern_counts', {}))
         buf.parent_pattern_counts = dict(data.get('parent_pattern_counts', {}))
         buf.core_pattern_counts = dict(data.get('core_pattern_counts', {}))
 
-        # Restore recent experiences
         for exp in data.get('recent_experiences', []):
             ctx = ExperienceContext(
                 trigger_type=exp['trigger_type'],
@@ -216,15 +219,11 @@ class ExperienceBuffer:
         return buf
 
 
-
 class FunctionalNeuron:
-    """Represents a neuron with a specific functional role.
-    
-    ALL neurons in the system are FunctionalNeurons - this is the unified type.
-    """
+    """Represents a neuron with a specific functional role."""
     
     def __init__(self, name: str, neuron_type: str, creation_context: ExperienceContext):
-        self.name = name
+        self.name = name  # Internal ID (e.g. 'reward_feeding_satisfaction_2')
         self.neuron_type = neuron_type
         self.creation_context = creation_context
         self.specialization = self._determine_specialization()
@@ -233,10 +232,39 @@ class FunctionalNeuron:
         self.utility_score = 0.0
         self.strength_multiplier = 1.0
 
-    
+    @property
+    def display_name(self) -> str:
+        """
+        Returns the Localised display name.
+        Uses localisation keys 'neuron_type_{type}' and 'spec_{specialization}'.
+        Falls back to formatted title case if keys are missing (no snake_case).
+        """
+        # 1. Localise the Type (e.g., 'neuron_type_novelty' -> 'Novelty' or 'Nouveauté')
+        type_key = f"neuron_type_{self.neuron_type}"
+        type_default = self.neuron_type.capitalize()
+        type_str = loc(type_key, default=type_default)
+        
+        # 2. Localise the Specialization (e.g., 'spec_object_investigation')
+        spec_key = f"spec_{self.specialization}"
+        spec_default = self.specialization.replace('_', ' ').title()
+        spec_str = loc(spec_key, default=spec_default)
+
+        # 3. Handle suffix numbering (e.g., "..._2")
+        parts = self.name.split('_')
+        suffix = ""
+        if parts[-1].isdigit():
+             suffix = f" {parts[-1]}"
+
+        # 4. Format: "Type: Specialization Suffix"
+        # The default format string prevents raw snake_case IDs from appearing
+        return loc("neuron_name_format", 
+                   default="{type}: {spec}{suffix}", 
+                   type=type_str, 
+                   spec=spec_str, 
+                   suffix=suffix)
+
     @classmethod
     def from_dict(cls, data):
-        # Support both 'active_neurons' (correct) and 'brain_state' (legacy) keys
         creation_ctx = data['creation_context']
         active_neurons_data = creation_ctx.get('active_neurons') or creation_ctx.get('brain_state', {})
         
@@ -313,11 +341,9 @@ class FunctionalNeuron:
         return 'undefined'
     
     def get_functional_connections(self, all_neurons: List[str]) -> Dict[str, float]:
-        """Determine which neurons this should connect to based on its function."""
         connections = {}
         ctx = self.creation_context
         
-        # Connect strongly to neurons that were highly active during creation
         for neuron, activation in ctx.active_neurons.items():
             if neuron in all_neurons:
                 deviation = abs(activation - 50)
@@ -329,78 +355,55 @@ class FunctionalNeuron:
         
         spec_connections = self._get_specialization_connections(all_neurons)
         connections.update(spec_connections)
-        
         return connections
     
     def _get_specialization_connections(self, all_neurons: List[str]) -> Dict[str, float]:
         connections = {}
         
         if self.specialization == 'feeding_satisfaction':
-            if 'hunger' in all_neurons:
-                connections['hunger'] = -0.7
-            if 'happiness' in all_neurons:
-                connections['happiness'] = 0.6
-            if 'satisfaction' in all_neurons:
-                connections['satisfaction'] = 0.8
+            if 'hunger' in all_neurons: connections['hunger'] = -0.7
+            if 'happiness' in all_neurons: connections['happiness'] = 0.6
+            if 'satisfaction' in all_neurons: connections['satisfaction'] = 0.8
                 
         elif self.specialization == 'hunger_stress_response':
-            if 'hunger' in all_neurons:
-                connections['hunger'] = 0.7
-            if 'anxiety' in all_neurons:
-                connections['anxiety'] = 0.5
-            if 'curiosity' in all_neurons:
-                connections['curiosity'] = 0.4
+            if 'hunger' in all_neurons: connections['hunger'] = 0.7
+            if 'anxiety' in all_neurons: connections['anxiety'] = 0.5
+            if 'curiosity' in all_neurons: connections['curiosity'] = 0.4
                 
         elif self.specialization == 'filth_avoidance':
-            if 'cleanliness' in all_neurons:
-                connections['cleanliness'] = -0.8
-            if 'anxiety' in all_neurons:
-                connections['anxiety'] = 0.6
+            if 'cleanliness' in all_neurons: connections['cleanliness'] = -0.8
+            if 'anxiety' in all_neurons: connections['anxiety'] = 0.6
         
         elif self.specialization == 'anxiety_regulation':
-            if 'anxiety' in all_neurons:
-                connections['anxiety'] = -0.8
-            if 'happiness' in all_neurons:
-                connections['happiness'] = 0.4
-            if 'satisfaction' in all_neurons:
-                connections['satisfaction'] = 0.3
+            if 'anxiety' in all_neurons: connections['anxiety'] = -0.8
+            if 'happiness' in all_neurons: connections['happiness'] = 0.4
+            if 'satisfaction' in all_neurons: connections['satisfaction'] = 0.3
                 
         elif self.specialization == 'object_investigation':
-            if 'curiosity' in all_neurons:
-                connections['curiosity'] = 0.7
-            if 'anxiety' in all_neurons:
-                connections['anxiety'] = -0.4
+            if 'curiosity' in all_neurons: connections['curiosity'] = 0.7
+            if 'anxiety' in all_neurons: connections['anxiety'] = -0.4
                 
         elif self.specialization == 'rest_reward':
-            if 'sleepiness' in all_neurons:
-                connections['sleepiness'] = -0.6
-            if 'satisfaction' in all_neurons:
-                connections['satisfaction'] = 0.5
-            if 'happiness' in all_neurons:
-                connections['happiness'] = 0.4
+            if 'sleepiness' in all_neurons: connections['sleepiness'] = -0.6
+            if 'satisfaction' in all_neurons: connections['satisfaction'] = 0.5
+            if 'happiness' in all_neurons: connections['happiness'] = 0.4
                 
         elif self.specialization == 'cleanliness_reward':
-            if 'cleanliness' in all_neurons:
-                connections['cleanliness'] = 0.6
-            if 'satisfaction' in all_neurons:
-                connections['satisfaction'] = 0.5
-            if 'anxiety' in all_neurons:
-                connections['anxiety'] = -0.3
+            if 'cleanliness' in all_neurons: connections['cleanliness'] = 0.6
+            if 'satisfaction' in all_neurons: connections['satisfaction'] = 0.5
+            if 'anxiety' in all_neurons: connections['anxiety'] = -0.3
         
         return connections
     
     def calculate_activation(self, brain_state: Dict[str, float], 
                        weights: Dict[Tuple[str, str], float]) -> float:
         activation = 50.0
-        
         for (source, target), weight in weights.items():
             if target == self.name and source in brain_state:
-                # Safety: force float even if something weird slipped in (legacy saves, etc.)
                 source_activation = float(brain_state[source])
                 influence = (source_activation - 50.0) * weight
                 activation += influence
         
-        # Apply strength multiplier
         activation = 50.0 + (activation - 50.0) * self.strength_multiplier
         activation = max(0.0, min(100.0, activation))
         
@@ -413,62 +416,12 @@ class FunctionalNeuron:
     def update_utility_score(self, outcome_value: float):
         alpha = 0.3
         self.utility_score = alpha * outcome_value + (1 - alpha) * self.utility_score
-    
-    def to_dict(self):
-        return {
-            'name': self.name,
-            'neuron_type': self.neuron_type,
-            'specialization': self.specialization,
-            'activation_count': self.activation_count,
-            'last_activated': self.last_activated,
-            'utility_score': self.utility_score,
-            'strength_multiplier': self.strength_multiplier,
-            'creation_context': {
-                'trigger_type': self.creation_context.trigger_type,
-                'timestamp': self.creation_context.timestamp,
-                'active_neurons': self.creation_context.active_neurons,
-                'recent_actions': self.creation_context.recent_actions,
-                'environmental_state': self.creation_context.environmental_state,
-                'outcome': self.creation_context.outcome,
-            }
-        }
-    
-    @classmethod
-    def from_dict(cls, data):
-        # Support both 'active_neurons' (correct) and 'brain_state' (legacy) keys
-        creation_ctx = data['creation_context']
-        active_neurons_data = creation_ctx.get('active_neurons') or creation_ctx.get('brain_state', {})
-        
-        context = ExperienceContext(
-            trigger_type=creation_ctx['trigger_type'],
-            active_neurons=active_neurons_data,
-            recent_actions=creation_ctx['recent_actions'],
-            environmental_state=creation_ctx['environmental_state'],
-            outcome=creation_ctx['outcome'],
-            timestamp=creation_ctx['timestamp']
-        )
-        
-        neuron = cls(
-            name=data['name'],
-            neuron_type=data['neuron_type'],
-            creation_context=context
-        )
-        
-        neuron.specialization = data.get('specialization', neuron.specialization)
-        neuron.activation_count = data.get('activation_count', 0)
-        neuron.last_activated = data.get('last_activated', 0)
-        neuron.utility_score = data.get('utility_score', 0.0)
-        neuron.strength_multiplier = data.get('strength_multiplier', 1.0)
-        
-        return neuron
 
 
 class EnhancedNeurogenesis:
     """
     UNIFIED neuron creation system.
-    
-    This is the SINGLE AUTHORITY for creating ALL neurons in the brain.
-    All creation requests must go through create_neuron() or create_functional_neuron().
+    SINGLE AUTHORITY for creating ALL neurons in the brain.
     """
     
     def __init__(self, brain_widget, config):
@@ -489,10 +442,6 @@ class EnhancedNeurogenesis:
         self._on_neuron_created_callback = None
         self._on_neuron_leveled_callback = None
 
-    # =========================================================================
-    # UNIFIED CREATION API - All neurons go through here
-    # =========================================================================
-    
     def create_neuron(self, 
                       neuron_type: str,
                       context: Optional[ExperienceContext] = None,
@@ -501,67 +450,39 @@ class EnhancedNeurogenesis:
                       trigger_value: Optional[float] = None) -> Optional[str]:
         """
         UNIFIED neuron creation entry point.
-        
-        This is the ONLY method that should be called to create neurons.
-        All other creation methods are internal helpers.
-        
-        Args:
-            neuron_type: 'novelty', 'stress', or 'reward'
-            context: Optional pre-built ExperienceContext
-            brain_state: Current brain state (used if no context provided)
-            environment: Environmental data (used if no context provided)
-            trigger_value: Optional value for logging
-            
-        Returns:
-            Name of created neuron, or None if creation was blocked
         """
-        # Build context if not provided
         if context is None:
             if brain_state is None:
                 brain_state = dict(self.brain_widget.state)
             if environment is None:
                 environment = {}
-            
             context = self._build_context(neuron_type, brain_state, environment)
         
-        # Delegate to internal creation
         return self._create_neuron_internal(context, trigger_value)
     
     def _make_reciprocal_connections(self, new_neuron: str):
-        """
-        Ensure every outgoing connection ≥ 0.2 abs gets a matching
-        incoming connection so the new neuron can *activate* as well as
-        *be activated*.  Runs once immediately after the neuron is created.
-        """
+        """Ensure outgoing connections get a reciprocal incoming connection."""
         bw = self.brain_widget
-        created = []                       # just for console log
-        MIN_RECIPROCAL = 0.2               # tunable
+        created = []                       
+        MIN_RECIPROCAL = 0.2               
 
-        # 1.  collect outgoing weights we care about
         outgoing = [(tgt, w) for (src, tgt), w in bw.weights.items()
                     if src == new_neuron and abs(w) >= MIN_RECIPROCAL]
 
-        # 2.  add the reverse link (same magnitude, same sign)
         for target, w in outgoing:
-            if (target, new_neuron) in bw.weights:        # already exists → skip
+            if (target, new_neuron) in bw.weights:
                 continue
             bw.weights[(target, new_neuron)] = w
             created.append(f"{target}→{new_neuron}:{w:+.2f}")
 
         if created:
-            print(f"   🔗 Reciprocal links added: {', '.join(created)}")
+            print(f"   🔗 {loc('log_reciprocal_links', default='Reciprocal links added')}: {', '.join(created)}")
     
     def create_functional_neuron(self, ctx: ExperienceContext, is_emergency: bool = False) -> Optional[str]:
-        """
-        Create a functional neuron from an experience context.
-        This is the standard entry point used by the neurogenesis system.
-        """
         return self._create_neuron_internal(ctx, is_emergency=is_emergency)
     
     def _build_context(self, trigger_type: str, brain_state: Dict[str, float], 
                        environment: Dict[str, Any]) -> ExperienceContext:
-        """Build an ExperienceContext from raw data."""
-        # Clean neurons - remove binary flags and system values
         clean_neurons = {
             k: float(v) if isinstance(v, (int, float)) else 50.0
             for k, v in brain_state.items()
@@ -572,7 +493,6 @@ class EnhancedNeurogenesis:
             ]
         }
         
-        # Determine outcome from state
         happiness = brain_state.get('happiness', 50)
         anxiety = brain_state.get('anxiety', 50)
         if happiness > 60:
@@ -594,22 +514,11 @@ class EnhancedNeurogenesis:
     def _create_neuron_internal(self, ctx: ExperienceContext,
                             trigger_value_for_log: Optional[float] = None,
                             is_emergency: bool = False) -> Optional[str]:
-        """
-        Internal unified neuron creation.
-
-        Caps enforced:
-        - max_per_type (hard limit per neuron_type, survives renaming)
-        - max_per_specialization (soft limit per spec, name-based)
-        - max_neurons (global network size)
-        Emergency mode only skips cooldown / pattern requirements.
-        """
         trigger_type = ctx.trigger_type
 
-        # 1. HARD TYPE CAP  (authoritative, survives showman renames)
+        # 1. HARD TYPE CAP 
         max_per_type = self.config.neurogenesis.get('max_per_type', {
-            'stress': 5,
-            'novelty': 6,
-            'reward': 6
+            'stress': 5, 'novelty': 6, 'reward': 6
         })
         max_for_this_type = max_per_type.get(trigger_type, 5)
         current_type_count = len([
@@ -617,12 +526,14 @@ class EnhancedNeurogenesis:
             if fn.neuron_type == trigger_type
         ])
         if current_type_count >= max_for_this_type:
-            print(f"   Type cap reached for {trigger_type} "
-                f"({current_type_count}/{max_for_this_type}), strengthening existing")
+            msg = loc('log_type_cap_reached', 
+                     default="Type cap reached for {type} ({count}/{max}), strengthening existing",
+                     type=trigger_type, count=current_type_count, max=max_for_this_type)
+            print(f"   {msg}")
             self._strengthen_existing_neuron(trigger_type, self._preview_specialization(ctx))
             return None
 
-        # 2. SPECIALIZATION CAP  (name-based, optional extra guard)
+        # 2. SPECIALIZATION CAP
         spec = self._preview_specialization(ctx)
         base_name = f"{trigger_type}_{spec}"
         max_per_spec = self.config.neurogenesis.get('max_per_specialization', 5)
@@ -631,7 +542,10 @@ class EnhancedNeurogenesis:
             if name.startswith(base_name)
         ])
         if current_spec_count >= max_per_spec:
-            print(f"   Specialization cap reached for {base_name}, strengthening existing")
+            msg = loc('log_spec_cap_reached',
+                     default="Specialization cap reached for {spec}, strengthening existing",
+                     spec=base_name)
+            print(f"   {msg}")
             self._strengthen_existing_neuron(trigger_type, spec)
             return None
 
@@ -647,31 +561,26 @@ class EnhancedNeurogenesis:
         func_neuron = FunctionalNeuron(neuron_name, trigger_type, ctx)
         self.functional_neurons[neuron_name] = func_neuron
 
-        # counters
         if trigger_type == 'novelty':
             self.novelty_neuron_count += 1
         self.last_creation_by_type[trigger_type] = time.time()
         self.neurons_created_this_session += 1
 
-        # ----- inject into brain_widget -----
         position = self._calculate_functional_position(func_neuron)
         self.brain_widget.neuron_positions[neuron_name] = position
         self._set_neuron_appearance(neuron_name, func_neuron)
         self.brain_widget.state[neuron_name] = 50.0
 
-        # functional connections
         all_neurons = list(self.brain_widget.neuron_positions.keys())
         connections = func_neuron.get_functional_connections(all_neurons)
         for target, weight in connections.items():
             self.brain_widget.weights[(neuron_name, target)] = weight
 
-        # bidirectional anxiety ↔ stress link
         if func_neuron.neuron_type == 'stress' and 'anxiety' in all_neurons:
             self.brain_widget.weights[(neuron_name, 'anxiety')] = -0.8
             self.brain_widget.weights[('anxiety', neuron_name)] = 0.9
-            print(f"   📎 Added bidirectional link: anxiety ↔ {neuron_name}")
+            print(f"   📎 {loc('log_bidirectional_link', default='Added bidirectional link')}: anxiety ↔ {func_neuron.display_name}")
 
-        # weak exploratory web
         for target in all_neurons:
             if target == neuron_name or target in self.brain_widget.excluded_neurons:
                 continue
@@ -681,10 +590,8 @@ class EnhancedNeurogenesis:
             self.brain_widget.weights[(neuron_name, target)] = seed
             self.brain_widget.weights[(target, neuron_name)] = seed * 0.5
 
-        # ===== NEW: make them reciprocal =====
         self._make_reciprocal_connections(neuron_name)
 
-        # visuals & bookkeeping
         if hasattr(self.brain_widget, 'visible_neurons'):
             self.brain_widget.visible_neurons.add(neuron_name)
         self.brain_widget.communication_events[neuron_name] = time.time()
@@ -697,12 +604,15 @@ class EnhancedNeurogenesis:
 
         # logging
         self._log_neuron_creation(neuron_name, trigger_type, spec, trigger_value_for_log)
+        
+        # CRITICAL FIX: Explicitly save display_name for the UI to read
         details = self.brain_widget.neurogenesis_data.setdefault('new_neurons_details', {})
         details[neuron_name] = {
             'created_at': ctx.timestamp,
             'trigger_type': trigger_type,
             'trigger_value_at_creation': trigger_value_for_log or 0,
-            'specialisation': spec
+            'specialisation': spec,
+            'display_name': func_neuron.display_name  # <-- Localized name added here
         }
 
         if self._on_neuron_created_callback:
@@ -711,19 +621,15 @@ class EnhancedNeurogenesis:
             except Exception as e:
                 print(f"Neuron creation callback error: {e}")
 
-        print(f"✨ Created neuron: {neuron_name} (spec: {spec})")
+        print(f"✨ {loc('log_created_neuron', default='Created neuron')}: {func_neuron.display_name} ({neuron_name})")
         return neuron_name
     
     def _on_neuron_created(self, neuron_name: str, neuron_type: str):
-        """Called when a new neuron is created"""        
-        # Trigger link toggle effect for visual feedback
         self._trigger_link_toggle_effect()
     
     def _get_unique_neuron_name(self, base_name: str) -> str:
-        """Generate unique name, checking both functional_neurons AND brain_widget."""
         if base_name not in self.brain_widget.neuron_positions:
             return base_name
-        
         counter = 2
         while True:
             candidate = f"{base_name}_{counter}"
@@ -732,9 +638,10 @@ class EnhancedNeurogenesis:
             counter += 1
 
     def _rebuild_new_neurons_details(self):
-        """Make sure every functional neuron is listed in
-        neurogenesis_data['new_neurons_details'] so the Laboratory
-        ‘newest neurogenesis neurons’ card can see it."""
+        """
+        Backfills missing details, especially display_name, for existing neurons.
+        This ensures neurons created before this update get localized titles.
+        """
         core = {'hunger', 'happiness', 'cleanliness', 'sleepiness',
                 'satisfaction', 'anxiety', 'curiosity'}
         details = self.brain_widget.neurogenesis_data.setdefault('new_neurons_details', {})
@@ -742,32 +649,23 @@ class EnhancedNeurogenesis:
         for name, fn in self.functional_neurons.items():
             if name in core or name in self.brain_widget.excluded_neurons:
                 continue
-            if name not in details:          # missing ➜ add it
-                details[name] = {
-                    'created_at': fn.creation_context.timestamp,
-                    'trigger_type': fn.neuron_type,
-                    'trigger_value_at_creation': 0,   # we don’t have the original value
-                    'specialisation': fn.specialization
-                }
-
-    def _rebuild_new_neurons_details_for_lab(self):
-        """Back-fill missing entries so the Laboratory 'newest' card works."""
-        core = {'hunger', 'happiness', 'cleanliness', 'sleepiness', 'satisfaction', 'anxiety', 'curiosity'}
-        details = self.brain_widget.neurogenesis_data.setdefault('new_neurons_details', {})
-        
-        for name, fn in self.functional_neurons.items():
-            if name in core or name in getattr(self.brain_widget, 'excluded_neurons', []):
-                continue
-            # Only add if missing
+            
+            # Update or Add info
             if name not in details:
                 details[name] = {
                     'created_at': fn.creation_context.timestamp,
                     'trigger_type': fn.neuron_type,
-                    'specialisation': fn.specialization
+                    'trigger_value_at_creation': 0,
+                    'specialisation': fn.specialization,
+                    'display_name': fn.display_name
                 }
+            # Force update display_name to ensure language changes apply immediately on reload
+            details[name]['display_name'] = fn.display_name
+
+    def _rebuild_new_neurons_details_for_lab(self):
+        self._rebuild_new_neurons_details()
     
     def _preview_specialization(self, ctx: ExperienceContext) -> str:
-        """Preview what specialization a neuron would get without creating it."""
         if ctx.trigger_type == 'reward':
             if ctx.environmental_state.get('is_eating', False):
                 return 'feeding_satisfaction'
@@ -796,7 +694,6 @@ class EnhancedNeurogenesis:
         return 'undefined'
     
     def _calculate_functional_position(self, func_neuron: FunctionalNeuron) -> Tuple[float, float]:
-        """Position neuron based on its functional relationships."""
         all_neurons = list(self.brain_widget.neuron_positions.keys())
         connections = func_neuron.get_functional_connections(all_neurons)
         
@@ -817,32 +714,140 @@ class EnhancedNeurogenesis:
         if total_weight > 0:
             center_x /= total_weight
             center_y /= total_weight
-            
             offset_x = random.randint(-80, 80)
             offset_y = random.randint(-80, 80)
-            
             x = max(50, min(974, center_x + offset_x))
             y = max(50, min(668, center_y + offset_y))
-            
             return (x, y)
         
         return (random.randint(100, 900), random.randint(100, 600))
+
+    def rescue_orphan(self, orphan_name: str):
+        """Force create a 'connector' neuron to link an orphan to the network."""
+        
+        # 1. Create Context for Connector
+        connector_type = 'connector'
+        neuron_name = self._get_unique_neuron_name(f"{connector_type}_rescue")
+        
+        ctx = ExperienceContext(
+            trigger_type=connector_type,
+            active_neurons=self.brain_widget.state.copy(),
+            recent_actions=[],
+            environmental_state={'orphan_rescue': True},
+            outcome='neutral',
+            timestamp=time.time()
+        )
+        
+        # 2. Create Neuron Object
+        func_neuron = FunctionalNeuron(neuron_name, connector_type, ctx)
+        func_neuron.specialization = 'network_bridge'
+        self.functional_neurons[neuron_name] = func_neuron
+        
+        # 3. Position: Average between orphan and center to pull it in
+        orphan_pos = self.brain_widget.neuron_positions.get(orphan_name, (500, 300))
+        center_x, center_y = 512, 384
+        new_x = (orphan_pos[0] + center_x) / 2
+        new_y = (orphan_pos[1] + center_y) / 2
+        
+        # Add random jitter
+        new_x += random.randint(-50, 50)
+        new_y += random.randint(-50, 50)
+        
+        self.brain_widget.neuron_positions[neuron_name] = (new_x, new_y)
+        self.brain_widget.state[neuron_name] = 50.0
+        
+        # 4. Create Wiring: Orphan + Closest Neighbor + 1 Random (EXCLUDING BINARY NEURONS)
+        # Identify binary neurons to exclude
+        binary_neurons = {
+            "can_see_food", "is_eating", "is_sleeping",
+            "is_sick", "is_fleeing", "pursuing_food", "is_startled",
+            "external_stimulus", "plant_proximity"
+        }
+        
+        candidates = [n for n in self.brain_widget.neuron_positions.keys() 
+                     if n != orphan_name and n != neuron_name 
+                     and n not in self.brain_widget.excluded_neurons
+                     and n not in binary_neurons]
+        
+        targets = []
+        
+        if candidates:
+            # Helper to calculate squared distance to orphan
+            def get_dist_sq(n_name):
+                pos = self.brain_widget.neuron_positions[n_name]
+                return (pos[0] - orphan_pos[0])**2 + (pos[1] - orphan_pos[1])**2
+            
+            # Sort candidates by proximity to orphan (closest first)
+            candidates.sort(key=get_dist_sq)
+            
+            # 1. Mandatory connection to Closest Neighbor
+            closest_neuron = candidates.pop(0)
+            targets.append(closest_neuron)
+            
+            # 2. Optional connection to a Random Neighbor (if any left)
+            if candidates:
+                targets.append(random.choice(candidates))
+            
+        # Link to Orphan (Strong link to ensure activation flow)
+        # Randomise direction (incoming or outgoing to orphan)
+        weight = random.uniform(0.5, 0.9)
+        if random.random() > 0.5:
+             self.brain_widget.weights[(neuron_name, orphan_name)] = weight
+        else:
+             self.brain_widget.weights[(orphan_name, neuron_name)] = weight
+             
+        # Link to Targets (Closest + Random)
+        for target in targets:
+            w = random.uniform(-0.5, 0.8) # Can be inhibitory
+            if abs(w) < 0.2: w = 0.3 # Ensure min strength
+            
+            # Randomise direction
+            if random.random() > 0.5:
+                self.brain_widget.weights[(neuron_name, target)] = w
+            else:
+                self.brain_widget.weights[(target, neuron_name)] = w
+                
+        # 5. Finalize
+        self._set_neuron_appearance(neuron_name, func_neuron)
+        
+        if hasattr(self.brain_widget, 'visible_neurons'):
+            self.brain_widget.visible_neurons.add(neuron_name)
+            
+        self.brain_widget.neurogenesis_highlight = {
+            'neuron': neuron_name,
+            'start_time': time.time(),
+            'duration': 8.0, # Longer highlight for connectors
+            'pulse_phase': 0
+        }
+        
+        # Log it
+        self.brain_widget.log_neurogenesis_event(
+            neuron_name, "created", 
+            details={
+                'trigger_type': 'connector', 
+                'trigger_value': 1.0, 
+                'specialization': 'orphan_rescue',
+                'display_name': func_neuron.display_name
+            }
+        )
+        print(f"🔗 Connector neuron {neuron_name} created to rescue {orphan_name} (connected to closest: {targets[0] if targets else 'None'})")
     
     def _set_neuron_appearance(self, name: str, func_neuron: FunctionalNeuron):
-        """Set visual appearance based on function."""
         spec = func_neuron.specialization
         neuron_type = func_neuron.neuron_type
         
-        # Shape based on type
         shape_map = {
-            'novelty': 'diamond',
-            'stress': 'square',
-            'reward': 'triangle'
+            'novelty': 'diamond', 
+            'stress': 'square', 
+            'reward': 'triangle',
+            'connector': 'hexagon'
         }
+        
         self.brain_widget.neuron_shapes[name] = shape_map.get(neuron_type, 'circle')
         
-        # Color based on type and specialization
-        if 'stress' in spec or 'anxiety' in spec:
+        if neuron_type == 'connector':
+             self.brain_widget.state_colors[name] = (50, 51, 100)
+        elif 'stress' in spec or 'anxiety' in spec:
             self.brain_widget.state_colors[name] = (255, 150, 150)
         elif 'reward' in spec or 'satisfaction' in spec:
             self.brain_widget.state_colors[name] = (150, 255, 150)
@@ -857,29 +862,26 @@ class EnhancedNeurogenesis:
             self.brain_widget.state_colors[name] = color_map.get(neuron_type, (200, 200, 255))
     
     def _log_neuron_creation(self, name: str, trigger_type: str, spec: str, trigger_value: Optional[float]):
-        """Log neuron creation event."""
+        display_name = self.functional_neurons[name].display_name
         self.brain_widget.log_neurogenesis_event(
             name, "created",
             details={
                 'trigger_type': trigger_type,
                 'trigger_value': trigger_value or 0,
-                'specialization': spec
+                'specialization': spec,
+                'display_name': display_name
             }
         )
     
     def _strengthen_existing_neuron(self, trigger_type: str, specialization: str):
-        """Strengthen existing neuron instead of creating duplicate."""
         prefix = f"{trigger_type}_{specialization}"
-        
         existing = [(name, neuron) for name, neuron in self.functional_neurons.items()
                     if name.startswith(prefix)]
         
         if not existing:
-            # Check if brain widget has neurons we need to convert
             brain_neurons = [name for name in self.brain_widget.neuron_positions.keys()
                             if name.startswith(prefix)]
             if brain_neurons:
-                # Convert first one to functional
                 self._ensure_functional_neuron(brain_neurons[0], trigger_type, specialization)
                 if brain_neurons[0] in self.functional_neurons:
                     existing = [(brain_neurons[0], self.functional_neurons[brain_neurons[0]])]
@@ -887,7 +889,6 @@ class EnhancedNeurogenesis:
         if not existing:
             return
         
-        # Strengthen the one with highest utility
         existing.sort(key=lambda x: x[1].utility_score, reverse=True)
         best_name, best_neuron = existing[0]
         
@@ -895,11 +896,12 @@ class EnhancedNeurogenesis:
         best_neuron.utility_score += 0.1
         
         self.brain_widget.communication_events[best_name] = time.time()
-        
-        # Force immediate visual update
         self.brain_widget.update()
         
-        print(f"   💪 Strengthened: {best_name} (multiplier: {best_neuron.strength_multiplier:.1f}x)")
+        msg = loc('log_strengthened_neuron', 
+                 default="Strengthened: {name} (multiplier: {mult}x)",
+                 name=best_neuron.display_name, mult=f"{best_neuron.strength_multiplier:.1f}")
+        print(f"   💪 {msg}")
         
         if self._on_neuron_leveled_callback:
             try:
@@ -909,34 +911,20 @@ class EnhancedNeurogenesis:
         
         self.brain_widget.update()
     
-    # =========================================================================
-    # Neuron Conversion - Ensure all neurons are FunctionalNeurons
-    # =========================================================================
-    
     def _ensure_functional_neuron(self, name: str, neuron_type: str = None, 
                                    specialization: str = None) -> Optional[FunctionalNeuron]:
-        """
-        Ensure a neuron exists as a FunctionalNeuron.
-        Converts existing brain widget neurons if needed.
-        """
         if name in self.functional_neurons:
             return self.functional_neurons[name]
         
         if name not in self.brain_widget.neuron_positions:
             return None
         
-        # Infer type from name if not provided
         if neuron_type is None:
-            if name.startswith('novelty'):
-                neuron_type = 'novelty'
-            elif name.startswith('stress'):
-                neuron_type = 'stress'
-            elif name.startswith('reward'):
-                neuron_type = 'reward'
-            else:
-                neuron_type = 'novelty'  # Default
+            if name.startswith('novelty'): neuron_type = 'novelty'
+            elif name.startswith('stress'): neuron_type = 'stress'
+            elif name.startswith('reward'): neuron_type = 'reward'
+            else: neuron_type = 'novelty'
         
-        # Build minimal context
         ctx = ExperienceContext(
             trigger_type=neuron_type,
             active_neurons=dict(self.brain_widget.state),
@@ -946,41 +934,29 @@ class EnhancedNeurogenesis:
             timestamp=time.time()
         )
         
-        # Create functional neuron
         func_neuron = FunctionalNeuron(name, neuron_type, ctx)
         if specialization:
             func_neuron.specialization = specialization
         
         self.functional_neurons[name] = func_neuron
-        print(f"   Converted {name} to FunctionalNeuron")
+        print(f"   {loc('log_converted_neuron', default='Converted {name} to FunctionalNeuron', name=name)}")
         
         return func_neuron
     
     def ensure_all_neurons_functional(self, force_sync=False):
         """
         Synchronize functional_neurons with brain_widget after loading a save.
-        
-        This method does two things:
-        1. Ensures neurons in brain_widget.neuron_positions have functional_neuron entries
-        2. Ensures neurons in functional_neurons are present in brain_widget structures
-        
-        Call this after loading a save or when synchronizing state.
-        
-        Args:
-            force_sync: If True, always update appearance even if neuron already exists
         """
         core_neurons = ['hunger', 'happiness', 'cleanliness', 'sleepiness',
                         'satisfaction', 'anxiety', 'curiosity']
         excluded = getattr(self.brain_widget, 'excluded_neurons', [])
 
-        # 1. Ensure neurons in neuron_positions have functional_neuron entries
         for name in list(self.brain_widget.neuron_positions.keys()):
             if name in core_neurons or name in excluded:
                 continue
             if name not in self.functional_neurons:
                 self._ensure_functional_neuron(name)
 
-        # 2. CRITICAL: Ensure functional_neurons are restored to brain_widget structures
         restored_positions = 0
         restored_states = 0
         restored_visible = 0
@@ -989,50 +965,31 @@ class EnhancedNeurogenesis:
             if name in core_neurons or name in excluded:
                 continue
             
-            # Add to neuron_positions if missing
             if name not in self.brain_widget.neuron_positions:
                 position = self._calculate_functional_position(fn)
                 self.brain_widget.neuron_positions[name] = position
                 restored_positions += 1
-                print(f"   ↪ Restored position for {name}: {position}")
             
-            # Add to state if missing
             if name not in self.brain_widget.state:
                 self.brain_widget.state[name] = 50.0
                 restored_states += 1
-                print(f"   ↪ Restored state for {name}")
             
-            # ALWAYS add to visible_neurons (this is idempotent for sets)
             if hasattr(self.brain_widget, 'visible_neurons'):
                 if name not in self.brain_widget.visible_neurons:
                     restored_visible += 1
                 self.brain_widget.visible_neurons.add(name)
             
-            # ALWAYS set appearance (color/shape) - ensures correct rendering after load
             self._set_neuron_appearance(name, fn)
             
-            # Restore connections if missing
             all_neurons = list(self.brain_widget.neuron_positions.keys())
             connections = fn.get_functional_connections(all_neurons)
             for target, weight in connections.items():
                 if (name, target) not in self.brain_widget.weights:
                     self.brain_widget.weights[(name, target)] = weight
 
-        # 3. Back-fill missing origin stories in neurogenesis_data
-        details = self.brain_widget.neurogenesis_data.setdefault('new_neurons_details', {})
-        for name, fn in self.functional_neurons.items():
-            if name in core_neurons or name in excluded:
-                continue
-            if name not in details:
-                details[name] = {
-                    'created_at': fn.creation_context.timestamp,
-                    'trigger_type': fn.neuron_type,
-                    'trigger_value_at_creation': 0,   # unknown for legacy neurons
-                    'specialisation': fn.specialization
-                }
+        # REBUILD DETAILS: ensure UI has the display names
+        self._rebuild_new_neurons_details()
         
-        # 4. CRITICAL: Rebuild new_neurons list from functional_neurons
-        # This list is used for drawing connections and identifying neurogenesis neurons
         new_neurons_list = self.brain_widget.neurogenesis_data.setdefault('new_neurons', [])
         restored_to_list = 0
         for name, fn in self.functional_neurons.items():
@@ -1041,14 +998,10 @@ class EnhancedNeurogenesis:
             if name not in new_neurons_list:
                 new_neurons_list.append(name)
                 restored_to_list += 1
-        if restored_to_list > 0:
-            print(f"   ↪ Restored {restored_to_list} neurons to new_neurons list")
         
         restored_count = len([n for n in self.functional_neurons if n not in core_neurons and n not in excluded])
         if restored_count > 0:
-            print(f"✅ Neurogenesis sync complete: {restored_count} functional neurons")
-            if restored_positions > 0 or restored_states > 0 or restored_visible > 0:
-                print(f"   Restored: {restored_positions} positions, {restored_states} states, {restored_visible} visibility flags")
+            print(f"✅ {loc('log_sync_complete', default='Neurogenesis sync complete')}: {restored_count}")
     
     def set_achievement_callbacks(self, on_created=None, on_leveled=None):
         self._on_neuron_created_callback = on_created
@@ -1072,15 +1025,8 @@ class EnhancedNeurogenesis:
         self.last_states.append(state.copy())
 
     def check_and_capture_experience(self, brain_state: dict, environment: dict):
-        """
-        Convenience method for automatic experience detection and capturing.
-        Analyzes brain state and environment to determine trigger types and capture experiences.
-        """
-        # Detect trigger type based on state changes and environment
         trigger_type = self._detect_trigger_type(brain_state, environment)
-        
         if trigger_type:
-            # Capture the experience with the detected trigger
             self.capture_experience_context(
                 trigger_type=trigger_type,
                 brain_state=brain_state,
@@ -1089,35 +1035,19 @@ class EnhancedNeurogenesis:
             )
     
     def _detect_trigger_type(self, brain_state: dict, environment: dict) -> Optional[str]:
-        """
-        Analyze brain state and environment to detect what kind of experience trigger this is.
-        Returns: 'novelty', 'stress', 'reward', or None
-        """
-        # Get key values
         anxiety = brain_state.get('anxiety', 50)
         satisfaction = brain_state.get('satisfaction', 50)
         curiosity = brain_state.get('curiosity', 50)
         happiness = brain_state.get('happiness', 50)
         
-        # Check for stress trigger (high anxiety)
-        if anxiety > 75:
-            return 'stress'
+        if anxiety > 75: return 'stress'
+        if environment.get('new_object_encountered', False) or curiosity > 70: return 'novelty'
+        if environment.get('recent_positive_outcome', False) or satisfaction > 70 or happiness > 70: return 'reward'
         
-        # Check for novelty trigger (high curiosity, new objects)
-        if environment.get('new_object_encountered', False) or curiosity > 70:
-            return 'novelty'
-        
-        # Check for reward trigger (positive outcomes, satisfaction, happiness)
-        if environment.get('recent_positive_outcome', False) or satisfaction > 70 or happiness > 70:
-            return 'reward'
-        
-        # Check for stress relief (anxiety dropped significantly)
         if len(self.last_states) > 0:
             prev_anxiety = self.last_states[-1].get('anxiety', 50)
-            if prev_anxiety > 60 and anxiety < 40:
-                return 'stress'  # Stress relief is still a stress-related trigger
+            if prev_anxiety > 60 and anxiety < 40: return 'stress'
         
-        # No clear trigger detected
         return None
 
     def capture_experience_context(self, trigger_type: str, brain_state: dict,
@@ -1125,20 +1055,16 @@ class EnhancedNeurogenesis:
         if self._first_real_tick is None:
             self._first_real_tick = time.time()
         
-        # FIX: Ensure recent_actions is a list to prevent TypeError
         if not isinstance(recent_actions, list):
-            print(f"⚠️ Warning: recent_actions was {type(recent_actions)}, expected list. Using empty list.")
             recent_actions = []
         
         ctx = self._build_context(trigger_type, brain_state, environment)
         ctx.recent_actions = recent_actions[-5:] if recent_actions else []
         
-        # Grace period
         elapsed = time.time() - self._first_real_tick
         if elapsed < 1.5:
             return ctx
         
-        # Don't buffer peaceful sleep
         is_sleeping = brain_state.get('is_sleeping', False)
         anxiety = brain_state.get('anxiety', 50)
         satisfaction = brain_state.get('satisfaction', 50)
@@ -1149,60 +1075,40 @@ class EnhancedNeurogenesis:
         return ctx
     
     def should_create_neuron(self, ctx: ExperienceContext) -> bool:
-        """Check if conditions allow neuron creation."""
         current_time = time.time()
         
-        # Emergency bypass
         if ctx.trigger_type == 'stress' and ctx.active_neurons.get('anxiety', 50) >= 95:
-            print("🚨 EMERGENCY: Critical anxiety - forcing stress neuron!")
+            print(f"🚨 {loc('log_emergency_forcing_neuron', default='EMERGENCY: Critical anxiety - forcing stress neuron!')}")
             return True
         
-        # Grace period
-        if self._first_real_tick is None:
-            return False
+        if self._first_real_tick is None: return False
         elapsed = current_time - self._first_real_tick
-        if elapsed < 5.0:
-            return False
+        if elapsed < 5.0: return False
         
-        # Pattern specificity
         pattern = ctx.get_pattern_signature()
-        if len(pattern.split('_')) < 4:
-            return False
+        if len(pattern.split('_')) < 4: return False
         
-        # Over-clustering
-        if self.experience_buffer.pattern_counts.get(pattern, 0) > 20:
-            return False
+        if self.experience_buffer.pattern_counts.get(pattern, 0) > 20: return False
         
-        # Max neurons
         current_count = len(self.brain_widget.neuron_positions)
         max_neurons = self.config.neurogenesis.get('max_neurons', 32)
-        if current_count >= max_neurons:
-            return False
+        if current_count >= max_neurons: return False
         
-        # Global cooldown
         global_cooldown = self.config.neurogenesis.get('cooldown', 60)
         default_time = self._first_real_tick or time.time()
         last_creation = max(
             (n.creation_context.timestamp for n in self.functional_neurons.values()),
             default=default_time
         )
-        if current_time - last_creation < global_cooldown:
-            return False
+        if current_time - last_creation < global_cooldown: return False
         
-        # Pattern recurrence
         pattern_level, count, _ = self.experience_buffer.get_pattern_recurrence(ctx)
         thresholds = {'specific': 2, 'parent': 3, 'core': 5}
-        if count < thresholds.get(pattern_level, 2):
-            return False
+        if count < thresholds.get(pattern_level, 2): return False
         
         return True
     
     def update_neuron_activations(self, brain_state: Dict[str, float]) -> None:
-        """
-        Update functional-neuron values + emit **very slow, very subtle** one-way pulses.
-        """
-
-        # ---------- 1.  sanitise ----------
         for key in list(brain_state.keys()):
             if not isinstance(brain_state[key], (int, float)):
                 try:
@@ -1210,29 +1116,24 @@ class EnhancedNeurogenesis:
                 except (ValueError, TypeError):
                     brain_state[key] = 50.0
 
-        # ---------- 2.  forward activation ----------
         for name, func_neuron in self.functional_neurons.items():
             if name in self.brain_widget.state:
-                activation = func_neuron.calculate_activation(brain_state,
-                                                            self.brain_widget.weights)
+                activation = func_neuron.calculate_activation(brain_state, self.brain_widget.weights)
                 self.brain_widget.state[name] = activation
 
-        # ---------- 3.  stress-neuron anxiety suppression ----------
         if 'anxiety' in brain_state:
             current_anxiety = brain_state['anxiety']
-            total_reduction   = 0.0
+            total_reduction = 0.0
             total_stress_power = 0.0
 
             for name, fn in self.functional_neurons.items():
                 if getattr(fn, 'neuron_type', '') == 'stress':
                     multiplier = getattr(fn, 'strength_multiplier', 1.0)
                     total_stress_power += multiplier
-
                     driven = 50.0 + (current_anxiety - 50.0) * 0.8
                     driven = max(50.0, min(100.0, driven))
                     current_val = self.brain_widget.state.get(name, 50.0)
                     self.brain_widget.state[name] = max(current_val, driven)
-
                     act = self.brain_widget.state[name]
                     infl = max(0.0, (act - 50.0) / 50.0)
                     total_reduction += (12.0 * multiplier) * (1.0 + infl)
@@ -1243,140 +1144,99 @@ class EnhancedNeurogenesis:
                     total_reduction += (current_anxiety - ceiling) * 0.8
                 brain_state['anxiety'] = max(0.0, current_anxiety - total_reduction)
 
-        # ---------- 4.  SUBTLE SLOW PULSES  (animations may be disabled) ----------
-        if not getattr(self.brain_widget, 'animations_enabled', True):
-            return
-        if not hasattr(self.brain_widget, 'trigger_activation_pulse'):
-            return
+        if not getattr(self.brain_widget, 'animations_enabled', True): return
+        if not hasattr(self.brain_widget, 'trigger_activation_pulse'): return
 
         now = time.time()
         for (src, dst), weight in self.brain_widget.weights.items():
-            if abs(weight) < 0.15:
-                continue
-
-            # ---- per-link personality ----
-            seed   = hash((src, dst)) % 1_000_000 / 1_000_000.0
+            if abs(weight) < 0.15: continue
+            seed = hash((src, dst)) % 1_000_000 / 1_000_000.0
             excite = seed * 0.85 + 0.15
-            if excite < 0.22:                      # ~22 % completely mute
-                continue
-            skip   = int(3 + seed * 9)             # 3-12 frame skip  →  slower cadence
-            if int(now * 60) % skip != 0:
-                continue
+            if excite < 0.22: continue
+            skip = int(3 + seed * 9)
+            if int(now * 60) % skip != 0: continue
 
-            src_act   = brain_state.get(src, 50.0)
+            src_act = brain_state.get(src, 50.0)
             influence = (src_act - 50.0) * weight
-            if abs(influence) < 6.0:               # only clear signals
-                continue
+            if abs(influence) < 6.0: continue
 
-            # ---- desaturated, darker palette ----
-            if influence > 0:                       # excitatory (olive → moss)
+            if influence > 0:
                 base_hue = 65 + seed * 25
-                sat = 70 + seed * 40                # 70-110  (soft)
-                val = 120 + seed * 30               # 120-150 (dim)
-            else:                                   # inhibitory (rust → wine)
+                sat = 70 + seed * 40
+                val = 120 + seed * 30
+            else:
                 base_hue = 5 + seed * 20
                 sat = 75 + seed * 35
                 val = 115 + seed * 30
 
-            rgb   = self._hsv_to_rgb(base_hue, sat, val)
-            alpha = 80 + int(seed * 60)             # 80-140  (very translucent)
+            rgb = self._hsv_to_rgb(base_hue, sat, val)
+            alpha = 80 + int(seed * 60)
             colour = (*rgb, alpha)
 
-            # ---- slow motion ----
-            duration = 1.5 + seed * 1.5             # 1.5 – 3.0 s
-            speed    = 0.3 + seed * 0.3             # 0.3 – 0.6×  (languid drift)
+            duration = 1.5 + seed * 1.5
+            speed = 0.3 + seed * 0.3
 
-            # ---- emit one-way pulse ----
             self.brain_widget.weight_animations.append({
-                'pair': (src, dst),
-                'start_time': now,
-                'duration': duration,
-                'start_weight': weight,
-                'end_weight': weight,
-                'neuron1': src,
-                'neuron2': dst,
-                'color': colour,
-                'pulse_speed': speed
+                'pair': (src, dst), 'start_time': now, 'duration': duration,
+                'start_weight': weight, 'end_weight': weight,
+                'neuron1': src, 'neuron2': dst, 'color': colour, 'pulse_speed': speed
             })
 
-    # ---------- helper ----------
     def _hsv_to_rgb(self, h, s, v):
-        """Fast HSV→RGB 0-255"""
         s, v = s / 255.0, v / 255.0
         c = v * s
         x = c * (1 - abs((h / 60.0) % 2 - 1))
         m = v - c
-        if h < 60:   r, g, b = c, x, 0
+        if h < 60: r, g, b = c, x, 0
         elif h <120: r, g, b = x, c, 0
         elif h <180: r, g, b = 0, c, x
         elif h <240: r, g, b = 0, x, c
         elif h <300: r, g, b = x, 0, c
-        else:        r, g, b = c, 0, x
+        else: r, g, b = c, 0, x
         return int((r + m) * 255), int((g + m) * 255), int((b + m) * 255)
     
     def intelligent_pruning(self) -> Optional[str]:
-        """Prune neurons based on utility."""
         candidates = []
-        
         for name, func_neuron in self.functional_neurons.items():
-            if time.time() - func_neuron.creation_context.timestamp < 300:
-                continue
-            
+            if time.time() - func_neuron.creation_context.timestamp < 300: continue
             score = 0.0
             score += func_neuron.utility_score * 0.4
-            
             recency = time.time() - func_neuron.last_activated
-            if recency < 300:
-                score += 0.3
-            elif recency < 1800:
-                score += 0.15
+            if recency < 300: score += 0.3
+            elif recency < 1800: score += 0.15
             
             similar_count = sum(1 for n in self.functional_neurons.values() 
                               if n.specialization == func_neuron.specialization)
-            if similar_count == 1:
-                score += 0.3
+            if similar_count == 1: score += 0.3
             
-            total_strength = sum(
-                abs(w) for (a, b), w in self.brain_widget.weights.items()
-                if a == name or b == name
-            )
+            total_strength = sum(abs(w) for (a, b), w in self.brain_widget.weights.items()
+                if a == name or b == name)
             score += min(total_strength / 5.0, 0.3)
-            
             candidates.append((name, score))
         
-        if not candidates:
-            return None
-        
+        if not candidates: return None
         candidates.sort(key=lambda x: x[1])
         neuron_to_prune = candidates[0][0]
         
-        # Remove from brain widget
         if neuron_to_prune in self.brain_widget.neuron_positions:
             del self.brain_widget.neuron_positions[neuron_to_prune]
         if neuron_to_prune in self.brain_widget.state:
             del self.brain_widget.state[neuron_to_prune]
         
-        # Remove connections
         for conn in list(self.brain_widget.weights.keys()):
-            if neuron_to_prune in conn:
-                del self.brain_widget.weights[conn]
+            if neuron_to_prune in conn: del self.brain_widget.weights[conn]
         
-        # Remove from functional neurons
         if neuron_to_prune in self.functional_neurons:
             fn = self.functional_neurons[neuron_to_prune]
-            if fn.neuron_type == 'novelty':
-                self.novelty_neuron_count -= 1
+            if fn.neuron_type == 'novelty': self.novelty_neuron_count -= 1
             del self.functional_neurons[neuron_to_prune]
         
-        print(f"🗑️ Pruned: {neuron_to_prune}")
+        print(f"🗑️ {loc('log_pruned', default='Pruned')}: {neuron_to_prune}")
         return neuron_to_prune
     
     def to_dict(self) -> dict:
         return {
-            'functional_neurons': {
-                name: neuron.to_dict() 
-                for name, neuron in self.functional_neurons.items()
-            },
+            'functional_neurons': {name: neuron.to_dict() for name, neuron in self.functional_neurons.items()},
             'experience_buffer': self.experience_buffer.to_dict(),
             'novelty_neuron_count': self.novelty_neuron_count,
             'neurons_created_this_session': self.neurons_created_this_session,
@@ -1394,14 +1254,10 @@ class EnhancedNeurogenesis:
         
         self.novelty_neuron_count = data.get('novelty_neuron_count', 0)
         self.neurons_created_this_session = data.get('neurons_created_this_session', 0)
-        self.last_creation_by_type = data.get('last_creation_by_type', 
-                                              {'novelty': 0, 'stress': 0, 'reward': 0})
+        self.last_creation_by_type = data.get('last_creation_by_type', {'novelty': 0, 'stress': 0, 'reward': 0})
         self._awarded_neurons = set(data.get('awarded_neurons', []))
         
-        # ensure all loaded neurons are in functional_neurons
         self.ensure_all_neurons_functional()
-
-        # Rebuild the lab view data
         self._rebuild_new_neurons_details_for_lab()
     
     def reset_state(self):
@@ -1415,11 +1271,8 @@ class EnhancedNeurogenesis:
         print("🔄 Neurogenesis state reset")
 
 
-# Integration example for TamagotchiLogic
 class NeurogenesisTriggerSystem:
-    """
-    Replaces simple counter-based triggers with context-aware experience tracking
-    """
+    """Replaces simple counter-based triggers with context-aware experience tracking"""
     
     def __init__(self, tamagotchi_logic):
         self.logic = tamagotchi_logic
@@ -1427,45 +1280,33 @@ class NeurogenesisTriggerSystem:
         self.last_states = deque(maxlen=5)
         
     def track_action(self, action: str):
-        """Track what the squid is doing"""
         self.recent_actions.append(action)
     
     def track_state_change(self, state: Dict[str, float]):
-        """Track brain state changes"""
         self.last_states.append(state.copy())
     
     def check_for_significant_experience(self) -> Optional[Tuple[str, ExperienceContext]]:
-        """
-        Check if something significant happened that warrants neurogenesis.
-        Returns (trigger_type, context) or None.
-        """
-        if len(self.last_states) < 2:
-            return None
+        if len(self.last_states) < 2: return None
         
         current = self.last_states[-1]
         previous = self.last_states[-2]
         
-        # Calculate total state change magnitude
         state_change = 0
         for key in ['hunger', 'happiness', 'satisfaction', 'anxiety', 'curiosity']:
             if key in current and key in previous:
                 state_change += abs(current.get(key, 50) - previous.get(key, 50))
         
-        # If total change is too small, nothing significant happened
         if state_change < 5 and not getattr(self.logic, 'new_object_encountered', False):
             return None
         
-        # Check for significant novelty
         if self._detect_novelty_experience(current, previous):
             context = self._build_context('novelty', current)
             return ('novelty', context)
         
-        # Check for significant stress
         if self._detect_stress_experience(current, previous):
             context = self._build_context('stress', current)
             return ('stress', context)
         
-        # Check for significant reward
         if self._detect_reward_experience(current, previous):
             context = self._build_context('reward', current)
             return ('reward', context)
@@ -1473,61 +1314,37 @@ class NeurogenesisTriggerSystem:
         return None
     
     def _detect_novelty_experience(self, current, previous) -> bool:
-        """Detect if something novel happened"""
-        # Don't trigger during sleep
-        if current.get('is_sleeping', False):
-            return False
+        if current.get('is_sleeping', False): return False
         
         current_curiosity = current.get('curiosity', 50)
         previous_curiosity = previous.get('curiosity', 50)
         curiosity_delta = current_curiosity - previous_curiosity
         
-        # Ignore if curiosity is at extremes
-        if current_curiosity >= 99 or current_curiosity <= 1:
-            return False
+        if current_curiosity >= 99 or current_curiosity <= 1: return False
         
-        # Check if we encountered a new object
         new_object = getattr(self.logic, 'new_object_encountered', False)
-        
-        # Require a significant spike AND curiosity to be reasonably high
         meaningful_spike = curiosity_delta > 15 and current_curiosity > 40
-        
         return meaningful_spike or new_object
     
     def _detect_stress_experience(self, current, previous) -> bool:
-        """Detect sustained or intense stress"""
-        # Don't trigger during peaceful sleep
-        if current.get('is_sleeping', False) and current.get('anxiety', 50) < 40:
-            return False
+        if current.get('is_sleeping', False) and current.get('anxiety', 50) < 40: return False
         
         current_anxiety = current.get('anxiety', 50)
         previous_anxiety = previous.get('anxiety', 50)
         current_hunger = current.get('hunger', 50)
-        # FIX: Removed stray 'a' that was here
         
-        # Ignore if anxiety is at minimum
-        if current_anxiety <= 5:
-            return False
+        if current_anxiety <= 5: return False
         
-        # High anxiety sustained
         anxiety_high = current_anxiety > 65 and previous_anxiety > 60
-        
-        # Sudden anxiety spike
         anxiety_spike = (current_anxiety - previous_anxiety) > 15 and current_anxiety > 50
-        
-        # Hunger crisis
         hunger_crisis = current_hunger > 85 and (current_hunger - previous.get('hunger', 50)) >= 0
-        
         return anxiety_high or anxiety_spike or hunger_crisis
     
     def _detect_reward_experience(self, current, previous) -> bool:
-        """Detect positive outcome experiences"""
-        # Don't trigger during sleep with maxed stats
         if current.get('is_sleeping', False):
             happiness = current.get('happiness', 50)
             satisfaction = current.get('satisfaction', 50)
-            if happiness >= 90 and satisfaction >= 90:
-                return False
+            if happiness >= 90 and satisfaction >= 90: return False
         
         current_happiness = current.get('happiness', 50)
         previous_happiness = previous.get('happiness', 50)
@@ -1537,29 +1354,18 @@ class NeurogenesisTriggerSystem:
         happiness_delta = current_happiness - previous_happiness
         satisfaction_delta = current_satisfaction - previous_satisfaction
         
-        # Ignore if stats are already maxed out
         if (current_happiness >= 99 and previous_happiness >= 99) or \
-           (current_satisfaction >= 99 and previous_satisfaction >= 99):
-            return False
+           (current_satisfaction >= 99 and previous_satisfaction >= 99): return False
         
-        # Ignore tiny fluctuations when stats are very high
-        if current_happiness >= 95 and happiness_delta < 3:
-            return False
-        if current_satisfaction >= 95 and satisfaction_delta < 3:
-            return False
+        if current_happiness >= 95 and happiness_delta < 3: return False
+        if current_satisfaction >= 95 and satisfaction_delta < 3: return False
         
-        # Check if positive outcome flag is set
         positive_outcome = getattr(self.logic, 'recent_positive_outcome', False)
-        
-        # Require significant increases OR explicit positive action
         significant_happiness = happiness_delta > 15 and current_happiness > 40
         significant_satisfaction = satisfaction_delta > 15 and current_satisfaction > 40
-        
         return significant_happiness or significant_satisfaction or positive_outcome
     
     def _build_context(self, trigger_type: str, current_state: Dict) -> ExperienceContext:
-        """Build experience context from current situation"""
-        # Filter out binary state neurons AND neurogenesis metrics
         filtered_neurons = {k: v for k, v in current_state.items() 
                         if not k.startswith('is_') and k not in [
                             'novelty_exposure', 'sustained_stress', 'recent_rewards', 

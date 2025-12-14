@@ -25,9 +25,14 @@ from .brain_decisions_tab import DecisionsTab
 from .brain_personality_tab import PersonalityTab
 from .brain_statistics_tab import StatisticsTab
 from .task_manager import TaskManagerWindow
+from .localisation import Localisation, set_language
 
 class SquidBrainWindow(QtWidgets.QMainWindow):
     def __init__(self, tamagotchi_logic, debug_mode=False, config=None, show_decorations_callback=None):
+        # Force language sync before any tabs are created
+        if config and hasattr(config, 'get_language'):
+            set_language(config.get_language())
+        
         super().__init__()
 
         # Initialize font size FIRST
@@ -372,6 +377,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             self.stimulate_button.setEnabled(enabled)
 
     def init_tabs(self):
+        # Get localisation instance
+        loc = Localisation.instance()
+
         # Create tab widget
         self.tabs = QtWidgets.QTabWidget()
         self.layout.addWidget(self.tabs)
@@ -381,32 +389,31 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         base_font.setPointSize(self.base_font_size)
         self.tabs.setFont(base_font)
 
-        # Create and add existing tabs
+        # Create and add existing tabs with Localized Titles
         self.network_tab = NetworkTab(self, self.tamagotchi_logic, self.brain_widget, self.config_manager, self.debug_mode)
-        self.tabs.addTab(self.network_tab, "Network")
+        self.tabs.addTab(self.network_tab, loc.get("brain_network", "Network"))
 
         # Add our Neural Network Visualizer tab as the Learning tab
         self.nn_viz_tab = NeuralNetworkVisualizerTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.nn_viz_tab, "Learning")
+        self.tabs.addTab(self.nn_viz_tab, loc.get("tab_learning", "Learning"))
 
         self.memory_tab = MemoryTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.memory_tab, "Memory")
+        self.tabs.addTab(self.memory_tab, loc.get("memory", "Memory"))
 
         self.decisions_tab = DecisionsTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.decisions_tab, "Decisions")
+        self.tabs.addTab(self.decisions_tab, loc.get("tab_decisions", "Decisions"))
 
         self.personality_tab = PersonalityTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.personality_tab, "Personality")
+        self.tabs.addTab(self.personality_tab, loc.get("tab_personality", "Personality"))
 
         # ADD THE NEW STATISTICS TAB HERE
         self.statistics_tab = StatisticsTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.statistics_tab, "Statistics")
+        self.tabs.addTab(self.statistics_tab, loc.get("statistics", "Statistics"))
 
         self.about_tab = AboutTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.about_tab, "About")
+        self.tabs.addTab(self.about_tab, loc.get("tab_about", "About"))
 
         # Make sure all tabs have correct tamagotchi_logic reference
-        # ADD 'statistics_tab' TO THIS LIST
         for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'decisions_tab', 'personality_tab', 'statistics_tab', 'about_tab']:
             if hasattr(self, tab_name):
                 tab = getattr(self, tab_name)

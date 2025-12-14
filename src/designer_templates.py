@@ -119,4 +119,5 @@ class TemplateManager:
             design.add_connection("can_see_food", "happiness", 0.2)
             design.add_connection("hunger", "satisfaction", -0.5)
             
+
         return design

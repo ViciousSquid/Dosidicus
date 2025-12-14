@@ -145,6 +145,77 @@ class SparseNetworkGenerator:
         # Clamp to valid range and round
         weight = max(-1.0, min(1.0, weight))
         return round(weight, 3)
+
+    def perturb_positions(self, design, variance: float = 0.3,
+                     bounds: Tuple[float, float, float, float] = (-400, -150, 900, 750)):
+        """
+        Randomly perturb neuron positions with organic variance.
+        
+        Args:
+            design: BrainDesign to modify
+            variance: Variance multiplier (0.3 = ±30% from original position)
+            bounds: (min_x, min_y, max_x, max_y) to constrain neurons within view window
+        """
+        if variance <= 0:
+            return
+            
+        min_x, min_y, max_x, max_y = bounds
+        rng = self.rng
+        
+        # Calculate center for organic spreading
+        if not design.neurons:
+            return
+            
+        center_x = sum(n.position[0] for n in design.neurons.values()) / len(design.neurons)
+        center_y = sum(n.position[1] for n in design.neurons.values()) / len(design.neurons)
+        
+        for name, neuron in design.neurons.items():
+            # Skip required neurons (core and can_see_food) to keep them stable
+            if neuron.is_required:
+                continue
+                
+            x, y = neuron.position
+            
+            # Add Gaussian noise scaled by variance
+            noise_scale = variance * 60  # 60px standard deviation at variance=1.0
+            new_x = x + rng.gauss(0, noise_scale)
+            new_y = y + rng.gauss(0, noise_scale)
+            
+            # Clamp to view bounds
+            new_x = max(min_x, min(max_x, new_x))
+            new_y = max(min_y, min(max_y, new_y))
+            
+            neuron.position = (new_x, new_y)
+
+    def add_random_sensors(self, design, probability: float = 0.3):
+        """
+        Randomly add input sensors to the design with sensible wiring.
+        
+        Args:
+            design: BrainDesign to modify
+            probability: Probability of adding each available sensor (0.0 to 1.0)
+        
+        Returns:
+            Number of sensors added
+        """
+        from designer_sensor_discovery import get_all_available_sensors
+        
+        all_sensors = get_all_available_sensors()
+        # Exclude already-present sensors and the required can_see_food
+        available_sensors = [
+            name for name in all_sensors.keys() 
+            if name not in design.neurons and name != 'can_see_food'
+        ]
+        
+        added = 0
+        for sensor_name in available_sensors:
+            if self.rng.random() < probability:
+                # add_sensor handles both creation and sensible wiring via defaults
+                success, _ = design.add_sensor(sensor_name, create_default_connections=True)
+                if success:
+                    added += 1
+                    
+        return added
     
     def _should_create_connection(self, template: ConnectionTemplate, 
                                    density_multiplier: float = 1.0) -> bool:
@@ -285,42 +356,61 @@ class SparseNetworkGenerator:
         return created, actions
     
     def get_preset_styles(self) -> Dict[str, Dict]:
-        """Return preset generation styles."""
+        """Return preset generation styles with new variance and sensor options."""
         return {
             'balanced': {
                 'name': '⚖️ Balanced',
-                'description': 'Standard density, moderate noise',
+                'description': 'Standard density, moderate noise, slight position variance',
                 'density': 1.0,
                 'include_feedback': True,
-                'weight_noise': 1.0
+                'weight_noise': 1.0,
+                'position_variance': 0.2,
+                'sensor_probability': 0.15
             },
             'sparse': {
                 'name': '🔬 Minimal',
-                'description': 'Fewer connections, essential only',
+                'description': 'Fewer connections, minimal position variance',
                 'density': 0.5,
                 'include_feedback': False,
-                'weight_noise': 0.7
+                'weight_noise': 0.7,
+                'position_variance': 0.1,
+                'sensor_probability': 0.0
             },
             'dense': {
                 'name': '🕸️ Dense',
-                'description': 'More connections, richer dynamics',
+                'description': 'More connections, rich dynamics, moderate sensors',
                 'density': 1.4,
                 'include_feedback': True,
-                'weight_noise': 1.2
+                'weight_noise': 1.2,
+                'position_variance': 0.3,
+                'sensor_probability': 0.3
             },
             'chaotic': {
                 'name': '🌀 Chaotic',
-                'description': 'High noise, unpredictable weights',
+                'description': 'High noise, unpredictable, high position variance',
                 'density': 1.1,
                 'include_feedback': True,
-                'weight_noise': 2.5
+                'weight_noise': 2.5,
+                'position_variance': 0.5,
+                'sensor_probability': 0.4
             },
             'calm': {
                 'name': '🧘 Calm',
-                'description': 'Weaker connections, stable behavior',
+                'description': 'Weaker connections, stable, low variance',
                 'density': 0.8,
                 'include_feedback': True,
-                'weight_noise': 0.5
+                'weight_noise': 0.5,
+                'position_variance': 0.1,
+                'sensor_probability': 0.0
+            },
+            'wild': {
+                'name': '🌿 Wild',
+                'description': 'Organic positions, many sensors, natural feel',
+                'density': 1.2,
+                'include_feedback': True,
+                'weight_noise': 1.5,
+                'position_variance': 0.4,
+                'sensor_probability': 0.5
             }
         }
 

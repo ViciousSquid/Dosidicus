@@ -1,6 +1,6 @@
-
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .display_scaling import DisplayScaling
+from .localisation import loc 
 import time
 
 
@@ -29,7 +29,7 @@ class EnhancedBrainTooltips:
             return func_neuron.neuron_type
         if hasattr(func_neuron, "specialization"):
             return func_neuron.specialization
-        return "functional"
+        return loc("tooltip_functional", default="functional")
 
     # ------------------------------------------------------------------
     # Public entry point – keeps old signature for compatibility
@@ -110,9 +110,6 @@ class EnhancedBrainTooltips:
         QtWidgets.QToolTip.hideText()
         self.current_tooltip_neuron = None
 
-    # ------------------------------------------------------------------
-    # HTML generators – now use scaled min-width
-    # ------------------------------------------------------------------
     def _generate_tooltip(self, neuron_name):
         bw = self.brain_widget
         is_functional = (
@@ -127,50 +124,15 @@ class EnhancedBrainTooltips:
 
     def _generate_functional_tooltip(self, neuron_name):
         bw = self.brain_widget
-        fn = bw.enhanced_neurogenesis.functional_neurons[neuron_name]
         current_value = bw.state.get(neuron_name, 50)
-
-        # time formatting
-        seconds_ago = int(time.time() - self._get_last_activated(fn))
-        last_active = (
-            f"{seconds_ago}s ago" if seconds_ago < 60 else
-            f"{seconds_ago // 60}m ago" if seconds_ago < 3600 else
-            f"{seconds_ago // 3600}h ago"
-        )
-        age_seconds = time.time() - self._get_creation_time(fn)
-        age = (
-            f"{int(age_seconds)}s" if age_seconds < 60 else
-            f"{int(age_seconds / 60)}m" if age_seconds < 3600 else
-            f"{int(age_seconds / 3600)}h" if age_seconds < 86400 else
-            f"{int(age_seconds / 86400)}d"
-        )
-
-        utility_color = self._get_utility_color(fn.utility_score)
-        activation_color = self._get_activation_color(current_value)
-
-        min_width = DisplayScaling.scale(300)  # STEP-3
-
+        
+        val_display = f"{current_value:.1f}"
+        
         return f"""
-        <div style='font-family: Arial, sans-serif; padding: 8px; min-width: {min_width}px;'>
-            <h3 style='margin: 0 0 8px 0; color: #333; border-bottom: 2px solid #4CAF50;'>
-                {neuron_name}
-            </h3>
-            <div style='background: #f5f5f5; padding: 6px; margin: 4px 0; border-radius: 4px;'>
-                <b>🎯 Specialization:</b><br>
-                <span style='color: #555; font-style: italic;'>{fn.specialization}</span>
-            </div>
-            <table style='width: 100%; margin: 8px 0;' cellpadding='3'>
-                <tr><td style='color: #666;'>Type:</td><td><b>{self._get_neuron_type(fn)}</b></td></tr>
-                <tr><td style='color: #666;'>Current:</td><td><span style='color: {activation_color}; font-weight: bold;'>{current_value:.1f}</span></td></tr>
-                <tr><td style='color: #666;'>Utility:</td><td><span style='color: {utility_color}; font-weight: bold;'>{fn.utility_score:.2f}</span>{self._get_utility_indicator(fn.utility_score)}</td></tr>
-                <tr><td style='color: #666;'>Activations:</td><td>{fn.activation_count}</td></tr>
-                <tr><td style='color: #666;'>Last Active:</td><td>{last_active}</td></tr>
-                <tr><td style='color: #666;'>Age:</td><td>{age}</td></tr>
-            </table>
-            {self._get_connection_summary(neuron_name)}
-            <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd; color: #888; font-size: {DisplayScaling.font_size(12)}px;'>
-                💡 Double-click to inspect • Right-click for options
-            </div>
+        <div style='background-color: black; color: white; padding: 6px; 
+                    font-family: Arial; font-size: 14px; font-weight: bold; 
+                    border-radius: 3px; min-width: 40px; text-align: center;'>
+            {val_display}
         </div>
         """
 
@@ -178,30 +140,21 @@ class EnhancedBrainTooltips:
     def _generate_basic_tooltip(self, neuron_name):
         bw = self.brain_widget
         current_value = bw.state.get(neuron_name, 50)
-        is_core = neuron_name in bw.original_neuron_positions
-        shape = bw.neuron_shapes.get(neuron_name, 'circle')
-        activation_color = self._get_activation_color(current_value)
-
+        
+        # Format value based on neuron type
         if neuron_name == 'can_see_food':
-            val_display = "OFF" if current_value > 50 else "ON"
+            # For binary neurons, show localized ON/OFF
+            val_display = loc("state_on") if current_value > 50 else loc("state_off")
         else:
+            # For continuous neurons, show numeric value
             val_display = f"{current_value:.1f}"
-
-        min_width = DisplayScaling.scale(250)
-
+        
+        # Minimal black rectangle with white text (matching weight overlay style)
         return f"""
-        <div style='font-family: Arial, sans-serif; padding: 8px; min-width: {min_width}px;'>
-            <h3 style='margin: 0 0 8px 0; color: #333; border-bottom: 2px solid #2196F3;'>
-                {neuron_name}
-            </h3>
-            <table style='width: 100%;' cellpadding='3'>
-                <tr><td style='color: #666;'>Type:</td><td><b>{'Core' if is_core else 'Generated'}</b></td></tr>
-                <tr><td style='color: #666;'>Current:</td><td><span style='color: {activation_color}; font-weight: bold;'>{val_display}</span></td></tr>
-            </table>
-            {self._get_connection_summary(neuron_name)}
-            <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd; color: #888; font-size: {DisplayScaling.font_size(12)}px;'>
-                💡 Double-click to inspect • Right-click for options
-            </div>
+        <div style='background-color: black; color: white; padding: 6px; 
+                    font-family: Arial; font-size: 14px; font-weight: bold; 
+                    border-radius: 3px; min-width: 40px; text-align: center;'>
+            {val_display}
         </div>
         """
 
@@ -214,14 +167,21 @@ class EnhancedBrainTooltips:
         outgoing = [(b, w) for (a, b), w in bw.weights.items() if b == neuron_name]
         top_in = sorted(incoming, key=lambda x: abs(x[1]), reverse=True)[:3]
         top_out = sorted(outgoing, key=lambda x: abs(x[1]), reverse=True)[:3]
+        
+        lbl_conn_header = loc("tooltip_connections_header")
+        # Ensure we pass named arguments for formatting
+        conn_stats = loc("tooltip_connections_stats", incoming=len(incoming), outgoing=len(outgoing))
+        
+        lbl_top_in = loc("tooltip_top_incoming")
+        lbl_top_out = loc("tooltip_top_outgoing")
 
         html = f"<div style='margin: 8px 0;'>"
         html += f"<div style='color: #666; font-size: {DisplayScaling.font_size(12)}px; margin-bottom: 4px;'>"
-        html += f"<b>Connections:</b> {len(incoming)} in, {len(outgoing)} out</div>"
+        html += f"<b>{lbl_conn_header}:</b> {conn_stats}</div>"
 
         if top_in:
             html += f"<div style='font-size: {DisplayScaling.font_size(14)}px; margin-left: 8px;'>"
-            html += "⬅️ <b>Top Incoming:</b><br>"
+            html += f"⬅️ <b>{lbl_top_in}:</b><br>"
             for src, wt in top_in:
                 arrow, color = ("→", "#4CAF50") if wt > 0 else ("⊣", "#f44336")
                 html += f"<span style='color: {color};'>{src} {arrow} {wt:.2f}</span><br>"
@@ -229,7 +189,7 @@ class EnhancedBrainTooltips:
 
         if top_out:
             html += f"<div style='font-size: {DisplayScaling.font_size(14)}px; margin-left: 8px; margin-top: 4px;'>"
-            html += "➡️ <b>Top Outgoing:</b><br>"
+            html += f"➡️ <b>{lbl_top_out}:</b><br>"
             for tgt, wt in top_out:
                 arrow, color = ("→", "#4CAF50") if wt > 0 else ("⊣", "#f44336")
                 html += f"<span style='color: {color};'>{arrow} {tgt} {wt:.2f}</span><br>"

@@ -3,6 +3,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .display_scaling import DisplayScaling
+from .localisation import Localisation
 import time
 
 class StatisticsTab(BrainBaseTab):
@@ -88,6 +89,8 @@ class StatisticsTab(BrainBaseTab):
 
     def initialize_ui(self):
         """Build the statistics tab interface with DPI scaling"""
+        loc = Localisation.instance()
+        
         self.layout.setContentsMargins(
             DisplayScaling.scale(15),
             DisplayScaling.scale(15),
@@ -120,25 +123,25 @@ class StatisticsTab(BrainBaseTab):
         stats_layout = QtWidgets.QFormLayout(stats_container)
         stats_layout.setSpacing(DisplayScaling.scale(10))
 
-        # Master list of every statistic we want to show
+        # Master list of every statistic we want to show (using localized strings)
         stat_items = [
-            ('squid_age_minutes', 'Squid Age'),
-            ('distance_swam', 'Distance Swam (pixels)'),
-            ('cheese_eaten', 'Cheese Eaten'),
-            ('sushi_eaten', 'Sushi Eaten'),
-            ('poops_created', 'Poops Created'),
-            ('max_poops_cleaned', 'Max Poops in Tank'),
-            ('startles_experienced', 'Times Startled'),
-            ('ink_clouds_created', 'Ink Clouds Created'),
-            ('times_colour_changed', 'Times Colour Changed'),
-            ('rocks_thrown', 'Rocks Thrown'),
-            ('plants_interacted', 'Plant Interactions'),
-            ('total_sleep_time', 'Total Sleep Time (seconds)'),
-            ('sickness_episodes', 'Sickness Episodes'),
-            ('novelty_neurons_created', 'Novelty Neurons Created'),
-            ('stress_neurons_created', 'Stress Neurons Created'),
-            ('reward_neurons_created', 'Reward Neurons Created'),
-            ('current_neurons', 'Current Neurons'),
+            ('squid_age_minutes', loc.get('stat_squid_age')),
+            ('distance_swam', loc.get('stat_distance')),
+            ('cheese_eaten', loc.get('stat_cheese')),
+            ('sushi_eaten', loc.get('stat_sushi')),
+            ('poops_created', loc.get('stat_poops')),
+            ('max_poops_cleaned', loc.get('stat_max_poops')),
+            ('startles_experienced', loc.get('stat_startles')),
+            ('ink_clouds_created', loc.get('stat_ink')),
+            ('times_colour_changed', loc.get('stat_colour_change')),
+            ('rocks_thrown', loc.get('stat_rocks')),
+            ('plants_interacted', loc.get('stat_plants')),
+            ('total_sleep_time', loc.get('stat_sleep')),
+            ('sickness_episodes', loc.get('stat_sickness')),
+            ('novelty_neurons_created', loc.get('stat_novelty_neurons')),
+            ('stress_neurons_created', loc.get('stat_stress_neurons')),
+            ('reward_neurons_created', loc.get('stat_reward_neurons')),
+            ('current_neurons', loc.get('stat_current_neurons')),
         ]
 
         # Ensure the label dictionary exists
@@ -265,9 +268,10 @@ class StatisticsTab(BrainBaseTab):
 
     def reset_statistics(self):
         """Reset all statistics to zero"""
+        loc = Localisation.instance()
         reply = QtWidgets.QMessageBox.question(
-            self, "Reset Statistics", 
-            "Are you sure you want to reset all statistics?",
+            self, loc.get("reset_stats_title"), 
+            loc.get("reset_stats_msg"),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
         )
         
@@ -281,43 +285,44 @@ class StatisticsTab(BrainBaseTab):
 
     def export_statistics(self):
         """Export statistics to a file"""
+        loc = Localisation.instance()
         file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Export Statistics", "", "Text Files (*.txt)"
+            self, loc.get("export_stats_title"), "", loc.get("export_file_type")
         )
         
         if file_name:
             try:
                 with open(file_name, 'w') as f:
-                    f.write("Squid Statistics Export\n")
+                    f.write(f"{loc.get('export_header')}\n")
                     f.write("=" * 30 + "\n")
                     from datetime import datetime
                     export_time = datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
-                    f.write(f"Export Time: {export_time}\n\n")
+                    f.write(f"{loc.get('export_time')}: {export_time}\n\n")
                     
-                    f.write("Activity Statistics:\n")
-                    f.write(f"Distance Swam: {int(self.statistics['distance_swam'])} pixels\n")
-                    f.write(f"Cheese Eaten: {self.statistics['cheese_eaten']}\n")
-                    f.write(f"Sushi Eaten: {self.statistics['sushi_eaten']}\n")
-                    f.write(f"Poops Created: {self.statistics['poops_created']}\n")
-                    f.write(f"Max Poops in Tank: {self.statistics['max_poops_cleaned']}\n")
-                    f.write(f"Rocks Thrown: {self.statistics['rocks_thrown']}\n")
-                    f.write(f"Plant Interactions: {self.statistics['plants_interacted']}\n")
-                    f.write(f"Times Startled: {self.statistics['startles_experienced']}\n")
-                    f.write(f"Total Sleep Time: {int(self.statistics['total_sleep_time'])} seconds\n")
-                    f.write(f"Sickness Episodes: {self.statistics['sickness_episodes']}\n")
-                    f.write(f"Squid Age: {int(self.statistics['squid_age_minutes'])} minutes\n")
+                    f.write(f"{loc.get('export_activity_section')}:\n")
+                    f.write(f"{loc.get('stat_distance')}: {int(self.statistics['distance_swam'])}\n")
+                    f.write(f"{loc.get('stat_cheese')}: {self.statistics['cheese_eaten']}\n")
+                    f.write(f"{loc.get('stat_sushi')}: {self.statistics['sushi_eaten']}\n")
+                    f.write(f"{loc.get('stat_poops')}: {self.statistics['poops_created']}\n")
+                    f.write(f"{loc.get('stat_max_poops')}: {self.statistics['max_poops_cleaned']}\n")
+                    f.write(f"{loc.get('stat_rocks')}: {self.statistics['rocks_thrown']}\n")
+                    f.write(f"{loc.get('stat_plants')}: {self.statistics['plants_interacted']}\n")
+                    f.write(f"{loc.get('stat_startles')}: {self.statistics['startles_experienced']}\n")
+                    f.write(f"{loc.get('stat_sleep')}: {int(self.statistics['total_sleep_time'])}\n")
+                    f.write(f"{loc.get('stat_sickness')}: {self.statistics['sickness_episodes']}\n")
+                    f.write(f"{loc.get('stat_squid_age')}: {int(self.statistics['squid_age_minutes'])}\n")
                     
                     f.write("\n" + "=" * 30 + "\n")
-                    f.write("End of Statistics\n")
+                    f.write(f"{loc.get('export_end')}\n")
                 
                 QtWidgets.QMessageBox.information(
-                    self, "Export Successful", 
-                    f"Statistics exported to {file_name}"
+                    self, loc.get("export_success_title"), 
+                    loc.get("export_success_msg", file_name=file_name)
                 )
             except Exception as e:
                 QtWidgets.QMessageBox.critical(
-                    self, "Export Error", 
-                    f"Error exporting statistics: {str(e)}"
+                    self, loc.get("export_error_title"), 
+                    loc.get("export_error_msg", error=str(e))
                 )
 
     def save_statistics(self):

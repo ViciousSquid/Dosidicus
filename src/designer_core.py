@@ -69,7 +69,8 @@ class DesignerNeuron:
     @property
     def is_required(self) -> bool: return is_required_neuron(self.name)
     @property
-    def is_sensor(self) -> bool: return is_input_sensor(self.name) or self.name == 'can_see_food'
+    def is_sensor(self) -> bool: 
+        return self.neuron_type == NeuronType.SENSOR or self.name == 'can_see_food'
     @property
     def is_protected(self) -> bool: return self.is_required
     @property
@@ -145,6 +146,26 @@ class BrainDesign:
         }
         self._next_custom_neuron_x = 400  # For auto-positioning custom neurons
         self._next_custom_neuron_y = 200
+
+    def remove_optional_sensors(self) -> int:
+        """
+        Remove optional sensors from the design.
+        Only 'can_see_food' is considered required. All other sensors are optional.
+        
+        Returns:
+            Number of sensors removed
+        """
+        sensors_to_remove = []
+        for name, neuron in self.neurons.items():
+            if neuron.is_sensor and name != 'can_see_food':
+                sensors_to_remove.append(name)
+        
+        removed_count = 0
+        for name in sensors_to_remove:
+            if self.remove_neuron(name)[0]:
+                removed_count += 1
+        
+        return removed_count
     
     def _validate_and_fix_position(self, position: any) -> Tuple[float, float]:
         """Validate and fix neuron position, generating a default if invalid."""
@@ -399,7 +420,7 @@ class BrainDesign:
         return added
     
     def get_sensors_in_design(self) -> List[str]:
-        return [n for n in self.neurons if is_input_sensor(n) or n == 'can_see_food']
+        return [name for name, neuron in self.neurons.items() if neuron.is_sensor]
     
     def validate(self, auto_fix: bool = True) -> Tuple[bool, List[str], int]:
         issues = []

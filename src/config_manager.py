@@ -1,6 +1,7 @@
 import configparser
 import os
 import random
+import sys
 from PyQt5 import QtCore
 from ast import literal_eval
 
@@ -15,8 +16,19 @@ class ConfigManager:
     # Available animation styles
     ANIMATION_STYLES = ['vibrant', 'subtle', 'neural', 'none']
     
-    def __init__(self, config_path="config.ini"):
-        self.config_path = config_path
+    def __init__(self, config_filename="config.ini"):
+        # Check if we are running as a frozen executable (Auto-Py-To-Exe)
+        if getattr(sys, 'frozen', False):
+            # If frozen, the config file should be next to the .exe
+            base_path = os.path.dirname(sys.executable)
+        else:
+            # If running from source (Dev), we are in /src/config_manager.py
+            # So we need to go up one level to find config.ini
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            base_path = os.path.dirname(current_dir) # Go up to parent folder
+
+        self.config_path = os.path.join(base_path, config_filename)
+        
         self.config = configparser.ConfigParser()
         self.load_config()
 
@@ -26,6 +38,11 @@ class ConfigManager:
         self.config.read(self.config_path)
 
     def create_default_config(self):
+        
+        self.config['General'] = {
+            'language': 'en'
+        }
+
         # Rock Interactions
         self.config['RockInteractions'] = {
             'pickup_probability': '0.7',
@@ -454,3 +471,8 @@ class ConfigManager:
                 self.config.write(f)
         except Exception as e:
             print(f"⚠️ Failed to save config: {e}")
+
+    def get_language(self):
+        if not self.config.has_section('General'):
+            return 'en'
+        return self.config.get('General', 'language', fallback='en').lower()

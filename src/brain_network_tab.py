@@ -14,7 +14,7 @@ from .brain_dialogs import StimulateDialog, DiagnosticReportDialog
 from .display_scaling import DisplayScaling
 from .laboratory import NeuronLaboratory
 from .animation_styles import get_available_styles, get_style_info
-
+from .localisation import Localisation
 
 class NetworkTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None,
@@ -46,6 +46,8 @@ class NetworkTab(BrainBaseTab):
         Build the complete Network-tab UI with metrics, timers, controls,
         neurogenesis counters, checkboxes, and emergency status indicators.
         """
+        loc = Localisation.instance()
+
         # --------------------  CLEAR ANY OLD LAYOUT  -------------------- 
         if self.layout is not None:
             while self.layout.count():
@@ -67,15 +69,15 @@ class NetworkTab(BrainBaseTab):
                                         DisplayScaling.scale(10), 0)
         metrics_layout.setSpacing(DisplayScaling.scale(20))
 
-        self.neurons_label = QtWidgets.QLabel("Neurons: N/A")
+        self.neurons_label = QtWidgets.QLabel(f"{loc.get('stats_neurons')}: N/A")
         self.neurons_label.setAlignment(QtCore.Qt.AlignCenter)
         metrics_layout.addWidget(self.neurons_label)
 
-        self.connections_label = QtWidgets.QLabel("Connections: N/A")
+        self.connections_label = QtWidgets.QLabel(f"{loc.get('stats_connections')}: N/A")
         self.connections_label.setAlignment(QtCore.Qt.AlignCenter)
         metrics_layout.addWidget(self.connections_label)
 
-        self.health_label = QtWidgets.QLabel("Network Health: N/A")
+        self.health_label = QtWidgets.QLabel(f"{loc.get('stats_health')}: N/A")
         self.health_label.setAlignment(QtCore.Qt.AlignCenter)
         metrics_layout.addWidget(self.health_label)
 
@@ -110,7 +112,7 @@ class NetworkTab(BrainBaseTab):
         timer_font = QtGui.QFont()
         timer_font.setPointSize(font_size_timers)
 
-        self.hebbian_timer_label = QtWidgets.QLabel("Hebbian: XX")
+        self.hebbian_timer_label = QtWidgets.QLabel(f"{loc.get('hebbian_cycle')}: XX")
         self.hebbian_timer_label.setStyleSheet("color: white;")
         self.hebbian_timer_label.setFont(timer_font)
         timers_layout.addWidget(self.hebbian_timer_label)
@@ -141,7 +143,7 @@ class NetworkTab(BrainBaseTab):
         value_font.setBold(True)
 
         # Add the global cooldown label
-        self.global_cooldown_label = QtWidgets.QLabel("Cooldown: 0.0s")
+        self.global_cooldown_label = QtWidgets.QLabel(f"{loc.get('global_cooldown')}: 0.0s")
         self.global_cooldown_label.setFont(value_font)
         values_box.addWidget(self.global_cooldown_label)
 
@@ -168,14 +170,14 @@ class NetworkTab(BrainBaseTab):
         
         self.anim_combo.currentIndexChanged.connect(self._change_animation_style)
 
-        bottom_bar.addWidget(QtWidgets.QLabel("Style:"))
+        bottom_bar.addWidget(QtWidgets.QLabel(loc.get("style_label")))
         bottom_bar.addWidget(self.anim_combo)
 
         # Spacing
         bottom_bar.addSpacing(20)
 
         # 2. CHECKBOXES (Center-Left)
-        self.checkbox_links = QtWidgets.QCheckBox("Show links")
+        self.checkbox_links = QtWidgets.QCheckBox(loc.get("chk_links"))
         self.checkbox_links.setChecked(True)
         if self.brain_widget:
             self.checkbox_links.stateChanged.connect(self.brain_widget.toggle_links)
@@ -183,13 +185,13 @@ class NetworkTab(BrainBaseTab):
             self.brain_widget.neuronCreated.connect(self._on_neuron_created)
         bottom_bar.addWidget(self.checkbox_links)
 
-        self.checkbox_weights = QtWidgets.QCheckBox("Show weights")
+        self.checkbox_weights = QtWidgets.QCheckBox(loc.get("chk_weights"))
         self.checkbox_weights.setChecked(False)
         if self.brain_widget:
             self.checkbox_weights.stateChanged.connect(self.brain_widget.toggle_weights)
         bottom_bar.addWidget(self.checkbox_weights)
 
-        self.checkbox_pruning = QtWidgets.QCheckBox("Enable pruning")
+        self.checkbox_pruning = QtWidgets.QCheckBox(loc.get("chk_pruning"))
         self.checkbox_pruning.setChecked(True)
         self.checkbox_pruning.stateChanged.connect(self.toggle_pruning)
         bottom_bar.addWidget(self.checkbox_pruning)
@@ -234,6 +236,7 @@ class NetworkTab(BrainBaseTab):
 
     def _open_brain_designer(self):
         """Launch Brain Designer in a separate process – safe & reliable"""
+        loc = Localisation.instance()
         
         # === 1. Force Immediate State Export ===
         # This ensures the 'active_brain_state.json' file is fresh and exists 
@@ -257,7 +260,7 @@ class NetworkTab(BrainBaseTab):
         if hasattr(self, '_brain_designer_process') and \
            getattr(self._brain_designer_process, 'is_alive', lambda: False)():
             QtWidgets.QMessageBox.information(
-                self, "Already Open", "Brain Designer is already running!"
+                self, loc.get("msg_already_open"), loc.get("msg_designer_running")
             )
             return
 
@@ -274,8 +277,8 @@ class NetworkTab(BrainBaseTab):
             traceback.print_exc()
             QtWidgets.QMessageBox.critical(
                 self,
-                "Launch Failed",
-                f"Could not start Brain Designer:\n\n{e}"
+                loc.get("msg_launch_failed"),
+                loc.get("msg_designer_fail", e=e)
             )
 
     def _change_animation_style(self, index):
@@ -338,6 +341,7 @@ class NetworkTab(BrainBaseTab):
 
     def _on_every_second(self):
         """Called every second by the single QTimer."""
+        loc = Localisation.instance()
         # === NEW: Check pause state ===
         is_paused = False
         if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'simulation_speed'):
@@ -345,7 +349,7 @@ class NetworkTab(BrainBaseTab):
             
         if is_paused:
             if hasattr(self, 'hebbian_timer_label'):
-                self.hebbian_timer_label.setText("Hebbian: PAUSED")
+                self.hebbian_timer_label.setText(f"{loc.get('hebbian_cycle')}: {loc.get('hebbian_paused')}")
             # Don't decrement counter
             return
         # ==============================
@@ -375,11 +379,13 @@ class NetworkTab(BrainBaseTab):
         self.update_hebbian_label()
 
     def update_hebbian_label(self):
+        loc = Localisation.instance()
         if hasattr(self, 'hebbian_timer_label'):
-            self.hebbian_timer_label.setText(f"Hebbian: {self.hebbian_timer_value}")
+            self.hebbian_timer_label.setText(f"{loc.get('hebbian_cycle')}: {self.hebbian_timer_value}")
 
     def update_metrics_display(self):
         '''Update the metrics bar with current network statistics - single source of truth'''
+        loc = Localisation.instance()
         if hasattr(self, 'brain_widget') and self.brain_widget:
             # Get neuron positions directly from brain widget
             neuron_positions = getattr(self.brain_widget, 'neuron_positions', {})
@@ -410,11 +416,11 @@ class NetworkTab(BrainBaseTab):
 
         # Update labels with consistent data
         if hasattr(self, 'neurons_label'):
-            self.neurons_label.setText(f"Neurons: {total_neurons}")
+            self.neurons_label.setText(f"{loc.get('stats_neurons')}: {total_neurons}")
         if hasattr(self, 'connections_label'):
-            self.connections_label.setText(f"Connections: {connection_count}")
+            self.connections_label.setText(f"{loc.get('stats_connections')}: {connection_count}")
         if hasattr(self, 'health_label'):
-            self.health_label.setText(f"Network Health: {health_percentage_str}")
+            self.health_label.setText(f"{loc.get('stats_health')}: {health_percentage_str}")
             # Set color based on health status
             if health_percentage_str == "Optimal":
                 self.health_label.setStyleSheet("font-weight: bold; color: green;")
@@ -438,21 +444,23 @@ class NetworkTab(BrainBaseTab):
 
     def _update_global_cooldown_label(self):
         """Update the global cooldown label with the remaining time."""
+        loc = Localisation.instance()
         if not self.brain_widget:
-            self.global_cooldown_label.setText("Cooldown: N/A")
+            self.global_cooldown_label.setText(f"{loc.get('global_cooldown')}: N/A")
             return
 
         eng = getattr(self.brain_widget, 'enhanced_neurogenesis', None)
         if eng is None:
-            self.global_cooldown_label.setText("Cooldown: N/A")
+            self.global_cooldown_label.setText(f"{loc.get('global_cooldown')}: N/A")
             return
 
         # This now returns the real cooldown value
         remaining = eng.get_global_cooldown_remaining()
-        self.global_cooldown_label.setText(f"Cooldown: {remaining:.1f}s")
+        self.global_cooldown_label.setText(f"{loc.get('global_cooldown')}: {remaining:.1f}s")
 
     def _create_functional_stats_area(self):
         """Creates the container for functional stats label and the two side-by-side emoji buttons."""
+        loc = Localisation.instance()
         # Wrapper that holds the green card + button container
         self.functional_stats_area = QtWidgets.QWidget()
         self.stats_and_button_layout = QtWidgets.QHBoxLayout(self.functional_stats_area)
@@ -498,7 +506,7 @@ class NetworkTab(BrainBaseTab):
                 border: 1px solid #444;
             }
         """)
-        self.new_50x50_button.setToolTip("Show Brain Designer")
+        self.new_50x50_button.setToolTip(loc.get("tooltip_brain_designer"))
         self.new_50x50_button.clicked.connect(self._open_brain_designer)
         btn_layout.addWidget(self.new_50x50_button)
         self.stats_and_button_layout.addWidget(self.new_button_container)
@@ -506,15 +514,17 @@ class NetworkTab(BrainBaseTab):
 
     def flash_emergency_creation(self, neuron_name):
         """Show visual indicator of emergency neuron creation"""
+        loc = Localisation.instance()
         if hasattr(self, 'emergency_status_label'):
-            self.emergency_status_label.setText(f"🚨 Emergency: {neuron_name}")
+            self.emergency_status_label.setText(loc.get("emergency_alert", name=neuron_name))
             self.emergency_status_label.setVisible(True)
             QtCore.QTimer.singleShot(5000, lambda: self.emergency_status_label.setVisible(False))
 
     def _toggle_neuron_laboratory(self):
         """Toggles the visibility of the Neuron Laboratory dialog."""
+        loc = Localisation.instance()
         if not self.brain_widget:
-            QtWidgets.QMessageBox.warning(self, "Missing Brain", "Cannot open Neuron Laboratory: Brain Widget is not available.")
+            QtWidgets.QMessageBox.warning(self, loc.get("msg_missing_brain"), loc.get("msg_cannot_open_lab"))
             return
 
         if self.neuron_lab_dialog is None:
@@ -528,6 +538,7 @@ class NetworkTab(BrainBaseTab):
 
     def _update_functional_neuron_stats(self):
         """Display functional neuron statistics"""
+        loc = Localisation.instance()
         if not hasattr(self.brain_widget, 'enhanced_neurogenesis'):
             return
 
@@ -553,11 +564,11 @@ class NetworkTab(BrainBaseTab):
         if spec_counts:
             avg_utility = total_utility / len(eng.functional_neurons)
 
-            text = "<b>🧬 Functional Neurons:</b><br>"
-            text += f"<b>Count:</b> {len(eng.functional_neurons)} | "
-            text += f"<b>Avg Utility:</b> {avg_utility:.2f} | "
-            text += f"<b>Total Activations:</b> {total_activations}<br>"
-            text += "<b>Specialisations:</b> "
+            text = f"<b>🧬 {loc.get('func_neurons_title')}:</b><br>"
+            text += f"<b>{loc.get('count_label')}:</b> {len(eng.functional_neurons)} | "
+            text += f"<b>{loc.get('avg_utility_label')}:</b> {avg_utility:.2f} | "
+            text += f"<b>{loc.get('total_activations_label')}:</b> {total_activations}<br>"
+            text += f"<b>{loc.get('specialisations_label')}:</b> "
 
             spec_list = [f"<i>{spec}</i>({count})" for spec, count in
                         sorted(spec_counts.items(), key=lambda x: x[1], reverse=True)]
@@ -566,11 +577,11 @@ class NetworkTab(BrainBaseTab):
             self.functional_stats_label.setText(text)
         else:
             # Always show the card with zero stats (as requested previously)
-            text = "<b>🧬 Functional Neurons:</b><br>"
-            text += "<b>Count:</b> 0 | "
-            text += "<b>Avg Utility:</b> N/A | "
-            text += "<b>Total Activations:</b> 0<br>"
-            text += "<b>Specialisations:</b> None"
+            text = f"<b>🧬 {loc.get('func_neurons_title')}:</b><br>"
+            text += f"<b>{loc.get('count_label')}:</b> 0 | "
+            text += f"<b>{loc.get('avg_utility_label')}:</b> N/A | "
+            text += f"<b>{loc.get('total_activations_label')}:</b> 0<br>"
+            text += f"<b>{loc.get('specialisations_label')}:</b> None"
             self.functional_stats_label.setText(text)
 
         # Ensure the entire area is always shown
@@ -667,12 +678,13 @@ class NetworkTab(BrainBaseTab):
 
     def _show_experience_buffer(self):
         """Show the Experience Buffer window when magnifying glass is clicked"""
+        loc = Localisation.instance()
         if not self.brain_widget:
-            QtWidgets.QMessageBox.warning(self, "Missing Brain", "Cannot open Experience Buffer: Brain Widget is not available.")
+            QtWidgets.QMessageBox.warning(self, loc.get("msg_missing_brain"), loc.get("msg_cannot_open_buffer"))
             return
 
         if not hasattr(self.brain_widget, 'enhanced_neurogenesis') or self.brain_widget.enhanced_neurogenesis is None:
-            QtWidgets.QMessageBox.warning(self, "No Neurogenesis", "Cannot open Experience Buffer: Neurogenesis system is not initialized.")
+            QtWidgets.QMessageBox.warning(self, loc.get("msg_no_neurogenesis"), loc.get("msg_neurogenesis_not_init"))
             return
 
         # Create or show the dialog
@@ -686,6 +698,7 @@ class NetworkTab(BrainBaseTab):
 
     def _show_decorations(self):
         """Show the Decorations window"""
+        loc = Localisation.instance()
         # Navigate up the parent hierarchy to find the main window/UI object
         # Handle both cases: parent as a method (PyQt default) or as an attribute
         parent = self.parent() if callable(self.parent) else self.parent
@@ -701,8 +714,8 @@ class NetworkTab(BrainBaseTab):
             parent = parent.parent() if callable(parent.parent) else parent.parent
         
         # If we couldn't find it, show a warning
-        QtWidgets.QMessageBox.warning(self, "Decorations Unavailable", 
-                                     "Cannot open Decorations: Window is not available.")
+        QtWidgets.QMessageBox.warning(self, loc.get("msg_decorations_unavailable"), 
+                                     loc.get("msg_decorations_fail"))
 
 
 class ExperienceBufferDialog(QtWidgets.QDialog):
@@ -711,7 +724,8 @@ class ExperienceBufferDialog(QtWidgets.QDialog):
     def __init__(self, brain_widget, parent=None):
         super().__init__(parent)
         self.brain_widget = brain_widget
-        self.setWindowTitle("Neurogenesis Experience Buffer")
+        self.loc = Localisation.instance()
+        self.setWindowTitle(self.loc.get("buffer_title"))
         self.setMinimumSize(800, 480)
         self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
         
@@ -722,14 +736,19 @@ class ExperienceBufferDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
         
         # Header with info
-        header = QtWidgets.QLabel("Recent Experiences")
+        header = QtWidgets.QLabel(self.loc.get("buffer_header"))
         header.setStyleSheet("font-weight: bold; font-size: 12pt; padding: 5px;")
         layout.addWidget(header)
         
         # Create table to show experiences
         self.table = QtWidgets.QTableWidget()
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Type", "Pattern", "Outcome", "Time"])
+        self.table.setHorizontalHeaderLabels([
+            self.loc.get("col_type"),
+            self.loc.get("col_pattern"),
+            self.loc.get("col_outcome"),
+            self.loc.get("col_time")
+        ])
         
         # Set column widths
         self.table.setColumnWidth(0, 100)   # Type
@@ -764,7 +783,7 @@ class ExperienceBufferDialog(QtWidgets.QDialog):
         
         # Refresh button
         button_layout = QtWidgets.QHBoxLayout()
-        refresh_btn = QtWidgets.QPushButton("Refresh")
+        refresh_btn = QtWidgets.QPushButton(self.loc.get("btn_refresh"))
         refresh_btn.clicked.connect(self.refresh_data)
         refresh_btn.setFixedSize(80, 30)
         button_layout.addStretch()
@@ -828,8 +847,8 @@ class ExperienceBufferDialog(QtWidgets.QDialog):
         top_patterns = sorted(pattern_counts.items(), key=lambda x: x[1], reverse=True)[:3]
         
         if top_patterns:
-            pattern_text = "Top patterns: " + " | ".join([f"{p}: {c}" for p, c in top_patterns])
+            pattern_text = f"{self.loc.get('top_patterns')}: " + " | ".join([f"{p}: {c}" for p, c in top_patterns])
         else:
-            pattern_text = "No patterns yet"
+            pattern_text = self.loc.get('no_patterns')
             
-        self.info_label.setText(f"📊 Buffer size: {len(experiences)}/{buffer.buffer.maxlen} | {pattern_text}")
+        self.info_label.setText(f"📊 {self.loc.get('buffer_size')}: {len(experiences)}/{buffer.buffer.maxlen} | {pattern_text}")

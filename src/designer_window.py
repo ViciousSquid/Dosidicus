@@ -759,6 +759,8 @@ class BrainDesignerWindow(QMainWindow):
                 clear_existing=True,
                 density=preset.get('density', 1.0),
                 include_feedback=preset.get('include_feedback', False),
+                position_variance=preset.get('position_variance', 0.2),
+                sensor_probability=preset.get('sensor_probability', 0.0)
             )
             
             self.on_design_changed()

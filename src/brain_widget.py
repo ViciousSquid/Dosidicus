@@ -1,6 +1,7 @@
 import sys
 import csv
 import os
+import re
 import time
 import math
 import random
@@ -20,6 +21,7 @@ from .brain_constants import CORE_NEURONS, INPUT_SENSORS, is_core_neuron
 from .personality import Personality
 from .learning import LearningConfig
 from .laboratory import NeuronLaboratory
+from .localisation import Localisation
 from typing import Dict, Optional
 
 # Brain state bridge for designer communication
@@ -67,6 +69,7 @@ class BrainWidget(QtWidgets.QWidget):
         self.resolution_scale = 1.0  # Default resolution scale
         self.config = config if config else LearningConfig()
         self._laboratory = None
+        self._last_lang = Localisation.instance().current_language
         
         # ===== ANIMATION STYLE INITIALIZATION =====
         self._animation_style_name = animation_style
@@ -189,7 +192,12 @@ class BrainWidget(QtWidgets.QWidget):
             "anxiety": (491, 389), #
             "curiosity": (701, 386) #
         }
-        self.neuron_positions = self.original_neuron_positions.copy() #
+        self.neuron_positions = self.original_neuron_positions.copy() 
+
+        # Randomize positions if configured ---
+        neuron_props = self.config.neurogenesis.get('neuron_properties', {})
+        if neuron_props.get('randomize_start_positions', False):
+            self._randomize_all_positions()
 
         # Ensure connection to hunger exists (always)
         self.weights[("can_see_food", "hunger")] = 0.2  # Seeing food increases hunger slightly
@@ -734,6 +742,19 @@ class BrainWidget(QtWidgets.QWidget):
         })
         
         self._comm_glow_last_spawn[conn_key] = current_time
+
+    def find_orphan_neurons(self):
+        """Find neurons with no connections in the weights dictionary"""
+        orphans = []
+        for neuron in self.neuron_positions.keys():
+            if neuron in self.excluded_neurons:
+                continue
+            has_connection = any(src == neuron or dst == neuron 
+                            for (src, dst) in self.weights.keys())
+            if not has_connection:
+                orphans.append(neuron)
+        return orphans
+
     
     def _update_comm_glows(self, dt):
         """
@@ -1303,10 +1324,15 @@ class BrainWidget(QtWidgets.QWidget):
 
     def update_animations(self):
         """Update all animation states with smarter dirty-checking."""
-        # === NEW: Freeze animations when paused ===
+        
+        current_lang = Localisation.instance().current_language
+        if getattr(self, '_last_lang', None) != current_lang:
+            self._last_lang = current_lang
+            self.mark_render_dirty()
+            self.update()
+
         if self.is_paused:
             return
-        # ==========================================
 
         current_time = time.time()
         
@@ -1612,55 +1638,34 @@ class BrainWidget(QtWidgets.QWidget):
         
         # Core neurons that should NOT be draggable
         if neuron_name in self.original_neurons:
-            return False
+            return True # HACK make it True anyway
         
         # ANY neuron not in original_neurons is draggable (including circular ones)
         return True
 
     def _periodic_neurogenesis_check(self):
-        """Periodic check for neurogenesis triggers (every 2 seconds)."""
+        """Periodic check for neurogenesis triggers and orphans."""
         if not hasattr(self, 'check_neurogenesis_triggers'):
             return
             
         # Skip if a check is already pending
         if self._pending_neurogenesis_check:
             return
+            
+        # Prioritise Orphan Rescue ---
+        if hasattr(self, 'enhanced_neurogenesis') and hasattr(self.enhanced_neurogenesis, 'rescue_orphan'):
+            orphans = self.find_orphan_neurons()
+            if orphans:
+                # Rescue the first orphan found
+                orphan = orphans[0]
+                print(f"🚑 Orphan detected: {orphan}. Creating connector neuron...")
+                self.enhanced_neurogenesis.rescue_orphan(orphan)
+                self.update()
+                # If we handled an orphan, skip normal neurogenesis this tick to prioritize
+                return
         
         # Build state with context
         state_with_context = self.state.copy()
-
-        # FIX: Ensure recent_actions is always a list before sending to worker
-        if 'recent_actions' in state_with_context:
-            if not isinstance(state_with_context['recent_actions'], list):
-                state_with_context['recent_actions'] = []
-        else:
-            state_with_context['recent_actions'] = []
-        
-        # Add environmental data if available
-        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
-            logic = self.tamagotchi_logic
-            if hasattr(logic, 'food_items'):
-                state_with_context['food_count'] = len(logic.food_items)
-            if hasattr(logic, 'poop_items'):
-                state_with_context['poop_count'] = len(logic.poop_items)
-            if hasattr(logic, 'squid'):
-                state_with_context['carrying_rock'] = getattr(logic.squid, 'carrying_rock', False)
-        
-        # CRITICAL: Ensure cache is updated before queueing
-        self._update_worker_cache()
-        
-        if self._use_threaded_processing and hasattr(self, 'brain_worker'):
-            # Queue the work to the background thread
-            self._pending_neurogenesis_check = True
-            self.brain_worker.queue_neurogenesis_check(state_with_context)
-        else:
-            # Fallback: synchronous processing (original behavior)
-            try:
-                created = self.check_neurogenesis_triggers(state_with_context)
-                if created:
-                    print(f"✨ Neurogenesis triggered! New neuron created.")
-            except Exception as e:
-                print(f"⚠️ Neurogenesis check error: {e}")
 
     def toggle_pruning(self, enabled):
         """Enable or disable the pruning mechanisms for neurogenesis"""
@@ -2537,13 +2542,24 @@ class BrainWidget(QtWidgets.QWidget):
         return False
 
     def apply_repulsion_force(self, iterations=15, strength=0.6, threshold=120.0):
-        """Applies a repulsion force between nearby neurons to spread them out."""
+        """Applies repulsion force and enforces boundary constraints from config."""
+        
+        neuron_props = self.config.neurogenesis.get('neuron_properties', {})
+        force_bounds = neuron_props.get('force_bounds', True)
+        centering_force = neuron_props.get('centering_force', 0.02)
+        padding = neuron_props.get('canvas_padding', 60)
+        
+        # Logical canvas center
+        center_x, center_y = 512, 384
+        min_x, max_x = padding, 1024 - padding
+        min_y, max_y = padding, 768 - padding
 
         neuron_list = [name for name in self.neuron_positions.keys() if name not in self.excluded_neurons]
 
         for _ in range(iterations):
             displacements = {name: [0.0, 0.0] for name in neuron_list}
 
+            # 1. Repulsion between neurons
             for i in range(len(neuron_list)):
                 for j in range(i + 1, len(neuron_list)):
                     neuron1 = neuron_list[i]
@@ -2567,20 +2583,33 @@ class BrainWidget(QtWidgets.QWidget):
                         displacements[neuron2][0] -= move_x
                         displacements[neuron2][1] -= move_y
 
+            # 2. Apply movements + Centering Force + Boundary Constraints
             damping = 0.5
             moved = False
+            
             for name in neuron_list:
-                if name in self.original_neuron_positions:
-                   continue
-
+                # Skip core neurons IF you want them fixed, but requirement says randomise start
+                # so we allow them to move, but maybe less? For now, move all.
+                
                 pos = self.neuron_positions[name]
                 disp = displacements[name]
+                
+                # Apply Centering Force (pull towards middle)
+                if centering_force > 0:
+                    dir_to_center_x = center_x - pos[0]
+                    dir_to_center_y = center_y - pos[1]
+                    disp[0] += dir_to_center_x * centering_force
+                    disp[1] += dir_to_center_y * centering_force
 
                 if abs(disp[0]) > 0.1 or abs(disp[1]) > 0.1:
                     new_x = pos[0] + disp[0] * damping
                     new_y = pos[1] + disp[1] * damping
-                    new_x = max(50, min(974, new_x))
-                    new_y = max(50, min(668, new_y))
+                    
+                    # Force Bounds
+                    if force_bounds:
+                        new_x = max(min_x, min(max_x, new_x))
+                        new_y = max(min_y, min(max_y, new_y))
+                        
                     self.neuron_positions[name] = (new_x, new_y)
                     moved = True
 
@@ -2588,6 +2617,7 @@ class BrainWidget(QtWidgets.QWidget):
                 break
         if moved:
            self.update()
+
 
     def update_weights(self):
 
@@ -3053,11 +3083,62 @@ class BrainWidget(QtWidgets.QWidget):
             painter.drawEllipse(QtCore.QPointF(x, y), radius, radius)
 
     def _draw_drag_preview(self, painter):
-        """Draw preview when dragging a neuron"""
-        # This could show a ghost of the neuron at cursor position
-        pass
+        """Draw preview when dragging a neuron (runs at full framerate)"""
+        if not self.dragged_neuron or self.dragged_neuron not in self.neuron_positions:
+            return
 
-    
+        # 1. Calculate Scale (Must match _draw_neurogenesis_highlight and render worker)
+        indicator_space = 0
+        base_width = 1024
+        base_height = 768 - indicator_space
+        scale_x = self.width() / base_width
+        scale_y = (self.height() - indicator_space) / max(1, base_height)
+        scale = max(0.01, min(scale_x, scale_y))
+        
+        # 2. Prepare single-neuron state for static drawing
+        name = self.dragged_neuron
+        pos = self.neuron_positions[name]
+        val = self.state.get(name, 50)
+        
+        temp_positions = {name: pos}
+        temp_states = {name: val}
+        
+        # 3. Draw the neuron immediately (bypassing cached 10fps render)
+        # Note: We don't clear the background, so we draw ON TOP of the cached frame.
+        # This might cause a slight 'trail' behind the moving neuron if the background 
+        # refresh is slow, but it guarantees the neuron stays stuck to the mouse cursor.
+        
+        # Check if it has a custom shape
+        shape = self.neuron_shapes.get(name, 'circle')
+        
+        x = pos[0] * scale
+        y = pos[1] * scale
+        radius = 20 * scale
+        
+        # Temporarily set painter to high quality
+        painter.save()
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        
+        # Use existing shape drawing logic
+        if shape == 'diamond':
+            self.draw_diamond_neuron(painter, x, y, radius, name, scale)
+        elif shape == 'square':
+            self.draw_square_neuron(painter, x, y, radius, name, scale)
+        elif shape == 'triangle':
+            self.draw_triangular_neuron(painter, x, y, radius, name, scale)
+        elif shape == 'hexagon':
+            self.draw_hexagon_neuron(painter, x, y, radius, name, scale)
+        else:
+            # Standard/Continuous or Binary
+            # Explicitly call the static method from the Mixin class
+            NetworkRenderingMixin.draw_neurons_static(
+                painter, temp_positions, temp_states,
+                visible_neurons={name}, 
+                scale=scale, 
+                base_font_size=self.neuron_label_font_size
+            )
+            
+        painter.restore()
 
     def draw_neurons(self, painter, scale=1.0):
         """Main neuron drawing routine."""
@@ -3099,11 +3180,10 @@ class BrainWidget(QtWidgets.QWidget):
                         self.tamagotchi_logic and
                         self.tamagotchi_logic.squid):
                         sees_food = bool(self.tamagotchi_logic.squid.get_visible_food())
-                        value = 100.0 if sees_food else 0.0
+                        # Inverted status as requested
+                        value = 0.0 if sees_food else 100.0
                     else:
-                        value = 100.0 if float(raw_value) > 50 else 0.0
-                else:
-                    value = 100.0 if float(raw_value) > 50 else 0.0
+                        value = 0.0 if float(raw_value) > 50 else 100.0
 
                 # Determine Color (Red/Green)
                 is_active = value > 50
@@ -3117,8 +3197,8 @@ class BrainWidget(QtWidgets.QWidget):
                 size = radius * 1.8  # Slight adjustment to visually match circle size
                 painter.drawRect(QtCore.QRectF(x - size/2, y - size/2, size, size))
 
-                # Draw Label
-                self._draw_standard_label(painter, x, y, radius, name, scale, font_metrics)
+                # Draw Label - FIXED ARGUMENTS HERE
+                self._draw_standard_label(painter, name, x, y, scale, self.neuron_label_font_size)
                 continue
 
             # ------------------------------------------------------------------
@@ -3133,6 +3213,8 @@ class BrainWidget(QtWidgets.QWidget):
                     self.draw_square_neuron(painter, x, y, radius, name, scale)
                 elif shape == 'triangle':
                     self.draw_triangular_neuron(painter, x, y, radius, name, scale)
+                elif shape == 'hexagon':
+                    self.draw_hexagon_neuron(painter, x, y, radius, name, scale)
                 else:
                     self.draw_circular_neuron(painter, x, y, 0, name, scale)
                 continue
@@ -3155,21 +3237,56 @@ class BrainWidget(QtWidgets.QWidget):
             painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), max(1, int(2 * scale))))
             painter.drawEllipse(QtCore.QPointF(x, y), radius, radius)
 
-            # Draw Label
-            self._draw_standard_label(painter, x, y, radius, name, scale, font_metrics)
+            # Draw Label - FIXED ARGUMENTS HERE
+            self._draw_standard_label(painter, name, x, y, scale, self.neuron_label_font_size)
 
-    def _draw_standard_label(self, painter, x, y, radius, name, scale, font_metrics):
-        """Helper to draw the standardized label below neurons."""
-        display_name = name.replace("_", " ").title()
+    def _draw_standard_label(self, painter, name, x, y, scale, font_size=None):
+        """Draw a standard neuron label with improved localisation fallback."""
+        from .localisation import Localisation
+        loc = Localisation.instance()
+
+        if font_size is None:
+            font_size = self.neuron_label_font_size
+
+        label_font = QtGui.QFont("Arial", int(font_size * scale))
+        label_font.setBold(True)
+        painter.setFont(label_font)
+        font_metrics = painter.fontMetrics()
+
+        # Primary: exact key
+        display_name = loc.get(name)
+
+        # Fallback 1: try space-separated version
+        if display_name == name:  # Means no translation found
+            space_key = name.replace("_", " ")
+            display_name = loc.get(space_key, default=None)
+            if display_name is None:
+                display_name = space_key  # Use spaces for readability
+
+        # Fallback 2: neurogenesis pattern (e.g., novelty_1 → Novelty 1)
+        if display_name == name or display_name == name.replace("_", " "):
+            match = re.match(r"^([a_z]+)_(\d+)$", name)
+            if match:
+                base = match.group(1)
+                idx = match.group(2)
+                base_loc = loc.get(base)
+                if base_loc != base:  # Found translation for base
+                    display_name = f"{base_loc} {idx}"
+                else:
+                    display_name = f"{base.capitalize()} {idx}"
+
+        # Final fallback: clean title case
+        if display_name == name:
+            display_name = name.replace("_", " ").title()
+
         text_width = font_metrics.horizontalAdvance(display_name)
-
-        padding = 4 * scale  # Reduced padding
-        rect_width = text_width + (padding * 2)
-        rect_height = font_metrics.height() + (2 * scale)
+        padding = 10 * scale
+        rect_width = text_width + padding * 2
+        rect_height = font_metrics.height() + 4
 
         text_rect = QtCore.QRectF(
             x - rect_width / 2,
-            y + radius + (3 * scale), # Closer to neuron
+            y + (20 * scale) + 5 * scale,
             rect_width,
             rect_height,
         )
@@ -3191,16 +3308,73 @@ class BrainWidget(QtWidgets.QWidget):
         label_width, label_height = int(150 * scale), int(20 * scale)
         painter.drawText(x_scaled - label_width//2, y_scaled + int(30 * scale), label_width, label_height, QtCore.Qt.AlignCenter, label)
 
-    def draw_circular_neuron(self, painter, x, y, value, label, scale=1.0):
-        color = QtGui.QColor(150, 255, 150); radius = 20 * scale
-        painter.setBrush(QtGui.QBrush(color)); painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
-        painter.drawEllipse(int(x - radius), int(y - radius), int(radius*2), int(radius*2))
-        self._draw_neuron_label(painter, x, y, label, scale)
+    def draw_circular_neuron(self, painter, name, pos, value, scale=1.0, visible_neurons=None, excluded_neurons=None):
+        """Fixed version with correct excluded_neurons handling."""
+        if visible_neurons is None:
+            visible_neurons = self.visible_neurons
+        if excluded_neurons is None:
+            excluded_neurons = self.excluded_neurons
+
+        if name in excluded_neurons or name not in visible_neurons:
+            return
+
+        # Reuse static method for consistency
+        temp_states = {name: value}
+        temp_positions = {name: pos}
+        
+        NetworkRenderingMixin.draw_neurons_static(
+            painter, temp_positions, temp_states,
+            visible_neurons={name}, excluded_neurons=excluded_neurons,
+            scale=scale, base_font_size=self.neuron_label_font_size
+        )
 
     def draw_triangular_neuron(self, painter, x, y, radius, label, scale=1.0, alpha=255):
         """Draw a triangular neuron with given radius"""
         color = QtGui.QColor(*self.state_colors.get(label, (255, 255, 150)))
         self._draw_polygon_neuron(painter, x, y, 3, radius, color, label, scale, alpha=alpha)
+
+    def draw_hexagon_neuron(self, painter, x, y, radius, label, scale=1.0, alpha=255):
+        """Draw a purple hexagon neuron with a 'C' inside and NO external label"""
+        # 1. Setup Painter
+        painter.save()
+        painter.translate(x, y)
+        
+        # Color setup (Purple)
+        color_tuple = self.state_colors.get(label, (160, 32, 240))
+        color = QtGui.QColor(*color_tuple)
+        color.setAlpha(min(255, max(0, alpha)))
+        
+        pen_color = QtGui.QColor(0, 0, 0)
+        pen_color.setAlpha(min(255, max(0, alpha)))
+
+        painter.setBrush(QtGui.QBrush(color))
+        painter.setPen(QtGui.QPen(pen_color))
+
+        # 2. Draw Hexagon Polygon
+        sides = 6
+        polygon = QtGui.QPolygonF()
+        angle_step = 360.0 / sides
+        for i in range(sides):
+            angle = math.radians(i * angle_step - 90)
+            polygon.append(QtCore.QPointF(radius * math.cos(angle), 
+                                        radius * math.sin(angle)))
+        painter.drawPolygon(polygon)
+
+        # 3. Draw the 'C' inside
+        font_size = int(14 * scale)
+        font = QtGui.QFont("Arial", font_size)
+        font.setBold(True)
+        painter.setFont(font)
+        
+        # White text
+        painter.setPen(QtGui.QColor(255, 255, 255, min(255, max(0, alpha))))
+        
+        rect_size = radius * 2
+        rect = QtCore.QRectF(-radius, -radius, rect_size, rect_size)
+        painter.drawText(rect, QtCore.Qt.AlignCenter, "C")
+
+        painter.restore()
+
 
     def show_diagnostic_report(self):
         if hasattr(self, 'brain_widget'): self.brain_widget.show_diagnostic_report()
@@ -3232,32 +3406,58 @@ class BrainWidget(QtWidgets.QWidget):
         painter.restore()
         self._draw_neuron_label(painter, x, y, label, radius, scale, alpha)
 
-    def _draw_neuron_label(self, painter, x, y, label, radius, scale, alpha=255):
-        """Draw neuron label below the neuron"""
-        alpha = max(0, min(255, alpha))              # ← clamp alpha
-        label_color = QtGui.QColor(0, 0, 0)
-        label_color.setAlpha(alpha)
-        painter.setPen(label_color)
-        font = painter.font()
-        font.setPointSize(self.neuron_label_font_size)  # Use config value directly
+    def _draw_neuron_label(self, painter, name, pos, scale):
+        """Draw neuron label with robust localisation fallback."""
+        from .localisation import Localisation
+        loc = Localisation.instance()
+
+        font = QtGui.QFont("Arial", int(self.neuron_label_font_size * scale))
+        font.setBold(True)
         painter.setFont(font)
-        label_y = y + radius + 15 * scale
+        fm = painter.fontMetrics()
 
-        # Calculate the width needed for the text
-        font_metrics = painter.fontMetrics()
-        text_width = font_metrics.horizontalAdvance(label)
+        # Step 1: Try exact key
+        label = loc.get(name)
+
+        # Step 2: Try space-separated key
+        if label == name:
+            space_key = name.replace("_", " ")
+            label = loc.get(space_key)
+            if label == space_key:
+                label = None  # Mark as not found
+
+        # Step 3: Neurogenesis pattern
+        if not label:
+            import re
+            match = re.match(r"^([a-z_]+)_(\d+)$", name)
+            if match:
+                base_key = match.group(1)
+                num = match.group(2)
+                base_label = loc.get(base_key)
+                if base_label != base_key:
+                    label = f"{base_label} {num}"
+                else:
+                    label = f"{base_key.replace('_', ' ').title()} {num}"
+
+        # Final fallback
+        if not label:
+            label = name.replace("_", " ").title()
+
+        text_width = fm.horizontalAdvance(label)
         padding = 10 * scale
-        rect_width = text_width + 2 * padding
-
-        # Center the text rectangle horizontally around the neuron center (x)
-        painter.drawText(
-            int(x - rect_width / 2),
-            int(label_y),
-            int(rect_width),
-            int(20 * scale),
-            QtCore.Qt.AlignCenter,
-            label
+        rect = QtCore.QRectF(
+            pos.x() - text_width / 2 - padding,
+            pos.y() + 25 * scale,
+            text_width + padding * 2,
+            fm.height() + 6
         )
+
+        painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0, 180)))
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.drawRoundedRect(rect, 6, 6)
+
+        painter.setPen(QtGui.QColor(255, 255, 255))
+        painter.drawText(rect, QtCore.Qt.AlignCenter, label)
 
     def draw_neurogenesis_highlights(self, painter, scale):
         if (self.neurogenesis_highlight['neuron'] and time.time() - self.neurogenesis_highlight['start_time'] < self.neurogenesis_highlight['duration']):
@@ -3528,7 +3728,29 @@ class BrainWidget(QtWidgets.QWidget):
 
     def reset_positions(self):
         self.neuron_positions = self.original_neuron_positions.copy()
+        
+        # Check config for randomization preference
+        neuron_props = self.config.neurogenesis.get('neuron_properties', {})
+        if neuron_props.get('randomize_start_positions', False):
+            self._randomize_all_positions()
+            
         self.update()
+
+    def _randomize_all_positions(self):
+        """Randomize positions of all neurons within safe bounds."""
+        import random
+        padding = self.config.neurogenesis.get('neuron_properties', {}).get('canvas_padding', 60)
+        
+        # Canvas dimensions (assumed roughly 1024x768 logical)
+        min_x, max_x = padding, 1024 - padding
+        min_y, max_y = padding, 768 - padding
+        
+        for name in self.neuron_positions:
+            rx = random.randint(min_x, max_x)
+            ry = random.randint(min_y, max_y)
+            self.neuron_positions[name] = (rx, ry)
+        
+        print("🎲 Randomized neuron positions")
         
     def start_tutorial_glow(self, duration_ms=5000):
         """Start a glowing, pulsing border effect for tutorial purposes"""
@@ -3872,11 +4094,14 @@ class NetworkRenderingMixin:
     def draw_neurons_static(
         painter, neuron_positions, neuron_states,
         visible_neurons=None, excluded_neurons=None,
-        scale=1.0, base_font_size=6):  # Reduced from 8
+        scale=1.0, base_font_size=6):
         """
-        Static neuron drawing – now correctly handles binary neurons even when
-        no tamagotchi_logic reference is available (e.g. during save load).
+        Static neuron drawing with full localisation fallback support.
         """
+        import re
+        from .localisation import Localisation
+        loc = Localisation.instance()
+
         BINARY_NEURONS = {
             "can_see_food", "is_eating", "is_sleeping",
             "is_sick", "is_fleeing", "pursuing_food", "is_startled"
@@ -3887,7 +4112,7 @@ class NetworkRenderingMixin:
         if excluded_neurons is None:
             excluded_neurons = set()
 
-        label_font = QtGui.QFont("Arial", int(base_font_size))
+        label_font = QtGui.QFont("Arial", int(base_font_size * scale))
         label_font.setBold(True)
         painter.setFont(label_font)
         font_metrics = painter.fontMetrics()
@@ -3898,13 +4123,12 @@ class NetworkRenderingMixin:
 
             raw_value = neuron_states.get(name, 0)
 
-            # Binary neuron handling (including can_see_food)
+            # Determine color and value (binary vs continuous)
             if name in BINARY_NEURONS:
                 value = 100.0 if float(raw_value) > 50 else 0.0
                 is_active = value > 50
                 color = QtGui.QColor(0, 255, 0) if is_active else QtGui.QColor(255, 0, 0)
             else:
-                # Continuous neurons – heat colour map
                 value = float(raw_value) if isinstance(raw_value, (int, float, bool)) else 50.0
                 value = max(0, min(100, value))
                 normalized = value / 100.0
@@ -3923,8 +4147,32 @@ class NetworkRenderingMixin:
             painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), max(1, int(2 * scale))))
             painter.drawEllipse(QtCore.QPointF(x, y), radius, radius)
 
-            # Label
-            display_name = name.replace("_", " ").title()
+            # === Localisation with multi-level fallback ===
+            display_name = loc.get(name)
+
+            # Fallback 1: space-separated key
+            if display_name == name:
+                space_key = name.replace("_", " ")
+                display_name = loc.get(space_key)
+                if display_name == space_key:
+                    display_name = None
+
+            # Fallback 2: neurogenesis numbered neuron
+            if not display_name:
+                match = re.match(r"^([a-z_]+)_(\d+)$", name)
+                if match:
+                    base = match.group(1)
+                    idx = match.group(2)
+                    base_loc = loc.get(base)
+                    if base_loc != base:
+                        display_name = f"{base_loc} {idx}"
+                    else:
+                        display_name = f"{base.replace('_', ' ').title()} {idx}"
+
+            # Final fallback
+            if not display_name:
+                display_name = name.replace("_", " ").title()
+
             text_width = font_metrics.horizontalAdvance(display_name)
             padding = 10 * scale
             rect_width = text_width + padding * 2

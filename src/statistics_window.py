@@ -1,11 +1,15 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 import time, json, math, random, os
+from .localisation import Localisation
 
 
 class StatBox(QtWidgets.QWidget):
-    """Unchanged – same as previous revision."""
-    def __init__(self, label, parent=None):
+    """A single stat display box with label and value."""
+    def __init__(self, label_key, parent=None):
         super().__init__(parent)
+        self.loc = Localisation.instance()
+        self.label_key = label_key
+        
         screen = QtWidgets.QApplication.primaryScreen()
         screen_size = screen.size()
         layout = QtWidgets.QVBoxLayout(self)
@@ -35,10 +39,11 @@ class StatBox(QtWidgets.QWidget):
         self.value_edit.hide()
         layout.addWidget(self.value_edit)
 
-        name_label = QtWidgets.QLabel(label)
-        name_label.setAlignment(QtCore.Qt.AlignCenter)
-        name_label.setStyleSheet(f"font-size:{label_font_size}px;font-weight:bold;")
-        layout.addWidget(name_label)
+        # Use localised label
+        self.name_label = QtWidgets.QLabel(self.loc.get(label_key))
+        self.name_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.name_label.setStyleSheet(f"font-size:{label_font_size}px;font-weight:bold;")
+        layout.addWidget(self.name_label)
         self.setFixedSize(box_width, box_height)
 
     def set_value(self, value):
@@ -51,6 +56,10 @@ class StatBox(QtWidgets.QWidget):
     def set_editable(self, editable):
         self.value_label.setVisible(not editable)
         self.value_edit.setVisible(editable)
+    
+    def update_label(self):
+        """Update the label text (for language changes)"""
+        self.name_label.setText(self.loc.get(self.label_key))
 
 
 class StatisticsWindow(QtWidgets.QWidget):
@@ -58,11 +67,12 @@ class StatisticsWindow(QtWidgets.QWidget):
         super().__init__()
         self.squid = squid
         self.show_decorations_callback = show_decorations_callback
+        self.loc = Localisation.instance()
 
         screen = QtWidgets.QApplication.primaryScreen()
         screen_size = screen.size()
 
-        self.setWindowTitle("Statistics")
+        self.setWindowTitle(self.loc.get("statistics"))
         self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
         self.move(0, 0)
 
@@ -74,7 +84,6 @@ class StatisticsWindow(QtWidgets.QWidget):
         self.last_food_time= 0
 
         # ---------------- font ----------------------------------------
-        # default to bold Arial if arcade.ttf not found
         if arcade_font_path and os.path.isfile(arcade_font_path):
             font_path = arcade_font_path
         else:
@@ -91,7 +100,7 @@ class StatisticsWindow(QtWidgets.QWidget):
         self.score_label = QtWidgets.QLabel("0000")
         self.score_label.setAlignment(QtCore.Qt.AlignCenter)
         self.score_label.setFont(font)
-        self.score_label.setStyleSheet("color:#000000;")   # black
+        self.score_label.setStyleSheet("color:#000000;")
 
         # ---------------- window sizing -------------------------------
         if screen_size.width() <= 1920 and screen_size.height() <= 1080:
@@ -113,15 +122,16 @@ class StatisticsWindow(QtWidgets.QWidget):
         grid_layout.setSpacing(grid_spacing)
         main_layout.addLayout(grid_layout)
 
+        # Create stat boxes with localisation keys
         self.stat_boxes = {
-            "hunger": StatBox("Hunger"),
-            "happiness": StatBox("Happiness"),
-            "cleanliness": StatBox("Cleanliness"),
-            "sleepiness": StatBox("Sleepiness"),
-            "health": StatBox("Health"),
-            "satisfaction": StatBox("Satisfaction"),
-            "curiosity": StatBox("Curiosity"),
-            "anxiety": StatBox("Anxiety"),
+            "hunger": StatBox("hunger"),
+            "happiness": StatBox("happiness"),
+            "cleanliness": StatBox("cleanliness"),
+            "sleepiness": StatBox("sleepiness"),
+            "health": StatBox("health"),
+            "satisfaction": StatBox("satisfaction"),
+            "curiosity": StatBox("curiosity"),
+            "anxiety": StatBox("anxiety"),
         }
 
         grid_layout.addWidget(self.stat_boxes["health"],       0, 0)
@@ -147,14 +157,14 @@ class StatisticsWindow(QtWidgets.QWidget):
         self.status_label.setStyleSheet(f"font-size:{status_font_size}px;")
         main_layout.addWidget(self.status_label)
 
-        # State indicator pills container (mirrors brain network view - can show multiple)
+        # State indicator pills container
         self.state_pills_container = QtWidgets.QWidget()
         self.state_pills_layout = QtWidgets.QHBoxLayout(self.state_pills_container)
         self.state_pills_layout.setSpacing(10)
         self.state_pills_layout.setContentsMargins(0, 5, 0, 5)
-        self.state_pills_layout.addStretch()  # Center the pills
+        self.state_pills_layout.addStretch()
         
-        # Create up to 3 pill labels (matching brain network view limit)
+        # Create up to 3 pill labels
         self.state_pills = []
         for i in range(3):
             pill = QtWidgets.QLabel()
@@ -173,12 +183,12 @@ class StatisticsWindow(QtWidgets.QWidget):
             self.state_pills.append(pill)
             self.state_pills_layout.addWidget(pill)
         
-        self.state_pills_layout.addStretch()  # Center the pills
+        self.state_pills_layout.addStretch()
         main_layout.addWidget(self.state_pills_container)
 
         main_layout.addWidget(self.score_label)
 
-        self.apply_button = QtWidgets.QPushButton("Apply Changes")
+        self.apply_button = QtWidgets.QPushButton(self.loc.get("apply_changes"))
         self.apply_button.clicked.connect(self.apply_changes)
         self.apply_button.hide()
         main_layout.addWidget(self.apply_button)
@@ -217,8 +227,7 @@ class StatisticsWindow(QtWidgets.QWidget):
         else:
             self.combo_level = 1
 
-        # NEW: Continuously update all statistics from squid
-        # This ensures sync when values are modified externally (e.g., from NeuronLaboratory)
+        # Continuously update all statistics from squid
         self.update_statistics()
 
     # -------------- external award -----------------------------------
@@ -232,7 +241,7 @@ class StatisticsWindow(QtWidgets.QWidget):
                 self.combo_level = 1
             self.last_food_time = now
             self.combo_timer = 600
-        # poop – no combo change
+        # poop - no combo change
         elif base == 25:
             pass
 
@@ -248,8 +257,6 @@ class StatisticsWindow(QtWidgets.QWidget):
 
     def update_score(self):
         """Update the score display (called by tamagotchi_logic)"""
-        # The score is already updated via the _tick timer which handles smooth animation
-        # This method exists for compatibility - explicit calls can force an immediate update
         self.score_label.setText(f"{int(self.display_score):04d}")
 
     # -------------- specific helpers ---------------------------------
@@ -271,7 +278,7 @@ class StatisticsWindow(QtWidgets.QWidget):
             for key, box in self.stat_boxes.items():
                 if hasattr(self.squid, key):
                     box.set_value(getattr(self.squid, key))
-            self.status_label.setText(f"Status: {self.squid.status}")
+            self.status_label.setText(f"{self.loc.get('status')}: {self.squid.status}")
             self._update_state_pill()
 
     def _update_state_pill(self):
@@ -281,30 +288,30 @@ class StatisticsWindow(QtWidgets.QWidget):
                 pill.hide()
             return
 
-        # Collect all active states (matches brain_widget.py logic lines 1474-1494)
+        # Collect all active states (matches brain_widget.py logic)
         active_states = []
         
-        # Check states in priority order
+        # Check states in priority order with localised text
         if getattr(self.squid, 'is_fleeing', False):
-            active_states.append(("Fleeing!", "rgb(220, 20, 60)"))  # Crimson
+            active_states.append((self.loc.get("fleeing"), "rgb(220, 20, 60)"))
         if getattr(self.squid, 'is_startled', False):
-            active_states.append(("Startled!", "rgb(255, 165, 0)"))  # Orange
+            active_states.append((self.loc.get("startled"), "rgb(255, 165, 0)"))
         if getattr(self.squid, 'pursuing_food', False):
-            active_states.append(("Pursuing Food", "rgb(60, 179, 113)"))  # Medium Sea Green
+            active_states.append((self.loc.get("pursuing_food"), "rgb(60, 179, 113)"))
         if getattr(self.squid, 'is_eating', False) or 'eating' in self.squid.status.lower():
-            active_states.append(("Eating", "rgb(46, 204, 113)"))  # Emerald
+            active_states.append((self.loc.get("eating"), "rgb(46, 204, 113)"))
         if getattr(self.squid, 'is_sleeping', False):
-            active_states.append(("Sleeping", "rgb(142, 68, 173)"))  # Purple
+            active_states.append((self.loc.get("sleeping"), "rgb(142, 68, 173)"))
         if 'rock' in self.squid.status.lower() or 'play' in self.squid.status.lower():
-            active_states.append(("Playing", "rgb(241, 196, 15)"))  # Sun Flower
+            active_states.append((self.loc.get("playing"), "rgb(241, 196, 15)"))
         if 'hiding' in self.squid.status.lower():
-            active_states.append(("Hiding", "rgb(22, 160, 133)"))  # Green Sea
+            active_states.append((self.loc.get("hiding"), "rgb(22, 160, 133)"))
         if getattr(self.squid, 'anxiety', 0) > 70 or 'anxious' in self.squid.status.lower():
-            active_states.append(("Anxious", "rgb(231, 76, 60)"))  # Alizarin
+            active_states.append((self.loc.get("anxious"), "rgb(231, 76, 60)"))
         if getattr(self.squid, 'curiosity', 0) > 80 or 'curious' in self.squid.status.lower():
-            active_states.append(("Curious", "rgb(52, 152, 219)"))  # Peter River
+            active_states.append((self.loc.get("curious"), "rgb(52, 152, 219)"))
         
-        # Display up to 3 states (matching brain network view limit)
+        # Display up to 3 states
         states_to_show = active_states[:3]
         
         # Update each pill

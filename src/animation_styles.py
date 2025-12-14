@@ -51,7 +51,7 @@ class AnimationStyle:
     pulse_enabled: bool = False                                     # Disabled for vibrant
     pulse_colour: Tuple[int, int, int] = (255, 255, 0)             # Yellow dot
     pulse_alpha: int = 200
-    pulse_duration: float = 2.0                                     # seconds
+    pulse_duration: float = 3.0                                     # Tuned for 10 FPS (slower)
     pulse_speed: float = 1.0                                        # 0-1 range for travel
     pulse_diameter: float = 6.0                                     # pixels (before scale)
     
@@ -64,13 +64,13 @@ class AnimationStyle:
     # ===== NEURON HOVER EFFECTS =====
     hover_enabled: bool = True
     hover_scale: float = 1.25                                       # expand on hover
-    hover_animation_duration: float = 0.2                           # seconds
+    hover_animation_duration: float = 0.4                           # Tuned for 10 FPS (slower)
     
     # ===== NEURON ACTIVITY HIGHLIGHT =====
     activity_highlight_enabled: bool = True
     activity_highlight_colour: Tuple[int, int, int] = (255, 255, 0)
     activity_highlight_alpha: int = 150
-    activity_pulse_speed: float = 10.0                              # Hz
+    activity_pulse_speed: float = 2.0                              # Tuned for 10 FPS (slower Hz)
     
     # ===== NEUROGENESIS HIGHLIGHT =====
     neurogenesis_highlight_colour: Tuple[int, int, int] = (255, 215, 0)  # Gold
@@ -82,7 +82,7 @@ class AnimationStyle:
     ambient_pulse_enabled: bool = True
     ambient_pulse_width_range: Tuple[float, float] = (0.7, 1.5)    # Width oscillates 70%-150%
     ambient_pulse_alpha_range: Tuple[int, int] = (120, 220)        # Alpha oscillates
-    ambient_pulse_freq_range: Tuple[float, float] = (0.2, 0.6)     # Slow, organic breathing
+    ambient_pulse_freq_range: Tuple[float, float] = (0.1, 0.3)     # Tuned for 10 FPS (Slow breathing)
     ambient_pulse_phase_drift: float = 0.05                         # Subtle phase wandering
     
     # ===== SUBTLE STYLE: COMMUNICATION GLOWS =====
@@ -92,7 +92,7 @@ class AnimationStyle:
     comm_glow_alpha: int = 180
     comm_glow_size: float = 12.0                                    # diameter in pixels
     comm_glow_tail_length: float = 0.15                             # 0-1, how much of line is tail
-    comm_glow_speed_range: Tuple[float, float] = (0.4, 1.2)        # seconds to traverse
+    comm_glow_speed_range: Tuple[float, float] = (1.5, 3.0)        # Tuned for 10 FPS (slower traversal)
     comm_glow_fade_in: float = 0.1                                  # 0-1, fade in portion
     comm_glow_fade_out: float = 0.2                                 # 0-1, fade out portion
     comm_glow_spawn_on_activity: bool = True                        # spawn when neurons active
@@ -102,7 +102,7 @@ class AnimationStyle:
     # ===== NEURAL STYLE: ACTIVATION PULSES =====
     # Traveling light pulses along connections during neural communication
     neural_pulse_enabled: bool = False
-    neural_pulse_duration: float = 0.9                              # seconds for full travel
+    neural_pulse_duration: float = 1.5                              # Tuned for 10 FPS (slower)
     neural_pulse_width: float = 7.0                                 # pulse line thickness
     neural_pulse_colour_positive: Tuple[int, int, int] = (180, 230, 255)  # Soft cyan glow
     neural_pulse_colour_negative: Tuple[int, int, int] = (255, 180, 150)  # Soft warm glow
@@ -146,7 +146,7 @@ class VibrantStyle(AnimationStyle):
     # Enable hover effects for interactivity
     hover_enabled: bool = True
     hover_scale: float = 1.25
-    hover_animation_duration: float = 0.2
+    hover_animation_duration: float = 0.4  # Slower for 10 FPS smoothness
     
     # Warmer background
     background_colour: Tuple[int, int, int] = (248, 248, 245)
@@ -156,21 +156,22 @@ class VibrantStyle(AnimationStyle):
     ambient_pulse_enabled: bool = True
     ambient_pulse_width_range: Tuple[float, float] = (0.7, 1.5)
     ambient_pulse_alpha_range: Tuple[int, int] = (120, 220)
-    ambient_pulse_freq_range: Tuple[float, float] = (0.2, 0.6)
+    ambient_pulse_freq_range: Tuple[float, float] = (0.15, 0.4) # Slower breathing for 10 FPS
     ambient_pulse_phase_drift: float = 0.05
 
     # ===== Communication glows =====
+    # Slowed down significantly so they don't 'teleport' across the screen
     comm_glow_enabled: bool = True
     comm_glow_colour: Tuple[int, int, int] = (247, 181, 57)
     comm_glow_alpha: int = 200
-    comm_glow_size: float = 4.0
+    comm_glow_size: float = 6.0  # Slightly larger for visibility
     comm_glow_tail_length: float = 0.15
-    comm_glow_speed_range: Tuple[float, float] = (0.5, 1.0)  # Pulse Speed
+    comm_glow_speed_range: Tuple[float, float] = (1.5, 3.0)  # 15 to 30 frames duration
     comm_glow_fade_in: float = 0.1
     comm_glow_fade_out: float = 0.25
     comm_glow_spawn_on_activity: bool = True
     comm_glow_spawn_on_weight_change: bool = True
-    comm_glow_max_per_connection: int = 0.9
+    comm_glow_max_per_connection: int = 2 # Reduced count to save performance
 
 
 @dataclass
@@ -186,7 +187,7 @@ class SubtleStyle(AnimationStyle):
     description: str = "Neural signals flow as glowing packets along connections"
     
     # Thinner, more muted base lines to let glows stand out
-    line_base_width: float = 0.7
+    line_base_width: float = 0.8
     line_colour_positive: Tuple[int, int, int] = (100, 160, 100)    # Muted sage green
     line_colour_negative: Tuple[int, int, int] = (160, 100, 100)    # Muted dusty rose
     line_alpha: int = 100                                            # Lower alpha, glows add brightness
@@ -207,11 +208,11 @@ class SubtleStyle(AnimationStyle):
     # Enable gentle hover
     hover_enabled: bool = True
     hover_scale: float = 1.12
-    hover_animation_duration: float = 0.3
+    hover_animation_duration: float = 0.5  # Slower for 10 FPS
     
     # Activity highlights more subtle
     activity_highlight_alpha: int = 100
-    activity_pulse_speed: float = 6.0
+    activity_pulse_speed: float = 1.5      # Slower Hz
     
     # Cool, calm background
     background_colour: Tuple[int, int, int] = (242, 244, 248)
@@ -224,9 +225,9 @@ class SubtleStyle(AnimationStyle):
     comm_glow_enabled: bool = True
     comm_glow_colour: Tuple[int, int, int] = (160, 200, 255)       # Soft electric blue
     comm_glow_alpha: int = 200
-    comm_glow_size: float = 10.0                                    # Glow diameter
+    comm_glow_size: float = 12.0                                    # Larger Glow diameter
     comm_glow_tail_length: float = 0.2                              # 20% of line trails behind
-    comm_glow_speed_range: Tuple[float, float] = (0.6, 1.8)        # Variable speeds (chaotic)
+    comm_glow_speed_range: Tuple[float, float] = (2.0, 4.0)         # 20 to 40 frames (very smooth flow)
     comm_glow_fade_in: float = 0.1                                  # Quick fade in
     comm_glow_fade_out: float = 0.25                                # Gentle fade out
     comm_glow_spawn_on_activity: bool = True                        # Spawn when neuron active
@@ -264,7 +265,7 @@ class NeuralStyle(AnimationStyle):
     # Enable hover for interactivity
     hover_enabled: bool = True
     hover_scale: float = 1.2
-    hover_animation_duration: float = 0.15
+    hover_animation_duration: float = 0.4
     
     # Neutral background
     background_colour: Tuple[int, int, int] = (245, 247, 250)
@@ -276,7 +277,7 @@ class NeuralStyle(AnimationStyle):
     # ===== NEURAL'S SIGNATURE: ACTIVATION PULSES =====
     # Traveling light pulses with sinusoidal fade, weight-scaled thickness
     neural_pulse_enabled: bool = True
-    neural_pulse_duration: float = 0.9                              # Fast, snappy pulses
+    neural_pulse_duration: float = 1.5                              # 15 frames
     neural_pulse_width: float = 7.0                                 # Thick glowing pulse
     neural_pulse_colour_positive: Tuple[int, int, int] = (180, 230, 255)  # Bright cyan glow
     neural_pulse_colour_negative: Tuple[int, int, int] = (255, 180, 150)  # Warm coral glow
@@ -328,7 +329,7 @@ class DesignerStyle(AnimationStyle):
     pulse_enabled: bool = True
     pulse_colour: Tuple[int, int, int] = (255, 255, 255)          # White core
     pulse_alpha: int = 255
-    pulse_duration: float = 3.0                                    # Slower travel
+    pulse_duration: float = 4.0                                    # 40 frames (very slow)
     pulse_speed: float = 0.6                                       # Moderate speed
     pulse_diameter: float = 10.0                                   # Larger orb
     
@@ -338,7 +339,7 @@ class DesignerStyle(AnimationStyle):
     comm_glow_alpha: int = 220
     comm_glow_size: float = 12.0                                   # Matches designer orb_size
     comm_glow_tail_length: float = 0.0                             # No tail, just orb
-    comm_glow_speed_range: Tuple[float, float] = (2.0, 3.5)       # Steady travel
+    comm_glow_speed_range: Tuple[float, float] = (3.0, 5.0)       # 30-50 frames
     comm_glow_fade_in: float = 0.05                                # Quick fade in
     comm_glow_fade_out: float = 0.1                                # Quick fade out
     comm_glow_spawn_on_activity: bool = True
@@ -357,13 +358,13 @@ class DesignerStyle(AnimationStyle):
     # Enable hover for interactivity
     hover_enabled: bool = True
     hover_scale: float = 1.15
-    hover_animation_duration: float = 0.15
+    hover_animation_duration: float = 0.3
     
     # Activity highlight
     activity_highlight_enabled: bool = True
     activity_highlight_colour: Tuple[int, int, int] = (255, 255, 150)
     activity_highlight_alpha: int = 180
-    activity_pulse_speed: float = 8.0
+    activity_pulse_speed: float = 3.0
     
     # Neurogenesis highlight (gold flash)
     neurogenesis_highlight_colour: Tuple[int, int, int] = (255, 215, 0)
@@ -492,7 +493,7 @@ def get_available_styles() -> list:
 
 
 def get_style_info() -> list:
-    """Return list of (name, display_name, description) tuples for all styles."""
+    """Return list of (name, display_name, description) for all styles."""
     return [
         (style.name, style.display_name, style.description)
         for style in ANIMATION_STYLES.values()

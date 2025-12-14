@@ -1,11 +1,12 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
+from .localisation import loc
 
 class VisionWindow(QtWidgets.QDialog):
     def __init__(self, tamagotchi_logic, parent=None):
         super().__init__(parent)
         self.tamagotchi_logic = tamagotchi_logic
-        self.setWindowTitle("Squid's Vision")
+        self.setWindowTitle(loc("vision_window_title"))
         self.setMinimumSize(400, 300)
 
         # Store original view cone state and enable it for the dialog
@@ -30,7 +31,9 @@ class VisionWindow(QtWidgets.QDialog):
         title_layout = QtWidgets.QHBoxLayout()
         title_icon = QtWidgets.QLabel("👁️")
         title_icon.setStyleSheet("font-size: 28px;")
-        title_label = QtWidgets.QLabel("Visible objects")
+        
+        # Reuse existing key "visible_objects"
+        title_label = QtWidgets.QLabel(loc("visible_objects"))
         title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #343a40;")
         title_layout.addWidget(title_icon)
         title_layout.addWidget(title_label)
@@ -61,7 +64,8 @@ class VisionWindow(QtWidgets.QDialog):
         button_layout = QtWidgets.QHBoxLayout()
 
         # Add the new "Toggle View Cone" button
-        self.toggle_cone_button = QtWidgets.QPushButton("Toggle View Cone")
+        # Reuse existing key "toggle_cone" from Debug menu
+        self.toggle_cone_button = QtWidgets.QPushButton(loc("toggle_cone"))
         self.toggle_cone_button.clicked.connect(self.toggle_view_cone)
         button_layout.addWidget(self.toggle_cone_button)
 
@@ -69,7 +73,8 @@ class VisionWindow(QtWidgets.QDialog):
         button_layout.addStretch()
 
         # Add the close button
-        self.close_button = QtWidgets.QPushButton("Close")
+        # Reuse existing key "close"
+        self.close_button = QtWidgets.QPushButton(loc("close"))
         self.close_button.clicked.connect(self.close)
         button_layout.addWidget(self.close_button)
 
@@ -91,7 +96,7 @@ class VisionWindow(QtWidgets.QDialog):
         """The method to update the content, formerly update_from_brain_state."""
         if not self.tamagotchi_logic or not hasattr(self.tamagotchi_logic, 'squid'):
             self.visible_objects_list.clear()
-            self.visible_objects_list.addItem("Squid logic not available.")
+            self.visible_objects_list.addItem(loc("vis_logic_unavailable"))
             return
 
         squid = self.tamagotchi_logic.squid
@@ -112,17 +117,22 @@ class VisionWindow(QtWidgets.QDialog):
         self.visible_objects_list.clear()
 
         if not visible_objects:
-            self.visible_objects_list.addItem("Nothing currently in view.")
+            self.visible_objects_list.addItem(loc("vis_nothing_in_view"))
         else:
             for obj in visible_objects:
-                obj_name = "Unknown Object"
+                # Reuse existing "unknown" key
+                obj_name = loc("unknown")
+                
                 # Determine object name based on its attributes
                 if hasattr(obj, 'category') and obj.category:
-                    obj_name = obj.category.capitalize()
+                    # Attempt to translate category (e.g. 'rock', 'plant') using existing keys
+                    obj_name = loc(obj.category, default=obj.category.capitalize())
                 elif hasattr(obj, 'is_sushi'):
-                    obj_name = "Sushi" if obj.is_sushi else "Cheese"
+                    # Use existing "sushi" and "food" keys (Cheese is default food)
+                    obj_name = loc("sushi") if obj.is_sushi else loc("food")
                 
                 distance = squid.distance_to(obj.pos().x(), obj.pos().y())
                 
-                list_item_text = f"{obj_name} (distance: {distance:.0f})"
+                dist_label = loc("vis_distance")
+                list_item_text = f"{obj_name} ({dist_label}: {distance:.0f})"
                 self.visible_objects_list.addItem(list_item_text)

@@ -1,14 +1,16 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 import os
 from .display_scaling import DisplayScaling
+from .localisation import Localisation
 
 class SplashScreen(QtWidgets.QWidget):
     finished = QtCore.pyqtSignal()
     second_frame = QtCore.pyqtSignal()
-    frame_changed = QtCore.pyqtSignal(int)  # NEW: Emits current frame index
+    frame_changed = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.loc = Localisation.instance()
         
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.FramelessWindowHint)
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
@@ -49,28 +51,30 @@ class SplashScreen(QtWidgets.QWidget):
 
     def start_animation(self):
         """Start the animation sequence after window is ready"""
-        # Emit signal for the initial frame (frame 0)
         self.frame_changed.emit(self.frame_index)
-        self.timer.start(1000)  # 1 seconds between frames
+        self.timer.start(1000)
 
     def next_frame(self):
         self.frame_index += 1
         if self.frame_index < len(self.frames):
             self.label.setPixmap(self.frames[self.frame_index])
-            self.frame_changed.emit(self.frame_index)  # NEW: Notify listeners
-            if self.frame_index == 1:  # Second frame (index 1)
-                self.second_frame.emit()  # Emit signal for second frame
+            self.frame_changed.emit(self.frame_index)
+            if self.frame_index == 1:
+                self.second_frame.emit()
         elif self.frame_index == len(self.frames):
-            # Last frame shown, schedule hiding
             QtCore.QTimer.singleShot(1500, self.end_animation)
         else:
             self.timer.stop()
 
     def end_animation(self):
+        # Use localised messages
+        hatched_msg = self.loc.get("squid_hatched")
+        look_after_msg = self.loc.get("look_after")
+        
         print("")
         print("                     ******************************")
-        print("                     ***  A SQUID HAS HATCHED!  ***")
-        print("                      YOU NEED TO LOOK AFTER HIM..")
+        print(f"                     ***  {hatched_msg}  ***")
+        print(f"                      {look_after_msg}")
         print("                     ******************************")
         self.hide()
         self.finished.emit()

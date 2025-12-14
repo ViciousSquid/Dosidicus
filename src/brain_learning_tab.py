@@ -2,7 +2,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 import random
 import time
-
+from .localisation import Localisation
 
 class NeuralNetworkVisualizerTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
@@ -48,9 +48,10 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         # Pre-initialize learning cards
         if hasattr(self, 'learning_content_layout'):
             # Add placeholder to initialize rendering
+            loc = Localisation.instance()
             placeholder = self._create_info_card(
-                "Learning System Ready",
-                "Hebbian learning will create associations between neurons that activate together.",
+                loc.get("learning_ready"),
+                loc.get("learning_ready_desc"),
                 "#e3f2fd"
             )
             self.learning_content_layout.addWidget(placeholder)
@@ -61,6 +62,8 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
             self.update_from_brain_state(sample_state)
 
     def setup_ui(self):
+        loc = Localisation.instance()
+        
         # Remove existing widgets from the layout
         if hasattr(self, '_layout'):
             while self.layout.count():
@@ -109,13 +112,13 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         # Header with title and Hebbian countdown
         header_layout = QtWidgets.QHBoxLayout()
         header_label = QtWidgets.QLabel(
-            "<h2 style='font-size: 24px; color: #2c3e50; font-weight: 600;'>Active Learning Pairs</h2>"
+            f"<h2 style='font-size: 24px; color: #2c3e50; font-weight: 600;'>{loc.get('active_learning_pairs')}</h2>"
         )
         header_layout.addWidget(header_label)
         header_layout.addStretch()
 
         # Hebbian countdown timer label
-        self.hebbian_timer_label_learning = QtWidgets.QLabel("Hebbian Cycle: --")
+        self.hebbian_timer_label_learning = QtWidgets.QLabel(f"{loc.get('hebbian_cycle')}: --")
         self.hebbian_timer_label_learning.setStyleSheet("""
             font-size: 16px;
             font-weight: 600;
@@ -159,40 +162,36 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
 
         # Create overview cards
         overview_card = self._create_educational_card(
-            "Hebbian Learning Overview",
-            """
+            loc.get("hebbian_overview"),
+            f"""
             <div style='font-size: 16px; line-height: 1.8; color: #4a5568;'>
                 <div style='background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px;'>
                     <div style='font-size: 20px; font-weight: bold; color: #1976d2; margin-bottom: 10px;'>
-                        "Neurons that fire together, wire together"
+                        {loc.get("hebbian_quote")}
                     </div>
-                    <p>This fundamental principle describes how neural networks learn through experience.</p>
+                    <p>{loc.get("hebbian_principle")}</p>
                 </div>
 
                 <p style='margin-bottom: 20px;'>
-                    Hebbian learning is a simple yet powerful rule used in artificial neural networks. When two neurons
-                    activate simultaneously, the connection (weight) between them strengthens. If they activate separately,
-                    the connection weakens. This allows the network to form associations between related concepts naturally.
+                    {loc.get("hebbian_explanation")}
                 </p>
 
                 <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0;'>
                     <div style='background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50;'>
-                        <div style='font-weight: bold; color: #2e7d32; margin-bottom: 5px; font-size: 18px;'>Excitatory Connections</div>
-                        <div style='font-size: 14px;'>Positive weights (0.0–1.0) make neurons more likely to activate together</div>
+                        <div style='font-weight: bold; color: #2e7d32; margin-bottom: 5px; font-size: 18px;'>{loc.get("excitatory_connections")}</div>
+                        <div style='font-size: 14px;'>{loc.get("excitatory_desc")}</div>
                     </div>
 
                     <div style='background: #ffebee; padding: 15px; border-radius: 8px; border-left: 4px solid #f44336;'>
-                        <div style='font-weight: bold; color: #c62828; margin-bottom: 5px; font-size: 18px;'>Inhibitory Connections</div>
-                        <div style='font-size: 14px;'>Negative weights (-1.0–0.0) reduce the chance of co-activation</div>
+                        <div style='font-weight: bold; color: #c62828; margin-bottom: 5px; font-size: 18px;'>{loc.get("inhibitory_connections")}</div>
+                        <div style='font-size: 14px;'>{loc.get("inhibitory_desc")}</div>
                     </div>
                 </div>
 
                 <div style='background: #fff3e0; padding: 15px; border-radius: 8px; margin-top: 20px;'>
-                    <div style='font-weight: bold; color: #e65100; margin-bottom: 10px; font-size: 18px;'>In Practice</div>
+                    <div style='font-weight: bold; color: #e65100; margin-bottom: 10px; font-size: 18px;'>{loc.get("in_practice_title")}</div>
                     <p style='margin: 0;'>
-                        In your squid's brain, Hebbian learning helps associate related states like 'hunger' with
-                        'satisfaction' when feeding occurs, or 'curiosity' with 'anxiety' during exploration.
-                        These learned associations influence future behavior.
+                        {loc.get("in_practice_text")}
                     </p>
                 </div>
             </div>
@@ -214,57 +213,54 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         mechanics_content_layout = QtWidgets.QVBoxLayout(mechanics_content)
 
         mechanics_card = self._create_educational_card(
-            "Learning Mechanics",
-            """
+            loc.get("mechanics_title"),
+            f"""
             <div style='font-size: 16px; line-height: 1.8; color: #4a5568;'>
                 <p style='margin-bottom: 20px;'>
-                    Hebbian learning updates connection strength (weight) between neurons based on their activity patterns.
-                    When neurons activate together, their connection strengthens; when they activate separately, it weakens.
+                    {loc.get("mechanics_intro")}
                 </p>
 
                 <div style='background: #f3e5f5; padding: 20px; border-radius: 8px; margin: 20px 0;'>
-                    <h3 style='color: #6a1b9a; margin: 0 0 15px 0; font-size: 20px;'>The Learning Rule</h3>
+                    <h3 style='color: #6a1b9a; margin: 0 0 15px 0; font-size: 20px;'>{loc.get("learning_rule_title")}</h3>
                     <div style='background: white; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 18px; text-align: center; margin-bottom: 15px;'>
                         <b>Δw = η × x × y</b>
                     </div>
-                    <p style='margin-bottom: 15px;'>Where:</p>
+                    <p style='margin-bottom: 15px;'>{loc.get("where_label")}</p>
                     <ul style='list-style: none; padding: 0;'>
                         <li style='margin-bottom: 12px; padding-left: 10px;'>
-                            <b>Δw</b> = Change in weight between two neurons
+                            {loc.get("delta_w_desc")}
                         </li>
                         <li style='margin-bottom: 12px; padding-left: 10px;'>
-                            <b>η</b> (eta) = Learning rate (controls speed of change)
+                            {loc.get("eta_desc")}
                         </li>
                         <li style='margin-bottom: 12px; padding-left: 10px;'>
-                            <b>x, y</b> = Activation values of the neurons (1 if active, 0 if inactive)
+                            {loc.get("activation_desc")}
                         </li>
                     </ul>
                 </div>
 
                 <div style='background: #e8eaf6; padding: 20px; border-radius: 8px; margin: 20px 0;'>
-                    <h3 style='color: #3f51b5; margin: 0 0 15px 0; font-size: 20px;'>Example Calculation</h3>
+                    <h3 style='color: #3f51b5; margin: 0 0 15px 0; font-size: 20px;'>{loc.get("example_calc_title")}</h3>
                     <div style='background: white; padding: 15px; border-radius: 6px;'>
-                        <p style='margin: 0 0 10px 0;'><b>Scenario:</b> 'hunger' and 'satisfaction' both activate</p>
+                        <p style='margin: 0 0 10px 0;'>{loc.get("scenario_label")}</p>
                         <ul style='list-style: none; padding: 0; margin: 10px 0;'>
-                            <li>x = 1 (hunger is active)</li>
-                            <li>y = 1 (satisfaction is active)</li>
-                            <li>η = 0.1 (learning rate)</li>
+                            <li>x = 1</li>
+                            <li>y = 1</li>
+                            <li>η = 0.1</li>
                         </ul>
                         <div style='background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0;'>
                             <b>Δw = 0.1 × 1 × 1 = 0.1</b>
                         </div>
                         <p style='margin: 10px 0 0 0;'>
-                            The weight increases by 0.1, strengthening the connection between these neurons.
+                            {loc.get("calc_result")}
                         </p>
                     </div>
                 </div>
 
                 <div style='background: #fce4ec; padding: 20px; border-radius: 8px;'>
-                    <h3 style='color: #c2185b; margin: 0 0 15px 0; font-size: 20px;'>Over Time</h3>
+                    <h3 style='color: #c2185b; margin: 0 0 15px 0; font-size: 20px;'>{loc.get("over_time_title")}</h3>
                     <p style='margin: 0;'>
-                        Through repeated activations, these small weight changes accumulate. Frequently co-occurring
-                        patterns develop strong connections, while rarely occurring patterns develop weak or negative
-                        connections. This is how your squid learns from experience!
+                        {loc.get("over_time_text")}
                     </p>
                 </div>
             </div>
@@ -277,9 +273,9 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         mechanics_layout.addWidget(mechanics_scroll)
 
         # Add all tabs
-        self.tab_widget.addTab(self.learning_tab, "Learning Pairs")
-        self.tab_widget.addTab(overview_tab, "Overview")
-        self.tab_widget.addTab(mechanics_tab, "Mechanics")
+        self.tab_widget.addTab(self.learning_tab, loc.get("learning_pairs_tab"))
+        self.tab_widget.addTab(overview_tab, loc.get("overview"))
+        self.tab_widget.addTab(mechanics_tab, loc.get("mechanics_tab"))
 
         main_layout.addWidget(self.tab_widget)
 
@@ -343,27 +339,28 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
 
     def _create_learning_pair_card(self, pair, weight, weight_change=None):
         """Create a card displaying a learning pair"""
+        loc = Localisation.instance()
         # Determine colors based on weight
         if weight > 0.5:
             border_color = "#4caf50"
             bg_color = "#e8f5e9"
             weight_color = "#2e7d32"
-            strength = "Strong Excitatory"
+            strength = loc.get("str_excitatory")
         elif weight > 0:
             border_color = "#8bc34a"
             bg_color = "#f1f8e9"
             weight_color = "#558b2f"
-            strength = "Weak Excitatory"
+            strength = loc.get("weak_excitatory")
         elif weight > -0.5:
             border_color = "#ff9800"
             bg_color = "#fff3e0"
             weight_color = "#e65100"
-            strength = "Weak Inhibitory"
+            strength = loc.get("weak_inhibitory")
         else:
             border_color = "#f44336"
             bg_color = "#ffebee"
             weight_color = "#c62828"
-            strength = "Strong Inhibitory"
+            strength = loc.get("str_inhibitory")
 
         # Weight change indicator
         change_indicator = ""
@@ -505,6 +502,7 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
 
     def clear_log(self):
         """Clear all learning pair cards"""
+        loc = Localisation.instance()
         if hasattr(self, 'learning_content_layout'):
             while self.learning_content_layout.count() > 1:  # Keep the stretch
                 item = self.learning_content_layout.takeAt(0)
@@ -516,8 +514,8 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
 
         # Add info card
         placeholder = self._create_info_card(
-            "Log Cleared",
-            "Learning pairs will appear here as your squid's neurons form new connections.",
+            loc.get("log_cleared"),
+            loc.get("log_cleared_desc"),
             "#e3f2fd"
         )
         self.learning_content_layout.insertWidget(0, placeholder)
@@ -549,6 +547,7 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
 
     def update_hebbian_label_learning(self, value):
         """Update the Hebbian countdown label and handle blinking when <5s"""
+        loc = Localisation.instance()
         if hasattr(self, 'hebbian_timer_label_learning'):
             # Check if simulation is paused
             is_paused = False
@@ -557,13 +556,13 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
             
             # Display PAUSE if paused, otherwise show countdown
             if is_paused:
-                self.hebbian_timer_label_learning.setText("Hebbian Cycle: PAUSED")
+                self.hebbian_timer_label_learning.setText(f"{loc.get('hebbian_cycle')}: {loc.get('hebbian_paused')}")
                 # Stop blinking when paused
                 if self.blink_timer.isActive():
                     self.blink_timer.stop()
                 self.hebbian_timer_label_learning.setVisible(True)
             else:
-                self.hebbian_timer_label_learning.setText(f"Hebbian Cycle: {value}s")
+                self.hebbian_timer_label_learning.setText(f"{loc.get('hebbian_cycle')}: {value}s")
                 
                 # Start/stop blinking
                 if isinstance(value, int) and value < 5:

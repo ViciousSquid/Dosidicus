@@ -1,11 +1,14 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .brain_ui_utils import UiUtils
+from .localisation import Localisation  # Import Localisation
 from datetime import datetime
 
 
 class MemoryTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
+        # Initialize localisation
+        self.loc = Localisation.instance()
         super().__init__(parent, tamagotchi_logic, brain_widget, config, debug_mode)
         self.initialize_ui()
         
@@ -30,10 +33,11 @@ class MemoryTab(BrainBaseTab):
         self.overview_tab = QtWidgets.QWidget()
         self.overview_layout = QtWidgets.QVBoxLayout(self.overview_tab)
         
-        # Add tabs
-        self.memory_subtabs.addTab(self.stm_tab, "🧠 Short-Term")
-        self.memory_subtabs.addTab(self.ltm_tab, "📚 Long-Term")
-        self.memory_subtabs.addTab(self.overview_tab, "📊 Overview")
+        # Add tabs with LOCALIZED names
+        # We keep the emojis but translate the text
+        self.memory_subtabs.addTab(self.stm_tab, f"🧠 {self.loc.get('short_term_memory')}")
+        self.memory_subtabs.addTab(self.ltm_tab, f"📚 {self.loc.get('long_term_memory')}")
+        self.memory_subtabs.addTab(self.overview_tab, f"📊 {self.loc.get('overview')}")
         
         # Configure STM tab
         self.stm_scroll = QtWidgets.QScrollArea()
@@ -55,11 +59,6 @@ class MemoryTab(BrainBaseTab):
         self.overview_stats = QtWidgets.QTextEdit()
         self.overview_stats.setReadOnly(True)
         self.overview_layout.addWidget(self.overview_stats)
-        
-        # Add test button
-        #self.test_memory_button = QtWidgets.QPushButton("Add Test Memory")
-        #self.test_memory_button.clicked.connect(self.add_test_memory)
-        #self.overview_layout.addWidget(self.test_memory_button)
         
         # Add memory subtabs to main memory tab layout, set to expand and fill
         self.layout.addWidget(self.memory_subtabs)
@@ -101,16 +100,12 @@ class MemoryTab(BrainBaseTab):
     
     def update_memory_display(self):
         """Update all memory displays"""
-        #print("Updating memory display...")
         try:
             # Get short-term and long-term memories
             if hasattr(self.tamagotchi_logic, 'squid') and hasattr(self.tamagotchi_logic.squid, 'memory_manager'):
                 # Get memories
                 stm = self.tamagotchi_logic.squid.memory_manager.get_all_short_term_memories()
                 ltm = self.tamagotchi_logic.squid.memory_manager.get_all_long_term_memories()
-                
-                #print(f"Raw short-term memories: {len(stm)}")
-                #print(f"Raw long-term memories: {len(ltm)}")
                 
                 # Filter displayable memories
                 stm_filtered = [m for m in stm if self._is_displayable_memory(m)]
@@ -132,9 +127,6 @@ class MemoryTab(BrainBaseTab):
                     if key not in seen_keys:
                         seen_keys.add(key)
                         ltm_deduped.append(m)
-                
-                #print(f"Filtered short-term memories: {len(stm_deduped)}")
-                #print(f"Filtered long-term memories: {len(ltm_deduped)}")
                 
                 # Clear existing content
                 self._clear_layout(self.stm_content_layout)
@@ -158,7 +150,6 @@ class MemoryTab(BrainBaseTab):
                 self.stm_scroll.setWidget(self.stm_content)
                 self.ltm_scroll.setWidget(self.ltm_content)
                 
-                #print("Memory display update completed")
         except Exception as e:
             print(f"Error updating memory tab: {e}")
             import traceback
@@ -291,8 +282,16 @@ class MemoryTab(BrainBaseTab):
         # Create layout
         card_layout = QtWidgets.QVBoxLayout(memory_widget)
 
-        # Category header - removed "Category:" prefix
-        header = QtWidgets.QLabel(f"{memory.get('category', 'unknown').capitalize()}")
+        # Category header
+        # Uses translated category name if available, or capitalizes the key
+        # We rely on "unknown" as a fallback
+        cat_key = memory.get('category', 'unknown').lower()
+        # You might want to add specific translations for category names in localisation.py
+        # For now we just capitalize, but strictly we should map 'food' -> 'Comida' etc.
+        # Simple capitalization for now unless keys exist
+        display_category = cat_key.capitalize()
+        
+        header = QtWidgets.QLabel(f"{display_category}")
         font = header.font()
         font.setBold(True)
         font.setPointSize(DisplayScaling.font_size(12))
@@ -317,7 +316,8 @@ class MemoryTab(BrainBaseTab):
             except Exception as e:
                 timestamp = str(memory.get('timestamp', ''))
 
-        time_label = QtWidgets.QLabel(f"Time: {timestamp}")
+        # Localized Time Label
+        time_label = QtWidgets.QLabel(f"{self.loc.get('time_label')} {timestamp}")
         time_font = time_label.font()
         time_font.setPointSize(DisplayScaling.font_size(8))
         time_label.setFont(time_font)
@@ -327,12 +327,16 @@ class MemoryTab(BrainBaseTab):
         if 'importance' in memory:
             importance = memory.get('importance', 1)
             if importance >= 5:
-                importance_label = QtWidgets.QLabel("⭐ Important")
-                importance_label.setStyleSheet(f"color: #FF5733; font-weight: bold; font-size: {DisplayScaling.font_sze(8)}px;")
+                # Localized Important Label
+                importance_label = QtWidgets.QLabel(f"⭐ {self.loc.get('important_label')}")
+                importance_label.setStyleSheet(f"color: #FF5733; font-weight: bold; font-size: {DisplayScaling.font_size(8)}px;")
                 card_layout.addWidget(importance_label, alignment=QtCore.Qt.AlignRight)
 
         # Add to layout
         target_layout.addWidget(memory_widget)
+        
+        # Set Tooltip
+        memory_widget.setToolTip(self._create_memory_tooltip(memory))
 
         # Add click handler to increase importance and potentially transfer to long-term
         memory_widget.mousePressEvent = lambda event, mem=memory: self._on_memory_card_clicked(mem)
@@ -372,10 +376,10 @@ class MemoryTab(BrainBaseTab):
 
     
     def _create_memory_tooltip(self, memory):
-        """Create detailed tooltip for a memory card"""
+        """Create detailed tooltip for a memory card with LOCALIZED labels"""
         tooltip = "<html><body style='white-space:pre'>"
-        tooltip += f"<b>Category:</b> {memory.get('category', 'unknown')}\n"
-        tooltip += f"<b>Key:</b> {memory.get('key', 'unknown')}\n"
+        tooltip += f"<b>{self.loc.get('category_label')}</b> {memory.get('category', self.loc.get('unknown'))}\n"
+        tooltip += f"<b>{self.loc.get('key_label')}</b> {memory.get('key', self.loc.get('unknown'))}\n"
         
         timestamp = memory.get('timestamp', '')
         if isinstance(timestamp, str):
@@ -384,21 +388,22 @@ class MemoryTab(BrainBaseTab):
             except:
                 timestamp = ""
         
-        tooltip += f"<b>Time:</b> {timestamp}\n"
+        tooltip += f"<b>{self.loc.get('time_label')}</b> {timestamp}\n"
         
         if 'importance' in memory:
+            # Reusing 'important_label' but as a header, or 'Importance' if added to loc
             tooltip += f"<b>Importance:</b> {memory.get('importance')}\n"
         
         if 'access_count' in memory:
-            tooltip += f"<b>Access count:</b> {memory.get('access_count')}\n"
+            tooltip += f"<b>{self.loc.get('access_count')}</b> {memory.get('access_count')}\n"
         
         # Add full content
         full_content = memory.get('formatted_value', str(memory.get('value', '')))
-        tooltip += f"\n<b>Full Content:</b>\n{full_content}\n"
+        tooltip += f"\n<b>{self.loc.get('full_content')}</b>\n{full_content}\n"
         
         # Add effects if present
         if isinstance(memory.get('raw_value'), dict):
-            tooltip += "\n<b>Effects:</b>\n"
+            tooltip += f"\n<b>{self.loc.get('effects_label')}</b>\n"
             for key, value in memory['raw_value'].items():
                 if isinstance(value, (int, float)):
                     tooltip += f"  {key}: {value:+.2f}\n"
@@ -427,16 +432,16 @@ class MemoryTab(BrainBaseTab):
         </style>
         """
         
-        # Memory counts
-        stats_html += """
+        # Memory counts - Localized Labels
+        stats_html += f"""
         <div class="stat-box">
-            <div class="stat-title">📈 Memory Statistics</div>
+            <div class="stat-title">📈 {self.loc.get('memory_stats')}</div>
             <table>
-                <tr><td>Short-Term Memories:</td><td style="padding-left: 20px;">{stm_count}</td></tr>
-                <tr><td>Long-Term Memories:</td><td style="padding-left: 20px;">{ltm_count}</td></tr>
+                <tr><td>{self.loc.get('short_term_memory')}:</td><td style="padding-left: 20px;">{len(stm)}</td></tr>
+                <tr><td>{self.loc.get('long_term_memory')}:</td><td style="padding-left: 20px;">{len(ltm)}</td></tr>
             </table>
         </div>
-        """.format(stm_count=len(stm), ltm_count=len(ltm))
+        """
         
         # Category breakdown
         categories = {}
@@ -451,7 +456,7 @@ class MemoryTab(BrainBaseTab):
         
         stats_html += f"""
         <div class="stat-box">
-            <div class="stat-title">🗂️ Categories</div>
+            <div class="stat-title">🗂️ {self.loc.get('categories')}</div>
             <table>{category_html}</table>
         </div>
         """
@@ -540,37 +545,3 @@ class MemoryTab(BrainBaseTab):
         """Handle memory card clicks - update importance and check for transfer"""
         print(f"Memory card clicked: {memory.get('category')}")
         self._update_memory_importance(memory)
-
-    def _update_memory_importance(self, memory):
-        """Increase importance of displayed memory and check for transfer"""
-        if not self.tamagotchi_logic or not hasattr(self.tamagotchi_logic, 'squid'):
-            return
-            
-        # Get memory manager
-        memory_manager = self.tamagotchi_logic.squid.memory_manager
-        
-        # Only process short-term memories
-        all_stm = memory_manager.get_all_short_term_memories()
-        matching_memories = [m for m in all_stm if 
-                            m.get('category') == memory.get('category') and
-                            m.get('key') == memory.get('key')]
-        
-        if not matching_memories:
-            return
-            
-        # Increase memory access count and importance
-        category = memory.get('category', '')
-        key = memory.get('key', '')
-        
-        if hasattr(memory_manager, 'update_memory_importance'):
-            # Increment importance by 1
-            memory_manager.update_memory_importance(category, key, 1)
-        
-        # Check if memory meets transfer criteria
-        if self._should_transfer_to_long_term(memory):
-            # Transfer memory to long-term
-            memory_manager.transfer_to_long_term_memory(category, key)
-            print(f"Memory transferred to long-term: {category}, {key}")
-            
-            # Update displays
-            self.update_memory_display()

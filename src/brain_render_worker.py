@@ -14,6 +14,7 @@ Usage:
 
 import time
 import math
+import re
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker, QWaitCondition, QSize, Qt, QPointF, QRectF
@@ -28,6 +29,9 @@ class RenderState:
     neuron_states: Dict[str, float] = field(default_factory=dict)
     state_colors: Dict[str, Tuple[int, int, int]] = field(default_factory=dict)
     neuron_shapes: Dict[str, str] = field(default_factory=dict)
+    
+    # Pre-calculated localized labels
+    neuron_labels: Dict[str, str] = field(default_factory=dict)
     
     # Connection data
     weights: Dict[Tuple[str, str], float] = field(default_factory=dict)
@@ -157,7 +161,7 @@ class BrainRenderWorker(QThread):
     
     def run(self):
         """Main worker loop"""
-        print("🎨 BrainRenderWorker started")
+        print("耳 BrainRenderWorker started")
         
         while self._running:
             state_to_render = None
@@ -196,11 +200,11 @@ class BrainRenderWorker(QThread):
                     self.render_complete.emit(image, render_time)
                     
                 except Exception as e:
-                    print(f"🎨 Render error: {e}")
+                    print(f"耳 Render error: {e}")
                     import traceback
                     traceback.print_exc()
         
-        print("🎨 BrainRenderWorker stopped")
+        print("耳 BrainRenderWorker stopped")
     
     def _render_frame(self, state: RenderState) -> QImage:
         """Render a complete frame to QImage"""
@@ -359,7 +363,7 @@ class BrainRenderWorker(QThread):
                 painter.drawLine(start, end)
     
     def _draw_neurons(self, painter: QPainter, state: RenderState, scale: float):
-        """Draw all neurons"""
+        """Draw all neurons with localized labels"""
         # Setup font - use config value directly
         font = QFont("Arial", state.neuron_label_font_size)
         font.setBold(True)
@@ -408,6 +412,26 @@ class BrainRenderWorker(QThread):
             elif shape == 'triangle':
                 color = QColor(*state.state_colors.get(name, (255, 255, 150)))
                 self._draw_polygon(painter, x, y, 3, radius, color)
+
+            elif shape == 'hexagon':
+                # --- HEXAGON LOGIC ---
+                # 1. Shape
+                color = QColor(*state.state_colors.get(name, (160, 32, 240)))
+                self._draw_polygon(painter, x, y, 6, radius, color, rotation=0)
+                
+                # 2. 'C' Label
+                painter.save()
+                font = QFont("Arial", int(14 * scale))
+                font.setBold(True)
+                painter.setFont(font)
+                painter.setPen(QColor(255, 255, 255))
+                
+                rect_size = radius * 2
+                rect = QRectF(x - radius, y - radius, rect_size, rect_size)
+                painter.drawText(rect, Qt.AlignCenter, "C")
+                painter.restore()
+                # 3. SKIP External Label
+                continue
             
             else:  # circle
                 # Get color from state_colors or calculate from value
@@ -420,8 +444,10 @@ class BrainRenderWorker(QThread):
                 painter.setPen(QPen(QColor(0, 0, 0), max(1, int(2 * scale))))
                 painter.drawEllipse(QPointF(x, y), radius, radius)
             
-            # Draw label
-            display_name = name.replace("_", " ").title()
+            # --- Draw Localized Label ---
+            # Retrieve the pre-translated label from state, fallback to title case
+            display_name = state.neuron_labels.get(name, name.replace("_", " ").title())
+            
             text_width = fm.horizontalAdvance(display_name)
             padding = 10 * scale
             rect_width = text_width + padding * 2
@@ -499,6 +525,10 @@ def create_render_state_from_widget(brain_widget) -> RenderState:
     Helper function to create a RenderState from a BrainWidget instance.
     Call this from the main thread before requesting a render.
     """
+    # Import Localisation here to avoid circular imports at module level
+    from .localisation import Localisation
+    loc = Localisation.instance()
+
     state = RenderState()
     
     # Copy neuron data
@@ -507,13 +537,55 @@ def create_render_state_from_widget(brain_widget) -> RenderState:
     state.state_colors = dict(getattr(brain_widget, 'state_colors', {}))
     state.neuron_shapes = dict(getattr(brain_widget, 'neuron_shapes', {}))
     
+    # --- Pre-calculate Localized Labels on Main Thread ---
+    labels = {}
+    
+    # We only need to calculate labels for neurons that might be drawn
+    visible = getattr(brain_widget, 'visible_neurons', brain_widget.neuron_positions.keys())
+    excluded = getattr(brain_widget, 'excluded_neurons', set())
+    
+    for name in state.neuron_positions.keys():
+        if name in excluded:
+            continue
+            
+        # 1. Try exact key lookup
+        display_name = loc.get(name)
+        
+        # 2. Fallback: space-separated key
+        if display_name == name:
+            space_key = name.replace("_", " ")
+            display_name = loc.get(space_key)
+            if display_name == space_key:
+                display_name = None # Mark as not found yet
+        
+        # 3. Fallback: Neurogenesis pattern (e.g., novelty_1 -> Novelty 1)
+        if not display_name:
+            match = re.match(r"^([a-z_]+)_(\d+)$", name)
+            if match:
+                base = match.group(1)
+                idx = match.group(2)
+                base_loc = loc.get(base)
+                if base_loc != base:
+                    display_name = f"{base_loc} {idx}"
+                else:
+                    display_name = f"{base.replace('_', ' ').title()} {idx}"
+        
+        # 4. Final Fallback: Title Case
+        if not display_name:
+            display_name = name.replace("_", " ").title()
+            
+        labels[name] = display_name
+    
+    state.neuron_labels = labels
+    # -----------------------------------------------------
+
     # Copy connection data
     state.weights = dict(brain_widget.weights)
     state.communication_events = dict(getattr(brain_widget, 'communication_events', {}))
     
     # Copy visibility
-    state.visible_neurons = set(getattr(brain_widget, 'visible_neurons', brain_widget.neuron_positions.keys()))
-    state.excluded_neurons = set(getattr(brain_widget, 'excluded_neurons', []))
+    state.visible_neurons = set(visible)
+    state.excluded_neurons = set(excluded)
     
     # Copy animation state
     state.link_opacities = dict(getattr(brain_widget, '_link_opacities', {}))

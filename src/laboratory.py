@@ -1,11 +1,11 @@
-# 2.4.5.0 | rev2_nov25
+# 2.4.5.1 | rev3_dec25
 #  --------------------------------------------------------------
 #  Powerful all-in-one viewer + editor for every neuron, especially
 #  those born via neurogenesis.  Excitatory vs inhibitory, beautiful
 #  cards, live edit mode (locked by default), educational hints.
 #  --------------------------------------------------------------
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal   # Qt now covers WindowMinMaxButtonsHint
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5 import QtCore
 from PyQt5.QtGui import (
     QFont, QPixmap, QColor, QPainter, QBrush, QPen, QDoubleValidator
@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
 )
 
 import json, math, time, random, datetime as dt
+from .localisation import loc  # Import localisation
 
 # ------------------------------------------------------------------
 #  Helper: coloured connection badge
@@ -36,26 +37,26 @@ class NeuronLaboratory(QDialog):
     def __init__(self, brain_widget, parent=None):
         super().__init__(parent)
         self.bw = brain_widget
-        self.setWindowTitle("🧠  Neuron Laboratory")
+        self.setWindowTitle(loc("lab_title", "🧠  Neuron Laboratory"))
         self.resize(900, 750)
         self.setWindowFlag(Qt.WindowMinMaxButtonsHint)
 
         # ---- top toolbar ----
         bar = QHBoxLayout()
-        self.live_check = QCheckBox("Live refresh")
+        self.live_check = QCheckBox(loc("lab_live_refresh", "Live refresh"))
         self.live_check.setChecked(True)
         self.live_check.toggled.connect(self._toggle_live)
         bar.addWidget(self.live_check)
 
         bar.addStretch()
-        self.lock_check = QCheckBox("🔓  Unlock editing")
+        self.lock_check = QCheckBox(loc("lab_unlock_editing", "🔓  Unlock editing"))
         self.lock_check.toggled.connect(self._unlock_editing)
         bar.addWidget(self.lock_check)
 
         # ---- main notebook ----
         self.tabs = QTabWidget()
         
-        # --- NEW: Apply Card-Based Styling from learning_tab/memory_tab ---
+        # --- Apply Card-Based Styling ---
         self.tabs.setStyleSheet("""
             QTabWidget::pane {
                 border: 2px solid #e1e5eb;
@@ -108,7 +109,7 @@ class NeuronLaboratory(QDialog):
         self._build_edit_tab()
 
         # ---- footer ----
-        self.status_lbl = QLabel("Ready")
+        self.status_lbl = QLabel(loc("lab_status_ready", "Ready"))
         self.status_lbl.setStyleSheet("color:#888;font-size:9pt;")
 
         lay = QVBoxLayout(self)
@@ -127,7 +128,7 @@ class NeuronLaboratory(QDialog):
         self.locked_neurons = {}   # name -> {locked: bool, slider, spin, button}
 
     # ================================================================
-    #  Construction helpers (unchanged)
+    #  Construction helpers
     # ================================================================
     def _build_overview_tab(self):
         self.ov_scroll = QScrollArea()
@@ -135,14 +136,14 @@ class NeuronLaboratory(QDialog):
         self.ov_grid = QGridLayout(self.ov_widget)
         self.ov_scroll.setWidget(self.ov_widget)
         self.ov_scroll.setWidgetResizable(True)
-        self.tabs.addTab(self.ov_scroll, "📊  Live Overview")
+        self.tabs.addTab(self.ov_scroll, loc("lab_tab_overview", "📊  Live Overview"))
 
     def _build_inspector_tab(self):
         w = QWidget()
         lay = QVBoxLayout(w)
         self.pick_neuron = QComboBox()
         self.pick_neuron.currentTextChanged.connect(self._inspect_neuron)
-        lay.addWidget(QLabel("Pick a neuron to inspect:"))
+        lay.addWidget(QLabel(loc("lab_pick_neuron", "Pick a neuron to inspect:")))
         self.pick_neuron.setStyleSheet("""
             QComboBox { font-size: 18px; min-height: 36px; padding: 4px; }
         """)
@@ -153,12 +154,12 @@ class NeuronLaboratory(QDialog):
         self.inspector_scroll.setWidget(self.inspector_cards)
         self.inspector_scroll.setWidgetResizable(True)
         lay.addWidget(self.inspector_scroll, 1)
-        self.tabs.addTab(w, "🔍  Deep Inspector")
+        self.tabs.addTab(w, loc("lab_tab_inspector", "🔍  Deep Inspector"))
 
     def _build_edit_tab(self):
         w = QWidget()
         lay = QVBoxLayout(w)
-        warn = QLabel("⚠️  Editing is locked – check 'Unlock editing' in the toolbar.")
+        warn = QLabel(loc("lab_edit_locked_msg", "⚠️  Editing is locked – check 'Unlock editing' in the toolbar."))
         warn.setStyleSheet("color:#d9534f;font-weight:bold;")
         lay.addWidget(warn)
         self.edit_warn = warn
@@ -168,17 +169,22 @@ class NeuronLaboratory(QDialog):
         self.edit_scroll.setWidget(self.edit_cards)
         self.edit_scroll.setWidgetResizable(True)
         lay.addWidget(self.edit_scroll, 1)
-        self.tabs.addTab(w, "🔧  Edit Sandbox")
+        self.tabs.addTab(w, loc("lab_tab_edit", "🔧  Edit Sandbox"))
 
     # ================================================================
-    #  Live refresh (extended)
+    #  Live refresh
     # ================================================================
     def _refresh(self):
         if not self.live_check.isChecked():
             return
         current = self.pick_neuron.currentText()
         self.pick_neuron.clear()
+        
+        # Translate neuron names if needed, or use raw keys? 
+        # Usually keys are used internally, but displayed names might be localized.
+        # For this tool, we usually show keys, but let's stick to keys for consistency with other tools.
         self.pick_neuron.addItems(sorted(self.bw.neuron_positions.keys()))
+        
         idx = self.pick_neuron.findText(current)
         if idx >= 0:
             self.pick_neuron.setCurrentIndex(idx)
@@ -192,13 +198,11 @@ class NeuronLaboratory(QDialog):
         and refreshes the Inspector tab content.
         """
         if not hasattr(self, 'pick_neuron'):
-            # pick_neuron is defined in _build_inspector_tab
             return
                 
         # 1. Select the neuron in the dropdown
         idx = self.pick_neuron.findText(neuron_name)
         if idx >= 0:
-            # Block signals to prevent _inspect_neuron being called twice if the index is already set
             self.pick_neuron.blockSignals(True)
             self.pick_neuron.setCurrentIndex(idx)
             self.pick_neuron.blockSignals(False)
@@ -207,13 +211,13 @@ class NeuronLaboratory(QDialog):
             self._inspect_neuron(neuron_name)
                 
             # 3. Switch to the "Deep Inspector" tab
-            self.tabs.setCurrentIndex(1)  # Index 1 corresponds to the "Deep Inspector" tab
+            self.tabs.setCurrentIndex(1)
                 
             # 4. Update the view to reflect the change
             self.update()
 
     # ================================================================
-    #  Overview / Inspector / Edit  (Refactored for card styling)
+    #  Overview / Inspector / Edit
     # ================================================================
     def _paint_overview(self):
         while self.ov_grid.count():
@@ -223,12 +227,13 @@ class NeuronLaboratory(QDialog):
         nd = getattr(self.bw, 'neurogenesis_data', {})
         cfg = getattr(self.bw, 'neurogenesis_config', {})
         
-        # Removed: card1.setStyleSheet("QGroupBox{font-weight:bold;}")
-        card1 = QGroupBox("Counter progress")
+        # Card 1: Counters
+        card1 = QGroupBox(loc("lab_ov_counters", "Counter progress"))
         g1 = QGridLayout(card1)
-        metrics = [('Novelty', nd.get('novelty_counter', 0), cfg.get('novelty_threshold', 3)),
-                   ('Stress', nd.get('stress_counter', 0), cfg.get('stress_threshold', .7)),
-                   ('Reward', nd.get('reward_counter', 0), cfg.get('reward_threshold', .6))]
+        # We localize the counter labels here using existing keys or raw if simple
+        metrics = [(loc("novelty", "Novelty"), nd.get('novelty_counter', 0), cfg.get('novelty_threshold', 3)),
+                   (loc("stress", "Stress"), nd.get('stress_counter', 0), cfg.get('stress_threshold', .7)),
+                   (loc("reward", "Reward"), nd.get('reward_counter', 0), cfg.get('reward_threshold', .6))]
         for row, (name, cur, thr) in enumerate(metrics):
             pct = min(100, (cur / thr) * 100) if thr else 0
             bar = self._progress_bar(pct)
@@ -236,30 +241,32 @@ class NeuronLaboratory(QDialog):
             g1.addWidget(bar, row, 1)
         self.ov_grid.addWidget(card1, 0, 0)
         
-        # Removed: card2.setStyleSheet("QGroupBox{font-weight:bold;}")
-        card2 = QGroupBox("Newest neurogenesis neurons")
+        # Card 2: Newest neurons
+        card2 = QGroupBox(loc("lab_ov_newest", "Newest neurogenesis neurons"))
         v2 = QVBoxLayout(card2)
         details = nd.get('new_neurons_details', {})
         for name, info in sorted(details.items(), key=lambda x: x[1].get('created_at', 0), reverse=True)[:5]:
             age = int(time.time() - info.get('created_at', 0))
-            v2.addWidget(QLabel(f"<b>{name}</b>  –  {info.get('trigger_type','?')}  –  {age}s ago"))
+            ago_text = loc("lab_ago", "{seconds}s ago", seconds=age)
+            v2.addWidget(QLabel(f"<b>{name}</b>  –  {info.get('trigger_type','?')}  –  {ago_text}"))
         if not details:
-            v2.addWidget(QLabel("None yet"))
+            v2.addWidget(QLabel(loc("lab_none_yet", "None yet")))
         self.ov_grid.addWidget(card2, 0, 1)
         
-        # Removed: card3.setStyleSheet("QGroupBox{font-weight:bold;}")
-        card3 = QGroupBox("Limits & pruning")
+        # Card 3: Limits
+        card3 = QGroupBox(loc("lab_ov_limits", "Limits & pruning"))
         v3 = QVBoxLayout(card3)
         current = len(self.bw.neuron_positions) - len(self.bw.excluded_neurons)
         max_n = cfg.get('max_neurons', 32)
-        v3.addWidget(self._progress_widget(f"Neurons", current, max_n))
-        v3.addWidget(QLabel(f"Pruning enabled: <b>{self.bw.pruning_enabled}</b>"))
+        v3.addWidget(self._progress_widget(loc("neurons", "Neurons"), current, max_n))
+        pruning_text = loc("lab_pruning_enabled", "Pruning enabled:")
+        v3.addWidget(QLabel(f"{pruning_text} <b>{self.bw.pruning_enabled}</b>"))
         self.ov_grid.addWidget(card3, 1, 0)
         
-        # Removed: card4.setStyleSheet("QGroupBox{font-weight:bold;}")
-        card4 = QGroupBox("Quick actions")
+        # Card 4: Quick Actions
+        card4 = QGroupBox(loc("lab_ov_actions", "Quick actions"))
         h = QHBoxLayout(card4)
-        btn = QPushButton("Force Hebbian cycle")
+        btn = QPushButton(loc("lab_force_hebbian", "Force Hebbian cycle"))
         btn.clicked.connect(self.bw.perform_hebbian_learning)
         h.addWidget(btn)
         self.ov_grid.addWidget(card4, 1, 1)
@@ -274,22 +281,50 @@ class NeuronLaboratory(QDialog):
                 item.widget().deleteLater()
         nd = getattr(self.bw, 'neurogenesis_data', {})
         details = nd.get('new_neurons_details', {}).get(name)
-        
-        # Removed: card2.setStyleSheet("QGroupBox{font-weight:bold;}")
-        card2 = QGroupBox("Connections (excitatory vs inhibitory)")
+
+        # Card: Connector Special Details (If applicable)
+        if details and details.get('trigger_type') == 'connector':
+            card_special = QGroupBox(loc("lab_connector_title", "Network Bridge Protocol"))
+            v_special = QVBoxLayout(card_special)
+            
+            info_text = (
+                "<b>Status:</b> <span style='color:blue'>Active Bridge</span><br>"
+                "This neuron was synthesized to rescue an isolated node.<br><br>"
+                "<b>Wiring Topology:</b><br>"
+                "• <b>Primary:</b> Connection to the Orphan<br>"
+                "• <b>Anchor:</b> Connection to Closest Neighbor<br>"
+                "• <b>Diversity:</b> Random connection to Network"
+            )
+            lbl_special = QLabel(info_text)
+            lbl_special.setTextFormat(QtCore.Qt.RichText)
+            v_special.addWidget(lbl_special)
+            self.inspector_lay.addWidget(card_special)
+
+        # Card: Connections
+        card2 = QGroupBox(loc("lab_connections_title", "Connections (excitatory vs inhibitory)"))
         v2 = QVBoxLayout(card2)
+        
+        h_partner = loc("lab_header_partner", "Partner")
+        h_weight = loc("lab_header_weight", "Weight")
+        h_type = loc("lab_header_type", "Type")
+        h_inf = loc("lab_header_inf", "Influence")
+        
         html = "<table width='100%'>"
-        html += "<tr><th>Partner</th><th>Weight</th><th>Type</th><th>Influence</th></tr>"
+        html += f"<tr><th>{h_partner}</th><th>{h_weight}</th><th>{h_type}</th><th>{h_inf}</th></tr>"
+        
+        t_exc = loc("lab_type_excitatory", "Excitatory")
+        t_inh = loc("lab_type_inhibitory", "Inhibitory")
+        
         for (src, dst), w in self.bw.weights.items():
             if src == name:
-                typ = "Excitatory" if w > 0 else "Inhibitory"
+                typ = t_exc if w > 0 else t_inh
                 col = "#d4ffd4" if w > 0 else "#ffd4d4"
                 html += f"<tr bgcolor='{col}'>"
                 html += f"<td>{dst}</td><td>{w:+.3f}</td><td>{badge(typ,'#000',col)}</td>"
                 html += f"<td>{self._influence_badge(w)}</td></tr>"
         for (src, dst), w in self.bw.weights.items():
             if dst == name:
-                typ = "Excitatory" if w > 0 else "Inhibitory"
+                typ = t_exc if w > 0 else t_inh
                 col = "#d4ffd4" if w > 0 else "#ffd4d4"
                 html += f"<tr bgcolor='{col}'>"
                 html += f"<td>{src} →</td><td>{w:+.3f}</td><td>{badge(typ,'#000',col)}</td>"
@@ -301,13 +336,16 @@ class NeuronLaboratory(QDialog):
         v2.addWidget(lbl)
         self.inspector_lay.addWidget(card2)
         
-        # Removed: card3.setStyleSheet("QGroupBox{font-weight:bold;}")
-        card3 = QGroupBox("Functional impact simulation")
+        # Card: Impacts
+        card3 = QGroupBox(loc("lab_impact_title", "Functional impact simulation"))
         v3 = QVBoxLayout(card3)
         impacts = self._compute_impacts(name)
         if impacts:
+            h_neuron = loc("lab_header_neuron", "Neuron")
+            h_delta = loc("lab_header_delta", "Δ Value")
+            
             html = "<table width='100%'>"
-            html += "<tr><th>Neuron</th><th>Δ Value</th></tr>"
+            html += f"<tr><th>{h_neuron}</th><th>{h_delta}</th></tr>"
             for partner, delta in impacts.items():
                 col = "#d4ffd4" if delta > 0 else "#ffd4d4"
                 html += f"<tr bgcolor='{col}'><td>{partner}</td><td>{delta:+.2f}</td></tr>"
@@ -317,18 +355,18 @@ class NeuronLaboratory(QDialog):
             lbl.setTextFormat(QtCore.Qt.RichText)
             v3.addWidget(lbl)
         else:
-            v3.addWidget(QLabel("No active connections at the moment"))
+            v3.addWidget(QLabel(loc("lab_no_connections", "No active connections at the moment")))
         self.inspector_lay.addWidget(card3)
         
-        # Removed: card4.setStyleSheet("QGroupBox{font-weight:bold;}")
-        card4 = QGroupBox("Did you know?")
+        # Card: Educational
+        card4 = QGroupBox(loc("lab_did_you_know", "Did you know?"))
         v4 = QVBoxLayout(card4)
         v4.addWidget(QLabel(self._educational_tip(name)))
         self.inspector_lay.addWidget(card4)
         self.inspector_lay.addStretch(1)
 
     # ================================================================
-    #  NEW  –  paint EDIT tab with individual pad-locks
+    #  EDIT tab
     # ================================================================
     def _paint_edit(self):
         while self.edit_lay.count():
@@ -338,12 +376,11 @@ class NeuronLaboratory(QDialog):
         if not self.lock_check.isChecked():
             return
 
-        # Removed: card.setStyleSheet("QGroupBox{font-weight:bold;}")
-        card = QGroupBox("Neuron values (drag to change)  –  click 🔒 to lock")
+        card = QGroupBox(loc("lab_edit_header", "Neuron values (drag to change)  –  click 🔒 to lock"))
         grid = QGridLayout(card)
 
         for row, name in enumerate(sorted(self.bw.neuron_positions.keys())):
-            val = self.forced_neurons.get(name, self.bw.state.get(name, 50))  # Use forced value if available
+            val = self.forced_neurons.get(name, self.bw.state.get(name, 50))
             if isinstance(val, bool):
                 continue
 
@@ -390,55 +427,47 @@ class NeuronLaboratory(QDialog):
 
     # -----------  lock / set slots  ---------------------------------
     def update_debug_info(self):
-        """Public method to refresh the dialog - called from external code"""
         self._refresh()
 
     def _toggle_lock(self, name, button):
-        """Toggle lock state and store current value as forced when locked"""
         is_locked = button.isChecked()
         self.locked_neurons[name]["locked"] = is_locked
         button.setText("🔒" if is_locked else "🔓")
         
         if is_locked:
             current_value = self.bw.state.get(name, 50)
-            self.forced_neurons[name] = int(current_value)  # CAST TO INT
-            self.status_lbl.setText(f"🔒 {name} locked at {current_value}")
+            self.forced_neurons[name] = int(current_value)
+            self.status_lbl.setText(loc("lab_status_locked", "🔒 {name} locked at {value}", name=name, value=current_value))
         else:
             if name in self.forced_neurons:
                 del self.forced_neurons[name]
-            self.status_lbl.setText(f"🔓 {name} unlocked")
+            self.status_lbl.setText(loc("lab_status_unlocked", "🔓 {name} unlocked", name=name))
 
     def _set_neuron(self, name, value):
-        """Store and apply a forced neuron value that overrides simulation"""
-        self.forced_neurons[name] = value  # Store as forced
-        self.bw.state[name] = value        # Apply immediately
+        self.forced_neurons[name] = value
+        self.bw.state[name] = value
         self.bw.update()
 
     def _apply_forced_values(self):
-        """Continuously enforce forced neuron values, overriding simulation"""
-        if not self.isVisible():  # Don't run when dialog is hidden
+        if not self.isVisible():
             return
             
         for name, value in self.forced_neurons.items():
             if name in self.bw.state:
-                # Force the brain widget state to our value
                 self.bw.state[name] = value
                 
                 # NEW: Sync to squid if it's a core statistic neuron
                 if hasattr(self.bw, 'tamagotchi_logic') and hasattr(self.bw.tamagotchi_logic, 'squid'):
                     squid = self.bw.tamagotchi_logic.squid
-                    # Only sync the 8 core stats that StatisticsWindow displays
                     if name in ['hunger', 'happiness', 'cleanliness', 'sleepiness', 
                             'health', 'satisfaction', 'curiosity', 'anxiety']:
                         setattr(squid, name, value)
                 
-                # If locked, ensure controls stay perfectly synced
                 if name in self.locked_neurons and self.locked_neurons[name]["locked"]:
                     slider = self.locked_neurons[name]["slider"]
                     spin = self.locked_neurons[name]["spin"]
                     
-                    # Update controls without triggering signals to avoid loops
-                    int_value = int(value)  # CAST TO INT FOR UI
+                    int_value = int(value)
                     if slider.value() != int_value:
                         slider.blockSignals(True)
                         slider.setValue(int_value)
@@ -457,8 +486,9 @@ class NeuronLaboratory(QDialog):
 
     def _unlock_editing(self, on):
         if on:
-            ans = QMessageBox.question(self, "Unlock editing?",
-                                     "You can now change neuron values and force creation events.  Use responsibly!")
+            title = loc("lab_unlock_title", "Unlock editing?")
+            msg = loc("lab_unlock_msg", "You can now change neuron values and force creation events. Use responsibly!")
+            ans = QMessageBox.question(self, title, msg)
             if ans != QMessageBox.Yes:
                 self.lock_check.setChecked(False)
                 return
@@ -474,7 +504,6 @@ class NeuronLaboratory(QDialog):
     #  Pretty helpers
     # ================================================================
     def _progress_bar(self, pct):
-        from PyQt5.QtWidgets import QProgressBar   # add this import
         bar = QProgressBar()
         bar.setRange(0, 100)
         bar.setValue(int(pct))
@@ -495,15 +524,14 @@ class NeuronLaboratory(QDialog):
     def _influence_badge(self, w, incoming=False):
         mag = abs(w)
         if mag < 0.1:
-            return badge("tiny", "#666", "#fff")
+            return badge(loc("lab_inf_tiny", "tiny"), "#666", "#fff")
         if mag < 0.3:
-            return badge("mild", "#fff", "#555")
+            return badge(loc("lab_inf_mild", "mild"), "#fff", "#555")
         if mag < 0.6:
-            return badge("moderate", "#fff", "#000")
-        return badge("STRONG", "#fff", "#d9534f")
+            return badge(loc("lab_inf_mod", "moderate"), "#fff", "#000")
+        return badge(loc("lab_inf_strong", "STRONG"), "#fff", "#d9534f")
 
     def _compute_impacts(self, name):
-        """Return dict partner→estimated delta if name activates"""
         impacts = {}
         val = self.bw.state.get(name, 50)
         if abs(val - 50) < 5:
@@ -515,27 +543,39 @@ class NeuronLaboratory(QDialog):
         return impacts
 
     def _educational_tip(self, name):
-        tips = {
-            "hunger": "Hunger is a homeostatic drive.  High hunger inhibits satisfaction and boosts anxiety.",
-            "happiness": "Happiness is reinforced by reward neurons.  It inhibits anxiety and promotes curiosity.",
-            "anxiety": "Anxiety is reduced by stress neurons (inhibitory).  High anxiety suppresses curiosity.",
-            "curiosity": "Curiosity spikes when novelty is high.  It encourages exploration and reduces anxiety.",
-        }
+        # 1. Try specific key first
+        specific_key = f"lab_tip_{name}"
+        text = loc(specific_key)
+        
+        # Check if translation was found (if loc returns key when missing)
+        if text != specific_key:
+            return text
+
+        # 2. Core neurons
+        core_keys = ["hunger", "happiness", "anxiety", "curiosity"]
+        if name in core_keys:
+            return loc(specific_key)
+                
         if name in self.bw.original_neuron_positions:
-            return tips.get(name, "Core neuron – fundamental to survival.")
+            return loc("lab_tip_core", "Core neuron – fundamental to survival.")
+                
         nd = getattr(self.bw, 'neurogenesis_data', {})
         det = nd.get('new_neurons_details', {}).get(name)
+            
         if not det:
-            return "Neurogenesis neuron – purpose inferred from birth context."
-        return (f"Created by <b>{det.get('trigger_type')}</b> – specialises in "
-                f"<b>{det.get('specialisation','?')}</b>.  "
-                f"Its job is to turn experiences into long-term behaviour.")
+            return loc("lab_tip_neuro_default", "Neurogenesis neuron – purpose inferred from birth context.")
+
+        # Special handling for connectors
+        if det.get('trigger_type') == 'connector':
+            return loc("lab_tip_connector", "Generated by the network to connect orphaned neurons. Has 3 connections.")
+                
+        return loc("lab_tip_neuro_fmt", 
+                "Created by <b>{trigger}</b> – specialises in <b>{spec}</b>. Its job is to turn experiences into long-term behaviour.",
+                trigger=det.get('trigger_type'),
+                spec=det.get('specialisation','?'))
 
 
-# ------------------------------------------------------------------
-#  Old name alias – drop-in compatibility
-# ------------------------------------------------------------------
-NeurogenesisDebugDialog = NeuronLaboratory
+NeurogenesisDebugDialog = NeuronLaboratory  #  Old name alias – Backwards compatibility
 
 
 # ------------------------------------------------------------------
@@ -548,6 +588,7 @@ if __name__ == "__main__":
     class DummyBW:
         neuron_positions = {"hunger": (100, 100), "happiness": (200, 100)}
         excluded_neurons = []
+        original_neuron_positions = {"hunger": (100, 100), "happiness": (200, 100)}
         state = {"hunger": 60, "happiness": 40}
         pruning_enabled = True
         weights = {("hunger", "happiness"): 0.75}
