@@ -21,6 +21,8 @@ from src.brain_tool import SquidBrainWindow
 from src.learning import LearningConfig
 from src.plugin_manager import PluginManager
 from src.brain_worker import BrainWorker
+from src.config_manager import ConfigManager
+from src.localisation import Localisation
 
 def launch_brain_designer_process():
     """Entry point for Brain Designer in a separate process"""
@@ -98,6 +100,7 @@ class TimedMessageBox(QtWidgets.QDialog):
         self.timeout_seconds = timeout_seconds
         self.remaining_seconds = timeout_seconds
         self.result_value = QtWidgets.QMessageBox.No  # Default to No
+        self.loc = Localisation.instance()
         
         # Setup UI
         layout = QtWidgets.QVBoxLayout()
@@ -105,17 +108,22 @@ class TimedMessageBox(QtWidgets.QDialog):
         self.message_label = QtWidgets.QLabel(message)
         layout.addWidget(self.message_label)
         
-        self.timer_label = QtWidgets.QLabel(f"(Auto-declining in {self.remaining_seconds}s)")
+        # Auto-decline message
+        self.timer_label = QtWidgets.QLabel(self.loc.get("auto_decline", seconds=self.remaining_seconds))
         self.timer_label.setStyleSheet("color: gray; font-size: 10px;")
         layout.addWidget(self.timer_label)
         
         # Buttons
-        button_box = QtWidgets.QDialogButtonBox(
+        self.button_box = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Yes | QtWidgets.QDialogButtonBox.No
         )
-        button_box.accepted.connect(self.accept_yes)
-        button_box.rejected.connect(self.reject_no)
-        layout.addWidget(button_box)
+        # Localise buttons manually since we use a custom dict system
+        self.button_box.button(QtWidgets.QDialogButtonBox.Yes).setText(self.loc.get("yes"))
+        self.button_box.button(QtWidgets.QDialogButtonBox.No).setText(self.loc.get("no"))
+
+        self.button_box.accepted.connect(self.accept_yes)
+        self.button_box.rejected.connect(self.reject_no)
+        layout.addWidget(self.button_box)
         
         self.setLayout(layout)
         
@@ -129,7 +137,7 @@ class TimedMessageBox(QtWidgets.QDialog):
     def update_countdown(self):
         """Update the countdown and auto-close when time runs out"""
         self.remaining_seconds -= 1
-        self.timer_label.setText(f"(Auto-declining in {self.remaining_seconds}s)")
+        self.timer_label.setText(self.loc.get("auto_decline", seconds=self.remaining_seconds))
         
         if self.remaining_seconds <= 0:
             self.timer.stop()
@@ -156,6 +164,12 @@ class TimedMessageBox(QtWidgets.QDialog):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, specified_personality=None, debug_mode=False, neuro_cooldown=None):
         super().__init__()
+        
+        # Apply configured language from config.ini
+        config_manager = ConfigManager()
+        language = config_manager.get_language()
+        Localisation.instance().set_language(language)
+        print(f"📄 Applied language from config: {language}")
         
         # Initialize configuration
         self.config = LearningConfig()
@@ -470,8 +484,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Show timed dialog
         dialog = TimedMessageBox(
             self,
-            "Startup",
-            "Show tutorial?",
+            Localisation.instance().get("startup"),
+            Localisation.instance().get("show_tutorial_q"),
             timeout_seconds=5
         )
         dialog.exec_()
@@ -515,8 +529,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Ask about tutorial
         tutorial_dialog = TimedMessageBox(
             self,
-            "Tutorial",
-            "Would you like to see the tutorial?",
+            Localisation.instance().get("tutorial_title"),
+            Localisation.instance().get("tutorial_query"),
             timeout_seconds=5
         )
         tutorial_dialog.exec_()
