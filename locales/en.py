@@ -313,7 +313,7 @@ translations = {
     "tutorial_satisfaction": "Keep satisfaction high and anxiety low.",
     "tutorial_traits": "Your squid will develop unique traits and behaviors based on how you raise him.",
 
-    # ===== BRAIN DESIGNER =====
+    # ===== BRAIN DESIGNER (Templates) =====
     "designer_title": "Brain Designer",
     "required_only": "Required Only",
     "dosidicus_default": "Dosidicus Default",
@@ -729,4 +729,270 @@ translations = {
     "fmt_m_short": "{val}m",
     "fmt_h_short": "{val}h",
     "fmt_d_short": "{val}d",
+
+    # ===== BRAIN DESIGNER WINDOW UI =====
+    "designer_window_title": "Brain Designer - Dosidicus-2",
+    "designer_window_title_imported": "Brain Designer - Dosidicus-2 [Imported from Game]",
+    
+    # Tabs
+    "designer_tab_layers": "Layers",
+    "designer_tab_sensors": "Sensors",
+    "designer_tab_props": "Properties",
+    "designer_tab_connections": "Connections",
+    "designer_tab_outputs": "Outputs",
+    
+    # Toolbar
+    "designer_btn_generate": "🎲 Generate Sparse Network",
+    "designer_tooltip_generate": "Generate random connections between core neurons",
+    "designer_btn_neuron": "➕ Neuron",
+    "designer_tooltip_neuron": "Add a new neuron (Shift+N)",
+    "designer_btn_fix": "🔧 Auto-Fix",
+    "designer_tooltip_fix": "Automatically fix orphan neurons and connectivity issues",
+    "designer_btn_validate": "✓ Validate",
+    "designer_tooltip_validate": "Check design for issues",
+    "designer_btn_sync": "🔄 Sync from Game",
+    "designer_tooltip_sync": "Refresh brain state from running Dosidicus game",
+    "designer_btn_clear_conn": "🗑 Clear Connections",
+    "designer_tooltip_clear_conn": "Remove all connections (keeps neurons)",
+    "designer_tooltip_dice": "Instantly generate a random network (no dialog)",
+    
+    # Ticker / Help Bar
+    "designer_help_drag_connect": "💡 <b>Left-Drag</b> from neuron to create connection",
+    "designer_help_ctrl_move": "<b>Ctrl+Drag</b> neuron to move it",
+    "designer_help_pan": "<b>Right-Drag</b> to pan canvas",
+    "designer_help_zoom": "<b>Scroll Wheel</b> to zoom (or adjust weight on connection)",
+    "designer_help_edit_weight": "<b>Double-Click</b> connection to edit weight",
+    "designer_help_select": "<b>Click</b> neuron/connection to select",
+    "designer_help_delete": "<b>Del</b> to delete selected",
+    "designer_help_reverse": "<b>Space</b> to reverse connection direction",
+    "designer_help_keys_weight": "<b>+/-</b> keys to adjust weight (Shift for larger steps)",
+    "designer_help_page_weight": "<b>Page Up/Down</b> to adjust weight (large steps)",
+    "designer_help_add_neuron": "<b>Shift+N</b> to add neuron",
+    "designer_help_save": "<b>Ctrl+S</b> to save",
+    "designer_help_open": "<b>Ctrl+O</b> to open",
+    "designer_help_export": "<b>Ctrl+E</b> to export",
+    "designer_help_new": "<b>Ctrl+N</b> for new design",
+    "designer_help_gen": "<b>Ctrl+G</b> to generate network",
+    "designer_help_dice": "🎲 <b>Dice button</b> for instant random generation",
+    "designer_help_outputs": "<b>Outputs tab</b> to bind neurons to squid behaviors",
+    
+    # Menus
+    "designer_menu_file": "File",
+    "designer_menu_edit": "Edit",
+    "designer_menu_templates": "Templates",
+    "designer_menu_generate": "Generate",
+    
+    # Actions
+    "designer_action_new": "New Design",
+    "designer_action_save": "Save...",
+    "designer_action_export": "Export for Dosidicus...",
+    "designer_action_open": "Open...",
+    "designer_action_gen_sparse": "Generate Sparse Network...",
+    "designer_action_autofix": "Auto-Fix Connectivity",
+    "designer_action_validate": "Validate Design",
+    "designer_action_clear_conn": "Clear All Connections",
+    "designer_action_clear_outputs": "Clear All Output Bindings",
+    
+    # Status Bar
+    "designer_status_neurons": "Neurons: {count}",
+    "designer_status_connections": "Connections: {count}",
+    "designer_status_required": "Required: {ok}",
+    "designer_status_outputs": "Outputs: {count}",
+    "designer_status_selected": "Selected: {source} → {target} (weight: {weight:+.3f})",
+    "designer_status_weight_updated": "Weight updated: {source} → {target} = {weight:+.3f}",
+    "designer_status_deleted": "Deleted connection: {source} → {target}",
+    "designer_status_cleared_conn": "Cleared {count} connections",
+    "designer_status_cleared_out": "Cleared {count} output bindings",
+    "designer_status_generated": "Generated {count} connections using '{style}' preset",
+    "designer_status_random_gen": "🎲 Generated {count} random connections (style: {style})",
+    "designer_status_synced": "✨ Synced: {neurons} neurons, {connections} connections",
+    "designer_status_imported": "✨ Active brain imported from running game",
+    
+    # Dialogs & Messages
+    "designer_msg_game_not_running_title": "Game Not Running",
+    "designer_msg_game_not_running": "The Dosidicus game is no longer running.\n\nStart the game again to sync.",
+    "designer_msg_sync_confirm_title": "Sync from Game",
+    "designer_msg_sync_confirm": "Replace current design with the latest brain state from the game?",
+    "designer_msg_sync_failed_title": "Sync Failed",
+    "designer_msg_sync_failed": "Could not import brain state from game.",
+    
+    "designer_msg_live_import_title": "Live Brain Import",
+    "designer_msg_live_import_header": "🧠 Active brain imported from running game",
+    "designer_msg_live_import_body": "The designer is now showing the exact neural network from your running Dosidicus game.\n\n• {neurons} neurons\n• {connections} connections\n\nChanges made here will NOT affect the running game.",
+    
+    "designer_msg_clear_conn_title": "Clear Connections",
+    "designer_msg_clear_conn_confirm": "Remove all {count} connections?\n\nNeurons will be kept.",
+    
+    "designer_msg_clear_out_title": "Clear Output Bindings",
+    "designer_msg_clear_out_empty": "No output bindings to clear.",
+    "designer_msg_clear_out_confirm": "Remove all {count} output bindings?",
+    
+    "designer_msg_new_design_title": "New Design",
+    "designer_msg_new_design_confirm": "Start a new design? Unsaved changes will be lost.",
+    
+    "designer_msg_autofix_title": "Auto-Fix",
+    "designer_msg_autofix_result": "Created {count} connections:\n\n{details}",
+    "designer_msg_autofix_none": "No issues found.",
+    
+    "designer_msg_save_title": "Save Design",
+    "designer_msg_saved_title": "Saved",
+    "designer_msg_save_success": "Design saved successfully: {msg}",
+    "designer_msg_save_bindings": "\n({count} output bindings included)",
+    "designer_msg_error_title": "Error",
+    "designer_msg_save_fail": "Failed to save design:\n\n{error}",
+    
+    "designer_msg_export_title": "Export",
+    "designer_msg_exported_title": "Exported",
+    "designer_msg_export_success": "Design exported successfully",
+    "designer_msg_export_fail": "Failed to export design:\n\n{error}",
+    
+    "designer_msg_open_title": "Open Design",
+    "designer_msg_open_fail": "Could not load design:\n\n{error}",
+    
+    "designer_msg_load_template_title": "Load Template",
+    "designer_msg_select_template": "Select a template:",
+    "designer_msg_replace_design": "Replace current design?",
+    
+    "designer_msg_status_title": "Design Status",
+    "designer_msg_status_ok": "\n✅ Status: OK",
+    "designer_msg_status_issues": "\n⚠️ ISSUES:\n",
+    
+    "designer_input_weight_title": "Connection Weight",
+    "designer_input_weight_label": "Set weight for {source} → {target}:",
+    
+    # ===== DESIGNER PANELS =====
+    # Properties Panel
+    "designer_prop_no_selection": "No neuron selected",
+    "designer_prop_no_selection_disabled": "No Selection",
+    "designer_prop_lbl_name": "Name:",
+    "designer_prop_lbl_type": "Type:",
+    "designer_prop_lbl_x": "X:",
+    "designer_prop_lbl_y": "Y:",
+    "designer_prop_btn_delete": "Delete Neuron",
+    
+    # Add Neuron Dialog
+    "designer_add_title": "Add Neuron",
+    "designer_add_grp_type": "Select Neuron Type",
+    "designer_add_btn_custom": "✨ Custom / Plugin Neuron",
+    "designer_add_btn_sensor": "📡 Input Sensor",
+    "designer_add_tooltip_custom": "Create a neuron with a specific name to link with game plugins",
+    "designer_add_grp_sensor": "Select Sensor",
+    "designer_add_grp_custom": "Define Custom Neuron",
+    "designer_add_info_custom": "<i>To affect the squid, the <b>Name</b> must match a plugin ID.<br>Example: Name it <b>'jet_boost'</b> to activate a jetpack plugin.</i>",
+    "designer_add_lbl_id": "Plugin ID / Name:",
+    "designer_add_ph_id": "e.g. turbo_mode",
+    "designer_add_btn_create": "Create Link",
+    "designer_add_all_added": "All sensors added",
+    "designer_add_err_title": "Error",
+    "designer_add_err_exists": "Exists",
+    "designer_add_msg_created": "Created {name}",
+    
+    # Layers Panel
+    "designer_layer_btn_add": "Add Layer",
+    "designer_layer_dlg_title": "New Layer",
+    "designer_layer_dlg_label": "Name:",
+    
+    # Sensors Panel
+    "designer_sensor_header": "Input Sensors:",
+    "designer_sensor_tooltip_refresh": "Refresh sensor list (includes plugin-registered sensors)",
+    "designer_sensor_cat_label": "── {name} ──",
+    
+    # Connections Table
+    "designer_conn_header_source": "Source",
+    "designer_conn_header_target": "Target",
+    "designer_conn_header_weight": "Weight",
+    
+    # ===== OUTPUTS PANEL =====
+    "designer_output_header": "<b>Output Bindings</b><br><small>Connect neurons to squid behaviors. When a neuron's activation exceeds the threshold, it triggers the bound action.</small>",
+    "designer_output_btn_add": "➕ Add Binding",
+    "designer_output_btn_edit": "✏️ Edit",
+    "designer_output_btn_remove": "🗑️ Remove",
+    "designer_output_col_neuron": "Neuron",
+    "designer_output_col_behavior": "→ Behavior",
+    "designer_output_col_threshold": "Threshold",
+    "designer_output_col_mode": "Mode",
+    "designer_output_col_enabled": "Enabled",
+    "designer_output_info": "{count} binding(s), {enabled} enabled",
+    "designer_output_err_missing": "⚠️ Neuron not found in design",
+    "designer_output_dlg_remove_title": "Remove Binding",
+    "designer_output_dlg_remove_msg": "Remove binding: {neuron} → {hook}?",
+    
+    # Output Binding Dialog
+    "designer_binding_title_add": "Add Output Binding",
+    "designer_binding_title_edit": "Configure Output Binding",
+    "designer_binding_grp_neuron": "Source Neuron",
+    "designer_binding_lbl_neuron": "Neuron:",
+    "designer_binding_lbl_current": "Current: --",
+    "designer_binding_grp_hook": "Output Behavior",
+    "designer_binding_lbl_trigger": "Trigger:",
+    "designer_binding_grp_settings": "Trigger Settings",
+    "designer_binding_lbl_thresh": "Threshold:",
+    "designer_binding_lbl_mode": "Mode:",
+    "designer_binding_lbl_cool": "Cooldown:",
+    "designer_binding_chk_enabled": "Enabled",
+    "designer_binding_err_neuron": "Please select a neuron",
+    "designer_binding_err_hook": "Please select an output behavior",
+    "designer_binding_err_duplicate": "A binding for {neuron} → {hook} already exists",
+    
+    # Trigger Modes
+    "designer_mode_rising": "Rising Edge (cross threshold going up)",
+    "designer_mode_falling": "Falling Edge (cross threshold going down)",
+    "designer_mode_above": "While Above (continuous while > threshold)",
+    "designer_mode_below": "While Below (continuous while < threshold)",
+    "designer_mode_change": "On Change (any significant change)",
+    
+    # ===== DESIGNER SENSOR DISCOVERY =====
+    "desc_builtin_sensor": "Built-in sensor: {name}",
+    "desc_vision_food": "Detects food in vision cone",
+    "desc_custom_sensor": "Custom sensor from {plugin}",
+    "desc_builtin": "builtin",
+    "desc_plugin": "plugin",
+    "desc_other": "other",
+    "desc_vision": "vision",
+    
+    # ===== DESIGNER TEMPLATES (Extra Keys) =====
+    "tmpl_core_name": "🟡 Required Only",
+    "tmpl_core_desc": "8 required neurons",
+    "tmpl_dosidicus_name": "🟡 Dosidicus Default",
+    "tmpl_dosidicus_desc": "Standard layout",
+    "tmpl_full_sensors_name": "🟡 Full Sensor Suite",
+    "tmpl_full_sensors_desc": "All sensors",
+    "tmpl_insomniac_name": "🔴 The Insomniac",
+    "tmpl_insomniac_desc": "Anxiety & Curiosity block sleep",
+    "tmpl_hyperactive_name": "🔴 The Hyperactive",
+    "tmpl_hyperactive_desc": "Noise neurons overwhelm sleepiness",
+    "tmpl_hangry_name": "🔴 The Hangry",
+    "tmpl_hangry_desc": "Hunger causes extreme rage",
+    "tmpl_depressive_name": "🔴 The Depressive",
+    "tmpl_depressive_desc": "Resistant to happiness",
+    "tmpl_obsessive_name": "🔴 The Obsessive",
+    "tmpl_obsessive_desc": "Anxiety/Curiosity feedback loop",
+    "layer_sensors": "Sensors",
+    "layer_core": "Core",
+    "layer_input": "Input",
+    "layer_out": "Out",
+    "layer_racing_mind": "Racing Mind",
+    "layer_state": "State",
+    "layer_vision": "Vision",
+    "layer_noise": "Noise",
+    "layer_output": "Output",
+    "layer_gut_brain": "Gut-Brain",
+    "layer_gray": "Gray",
+    "layer_loop": "Loop",
+    "layer_stats": "Stats",
+    "layer_emotions": "Emotions",
+    
+    # ===== CANVAS CONTEXT MENU / DIALOGS =====
+    "designer_cnv_del_conn_title": "Delete Connection",
+    "designer_cnv_del_conn_msg": "Are you sure you want to delete the connection:\n{source} → {target}?",
+    "designer_cnv_chk_dont_ask": "Don't ask again",
+    "designer_cnv_btn_del": "Yes, Delete",
+    "designer_cnv_btn_cancel": "Cancel",
+    "designer_cnv_dlg_edit_title": "Edit Connection",
+    "designer_cnv_lbl_conn": "Connection: {source} → {target}",
+    "designer_cnv_lbl_weight": "Weight:",
+    "designer_cnv_info_weight": "Positive = Excitatory (green), Negative = Inhibitory (red)",
+    "designer_cnv_btn_del_conn": "Delete Connection",
+    "designer_cnv_btn_ok": "OK",
+    "designer_cnv_tooltip_invalid": "Invalid connection",
 }
