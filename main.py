@@ -945,18 +945,40 @@ def main():
                        help='Set neurogenesis cooldown in seconds')
     parser.add_argument('-c', '--clean', action='store_true',
                        help='Clean __pycache__ and logs folders before starting')
+    parser.add_argument('-designer', '--designer', action='store_true',
+                       help='Launch Brain Designer standalone')
     args = parser.parse_args()
 
     # Perform cleanup if requested before logging setup
     if args.clean:
         perform_cleanup_and_exit()
 
+    # Launch designer if flag is set
+    if args.designer:
+        print("Launching Brain Designer standalone...")
+        try:
+            # Import and run designer's main function
+            try:
+                from src import brain_designer
+            except ImportError:
+                import brain_designer
+            
+            # brain_designer.main() will parse sys.argv and handle -d and -c flags automatically
+            brain_designer.main()
+        except ImportError as e:
+            print(f"Error: Could not import brain_designer module: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"Error launching designer: {e}")
+            sys.exit(1)
+        return  # Exit after designer closes
+
     # Initialize logging (replaces previous global setup)
     setup_logging_configuration()
-
-    print(f"Personality: {args.personality}")
-    print(f"Debug mode: {args.debug}")
-    print(f"Cooldown {args.neurocooldown or 'will be loaded from config'}")
+    
+    print(f"    Personality: {args.personality}")
+    print(f"    Debug mode: {args.debug}")
+    print(f"    Cooldown {args.neurocooldown or 'will be loaded from config'}")
 
     app = QtWidgets.QApplication(sys.argv)
     
