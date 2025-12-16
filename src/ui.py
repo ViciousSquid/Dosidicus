@@ -18,7 +18,7 @@ from .plugin_manager_dialog import PluginManagerDialog
 from .tutorial import TutorialManager
 from .vision import VisionWindow
 from .task_manager import TaskManagerWindow
-from .laboratory import NeurogenesisDebugDialog
+from .laboratory import NeuronLaboratory
 from .preferences import PreferencesWindow
 from .localisation import Localization
 

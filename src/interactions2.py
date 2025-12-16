@@ -70,6 +70,11 @@ class PoopInteractionManager:
             return False
         if hasattr(poop, 'is_being_carried') and poop.is_being_carried:
             return False
+            
+        # Check if poop is in cooldown after being thrown
+        if hasattr(poop, 'throw_cooldown_until'):
+            if time.time() < poop.throw_cooldown_until:
+                return False      
         return True
 
     def attach_poop_to_squid(self, poop):
@@ -323,8 +328,16 @@ class PoopInteractionManager:
 
     def cleanup_after_throw(self):
         if hasattr(self.squid, 'carried_poop') and self.squid.carried_poop:
+            poop = self.squid.carried_poop
+            
+            # --- ADDED COOLDOWN APPLICATION ---
+            # Set cooldown on the poop so it can't be picked up immediately
+            cooldown = self.poop_config.get('cooldown_after_throw', 10.0)
+            poop.throw_cooldown_until = time.time() + cooldown
+            # ----------------------------------
+
             # Make sure to reset all poop-related states
-            self.squid.carried_poop.is_being_carried = False
+            poop.is_being_carried = False
             self.squid.carried_poop = None
         
         # Reset squid states

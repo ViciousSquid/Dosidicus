@@ -53,7 +53,6 @@ class EnhancedBrainTooltips:
             self.hide_tooltip()
             return
 
-        # NOTE: We now show tooltips for ALL neurons, including binary sensors.
         # Binary neurons will show ON/OFF, continuous neurons show numeric values.
 
         # 1. Get neuron's logical position
@@ -118,9 +117,9 @@ class EnhancedBrainTooltips:
         val_display = f"{current_value:.1f}"
         
         return f"""
-        <div style='background-color: black; color: white; padding: 10px; 
-                    font-family: Arial; font-size: 28px; font-weight: bold; 
-                    border-radius: 5px; min-width: 60px; text-align: center;'>
+        <div style='background-color: black; color: white; padding: 1px; 
+                    font-family: Arial; font-size: 30px; font-weight: bold; 
+                    border-radius: 1px; min-width: 60px; text-align: center;'>
             {val_display}
         </div>
         """

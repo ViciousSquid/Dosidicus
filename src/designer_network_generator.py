@@ -192,27 +192,35 @@ class SparseNetworkGenerator:
 
     def add_random_sensors(self, design, probability: float = 0.3):
         """
-        Randomly add input sensors to the design with sensible wiring.
+        Randomly add input sensors to the design based on specific game rules.
+        
+        Rules:
+        - 'can_see_food' is required (handled by design validation, but implicitly part of valid set)
+        - 'plant_proximity': 20% chance
+        - 'is_fleeing': 10% chance
+        - No other sensors are generated.
         
         Args:
             design: BrainDesign to modify
-            probability: Probability of adding each available sensor (0.0 to 1.0)
+            probability: Ignored. Probabilities are hardcoded per requirements.
         
         Returns:
             Number of sensors added
         """
-        from designer_sensor_discovery import get_all_available_sensors
-        
-        all_sensors = get_all_available_sensors()
-        # Exclude already-present sensors and the required can_see_food
-        available_sensors = [
-            name for name in all_sensors.keys() 
-            if name not in design.neurons and name != 'can_see_food'
-        ]
+        # Specific probabilities requested
+        sensor_rules = {
+            'plant_proximity': 0.20,
+            'is_fleeing': 0.10
+        }
         
         added = 0
-        for sensor_name in available_sensors:
-            if self.rng.random() < probability:
+        for sensor_name, chance in sensor_rules.items():
+            # Skip if already present
+            if sensor_name in design.neurons:
+                continue
+
+            # Roll the dice
+            if self.rng.random() < chance:
                 # add_sensor handles both creation and sensible wiring via defaults
                 success, _ = design.add_sensor(sensor_name, create_default_connections=True)
                 if success:
@@ -302,6 +310,7 @@ class SparseNetworkGenerator:
                             weight_noise: float = 1.0,        # ADDED to match call sig
                             position_variance: float = 0.0,   # ADDED to fix Error
                             sensor_probability: float = 0.0,  # ADDED to match call sig
+                            bounds: Tuple[float, float, float, float] = (-400, -150, 900, 750),
                             seed: Optional[int] = None,
                             silent: bool = False) -> Tuple[int, List[str]]:
         """
@@ -315,6 +324,7 @@ class SparseNetworkGenerator:
             weight_noise: Multiplier for random weight variance
             position_variance: If > 0, randomly moves neurons (perturbation)
             sensor_probability: Chance to add random input sensors
+            bounds: (min_x, min_y, max_x, max_y) to constrain neurons within view window
             seed: Optional seed for reproducible generation.
             silent: If True, suppresses generation of action description strings
         
@@ -344,7 +354,7 @@ class SparseNetworkGenerator:
 
         # 2. Handle Position Perturbation (if requested)
         if position_variance > 0:
-            self.perturb_positions(design, variance=position_variance)
+            self.perturb_positions(design, variance=position_variance, bounds=bounds)
             if not silent:
                 actions.append(f"Perturbed neuron positions (variance: {position_variance})")
 

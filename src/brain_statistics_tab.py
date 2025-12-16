@@ -67,13 +67,22 @@ class StatisticsTab(BrainBaseTab):
         self.tamagotchi_logic = logic
 
     def update_current_neurons(self, count):
-        """Update the current neuron count in the UI, enforcing only-count-up logic."""
+        """Update the current neuron count in the UI, enforcing only-count-up logic.
+        
+        This ensures the max neurons stat only ever increases, never decreases.
+        """
         if hasattr(self, 'stat_labels') and 'current_neurons' in self.stat_labels:
-            # Check if new count is higher than stored max
+            # Get stored max - this should only ever go UP
             current_max = self.statistics.get('current_neurons', 0)
             if count > current_max:
                 self.statistics['current_neurons'] = count
                 self.stat_labels['current_neurons'].setText(str(count))
+                
+                # Sync to squid statistics if available
+                if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'squid'):
+                    squid = self.tamagotchi_logic.squid
+                    if hasattr(squid, 'statistics') and hasattr(squid.statistics, 'max_neurons_reached'):
+                        squid.statistics.max_neurons_reached = count
 
     def _on_neuron_created_update_stats(self, neuron_name: str):
         """Update current neuron count when a new neuron is created"""

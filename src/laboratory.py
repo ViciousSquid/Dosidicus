@@ -26,7 +26,7 @@ from .localisation import loc  # Import localisation
 # ------------------------------------------------------------------
 def badge(text, color="#333", bg="#eee"):
     return f"""<span style="color:{color};background:{bg};
-               padding:2px 6px;border-radius:4px;font-size:8pt;
+               padding:2px 6px;border-radius:4px;font-size:10pt;
                font-weight:600;">{text}</span>"""
 
 
@@ -615,4 +615,5 @@ if __name__ == "__main__":
 
     dlg = NeuronLaboratory(DummyBW())
     dlg.show()
+
     sys.exit(app.exec_())

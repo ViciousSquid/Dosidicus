@@ -2,6 +2,7 @@
 import os
 import sys
 import glob
+import re
 from PyQt5 import QtWidgets, QtCore, QtGui
 from .config_manager import ConfigManager
 from .localisation import Localization
@@ -38,6 +39,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         # Ensure scaling is initialized based on the screen this window is on
         screen = QtWidgets.QApplication.primaryScreen()
         screen_geometry = screen.availableGeometry()
+        self.config = ConfigManager()
         
         # Re-initialize scaling to ensure context is correct for this window creation
         DisplayScaling.initialize(screen_geometry.width(), screen_geometry.height())
@@ -46,7 +48,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.setModal(False)
         
         # Scale the initial window size
-        w = DisplayScaling.scale(900)
+        w = DisplayScaling.scale(1024)
         h = DisplayScaling.scale(800)
         self.resize(w, h)
         
@@ -213,6 +215,13 @@ class PreferencesWindow(QtWidgets.QDialog):
                 color: #7f8c8d;
                 font-style: italic;
             }}
+            
+            /* NEW: Two-column layout for interactions */
+            QFrame#ColumnFrame {{
+                border: {border_width}px solid #bdc3c7;
+                border-radius: {radius}px;
+                padding: {padding_std}px;
+            }}
         """
         self.setStyleSheet(css)
 
@@ -267,17 +276,25 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.general_tab = self._create_general_tab()
         self.tab_widget.addTab(self.general_tab, "General")
         
-        # Rock Interactions tab
-        self.rock_tab = self._create_rock_tab()
-        self.tab_widget.addTab(self.rock_tab, "Rock Interactions")
+        # Interactions tab - NEW COMBINED TAB
+        self.interactions_tab = self._create_interactions_tab()
+        self.tab_widget.addTab(self.interactions_tab, "Interactions")
         
         # Neurogenesis tab
         self.neurogenesis_tab = self._create_neurogenesis_tab()
         self.tab_widget.addTab(self.neurogenesis_tab, "Neurogenesis")
         
+        # Hebbian tab - NEW TAB
+        self.hebbian_tab = self._create_hebbian_tab()
+        self.tab_widget.addTab(self.hebbian_tab, "Hebbian Learning")
+        
         # Display tab
         self.display_tab = self._create_display_tab()
         self.tab_widget.addTab(self.display_tab, "Display")
+        
+        # Designer tab
+        self.designer_tab = self._create_designer_tab()
+        self.tab_widget.addTab(self.designer_tab, "Designer")
         
         layout.addWidget(self.tab_widget)
         
@@ -329,83 +346,238 @@ class PreferencesWindow(QtWidgets.QDialog):
         desc_label.setObjectName("DescriptionLabel") # Styled specifically smaller
         layout.addWidget(desc_label)
         
+        # Decorations group - NEW
+        decorations_group = QtWidgets.QGroupBox("🦑")
+        decorations_layout = QtWidgets.QFormLayout()
+        decorations_layout.setSpacing(DisplayScaling.scale(15))
+        
+        self.decorations_enabled = QtWidgets.QCheckBox("")
+        self.decorations_enabled.stateChanged.connect(self._on_change)
+        #decorations_layout.addRow(self.decorations_enabled)
+        
+        self.decorations_max_shows = QtWidgets.QSpinBox()
+        self.decorations_max_shows.setRange(1, 10)
+        self.decorations_max_shows.valueChanged.connect(self._on_change)
+        #decorations_layout.addRow("Max Shows:", self.decorations_max_shows)
+        
+        self.decorations_min_interval = QtWidgets.QDoubleSpinBox()
+        self.decorations_min_interval.setRange(30.0, 600.0)
+        self.decorations_min_interval.setSingleStep(30.0)
+        self.decorations_min_interval.setSuffix(" sec")
+        self.decorations_min_interval.valueChanged.connect(self._on_change)
+        #decorations_layout.addRow("Min Interval:", self.decorations_min_interval)
+        
+        self.decorations_max_interval = QtWidgets.QDoubleSpinBox()
+        self.decorations_max_interval.setRange(60.0, 1800.0)
+        self.decorations_max_interval.setSingleStep(60.0)
+        self.decorations_max_interval.setSuffix(" sec")
+        self.decorations_max_interval.valueChanged.connect(self._on_change)
+        #decorations_layout.addRow("Max Interval:", self.decorations_max_interval)
+        
+        decorations_group.setLayout(decorations_layout)
+        #layout.addWidget(decorations_group)
+        
+        # Link Blink group
+        linkblink_group = QtWidgets.QGroupBox("Connection Blink Effects")
+        linkblink_layout = QtWidgets.QFormLayout()
+        linkblink_layout.setSpacing(DisplayScaling.scale(15))
+        
+        self.linkblink_interval_min = QtWidgets.QDoubleSpinBox()
+        self.linkblink_interval_min.setRange(1.0, 60.0)
+        self.linkblink_interval_min.setSingleStep(1.0)
+        self.linkblink_interval_min.setSuffix(" sec")
+        self.linkblink_interval_min.valueChanged.connect(self._on_change)
+        linkblink_layout.addRow("Min Blink Interval:", self.linkblink_interval_min)
+        
+        self.linkblink_interval_max = QtWidgets.QDoubleSpinBox()
+        self.linkblink_interval_max.setRange(5.0, 120.0)
+        self.linkblink_interval_max.setSingleStep(1.0)
+        self.linkblink_interval_max.setSuffix(" sec")
+        self.linkblink_interval_max.valueChanged.connect(self._on_change)
+        linkblink_layout.addRow("Max Blink Interval:", self.linkblink_interval_max)
+        
+        self.linkblink_duration = QtWidgets.QDoubleSpinBox()
+        self.linkblink_duration.setRange(0.5, 10.0)
+        self.linkblink_duration.setSingleStep(0.5)
+        self.linkblink_duration.setSuffix(" sec")
+        self.linkblink_duration.valueChanged.connect(self._on_change)
+        linkblink_layout.addRow("Blink Duration:", self.linkblink_duration)
+        
+        linkblink_group.setLayout(linkblink_layout)
+        layout.addWidget(linkblink_group)
+        
         layout.addStretch() 
         widget.setLayout(layout)
         return widget
 
-    def _create_rock_tab(self):
-        """Create Rock Interactions settings tab"""
+    def _create_interactions_tab(self):
+        """NEW: Create combined Rock & Poop Interactions tab with two columns"""
         widget = QtWidgets.QWidget()
-        layout = QtWidgets.QFormLayout()
-        layout.setSpacing(DisplayScaling.scale(20))
-        layout.setContentsMargins(DisplayScaling.scale(25), DisplayScaling.scale(25), DisplayScaling.scale(25), DisplayScaling.scale(25))
+        main_layout = QtWidgets.QVBoxLayout()
+        main_layout.setSpacing(DisplayScaling.scale(25))
+        main_layout.setContentsMargins(DisplayScaling.scale(20), DisplayScaling.scale(20), DisplayScaling.scale(20), DisplayScaling.scale(20))
         
-        # Probabilities (0-1)
+        # Create horizontal layout for two columns
+        columns_layout = QtWidgets.QHBoxLayout()
+        columns_layout.setSpacing(DisplayScaling.scale(30))
+        
+        # Left column - Rock Interactions
+        rock_frame = QtWidgets.QFrame()
+        rock_frame.setObjectName("ColumnFrame")
+        rock_layout = QtWidgets.QVBoxLayout(rock_frame)
+        
+        rock_header = QtWidgets.QLabel("🪨 Rock Interactions")
+        rock_header.setStyleSheet("""
+            font-size: 20px; 
+            font-weight: bold; 
+            color: #34495e;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #3498db;
+        """)
+        rock_layout.addWidget(rock_header)
+        
+        # Shared field titles - Rock column
+        rock_form = QtWidgets.QFormLayout()
+        rock_form.setSpacing(DisplayScaling.scale(15))
+        
+        # Probabilities
         self.rock_pickup_prob = QtWidgets.QDoubleSpinBox()
         self.rock_pickup_prob.setRange(0.0, 1.0)
         self.rock_pickup_prob.setSingleStep(0.1)
         self.rock_pickup_prob.setDecimals(2)
         self.rock_pickup_prob.valueChanged.connect(self._on_change)
-        layout.addRow("Pickup Probability:", self.rock_pickup_prob)
+        rock_form.addRow("Pickup Probability:", self.rock_pickup_prob)
         
         self.rock_throw_prob = QtWidgets.QDoubleSpinBox()
         self.rock_throw_prob.setRange(0.0, 1.0)
         self.rock_throw_prob.setSingleStep(0.1)
         self.rock_throw_prob.setDecimals(2)
         self.rock_throw_prob.valueChanged.connect(self._on_change)
-        layout.addRow("Throw Probability:", self.rock_throw_prob)
+        rock_form.addRow("Throw Probability:", self.rock_throw_prob)
         
-        # Durations
+        # Durations with suffix
         self.rock_min_carry = QtWidgets.QDoubleSpinBox()
         self.rock_min_carry.setRange(0.5, 30.0)
         self.rock_min_carry.setSingleStep(0.5)
         self.rock_min_carry.setSuffix(" sec")
         self.rock_min_carry.valueChanged.connect(self._on_change)
-        layout.addRow("Min Carry Duration:", self.rock_min_carry)
+        rock_form.addRow("Min Carry Duration:", self.rock_min_carry)
         
         self.rock_max_carry = QtWidgets.QDoubleSpinBox()
         self.rock_max_carry.setRange(1.0, 60.0)
         self.rock_max_carry.setSingleStep(0.5)
         self.rock_max_carry.setSuffix(" sec")
         self.rock_max_carry.valueChanged.connect(self._on_change)
-        layout.addRow("Max Carry Duration:", self.rock_max_carry)
+        rock_form.addRow("Max Carry Duration:", self.rock_max_carry)
         
         self.rock_cooldown = QtWidgets.QDoubleSpinBox()
         self.rock_cooldown.setRange(0.0, 60.0)
         self.rock_cooldown.setSingleStep(1.0)
         self.rock_cooldown.setSuffix(" sec")
         self.rock_cooldown.valueChanged.connect(self._on_change)
-        layout.addRow("Cooldown After Throw:", self.rock_cooldown)
+        rock_form.addRow("Cooldown After Throw:", self.rock_cooldown)
         
         # Stat effects
         self.rock_happiness_boost = QtWidgets.QSpinBox()
         self.rock_happiness_boost.setRange(0, 100)
         self.rock_happiness_boost.valueChanged.connect(self._on_change)
-        layout.addRow("Happiness Boost:", self.rock_happiness_boost)
+        rock_form.addRow("Happiness Boost:", self.rock_happiness_boost)
         
         self.rock_satisfaction_boost = QtWidgets.QSpinBox()
         self.rock_satisfaction_boost.setRange(0, 100)
         self.rock_satisfaction_boost.valueChanged.connect(self._on_change)
-        layout.addRow("Satisfaction Boost:", self.rock_satisfaction_boost)
+        rock_form.addRow("Satisfaction Boost:", self.rock_satisfaction_boost)
         
         self.rock_anxiety_reduction = QtWidgets.QSpinBox()
         self.rock_anxiety_reduction.setRange(0, 100)
         self.rock_anxiety_reduction.valueChanged.connect(self._on_change)
-        layout.addRow("Anxiety Reduction:", self.rock_anxiety_reduction)
+        rock_form.addRow("Anxiety Reduction:", self.rock_anxiety_reduction)
         
         # Memory
         self.rock_memory_decay = QtWidgets.QDoubleSpinBox()
         self.rock_memory_decay.setRange(0.0, 1.0)
         self.rock_memory_decay.setSingleStep(0.05)
         self.rock_memory_decay.valueChanged.connect(self._on_change)
-        layout.addRow("Memory Decay Rate:", self.rock_memory_decay)
+        rock_form.addRow("Memory Decay Rate:", self.rock_memory_decay)
         
         self.rock_max_memories = QtWidgets.QSpinBox()
         self.rock_max_memories.setRange(1, 20)
         self.rock_max_memories.valueChanged.connect(self._on_change)
-        layout.addRow("Max Rock Memories:", self.rock_max_memories)
+        rock_form.addRow("Max Rock Memories:", self.rock_max_memories)
         
-        widget.setLayout(layout)
+        rock_layout.addLayout(rock_form)
+        rock_layout.addStretch()
+        
+        # Right column - Poop Interactions
+        poop_frame = QtWidgets.QFrame()
+        poop_frame.setObjectName("ColumnFrame")
+        poop_layout = QtWidgets.QVBoxLayout(poop_frame)
+        
+        poop_header = QtWidgets.QLabel("💩 Poop Interactions")
+        poop_header.setStyleSheet("""
+            font-size: 20px; 
+            font-weight: bold; 
+            color: #34495e;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #e67e22;
+        """)
+        poop_layout.addWidget(poop_header)
+        
+        # Shared field titles - Poop column (same labels)
+        poop_form = QtWidgets.QFormLayout()
+        poop_form.setSpacing(DisplayScaling.scale(15))
+        
+        self.poop_pickup_prob = QtWidgets.QDoubleSpinBox()
+        self.poop_pickup_prob.setRange(0.0, 1.0)
+        self.poop_pickup_prob.setSingleStep(0.1)
+        self.poop_pickup_prob.setDecimals(2)
+        self.poop_pickup_prob.valueChanged.connect(self._on_change)
+        poop_form.addRow("Pickup Probability:", self.poop_pickup_prob)
+        
+        self.poop_throw_prob = QtWidgets.QDoubleSpinBox()
+        self.poop_throw_prob.setRange(0.0, 1.0)
+        self.poop_throw_prob.setSingleStep(0.1)
+        self.poop_throw_prob.setDecimals(2)
+        self.poop_throw_prob.valueChanged.connect(self._on_change)
+        poop_form.addRow("Throw Probability:", self.poop_throw_prob)
+        
+        self.poop_min_carry = QtWidgets.QDoubleSpinBox()
+        self.poop_min_carry.setRange(0.5, 30.0)
+        self.poop_min_carry.setSingleStep(0.5)
+        self.poop_min_carry.setSuffix(" sec")
+        self.poop_min_carry.valueChanged.connect(self._on_change)
+        poop_form.addRow("Min Carry Duration:", self.poop_min_carry)
+        
+        self.poop_max_carry = QtWidgets.QDoubleSpinBox()
+        self.poop_max_carry.setRange(1.0, 60.0)
+        self.poop_max_carry.setSingleStep(0.5)
+        self.poop_max_carry.setSuffix(" sec")
+        self.poop_max_carry.valueChanged.connect(self._on_change)
+        poop_form.addRow("Max Carry Duration:", self.poop_max_carry)
+        
+        self.poop_cooldown = QtWidgets.QDoubleSpinBox()
+        self.poop_cooldown.setRange(0.0, 60.0)
+        self.poop_cooldown.setSingleStep(1.0)
+        self.poop_cooldown.setSuffix(" sec")
+        self.poop_cooldown.valueChanged.connect(self._on_change)
+        poop_form.addRow("Cooldown After Throw:", self.poop_cooldown)
+        
+        # Spacer for alignment (poop doesn't have these stats)
+        poop_form.addRow(QtWidgets.QLabel(""))
+        poop_form.addRow(QtWidgets.QLabel(""))
+        poop_form.addRow(QtWidgets.QLabel(""))
+        poop_form.addRow(QtWidgets.QLabel(""))
+        poop_form.addRow(QtWidgets.QLabel(""))
+        
+        poop_layout.addLayout(poop_form)
+        poop_layout.addStretch()
+        
+        # Add columns to main layout
+        columns_layout.addWidget(rock_frame)
+        columns_layout.addWidget(poop_frame)
+        
+        main_layout.addLayout(columns_layout)
+        widget.setLayout(main_layout)
         return widget
     
     def _create_neurogenesis_tab(self):
@@ -425,6 +597,11 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.showmanship_enabled.stateChanged.connect(self._on_change)
         layout.addWidget(self.showmanship_enabled)
         
+        # Pruning checkbox - NEW
+        self.pruning_enabled = QtWidgets.QCheckBox("Enable Pruning (Remove weak neurons)")
+        self.pruning_enabled.stateChanged.connect(self._on_change)
+        layout.addWidget(self.pruning_enabled)
+        
         # Sub-tabs
         sub_tabs = QtWidgets.QTabWidget()
         
@@ -439,6 +616,10 @@ class PreferencesWindow(QtWidgets.QDialog):
         # Appearance sub-tab
         appearance_subtab = self._create_neurogenesis_appearance()
         sub_tabs.addTab(appearance_subtab, "Appearance")
+        
+        # Advanced sub-tab - NEW
+        advanced_subtab = self._create_neurogenesis_advanced()
+        sub_tabs.addTab(advanced_subtab, "Advanced")
         
         layout.addWidget(sub_tabs)
         widget.setLayout(layout)
@@ -636,6 +817,97 @@ class PreferencesWindow(QtWidgets.QDialog):
         widget.setLayout(layout)
         return widget
     
+    def _create_neurogenesis_advanced(self):
+        """NEW: Create Neurogenesis Advanced sub-tab"""
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QFormLayout()
+        layout.setSpacing(DisplayScaling.scale(20))
+        layout.setContentsMargins(DisplayScaling.scale(25), DisplayScaling.scale(25), DisplayScaling.scale(25), DisplayScaling.scale(25))
+        
+        # Advanced neurogenesis parameters
+        self.max_novelty_neurons = QtWidgets.QSpinBox()
+        self.max_novelty_neurons.setRange(1, 20)
+        self.max_novelty_neurons.valueChanged.connect(self._on_change)
+        layout.addRow("Max Novelty Neurons:", self.max_novelty_neurons)
+        
+        self.pattern_threshold = QtWidgets.QSpinBox()
+        self.pattern_threshold.setRange(1, 10)
+        self.pattern_threshold.valueChanged.connect(self._on_change)
+        layout.addRow("Pattern Threshold:", self.pattern_threshold)
+        
+        self.experience_buffer_size = QtWidgets.QSpinBox()
+        self.experience_buffer_size.setRange(10, 100)
+        self.experience_buffer_size.valueChanged.connect(self._on_change)
+        layout.addRow("Experience Buffer Size:", self.experience_buffer_size)
+        
+        self.min_utility_for_keep = QtWidgets.QDoubleSpinBox()
+        self.min_utility_for_keep.setRange(0.0, 1.0)
+        self.min_utility_for_keep.setSingleStep(0.05)
+        self.min_utility_for_keep.valueChanged.connect(self._on_change)
+        layout.addRow("Min Utility for Keep:", self.min_utility_for_keep)
+        
+        widget.setLayout(layout)
+        return widget
+    
+    def _create_hebbian_tab(self):
+        """NEW: Create Hebbian Learning tab"""
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QFormLayout()
+        layout.setSpacing(DisplayScaling.scale(20))
+        layout.setContentsMargins(DisplayScaling.scale(25), DisplayScaling.scale(25), DisplayScaling.scale(25), DisplayScaling.scale(25))
+        
+        hebbian_desc = QtWidgets.QLabel(
+            "Hebbian learning strengthens connections between neurons that fire together. "
+            "This simulates the 'cells that fire together, wire together' principle."
+        )
+        hebbian_desc.setWordWrap(True)
+        hebbian_desc.setStyleSheet("color: #7f8c8d; font-style: italic;")
+        layout.addRow(hebbian_desc)
+        
+        layout.addRow(QtWidgets.QLabel(""))  # Spacer
+        
+        self.hebbian_learning_interval = QtWidgets.QSpinBox()
+        self.hebbian_learning_interval.setRange(1, 300)
+        self.hebbian_learning_interval.setSuffix(" sec")
+        self.hebbian_learning_interval.valueChanged.connect(self._on_change)
+        layout.addRow("Learning Interval:", self.hebbian_learning_interval)
+        
+        self.hebbian_base_rate = QtWidgets.QDoubleSpinBox()
+        self.hebbian_base_rate.setRange(0.0, 1.0)
+        self.hebbian_base_rate.setSingleStep(0.01)
+        self.hebbian_base_rate.setDecimals(3)
+        self.hebbian_base_rate.valueChanged.connect(self._on_change)
+        layout.addRow("Base Learning Rate:", self.hebbian_base_rate)
+        
+        self.hebbian_weight_decay = QtWidgets.QDoubleSpinBox()
+        self.hebbian_weight_decay.setRange(0.0, 0.5)
+        self.hebbian_weight_decay.setSingleStep(0.01)
+        self.hebbian_weight_decay.setDecimals(3)
+        self.hebbian_weight_decay.valueChanged.connect(self._on_change)
+        layout.addRow("Weight Decay:", self.hebbian_weight_decay)
+        
+        self.hebbian_min_weight = QtWidgets.QDoubleSpinBox()
+        self.hebbian_min_weight.setRange(-2.0, 0.0)
+        self.hebbian_min_weight.setSingleStep(0.1)
+        self.hebbian_min_weight.setDecimals(1)
+        self.hebbian_min_weight.valueChanged.connect(self._on_change)
+        layout.addRow("Min Weight:", self.hebbian_min_weight)
+        
+        self.hebbian_max_weight = QtWidgets.QDoubleSpinBox()
+        self.hebbian_max_weight.setRange(0.0, 2.0)
+        self.hebbian_max_weight.setSingleStep(0.1)
+        self.hebbian_max_weight.setDecimals(1)
+        self.hebbian_max_weight.valueChanged.connect(self._on_change)
+        layout.addRow("Max Weight:", self.hebbian_max_weight)
+        
+        self.hebbian_max_pairs = QtWidgets.QSpinBox()
+        self.hebbian_max_pairs.setRange(1, 10)
+        self.hebbian_max_pairs.valueChanged.connect(self._on_change)
+        layout.addRow("Max Hebbian Pairs:", self.hebbian_max_pairs)
+        
+        widget.setLayout(layout)
+        return widget
+    
     def _create_color_button(self):
         """Create a color picker button"""
         button = QtWidgets.QPushButton()
@@ -703,6 +975,38 @@ class PreferencesWindow(QtWidgets.QDialog):
         widget.setLayout(layout)
         return widget
     
+    def _create_designer_tab(self):
+        """Create Designer settings tab"""
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QFormLayout()
+        layout.setSpacing(DisplayScaling.scale(20))
+        layout.setContentsMargins(DisplayScaling.scale(25), DisplayScaling.scale(25), DisplayScaling.scale(25), DisplayScaling.scale(25))
+        
+        designer_desc = QtWidgets.QLabel(
+            "Designer mode settings for creating and editing neural networks. "
+            "These constraints ensure neurons are positioned optimally."
+        )
+        designer_desc.setWordWrap(True)
+        designer_desc.setStyleSheet("color: #7f8c8d; font-style: italic;")
+        layout.addRow(designer_desc)
+        
+        layout.addRow(QtWidgets.QLabel(""))  # Spacer
+        
+        self.designer_min_distance = QtWidgets.QSpinBox()
+        self.designer_min_distance.setRange(50, 300)
+        self.designer_min_distance.setSuffix(" px")
+        self.designer_min_distance.valueChanged.connect(self._on_change)
+        layout.addRow("Min Neuron Distance:", self.designer_min_distance)
+        
+        self.designer_max_distance = QtWidgets.QSpinBox()
+        self.designer_max_distance.setRange(300, 1000)
+        self.designer_max_distance.setSuffix(" px")
+        self.designer_max_distance.valueChanged.connect(self._on_change)
+        layout.addRow("Max Neuron Distance:", self.designer_max_distance)
+        
+        widget.setLayout(layout)
+        return widget
+    
     def _on_change(self):
         """Mark that changes have been made"""
         self.changes_made = True
@@ -720,6 +1024,19 @@ class PreferencesWindow(QtWidgets.QDialog):
                 self.language_combo.setCurrentIndex(i)
                 break
         
+        # Decorations config - NEW
+        decorations_config = self.config_manager.get_decorations_config()
+        self.decorations_enabled.setChecked(decorations_config['message_enabled'])
+        self.decorations_max_shows.setValue(decorations_config['message_max_shows'])
+        self.decorations_min_interval.setValue(decorations_config['message_min_interval'])
+        self.decorations_max_interval.setValue(decorations_config['message_max_interval'])
+        
+        # LinkBlink config - NEW
+        linkblink_config = self.config_manager.get_linkblink_config()
+        self.linkblink_interval_min.setValue(linkblink_config['interval_min'])
+        self.linkblink_interval_max.setValue(linkblink_config['interval_max'])
+        self.linkblink_duration.setValue(linkblink_config['blink_duration'])
+        
         # Rock config
         rock_config = self.config_manager.get_rock_config()
         self.rock_pickup_prob.setValue(rock_config['pickup_prob'])
@@ -733,16 +1050,31 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.rock_memory_decay.setValue(rock_config['memory_decay_rate'])
         self.rock_max_memories.setValue(rock_config['max_rock_memories'])
         
+        # Poop config - NEW
+        poop_config = self.config_manager.get_poop_config()
+        self.poop_pickup_prob.setValue(poop_config['pickup_prob'])
+        self.poop_throw_prob.setValue(poop_config['throw_prob'])
+        self.poop_min_carry.setValue(poop_config['min_carry_duration'])
+        self.poop_max_carry.setValue(poop_config['max_carry_duration'])
+        self.poop_cooldown.setValue(poop_config['cooldown_after_throw'])
+        
         # Neurogenesis config
         neuro_config = self.config_manager.get_neurogenesis_config()
         self.neurogenesis_enabled.setChecked(neuro_config['general']['enabled'])
         self.showmanship_enabled.setChecked(neuro_config['general']['showmanship'])
+        self.pruning_enabled.setChecked(neuro_config['general']['pruning_enabled'])  # NEW
         self.neuro_cooldown.setValue(neuro_config['general']['cooldown'])
         self.neuro_per_type_cooldown.setValue(neuro_config['general']['per_type_cooldown'])
         self.neuro_max_neurons.setValue(neuro_config['general']['max_neurons'])
         self.neuro_initial_count.setValue(neuro_config['general']['initial_neuron_count'])
         
-        # Load Positioning & Physics (Directly from raw config for new properties)
+        # Advanced neurogenesis - NEW
+        self.max_novelty_neurons.setValue(neuro_config['general']['max_novelty_neurons'])
+        self.pattern_threshold.setValue(neuro_config['general']['pattern_threshold'])
+        self.experience_buffer_size.setValue(neuro_config['general']['experience_buffer_size'])
+        self.min_utility_for_keep.setValue(neuro_config['general']['min_utility_for_keep'])
+        
+        # Load Positioning & Physics
         raw_config = self.config_manager.config
         sec_props = 'Neurogenesis.NeuronProperties'
         
@@ -771,6 +1103,15 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.highlight_duration.setValue(neuro_config['visual_effects']['highlight_duration'])
         self.pulse_effect.setChecked(neuro_config['visual_effects']['pulse_effect'])
         
+        # Hebbian config - NEW
+        hebbian_config = self.config_manager.get_hebbian_config()
+        self.hebbian_learning_interval.setValue(hebbian_config['learning_interval'])
+        self.hebbian_base_rate.setValue(hebbian_config['base_learning_rate'])
+        self.hebbian_weight_decay.setValue(hebbian_config['weight_decay'])
+        self.hebbian_min_weight.setValue(hebbian_config['min_weight'])
+        self.hebbian_max_weight.setValue(hebbian_config['max_weight'])
+        self.hebbian_max_pairs.setValue(hebbian_config['max_hebbian_pairs'])
+        
         # Display
         display_config = self.config_manager.get_display_config()
         self.neuron_radius.setValue(display_config['neuron_radius'])
@@ -780,6 +1121,10 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.button_width.setValue(display_config['button_width'])
         self.button_height.setValue(display_config['button_height'])
         self.button_spacing.setValue(display_config['button_spacing'])
+        
+        # Designer
+        self.designer_min_distance.setValue(self.config_manager.config.getint('Designer', 'designer_min_neuron_distance', fallback=100))
+        self.designer_max_distance.setValue(self.config_manager.config.getint('Designer', 'designer_max_neuron_distance', fallback=600))
         
         # Reset changes flag
         self.changes_made = False
@@ -819,6 +1164,25 @@ class PreferencesWindow(QtWidgets.QDialog):
         language_code = selected_lang_display.split(' - ')[0]
         self.config_manager.config.set('General', 'language', language_code)
         
+        # Debug
+        if not self.config_manager.config.has_section('Debug'):
+            self.config_manager.config.add_section('Debug')
+        
+        # Decorations - NEW
+        if not self.config_manager.config.has_section('Decorations'):
+            self.config_manager.config.add_section('Decorations')
+        self.config_manager.config.set('Decorations', 'message_enabled', str(self.decorations_enabled.isChecked()))
+        self.config_manager.config.set('Decorations', 'message_max_shows', str(self.decorations_max_shows.value()))
+        self.config_manager.config.set('Decorations', 'message_min_interval', str(self.decorations_min_interval.value()))
+        self.config_manager.config.set('Decorations', 'message_max_interval', str(self.decorations_max_interval.value()))
+        
+        # LinkBlink - NEW
+        if not self.config_manager.config.has_section('LinkBlink'):
+            self.config_manager.config.add_section('LinkBlink')
+        self.config_manager.config.set('LinkBlink', 'interval_min', str(self.linkblink_interval_min.value()))
+        self.config_manager.config.set('LinkBlink', 'interval_max', str(self.linkblink_interval_max.value()))
+        self.config_manager.config.set('LinkBlink', 'blink_duration', str(self.linkblink_duration.value()))
+        
         # Rock Interactions
         if not self.config_manager.config.has_section('RockInteractions'):
             self.config_manager.config.add_section('RockInteractions')
@@ -833,15 +1197,31 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.config_manager.config.set('RockInteractions', 'memory_decay_rate', str(self.rock_memory_decay.value()))
         self.config_manager.config.set('RockInteractions', 'max_rock_memories', str(self.rock_max_memories.value()))
         
+        # Poop Interactions - NEW SECTION
+        if not self.config_manager.config.has_section('PoopInteractions'):
+            self.config_manager.config.add_section('PoopInteractions')
+        self.config_manager.config.set('PoopInteractions', 'pickup_probability', str(self.poop_pickup_prob.value()))
+        self.config_manager.config.set('PoopInteractions', 'throw_probability', str(self.poop_throw_prob.value()))
+        self.config_manager.config.set('PoopInteractions', 'min_carry_duration', str(self.poop_min_carry.value()))
+        self.config_manager.config.set('PoopInteractions', 'max_carry_duration', str(self.poop_max_carry.value()))
+        self.config_manager.config.set('PoopInteractions', 'cooldown_after_throw', str(self.poop_cooldown.value()))
+        
         # Neurogenesis
         if not self.config_manager.config.has_section('Neurogenesis'):
             self.config_manager.config.add_section('Neurogenesis')
         self.config_manager.config.set('Neurogenesis', 'enabled', str(self.neurogenesis_enabled.isChecked()))
         self.config_manager.config.set('Neurogenesis', 'showmanship', str(self.showmanship_enabled.isChecked()))
+        self.config_manager.config.set('Neurogenesis', 'pruning_enabled', str(self.pruning_enabled.isChecked()))
         self.config_manager.config.set('Neurogenesis', 'cooldown', str(self.neuro_cooldown.value()))
         self.config_manager.config.set('Neurogenesis', 'per_type_cooldown', str(self.neuro_per_type_cooldown.value()))
         self.config_manager.config.set('Neurogenesis', 'max_neurons', str(self.neuro_max_neurons.value()))
         self.config_manager.config.set('Neurogenesis', 'initial_neuron_count', str(self.neuro_initial_count.value()))
+        
+        # Advanced neurogenesis
+        self.config_manager.config.set('Neurogenesis', 'max_novelty_neurons', str(self.max_novelty_neurons.value()))
+        self.config_manager.config.set('Neurogenesis', 'pattern_threshold', str(self.pattern_threshold.value()))
+        self.config_manager.config.set('Neurogenesis', 'experience_buffer_size', str(self.experience_buffer_size.value()))
+        self.config_manager.config.set('Neurogenesis', 'min_utility_for_keep', str(self.min_utility_for_keep.value()))
         
         # Neurogenesis.NeuronProperties (Positioning)
         if not self.config_manager.config.has_section('Neurogenesis.NeuronProperties'):
@@ -852,79 +1232,10 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.config_manager.config.set('Neurogenesis.NeuronProperties', 'canvas_padding', str(self.canvas_padding.value()))
         self.config_manager.config.set('Neurogenesis.NeuronProperties', 'centering_force', str(self.centering_force.value()))
 
-        # Triggers
-        if not self.config_manager.config.has_section('Neurogenesis.Novelty'):
-            self.config_manager.config.add_section('Neurogenesis.Novelty')
-        self.config_manager.config.set('Neurogenesis.Novelty', 'enabled', str(self.novelty_enabled.isChecked()))
-        self.config_manager.config.set('Neurogenesis.Novelty', 'threshold', str(self.novelty_threshold.value()))
-        self.config_manager.config.set('Neurogenesis.Novelty', 'decay_rate', str(self.novelty_decay.value()))
-        
-        if not self.config_manager.config.has_section('Neurogenesis.Stress'):
-            self.config_manager.config.add_section('Neurogenesis.Stress')
-        self.config_manager.config.set('Neurogenesis.Stress', 'enabled', str(self.stress_enabled.isChecked()))
-        self.config_manager.config.set('Neurogenesis.Stress', 'threshold', str(self.stress_threshold.value()))
-        self.config_manager.config.set('Neurogenesis.Stress', 'decay_rate', str(self.stress_decay.value()))
-        
-        if not self.config_manager.config.has_section('Neurogenesis.Reward'):
-            self.config_manager.config.add_section('Neurogenesis.Reward')
-        self.config_manager.config.set('Neurogenesis.Reward', 'enabled', str(self.reward_enabled.isChecked()))
-        self.config_manager.config.set('Neurogenesis.Reward', 'threshold', str(self.reward_threshold.value()))
-        self.config_manager.config.set('Neurogenesis.Reward', 'decay_rate', str(self.reward_decay.value()))
-        
-        # Appearance
-        if not self.config_manager.config.has_section('Neurogenesis.Appearance'):
-            self.config_manager.config.add_section('Neurogenesis.Appearance')
-        self.config_manager.config.set('Neurogenesis.Appearance', 'novelty_color', self._get_color_from_button(self.novelty_color))
-        self.config_manager.config.set('Neurogenesis.Appearance', 'stress_color', self._get_color_from_button(self.stress_color))
-        self.config_manager.config.set('Neurogenesis.Appearance', 'reward_color', self._get_color_from_button(self.reward_color))
-        
-        # Visual Effects
-        if not self.config_manager.config.has_section('Neurogenesis.VisualEffects'):
-            self.config_manager.config.add_section('Neurogenesis.VisualEffects')
-        self.config_manager.config.set('Neurogenesis.VisualEffects', 'highlight_duration', str(self.highlight_duration.value()))
-        self.config_manager.config.set('Neurogenesis.VisualEffects', 'pulse_effect', str(self.pulse_effect.isChecked()))
-        
-        # Display
-        if not self.config_manager.config.has_section('Display'):
-            self.config_manager.config.add_section('Display')
-        self.config_manager.config.set('Display', 'neuron_radius', str(self.neuron_radius.value()))
-        self.config_manager.config.set('Display', 'neuron_label_font_size', str(self.neuron_font_size.value()))
-        self.config_manager.config.set('Display', 'connection_line_width', str(self.connection_width.value()))
-        self.config_manager.config.set('Display', 'button_font_size', str(self.button_font_size.value()))
-        self.config_manager.config.set('Display', 'button_width', str(self.button_width.value()))
-        self.config_manager.config.set('Display', 'button_height', str(self.button_height.value()))
-        self.config_manager.config.set('Display', 'button_spacing', str(self.button_spacing.value()))
-        
-        # Write to file
+        # Save to file via ConfigManager helper
         self.config_manager._save_config()
-    
-    def _get_color_from_button(self, button):
-        """Extract RGB values from button stylesheet"""
-        style = button.styleSheet()
-        # Parse background-color from stylesheet
-        import re
-        match = re.search(r'background-color:\s*#?([0-9a-fA-F]{6})', style)
-        if match:
-            hex_color = match.group(1)
-            r = int(hex_color[0:2], 16)
-            g = int(hex_color[2:4], 16)
-            b = int(hex_color[4:6], 16)
-            return f"{r},{g},{b}"
-        return "255,255,255"
-    
+
     def _restart_application(self):
-        """Restart the application"""
-        # Close current window
-        if hasattr(self, 'parent') and self.parent():
-            self.parent().close()
-        
-        # Restart process
-        if getattr(sys, 'frozen', False):
-            # Running as compiled executable
-            QtCore.QProcess.startDetached(sys.executable, [])
-        else:
-            # Running from source
-            QtCore.QProcess.startDetached(sys.executable, sys.argv)
-        
-        # Exit current process
-        QtWidgets.QApplication.quit()
+        """Restarts the current python process"""
+        python = sys.executable
+        os.execl(python, python, *sys.argv)

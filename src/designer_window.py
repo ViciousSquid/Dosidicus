@@ -1,4 +1,3 @@
-# designer_window.py
 """
 Brain Designer Window - Main application window for designing custom neural networks.
 
@@ -321,7 +320,7 @@ class BrainDesignerWindow(QMainWindow):
         
         # Quick dice button - instant random generation
         dice_btn = QPushButton("🎲")
-        dice_btn.setToolTip("Instantly generate a random network (no dialog)")
+        dice_btn.setToolTip("Instantly shuffle positions and generate a chaotic network (no dialog)")
         dice_btn.setFixedWidth(40)
         dice_btn.setStyleSheet("""
             QPushButton {
@@ -445,7 +444,7 @@ class BrainDesignerWindow(QMainWindow):
             "<span style='color:#333'><b> Ctrl+E</b> to export </span>"
             "<span style='color:#333'><b> Ctrl+N</b> for new design </span>"
             "<span style='color:#333'><b> Ctrl+G</b> to generate network </span>"
-            "<span style='color:#333'>🎲 <b>Dice button</b> for instant random generation </span>"
+            "<span style='color:#333'>🎲 <b>Dice button</b> for instant chaotic shuffle & generation </span>"
             "<span style='color:#333'><b>Outputs tab</b> to bind neurons to squid behaviors </span>"
         )
         layout.addWidget(self.help_ticker)
@@ -911,13 +910,26 @@ class BrainDesignerWindow(QMainWindow):
                 return
             
             preset = presets[style_key]
+            
+            # Determine dynamic bounds from the canvas view if available
+            bounds = (-450, -250, 650, 500)
+            if hasattr(self, 'canvas') and self.canvas.viewport():
+                try:
+                    view_rect = self.canvas.viewport().rect()
+                    scene_poly = self.canvas.mapToScene(view_rect)
+                    brect = scene_poly.boundingRect()
+                    bounds = (brect.left(), brect.top(), brect.right(), brect.bottom())
+                except Exception:
+                    pass
+
             count, connections = generator.generate_for_design(
                 self.design,
                 clear_existing=True,
                 density=preset.get('density', 1.0),
                 include_feedback=preset.get('include_feedback', False),
                 position_variance=preset.get('position_variance', 0.2),
-                sensor_probability=preset.get('sensor_probability', 0.0)
+                sensor_probability=preset.get('sensor_probability', 0.0),
+                bounds=bounds
             )
             
             self.on_design_changed()
@@ -929,31 +941,55 @@ class BrainDesignerWindow(QMainWindow):
             QMessageBox.warning(self, "Error", f"Generation failed: {e}")
 
     def instant_random_generate(self):
-        """Instantly generate a random network without any dialog."""
+        """Instantly generate a random network without any dialog, shuffling positions."""
         import random
         
         try:
             generator = SparseNetworkGenerator()
             presets = generator.get_preset_styles()
             
-            # Pick a random preset
+            # Pick a random preset as a base
             style_key = random.choice(list(presets.keys()))
             preset = presets[style_key]
             
-            # Randomize some parameters
-            density = random.uniform(0.5, 1.5)
-            excitatory_ratio = random.uniform(0.5, 0.85)
+            # Randomize connection parameters
+            density = random.uniform(0.7, 1.4)
+            
+            # !! CHAOS MODE !!
+            # Use high variance to shuffle neurons around the visible canvas
+            position_variance = random.uniform(0.6, 1.0) 
+            
+            # Calculate dynamic bounds from the actual visible canvas area
+            if hasattr(self, 'canvas') and self.canvas.viewport():
+                try:
+                    view_rect = self.canvas.viewport().rect()
+                    scene_poly = self.canvas.mapToScene(view_rect)
+                    brect = scene_poly.boundingRect()
+                    bounds = (brect.left(), brect.top(), brect.right(), brect.bottom())
+                except Exception:
+                    # Fallback if calculation fails
+                    bounds = (-450, -250, 650, 500)
+            else:
+                bounds = (-450, -250, 650, 500)
             
             count, _ = generator.generate_for_design(
                 self.design,
                 clear_existing=True,
                 density=density,
                 include_feedback=random.random() > 0.3,
+                position_variance=position_variance,
+                bounds=bounds,
+                sensor_probability=0.2  # Add some random sensors for flavor
             )
             
             self.on_design_changed()
+            
+            # Ensure the canvas recenters on the new chaotic layout
+            if self.canvas:
+                self.canvas.center_on_neurons()
+                
             self.status_bar.showMessage(
-                f"🎲 Generated {count} random connections (style: {preset['name']})", 3000
+                f"🎲 Chaos! Shuffled positions & made {count} connections ({preset['name']} style)", 3000
             )
         except Exception as e:
             self.logger.error(f"Error in instant_random_generate: {e}", exc_info=True)

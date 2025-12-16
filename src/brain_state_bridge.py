@@ -353,61 +353,64 @@ def convert_to_brain_design(live_state: Dict) -> Optional['BrainDesign']:
         traceback.print_exc()
         return None
 
-    def get_import_file_path() -> Path:
-        """Get the path for designs waiting to be imported by the game."""
-        return get_bridge_directory() / "pending_import.json"
 
-    def export_design_to_game(design_data: Dict) -> bool:
-        """
-        Export a design from the Designer to the running game.
-        
-        Args:
-            design_data: The dictionary returned by to_dosidicus_format()
-        """
-        try:
-            import_file = get_import_file_path()
-            temp_file = import_file.with_suffix('.tmp')
-            
-            # Ensure it's marked
-            design_data['format'] = 'pending_import'
-            
-            with open(temp_file, 'w') as f:
-                json.dump(design_data, f, indent=2)
-                
-            # Atomic rename to ensure game reads complete file
-            temp_file.replace(import_file)
-            return True
-        except Exception as e:
-            print(f"[BrainBridge] Error exporting to game: {e}")
-            return False
+def get_import_file_path() -> Path:
+    """Get the path for designs waiting to be imported by the game."""
+    return get_bridge_directory() / "pending_import.json"
 
-    def consume_pending_import() -> Optional[Dict]:
-        """
-        Check for and retrieve a pending design import.
-        Removes the file after reading to ensure it's processed only once.
-        """
+
+def export_design_to_game(design_data: Dict) -> bool:
+    """
+    Export a design from the Designer to the running game.
+    
+    Args:
+        design_data: The dictionary returned by to_dosidicus_format()
+    """
+    try:
         import_file = get_import_file_path()
-        if not import_file.exists():
-            return None
+        temp_file = import_file.with_suffix('.tmp')
+        
+        # Ensure it's marked
+        design_data['format'] = 'pending_import'
+        
+        with open(temp_file, 'w') as f:
+            json.dump(design_data, f, indent=2)
             
+        # Atomic rename to ensure game reads complete file
+        temp_file.replace(import_file)
+        return True
+    except Exception as e:
+        print(f"[BrainBridge] Error exporting to game: {e}")
+        return False
+
+
+def consume_pending_import() -> Optional[Dict]:
+    """
+    Check for and retrieve a pending design import.
+    Removes the file after reading to ensure it's processed only once.
+    """
+    import_file = get_import_file_path()
+    if not import_file.exists():
+        return None
+        
+    try:
+        # Ignore files older than 10 seconds (stale exports)
+        if time.time() - import_file.stat().st_mtime > 10:
+            return None 
+            
+        with open(import_file, 'r') as f:
+            data = json.load(f)
+            
+        # Clean up immediately
         try:
-            # Ignore files older than 10 seconds (stale exports)
-            if time.time() - import_file.stat().st_mtime > 10:
-                return None 
-                
-            with open(import_file, 'r') as f:
-                data = json.load(f)
-                
-            # Clean up immediately
-            try:
-                import_file.unlink()
-            except:
-                pass
-                
-            return data
-        except Exception as e:
-            print(f"[BrainBridge] Error reading pending import: {e}")
-            return None
+            import_file.unlink()
+        except:
+            pass
+            
+        return data
+    except Exception as e:
+        print(f"[BrainBridge] Error reading pending import: {e}")
+        return None
 
 
 # ============================================================================

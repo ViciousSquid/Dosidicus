@@ -769,13 +769,22 @@ class BrainWidget(QtWidgets.QWidget):
     def find_orphan_neurons(self):
         """Find neurons with no connections in the weights dictionary"""
         orphans = []
+        
+        # Define neurons that should be checked even if they are in excluded_neurons
+        explicitly_allowed = {'can_see_food', 'plant_proximity', 'is_fleeing'}
+        
         for neuron in self.neuron_positions.keys():
-            if neuron in self.excluded_neurons:
+            # Skip if the neuron is excluded, unless it's in our allowed list
+            if neuron in self.excluded_neurons and neuron not in explicitly_allowed:
                 continue
+            
+            # Check for any connection (incoming or outgoing)
             has_connection = any(src == neuron or dst == neuron 
-                            for (src, dst) in self.weights.keys())
+                                for (src, dst) in self.weights.keys())
+            
             if not has_connection:
                 orphans.append(neuron)
+                
         return orphans
 
     
@@ -1191,6 +1200,8 @@ class BrainWidget(QtWidgets.QWidget):
         import random
         from PyQt5.QtGui import QColor
         
+        new_connections_created = []  # Track newly formed connections
+        
         # Apply the weight updates (main thread only)
         for i, (pair_str, update_data) in enumerate(weight_updates.items()):
             # Convert string key back to tuple if needed
@@ -1198,6 +1209,14 @@ class BrainWidget(QtWidgets.QWidget):
                 pair = tuple(pair_str.split(','))
             else:
                 pair = pair_str
+            
+            # Check if this is a new connection being created by Hebbian learning
+            is_new_connection = update_data.get('is_new_connection', False)
+            
+            if is_new_connection and pair not in self.weights:
+                # Create the new connection - Hebbian learning forming new pathways!
+                self.weights[pair] = 0.0  # Initialize with zero weight
+                new_connections_created.append(pair)
                 
             if pair in self.weights:
                 old_weight = update_data['old_weight']
@@ -1234,9 +1253,17 @@ class BrainWidget(QtWidgets.QWidget):
                 if isinstance(pair, (list, tuple)) and len(pair) == 2:
                     a, b = pair
                     color = COLORS[i % len(COLORS)]
-                    colored.append(f"{color}{a} ↔ {b}{RESET}")
+                    # Mark new connections with a ✨
+                    marker = " ✨" if pair in new_connections_created else ""
+                    colored.append(f"{color}{a} ↔ {b}{marker}{RESET}")
             if colored:
                 print("     Hebbian learning chosen pairs: " + "  ".join(colored))
+        
+        # Log new connections formed
+        if new_connections_created:
+            print(f"     🔗 New connections formed: {len(new_connections_created)}")
+            # Sync connections list from weights after creating new connections
+            self.sync_connections_from_weights()
             
         self.update()
         
@@ -1280,6 +1307,10 @@ class BrainWidget(QtWidgets.QWidget):
                         # [CRITICAL FIX] Don't let decay logic touch sensors
                         if neuron not in INPUT_SENSORS:
                             self.state[neuron] = decayed_val
+
+        # [NEW] Run Enhanced Neurogenesis logic (Stress reduction, etc.)
+        if hasattr(self, 'enhanced_neurogenesis'):
+            self.enhanced_neurogenesis.update_neuron_activations(self.state)
 
         self.update() # Repaint
 
@@ -2244,6 +2275,9 @@ class BrainWidget(QtWidgets.QWidget):
         self.neuron_positions = state['neuron_positions']
         self.state = state.get('neuron_states', {})
         self.layers = state.get('layer_structure', [])
+        
+        # Sync connections list from loaded weights
+        self.sync_connections_from_weights()
 
         # ADD THESE THREE LINES
         self.neuron_shapes = state.get('neuron_shapes', {})  # Load shapes
@@ -2326,14 +2360,17 @@ class BrainWidget(QtWidgets.QWidget):
         print("🔄 Animation state reset for new game (tutorial mode enabled)")
 
     def initialize_connections(self):
-        connections = []
-        neurons = list(self.neuron_positions.keys())
-        for i in range(len(neurons)):
-            for j in range(i+1, len(neurons)):
-                connections.append((neurons[i], neurons[j]))
-        return connections
+        """Return list of connection tuples derived from self.weights.
+        This ensures self.connections stays synced with self.weights as source of truth."""
+        return list(self.weights.keys())
+    
+    def sync_connections_from_weights(self):
+        """Sync self.connections list from self.weights (single source of truth).
+        Call this after any modification to self.weights."""
+        self.connections = list(self.weights.keys())
 
     def initialize_weights(self):
+        """Initialize weights with sparse random connections (40% density)."""
         neurons = list(self.neuron_positions.keys())
         # Create sparse random connections (40% density)
         connection_probability = 0.4
@@ -2342,6 +2379,9 @@ class BrainWidget(QtWidgets.QWidget):
             for j in range(i+1, len(neurons)):
                 if random.random() < connection_probability:
                     self.weights[(neurons[i], neurons[j])] = random.uniform(-1, 1)
+        
+        # Sync connections list from weights
+        self.sync_connections_from_weights()
 
     def get_neuron_count(self):
         """Returns the actual count of neurons in the network positions."""
@@ -2494,12 +2534,8 @@ class BrainWidget(QtWidgets.QWidget):
             value += random.uniform(-noise, noise)
             updated[neuron] = value
 
-        # 2. Apply Connections
-        for conn in self.connections:
-            src = conn.get("from")
-            dst = conn.get("to")
-            weight = conn.get("weight", 0)
-
+        # 2. Apply Connections - USE self.weights as source of truth
+        for (src, dst), weight in self.weights.items():
             # Get source value (Use current state if it's an input)
             if src in PURE_INPUTS and src not in updated:
                 src_val = self.neurons.get(src, {}).get('activation', 0.0)
@@ -2556,15 +2592,30 @@ class BrainWidget(QtWidgets.QWidget):
             value += random.uniform(-noise, noise)
             updated[neuron] = value
         
-        # Second pass: connection effects
-        for conn in self.connections:
-            src = conn.get("from")
-            dst = conn.get("to")
-            weight = conn.get("weight", 0)
-
+        # Second pass: connection effects - USE self.weights as source of truth
+        for (src, dst), weight in self.weights.items():
+            # Skip if neurons don't exist in updated state
+            if src not in self.state and src not in updated:
+                continue
+            if dst not in updated:
+                continue
+            
             # [FIX] Prevent inputs from being modified by connections
             if dst in PURE_INPUTS:
                 continue
+            
+            # Get source value
+            if src in updated:
+                src_val = updated[src]
+            elif src in self.state:
+                src_val = self.state[src]
+                if isinstance(src_val, bool):
+                    src_val = 100.0 if src_val else 0.0
+            else:
+                continue
+                
+            if isinstance(src_val, (int, float)):
+                updated[dst] += src_val * weight
 
             # Use current state for inputs if not in 'updated' list yet
             src_val = updated.get(src, self.state.get(src, 0))
@@ -2610,11 +2661,8 @@ class BrainWidget(QtWidgets.QWidget):
             value += random.uniform(-noise, noise)
             updated[neuron] = value
         
-        # Second pass: connection effects
-        for conn in self.connections:
-            src = conn.get("from")
-            dst = conn.get("to")
-            weight = conn.get("weight", 0)
+        # Second pass: connection effects - USE self.weights as source of truth
+        for (src, dst), weight in self.weights.items():
             if src in updated and dst in updated:
                 updated[dst] += updated[src] * weight
         
@@ -2987,8 +3035,11 @@ class BrainWidget(QtWidgets.QWidget):
                            f"{name} ({l_type})")
 
     def draw_connections(self, painter, scale):
-        """Draw connections with extended 2-second weight-change animations.
-        Links are forced INVISIBLE while core neurons are still being revealed."""
+        """
+        Draw connections with extended 2-second weight-change animations.
+        Links are forced INVISIBLE while core neurons are still being revealed.
+        Includes special visualization for Stress->Anxiety inhibitory links.
+        """
         if not self.show_links:
             return
 
@@ -3052,20 +3103,85 @@ class BrainWidget(QtWidgets.QWidget):
             start_point = QtCore.QPointF(float(start[0]), float(start[1]))
             end_point   = QtCore.QPointF(float(end[0]),   float(end[1]))
 
-            # special styling:  Stress ↔ Anxiety  (uses animation style params)
+            # === SPECIAL STYLING: Stress -> Anxiety (Dotted Red with Moving Arrows) ===
+            # Detect connection between any stress neuron and anxiety
             is_stress_to_anxiety = (
                 (source.lower().startswith('stress') and target.lower() == 'anxiety') or
                 (target.lower().startswith('stress') and source.lower() == 'anxiety'))
+            
             if is_stress_to_anxiety:
-                pen = QtGui.QPen(QtGui.QColor(*self.anim_stress_colour))
-                pen.setWidth(int(self.anim_stress_width))
-                if self.anim_stress_dashed:
-                    pen.setStyle(QtCore.Qt.DashLine)
+                # 1. Draw Dotted Red Line
+                # Use a bright red color to indicate inhibitory/stress signal
+                pen = QtGui.QPen(QtGui.QColor(255, 60, 60)) 
+                pen.setWidth(max(2, int(3 * scale))) # Thicker than normal for visibility
+                pen.setStyle(QtCore.Qt.DotLine)
                 painter.setPen(pen)
                 painter.drawLine(start_point, end_point)
-                continue   # skip default drawing for this pair
+                
+                # 2. Draw Moving Arrows (Flowing towards Anxiety)
+                # Determine which end is Anxiety
+                if target.lower() == 'anxiety':
+                    actual_start = start_point
+                    actual_end = end_point
+                else:
+                    actual_start = end_point
+                    actual_end = start_point
+                
+                # Vector math for the line
+                dx = actual_end.x() - actual_start.x()
+                dy = actual_end.y() - actual_start.y()
+                length = math.sqrt(dx*dx + dy*dy)
+                
+                if length > 0:
+                    # Unit vector
+                    ux = dx / length
+                    uy = dy / length
+                    
+                    # Arrow animation parameters
+                    arrow_spacing = 40 * scale   # Distance between arrows
+                    speed = 60 * scale           # Pixels per second
+                    
+                    # Offset based on time to create movement
+                    offset = (current_time * speed) % arrow_spacing
+                    
+                    painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 0, 0)))
+                    painter.setPen(QtCore.Qt.NoPen)
+                    
+                    current_dist = offset
+                    while current_dist < length:
+                        # Calculate position of arrow center on the line
+                        ax = actual_start.x() + ux * current_dist
+                        ay = actual_start.y() + uy * current_dist
+                        
+                        # Draw triangle (Arrowhead)
+                        arrow_size = 6 * scale
+                        
+                        # Perpendicular vector for arrowhead width
+                        px = -uy * arrow_size
+                        py = ux * arrow_size
+                        
+                        # Tip of arrow (pointing forward)
+                        tip_x = ax + ux * arrow_size
+                        tip_y = ay + uy * arrow_size
+                        
+                        # Base corners of arrow
+                        base_x = ax - ux * arrow_size
+                        base_y = ay - uy * arrow_size
+                        
+                        points = [
+                            QtCore.QPointF(tip_x, tip_y),
+                            QtCore.QPointF(base_x + px, base_y + py),
+                            QtCore.QPointF(base_x - px, base_y - py)
+                        ]
+                        painter.drawPolygon(QtGui.QPolygonF(points))
+                        
+                        current_dist += arrow_spacing
 
-            # default appearance (uses animation style params)
+                # Skip standard drawing logic for this connection
+                connections_drawn += 1
+                continue
+
+            # === STANDARD CONNECTION DRAWING ===
             anim_weight = weight
             base_width  = self.anim_line_base_width * scale
             line_width  = base_width
