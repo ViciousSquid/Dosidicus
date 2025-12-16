@@ -573,7 +573,7 @@ class MainWindow(QtWidgets.QMainWindow):
             
             # Clear enhanced neurogenesis tracking
             if hasattr(brain_widget, 'enhanced_neurogenesis'):
-                brain_widget.enhanced_neurogenesis.reset_all_state()
+                brain_widget.enhanced_neurogenesis.reset_state()
             
             # Reset brain widget state
             if hasattr(brain_widget, 'state'):
@@ -753,11 +753,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def show_feeding_hint(self):
         """Use the same strip as every other message."""
-        self.user_interface.show_message("Use the Actions menu to feed the squid")
+        self.user_interface.show_message("Press D to open the Decorations window")
     
     def _start_splash_with_reveals(self):
         """Start splash screen with neuron reveal synchronization (called after brain window is ready)"""
-        print("🥚 A squid is hatching...")
+        print("     🥚 A squid is hatching...")
         
         # Connect frame changes to neuron reveals
         self.splash.frame_changed.connect(self._reveal_neuron_for_frame)
