@@ -27,7 +27,7 @@ class SparseNetworkDialog(QDialog):
         
         self.setWindowTitle("🎲 Generate Sparse Network")
         self.setMinimumWidth(500)
-        self.setMinimumHeight(450)
+        self.setMinimumHeight(550)
         
         self.setup_ui()
         self.load_preset('balanced')
@@ -73,30 +73,51 @@ class SparseNetworkDialog(QDialog):
         advanced_group = QGroupBox("Fine Tuning")
         advanced_layout = QVBoxLayout(advanced_group)
         
-        # Density slider
-        density_row = QHBoxLayout()
-        density_row.addWidget(QLabel("Density:"))
+        # Density & Noise
+        row1 = QHBoxLayout()
+        row1.addWidget(QLabel("Density:"))
         self.density_spin = QDoubleSpinBox()
         self.density_spin.setRange(0.2, 2.0)
         self.density_spin.setSingleStep(0.1)
         self.density_spin.setDecimals(1)
         self.density_spin.setValue(1.0)
         self.density_spin.setToolTip("Lower = fewer connections, Higher = more connections")
-        density_row.addWidget(self.density_spin)
+        row1.addWidget(self.density_spin)
         
-        density_row.addSpacing(20)
+        row1.addSpacing(20)
         
-        density_row.addWidget(QLabel("Noise:"))
+        row1.addWidget(QLabel("Weight Noise:"))
         self.noise_spin = QDoubleSpinBox()
         self.noise_spin.setRange(0.1, 3.0)
         self.noise_spin.setSingleStep(0.1)
         self.noise_spin.setDecimals(1)
         self.noise_spin.setValue(1.0)
         self.noise_spin.setToolTip("How much randomness in connection weights")
-        density_row.addWidget(self.noise_spin)
+        row1.addWidget(self.noise_spin)
+        advanced_layout.addLayout(row1)
+
+        # Variance & Sensors (NEW)
+        row2 = QHBoxLayout()
+        row2.addWidget(QLabel("Pos Variance:"))
+        self.variance_spin = QDoubleSpinBox()
+        self.variance_spin.setRange(0.0, 1.0)
+        self.variance_spin.setSingleStep(0.1)
+        self.variance_spin.setDecimals(2)
+        self.variance_spin.setValue(0.0)
+        self.variance_spin.setToolTip("Jitter neuron positions (0.0 = fixed, 0.5 = chaotic)")
+        row2.addWidget(self.variance_spin)
         
-        density_row.addStretch()
-        advanced_layout.addLayout(density_row)
+        row2.addSpacing(20)
+        
+        row2.addWidget(QLabel("Sensor Prob:"))
+        self.sensor_prob_spin = QDoubleSpinBox()
+        self.sensor_prob_spin.setRange(0.0, 1.0)
+        self.sensor_prob_spin.setSingleStep(0.1)
+        self.sensor_prob_spin.setDecimals(2)
+        self.sensor_prob_spin.setValue(0.0)
+        self.sensor_prob_spin.setToolTip("Probability of adding random extra sensors")
+        row2.addWidget(self.sensor_prob_spin)
+        advanced_layout.addLayout(row2)
         
         # Options row
         options_row = QHBoxLayout()
@@ -195,14 +216,20 @@ class SparseNetworkDialog(QDialog):
         # Block signals during update
         self.density_spin.blockSignals(True)
         self.noise_spin.blockSignals(True)
+        self.variance_spin.blockSignals(True)
+        self.sensor_prob_spin.blockSignals(True)
         self.feedback_check.blockSignals(True)
         
         self.density_spin.setValue(preset['density'])
         self.noise_spin.setValue(preset.get('weight_noise', 1.0))
+        self.variance_spin.setValue(preset.get('position_variance', 0.0))
+        self.sensor_prob_spin.setValue(preset.get('sensor_probability', 0.0))
         self.feedback_check.setChecked(preset.get('include_feedback', True))
         
         self.density_spin.blockSignals(False)
         self.noise_spin.blockSignals(False)
+        self.variance_spin.blockSignals(False)
+        self.sensor_prob_spin.blockSignals(False)
         self.feedback_check.blockSignals(False)
         
         self.generate_preview()
@@ -212,6 +239,7 @@ class SparseNetworkDialog(QDialog):
         # Create fresh generator (no seed for variety)
         gen = SparseNetworkGenerator()
         
+        # Pass the weight_noise parameter
         connections = gen.generate_connections(
             density=self.density_spin.value(),
             include_feedback_loops=self.feedback_check.isChecked(),
@@ -234,6 +262,12 @@ class SparseNetworkDialog(QDialog):
             else:
                 inhibitory += 1
         
+        # Add note about sensors/variance if active
+        if self.sensor_prob_spin.value() > 0:
+            lines.insert(0, f"NOTE: Will attempt to add random sensors (Prob: {self.sensor_prob_spin.value()})")
+        if self.variance_spin.value() > 0:
+            lines.insert(0, f"NOTE: Will randomly perturb positions (Var: {self.variance_spin.value()})")
+        
         if lines:
             self.preview_text.setPlainText("\n".join(lines))
         else:
@@ -249,11 +283,15 @@ class SparseNetworkDialog(QDialog):
         """Apply the generated network to the design."""
         gen = SparseNetworkGenerator()
         
+        # Now passing all new arguments to fix the TypeError
         count, actions = gen.generate_for_design(
             self.design,
             clear_existing=self.clear_check.isChecked(),
             density=self.density_spin.value(),
-            include_feedback=self.feedback_check.isChecked()
+            include_feedback=self.feedback_check.isChecked(),
+            weight_noise=self.noise_spin.value(),
+            position_variance=self.variance_spin.value(),
+            sensor_probability=self.sensor_prob_spin.value()
         )
         
         self.result_actions = actions

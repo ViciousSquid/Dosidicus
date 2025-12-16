@@ -51,22 +51,22 @@ class OutputBindingDialog(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout(self)
         
-        # Neuron selection
-        neuron_group = QGroupBox("Source Neuron")
-        neuron_layout = QFormLayout(neuron_group)
+        # 1. Selection Group
+        type_group = QGroupBox("Select Neuron Type")
+        type_layout = QFormLayout(type_group)
         
         self.neuron_combo = QComboBox()
         self._populate_neurons()
-        neuron_layout.addRow("Neuron:", self.neuron_combo)
+        type_layout.addRow("Neuron:", self.neuron_combo)
         
         # Show current activation hint
         self.activation_label = QLabel("Current: --")
         self.activation_label.setStyleSheet("color: #888;")
-        neuron_layout.addRow("", self.activation_label)
+        type_layout.addRow("", self.activation_label)
         
-        layout.addWidget(neuron_group)
+        layout.addWidget(type_group)
         
-        # Output hook selection
+        # 2. Output hook selection
         hook_group = QGroupBox("Output Behavior")
         hook_layout = QFormLayout(hook_group)
         
@@ -95,13 +95,13 @@ class OutputBindingDialog(QDialog):
         self.color_preview.setFixedSize(30, 30)
         self.color_preview.setStyleSheet("background-color: #CCCCCC; border: 1px solid #888;")
         
-        self.pick_color_btn = QPushButton("Pick Color...")
+        self.pick_color_btn = QPushButton("Pick Colour...")
         self.pick_color_btn.clicked.connect(self._pick_color)
         
         self.reset_color_btn = QPushButton("Reset (Random)")
         self.reset_color_btn.clicked.connect(self._reset_color)
         
-        color_layout.addWidget(QLabel("Tint Color:"))
+        color_layout.addWidget(QLabel("Tint Colour:"))
         color_layout.addWidget(self.color_preview)
         color_layout.addWidget(self.pick_color_btn)
         color_layout.addWidget(self.reset_color_btn)
@@ -164,10 +164,21 @@ class OutputBindingDialog(QDialog):
         
         # Get all non-core neurons (outputs typically come from processing neurons)
         for name, neuron in sorted(self.design.neurons.items()):
-            if not neuron.is_core:  # Skip stat neurons as outputs
+            if not neuron.is_core:
                 display = name
+                
+                # Add icons for special types
                 if neuron.is_sensor:
                     display = f"📡 {name}"
+                elif name.startswith('connector_'):
+                    display = f"🔗 {name}"
+                elif name.startswith('novelty_'):
+                    display = f"✨ {name}"
+                elif name.startswith('stress_'):
+                    display = f"🔥 {name}"
+                elif name.startswith('reward_'):
+                    display = f"💎 {name}"
+                    
                 self.neuron_combo.addItem(display, name)
         
         # Also add core neurons (they might want anxiety to trigger flee, etc.)
@@ -370,7 +381,15 @@ class NeuronOutputsPanel(QWidget):
         self.table.setHorizontalHeaderLabels([
             "Neuron", "→ Behavior", "Threshold", "Mode", "Enabled"
         ])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        
+        # [CHANGED] Enable interactive column resizing and set default widths
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.table.setColumnWidth(0, 150)  # Neuron
+        self.table.setColumnWidth(1, 200)  # Behavior (wider to show color)
+        self.table.setColumnWidth(2, 100)  # Threshold
+        self.table.setColumnWidth(3, 150)  # Mode
+        self.table.setColumnWidth(4, 80)   # Enabled
+        
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.doubleClicked.connect(self.edit_binding)
@@ -398,17 +417,26 @@ class NeuronOutputsPanel(QWidget):
             # Output hook (formatted nicely)
             hook_display = binding.output_hook.replace('neuron_output_', '').replace('_', ' ').title()
             
-            # Add parameter details (e.g. RGB color) to display
-            if binding.hook_params:
-                if 'red' in binding.hook_params:
-                    r = binding.hook_params.get('red')
-                    g = binding.hook_params.get('green')
-                    b = binding.hook_params.get('blue')
-                    hook_display += f" [RGB: {r},{g},{b}]"
-            
+            # [CHANGED] For color bindings, show color as cell background instead of RGB text
             hook_item = QTableWidgetItem(hook_display)
             if binding.output_hook in STANDARD_OUTPUT_HOOKS:
                 hook_item.setToolTip(STANDARD_OUTPUT_HOOKS[binding.output_hook].get('description', ''))
+            
+            # If this is a color binding, set the background color
+            if binding.hook_params and 'red' in binding.hook_params:
+                r = binding.hook_params.get('red', 255)
+                g = binding.hook_params.get('green', 255)
+                b = binding.hook_params.get('blue', 255)
+                color = QColor(r, g, b)
+                hook_item.setBackground(color)
+                
+                # Adjust text color for contrast
+                brightness = (r * 299 + g * 587 + b * 114) / 1000
+                if brightness < 128:
+                    hook_item.setForeground(QColor(255, 255, 255))
+                else:
+                    hook_item.setForeground(QColor(0, 0, 0))
+            
             self.table.setItem(row, 1, hook_item)
             
             # Threshold

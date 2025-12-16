@@ -1347,8 +1347,9 @@ class TamagotchiLogic:
             self.vision_worker.update_squid_state(vision_state)
             
             # Send scene objects (food + extracted decorations)
-            # We pass self.food_items explicitly. extract_scene_objects finds the rest.
-            scene_objects = extract_scene_objects(self.user_interface.scene, self.food_items)
+            # Explicitly pass decorations to avoid import issues in extract_scene_objects
+            decorations = self._get_cached_decorations()
+            scene_objects = extract_scene_objects(self.user_interface.scene, self.food_items, decorations)
             self.vision_worker.update_scene_objects(scene_objects)
 
         if self.squid:
@@ -1454,6 +1455,19 @@ class TamagotchiLogic:
         if _PERF_TRACKING_AVAILABLE:
             _sim_elapsed = (time.perf_counter() - _sim_start) * 1000
             perf_tracker.record("simulation_tick", _sim_elapsed)
+
+    def _get_cached_decorations(self):
+        """Get decorations with caching to avoid scanning scene every tick."""
+        current_time = time.time()
+        if current_time - self._decoration_cache_time > self._decoration_cache_interval:
+            self._decoration_cache = []
+            for item in self.user_interface.scene.items():
+                if isinstance(item, ResizablePixmapItem) and hasattr(item, 'category'):
+                    # Cache both the item and its center point
+                    center = item.sceneBoundingRect().center()
+                    self._decoration_cache.append((item, center.x(), center.y()))
+            self._decoration_cache_time = current_time
+        return self._decoration_cache
 
     def apply_input_neurons_to_brain(self):
         """

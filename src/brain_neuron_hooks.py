@@ -260,11 +260,27 @@ class BrainNeuronHooks:
             0-99 scaled by distance to nearest plant edge if not touching
             0.0 if no plants exist
         """
-        # 1. Prefer VisionWorker result for proximity (smoother/faster)
+        # 1. First check squid's cached plant proximity (most reliable, updated via signal)
+        if hasattr(self.logic, 'squid') and self.logic.squid:
+            squid = self.logic.squid
+            if hasattr(squid, '_cached_plant_proximity'):
+                cached = squid._cached_plant_proximity
+                if cached is not None and cached > 0:
+                    return cached
+            # Also try the getter method
+            if hasattr(squid, 'get_plant_proximity'):
+                prox = squid.get_plant_proximity()
+                if prox is not None and prox > 0:
+                    return prox
+        
+        # 2. Check VisionWorker result (only if attribute actually exists and has value)
         if hasattr(self.logic, 'latest_vision_result') and self.logic.latest_vision_result:
-            # The worker calculates a 0-100 proximity value automatically
-            return getattr(self.logic.latest_vision_result, 'plant_proximity_value', 0.0)
+            result = self.logic.latest_vision_result
+            if hasattr(result, 'plant_proximity_value') and result.plant_proximity_value is not None:
+                if result.plant_proximity_value > 0:
+                    return result.plant_proximity_value
 
+        # 3. Manual fallback - calculate directly from scene
         if not hasattr(self.logic, 'user_interface') or not hasattr(self.logic, 'squid'):
             return 0.0
         

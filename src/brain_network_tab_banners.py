@@ -399,4 +399,5 @@ class PlaceholderBanner(QtWidgets.QWidget):
             cx = self.width() / 2
             cy = self.height() / 2
             for offset in [-10, 0, 10]:
+
                 painter.drawEllipse(QtCore.QPointF(cx, cy + offset), 2.0, 2.0)

@@ -32,10 +32,10 @@ class EnhancedBrainTooltips:
         return loc("tooltip_functional", default="functional")
 
     # ------------------------------------------------------------------
-    # Public entry point – keeps old signature for compatibility
+    # Public entry point — keeps old signature for compatibility
     # ------------------------------------------------------------------
     def show_tooltip_for_position(self, event):
-        """Legacy entry – we ignore event.pos() and use neuron centre."""
+        """Legacy entry — we ignore event.pos() and use neuron centre."""
         neuron_name = self.brain_widget.get_neuron_at_pos(event.pos())
         if neuron_name:
             self.show_tooltip_for_neuron(neuron_name, event.pos())
@@ -53,10 +53,8 @@ class EnhancedBrainTooltips:
             self.hide_tooltip()
             return
 
-        # Check if this is a binary neuron and skip tooltip if so
-        if hasattr(self.brain_widget, 'is_binary_neuron') and self.brain_widget.is_binary_neuron(neuron_name):
-            self.hide_tooltip()
-            return
+        # NOTE: We now show tooltips for ALL neurons, including binary sensors.
+        # Binary neurons will show ON/OFF, continuous neurons show numeric values.
 
         # 1. Get neuron's logical position
         x_logic, y_logic = self.brain_widget.neuron_positions[neuron_name]
@@ -127,17 +125,75 @@ class EnhancedBrainTooltips:
         </div>
         """
 
+    def _is_binary_neuron(self, neuron_name):
+        """
+        Check if a neuron is binary (outputs only 0 or 100).
+        
+        Priority order (first explicit value wins):
+        1. neuron_details from loaded brain file (most authoritative)
+        2. neurons dict with is_binary field
+        3. BINARY_NEURONS constant
+        4. Known binary sensors (hardcoded fallback)
+        
+        We do NOT use brain_widget.is_binary_neuron() as it may have incorrect logic.
+        """
+        bw = self.brain_widget
+        
+        # Priority 1: Check neuron_details (from loaded brain JSON) - MOST AUTHORITATIVE
+        if hasattr(bw, 'neuron_details') and neuron_name in bw.neuron_details:
+            details = bw.neuron_details[neuron_name]
+            if isinstance(details, dict) and 'is_binary' in details:
+                return details['is_binary']
+        
+        # Priority 2: Check neurons dict (alternative storage in some brain formats)
+        if hasattr(bw, 'neurons') and neuron_name in bw.neurons:
+            neuron_data = bw.neurons[neuron_name]
+            if isinstance(neuron_data, dict) and 'is_binary' in neuron_data:
+                return neuron_data['is_binary']
+        
+        # Priority 3: Check config's neuron definitions
+        if hasattr(bw, 'config') and bw.config:
+            try:
+                neurons_config = bw.config.get_neurogenesis_config().get('neurons', {})
+                if neuron_name in neurons_config:
+                    neuron_cfg = neurons_config[neuron_name]
+                    if 'is_binary' in neuron_cfg:
+                        return neuron_cfg['is_binary']
+            except:
+                pass
+        
+        # Priority 4: Check BINARY_NEURONS constant
+        try:
+            from .brain_constants import BINARY_NEURONS
+            if neuron_name in BINARY_NEURONS:
+                return True
+        except ImportError:
+            pass
+        
+        # Priority 5: Known binary sensors (hardcoded fallback for core sensors)
+        # NOTE: plant_proximity is NOT in this list - it's continuous!
+        KNOWN_BINARY = {
+            'can_see_food', 'is_eating', 'is_sleeping', 'is_sick',
+            'pursuing_food', 'is_fleeing', 'is_startled'
+        }
+        if neuron_name in KNOWN_BINARY:
+            return True
+        
+        # Default: assume continuous (not binary)
+        return False
 
     def _generate_basic_tooltip(self, neuron_name):
         bw = self.brain_widget
-        current_value = bw.state.get(neuron_name, 50)
+        current_value = bw.state.get(neuron_name, 0)
         
-        # Format value based on neuron type
-        if neuron_name == 'can_see_food':
+        # Check if this is a binary neuron using comprehensive check
+        is_binary = self._is_binary_neuron(neuron_name)
+        
+        if is_binary:
             # For binary neurons, show localized ON/OFF
             val_display = loc("state_on") if current_value > 50 else loc("state_off")
         else:
-            # For continuous neurons, show numeric value
+            # For continuous neurons (including plant_proximity), show numeric value
             val_display = f"{current_value:.1f}"
         
         # Minimal black rectangle with white text (matching weight overlay style)

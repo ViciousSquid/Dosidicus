@@ -133,11 +133,11 @@ if HAS_QT:
             super().__init__()
             self.setWindowTitle("Neuron Monitor")
             
-            # Window Flags: Tool (small title bar), Stay on Top, Frameless (optional, keeping frame for moveability)
+            # Window Flags: Tool (small title bar), Stay on Top
             self.setWindowFlags(QtCore.Qt.Tool | QtCore.Qt.WindowStaysOnTopHint)
             self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
             
-            self.resize(600, 200)
+            self.resize(800, 200)
             
             # Styling: Dark background, Orange text (Consolas/Monospace)
             self.setStyleSheet("""

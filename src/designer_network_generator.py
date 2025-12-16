@@ -166,22 +166,25 @@ class SparseNetworkGenerator:
         if not design.neurons:
             return
             
-        center_x = sum(n.position[0] for n in design.neurons.values()) / len(design.neurons)
-        center_y = sum(n.position[1] for n in design.neurons.values()) / len(design.neurons)
-        
         for name, neuron in design.neurons.items():
-            # Skip required neurons (core and can_see_food) to keep them stable
-            if neuron.is_required:
+            # Skip required/core neurons to keep the brain structure recognizable
+            # but allow custom neurons (connectors, neurogenesis types) to move
+            if neuron.is_required or neuron.is_core:
+                continue
+            
+            # Ensure position is valid
+            if neuron.position is None:
                 continue
                 
             x, y = neuron.position
             
             # Add Gaussian noise scaled by variance
-            noise_scale = variance * 60  # 60px standard deviation at variance=1.0
+            # Using a larger base scale (100px) so variance=0.2 moves things visibly (~20px)
+            noise_scale = variance * 100 
             new_x = x + rng.gauss(0, noise_scale)
             new_y = y + rng.gauss(0, noise_scale)
             
-            # Clamp to view bounds
+            # Clamp to view bounds to keep them on canvas
             new_x = max(min_x, min(max_x, new_x))
             new_y = max(min_y, min(max_y, new_y))
             
@@ -296,6 +299,9 @@ class SparseNetworkGenerator:
                             clear_existing: bool = True,
                             density: float = 1.0,
                             include_feedback: bool = True,
+                            weight_noise: float = 1.0,        # ADDED to match call sig
+                            position_variance: float = 0.0,   # ADDED to fix Error
+                            sensor_probability: float = 0.0,  # ADDED to match call sig
                             seed: Optional[int] = None,
                             silent: bool = False) -> Tuple[int, List[str]]:
         """
@@ -306,7 +312,10 @@ class SparseNetworkGenerator:
             clear_existing: If True, removes existing connections first
             density: Connection density multiplier
             include_feedback: Include feedback loops
-            seed: Optional seed for reproducible generation. If provided, regenerates the RNG.
+            weight_noise: Multiplier for random weight variance
+            position_variance: If > 0, randomly moves neurons (perturbation)
+            sensor_probability: Chance to add random input sensors
+            seed: Optional seed for reproducible generation.
             silent: If True, suppresses generation of action description strings
         
         Returns:
@@ -327,17 +336,30 @@ class SparseNetworkGenerator:
             if not silent:
                 actions.append(f"Added missing required neurons: {', '.join(missing)}")
         
-        # Clear existing if requested
+        # 1. Handle Random Sensors (if requested)
+        if sensor_probability > 0:
+            added_sensors = self.add_random_sensors(design, sensor_probability)
+            if added_sensors > 0 and not silent:
+                actions.append(f"Added {added_sensors} random input sensors")
+
+        # 2. Handle Position Perturbation (if requested)
+        if position_variance > 0:
+            self.perturb_positions(design, variance=position_variance)
+            if not silent:
+                actions.append(f"Perturbed neuron positions (variance: {position_variance})")
+
+        # 3. Clear existing connections (if requested)
         if clear_existing:
             old_count = len(design.connections)
             design.connections.clear()
             if old_count > 0 and not silent:
                 actions.append(f"Cleared {old_count} existing connections")
         
-        # Generate new connections
+        # 4. Generate new connections
         connections = self.generate_connections(
             density=density,
-            include_feedback_loops=include_feedback
+            include_feedback_loops=include_feedback,
+            weight_noise=weight_noise
         )
         
         # Apply to design
@@ -423,13 +445,6 @@ def generate_sparse_core_network(density: float = 1.0,
                                   seed: Optional[int] = None) -> List[Tuple[str, str, float]]:
     """
     Convenience function to generate sparse network connections.
-    
-    Args:
-        density: How dense the network should be (0.5 = sparse, 1.5 = dense)
-        seed: Random seed for reproducibility
-    
-    Returns:
-        List of (source, target, weight) tuples
     """
     generator = SparseNetworkGenerator(seed)
     return generator.generate_connections(density=density)

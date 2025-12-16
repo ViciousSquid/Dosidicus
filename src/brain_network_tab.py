@@ -1,8 +1,3 @@
-try:
-    from .brain_designer_launcher import launch_brain_designer_process
-except ImportError:
-    # Fallback if path is wrong (should never happen with the fix above)
-    launch_brain_designer_process = None
 import json
 import time
 import subprocess
@@ -36,7 +31,6 @@ class NetworkTab(BrainBaseTab):
         self.initialize_ui()
         self.setup_timers()
         self.neuron_lab_dialog = None
-        self.experience_buffer_dialog = None
 
     # ------------------------------------------------------------------
     #  UI BUILD
@@ -235,51 +229,24 @@ class NetworkTab(BrainBaseTab):
                     self._clear_layout_recursively(sub_layout)
 
     def _open_brain_designer(self):
-        """Launch Brain Designer in a separate process – safe & reliable"""
-        loc = Localisation.instance()
+        """
+        Switch the main window to Brain Designer mode.
+        Replaces the current view with the designer interface.
+        """
+        # Find the main SquidBrainWindow
+        # self.parent() might be QTabWidget, its parent is SquidBrainWindow
+        window = self.window()
         
-        # === 1. Force Immediate State Export ===
-        # This ensures the 'active_brain_state.json' file is fresh and exists 
-        # BEFORE the designer process starts and tries to read it.
-        if self.brain_widget and hasattr(self.brain_widget, 'export_brain_state_for_designer'):
-            print("🧠 Force-exporting brain state for Designer...")
-            self.brain_widget.export_brain_state_for_designer()
-        # =======================================
-
-        # === Pause simulation via UI ===
-        if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'user_interface'):
-            self.tamagotchi_logic.user_interface.set_simulation_speed(0)
-            self.tamagotchi_logic.user_interface.show_message("Paused for Brain Designer")
-        elif self.tamagotchi_logic:
-            self.tamagotchi_logic.set_simulation_speed(0)
-
-        import multiprocessing
-        from src.brain_designer_launcher import launch_brain_designer_process
-
-        # Prevent multiple instances
-        if hasattr(self, '_brain_designer_process') and \
-           getattr(self._brain_designer_process, 'is_alive', lambda: False)():
-            QtWidgets.QMessageBox.information(
-                self, loc.get("msg_already_open"), loc.get("msg_designer_running")
-            )
-            return
-
-        try:
-            self._brain_designer_process = multiprocessing.Process(
-                target=launch_brain_designer_process,
-                name="BrainDesignerProcess",
-                daemon=False
-            )
-            self._brain_designer_process.start()
-            print(f"Brain Designer launched! PID: {self._brain_designer_process.pid}")
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            QtWidgets.QMessageBox.critical(
-                self,
-                loc.get("msg_launch_failed"),
-                loc.get("msg_designer_fail", e=e)
-            )
+        if hasattr(window, 'switch_to_designer_mode'):
+            window.switch_to_designer_mode()
+        else:
+            print("❌ Could not find switch_to_designer_mode method on main window")
+            # Fallback (legacy process launch)
+            try:
+                from .brain_designer_launcher import launch_brain_designer_process
+                launch_brain_designer_process()
+            except ImportError:
+                QtWidgets.QMessageBox.warning(self, "Error", "Cannot launch Brain Designer.")
 
     def _change_animation_style(self, index):
         """
@@ -485,22 +452,22 @@ class NetworkTab(BrainBaseTab):
         """)
         self.stats_and_button_layout.addWidget(self.functional_stats_label, 1)
 
-        # 2. Button container (holds the two emoji buttons side-by-side)
+        # 2. Button container (single button for Brain Designer)
         self.new_button_container = QtWidgets.QWidget()
-        self.new_button_container.setFixedSize(DisplayScaling.scale(90), DisplayScaling.scale(90))
+        self.new_button_container.setFixedSize(DisplayScaling.scale(100), DisplayScaling.scale(100))
         btn_layout = QtWidgets.QHBoxLayout(self.new_button_container)
         btn_layout.setContentsMargins(0, 0, 0, 0)
-        btn_layout.setSpacing(4)
+        btn_layout.setSpacing(0)
 
-        # First emoji button (Brain Designer)
+        # Brain Designer button (enlarged to fill space)
         self.new_50x50_button = QtWidgets.QPushButton("🧠")
-        self.new_50x50_button.setFixedSize(DisplayScaling.scale(42), DisplayScaling.scale(42))
+        self.new_50x50_button.setFixedSize(DisplayScaling.scale(100), DisplayScaling.scale(80))
         self.new_50x50_button.setStyleSheet("""
             QPushButton {
                 background-color: #e1f5fe;
                 border: 1px solid #029be5;
                 border-radius: 8px;
-                font-size: 20pt;
+                font-size: 24pt;  /* Slightly larger emoji */
             }
             QPushButton:hover {
                 background-color: #b3e5fc;
@@ -526,7 +493,7 @@ class NetworkTab(BrainBaseTab):
         """)
         self.buffer_button.clicked.connect(self._show_experience_buffer)
         self.buffer_button.setToolTip(loc.get("tooltip_experience_buffer"))
-        btn_layout.addWidget(self.buffer_button)
+        #btn_layout.addWidget(self.buffer_button)
 
         self.stats_and_button_layout.addWidget(self.new_button_container)
 

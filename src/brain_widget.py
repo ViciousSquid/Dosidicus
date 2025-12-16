@@ -357,7 +357,13 @@ class BrainWidget(QtWidgets.QWidget):
     # =========================================================================
     # BRAIN STATE BRIDGE METHODS (for designer synchronization)
     # =========================================================================
-    
+    def showEvent(self, event):
+        """Ensure render is requested when widget becomes visible."""
+        super().showEvent(event)
+        self.mark_render_dirty()
+        # Reset render throttle to force immediate update
+        self._last_render_request = 0
+        self._request_render()
     
     def export_brain_state_for_designer(self):
         """

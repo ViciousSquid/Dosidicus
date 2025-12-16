@@ -181,7 +181,8 @@ class NeuronPropertiesPanel(QWidget):
         form.addRow("Name:", self.name_edit)
         
         self.type_combo = QComboBox()
-        self.type_combo.addItems(["CORE", "SENSOR", "INPUT", "OUTPUT", "HIDDEN"])
+        # [UPDATED] Added CONNECTOR to valid types
+        self.type_combo.addItems(["CORE", "SENSOR", "INPUT", "OUTPUT", "HIDDEN", "CONNECTOR"])
         self.type_combo.currentTextChanged.connect(self.on_type_changed)
         form.addRow("Type:", self.type_combo)
         

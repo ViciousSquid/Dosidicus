@@ -451,47 +451,83 @@ class Ui:
                 self.scene.removeItem(item)
         self.scene.update()
 
+    def show_experience_buffer(self):
+        """Show the Experience Buffer window from the debug menu"""
+        loc = Localization.instance()
+        
+        # Get brain widget from the brain window
+        if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
+            self.show_message("Brain window not initialized")
+            return
+        
+        brain_widget = self.squid_brain_window.brain_widget
+        
+        if not brain_widget:
+            QtWidgets.QMessageBox.warning(self.window, "Missing Brain", "Brain widget not available")
+            return
+
+        if not hasattr(brain_widget, 'enhanced_neurogenesis') or brain_widget.enhanced_neurogenesis is None:
+            QtWidgets.QMessageBox.warning(self.window, "No Neurogenesis", "Neurogenesis system not initialized")
+            return
+
+        # Create or show the dialog
+        if not hasattr(self, '_experience_buffer_dialog') or not self._experience_buffer_dialog:
+            from .brain_network_tab import ExperienceBufferDialog
+            self._experience_buffer_dialog = ExperienceBufferDialog(brain_widget, self.window)
+        
+        self._experience_buffer_dialog.refresh_data()
+        self._experience_buffer_dialog.show()
+        self._experience_buffer_dialog.raise_()
+        self._experience_buffer_dialog.activateWindow()
+
     def open_brain_designer(self):
-        self.set_simulation_speed(0)
-        self.show_message("Simulation paused for Brain Designer")
-        import multiprocessing
-        try:
-            from .brain_designer_launcher import launch_brain_designer_process
-        except ImportError as e:
-            QtWidgets.QMessageBox.critical(
-                self.window,
-                "Missing Launcher",
-                "Cannot find brain_designer_launcher.py!\n\n"
-                "Make sure the file exists in the 'src' folder."
-            )
-            print(f"Import error: {e}")
+        """
+        Open the Brain Tool (if closed) and switch it to Designer Mode.
+        Ensures only one instance runs by using the existing window.
+        """
+        # 1. Ensure Brain Window is initialized (Lazy Loading)
+        if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
+            if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+                current_debug_mode = getattr(self.tamagotchi_logic, 'debug_mode', False)
+                
+                # Check if logic already holds a reference
+                if hasattr(self.tamagotchi_logic, 'brain_window') and self.tamagotchi_logic.brain_window:
+                    self.squid_brain_window = self.tamagotchi_logic.brain_window
+                else: 
+                    # Create new window
+                    self.squid_brain_window = SquidBrainWindow(
+                        self.tamagotchi_logic, 
+                        current_debug_mode, 
+                        show_decorations_callback=self.show_decorations_window
+                    )
+                    # Register back to logic
+                    if hasattr(self.tamagotchi_logic, 'set_brain_window'): 
+                         self.tamagotchi_logic.set_brain_window(self.squid_brain_window)
+            else:
+                self.show_message("Cannot open Designer: Game logic not initialized.")
+                return
+
+        # 2. Show and Focus the Brain Window
+        if not self.squid_brain_window.isVisible():
+            self.squid_brain_window.show()
+            self.squid_brain_window.raise_()
+            self.squid_brain_window.activateWindow()
+            
+            # Sync the "Brain Tool" menu checkmark
+            if hasattr(self, 'brain_action'):
+                self.brain_action.setChecked(True)
+
+        # 3. Switch to Designer Mode
+        # Check if already in designer mode to avoid redundant reloading
+        if hasattr(self.squid_brain_window, 'designer_view') and self.squid_brain_window.designer_view:
+            print("Designer mode already active.")
             return
-        if hasattr(self, '_brain_designer_process') and \
-           getattr(self._brain_designer_process, 'is_alive', lambda: False)():
-            QtWidgets.QMessageBox.information(
-                self.window,
-                "Already Running",
-                "Brain Designer is already open!"
-            )
-            return
-        try:
-            debug_mode = getattr(self, 'debug_mode', False)
-            self._brain_designer_process = multiprocessing.Process(
-                target=launch_brain_designer_process,
-                args=(debug_mode,),
-                daemon=False
-            )
-            self._brain_designer_process.start()
-            print(f"Brain Designer launched (PID: {self._brain_designer_process.pid})"
-                  f"{' [debug mode]' if debug_mode else ''}")
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            QtWidgets.QMessageBox.critical(
-                self.window,
-                "Launch Failed",
-                f"Could not start Brain Designer:\n\n{e}"
-            )
+
+        if hasattr(self.squid_brain_window, 'switch_to_designer_mode'):
+            self.squid_brain_window.switch_to_designer_mode()
+            self.show_message("Switching to Designer Mode...")
+        else:
+            self.show_message("Error: Brain Tool does not support Designer Mode.")
 
     def setup_plugin_menu(self, plugin_manager_instance):
         loc = Localization.instance()
@@ -1423,6 +1459,11 @@ class Ui:
 
         self.rock_test_action = QtWidgets.QAction('Rock test (forced)', self.window)
         self.rock_test_action.triggered.connect(self.trigger_rock_test)
+
+        self.experience_buffer_action = QtWidgets.QAction("Neurogenesis Experience Buffer", self.window)
+        self.experience_buffer_action.triggered.connect(self.show_experience_buffer)
+        self.experience_buffer_action.setToolTip("View neurogenesis experience buffer")
+        debug_menu.addAction(self.experience_buffer_action)
         
         self.plugins_menu = self.menu_bar.addMenu(loc.get("plugins"))
         self.connect_action_buttons()

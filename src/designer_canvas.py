@@ -39,7 +39,7 @@ class SmartConnectionItem(QGraphicsItem):
         
         # Visual states
         self.is_selected = False
-        self.is_hovered = False  # [FIX] Initialize is_hovered
+        self.is_hovered = False
         self.is_dying = False  # If True, connection is retreating/fading out
         
         # Organic Animation States
@@ -53,7 +53,6 @@ class SmartConnectionItem(QGraphicsItem):
         # Pulse animation (standard)
         self.pulse_phase = 0.0
         
-        # [FIX] Enable hover events so the hover glow logic works
         self.setAcceptHoverEvents(True)
         self.setZValue(-5) 
         self.hit_thickness = 25 
@@ -68,27 +67,17 @@ class SmartConnectionItem(QGraphicsItem):
             .adjusted(-extra, -extra, extra, extra)
 
     def shape(self):
-        # Custom hitbox for Hexagon
-        if hasattr(self, 'neuron_type') and self.neuron_type == NeuronType.CONNECTOR:
-            path = QPainterPath()
-            sides = 6
-            polygon = QPolygonF()
-            angle_step = 360.0 / sides
-            # Match the geometry defined in paint()
-            for i in range(sides):
-                angle = math.radians(i * angle_step - 90)
-                polygon.append(QPointF(self.radius * math.cos(angle), 
-                                     self.radius * math.sin(angle)))
-            path.addPolygon(polygon)
-            
-            # Create a stroker to include the pen width in the hit area
-            stroker = QPainterPathStroker()
-            stroker.setWidth(self.pen().width() + 5) # Add tolerance
-            return stroker.createStroke(path).united(path)
-            
-        return super().shape()
+        """Custom hit area for connection lines."""
+        path = QPainterPath()
+        path.moveTo(self.source_pos)
+        path.lineTo(self.target_pos)
+        
+        # Create a stroker to widen the hit area
+        stroker = QPainterPathStroker()
+        stroker.setWidth(self.hit_thickness)
+        stroker.setCapStyle(Qt.RoundCap)
+        return stroker.createStroke(path)
     
-    # [FIX] Added hover events to toggle state
     def hoverEnterEvent(self, event):
         self.is_hovered = True
         self.update()
@@ -132,16 +121,10 @@ class SmartConnectionItem(QGraphicsItem):
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # Draw hover glow
-        # [FIX] Now self.is_hovered is defined, this won't crash
+        # Draw hover glow (subtle blue when hovered but not selected)
         if self.is_hovered and not self.is_selected:
-            # We need a radius to draw the glow. Using a fixed value or deriving from thickness.
-            # Since connections are lines, we usually draw a "path" glow, but for simplicity here:
-            # We will draw a line glow along the connection path.
-            
             pen_width = 12
             glow_color = QColor(100, 200, 255, 100)
-            
             painter.setPen(QPen(glow_color, pen_width, Qt.SolidLine, Qt.RoundCap))
             painter.drawLine(self.source_pos, self.target_pos)
 
@@ -159,33 +142,105 @@ class SmartConnectionItem(QGraphicsItem):
         pulse = math.sin(self.pulse_phase * math.pi * 2) * 0.5 + 0.5
         thickness += pulse * 1.5
 
+        # Draw selection highlight (yellow glow when selected)
         if self.is_selected:
             painter.setPen(QPen(QColor(255, 215, 0), thickness + 4, Qt.SolidLine, Qt.RoundCap))
             painter.drawLine(self.source_pos, self.target_pos)
 
         painter.setPen(QPen(base_color, thickness, Qt.SolidLine, Qt.RoundCap))
         painter.drawLine(self.source_pos, self.target_pos)
+        
+        painter.restore()
 
-        # --- CUSTOM PAINTING FOR CONNECTORS ---
-        if hasattr(self, 'neuron_type') and self.neuron_type == NeuronType.CONNECTOR:
-            painter.setBrush(self.brush())
-            painter.setPen(self.pen())
 
-            # Draw Hexagon
-            sides = 6
-            polygon = QPolygonF()
-            angle_step = 360.0 / sides
-            for i in range(sides):
-                angle = math.radians(i * angle_step - 90)
-                polygon.append(QPointF(self.radius * math.cos(angle),
-                                    self.radius * math.sin(angle)))
-
-            painter.drawPolygon(polygon)
-            painter.restore()
-            return  # Exit early
-
-        # SmartConnectionItem inherits QGraphicsItem directly in this corrected version,
-        # so we don't call super().paint() which expects QGraphicsEllipseItem logic.
+class ConnectorNeuronItem(QGraphicsItem):
+    """
+    Connector Neuron: Black hexagon with a white 'c' inside.
+    Matches brain_widget.py's draw_hexagon_neuron style.
+    """
+    
+    def __init__(self, x, y, radius, name, parent=None):
+        super().__init__(parent)
+        self.name = name
+        self.radius = radius
+        self.is_selected = False
+        self.is_hovered = False
+        self.neuron_type = NeuronType.CONNECTOR
+        
+        self.setPos(x, y)
+        self.setAcceptHoverEvents(True)
+        self.setData(0, ('neuron', name))
+        self.setZValue(2)
+    
+    def boundingRect(self):
+        extra = 15
+        return QRectF(-self.radius - extra, -self.radius - extra,
+                      (self.radius + extra) * 2, (self.radius + extra) * 2)
+    
+    def shape(self):
+        """Custom hitbox for Hexagon."""
+        path = QPainterPath()
+        sides = 6
+        polygon = QPolygonF()
+        angle_step = 360.0 / sides
+        for i in range(sides):
+            angle = math.radians(i * angle_step - 90)
+            polygon.append(QPointF(self.radius * math.cos(angle), 
+                                   self.radius * math.sin(angle)))
+        path.addPolygon(polygon)
+        path.closeSubpath()
+        return path
+    
+    def hoverEnterEvent(self, event):
+        self.is_hovered = True
+        self.update()
+        super().hoverEnterEvent(event)
+    
+    def hoverLeaveEvent(self, event):
+        self.is_hovered = False
+        self.update()
+        super().hoverLeaveEvent(event)
+    
+    def paint(self, painter, option, widget):
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Draw hover glow
+        if self.is_hovered and not self.is_selected:
+            grad = QRadialGradient(0, 0, self.radius + 12)
+            grad.setColorAt(0.5, QColor(100, 200, 255, 100))
+            grad.setColorAt(1.0, QColor(100, 200, 255, 0))
+            painter.setBrush(QBrush(grad))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(QPointF(0, 0), self.radius + 12, self.radius + 12)
+        
+        # Draw selection ring
+        if self.is_selected:
+            painter.setPen(QPen(QColor(255, 255, 255), 4))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(QPointF(0, 0), self.radius + 5, self.radius + 5)
+        
+        # Draw BLACK hexagon body
+        sides = 6
+        polygon = QPolygonF()
+        angle_step = 360.0 / sides
+        for i in range(sides):
+            angle = math.radians(i * angle_step - 90)
+            polygon.append(QPointF(self.radius * math.cos(angle), 
+                                   self.radius * math.sin(angle)))
+        
+        painter.setBrush(QBrush(QColor(0, 0, 0)))  # BLACK fill
+        painter.setPen(QPen(QColor(50, 50, 50), 2))
+        painter.drawPolygon(polygon)
+        
+        # Draw WHITE 'c' inside
+        font = QFont("Arial", int(self.radius * 0.7))
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(255, 255, 255))  # WHITE text
+        
+        rect = QRectF(-self.radius, -self.radius, self.radius * 2, self.radius * 2)
+        painter.drawText(rect, Qt.AlignCenter, "c")
         
         painter.restore()
 
@@ -483,7 +538,7 @@ class BrainCanvas(QGraphicsView):
         
         # 1. Update Layers
         for item in self.scene.items():
-            if not isinstance(item, (NeuronItem, SmartConnectionItem)) and item.zValue() < 0:
+            if not isinstance(item, (NeuronItem, ConnectorNeuronItem, SmartConnectionItem)) and item.zValue() < 0:
                 if isinstance(item, (QGraphicsRectItem, QGraphicsTextItem)): 
                      if item.zValue() < -5: self.scene.removeItem(item)
         self.draw_layers()
@@ -504,7 +559,6 @@ class BrainCanvas(QGraphicsView):
             
             if name in self.neuron_items:
                 # Update existing position
-                # Now that NeuronItem is centered at (0,0) locally, setPos works correctly
                 self.neuron_items[name].setPos(x, y) 
             else:
                 self.draw_single_neuron(name, neuron)
@@ -593,9 +647,71 @@ class BrainCanvas(QGraphicsView):
             x, y = neuron.position
         except (TypeError, ValueError): return
 
-        # 1. Create Neuron Body (The Parent Item)
-        # Position is set via setPos(x,y), geometry is centered at 0,0 locally.
-        body = NeuronItem(x, y, self.NEURON_RADIUS, name)
+        # Determine Shape
+        shape = getattr(neuron, 'shape', 'circle')
+
+        # --- CASE 1: CONNECTOR (Hexagon) ---
+        is_connector = (neuron.neuron_type == NeuronType.CONNECTOR or 
+                        name.startswith('connector_') or
+                        shape == 'hexagon')
+        
+        if is_connector:
+            # Use the special ConnectorNeuronItem (black hexagon with 'c')
+            body = ConnectorNeuronItem(x, y, self.NEURON_RADIUS, name)
+            body.is_selected = (name == self.selected_neuron)
+            self.scene.addItem(body)
+            self.neuron_items[name] = body
+            
+            # Create Label (Child of Body) - simplified for connectors
+            display = name.replace('_', ' ').title()
+            label = QGraphicsTextItem(display)
+            label.setDefaultTextColor(QColor(40, 40, 50))
+            label.setFont(QFont("Arial", 8, QFont.Bold))
+            
+            # Center text horizontally relative to body center (0,0)
+            w = label.boundingRect().width()
+            label.setPos(-w / 2, self.NEURON_RADIUS + 5)
+            label.setZValue(3)
+            label.setParentItem(body)
+            return
+
+        # --- CASE 2: POLYGONS (Diamond, Square, Triangle) ---
+        if shape in ['diamond', 'square', 'triangle']:
+            sides = 4
+            rotation = 0
+            if shape == 'diamond':
+                sides = 4
+                rotation = 0
+            elif shape == 'square':
+                sides = 4
+                rotation = 45
+            elif shape == 'triangle':
+                sides = 3
+                rotation = 0
+            
+            # Create Polygon Body
+            body = PolygonNeuronItem(x, y, self.NEURON_RADIUS, name, 
+                                     sides=sides, rotation=rotation, 
+                                     color=neuron.color)
+            body.is_selected = (name == self.selected_neuron)
+            self.scene.addItem(body)
+            self.neuron_items[name] = body
+
+            # Create Label (Child of Body)
+            display = name.replace('_', ' ').title()
+            label = QGraphicsTextItem(display)
+            label.setDefaultTextColor(QColor(40, 40, 50))
+            label.setFont(QFont("Arial", 9, QFont.Bold))
+            
+            w = label.boundingRect().width()
+            label.setPos(-w / 2, self.NEURON_RADIUS + 5)
+            label.setZValue(3)
+            label.setParentItem(body)
+            return
+
+        # --- CASE 3: CIRCLE (Default) ---
+        # 1. Create Neuron Body (The Parent Item) - standard ellipse
+        body = NeuronItem(x, y, self.NEURON_RADIUS, name, neuron.neuron_type)
         body.setBrush(QBrush(QColor(*neuron.color)))
         body.setPen(QPen(QColor(50, 50, 50), 2))
         body.is_selected = (name == self.selected_neuron)
@@ -603,7 +719,7 @@ class BrainCanvas(QGraphicsView):
         self.scene.addItem(body)
         self.neuron_items[name] = body
 
-        # 2. Determine Ring Style
+        # 2. Determine Ring Style (Only for circles)
         if neuron.is_core:
             ring_color = QColor(*CORE_NEURON_RING_COLOR)
             ring_width = PROTECTED_RING_WIDTH
@@ -622,18 +738,17 @@ class BrainCanvas(QGraphicsView):
             ring_width = 4
 
         # 3. Create Ring (Child of Body)
-        # Relative to body center (0,0)
         r_outer = self.NEURON_RADIUS + 3
         outer = QGraphicsEllipseItem(-r_outer, -r_outer, r_outer * 2, r_outer * 2)
         outer.setPen(QPen(ring_color, ring_width))
         outer.setZValue(1) 
         outer.setData(0, ('ring', name))
-        outer.setParentItem(body) # Move with body
-        # Ensure it is drawn behind the body fill
+        outer.setParentItem(body)
         outer.setFlag(QGraphicsItem.ItemStacksBehindParent)
 
         # 4. Create Label (Child of Body)
         display = name.replace('_', ' ').title()
+        # Add icons for specific types
         if neuron.is_core: display = f"🟡 {display}"
         elif name == 'can_see_food': display = f"👁 {display}"
         elif neuron.is_sensor: display = f"📡 {display}"
@@ -646,7 +761,8 @@ class BrainCanvas(QGraphicsView):
         w = label.boundingRect().width()
         label.setPos(-w / 2, self.NEURON_RADIUS + 5)
         label.setZValue(3)
-        label.setParentItem(body) # Move with body
+        label.setParentItem(body)
+
 
     def draw_neurons(self):
         for name, neuron in self.design.neurons.items():
@@ -672,8 +788,6 @@ class BrainCanvas(QGraphicsView):
         ))
 
     def get_neuron_at(self, pos):
-        # We need to map scene pos to items.
-        # Since items are circular, distance check is best.
         for name, neuron in self.design.neurons.items():
             if neuron.position is None: continue
             x, y = neuron.position
@@ -833,11 +947,14 @@ class BrainCanvas(QGraphicsView):
         super().keyPressEvent(event)
 
     def wheelEvent(self, event):
-        scene_pos = self.mapToScene(event.pos())
-        conn_item = self.get_connection_at(scene_pos)
-        if conn_item or self.selected_connection_key:
-            if conn_item: conn = conn_item.data(0)
-            else: conn = self.design.get_connection(*self.selected_connection_key)
+        """
+        Mouse wheel behavior:
+        - If a connection is SELECTED (clicked), scroll changes its weight
+        - Otherwise, scroll zooms the canvas
+        """
+        # Only adjust weight if a connection is explicitly selected (clicked)
+        if self.selected_connection_key:
+            conn = self.design.get_connection(*self.selected_connection_key)
             if conn:
                 delta = event.angleDelta().y()
                 step = self.WEIGHT_STEP_LARGE if event.modifiers() & Qt.ShiftModifier else self.WEIGHT_STEP
@@ -850,6 +967,8 @@ class BrainCanvas(QGraphicsView):
                 QToolTip.showText(QCursor.pos(), f"Weight: {new_weight:+.2f}", self)
                 event.accept()
                 return
+        
+        # Default: zoom canvas
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
         self.zoom_level = max(0.2, min(3.0, self.zoom_level * factor))
         self.setTransform(QTransform().scale(self.zoom_level, self.zoom_level))
@@ -953,3 +1072,89 @@ class BrainCanvas(QGraphicsView):
         self.rebuild()
         self.weightChanged.emit(conn.source, conn.target, conn.weight)
         QToolTip.showText(QCursor.pos(), f"Weight: {conn.weight:+.2f}", self)
+
+
+class PolygonNeuronItem(QGraphicsItem):
+    """
+    Polygonal Neuron Body (Diamond, Square, Triangle).
+    Acts as Parent item for Label (Ring is usually not used for these shapes in Designer).
+    """
+    
+    def __init__(self, x, y, radius, name, sides=4, rotation=0, color=(150, 150, 220), parent=None):
+        super().__init__(parent)
+        self.name = name
+        self.radius = radius
+        self.sides = sides
+        self.rotation_deg = rotation
+        self.color = color
+        self.is_selected = False
+        self.is_hovered = False
+        
+        self.setPos(x, y)
+        self.setAcceptHoverEvents(True)
+        self.setData(0, ('neuron', name))
+        self.setZValue(2)
+        
+    def boundingRect(self):
+        extra = 5
+        return QRectF(-self.radius - extra, -self.radius - extra,
+                      (self.radius + extra) * 2, (self.radius + extra) * 2)
+    
+    def shape(self):
+        path = QPainterPath()
+        polygon = QPolygonF()
+        angle_step = 360.0 / self.sides
+        # Apply rotation offset
+        offset_rad = math.radians(self.rotation_deg - 90)
+        
+        for i in range(self.sides):
+            angle = math.radians(i * angle_step) + offset_rad
+            polygon.append(QPointF(self.radius * math.cos(angle), 
+                                   self.radius * math.sin(angle)))
+        path.addPolygon(polygon)
+        path.closeSubpath()
+        return path
+
+    def paint(self, painter, option, widget):
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Draw hover glow
+        if self.is_hovered and not self.is_selected:
+            painter.setBrush(Qt.NoBrush)
+            painter.setPen(QPen(QColor(100, 200, 255, 150), 6))
+            # Re-calculate polygon for glow path
+            path = self.shape()
+            painter.drawPath(path)
+
+        # Draw Selection Highlight
+        if self.is_selected:
+            painter.setPen(QPen(QColor(255, 255, 255), 4))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawPath(self.shape())
+
+        # Draw Polygon Body
+        painter.setBrush(QBrush(QColor(*self.color)))
+        painter.setPen(QPen(QColor(50, 50, 50), 2))
+        
+        polygon = QPolygonF()
+        angle_step = 360.0 / self.sides
+        offset_rad = math.radians(self.rotation_deg - 90)
+        
+        for i in range(self.sides):
+            angle = math.radians(i * angle_step) + offset_rad
+            polygon.append(QPointF(self.radius * math.cos(angle), 
+                                   self.radius * math.sin(angle)))
+        
+        painter.drawPolygon(polygon)
+        painter.restore()
+        
+    def hoverEnterEvent(self, event):
+        self.is_hovered = True
+        self.update()
+        super().hoverEnterEvent(event)
+    
+    def hoverLeaveEvent(self, event):
+        self.is_hovered = False
+        self.update()
+        super().hoverLeaveEvent(event)

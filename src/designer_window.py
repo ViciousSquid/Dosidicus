@@ -17,7 +17,7 @@ from PyQt5.QtGui import (
     QTextDocument, QAbstractTextDocumentLayout
 )
 # [FIX] Added QRectF to imports
-from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QRectF, QSizeF
+from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QRectF, QSizeF, pyqtSignal
 
 from designer_logging import get_logger, log_exceptions, safe_call, OperationLogger
 from designer_core import BrainDesign
@@ -28,7 +28,8 @@ try:
     from brain_state_bridge import (
         is_game_running,
         import_brain_state_for_designer,
-        convert_to_brain_design
+        convert_to_brain_design,
+        export_design_to_game
     )
     _HAS_BRAIN_BRIDGE = True
 except ImportError:
@@ -142,10 +143,15 @@ class ScrollingTicker(QWidget):
 class BrainDesignerWindow(QMainWindow):
     """Main window for the Brain Designer application."""
 
-    def __init__(self):
-        super().__init__()
+    # Signal to notify parent when user wants to exit/return
+    exitRequested = pyqtSignal()
+
+    def __init__(self, parent=None, embedded_mode=False):
+        super().__init__(parent)
         self.logger = get_logger("brain_designer.window")
         self.logger.info("Initializing BrainDesignerWindow")
+        
+        self.embedded_mode = embedded_mode
 
         try:
             self.design = BrainDesign()
@@ -163,21 +169,20 @@ class BrainDesignerWindow(QMainWindow):
             with OperationLogger("Setting up toolbar", self.logger):
                 self.setup_toolbar()
 
-            # Check if game is running and import its brain state
-            # Otherwise generate a random network
-            with OperationLogger("Initializing brain network", self.logger):
-                self._imported_from_game = False
-                if not self._try_import_from_game():
-                    # No game running, generate random network
-                    self.generate_initial_network()
+            # Only auto-generate if NOT embedded (embedded mode will load existing state)
+            if not self.embedded_mode:
+                with OperationLogger("Initializing brain network", self.logger):
+                    self._imported_from_game = False
+                    if not self._try_import_from_game():
+                        # No game running, generate random network
+                        self.generate_initial_network()
+                
+                # Show import notification if applicable
+                if self._imported_from_game:
+                    self._show_import_notification()
 
             # Force UI refresh
             self.refresh_all()
-            
-            # Show import notification if applicable
-            if self._imported_from_game:
-                self._show_import_notification()
-
             self.update_status()
             self.logger.info("BrainDesignerWindow initialized successfully")
 
@@ -282,7 +287,7 @@ class BrainDesignerWindow(QMainWindow):
         layout.setContentsMargins(8, 4, 8, 4)
 
         # Generate button (prominent)
-        generate_btn = QPushButton("🎲 Generate Sparse Network")
+        generate_btn = QPushButton("🎲 Generate")
         generate_btn.setToolTip("Generate random connections between core neurons")
         generate_btn.setStyleSheet("""
             QPushButton {
@@ -368,13 +373,13 @@ class BrainDesignerWindow(QMainWindow):
         fix_btn = QPushButton("🔧 Auto-Fix")
         fix_btn.setToolTip("Automatically fix orphan neurons and connectivity issues")
         fix_btn.clicked.connect(self.run_auto_fix)
-        layout.addWidget(fix_btn)
+        #layout.addWidget(fix_btn)
 
         # Validate button
         validate_btn = QPushButton("✓ Validate")
         validate_btn.setToolTip("Check design for issues")
         validate_btn.clicked.connect(self.check_status)
-        layout.addWidget(validate_btn)
+        #layout.addWidget(validate_btn)
 
         # Placeholder for sync button - will be added later if game is detected
         self._sync_btn_container = QFrame()
@@ -382,6 +387,26 @@ class BrainDesignerWindow(QMainWindow):
         self._sync_btn_layout.setContentsMargins(0, 0, 0, 0)
         self._sync_btn_container.hide()  # Hidden by default
         layout.addWidget(self._sync_btn_container)
+        
+        # Add RETURN button if embedded
+        if self.embedded_mode:
+            layout.addSpacing(20)
+            return_btn = QPushButton("💾 Save & Return to Game")
+            return_btn.setToolTip("Save changes and return to game view")
+            return_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #673AB7;
+                    color: white;
+                    font-weight: bold;
+                    padding: 6px 14px;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #5E35B1;
+                }
+            """)
+            return_btn.clicked.connect(self.exitRequested.emit)
+            layout.addWidget(return_btn)
 
         layout.addStretch()
 
@@ -404,24 +429,24 @@ class BrainDesignerWindow(QMainWindow):
 
         # Create scrolling ticker with comprehensive shortcuts
         self.help_ticker = ScrollingTicker(
-            "<span style='color:#333'>💡 <b>Left-Drag</b> from neuron to create connection</span>"
-            "<span style='color:#333'><b>Ctrl+Drag</b> neuron to move it</span>"
-            "<span style='color:#333'><b>Right-Drag</b> to pan canvas</span>"
-            "<span style='color:#333'><b>Scroll Wheel</b> to zoom (or adjust weight on connection)</span>"
-            "<span style='color:#333'><b>Double-Click</b> connection to edit weight</span>"
-            "<span style='color:#333'><b>Click</b> neuron/connection to select</span>"
-            "<span style='color:#333'><b>Del</b> to delete selected</span>"
-            "<span style='color:#333'><b>Space</b> to reverse connection direction</span>"
-            "<span style='color:#333'><b>+/-</b> keys to adjust weight (Shift for larger steps)</span>"
-            "<span style='color:#333'><b>Page Up/Down</b> to adjust weight (large steps)</span>"
-            "<span style='color:#333'><b>Shift+N</b> to add neuron</span>"
-            "<span style='color:#333'><b>Ctrl+S</b> to save</span>"
-            "<span style='color:#333'><b>Ctrl+O</b> to open</span>"
-            "<span style='color:#333'><b>Ctrl+E</b> to export</span>"
-            "<span style='color:#333'><b>Ctrl+N</b> for new design</span>"
-            "<span style='color:#333'><b>Ctrl+G</b> to generate network</span>"
-            "<span style='color:#333'>🎲 <b>Dice button</b> for instant random generation</span>"
-            "<span style='color:#333'><b>Outputs tab</b> to bind neurons to squid behaviors</span>"
+            "<span style='color:#333'>💡 <b> Left-Drag</b> from neuron to create connection </span>"
+            "<span style='color:#333'><b> Ctrl+Drag</b> neuron to move it </span>"
+            "<span style='color:#333'><b> Right-Drag</b> to pan canvas </span>"
+            "<span style='color:#333'><b> Scroll Wheel</b> to zoom (or adjust weight on connection) </span>"
+            "<span style='color:#333'><b> Double-Click</b> connection to edit weight </span>"
+            "<span style='color:#333'><b> Click</b> neuron/connection to select </span>"
+            "<span style='color:#333'><b> Del</b> to delete selected </span>"
+            "<span style='color:#333'><b> Space</b> to reverse connection direction </span>"
+            "<span style='color:#333'><b> +/-</b> keys to adjust weight (Shift for larger steps) </span>"
+            "<span style='color:#333'><b> Page Up/Down</b> to adjust weight (large steps) </span>"
+            "<span style='color:#333'><b> Shift+N</b> to add neuron </span>"
+            "<span style='color:#333'><b> Ctrl+S</b> to save </span>"
+            "<span style='color:#333'><b> Ctrl+O</b> to open </span>"
+            "<span style='color:#333'><b> Ctrl+E</b> to export </span>"
+            "<span style='color:#333'><b> Ctrl+N</b> for new design </span>"
+            "<span style='color:#333'><b> Ctrl+G</b> to generate network </span>"
+            "<span style='color:#333'>🎲 <b>Dice button</b> for instant random generation </span>"
+            "<span style='color:#333'><b>Outputs tab</b> to bind neurons to squid behaviors </span>"
         )
         layout.addWidget(self.help_ticker)
 
@@ -429,10 +454,19 @@ class BrainDesignerWindow(QMainWindow):
 
     def setup_menus(self):
         """Setup the menu bar."""
+        # In embedded mode, menus might not show up if parent is not main window.
+        # But for QMainWindow they usually work.
         menu = self.menuBar()
 
         # File menu
         file_menu = menu.addMenu("File")
+        
+        if self.embedded_mode:
+            return_action = QAction("Save & Return to Game", self)
+            return_action.setShortcut("Ctrl+Return")
+            return_action.triggered.connect(self.exitRequested.emit)
+            file_menu.addAction(return_action)
+            file_menu.addSeparator()
 
         new_action = QAction("New Design", self)
         new_action.setShortcut("Ctrl+N")
@@ -444,7 +478,7 @@ class BrainDesignerWindow(QMainWindow):
         save_action = QAction("Save...", self)
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_design)
-        file_menu.addAction(save_action)
+        #file_menu.addAction(save_action)
 
         export_action = QAction("Export for Dosidicus...", self)
         export_action.setShortcut("Ctrl+E")
@@ -461,7 +495,7 @@ class BrainDesignerWindow(QMainWindow):
         # Edit menu
         edit_menu = menu.addMenu("Edit")
 
-        generate_action = QAction("Generate Sparse Network...", self)
+        generate_action = QAction("Generate Network...", self)
         generate_action.setShortcut("Ctrl+G")
         generate_action.triggered.connect(self.show_sparse_network_dialog)
         edit_menu.addAction(generate_action)
@@ -474,17 +508,17 @@ class BrainDesignerWindow(QMainWindow):
 
         validate_action = QAction("Validate Design", self)
         validate_action.triggered.connect(self.check_status)
-        edit_menu.addAction(validate_action)
+        #edit_menu.addAction(validate_action)
 
         edit_menu.addSeparator()
 
-        clear_conn_action = QAction("Clear All Connections", self)
+        clear_conn_action = QAction("Clear All", self)
         clear_conn_action.triggered.connect(self.clear_all_connections)
         edit_menu.addAction(clear_conn_action)
         
         # Clear outputs action
         if _HAS_OUTPUTS_PANEL:
-            clear_outputs_action = QAction("Clear All Output Bindings", self)
+            clear_outputs_action = QAction("Clear all Bindings", self)
             clear_outputs_action.triggered.connect(self.clear_all_outputs)
             edit_menu.addAction(clear_outputs_action)
 
@@ -499,7 +533,7 @@ class BrainDesignerWindow(QMainWindow):
         # Network generation presets
         gen_menu = menu.addMenu("Generate")
 
-        gen_dialog_action = QAction("🎲 Generate Sparse Network...", self)
+        gen_dialog_action = QAction("🎲 Generate...", self)
         gen_dialog_action.setShortcut("Ctrl+G")
         gen_dialog_action.triggered.connect(self.show_sparse_network_dialog)
         gen_menu.addAction(gen_dialog_action)
@@ -526,8 +560,108 @@ class BrainDesignerWindow(QMainWindow):
 
         toolbar.addSeparator()
 
+        if _HAS_BRAIN_BRIDGE:
+            push_action = QAction("🚀 Push to Game", self)
+            push_action.setToolTip("Export current design directly to the running Dosidicus game")
+            push_action.triggered.connect(self.push_to_game)
+            toolbar.addAction(push_action)
+            toolbar.addSeparator()
+
         # Template dropdown
         toolbar.addAction("📋 Templates", self.show_template_menu)
+
+    def push_to_game(self):
+        """Export current design, state, and bindings directly to the running game."""
+        if not _HAS_BRAIN_BRIDGE:
+            return
+
+        if not is_game_running():
+            QMessageBox.warning(self, "Game Not Found", 
+                              "Dosidicus does not appear to be running.\nStart the game to push designs.")
+            return
+
+        try:
+            # 1. Ensure bindings are up to date
+            if self.outputs_panel:
+                self.design.output_bindings = self.outputs_panel.export_bindings()
+
+            # 2. Convert to the format the game expects
+            data = self.design.to_dosidicus_format()
+            
+            # 3. Push via bridge
+            if export_design_to_game(data):
+                self.status_bar.showMessage("Design pushed to running game", 3000)
+                self.tamagotchi_logic.show_message("Custom Brain was pushed from Designer")
+            else:
+                QMessageBox.warning(self, "Export Failed", "Could not write bridge file.")
+                
+        except Exception as e:
+            self.logger.error(f"Push to game failed: {e}", exc_info=True)
+            QMessageBox.critical(self, "Error", f"Failed to push design:\n{e}")
+
+    # ==========================================================================
+    # DATA LOADING AND CONVERSION
+    # ==========================================================================
+    
+    def load_from_brain_widget_state(self, state):
+        """
+        Load design from a brain widget state dictionary.
+        Used for in-process switching with robust fallback.
+        """
+        try:
+            imported_design = None
+            
+            # Attempt 1: Try using the bridge if available
+            try:
+                from brain_state_bridge import convert_to_brain_design
+                imported_design = convert_to_brain_design(state)
+            except ImportError:
+                # Bridge not found, proceed to fallback
+                pass
+            
+            # Attempt 2: Direct conversion using DesignerCore (Fallback)
+            if imported_design is None:
+                # If bridge failed or returned None, use the core method directly
+                # This ensures we don't need the bridge to be active/present
+                from designer_core import BrainDesign
+                # Try dosidicus format first (likely coming from BrainWidget)
+                imported_design = BrainDesign.from_dosidicus_format(state)
+            
+            if imported_design is None:
+                self.logger.warning("Could not convert state to BrainDesign")
+                return False
+            
+            # Apply the design
+            self.design = imported_design
+            self.refresh_all()
+            
+            # Force canvas to center on the new nodes
+            if hasattr(self, 'canvas'):
+                self.canvas.center_on_neurons()
+            
+            self.logger.info(
+                f"Loaded design from memory: {len(self.design.neurons)} neurons"
+            )
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error loading from state: {e}", exc_info=True)
+            return False
+
+    def get_current_design_state(self):
+        """
+        Get the current design as a state dictionary compatible with BrainWidget.
+        """
+        try:
+            # Sync output bindings first
+            if self.outputs_panel:
+                self.design.output_bindings = self.outputs_panel.export_bindings()
+            
+            # Export to dosidicus format (compatible with loader)
+            return self.design.to_dosidicus_format()
+        except Exception as e:
+            self.logger.error(f"Error exporting state: {e}", exc_info=True)
+            return None
 
     # ==========================================================================
     # REFRESH AND STATUS
