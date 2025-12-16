@@ -179,6 +179,7 @@ class PluginManager:
         self.register_hook("neuron_output_pick_up_rock")
         self.register_hook("neuron_output_ink_cloud")
         self.register_hook("neuron_output_eat")
+        self.register_hook("neuron_output_change_color")
         
         # State changes
         self.register_hook("neuron_output_sleep")
@@ -193,6 +194,64 @@ class PluginManager:
         
         # Custom/plugin-defined outputs
         self.register_hook("neuron_output_custom")
+
+
+
+    def register_all_sensors(self, tamagotchi_logic):
+        """
+        Register all available sensors (built-in and plugin) with the plugin manager.
+        
+        This creates a unified registry by registering built-in sensors that normally 
+        live in BrainNeuronHooks, making them discoverable through the plugin manager's API.
+        
+        Args:
+            tamagotchi_logic: TamagotchiLogic instance needed for sensor handlers
+            
+        Returns:
+            int: Number of built-in sensors registered
+        """
+        # Lazy imports to avoid circular dependencies
+        from .designer_sensor_discovery import get_builtin_sensors
+        from .brain_neuron_hooks import BrainNeuronHooks
+        
+        brain_hooks = BrainNeuronHooks(tamagotchi_logic)
+        builtin_sensors = get_builtin_sensors()
+        
+        count = 0
+        for name, info in builtin_sensors.items():
+            # Skip if already registered by a plugin
+            if name in self._neuron_handlers:
+                existing = self._neuron_handlers[name]
+                if existing.get('plugin') != 'system':
+                    self.logger.debug(
+                        f"Skipping built-in sensor '{name}' - "
+                        f"overridden by plugin '{existing.get('plugin')}'"
+                    )
+                continue
+            
+            # Register if handler exists
+            if name in brain_hooks.handlers:
+                handler = brain_hooks.handlers[name]
+                
+                metadata = {
+                    'description': info.get('description', ''),
+                    'is_binary': info.get('is_binary', False),
+                    'category': info.get('category', 'built-in'),
+                    'default_connections': info.get('default_connections', []),
+                    'source': 'built-in'
+                }
+                
+                self.register_neuron_handler(
+                    neuron_name=name,
+                    handler=handler,
+                    plugin_name='system',
+                    metadata=metadata
+                )
+                count += 1
+        
+        if count > 0:
+            self.logger.info(f"Registered {count} built-in sensors with PluginManager")
+        return count
     
     def register_hook(self, hook_name: str) -> None:
         """

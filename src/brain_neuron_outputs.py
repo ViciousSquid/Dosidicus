@@ -1,4 +1,3 @@
-# brain_neuron_outputs.py
 """
 Neuron Output Binding System
 
@@ -7,20 +6,6 @@ when they fire. It creates a bidirectional system:
 
 INPUT (Sensors):  Game Events → Hooks → Neuron Activation
 OUTPUT (Actuators): Neuron Fires → Threshold Check → Hooks → Game Behavior
-
-Example use cases:
-- A "flee_trigger" neuron that makes the squid flee when activation > 80
-- A "seek_plant" neuron that drives plant-seeking behavior
-- A "social_signal" neuron that triggers ink cloud displays
-
-Usage:
-    # In tamagotchi_logic.py
-    from brain_neuron_outputs import NeuronOutputMonitor
-    
-    self.neuron_output_monitor = NeuronOutputMonitor(self)
-    
-    # In update loop:
-    self.neuron_output_monitor.process_outputs()
 """
 
 import time
@@ -28,6 +13,16 @@ from typing import Dict, List, Callable, Any, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
+# Try importing PyQt5 for the floating console
+try:
+    from PyQt5 import QtWidgets, QtCore, QtGui
+    HAS_QT = True
+except ImportError:
+    HAS_QT = False
+
+# ANSI Colors for Console Output (Fallback)
+ANSI_ORANGE = "\033[38;5;208m"
+ANSI_RESET = "\033[0m"
 
 class OutputTriggerMode(Enum):
     """How the output should be triggered."""
@@ -127,11 +122,82 @@ class NeuronOutputBinding:
 
 
 # =============================================================================
-# PREDEFINED OUTPUT HOOKS
+# FLOATING LOG WINDOW
 # =============================================================================
 
-# These are the standard output hooks that neurons can bind to.
-# Each hook triggers a specific squid behavior.
+if HAS_QT:
+    class NeuronLogWindow(QtWidgets.QWidget):
+        """A floating console window for neuron output logs."""
+        
+        def __init__(self):
+            super().__init__()
+            self.setWindowTitle("Neuron Monitor")
+            
+            # Window Flags: Tool (small title bar), Stay on Top, Frameless (optional, keeping frame for moveability)
+            self.setWindowFlags(QtCore.Qt.Tool | QtCore.Qt.WindowStaysOnTopHint)
+            self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
+            
+            self.resize(600, 200)
+            
+            # Styling: Dark background, Orange text (Consolas/Monospace)
+            self.setStyleSheet("""
+                QWidget {
+                    background-color: #121212;
+                    color: #ffb74d;
+                    font-family: 'Consolas', 'Courier New', monospace;
+                    font-size: 10pt;
+                }
+                QPlainTextEdit {
+                    border: 1px solid #333;
+                    selection-background-color: #333;
+                }
+            """)
+            
+            # Layout
+            layout = QtWidgets.QVBoxLayout(self)
+            layout.setContentsMargins(2, 2, 2, 2)
+            
+            # Text Area
+            self.text_area = QtWidgets.QPlainTextEdit()
+            self.text_area.setReadOnly(True)
+            self.text_area.setMaximumBlockCount(1000) # Limit history
+            layout.addWidget(self.text_area)
+            
+            # Initial positioning
+            self._position_at_bottom_center()
+            
+        def _position_at_bottom_center(self):
+            """Move window to bottom center of primary screen."""
+            if not QtWidgets.QApplication.instance():
+                return
+                
+            screen = QtWidgets.QApplication.primaryScreen()
+            if screen:
+                geo = screen.availableGeometry()
+                # Center X
+                x = geo.x() + (geo.width() - self.width()) // 2
+                # Bottom Y (with some padding)
+                y = geo.y() + geo.height() - self.height() - 50
+                self.move(x, y)
+
+        def log(self, message: str):
+            """Append a message to the log."""
+            timestamp = time.strftime("%H:%M:%S")
+            self.text_area.appendPlainText(f"[{timestamp}] {message}")
+            
+            # Auto-scroll to bottom
+            bar = self.text_area.verticalScrollBar()
+            bar.setValue(bar.maximum())
+else:
+    class NeuronLogWindow:
+        """Dummy class if PyQt is not available."""
+        def log(self, msg): print(msg)
+        def show(self): pass
+
+
+# =============================================================================
+# PREDEFINED OUTPUT HOOKS
+# =============================================================================
 
 STANDARD_OUTPUT_HOOKS = {
     # Movement behaviors
@@ -224,9 +290,10 @@ STANDARD_OUTPUT_HOOKS = {
 
      # Colour change
     'neuron_output_change_color': {
-        'description': 'Change the squid body color when triggered',
+        'description': 'Change the squid body color when triggered. Can specify specific color parameters.',
         'category': 'action',
         'default_threshold': 60.0,
+        'has_params': True,
     },
     
     # Custom/plugin hooks
@@ -254,69 +321,111 @@ class NeuronOutputMonitor:
         self.total_fires = 0
         self.fires_by_hook: Dict[str, int] = {}
         
+        # Log Window
+        self.log_window = None
+        
         # Register default hook handlers
         self._register_default_handlers()
     
+    def _ensure_log_window(self):
+        """Create the log window if it doesn't exist and Qt is available."""
+        if self.log_window is None and HAS_QT:
+            # Only create if QApplication exists
+            if QtWidgets.QApplication.instance():
+                self.log_window = NeuronLogWindow()
+
+    def _log(self, message: str):
+        """Helper to print logs to floating window (or console fallback)."""
+        if HAS_QT and QtWidgets.QApplication.instance():
+            self._ensure_log_window()
+            if self.log_window:
+                self.log_window.log(message)
+        else:
+            # Fallback for headless or non-Qt environments
+            print(f"{ANSI_ORANGE}[NeuronOutputMonitor]{ANSI_RESET} {message}")
+
     def _register_default_handlers(self):
         """Register all standard output hooks and subscribe to available handlers."""
         if not hasattr(self.logic, 'plugin_manager'):
+            self._log("⚠️ Cannot register handlers: plugin_manager not available")
             return
         
         pm = self.logic.plugin_manager
         
-        # Register ALL standard output hooks from the dictionary
+        # Whitelist this monitor as an enabled 'plugin'
+        if hasattr(pm, 'enabled_plugins'):
+            pm.enabled_plugins.add('neuronoutputmonitor')
+            
+        self._log(f"📡 Plugin manager found, registering {len(STANDARD_OUTPUT_HOOKS)} hooks...")
+        
+        # Register hooks
         for hook_name in STANDARD_OUTPUT_HOOKS.keys():
             pm.register_hook(hook_name)
-        
-        # Automatically subscribe to any _handle_* methods that correspond to hooks
+            
+        # Subscribe handlers
         import inspect
-        
-        # Get all methods that start with _handle_
+        subscribed_count = 0
         for method_name, method in inspect.getmembers(self, predicate=inspect.ismethod):
             if method_name.startswith('_handle_'):
-                # Convert _handle_flee -> neuron_output_flee
                 base_name = method_name[8:]  # Remove '_handle_' prefix
                 hook_name = f"neuron_output_{base_name}"
                 
-                # Only subscribe if the hook is defined in STANDARD_OUTPUT_HOOKS
                 if hook_name in STANDARD_OUTPUT_HOOKS:
                     success = pm.subscribe_to_hook(hook_name, 'NeuronOutputMonitor', method)
                     if success:
-                        print(f"[NeuronOutputMonitor] Auto-subscribed: {hook_name}")
-                    else:
-                        print(f"[NeuronOutputMonitor] Failed to subscribe to {hook_name}")
+                        subscribed_count += 1
         
-        # Debug: List all registered hooks
-        if self.logic.debug_mode:
-            print(f"[NeuronOutputMonitor] Registered {len(STANDARD_OUTPUT_HOOKS)} output hooks:")
-            for hook in sorted(STANDARD_OUTPUT_HOOKS.keys()):
-                print(f"  ✓ {hook}")
+        self._log(f"📊 Ready. Total subscriptions: {subscribed_count}")
+        
+        # Redundant safety pass
+        for method_name, method in inspect.getmembers(self, predicate=inspect.ismethod):
+            if method_name.startswith('_handle_'):
+                base_name = method_name[8:]
+                hook_name = f"neuron_output_{base_name}"
+                if hook_name in STANDARD_OUTPUT_HOOKS:
+                    pm.subscribe_to_hook(hook_name, 'NeuronOutputMonitor', method)
     
     # =========================================================================
     # BINDING MANAGEMENT
     # =========================================================================
+
+    def monitor(self, neuron_activations: Dict[str, float], current_time: Optional[float] = None):
+        """Main method called every frame with all current neuron activations."""
+        if not self.enabled:
+            return
+            
+        # Self-Healing Whitelist
+        if hasattr(self.logic, 'plugin_manager'):
+            pm = self.logic.plugin_manager
+            if hasattr(pm, 'enabled_plugins') and 'neuronoutputmonitor' not in pm.enabled_plugins:
+                pm.enabled_plugins.add('neuronoutputmonitor')
+        
+        current_time = current_time or time.time()
+        
+        for binding in self.bindings:
+            activation = neuron_activations.get(binding.neuron_name, 0.0)
+            
+            # Check for firing BEFORE updating last_activation
+            if binding.should_fire(activation, current_time):
+                self._fire_binding(binding, activation, current_time)
+            
+            # Update last activation for edge detection
+            binding.last_activation = activation
     
     def add_binding(self, binding: NeuronOutputBinding) -> bool:
         """Add a new output binding."""
-        # Check for duplicate
-        for existing in self.bindings:
-            if (existing.neuron_name == binding.neuron_name and 
-                existing.output_hook == binding.output_hook):
-                print(f"[NeuronOutputMonitor] Binding already exists: {binding.neuron_name} → {binding.output_hook}")
-                return False
-        
         self.bindings.append(binding)
-        print(f"[NeuronOutputMonitor] Added binding: {binding.neuron_name} → {binding.output_hook}")
+        self._log(f"Added binding: {binding.neuron_name} → {binding.output_hook}")
         return True
     
     def remove_binding(self, neuron_name: str, output_hook: str) -> bool:
-        """Remove a binding by neuron and hook name."""
-        for i, binding in enumerate(self.bindings):
-            if binding.neuron_name == neuron_name and binding.output_hook == output_hook:
-                self.bindings.pop(i)
-                print(f"[NeuronOutputMonitor] Removed binding: {neuron_name} → {output_hook}")
-                return True
-        return False
+        """Remove bindings matching neuron and hook name."""
+        initial_len = len(self.bindings)
+        self.bindings = [
+            b for b in self.bindings 
+            if not (b.neuron_name == neuron_name and b.output_hook == output_hook)
+        ]
+        return len(self.bindings) < initial_len
     
     def get_bindings_for_neuron(self, neuron_name: str) -> List[NeuronOutputBinding]:
         """Get all output bindings for a specific neuron."""
@@ -336,7 +445,7 @@ class NeuronOutputMonitor:
                 binding = NeuronOutputBinding.from_dict(binding_data)
                 self.add_binding(binding)
             except Exception as e:
-                print(f"[NeuronOutputMonitor] Error loading binding: {e}")
+                self._log(f"Error loading binding: {e}")
     
     def export_bindings(self) -> List[dict]:
         """Export all bindings as serializable dicts."""
@@ -349,7 +458,6 @@ class NeuronOutputMonitor:
     def process_outputs(self):
         """
         Process all output bindings.
-        
         Call this each simulation tick after the neural network has been updated.
         """
         if not self.enabled or not self.bindings:
@@ -364,6 +472,8 @@ class NeuronOutputMonitor:
         for binding in self.bindings:
             # Get current activation for this neuron
             activation = self._get_neuron_activation(brain_widget, binding.neuron_name)
+            
+            # If we can't find the activation, we can't trigger
             if activation is None:
                 continue
             
@@ -375,14 +485,31 @@ class NeuronOutputMonitor:
             binding.last_activation = activation
     
     def _get_neuron_activation(self, brain_widget, neuron_name: str) -> Optional[float]:
-        """Get the current activation value of a neuron."""
-        if hasattr(brain_widget, 'neuron_activations'):
-            return brain_widget.neuron_activations.get(neuron_name)
-        
-        # Fallback: check config state
+        """
+        Get the current activation value of a neuron.
+        Checks multiple sources to ensure compatibility with different brain versions.
+        """
+        # 1. Check 'neuron_activations' (often used for sensor overrides/inputs)
+        if hasattr(brain_widget, 'neuron_activations') and brain_widget.neuron_activations:
+            val = brain_widget.neuron_activations.get(neuron_name)
+            if val is not None:
+                return float(val)
+
+        # 2. Check 'state' (main storage for neuron values in Dosidicus/Custom brains)
+        if hasattr(brain_widget, 'state') and brain_widget.state:
+            val = brain_widget.state.get(neuron_name)
+            if val is not None:
+                return float(val)
+
+        # 3. Fallback: check config state
         if hasattr(brain_widget, 'config'):
-            state = brain_widget.config.get_neurogenesis_config().get('state', {})
-            return state.get(neuron_name)
+            try:
+                state = brain_widget.config.get_neurogenesis_config().get('state', {})
+                val = state.get(neuron_name)
+                if val is not None:
+                    return float(val)
+            except:
+                pass
         
         return None
     
@@ -408,14 +535,13 @@ class NeuronOutputMonitor:
         
         # Debug output
         if hasattr(self.logic, 'debug_mode') and self.logic.debug_mode:
-            print(f"[NeuronOutput] {binding.neuron_name} → {binding.output_hook} (activation: {activation:.1f})")
+            self._log(f"FIRED: {binding.neuron_name} → {binding.output_hook} ({activation:.0f})")
     
     # =========================================================================
     # DEFAULT HOOK HANDLERS
     # =========================================================================
     
     def _handle_flee(self, neuron_name, activation, squid, **kwargs):
-        """Handle flee behavior trigger."""
         if squid and not getattr(squid, 'is_fleeing', False):
             squid.is_fleeing = True
             squid.current_speed = squid.base_speed * 2
@@ -423,20 +549,15 @@ class NeuronOutputMonitor:
                 squid.mental_state_manager.activate_state('fleeing')
     
     def _handle_seek_food(self, neuron_name, activation, squid, tamagotchi_logic, **kwargs):
-        """Handle food seeking behavior."""
         if squid and tamagotchi_logic:
-            # Find nearest visible food
             visible_food = squid.get_visible_food() if hasattr(squid, 'get_visible_food') else []
             if visible_food:
                 squid.pursuing_food = True
                 squid.target_food = visible_food[0]
     
     def _handle_seek_plant(self, neuron_name, activation, squid, tamagotchi_logic, **kwargs):
-        """Handle plant seeking behavior."""
-        if not squid or not tamagotchi_logic:
-            return
+        if not squid or not tamagotchi_logic: return
         
-        # Find nearest plant
         nearest_plant = None
         min_dist = float('inf')
         
@@ -454,35 +575,47 @@ class NeuronOutputMonitor:
             squid.move_toward_position(target_pos)
     
     def _handle_ink_cloud(self, neuron_name, activation, squid, **kwargs):
-        """Handle ink cloud release."""
         if squid and hasattr(squid, 'release_ink'):
             squid.release_ink()
         elif squid and hasattr(squid, 'mental_state_manager'):
             squid.mental_state_manager.activate_state('inking')
 
     def _handle_change_color(self, neuron_name, activation, squid, **kwargs):
-        """Handle color change when neuron fires."""
+        """
+        Handle color change when neuron fires.
+        Checks for specific 'red', 'green', 'blue' parameters in kwargs.
+        """
         if squid and hasattr(squid, 'apply_tint'):
+            from PyQt5.QtGui import QColor
             import random
-            # Generate a random color
+
+            try:
+                r = int(kwargs.get('red', -1))
+                g = int(kwargs.get('green', -1))
+                b = int(kwargs.get('blue', -1))
+                
+                if r >= 0 and g >= 0 and b >= 0:
+                    color = QColor(r, g, b)
+                    squid.apply_tint(color)
+                    self._log(f"Tint: {r},{g},{b}")
+                    return
+            except (ValueError, TypeError):
+                pass
+            
+            # Fallback only if params missing or invalid
             colors = [
-                (255, 100, 100),  # Red
-                (100, 255, 100),  # Green
-                (100, 100, 255),  # Blue
-                (255, 255, 100),  # Yellow
-                (255, 100, 255),  # Magenta
+                (255, 100, 100), (100, 255, 100), (100, 100, 255),
+                (255, 255, 100), (255, 100, 255), (100, 255, 255)
             ]
-            random_color = random.choice(colors)
-            squid.apply_tint(random_color)
-            print(f"[NeuronOutput] {neuron_name} → change_color activated!")
+            rgb = random.choice(colors)
+            squid.apply_tint(QColor(*rgb))
+            self._log(f"RandTint: {rgb}")
     
     def _handle_startle(self, neuron_name, activation, squid, **kwargs):
-        """Handle startle response."""
         if squid and hasattr(squid, 'mental_state_manager'):
             squid.mental_state_manager.activate_state('startled')
     
     def _handle_calm(self, neuron_name, activation, squid, **kwargs):
-        """Handle calming behavior."""
         if squid:
             squid.anxiety = max(0, squid.anxiety - 10)
             squid.is_fleeing = False
@@ -491,42 +624,34 @@ class NeuronOutputMonitor:
                 squid.mental_state_manager.deactivate_state('fleeing')
     
     def _handle_sleep(self, neuron_name, activation, squid, **kwargs):
-        """Handle sleep initiation."""
         if squid and not getattr(squid, 'is_sleeping', False):
             squid.is_sleeping = True
             squid.status = "sleeping"
     
     def _handle_wake(self, neuron_name, activation, squid, **kwargs):
-        """Handle waking up."""
         if squid and getattr(squid, 'is_sleeping', False):
             squid.is_sleeping = False
             squid.status = "roaming"
     
     def _handle_boost_happiness(self, neuron_name, activation, squid, **kwargs):
-        """Handle happiness boost."""
         if squid:
-            boost = (activation / 100.0) * 5  # Scale boost by activation
+            boost = (activation / 100.0) * 5
             squid.happiness = min(100, squid.happiness + boost)
     
     def _handle_reduce_anxiety(self, neuron_name, activation, squid, **kwargs):
-        """Handle anxiety reduction."""
         if squid:
-            reduction = ((100 - activation) / 100.0) * 5  # Lower activation = more reduction
+            reduction = ((100 - activation) / 100.0) * 5
             squid.anxiety = max(0, squid.anxiety - reduction)
     
     def _handle_wander(self, neuron_name, activation, squid, **kwargs):
-        """Handle random wandering."""
         if squid and hasattr(squid, 'wander'):
             squid.wander()
         elif squid:
             squid.status = "roaming"
     
     def _handle_approach_rock(self, neuron_name, activation, squid, tamagotchi_logic, **kwargs):
-        """Handle rock approaching behavior."""
-        if not squid or not tamagotchi_logic:
-            return
+        if not squid or not tamagotchi_logic: return
         
-        # Find nearest rock
         decorations = tamagotchi_logic.get_nearby_decorations(squid.squid_x, squid.squid_y, 300)
         rocks = [d for d in decorations if hasattr(d, 'category') and d.category == 'rock']
         
@@ -538,16 +663,13 @@ class NeuronOutputMonitor:
             squid.current_rock_target = nearest
     
     def _handle_throw_rock(self, neuron_name, activation, squid, **kwargs):
-        """Handle rock throwing."""
         if squid and getattr(squid, 'carrying_rock', False):
             import random
             direction = random.choice(['left', 'right'])
             squid.throw_rock(direction)
     
     def _handle_pick_up_rock(self, neuron_name, activation, squid, tamagotchi_logic, **kwargs):
-        """Handle rock pickup."""
-        if not squid or getattr(squid, 'carrying_rock', False):
-            return
+        if not squid or getattr(squid, 'carrying_rock', False): return
         
         if tamagotchi_logic:
             decorations = tamagotchi_logic.get_nearby_decorations(squid.squid_x, squid.squid_y, 50)
@@ -556,32 +678,20 @@ class NeuronOutputMonitor:
                 squid.pick_up_rock(rocks[0])
     
     def _handle_eat(self, neuron_name, activation, squid, **kwargs):
-        """Handle eating behavior."""
         if squid and hasattr(squid, 'target_food') and squid.target_food:
             squid.is_eating = True
     
     def _handle_boost_curiosity(self, neuron_name, activation, squid, **kwargs):
-        """Handle curiosity boost."""
         if squid:
             boost = (activation / 100.0) * 5
             squid.curiosity = min(100, squid.curiosity + boost)
 
 
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
-
 def get_available_output_hooks() -> Dict[str, dict]:
-    """
-    Get all available output hooks with their metadata.
-    
-    Used by the brain designer to populate the output binding options.
-    """
     return dict(STANDARD_OUTPUT_HOOKS)
 
 
 def get_output_hooks_by_category() -> Dict[str, Dict[str, dict]]:
-    """Get output hooks organized by category."""
     by_category = {}
     for hook_name, info in STANDARD_OUTPUT_HOOKS.items():
         cat = info.get('category', 'other')

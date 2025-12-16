@@ -57,23 +57,16 @@ class ScrollingTicker(QWidget):
         super().__init__(parent)
         self.text = text
         self.offset = 0
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.scroll_text)
-        self.timer.start(30)  # ~33fps
-        self.setFixedHeight(30)
-        
-        # Style
-        self.setStyleSheet("background-color: transparent;")
         
         # Prepare text document for HTML rendering
         self.doc = QTextDocument()
         self.doc.setDefaultFont(self.font())
         self.doc.setHtml(self.text)
-        self.doc.setTextWidth(-1) # No wrap
+        self.doc.setTextWidth(-1)  # No wrap
         
         # Calculate dimensions
         self.text_width = self.doc.idealWidth()
-        self.text_height = self.doc.size().height()
+        self.text_height = self.doc.size().height()  # FIX: Call method with ()
         
         # Separator
         self.sep_doc = QTextDocument()
@@ -82,15 +75,44 @@ class ScrollingTicker(QWidget):
         self.sep_doc.setTextWidth(-1)
         self.sep_width = self.sep_doc.idealWidth()
         
+        # Timer - don't start it yet
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.scroll_text)
+        self.timer.setInterval(30)  # ~33fps
+        
+        # Style
+        self.setStyleSheet("background-color: transparent;")
+        self.setFixedHeight(30)
+    
+    def showEvent(self, event):
+        """Start timer when widget becomes visible."""
+        super().showEvent(event)
+        # Start timer on first show (prevents premature updates)
+        if not self.timer.isActive():
+            self.timer.start()
+    
+    def hideEvent(self, event):
+        """Stop timer when widget becomes hidden."""
+        super().hideEvent(event)
+        self.timer.stop()
+    
     def scroll_text(self):
-        self.offset -= 1  # Move left by 1 pixel
-        # Reset when the first copy of text has fully scrolled off
+        """Update scroll offset and trigger repaint."""
+        self.offset -= 1
         if self.offset <= -(self.text_width + self.sep_width):
             self.offset = 0
-        self.update()  # Trigger paintEvent
-        
+        self.update()
+    
     def paintEvent(self, event):
+        """Paint the scrolling text with proper painter lifecycle."""
         painter = QPainter(self)
+        
+        # Ensure painter is valid before proceeding
+        if not painter.isActive():
+            return
+        
+        # Removed the try...finally block - Qt handles painter lifecycle automatically
+        painter.setRenderHint(QPainter.Antialiasing)
         
         # Center vertically
         y_pos = (self.height() - self.text_height) / 2
@@ -101,7 +123,6 @@ class ScrollingTicker(QWidget):
             # Draw Main Text
             painter.save()
             painter.translate(current_x, y_pos)
-            # [FIX] QRectF is now imported and correctly used
             self.doc.drawContents(painter, QRectF(0, 0, self.text_width, self.text_height))
             painter.restore()
             
@@ -114,6 +135,8 @@ class ScrollingTicker(QWidget):
             painter.restore()
             
             current_x += self.sep_width
+        
+        # REMOVED: No need for finally block or manual painter.end()
 
 
 class BrainDesignerWindow(QMainWindow):

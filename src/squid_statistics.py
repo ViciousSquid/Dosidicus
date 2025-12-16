@@ -36,7 +36,7 @@ class SquidStatistics:
         self.startles_experienced = 0
         self.times_colour_changed = 0
         self.sickness_episodes = 0
-        self.max_neurons_reached = 0
+        self.max_neurons_reached = 7
         self.current_neurons = 7
 
     def get_total_age_seconds(self):
@@ -126,7 +126,9 @@ class SquidStatistics:
         self.novelty_neurons_created = data.get('novelty_neurons_created', 0)
         self.stress_neurons_created = data.get('stress_neurons_created', 0)
         self.reward_neurons_created = data.get('reward_neurons_created', 0)
-        self.max_neurons_reached = data.get('max_neurons_reached', 0)
+        
+        # --- FIX: Ensure these are loaded correctly, defaulting to 7 ---
+        self.max_neurons_reached = data.get('max_neurons_reached', 7)
         self.current_neurons = data.get('current_neurons', 7)
 
     def update(self):
@@ -144,18 +146,27 @@ class SquidStatistics:
         # --- Check and update peak neurogenesis values ---
         if self.squid.tamagotchi_logic and self.squid.tamagotchi_logic.brain_window:
             brain_widget = self.squid.tamagotchi_logic.brain_window.brain_widget
-            if brain_widget and hasattr(brain_widget, 'neurogenesis_data'):
-                neuro_data = brain_widget.neurogenesis_data
-                current_novelty = neuro_data.get('novelty_counter', 0)
-                current_stress = neuro_data.get('stress_counter', 0)
-                current_reward = neuro_data.get('reward_counter', 0)
+            if brain_widget:
+                # 1. Update Neurogenesis Stats
+                if hasattr(brain_widget, 'neurogenesis_data'):
+                    neuro_data = brain_widget.neurogenesis_data
+                    current_novelty = neuro_data.get('novelty_counter', 0)
+                    current_stress = neuro_data.get('stress_counter', 0)
+                    current_reward = neuro_data.get('reward_counter', 0)
 
-                if current_novelty > self.peak_novelty:
-                    self.peak_novelty = current_novelty
-                if current_stress > self.peak_stress:
-                    self.peak_stress = current_stress
-                if current_reward > self.peak_reward:
-                    self.peak_reward = current_reward
+                    if current_novelty > self.peak_novelty:
+                        self.peak_novelty = current_novelty
+                    if current_stress > self.peak_stress:
+                        self.peak_stress = current_stress
+                    if current_reward > self.peak_reward:
+                        self.peak_reward = current_reward
+                
+                # 2. Update Max Neurons Reached (FIX)
+                if hasattr(brain_widget, 'neuron_positions'):
+                    actual_count = len(brain_widget.neuron_positions)
+                    if actual_count > self.max_neurons_reached:
+                        self.max_neurons_reached = actual_count
+                    self.current_neurons = actual_count
 
     def get_sleep_time(self):
         hours = int(self.time_spent_asleep // 3600)

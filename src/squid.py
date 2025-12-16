@@ -15,6 +15,14 @@ from .decision_engine import DecisionEngine
 from .image_cache import ImageCache
 from .statistics_window import StatisticsWindow
 from .squid_statistics import SquidStatistics
+from .vision_worker import (
+    VisionWorker, 
+    VisionResult, 
+    SquidVisionState,
+    SceneObject,
+    extract_scene_objects,
+    create_squid_vision_state
+)
 
 
 class Squid:
@@ -113,6 +121,29 @@ class Squid:
         self.satisfaction = 50
         self.anxiety = 0
         self.curiosity = 50
+
+         # ===== VISION WORKER SETUP =====
+        # Background thread for vision calculations
+        self._vision_worker = VisionWorker()
+        self._vision_worker.food_visibility_changed.connect(self._on_food_visibility_changed)
+        self._vision_worker.plant_proximity_changed.connect(self._on_plant_proximity_changed)
+        self._vision_worker.visibility_update.connect(self._on_visibility_update)
+        self._vision_worker.start()
+        
+        # Cached vision results
+        self._cached_vision: Optional[VisionResult] = None
+        self._cached_visible_food: List[Tuple[float, float]] = []
+        self._cached_can_see_food: bool = False
+        self._cached_plant_proximity: float = 0.0
+        
+        # Vision update timer - updates worker with squid state
+        self._vision_update_timer = QtCore.QTimer()
+        self._vision_update_timer.timeout.connect(self._update_vision_worker)
+        self._vision_update_timer.start(50)  # 20 Hz updates
+        
+        # Scene object cache for vision worker
+        self._scene_objects_dirty = True
+        self._cached_scene_objects: List[SceneObject] = []
         
 
         if personality is None:
@@ -334,6 +365,119 @@ class Squid:
                     new_value=self._curiosity
                 )
 
+    def _on_food_visibility_changed(self, can_see: bool, food_positions: list):
+        """Handle food visibility change from vision worker"""
+        old_can_see = self._cached_can_see_food
+        self._cached_can_see_food = can_see
+        self._cached_visible_food = food_positions
+        
+        # React to visibility change
+        if can_see and not old_can_see:
+            # Food just became visible
+            if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+                if hasattr(self.tamagotchi_logic, 'brain_window'):
+                    self.tamagotchi_logic.brain_window.add_thought("I see food!")
+        
+        elif not can_see and old_can_see:
+            # Food just became invisible
+            self.pursuing_food = False
+            self.target_food = None
+
+    def _update_scene_objects(self):
+        """Update the cached scene objects for vision worker"""
+        if not self.tamagotchi_logic:
+            return
+        
+        try:
+            objects = []
+            
+            # Add food items
+            for item in self.tamagotchi_logic.food_items:
+                try:
+                    pos = item.pos()
+                    rect = item.boundingRect()
+                    objects.append(SceneObject(
+                        x=pos.x(),
+                        y=pos.y(),
+                        width=rect.width(),
+                        height=rect.height(),
+                        category='food',
+                        is_sushi=getattr(item, 'is_sushi', False)
+                    ))
+                except:
+                    pass
+            
+            # Add decorations from scene
+            if hasattr(self.ui, 'scene'):
+                for item in self.ui.scene.items():
+                    # Check if it's a decoration item
+                    if hasattr(item, 'category') and item.category in ('plant', 'rock', 'poop'):
+                        try:
+                            pos = item.pos()
+                            rect = item.boundingRect()
+                            objects.append(SceneObject(
+                                x=pos.x(),
+                                y=pos.y(),
+                                width=rect.width(),
+                                height=rect.height(),
+                                category=item.category
+                            ))
+                        except:
+                            pass
+            
+            # Send to vision worker
+            self._vision_worker.update_scene_objects(objects)
+            self._cached_scene_objects = objects
+            self._scene_objects_dirty = False
+            
+        except Exception as e:
+            print(f"Error updating scene objects: {e}")
+
+    def mark_scene_objects_dirty(self):
+        """Call when objects are added/removed from scene"""
+        self._scene_objects_dirty = True
+
+    def _update_vision_worker(self):
+        """Periodically update vision worker with current state"""
+        if not hasattr(self, '_vision_worker') or not self._vision_worker:
+            return
+        
+        # Update squid state
+        try:
+            squid_state = create_squid_vision_state(self)
+            self._vision_worker.update_squid_state(squid_state)
+        except Exception as e:
+            print(f"Error updating squid vision state: {e}")
+        
+        # FIX: Always update scene objects if food exists (because food moves constantly!)
+        # The dirty flag is only set when items are added/removed, but we need 
+        # fresh coordinates for sinking food items every cycle.
+        has_food = self.tamagotchi_logic and getattr(self.tamagotchi_logic, 'food_items', False)
+        
+        if self._scene_objects_dirty or has_food:
+            self._update_scene_objects()
+
+    def _on_plant_proximity_changed(self, proximity: float, plant_positions: list):
+        """Handle plant proximity change from vision worker"""
+        self._cached_plant_proximity = proximity
+        
+        # Could trigger calming effects when near plants
+        if proximity > 50 and hasattr(self, 'tamagotchi_logic'):
+            # Near a plant - slight anxiety reduction
+            if hasattr(self.tamagotchi_logic, 'plant_calming_effect_counter'):
+                self.tamagotchi_logic.plant_calming_effect_counter += 1
+    
+    def _on_visibility_update(self, result: VisionResult):
+        """Handle full visibility update from vision worker"""
+        # Discard stale updates if scene has changed since this calculation started
+        if getattr(self, '_scene_objects_dirty', False):
+            return
+
+        self._cached_vision = result
+        self._cached_visible_food = result.visible_food
+        self._cached_can_see_food = result.can_see_food
+        self._cached_plant_proximity = result.plant_proximity_value
+
     def _has_personality_starter_neuron(self) -> bool:
         """Return True if any starter neuron for this personality already exists."""
         if not hasattr(self, 'brain_widget') or not self.brain_widget:
@@ -394,9 +538,15 @@ class Squid:
                 target_angle = math.atan2(fy - sy, fx - sx)
 
                 # The hungrier, the more likely to snap gaze directly at food
-                hunger_factor = (self.hunger - 65) / 35.0  # 0.0 → 1.0 as hunger goes 65→100
+                hunger_factor = (self.hunger - 65) / 35.0  # 0.0 -> 1.0 as hunger goes 65->100
                 if random.random() < hunger_factor:
                     self.current_view_angle = target_angle
+                    
+                    # FIX: Force immediate vision sync when locked on
+                    # This bridges the gap between "looking" (angle set) and "seeing" (worker detection)
+                    # ensuring the squid immediately pursues what it just decided to look at.
+                    self._force_sync_vision_until = time.time() + 0.5 
+                    
                 else:
                     # Look near the food (curious glancing)
                     self.current_view_angle = target_angle + random.uniform(-0.8, 0.8)
@@ -406,7 +556,7 @@ class Squid:
             # Option 1: Direct brain hook refresh (most reliable)
             if hasattr(self.tamagotchi_logic, 'brain_hooks'):
                 # This recalculates all input neurons including can_see_food
-                QtCore.QTimer.singleShot(10, lambda: self.tamagotchi_logic.brain_hooks.get_input_neuron_values())
+                QtCore.QTimer.singleShot(10, lambda: self.tamagotchi_logic.apply_input_neurons_to_brain())
 
             # Option 2: Trigger full brain tick (fallback, also works)
             if hasattr(self.tamagotchi_logic, 'update_squid_brain'):
@@ -1084,49 +1234,103 @@ class Squid:
         """
         visible_objects = []
         for item in object_list:
-            item_x, item_y = item.pos().x(), item.pos().y()
-            if self.is_in_vision_cone(item_x, item_y):
+            # FIX: Use the center of the item instead of the top-left position.
+            # This ensures detection works if the cone touches the object body
+            # but misses the specific (0,0) origin point.
+            if hasattr(item, 'sceneBoundingRect'):
+                center = item.sceneBoundingRect().center()
+                check_x, check_y = center.x(), center.y()
+            else:
+                # Fallback for items not fully initialized in scene
+                check_x, check_y = item.pos().x(), item.pos().y()
+
+            if self.is_in_vision_cone(check_x, check_y):
                 visible_objects.append(item)
         return visible_objects
 
     def get_visible_food(self):
         """
-        Returns the positions of visible food items, prioritized by type (sushi first).
-        This method is now refactored to use the generic get_visible_objects.
+        Returns the positions of visible food items.
+        Includes a circuit breaker to prevent 'ghost' food detection.
         """
+        # 1. Circuit Breaker: If the logic system says there is no food, 
+        # we absolutely cannot see any, regardless of what the vision cache says.
+        # This fixes the "stuck at top" bug where the worker thread returns old data.
+        if self.tamagotchi_logic and not self.tamagotchi_logic.food_items:
+            return []
+
+        # 2. Force sync check if recently ate (handling worker latency)
+        # This ensures we don't act on stale worker data immediately after eating
+        if time.time() < getattr(self, '_force_sync_vision_until', 0):
+            return self._get_visible_food_sync()
+
+        # 3. If scene is dirty (items recently added/removed), the cache is invalid.
+        # Fall back to synchronous check which uses the authoritative list.
+        if getattr(self, '_scene_objects_dirty', False):
+            return self._get_visible_food_sync()
+
+        # 4. Use cached result if available and valid
+        if hasattr(self, '_cached_visible_food') and self._cached_visible_food is not None:
+            return self._cached_visible_food
+        
+        # 5. Fallback to synchronous calculation
+        return self._get_visible_food_sync()
+
+    def _get_visible_food_sync(self):
+        """Synchronous fallback for get_visible_food"""
         if self.tamagotchi_logic is None:
             return []
         
-        # Use the new generic method to find all food items in view
         all_visible_food_items = self.get_visible_objects(self.tamagotchi_logic.food_items)
-
+        
         if not all_visible_food_items:
             return []
-
+        
         # Sort visible food to prioritize sushi
         sushi_items = [item for item in all_visible_food_items if getattr(item, 'is_sushi', False)]
         other_food_items = [item for item in all_visible_food_items if not getattr(item, 'is_sushi', False)]
         
-        # Return sorted positions
         sorted_positions = [(food.pos().x(), food.pos().y()) for food in sushi_items]
         sorted_positions.extend([(food.pos().x(), food.pos().y()) for food in other_food_items])
         
         return sorted_positions
+
+    def can_see_food(self) -> bool:
+        """
+        Quick check if food is visible.
+        Uses cached result from vision worker.
+        """
+        if hasattr(self, '_cached_can_see_food'):
+            return self._cached_can_see_food
+        return len(self.get_visible_food()) > 0
+
+    def get_plant_proximity(self) -> float:
+        """
+        Get the current plant proximity value (0-100).
+        Uses cached result from vision worker.
+        """
+        if hasattr(self, '_cached_plant_proximity'):
+            return self._cached_plant_proximity
+        return 0.0
     
     def get_visible_plants(self):
-        """Finds plant decorations that are within the squid's vision cone."""
+        """
+        Finds plant decorations that are within the squid's vision cone.
+        Uses cached result from vision worker when available.
+        """
+        if hasattr(self, '_cached_vision') and self._cached_vision:
+            return self._cached_vision.visible_plants
+        
+        # Fallback to synchronous calculation
         if self.tamagotchi_logic is None:
             return []
-
-        # Get all items in the scene that are categorized as 'plant'
+        
         all_plants = []
         for item in self.tamagotchi_logic.user_interface.scene.items():
             if hasattr(item, 'category') and item.category == 'plant':
                 all_plants.append(item)
-
-        # Use the existing generic vision function to see which plants are visible
-        visible_plants = self.get_visible_objects(all_plants)
-        return visible_plants
+        
+        return self.get_visible_objects(all_plants)
 
     def is_in_vision_cone(self, x, y):
         """
@@ -1188,6 +1392,16 @@ class Squid:
     
     def change_view_cone_direction(self):
         self.current_view_angle = random.uniform(0, 2 * math.pi)
+
+    def cleanup_vision_worker(self):
+        """Clean up vision worker - call before squid destruction"""
+        if hasattr(self, '_vision_update_timer') and self._vision_update_timer:
+            self._vision_update_timer.stop()
+        
+        if hasattr(self, '_vision_worker') and self._vision_worker:
+            self._vision_worker.stop()
+            self._vision_worker.wait(1000)
+            self._vision_worker = None
 
     def move_squid(self):
         """
@@ -1321,6 +1535,11 @@ class Squid:
         self.move_squid()
 
     def eat(self, food_item):
+        # FIX: Force synchronous vision for a short time to prevent "ghost" food
+        # This prevents the vision worker from reporting the just-eaten food as visible
+        # before it has processed the scene update.
+        self._force_sync_vision_until = time.time() + 0.5
+
         effects = {}
 
         # Basic effects for all food types
@@ -1376,6 +1595,14 @@ class Squid:
 
         # Visual/behavioral effects
         self.tamagotchi_logic.remove_food(food_item)
+
+        # --- FIX Clear vision cache immediately ---
+        # This prevents the squid from "seeing" the ghost of the food it just ate
+        # and getting stuck in 'pursuing_food' mode at the top of the screen.
+        self._cached_visible_food = []
+        self._cached_can_see_food = False
+        # --- FIX END ---
+
         self.show_eating_effect()
         self.start_poop_timer()
         self.pursuing_food = False
@@ -1706,8 +1933,11 @@ class Squid:
         self.squid_item.setPixmap(self.current_image())
 
     def current_image(self):
-        """Return the current image of the squid, with tint applied only to white parts."""
-        # Base image selection logic (same as before)
+        """
+        Return the current image of the squid, with tint applied using
+        CompositionMode_SourceAtop to tint all non-transparent pixels.
+        """
+        # 1. Select the base image based on status/direction
         if hasattr(self, 'startled_transition') and self.startled_transition:
             base_image = self.startled_image
         elif hasattr(self, 'status') and self.status == "startled" and not self.is_sleeping:
@@ -1724,48 +1954,33 @@ class Squid:
         else:
             base_image = self.images["left1"]
 
-        # If no tint color is set, return the original image
+        # 2. If no tint, return immediately
         if not self.tint_color:
             return base_image
 
-        # --- Corrected Tinting Logic ---
-
-        # Convert the QPixmap to a QImage for pixel-level access
-        source_image = base_image.toImage()
-
-        # Create a new QImage to draw our modified squid onto.
-        # Using Format_ARGB32 is crucial for handling transparency correctly
-        # and preventing the black background issue.
-        output_image = QtGui.QImage(source_image.size(), QtGui.QImage.Format_ARGB32)
-        output_image.fill(QtCore.Qt.transparent)  # Start with a fully transparent canvas
-
-        white_threshold = 240
-
-        # Iterate over every pixel in the source image
-        for y in range(source_image.height()):
-            for x in range(source_image.width()):
-                # Get the color of the current pixel from the source
-                pixel_color = QtGui.QColor(source_image.pixel(x, y))
-
-                # Check if the pixel is 'white enough' and not fully transparent
-                if (pixel_color.alpha() > 0 and
-                    pixel_color.red() > white_threshold and
-                    pixel_color.green() > white_threshold and
-                    pixel_color.blue() > white_threshold):
-                    
-                    # If it's a white pixel, apply the tint color
-                    new_color = QtGui.QColor(self.tint_color)
-                    # Preserve the original pixel's alpha value to keep smooth edges
-                    new_color.setAlpha(pixel_color.alpha())
-                    output_image.setPixelColor(x, y, new_color)
-                else:
-                    # For any other pixel (the outline, or fully transparent areas),
-                    # just copy it directly from the source. This ensures the background
-                    # remains transparent.
-                    output_image.setPixel(x, y, source_image.pixel(x, y))
-
-        # Convert the modified QImage back to a QPixmap and return it
-        return QtGui.QPixmap.fromImage(output_image)
+        # 3. Apply robust tinting using QPainter
+        # Create a blank canvas the size of the image
+        result = QtGui.QPixmap(base_image.size())
+        result.fill(QtCore.Qt.transparent)
+        
+        painter = QtGui.QPainter(result)
+        
+        # Draw the base squid
+        painter.drawPixmap(0, 0, base_image)
+        
+        # Draw the tint color over it, keeping the squid's alpha channel
+        # CompositionMode_SourceAtop keeps destination alpha (squid shape) 
+        # but paints source (color) over it.
+        painter.setCompositionMode(QtGui.QPainter.CompositionMode_SourceAtop)
+        
+        # Use a semi-transparent version of the tint so texture shows through
+        tint = QtGui.QColor(self.tint_color)
+        tint.setAlpha(120)  # Adjust 0-255 for tint strength (120 is usually good)
+        painter.fillRect(result.rect(), tint)
+        
+        painter.end()
+        
+        return result
 
     def move_randomly(self):
         if random.random() < 0.20:

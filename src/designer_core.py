@@ -59,6 +59,11 @@ class DesignerNeuron:
             self.neuron_type = NeuronType.SENSOR
             self.color = DEFAULT_COLORS.get('required', (100, 180, 100))
             self.is_binary = True
+        elif self.name.startswith('connector_') or self.neuron_type == NeuronType.CONNECTOR:
+            self.neuron_type = NeuronType.CONNECTOR
+            self.color = DEFAULT_COLORS['connector']
+        # ----------------------
+
         elif is_input_sensor(self.name):
             self.neuron_type = NeuronType.SENSOR
             self.color = DEFAULT_COLORS['sensor']

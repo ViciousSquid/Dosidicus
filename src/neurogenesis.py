@@ -346,10 +346,16 @@ class FunctionalNeuron:
         
         for neuron, activation in ctx.active_neurons.items():
             if neuron in all_neurons:
-                deviation = abs(activation - 50)
+                # Ensure activation is numeric
+                try:
+                    activation_value = float(activation) if isinstance(activation, (int, float, str)) else 50.0
+                except (ValueError, TypeError):
+                    activation_value = 50.0
+                    
+                deviation = abs(activation_value - 50)
                 if deviation > 20:
                     weight = (deviation / 50) * 0.8
-                    if activation < 50:
+                    if activation_value < 50:
                         weight = -weight
                     connections[neuron] = weight
         
@@ -512,42 +518,36 @@ class EnhancedNeurogenesis:
         )
     
     def _create_neuron_internal(self, ctx: ExperienceContext,
-                            trigger_value_for_log: Optional[float] = None,
-                            is_emergency: bool = False) -> Optional[str]:
+                                trigger_value_for_log: Optional[float] = None,
+                                is_emergency: bool = False) -> Optional[str]:
         trigger_type = ctx.trigger_type
 
-        # 1. HARD TYPE CAP 
+        # 1. HARD TYPE CAP
         max_per_type = self.config.neurogenesis.get('max_per_type', {
-            'stress': 5, 'novelty': 6, 'reward': 6
+            'stress': 5, 'novelty': 6, 'reward': 6, 'connector': 10
         })
         max_for_this_type = max_per_type.get(trigger_type, 5)
+
         current_type_count = len([
             name for name, fn in self.functional_neurons.items()
             if fn.neuron_type == trigger_type
         ])
+
         if current_type_count >= max_for_this_type:
-            msg = loc('log_type_cap_reached', 
-                     default="Type cap reached for {type} ({count}/{max}), strengthening existing",
-                     type=trigger_type, count=current_type_count, max=max_for_this_type)
+            msg = loc(
+                'log_type_cap_reached',
+                default="Type cap reached for {type} ({count}/{max}), strengthening existing",
+                type=trigger_type,
+                count=current_type_count,
+                max=max_for_this_type
+            )
             print(f"   {msg}")
             self._strengthen_existing_neuron(trigger_type, self._preview_specialization(ctx))
             return None
 
-        # 2. SPECIALIZATION CAP
+        # 2. SPECIALIZATION
         spec = self._preview_specialization(ctx)
         base_name = f"{trigger_type}_{spec}"
-        max_per_spec = self.config.neurogenesis.get('max_per_specialization', 5)
-        current_spec_count = len([
-            name for name in self.brain_widget.neuron_positions.keys()
-            if name.startswith(base_name)
-        ])
-        if current_spec_count >= max_per_spec:
-            msg = loc('log_spec_cap_reached',
-                     default="Specialization cap reached for {spec}, strengthening existing",
-                     spec=base_name)
-            print(f"   {msg}")
-            self._strengthen_existing_neuron(trigger_type, spec)
-            return None
 
         # 3. GLOBAL NEURON LIMIT
         current_total = len(self.brain_widget.neuron_positions) - len(self.brain_widget.excluded_neurons)
@@ -556,73 +556,62 @@ class EnhancedNeurogenesis:
             print(f"   Max neurons reached ({current_total}/{max_neurons})")
             return None
 
-        # ---------- creation proceeds ----------
+        # ---------- CREATE FUNCTIONAL NEURON ----------
         neuron_name = self._get_unique_neuron_name(base_name)
         func_neuron = FunctionalNeuron(neuron_name, trigger_type, ctx)
         self.functional_neurons[neuron_name] = func_neuron
 
+        # Track stats
         if trigger_type == 'novelty':
             self.novelty_neuron_count += 1
         self.last_creation_by_type[trigger_type] = time.time()
         self.neurons_created_this_session += 1
 
+        # ---------- POSITION ----------
         position = self._calculate_functional_position(func_neuron)
         self.brain_widget.neuron_positions[neuron_name] = position
+
+        # ---------- APPEARANCE (CRITICAL FIX) ----------
+        # This guarantees connector neurons are tagged BEFORE render-state snapshot
         self._set_neuron_appearance(neuron_name, func_neuron)
+
+        # ---------- INITIAL STATE ----------
         self.brain_widget.state[neuron_name] = 50.0
 
-        all_neurons = list(self.brain_widget.neuron_positions.keys())
-        connections = func_neuron.get_functional_connections(all_neurons)
+        # ---------- CONNECTIONS ----------
+        connections = func_neuron.get_functional_connections(
+            list(self.brain_widget.neuron_positions.keys())
+        )
+
         for target, weight in connections.items():
+            if abs(weight) < 0.05:
+                continue
             self.brain_widget.weights[(neuron_name, target)] = weight
-
-        if func_neuron.neuron_type == 'stress' and 'anxiety' in all_neurons:
-            self.brain_widget.weights[(neuron_name, 'anxiety')] = -0.8
-            self.brain_widget.weights[('anxiety', neuron_name)] = 0.9
-            print(f"   📎 {loc('log_bidirectional_link', default='Added bidirectional link')}: anxiety ↔ {func_neuron.display_name}")
-
-        for target in all_neurons:
-            if target == neuron_name or target in self.brain_widget.excluded_neurons:
-                continue
-            if (neuron_name, target) in self.brain_widget.weights:
-                continue
-            seed = random.uniform(-0.08, 0.08)
-            self.brain_widget.weights[(neuron_name, target)] = seed
-            self.brain_widget.weights[(target, neuron_name)] = seed * 0.5
 
         self._make_reciprocal_connections(neuron_name)
 
+        # ---------- VISIBILITY ----------
         if hasattr(self.brain_widget, 'visible_neurons'):
             self.brain_widget.visible_neurons.add(neuron_name)
-        self.brain_widget.communication_events[neuron_name] = time.time()
+
+        # ---------- HIGHLIGHT ----------
         self.brain_widget.neurogenesis_highlight = {
             'neuron': neuron_name,
             'start_time': time.time(),
-            'duration': 5.0,
+            'duration': 8.0 if trigger_type == 'connector' else 4.0,
             'pulse_phase': 0
         }
 
-        # logging
-        self._log_neuron_creation(neuron_name, trigger_type, spec, trigger_value_for_log)
-        
-        # CRITICAL FIX: Explicitly save display_name for the UI to read
-        details = self.brain_widget.neurogenesis_data.setdefault('new_neurons_details', {})
-        details[neuron_name] = {
-            'created_at': ctx.timestamp,
-            'trigger_type': trigger_type,
-            'trigger_value_at_creation': trigger_value_for_log or 0,
-            'specialisation': spec,
-            'display_name': func_neuron.display_name  # <-- Localized name added here
-        }
+        # ---------- LOG ----------
+        self._log_neuron_creation(
+            neuron_name,
+            trigger_type,
+            spec,
+            trigger_value_for_log
+        )
 
-        if self._on_neuron_created_callback:
-            try:
-                self._on_neuron_created_callback(neuron_name, trigger_type)
-            except Exception as e:
-                print(f"Neuron creation callback error: {e}")
-
-        print(f"✨ {loc('log_created_neuron', default='Created neuron')}: {func_neuron.display_name} ({neuron_name})")
         return neuron_name
+
     
     def _on_neuron_created(self, neuron_name: str, neuron_type: str):
         self._trigger_link_toggle_effect()
@@ -837,11 +826,17 @@ class EnhancedNeurogenesis:
         neuron_type = func_neuron.neuron_type
         
         shape_map = {
-            'novelty': 'diamond', 
-            'stress': 'square', 
-            'reward': 'triangle',
-            'connector': 'hexagon'
-        }
+        'novelty': 'diamond', 
+        'stress': 'square', 
+        'reward': 'triangle',
+        'connector': 'hexagon'
+    }
+    
+        assigned_shape = shape_map.get(neuron_type, 'circle')
+        self.brain_widget.neuron_shapes[name] = assigned_shape
+        
+        # ADD THIS DEBUG PRINT
+        print(f"🔧 SET NEURON APPEARANCE: {name} -> type={neuron_type}, shape={assigned_shape}")
         
         self.brain_widget.neuron_shapes[name] = shape_map.get(neuron_type, 'circle')
         
@@ -1196,8 +1191,13 @@ class EnhancedNeurogenesis:
         return int((r + m) * 255), int((g + m) * 255), int((b + m) * 255)
     
     def intelligent_pruning(self) -> Optional[str]:
+        """Remove weakly connected neurons, but never prune connectors."""
         candidates = []
         for name, func_neuron in self.functional_neurons.items():
+            # Skip connector neurons from pruning (they serve a structural purpose)
+            if func_neuron.neuron_type == 'connector':
+                continue
+            
             if time.time() - func_neuron.creation_context.timestamp < 300: continue
             score = 0.0
             score += func_neuron.utility_score * 0.4

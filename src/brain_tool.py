@@ -157,12 +157,23 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Update brain widget
         if hasattr(self, 'brain_widget'):
             self.brain_widget.tamagotchi_logic = tamagotchi_logic
+            
+            # 🔽 ADD THIS BLOCK: Load output bindings if they exist 🔽
+            if (hasattr(self.brain_widget, 'output_bindings') and 
+                self.brain_widget.output_bindings and
+                hasattr(tamagotchi_logic, 'neuron_output_monitor') and
+                tamagotchi_logic.neuron_output_monitor):
+                
+                tamagotchi_logic.neuron_output_monitor.load_bindings_from_brain({
+                    'output_bindings': self.brain_widget.output_bindings
+                })
+                print(f"  ✓ Loaded {len(self.brain_widget.output_bindings)} output bindings into Monitor")
         
         # Update all tabs
         for tab_attr in ['memory_tab', 'network_tab', 'learning_tab', 'decisions_tab', 'about_tab']:
             if hasattr(self, tab_attr):
                 tab = getattr(self, tab_attr)
-                if hasattr(tab, 'set_tamagotchi_logic'):
+                if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:
                     tab.set_tamagotchi_logic(tamagotchi_logic)
 
     def setup_decorations_shortcut(self):

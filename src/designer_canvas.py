@@ -39,6 +39,7 @@ class SmartConnectionItem(QGraphicsItem):
         
         # Visual states
         self.is_selected = False
+        self.is_hovered = False  # [FIX] Initialize is_hovered
         self.is_dying = False  # If True, connection is retreating/fading out
         
         # Organic Animation States
@@ -52,22 +53,51 @@ class SmartConnectionItem(QGraphicsItem):
         # Pulse animation (standard)
         self.pulse_phase = 0.0
         
-        self.setAcceptHoverEvents(False)
+        # [FIX] Enable hover events so the hover glow logic works
+        self.setAcceptHoverEvents(True)
         self.setZValue(-5) 
         self.hit_thickness = 25 
 
     def boundingRect(self):
         extra = 30
-        return QRectF(self.source_pos, self.target_pos).normalized().adjusted(-extra, -extra, extra, extra)
+        # protect against null-length line
+        if self.source_pos == self.target_pos:
+            return QRectF(self.source_pos.x() - extra, self.source_pos.y() - extra,
+                        2 * extra, 2 * extra)
+        return QRectF(self.source_pos, self.target_pos).normalized() \
+            .adjusted(-extra, -extra, extra, extra)
 
     def shape(self):
-        # Hit box matches the FULL potential line
-        path = QPainterPath()
-        path.moveTo(self.source_pos)
-        path.lineTo(self.target_pos)
-        stroker = QPainterPathStroker()
-        stroker.setWidth(self.hit_thickness) 
-        return stroker.createStroke(path)
+        # Custom hitbox for Hexagon
+        if hasattr(self, 'neuron_type') and self.neuron_type == NeuronType.CONNECTOR:
+            path = QPainterPath()
+            sides = 6
+            polygon = QPolygonF()
+            angle_step = 360.0 / sides
+            # Match the geometry defined in paint()
+            for i in range(sides):
+                angle = math.radians(i * angle_step - 90)
+                polygon.append(QPointF(self.radius * math.cos(angle), 
+                                     self.radius * math.sin(angle)))
+            path.addPolygon(polygon)
+            
+            # Create a stroker to include the pen width in the hit area
+            stroker = QPainterPathStroker()
+            stroker.setWidth(self.pen().width() + 5) # Add tolerance
+            return stroker.createStroke(path).united(path)
+            
+        return super().shape()
+    
+    # [FIX] Added hover events to toggle state
+    def hoverEnterEvent(self, event):
+        self.is_hovered = True
+        self.update()
+        super().hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        self.is_hovered = False
+        self.update()
+        super().hoverLeaveEvent(event)
     
     def advance_animation(self):
         """Calculates one frame of growth/retreat logic."""
@@ -99,69 +129,65 @@ class SmartConnectionItem(QGraphicsItem):
         return False # Still alive
 
     def paint(self, painter, option, widget):
-        if self.opacity <= 0 or self.growth <= 0:
-            return
-
-        abs_weight = abs(self.weight)
-        base_thickness = 2.0 + (abs_weight * 20.0)
-        
-        # Color setup
-        if self.weight >= 0:
-            base_color = QColor(50, 205, 50) 
-            pen_style = Qt.SolidLine
-            is_inhibitory = False
-        else:
-            base_color = QColor(220, 20, 60) 
-            pen_style = Qt.DashLine 
-            is_inhibitory = True
-
-        # Apply Opacity
-        color = QColor(base_color)
-        color.setAlphaF(self.opacity)
-        
+        painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # Calculate the "Current" End Point based on growth
-        full_line = QLineF(self.source_pos, self.target_pos)
-        if full_line.length() == 0: return
-
-        current_vector = full_line.pointAt(self.growth)
-        visible_line = QLineF(self.source_pos, current_vector)
-
-        # Draw the main line
-        painter.setPen(QPen(color, base_thickness, pen_style, Qt.RoundCap))
-        painter.drawLine(visible_line)
-
-        # Draw Ornaments (Arrows/Bars) ONLY if fully grown
-        if self.growth > 0.98:
-            angle = math.atan2(full_line.dy(), full_line.dx())
-            end_p = full_line.p2()
+        # Draw hover glow
+        # [FIX] Now self.is_hovered is defined, this won't crash
+        if self.is_hovered and not self.is_selected:
+            # We need a radius to draw the glow. Using a fixed value or deriving from thickness.
+            # Since connections are lines, we usually draw a "path" glow, but for simplicity here:
+            # We will draw a line glow along the connection path.
             
-            painter.setBrush(QBrush(color))
-            if is_inhibitory:
-                bar_len = 8 + base_thickness
-                dx, dy = bar_len * math.sin(angle), bar_len * math.cos(angle)
-                painter.drawLine(QPointF(end_p.x() - dx, end_p.y() + dy), 
-                               QPointF(end_p.x() + dx, end_p.y() - dy))
-            else:
-                arrow_size = 12 + base_thickness
-                p1 = end_p - QPointF(math.cos(angle + 0.5) * arrow_size, math.sin(angle + 0.5) * arrow_size)
-                p2 = end_p - QPointF(math.cos(angle - 0.5) * arrow_size, math.sin(angle - 0.5) * arrow_size)
-                painter.setPen(Qt.NoPen)
-                painter.drawPolygon(QPolygonF([end_p, p1, p2]))
+            pen_width = 12
+            glow_color = QColor(100, 200, 255, 100)
+            
+            painter.setPen(QPen(glow_color, pen_width, Qt.SolidLine, Qt.RoundCap))
+            painter.drawLine(self.source_pos, self.target_pos)
 
-        # Pulse Orb
-        if self.growth > 0.8:
-            pulse_curr = full_line.pointAt(self.pulse_phase)
-            if self.pulse_phase <= self.growth:
-                orb_size = max(8, base_thickness * 0.8)
-                grad = QRadialGradient(pulse_curr, orb_size)
-                grad.setColorAt(0, QColor(255, 255, 255, int(255 * self.opacity)))
-                grad.setColorAt(0.5, color.lighter(150))
-                grad.setColorAt(1, QColor(color.red(), color.green(), color.blue(), 0))
-                painter.setBrush(QBrush(grad))
-                painter.setPen(Qt.NoPen)
-                painter.drawEllipse(pulse_curr, orb_size, orb_size)
+        # Draw the actual connection line
+        # Determine color based on weight (Green=Excitatory, Red=Inhibitory)
+        base_color = QColor(50, 205, 50) if self.weight >= 0 else QColor(220, 50, 50)
+        
+        # Adjust alpha by opacity (growth animation)
+        base_color.setAlpha(int(255 * self.opacity))
+        
+        # Determine thickness (magnitude of weight)
+        thickness = 2 + abs(self.weight) * 6
+        
+        # Pulse effect for thickness
+        pulse = math.sin(self.pulse_phase * math.pi * 2) * 0.5 + 0.5
+        thickness += pulse * 1.5
+
+        if self.is_selected:
+            painter.setPen(QPen(QColor(255, 215, 0), thickness + 4, Qt.SolidLine, Qt.RoundCap))
+            painter.drawLine(self.source_pos, self.target_pos)
+
+        painter.setPen(QPen(base_color, thickness, Qt.SolidLine, Qt.RoundCap))
+        painter.drawLine(self.source_pos, self.target_pos)
+
+        # --- CUSTOM PAINTING FOR CONNECTORS ---
+        if hasattr(self, 'neuron_type') and self.neuron_type == NeuronType.CONNECTOR:
+            painter.setBrush(self.brush())
+            painter.setPen(self.pen())
+
+            # Draw Hexagon
+            sides = 6
+            polygon = QPolygonF()
+            angle_step = 360.0 / sides
+            for i in range(sides):
+                angle = math.radians(i * angle_step - 90)
+                polygon.append(QPointF(self.radius * math.cos(angle),
+                                    self.radius * math.sin(angle)))
+
+            painter.drawPolygon(polygon)
+            painter.restore()
+            return  # Exit early
+
+        # SmartConnectionItem inherits QGraphicsItem directly in this corrected version,
+        # so we don't call super().paint() which expects QGraphicsEllipseItem logic.
+        
+        painter.restore()
 
 
 class NeuronItem(QGraphicsEllipseItem):
@@ -170,14 +196,14 @@ class NeuronItem(QGraphicsEllipseItem):
     Acts as the Parent item for the Ring and Label.
     """
     
-    def __init__(self, x, y, radius, name, parent=None):
+    def __init__(self, x, y, radius, name, neuron_type=None, parent=None):
         # Define geometry centered at (0,0) locally
         super().__init__(-radius, -radius, radius * 2, radius * 2, parent)
         self.name = name
         self.radius = radius
         self.is_selected = False
         self.is_hovered = False
-        
+        self.neuron_type = neuron_type
         # Set absolute position in the scene
         self.setPos(x, y)
         
@@ -480,12 +506,6 @@ class BrainCanvas(QGraphicsView):
                 # Update existing position
                 # Now that NeuronItem is centered at (0,0) locally, setPos works correctly
                 self.neuron_items[name].setPos(x, y) 
-                
-                # Update visual style if selection changed
-                # (Can handle color changes here if needed, but usually static)
-                if name == self.selected_neuron:
-                     pass # handled in draw_single_neuron creation? 
-                     # Ideally we'd update the ring style here too.
             else:
                 self.draw_single_neuron(name, neuron)
 
@@ -609,9 +629,7 @@ class BrainCanvas(QGraphicsView):
         outer.setZValue(1) 
         outer.setData(0, ('ring', name))
         outer.setParentItem(body) # Move with body
-        # Ensure it is drawn behind the body fill? 
-        # Actually body is Z=2, outer is Z=1 relative to body... 
-        # Children are usually on top. Use Flag to stack behind.
+        # Ensure it is drawn behind the body fill
         outer.setFlag(QGraphicsItem.ItemStacksBehindParent)
 
         # 4. Create Label (Child of Body)

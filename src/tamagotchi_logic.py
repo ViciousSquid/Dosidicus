@@ -17,6 +17,7 @@ from .config_manager import ConfigManager
 from .plugin_manager import PluginManager
 from .brain_neuron_hooks import BrainNeuronHooks
 from .brain_neuron_outputs import NeuronOutputMonitor
+from .vision_worker import VisionWorker, create_squid_vision_state, extract_scene_objects
 
 from .custom_brain_loader import (
     get_custom_brain_save_data, 
@@ -42,7 +43,12 @@ class TamagotchiLogic:
         self.squid = squid
         self.brain_window = brain_window
         self.brain_hooks = BrainNeuronHooks(self)
-        self.neuron_output_monitor = NeuronOutputMonitor(self)
+
+        # Initialize Vision Worker
+        self.vision_worker = VisionWorker()
+        self.vision_worker.visibility_update.connect(self.handle_vision_update)
+        self.vision_worker.start()
+        self.latest_vision_result = None
         
         # Initialize rock interaction manager with config
         self.rock_interaction = RockInteractionManager(
@@ -69,6 +75,14 @@ class TamagotchiLogic:
         self.age_update_timer.timeout.connect(self.update_squid_age)
         self.age_update_timer.start(60000)  # 1 minute
 
+        # Decorations message system
+        self.decorations_message_count = 0
+        self.decorations_message_max = 3
+        self.last_decorations_message_time = 0
+        self.decorations_message_cooldown = 120  # 2 minutes in seconds
+        self.decorations_message_check_interval = 300  # 5 minutes in seconds
+        self.next_decorations_message_check = time.time() + random.randint(120, 300)  # 2-5 minutes from now
+
         # -------  curiosity / startle cooldowns  -------
         
         self.mental_states_enabled = True 
@@ -90,9 +104,16 @@ class TamagotchiLogic:
         self.plugin_manager = PluginManager()
         self.plugin_manager.set_tamagotchi_logic(self)
 
-        # Store save data that will be loaded later (we need it for achievements)
+        # Initialize Monitor so handlers can register
+        self.neuron_output_monitor = NeuronOutputMonitor(self)
+
+        # Register all built-in sensors with the plugin manager
+        # This makes them discoverable via plugin_manager.get_all_neuron_handler_info()
+        self.plugin_manager.register_all_sensors(self)
+
+        # Store save data that will be loaded later (needed for achievements)
         self._pending_save_data = None
-        
+    
         # Load save data FIRST (but don't apply it yet)
         save_data = self.save_manager.load_game()
         if save_data:
@@ -100,7 +121,7 @@ class TamagotchiLogic:
             print("✓ Save data loaded and cached for plugin initialization")
 
         # --- BLACKLIST MULTIPLAYER PLUGIN FROM AUTO-LOADING ---
-        blacklisted = {"multiplayer"}  # lowercase plugin key
+        blacklisted = {"multiplayer"}
         discovered = self.plugin_manager.discover_plugins()
         for name in list(discovered.keys()):
             if name.lower() in blacklisted:
@@ -131,7 +152,7 @@ class TamagotchiLogic:
         self.update_status_bar()
                     
         # Trigger startup hook
-        self.plugin_manager.trigger_hook("on_startup", 
+        self.plugin_manager.trigger_hook("on_startup",
                                         tamagotchi_logic=self,
                                         squid=self.squid,
                                         user_interface=self.user_interface)
@@ -150,7 +171,6 @@ class TamagotchiLogic:
         self.max_poop = 3
         self.points = 0
 
-        # ===== PERFORMANCE FIX: Decoration cache =====
         # Caches scene items to avoid iterating the entire scene every tick
         self._decoration_cache = []
         self._decoration_cache_time = 0
@@ -228,6 +248,12 @@ class TamagotchiLogic:
         self.squid.satisfaction = 50
         self.squid.anxiety = 10
         self.squid.curiosity = 55
+
+    def handle_vision_update(self, result):
+        """Cache the latest vision result and push to brain immediately."""
+        self.latest_vision_result = result
+        # [FIX] Push to brain now. Waiting for the 1-second timer causes lag/flicker.
+        self.apply_input_neurons_to_brain()
 
 
     def _initialize_plugins(self):
@@ -962,6 +988,11 @@ class TamagotchiLogic:
 
     def stop(self):
         """Stop all timers and clean up resources"""
+        # Stop Vision Worker
+        if hasattr(self, 'vision_worker') and self.vision_worker:
+            self.vision_worker.stop()
+            self.vision_worker.wait()
+
         # Stop main timers
         if hasattr(self, 'simulation_timer') and self.simulation_timer:
             self.simulation_timer.stop()
@@ -1288,73 +1319,65 @@ class TamagotchiLogic:
     def update_simulation(self):
         """
         Main simulation update loop.
-        
-        This method is called on each simulation tick and handles:
-        1. Plugin pre-update hooks
-        2. Object movement and animation
-        3. Squid behavior updates
-        4. Mental state processing
-        5. Neurogenesis tracking
-        6. Memory management
-        7. Brain state calculation with input sensors
-        8. Brain visualization update
-        9. Neuron OUTPUT processing (actuator neurons trigger behaviors)
-        10. Plugin post-update hooks
         """
-        # ===== PERFORMANCE TRACKING =====
         if _PERF_TRACKING_AVAILABLE:
             _sim_start = time.perf_counter()
             perf_tracker.increment("simulation_ticks")
         
-        # === 1. TRIGGER PRE-UPDATE HOOK ===
-        self.plugin_manager.trigger_hook(
-            "pre_update", 
-            tamagotchi_logic=self, 
-            squid=self.squid
-        )
+        # 1. Pre-update hook
+        self.plugin_manager.trigger_hook("pre_update", tamagotchi_logic=self, squid=self.squid)
         
-        # === 2. CHECK IF SIMULATION IS PAUSED ===
+        # 2. Paused?
         if self.simulation_speed == 0:
             return
         
-        # === 3. HANDLE EXISTING SIMULATION UPDATES ===
+        # Check for decorations message (randomly show D key reminder)
+        self._check_decorations_message()
+        
+        # 3. World updates
         self.move_objects()
         self.animate_poops()
         self.update_statistics()
-        
-        # Add poop interaction check
         self.check_poop_interaction()
         
+        # Update Vision Worker with new world state
+        if self.squid and hasattr(self, 'vision_worker') and self.vision_worker.isRunning():
+            # Send squid state
+            vision_state = create_squid_vision_state(self.squid)
+            self.vision_worker.update_squid_state(vision_state)
+            
+            # Send scene objects (food + extracted decorations)
+            # We pass self.food_items explicitly. extract_scene_objects finds the rest.
+            scene_objects = extract_scene_objects(self.user_interface.scene, self.food_items)
+            self.vision_worker.update_scene_objects(scene_objects)
+
         if self.squid:
-            # === 4. CORE SQUID UPDATES ===
+            # 4. Squid movement & behavior
             self.squid.move_squid()
             self.check_for_decoration_attraction()
             
-            # === 5. MENTAL STATE UPDATES ===
+            # 5. Mental states
             if self.mental_states_enabled:
                 self.check_for_startle()
                 self.check_for_curiosity()
             
-            # === 6. NEUROGENESIS TRACKING ===
+            # 6. Neurogenesis tracking
             self.track_neurogenesis_triggers()
             
-            # === 7. MEMORY MANAGEMENT ===
-            # During sleep, consolidate short-term memories to long-term
+            # 7. Memory management
             if self.squid.is_sleeping:
                 self.squid.memory_manager.review_and_transfer_memories()
             else:
                 self.squid.memory_manager.periodic_memory_management()
             
-            # === 8. PREPARE BRAIN STATE WITH NEUROGENESIS DATA ===
-            # Robust startled detection
+            # 8. Build core brain state
             is_startled_state = False
             if hasattr(self.squid, 'mental_state_manager') and self.squid.mental_state_manager:
                 is_startled_state = self.squid.mental_state_manager.is_state_active('startled')
-            elif hasattr(self.squid, 'status') and isinstance(self.squid.status, str):
-                is_startled_state = "startled" in self.squid.status.lower()
+            elif hasattr(self.squid, 'status'):
+                is_startled_state = "startled" in str(self.squid.status).lower()
             
             brain_state = {
-                # Core stats
                 "hunger": self.squid.hunger,
                 "happiness": self.squid.happiness,
                 "cleanliness": self.squid.cleanliness,
@@ -1362,110 +1385,149 @@ class TamagotchiLogic:
                 "satisfaction": self.squid.satisfaction,
                 "anxiety": self.squid.anxiety,
                 "curiosity": self.squid.curiosity,
-                
-                # State flags
                 "is_sick": self.squid.is_sick,
                 "is_sleeping": self.squid.is_sleeping,
                 "is_eating": getattr(self.squid, 'is_eating', False) or (self.squid.status == "eating"),
                 "pursuing_food": self.squid.pursuing_food,
                 "is_fleeing": getattr(self.squid, 'is_fleeing', False),
                 "is_startled": is_startled_state,
-                
-                # Position and movement
                 "direction": self.squid.squid_direction,
                 "position": (self.squid.squid_x, self.squid.squid_y),
-                
-                # Personality and status
                 "personality": self.squid.personality.value if isinstance(self.squid.personality, Personality) else str(self.squid.personality),
                 "status": self.squid.status,
-                
-                # Neurogenesis-specific additions
                 "novelty_exposure": self.neurogenesis_triggers['novel_objects'],
                 "sustained_stress": self.neurogenesis_triggers['high_stress_cycles'] / 10.0,
                 "recent_rewards": self.neurogenesis_triggers['positive_outcomes'],
-                
-                # Context for plugins
                 'recent_actions': self.recent_actions[-10:],
                 'food_count': len(self.food_items),
                 'poop_count': len(self.poop_items),
             }
             
-            # === 9. CALCULATE INPUT NEURON VALUES (SENSORS) ===
-            # This automatically populates values for all registered input neurons
-            # like external_stimulus, plant_proximity, threat_level, etc.
-            # Also includes any plugin-registered custom sensors.
+            # 9. CRITICAL: Merge real-time sensor inputs (can_see_food, etc.)
             if hasattr(self, 'brain_hooks'):
                 input_values = self.brain_hooks.get_input_neuron_values()
-                brain_state.update(input_values)
+                brain_state.update(input_values)  # This makes can_see_food work!
             
-            # === 10. UPDATE BRAIN VISUALIZATION ===
+            # 10. Send full state to brain visualization
             self.brain_window.update_brain(brain_state)
             
-            # === 11. TRACK STATE AND CHECK FOR NEUROGENESIS EXPERIENCES ===
-            if hasattr(self.brain_window, 'brain_widget') and \
-            hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis'):
+            # 11. Neurogenesis experience tracking
+            if (hasattr(self.brain_window, 'brain_widget') and 
+                hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis')):
                 neuro = self.brain_window.brain_widget.enhanced_neurogenesis
-                
-                # Track current action
                 current_status = getattr(self.squid, 'status', 'roaming')
                 action_to_track = self._normalize_action_name(current_status)
                 neuro.track_action(action_to_track)
-                
-                # Track state change for experience detection
                 neuro.track_state_change(brain_state)
                 
-                # Build environment context
                 environment = {
                     'food_count': len(self.food_items),
                     'poop_count': len(self.poop_items),
                     'is_sick': self.squid.is_sick,
                     'is_eating': brain_state.get('is_eating', False),
-                    'has_rock': hasattr(self, 'rock_items') and len(getattr(self, 'rock_items', [])) > 0,
+                    'has_rock': len(getattr(self, 'rock_items', [])) > 0,
                     'new_object_encountered': self.new_object_encountered,
                     'recent_positive_outcome': self.recent_positive_outcome
                 }
-                
-                # Check and capture experiences
                 neuro.check_and_capture_experience(brain_state, environment)
             
-            # === 12. PROCESS NEURON OUTPUTS (ACTUATORS) ===
-            # This is where custom neurons can trigger game behaviors!
-            # When a neuron's activation exceeds its threshold, the bound hook fires.
-            if hasattr(self, 'neuron_output_monitor') and self.neuron_output_monitor:
-                self.neuron_output_monitor.process_outputs()
+            # 12. Process neuron outputs → game behaviors
+            if hasattr(self, 'neuron_output_monitor'):
+                self.neuron_output_monitor.process_outputs()  # This triggers seek_food, flee, etc.
             
-            # === 13. RESET FRAME-SPECIFIC FLAGS ===
+            # 13. Reset per-frame flags
             self.new_object_encountered = False
             self.recent_positive_outcome = False
             
-            # === 14. HUNGER SCORING ===
-            if self.squid.hunger == 0 or self.squid.hunger >= 99:
+            # 14. Hunger scoring
+            if self.squid.hunger <= 1 or self.squid.hunger >= 99:
                 self.statistics_window.update_score()
         
-        # === 15. DECAY ENVIRONMENTAL TRACKERS ===
+        # 15. Decay environmental stimulus trackers (window resize, clicks, etc.)
         if hasattr(self, 'brain_hooks'):
             self.brain_hooks.update_decay()
         
-        # === 16. TRIGGER POST-UPDATE HOOK ===
-        self.plugin_manager.trigger_hook(
-            "post_update",
-            tamagotchi_logic=self,
-            squid=self.squid
-        )
+        # 16. Post-update hook
+        self.plugin_manager.trigger_hook("post_update", tamagotchi_logic=self, squid=self.squid)
         
-        # ===== END PERFORMANCE TRACKING =====
+        # End performance tracking
         if _PERF_TRACKING_AVAILABLE:
             _sim_elapsed = (time.perf_counter() - _sim_start) * 1000
             perf_tracker.record("simulation_tick", _sim_elapsed)
 
+    def apply_input_neurons_to_brain(self):
+        """
+        Apply real-time sensor values to the brain's input neurons.
+        Without this, can_see_food, plant_proximity, external_stimulus, etc. will NEVER update.
+        """
+        if not self.brain_window or not self.brain_window.brain_widget:
+            return
+
+        brain_widget = self.brain_window.brain_widget
+
+        # Get fresh input neuron values (this calls calculate_can_see_food(), etc.)
+        input_values = self.brain_hooks.get_input_neuron_values()
+
+        # Override specific neurons with VisionWorker results if available
+        # This prioritizes the async worker result over the synchronous check
+        if self.latest_vision_result:
+            # Overwrite the hook's calculation with the worker's result
+            input_values['can_see_food'] = 100.0 if self.latest_vision_result.can_see_food else 0.0
+            
+            # Use worker for plant proximity if available
+            if hasattr(self.latest_vision_result, 'plant_proximity_value'):
+                 input_values['plant_proximity'] = self.latest_vision_result.plant_proximity_value
+
+        if not input_values:
+            return
+
+        # Directly inject into the brain state
+        # This overrides any propagation — input neurons are driven by the world, not the network
+        for neuron_name, activation in input_values.items():
+            # 1. Update visual/display state (what the user sees)
+            if neuron_name in brain_widget.state:
+                brain_widget.state[neuron_name] = activation
+            
+            # 2. CRITICAL FIX: Ensure internal neuron dict is also updated.
+            # If we don't do this, the local simulation logic might use an old value.
+            if hasattr(brain_widget, 'neurons') and neuron_name in brain_widget.neurons:
+                brain_widget.neurons[neuron_name]['activation'] = activation
+
+            # Optional: also update any cached activations if used in older logic/plugins
+            if hasattr(brain_widget, 'neuron_activations') and neuron_name in brain_widget.neuron_activations:
+                brain_widget.neuron_activations[neuron_name] = activation
+
+        # CRITICAL ADDITION: Push these new values to the worker thread immediately.
+        # Without this, the background worker has "stale" data (e.g., can_see_food=0) 
+        # while the UI shows 100. This ensures Hebbian learning uses the correct values.
+        if hasattr(brain_widget, '_update_worker_cache'):
+            brain_widget._update_worker_cache()
+
+        # Force a repaint to show immediate change
+        brain_widget.update()
+
+    def _check_decorations_message(self):
+        """Check if we should show the decorations window reminder message"""
+        current_time = time.time()
+        
+        # Only check if we haven't shown the max times and enough time has passed
+        if (self.decorations_message_count < self.decorations_message_max and 
+            current_time >= self.next_decorations_message_check):
+            
+            # Show the message
+            self.show_message("Press D to open the Decorations window")
+            self.decorations_message_count += 1
+            self.last_decorations_message_time = current_time
+            
+            # Schedule next check for 2-5 minutes from now
+            self.next_decorations_message_check = current_time + random.randint(
+                self.decorations_message_cooldown, 
+                self.decorations_message_check_interval
+            )
+            
+
 
     def update_squid_brain(self):
-        """
-        Update the squid's brain visualization and process neural network.
-        
-        This is called on a separate timer from update_simulation for
-        potentially different update rates.
-        """
         if not self.squid or not self.brain_window.isVisible():
             return
 
@@ -1477,7 +1539,6 @@ class TamagotchiLogic:
             is_startled_state = "startled" in self.squid.status.lower()
 
         brain_state = {
-            # Core stats
             "hunger": self.squid.hunger,
             "happiness": self.squid.happiness,
             "cleanliness": self.squid.cleanliness,
@@ -1485,33 +1546,41 @@ class TamagotchiLogic:
             "anxiety": self.squid.anxiety,
             "curiosity": self.squid.curiosity,
             "satisfaction": self.squid.satisfaction,
-            
-            # State flags
             "is_sick": self.squid.is_sick,
-            "is_eating": getattr(self.squid, 'is_eating', False) or (self.squid.status == "eating"),
+            "is_eating": self.squid.is_eating if hasattr(self.squid, 'is_eating') else (self.squid.status == "eating"),
             "is_sleeping": self.squid.is_sleeping,
             "pursuing_food": self.squid.pursuing_food,
             "is_fleeing": getattr(self.squid, 'is_fleeing', False),
             "is_startled": is_startled_state,
-            
-            # Position and context
             "direction": self.squid.squid_direction,
             "position": (self.squid.squid_x, self.squid.squid_y),
             "personality": self.squid.personality.value if isinstance(self.squid.personality, Personality) else str(self.squid.personality),
             "status": self.squid.status,
-            
-            # Additional context
             'recent_actions': self.recent_actions[-10:],
             'food_count': len(self.food_items),
             'poop_count': len(self.poop_items),
         }
 
-        # === DYNAMIC PERCEPTION (INPUT SENSORS) ===
+        # === DYNAMIC PERCEPTION ===
         if hasattr(self, 'brain_hooks'):
             input_values = self.brain_hooks.get_input_neuron_values()
+            
+            # Override with VisionWorker results
+            if self.latest_vision_result:
+                input_values['can_see_food'] = 100.0 if self.latest_vision_result.can_see_food else 0.0
+            
             brain_state.update(input_values)
 
-            # Critical: decay temporal sensors so they don't stick forever
+            # --- Force-sync inputs to bw.neurons to prevent Sync Loop overwrite
+            if hasattr(self.brain_window, 'brain_widget'):
+                bw = self.brain_window.brain_widget
+                if hasattr(bw, 'neurons') and bw.neurons:
+                    for k, v in input_values.items():
+                        if k in bw.neurons:
+                            # Update the internal simulation prop directly
+                            bw.neurons[k]['activation'] = v
+
+            # Decay temporal sensors so they don't stick forever
             self.brain_hooks.update_decay()
 
         # Allow plugins to inject or modify brain state
@@ -1522,7 +1591,7 @@ class TamagotchiLogic:
             logic=self
         )
 
-        # Push to brain visualizer
+        # Final push to brain visualizer
         self.brain_window.update_brain(brain_state)
         
         # === PROCESS NEURON OUTPUTS (ACTUATORS) ===
@@ -1968,6 +2037,10 @@ class TamagotchiLogic:
             self.user_interface.scene.removeItem(food_item)
             self.food_items.remove(food_item)
 
+            # Notify vision worker of scene change
+            if hasattr(self.squid, 'mark_scene_objects_dirty'):
+                self.squid.mark_scene_objects_dirty()
+
     def move_poops(self):
         for poop_item in self.poop_items[:]:
             poop_x = poop_item.pos().x()
@@ -2191,6 +2264,10 @@ class TamagotchiLogic:
         self.food_items.append(food_item)  # Single addition
         self.brain_hooks.on_object_spawned('food')
 
+        # Notify vision worker of scene change
+        if hasattr(self.squid, 'mark_scene_objects_dirty'):
+            self.squid.mark_scene_objects_dirty()
+
     def clean_environment(self):
         # Track for neurogenesis FIRST
         if hasattr(self.brain_window, 'brain_widget') and \
@@ -2243,18 +2320,26 @@ class TamagotchiLogic:
         new_x = self.user_interface.window_width - self.cleaning_progress
         self.cleaning_line.setLine(new_x, -500, new_x, self.user_interface.window_height + 500)
 
+        items_removed = False
+
         # Remove poops and food that the line has passed
         for poop_item in self.poop_items[:]:
             if poop_item.scenePos().x() > new_x:
                 self.user_interface.scene.removeItem(poop_item)
                 self.poop_items.remove(poop_item)
+                items_removed = True
 
         for food_item in self.food_items[:]:
             if food_item.pos().x() > new_x:
-                self.remove_food(food_item)
+                self.remove_food(food_item) # This calls mark_scene_objects_dirty internally
+                items_removed = True
 
         # Force an update of the scene
         self.user_interface.scene.update()
+
+        # Explicitly notify if we removed poop (food handled by remove_food)
+        if items_removed and hasattr(self.squid, 'mark_scene_objects_dirty'):
+            self.squid.mark_scene_objects_dirty()
 
 
 
@@ -2396,6 +2481,10 @@ class TamagotchiLogic:
             sushi_item.is_sushi = True
             self.food_items.append(sushi_item)
 
+            # Notify vision worker of scene change
+            if hasattr(self.squid, 'mark_scene_objects_dirty'):
+                self.squid.mark_scene_objects_dirty()
+
     def spawn_poop(self, x, y):
         if len(self.poop_items) < self.max_poop and self.squid is not None:
             poop_item = ResizablePixmapItem(self.squid.poop_images[0], category='poop')
@@ -2403,6 +2492,10 @@ class TamagotchiLogic:
             self.user_interface.scene.addItem(poop_item)
             self.poop_items.append(poop_item)
             self.brain_hooks.on_object_spawned('poop')
+
+            # Notify vision worker of scene change
+            if hasattr(self.squid, 'mark_scene_objects_dirty'):
+                self.squid.mark_scene_objects_dirty()
 
     def animate_poops(self):
         if self.squid is not None:
@@ -2464,6 +2557,10 @@ class TamagotchiLogic:
         self.squid.squid_x = self.squid.center_x
         self.squid.squid_y = self.squid.center_y
         self.squid.squid_item.setPos(self.squid.squid_x, self.squid.squid_y)
+
+        # Notify vision worker of scene change (cleared objects)
+        if hasattr(self.squid, 'mark_scene_objects_dirty'):
+            self.squid.mark_scene_objects_dirty()
 
         # Show a message
         self.show_message("Game reset. Take better care of your squid!")
@@ -2533,20 +2630,36 @@ class TamagotchiLogic:
                 except ValueError:
                     pass
 
-            # Load brain state
+            # Load custom brain (Logic patched to load output bindings)
+            custom_brain_data = data.get('custom_brain', {})
+            custom_brain_loaded = False
+            
+            if custom_brain_data and custom_brain_data.get('is_custom_brain'):
+                success, msg = restore_custom_brain_from_save(data, self.brain_window.brain_widget)
+                print(f"[Load] Custom brain: {msg}")
+                
+                # Manually load bindings from custom brain definition ---
+                if success and hasattr(self, 'neuron_output_monitor'):
+                    brain_def = custom_brain_data.get('brain_definition', {})
+                    if brain_def:
+                        self.neuron_output_monitor.load_bindings_from_brain(brain_def)
+                        custom_brain_loaded = True
+                        print(f"     + Synced custom output bindings to monitor")
+
+            # Load brain state (Standard)
             brain_state = data.get('brain_state', {})
             if brain_state and hasattr(self, 'brain_window'):
                 self.brain_window.set_brain_state(brain_state)
+                
+                # Manually load bindings if not using custom brain
+                # This handles standard saves where bindings are stored in 'brain_state'
+                if not custom_brain_loaded and hasattr(self, 'neuron_output_monitor'):
+                    self.neuron_output_monitor.load_bindings_from_brain(brain_state)
+                    print(f"     + Synced standard output bindings to monitor")
 
             # Load memories
             self.squid.memory_manager.short_term_memory = data.get('ShortTerm', [])
             self.squid.memory_manager.long_term_memory = data.get('LongTerm', [])
-
-            # Load custom brain
-            custom_brain_data = data.get('custom_brain', {})
-            if custom_brain_data and custom_brain_data.get('is_custom_brain'):
-                success, msg = restore_custom_brain_from_save(data, self.brain_window.brain_widget)
-                print(f"[Load] Custom brain: {msg}")
 
             # Load decorations
             decorations_data = game_state.get('decorations', [])
@@ -2558,6 +2671,10 @@ class TamagotchiLogic:
             self.hunger_threshold_time = logic_data.get('hunger_threshold_time', 0)
             self.last_clean_time = logic_data.get('last_clean_time', 0)
             self.points = logic_data.get('points', 0)
+            
+            # Restore achievements if available
+            if 'achievements' in data:
+                self._restore_achievements_data(data['achievements'])
 
             if hasattr(self, 'statistics_window'):
                 self.statistics_window.set_score(self.points)
@@ -2572,58 +2689,6 @@ class TamagotchiLogic:
             traceback.print_exc()
             return False
 
-    def update_squid_brain(self):
-        if not self.squid or not self.brain_window.isVisible():
-            return
-
-        # Robust startled detection
-        is_startled_state = False
-        if hasattr(self.squid, 'mental_state_manager') and self.squid.mental_state_manager:
-            is_startled_state = self.squid.mental_state_manager.is_state_active('startled')
-        elif hasattr(self.squid, 'status') and isinstance(self.squid.status, str):
-            is_startled_state = "startled" in self.squid.status.lower()
-
-        brain_state = {
-            "hunger": self.squid.hunger,
-            "happiness": self.squid.happiness,
-            "cleanliness": self.squid.cleanliness,
-            "sleepiness": self.squid.sleepiness,
-            "anxiety": self.squid.anxiety,
-            "curiosity": self.squid.curiosity,
-            "satisfaction": self.squid.satisfaction,
-            "is_sick": self.squid.is_sick,
-            "is_eating": self.squid.is_eating if hasattr(self.squid, 'is_eating') else (self.squid.status == "eating"),
-            "is_sleeping": self.squid.is_sleeping,
-            "pursuing_food": self.squid.pursuing_food,
-            "is_fleeing": getattr(self.squid, 'is_fleeing', False),
-            "is_startled": is_startled_state,
-            "direction": self.squid.squid_direction,
-            "position": (self.squid.squid_x, self.squid.squid_y),
-            "personality": self.squid.personality.value if isinstance(self.squid.personality, Personality) else str(self.squid.personality),
-            "status": self.squid.status,
-            'recent_actions': self.recent_actions[-10:],  # limit size
-            'food_count': len(self.food_items),
-            'poop_count': len(self.poop_items),
-        }
-
-        # === DYNAMIC PERCEPTION ===
-        if hasattr(self, 'brain_hooks'):
-            input_values = self.brain_hooks.get_input_neuron_values()
-            brain_state.update(input_values)
-
-            # Critical: decay temporal sensors so they don't stick forever
-            self.brain_hooks.update_decay()
-
-        # Allow plugins to inject or modify brain state
-        self.plugin_manager.trigger_hook(
-            "on_brain_state_update",
-            brain_state=brain_state,
-            squid=self.squid,
-            logic=self
-        )
-
-        # Final push to brain visualizer
-        self.brain_window.update_brain(brain_state)
 
     def save_game(self, is_autosave=False):
         """
@@ -2889,6 +2954,10 @@ class TamagotchiLogic:
             # Load decorations
             decorations_data = game_state.get('decorations', [])
             self.user_interface.load_decorations_data(decorations_data)
+
+            # Notify vision worker of scene change (decorations loaded)
+            if hasattr(self.squid, 'mark_scene_objects_dirty'):
+                self.squid.mark_scene_objects_dirty()
             
             # Load game state
             logic_data = game_state['tamagotchi_logic']

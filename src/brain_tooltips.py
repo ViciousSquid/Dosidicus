@@ -53,53 +53,44 @@ class EnhancedBrainTooltips:
             self.hide_tooltip()
             return
 
+        # Check if this is a binary neuron and skip tooltip if so
+        if hasattr(self.brain_widget, 'is_binary_neuron') and self.brain_widget.is_binary_neuron(neuron_name):
+            self.hide_tooltip()
+            return
+
         # 1. Get neuron's logical position
         x_logic, y_logic = self.brain_widget.neuron_positions[neuron_name]
         
-        # 2. Calculate layout scale EXACTLY as paintEvent does
+        # 2. Calculate layout scale EXACTLY as paintEvent/render worker does
+        indicator_space = 0 
+        base_width = 1024
+        base_height = 768 - indicator_space
+        
+        # Use dimensions from the widget
         widget_width = self.brain_widget.width()
         widget_height = self.brain_widget.height()
         
-        # Match paintEvent's indicator space calculation
-        indicator_y_position = 10
-        fixed_indicator_area_height = 0
-        indicator_space_at_top = indicator_y_position + fixed_indicator_area_height
-        
-        base_width_logical = 1024
-        base_height_logical = 768 - indicator_space_at_top
-        if base_height_logical <= 0:
-            base_height_logical = 1
-        
-        scale_x = widget_width / base_width_logical
-        
-        drawable_height_for_neurons = widget_height - indicator_space_at_top
-        if drawable_height_for_neurons <= 0:
-            drawable_height_for_neurons = 1
-            
-        scale_y = drawable_height_for_neurons / base_height_logical
-        scale_y = max(0.01, scale_y)
-        
-        # Use the smaller scale to maintain aspect ratio
+        scale_x = widget_width / base_width
+        scale_y = (widget_height - indicator_space) / max(1, base_height)
         scale = max(0.01, min(scale_x, scale_y))
         
-        # 3. Transform logical coordinates to widget coordinates
-        # This matches: painter.translate(0, indicator_space_at_top); painter.scale(scale, scale)
-        widget_x = int(x_logic * scale)
-        widget_y = int(y_logic * scale + indicator_space_at_top)
-        
-        # 4. Handle horizontal centering if width is the limiting factor
+        offset_x = 0
         if scale_x > scale_y:
-            content_width = base_width_logical * scale
+            content_width = base_width * scale
             offset_x = (widget_width - content_width) / 2
-            widget_x += int(offset_x)
         
-        # 5. Position tooltip 40px above neuron (visual offset - NOT scaled)
+        # 3. Transform logical coordinates to widget coordinates
+        # Formula: Logical * Scale + Offset
+        widget_x = int(x_logic * scale + offset_x)
+        widget_y = int(y_logic * scale + indicator_space)
+        
+        # 4. Position tooltip 40px above neuron (visual offset - NOT scaled)
         tooltip_pos_widget = QtCore.QPoint(widget_x, widget_y - 40)
         
-        # 6. Convert to global screen coordinates for QToolTip
+        # 5. Convert to global screen coordinates for QToolTip
         tooltip_pos_global = self.brain_widget.mapToGlobal(tooltip_pos_widget)
         
-        # 7. Generate and show tooltip (scale only the HTML content)
+        # 6. Generate and show tooltip (scale only the HTML content)
         html = self._generate_tooltip(neuron_name)
         scaled_html = DisplayScaling.scale_css(html)
         
@@ -129,9 +120,9 @@ class EnhancedBrainTooltips:
         val_display = f"{current_value:.1f}"
         
         return f"""
-        <div style='background-color: black; color: white; padding: 6px; 
-                    font-family: Arial; font-size: 14px; font-weight: bold; 
-                    border-radius: 3px; min-width: 40px; text-align: center;'>
+        <div style='background-color: black; color: white; padding: 10px; 
+                    font-family: Arial; font-size: 28px; font-weight: bold; 
+                    border-radius: 5px; min-width: 60px; text-align: center;'>
             {val_display}
         </div>
         """
@@ -151,9 +142,9 @@ class EnhancedBrainTooltips:
         
         # Minimal black rectangle with white text (matching weight overlay style)
         return f"""
-        <div style='background-color: black; color: white; padding: 6px; 
-                    font-family: Arial; font-size: 14px; font-weight: bold; 
-                    border-radius: 3px; min-width: 40px; text-align: center;'>
+        <div style='background-color: black; color: white; padding: 10px; 
+                    font-family: Arial; font-size: 28px; font-weight: bold; 
+                    border-radius: 5px; min-width: 60px; text-align: center;'>
             {val_display}
         </div>
         """

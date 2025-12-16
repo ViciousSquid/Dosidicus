@@ -352,7 +352,6 @@ class NetworkTab(BrainBaseTab):
                 self.hebbian_timer_label.setText(f"{loc.get('hebbian_cycle')}: {loc.get('hebbian_paused')}")
             # Don't decrement counter
             return
-        # ==============================
 
         # 1. Update Hebbian counter (count down to 0, show 0 for one full second)
         if self.hebbian_timer_value > 0:
@@ -461,13 +460,18 @@ class NetworkTab(BrainBaseTab):
     def _create_functional_stats_area(self):
         """Creates the container for functional stats label and the two side-by-side emoji buttons."""
         loc = Localisation.instance()
+        
+        # Avoid creating multiple times
+        if hasattr(self, 'functional_stats_area') and self.functional_stats_area is not None:
+            return
+
         # Wrapper that holds the green card + button container
         self.functional_stats_area = QtWidgets.QWidget()
         self.stats_and_button_layout = QtWidgets.QHBoxLayout(self.functional_stats_area)
         self.stats_and_button_layout.setContentsMargins(0, 0, 0, 0)
         self.stats_and_button_layout.setSpacing(10)
 
-        # 1. Functional-stats label (green card)
+        # 1. Functional-stats label (green card) — this is the target for overlay
         self.functional_stats_label = QtWidgets.QLabel()
         self.functional_stats_label.setWordWrap(True)
         self.functional_stats_label.setStyleSheet("""
@@ -476,41 +480,70 @@ class NetworkTab(BrainBaseTab):
                 padding: 8px;
                 border-radius: 5px;
                 border: 1px solid #4CAF50;
-                margin: 5px;
+                margin: 5px 5px 5px 8px;
             }
         """)
         self.stats_and_button_layout.addWidget(self.functional_stats_label, 1)
 
-        # 2. Button container
+        # 2. Button container (holds the two emoji buttons side-by-side)
         self.new_button_container = QtWidgets.QWidget()
-        self.new_button_container.setFixedSize(DisplayScaling.scale(90),
-                                            DisplayScaling.scale(90))
+        self.new_button_container.setFixedSize(DisplayScaling.scale(90), DisplayScaling.scale(90))
         btn_layout = QtWidgets.QHBoxLayout(self.new_button_container)
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(4)
 
-        # Brain Designer
+        # First emoji button (Brain Designer)
         self.new_50x50_button = QtWidgets.QPushButton("🧠")
-        self.new_50x50_button.setFixedSize(DisplayScaling.scale(90), DisplayScaling.scale(90))
+        self.new_50x50_button.setFixedSize(DisplayScaling.scale(42), DisplayScaling.scale(42))
         self.new_50x50_button.setStyleSheet("""
             QPushButton {
-                background-color: #0041C2;
-                color: white;
-                border-radius: 5px;
-                font-size: 26pt;
+                background-color: #e1f5fe;
+                border: 1px solid #029be5;
+                border-radius: 8px;
+                font-size: 20pt;
             }
-            QToolTip {
-                font-size: 9pt;
-                color: #ffffff;
-                background: #2b2b2b;
-                border: 1px solid #444;
+            QPushButton:hover {
+                background-color: #b3e5fc;
             }
         """)
-        self.new_50x50_button.setToolTip(loc.get("tooltip_brain_designer"))
         self.new_50x50_button.clicked.connect(self._open_brain_designer)
+        self.new_50x50_button.setToolTip(loc.get("tooltip_brain_designer"))
         btn_layout.addWidget(self.new_50x50_button)
+
+        # Second emoji button (Experience Buffer)
+        self.buffer_button = QtWidgets.QPushButton("🔍")
+        self.buffer_button.setFixedSize(DisplayScaling.scale(42), DisplayScaling.scale(42))
+        self.buffer_button.setStyleSheet("""
+            QPushButton {
+                background-color: #fff3e0;
+                border: 1px solid #ff8f00;
+                border-radius: 8px;
+                font-size: 20pt;
+            }
+            QPushButton:hover {
+                background-color: #ffe0b2;
+            }
+        """)
+        self.buffer_button.clicked.connect(self._show_experience_buffer)
+        self.buffer_button.setToolTip(loc.get("tooltip_experience_buffer"))
+        btn_layout.addWidget(self.buffer_button)
+
         self.stats_and_button_layout.addWidget(self.new_button_container)
+
+        # === INSERT THE STATS AREA JUST ABOVE THE BOTTOM BAR ===
         self.layout.insertWidget(self.layout.count() - 1, self.functional_stats_area)
+
+        # === CREATE THE BINDINGS OVERLAY TARGETING ONLY THE GREEN LABEL ===
+        try:
+            from .brain_network_tab_banners import BindingOverlay
+            self.binding_overlay = BindingOverlay(self, self.functional_stats_label)
+            self.binding_overlay.hide()  # Hidden until bindings are loaded
+        except ImportError as e:
+            print("Could not import BindingOverlay:", e)
+            self.binding_overlay = None
+
+        # Initially hidden until we have functional neuron data
+        self.functional_stats_area.hide()
 
     def flash_emergency_creation(self, neuron_name):
         """Show visual indicator of emergency neuron creation"""
@@ -543,9 +576,8 @@ class NetworkTab(BrainBaseTab):
             return
 
         eng = self.brain_widget.enhanced_neurogenesis
-        functional_neurons = eng.functional_neurons          # same dict
+        functional_neurons = eng.functional_neurons
 
-        # ---- FIX: always create the variables ----
         spec_counts = {}
         total_utility = 0
         total_activations = 0
@@ -556,35 +588,28 @@ class NetworkTab(BrainBaseTab):
             total_utility += func_neuron.utility_score
             total_activations += func_neuron.activation_count
 
-        # Create label *and container* if it doesn't exist
-        if not hasattr(self, 'functional_stats_area'):
-            self._create_functional_stats_area() # Call the new helper method
+        # === Ensure stats area exists ===
+        if not hasattr(self, 'functional_stats_area') or self.functional_stats_area is None:
+            self._create_functional_stats_area()
 
-        # Build display text
+        # === Update text ===
         if spec_counts:
-            avg_utility = total_utility / len(eng.functional_neurons)
-
+            avg_utility = total_utility / len(functional_neurons) if functional_neurons else 0
             text = f"<b>🧬 {loc.get('func_neurons_title')}:</b><br>"
-            text += f"<b>{loc.get('count_label')}:</b> {len(eng.functional_neurons)} | "
+            text += f"<b>{loc.get('count_label')}:</b> {len(functional_neurons)} | "
             text += f"<b>{loc.get('avg_utility_label')}:</b> {avg_utility:.2f} | "
             text += f"<b>{loc.get('total_activations_label')}:</b> {total_activations}<br>"
             text += f"<b>{loc.get('specialisations_label')}:</b> "
-
-            spec_list = [f"<i>{spec}</i>({count})" for spec, count in
-                        sorted(spec_counts.items(), key=lambda x: x[1], reverse=True)]
+            spec_list = [f"<i>{spec}</i>({count})" for spec, count in sorted(spec_counts.items(), key=lambda x: x[1], reverse=True)]
             text += ", ".join(spec_list)
-
-            self.functional_stats_label.setText(text)
         else:
-            # Always show the card with zero stats (as requested previously)
             text = f"<b>🧬 {loc.get('func_neurons_title')}:</b><br>"
             text += f"<b>{loc.get('count_label')}:</b> 0 | "
             text += f"<b>{loc.get('avg_utility_label')}:</b> N/A | "
             text += f"<b>{loc.get('total_activations_label')}:</b> 0<br>"
             text += f"<b>{loc.get('specialisations_label')}:</b> None"
-            self.functional_stats_label.setText(text)
 
-        # Ensure the entire area is always shown
+        self.functional_stats_label.setText(text)
         self.functional_stats_area.show()
 
     # ------------------------------------------------------------------

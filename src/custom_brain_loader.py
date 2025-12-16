@@ -1,9 +1,11 @@
 import os
 import json
 import shutil
+import time
 from pathlib import Path
 from typing import Optional, Dict
 from PyQt5 import QtWidgets, QtCore, QtGui
+from .brain_neuron_outputs import NeuronOutputBinding, OutputTriggerMode
 
 
 # Global tracker for the currently loaded custom brain
@@ -24,7 +26,7 @@ def add_load_brain_button(network_tab, checkbox_layout):
     checkbox_layout.addSpacing(20)
     
     # Create the button
-    load_btn = QtWidgets.QPushButton("🧠 Load Brain")
+    load_btn = QtWidgets.QPushButton("Load Brain...")
     load_btn.setToolTip("Load a custom brain architecture")
     load_btn.setStyleSheet("""
         QPushButton {
@@ -82,6 +84,9 @@ def add_load_brain_button(network_tab, checkbox_layout):
                 QtWidgets.QMessageBox.critical(
                     network_tab, "Error", f"Failed to reset positions:\n{e}"
                 )
+    
+    reset_btn.clicked.connect(_confirm_reset)
+    checkbox_layout.addWidget(reset_btn)
 
 
 # =============================================================================
@@ -294,32 +299,80 @@ class BrainLoader:
             
             with open(filepath, 'r') as f:
                 data = json.load(f)
-            print("  ✓ File read successfully")
             
             brain = self._parse(data)
             if not brain:
                 raise ValueError("Could not parse brain format")
-            print(f"  ✓ Parsed: {len(brain['positions'])} neurons, {len(brain['weights'])} connections")
             
             self._apply(brain)
-            print("  ✓ Applied to brain widget")
             
-            # Store the brain definition for saving
-            _current_custom_brain = data  # Store original JSON
+            # 1. Send bindings to the live game logic
+            if hasattr(self.network_tab, 'tamagotchi_logic'):
+                logic = self.network_tab.tamagotchi_logic
+                if hasattr(logic, 'neuron_output_monitor') and logic.neuron_output_monitor:
+                    logic.neuron_output_monitor.load_bindings_from_brain(brain)
+                    print(f"  ✓ Loaded {len(brain.get('output_bindings', []))} output bindings into Monitor")
+
+                # --- FIX: Force-sync live sensor values immediately ---
+                # This prevents the saved "0" value from overwriting the real sensor input
+                # in the first frame after loading.
+                if hasattr(logic, 'brain_hooks'):
+                    print("  -> Syncing live sensor inputs...")
+                    input_values = logic.brain_hooks.get_input_neuron_values()
+                    
+                    # Update widget state directly
+                    bw = self.brain_widget
+                    if hasattr(bw, 'state'):
+                        bw.state.update(input_values)
+                    
+                    # Update internal simulation neurons if present
+                    if hasattr(bw, 'neurons'):
+                        for k, v in input_values.items():
+                            if k in bw.neurons:
+                                bw.neurons[k]['activation'] = v
+                # --- END FIX ---
+
+            # 2. UI OVERLAY SETUP
+            # Check if the stats area exists. If not, create it manually.
+            if hasattr(self.network_tab, '_create_functional_stats_area'):
+                if not hasattr(self.network_tab, 'functional_stats_area') or self.network_tab.functional_stats_area is None:
+                    print("  -> Creating functional stats area for overlay...")
+                    self.network_tab._create_functional_stats_area()
+            
+            # Ensure the label has text so the widget has non-zero height!
+            if hasattr(self.network_tab, 'functional_stats_label') and not self.network_tab.functional_stats_label.text():
+                self.network_tab.functional_stats_label.setText("<b>🧠 Custom Brain Loaded</b><br>External Bindings Active")
+                self.network_tab.functional_stats_label.show()
+
+            # Initialize overlay if missing
+            if hasattr(self.network_tab, 'functional_stats_area'):
+                if not hasattr(self.network_tab, 'binding_overlay') or self.network_tab.binding_overlay is None:
+                    try:
+                        from .brain_network_tab_banners import BindingOverlay
+                        self.network_tab.binding_overlay = BindingOverlay(self.network_tab, self.network_tab.functional_stats_area)
+                        print("  -> BindingOverlay initialized")
+                    except ImportError as e:
+                        print(f"  ! Could not import BindingOverlay: {e}")
+
+            # Update the overlay with data
+            if hasattr(self.network_tab, 'binding_overlay') and self.network_tab.binding_overlay:
+                bindings = brain.get('output_bindings', [])
+                if bindings:
+                    print(f"  -> Sending {len(bindings)} bindings to overlay")
+                    self.network_tab.binding_overlay.update_bindings(bindings)
+
+            # 3. Finalize
+            _current_custom_brain = data
             _current_custom_brain_name = Path(filepath).stem
             _current_custom_brain_file = filepath
-            print(f"  ✓ Tracking custom brain: {_current_custom_brain_name}")
             
             self._update_worker()
-            print("  ✓ Worker update attempted")
             
             if hasattr(self.network_tab, 'update_metrics_display'):
                 self.network_tab.update_metrics_display()
-                print("  ✓ Metrics updated")
             
             if self.brain_widget:
                 self.brain_widget.update()
-                print("  ✓ Widget refreshed")
             
             name = Path(filepath).stem
             QtWidgets.QMessageBox.information(
@@ -333,7 +386,6 @@ class BrainLoader:
             import traceback
             print(f"❌ Failed to load brain: {e}")
             traceback.print_exc()
-            
             QtWidgets.QMessageBox.critical(self.network_tab, "Error", f"Failed to load:\n{e}")
             return False
     
@@ -390,7 +442,7 @@ class BrainLoader:
     
     def _parse(self, data: Dict) -> Optional[Dict]:
         """Parse brain file to standard format."""
-        result = {'positions': {}, 'weights': {}, 'state': {}, 'excluded': set()}
+        result = {'positions': {}, 'weights': {}, 'state': {}, 'excluded': set(), 'output_bindings': []}
         
         # Format 1: Dosidicus format (connections as dict with "->")
         if 'neurons' in data and isinstance(data.get('connections'), dict):
@@ -430,6 +482,9 @@ class BrainLoader:
         else:
             return None
         
+        # Parse output bindings
+        result['output_bindings'] = data.get('output_bindings', [])
+        
         # Defaults
         for n in result['positions']:
             if n not in result['state']:
@@ -440,62 +495,117 @@ class BrainLoader:
         
         return result if result['positions'] else None
     
-    def _apply(self, brain: Dict):
-        """Apply brain to widget."""
+    def _apply(self, brain: dict):
+        """Apply parsed brain data to the current brain widget."""
         bw = self.brain_widget
-        if not bw:
-            raise ValueError("No brain widget available")
-            
-        # Status neurons - don't touch their state values, just ensure they exist
-        status = {'is_sick', 'is_eating', 'is_sleeping', 'pursuing_food', 'direction'}
-        
-        # Backup original (once)
-        if not hasattr(bw, '_orig_backup'):
-            bw._orig_backup = {
-                'positions': dict(getattr(bw, 'neuron_positions', {})),
-                'weights': dict(getattr(bw, 'weights', {})),
-                'state': dict(getattr(bw, 'state', {})),
-            }
-        
-        # Save current status neuron values before clearing
-        saved_status = {}
-        if hasattr(bw, 'state'):
-            for s in status:
-                if s in bw.state:
-                    saved_status[s] = bw.state[s]
         
         # Apply positions
-        if hasattr(bw, 'neuron_positions'):
-            bw.neuron_positions.clear()
-            bw.neuron_positions.update(brain['positions'])
-            for s in status:
-                if s not in bw.neuron_positions:
-                    bw.neuron_positions[s] = (0, 0)
+        if 'positions' in brain:
+            if hasattr(bw, 'neuron_positions'):
+                bw.neuron_positions.clear()
+                bw.neuron_positions.update(brain['positions'])
+                
+        # --- FIX: Ensure mandatory sensors are present ---
+        # If the custom brain deleted core sensors, the game logic will break.
+        # We restore them using original positions (or default) so inputs still work.
+        MANDATORY_SENSORS = {
+            'can_see_food', 'external_stimulus', 'plant_proximity', 
+            'is_eating', 'is_sleeping', 'is_sick', 'is_fleeing', 'is_startled', 
+            'pursuing_food'
+        }
         
-        # Apply state - only for non-status neurons
-        if hasattr(bw, 'state'):
-            bw.state.clear()
-            # Add new brain state (excluding status neurons)
-            for name, value in brain['state'].items():
-                if name not in status:
-                    bw.state[name] = value
-            # Restore status neuron values
-            for s, val in saved_status.items():
-                bw.state[s] = val
-            # Ensure all status neurons have some value
-            for s in status:
-                if s not in bw.state:
-                    if s == 'direction':
-                        bw.state[s] = 'none'  # direction is a string
-                    elif s.startswith('is_'):
-                        bw.state[s] = False   # is_* are booleans
-                    else:
-                        bw.state[s] = 0
+        restored_sensors = 0
+        if hasattr(bw, 'original_neuron_positions'):
+            for sensor in MANDATORY_SENSORS:
+                if sensor not in bw.neuron_positions:
+                    if sensor in bw.original_neuron_positions:
+                        bw.neuron_positions[sensor] = bw.original_neuron_positions[sensor]
+                        # Also ensure it has a state entry
+                        if hasattr(bw, 'state') and sensor not in bw.state:
+                            bw.state[sensor] = 0.0
+                        restored_sensors += 1
         
-        # Apply weights
-        if hasattr(bw, 'weights'):
-            bw.weights.clear()
-            bw.weights.update(brain['weights'])
+        if restored_sensors > 0:
+            print(f"🔧 Restored {restored_sensors} mandatory sensor neurons missing from custom brain")
+        
+        # Apply weights/connections
+        if 'weights' in brain:
+            if hasattr(bw, 'weights'):
+                bw.weights.clear()
+                bw.weights.update(brain['weights'])
+        
+        # Apply state if present (neuron activations)
+        if 'state' in brain:
+            if hasattr(bw, 'state'):
+                bw.state.clear()
+                bw.state.update(brain['state'])
+
+        # Populate bw.neurons for synchronous simulation fallback
+        if hasattr(bw, 'neurons'):
+            bw.neurons = {}
+            for name in bw.neuron_positions:
+                # Check if this is a binary/sensor neuron
+                is_sensor = hasattr(bw, 'is_binary_neuron') and bw.is_binary_neuron(name)
+                
+                # FIX: Sensors get 1.0 decay so they persist. 0.0 decay zeroes them out instantly.
+                bw.neurons[name] = {
+                    'activation': bw.state.get(name, 50.0),
+                    'decay': 1.0 if is_sensor else 0.9, 
+                    'noise': 0.0
+                }
+        
+        # Apply excluded neurons
+        if 'excluded' in brain:
+            if hasattr(bw, 'excluded_neurons'):
+                bw.excluded_neurons = list(brain['excluded'])
+        
+        # === OUTPUT BINDINGS (Neuron → Behavior) ===
+        output_bindings_data = brain.get('output_bindings', [])
+        
+        if output_bindings_data:
+            # Find the NeuronOutputMonitor
+            monitor = None
+            logic = getattr(bw, 'tamagotchi_logic', None)
+            if logic and hasattr(logic, 'neuron_output_monitor'):
+                monitor = logic.neuron_output_monitor
+            # Fallback if attached differently
+            elif hasattr(bw, 'parent') and hasattr(bw.parent(), 'tamagotchi_logic'):
+                monitor = bw.parent().tamagotchi_logic.neuron_output_monitor
+            
+            if monitor:
+                # Load the bindings
+                monitor.bindings = []  # Clear old ones
+                loaded_count = 0
+                for bind_data in output_bindings_data:
+                    try:
+                        binding = NeuronOutputBinding.from_dict(bind_data)
+                        monitor.bindings.append(binding)
+                        loaded_count += 1
+                    except Exception as e:
+                        print(f"[BrainLoader] Failed to load binding: {e}")
+                
+                print(f"[NeuronOutputMonitor] Loaded {loaded_count} neuron output bindings")
+                
+                # Use the actual monitor() method to trigger initial thresholds
+                if hasattr(bw, 'state') and bw.state:
+                    # Convert state values to float where needed
+                    activations = {}
+                    for name, value in bw.state.items():
+                        try:
+                            activations[name] = float(value)
+                        except (TypeError, ValueError):
+                            activations[name] = 100.0 if value else 0.0
+                    
+                    # Trigger the monitor with current activations
+                    monitor.monitor(activations)
+                    print("[NeuronOutputMonitor] Initial neuron activations processed via monitor()")
+                else:
+                    print("[NeuronOutputMonitor] ⚠️ No state data available for initial trigger")
+            else:
+                print("[NeuronOutputMonitor] ⚠️ Monitor not found — bindings saved but not activated")
+        
+        # Keep a copy on the widget for saving/exporting later
+        bw.output_bindings = output_bindings_data
         
         # Update related attributes safely
         if hasattr(bw, 'connections'):
@@ -505,12 +615,10 @@ class BrainLoader:
         if hasattr(bw, 'original_neuron_positions') and hasattr(bw, 'neuron_positions'):
             bw.original_neuron_positions = dict(bw.neuron_positions)
         if hasattr(bw, 'original_neurons') and hasattr(bw, 'neuron_positions'):
+            status = {'is_sick', 'is_eating', 'is_sleeping', 'pursuing_food', 'direction'}
             bw.original_neurons = [n for n in bw.neuron_positions if n not in status]
         if hasattr(bw, 'communication_events') and hasattr(bw, 'neuron_positions'):
             bw.communication_events = {n: 0 for n in bw.neuron_positions}
-        
-        if hasattr(bw, 'excluded_neurons'):
-            bw.excluded_neurons = list(brain['excluded'])
     
     def _update_worker(self):
         """Update BrainWorker cache if available."""

@@ -5,7 +5,7 @@ Brain Designer panel for configuring neuron output bindings.
 This panel allows users to:
 1. Bind neurons to output hooks (actuators)
 2. Configure trigger thresholds and modes
-3. Manage cooldowns and parameters
+3. Manage cooldowns and parameters (including color selection)
 
 When the squid runs this brain, neurons that exceed their threshold
 will trigger the bound behaviors (flee, seek food, ink, etc.)
@@ -15,7 +15,8 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
     QPushButton, QLabel, QComboBox, QDoubleSpinBox, QCheckBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QDialog,
-    QDialogButtonBox, QScrollArea, QFrame, QMessageBox, QSpinBox
+    QDialogButtonBox, QScrollArea, QFrame, QMessageBox, QSpinBox,
+    QColorDialog
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
@@ -34,6 +35,11 @@ class OutputBindingDialog(QDialog):
         self.design = design
         self.existing_binding = existing_binding
         self.result_binding = None
+        
+        # Store dynamic parameters here
+        self.current_params = {}
+        if existing_binding and existing_binding.hook_params:
+            self.current_params = existing_binding.hook_params.copy()
         
         self.setWindowTitle("Configure Output Binding" if existing_binding else "Add Output Binding")
         self.setMinimumWidth(450)
@@ -75,6 +81,37 @@ class OutputBindingDialog(QDialog):
         hook_layout.addRow("", self.hook_description)
         
         layout.addWidget(hook_group)
+
+        # === Dynamic Parameters Area ===
+        self.params_group = QGroupBox("Behavior Parameters")
+        self.params_layout = QVBoxLayout(self.params_group)
+        
+        # Color Picker UI (Hidden by default)
+        self.color_widget = QWidget()
+        color_layout = QHBoxLayout(self.color_widget)
+        color_layout.setContentsMargins(0,0,0,0)
+        
+        self.color_preview = QLabel()
+        self.color_preview.setFixedSize(30, 30)
+        self.color_preview.setStyleSheet("background-color: #CCCCCC; border: 1px solid #888;")
+        
+        self.pick_color_btn = QPushButton("Pick Color...")
+        self.pick_color_btn.clicked.connect(self._pick_color)
+        
+        self.reset_color_btn = QPushButton("Reset (Random)")
+        self.reset_color_btn.clicked.connect(self._reset_color)
+        
+        color_layout.addWidget(QLabel("Tint Color:"))
+        color_layout.addWidget(self.color_preview)
+        color_layout.addWidget(self.pick_color_btn)
+        color_layout.addWidget(self.reset_color_btn)
+        color_layout.addStretch()
+        
+        self.params_layout.addWidget(self.color_widget)
+        self.color_widget.hide() # Hide initially
+        
+        layout.addWidget(self.params_group)
+        self.params_group.hide() # Hide group initially
         
         # Trigger configuration
         trigger_group = QGroupBox("Trigger Settings")
@@ -160,8 +197,10 @@ class OutputBindingDialog(QDialog):
                 self.hook_combo.addItem(f"  {display_name}", hook_name)
     
     def _on_hook_changed(self):
-        """Update description when hook selection changes."""
+        """Update description and param UI when hook selection changes."""
         hook_name = self.hook_combo.currentData()
+        self._update_param_ui(hook_name)
+
         if hook_name and hook_name in STANDARD_OUTPUT_HOOKS:
             info = STANDARD_OUTPUT_HOOKS[hook_name]
             self.hook_description.setText(info.get('description', ''))
@@ -173,6 +212,53 @@ class OutputBindingDialog(QDialog):
         else:
             self.hook_description.setText("")
     
+    def _update_param_ui(self, hook_name):
+        """Show specific UI elements based on the selected hook."""
+        self.params_group.hide()
+        self.color_widget.hide()
+        
+        if hook_name == 'neuron_output_change_color':
+            self.params_group.show()
+            self.color_widget.show()
+            self._update_color_preview()
+
+    def _update_color_preview(self):
+        """Update the color preview box based on current params."""
+        if 'red' in self.current_params:
+            r = self.current_params.get('red', 255)
+            g = self.current_params.get('green', 255)
+            b = self.current_params.get('blue', 255)
+            self.color_preview.setStyleSheet(f"background-color: rgb({r},{g},{b}); border: 1px solid #000;")
+            self.color_preview.setText("")
+        else:
+            self.color_preview.setStyleSheet("background-color: #EEE; border: 1px dashed #888;")
+            self.color_preview.setText("?")
+
+    def _pick_color(self):
+        """Open color picker dialog."""
+        initial = QColor(255, 255, 255)
+        if 'red' in self.current_params:
+            initial = QColor(
+                self.current_params['red'], 
+                self.current_params['green'], 
+                self.current_params['blue']
+            )
+            
+        color = QColorDialog.getColor(initial, self, "Select Output Tint")
+        
+        if color.isValid():
+            self.current_params['red'] = color.red()
+            self.current_params['green'] = color.green()
+            self.current_params['blue'] = color.blue()
+            self._update_color_preview()
+
+    def _reset_color(self):
+        """Clear color params to revert to random."""
+        self.current_params.pop('red', None)
+        self.current_params.pop('green', None)
+        self.current_params.pop('blue', None)
+        self._update_color_preview()
+
     def _populate_from_binding(self, binding: NeuronOutputBinding):
         """Fill dialog fields from existing binding."""
         # Find and select neuron
@@ -196,7 +282,11 @@ class OutputBindingDialog(QDialog):
             if self.mode_combo.itemData(i) == binding.trigger_mode.value:
                 self.mode_combo.setCurrentIndex(i)
                 break
-    
+        
+        # Load params
+        self.current_params = binding.hook_params.copy() if binding.hook_params else {}
+        self._on_hook_changed()
+
     def accept(self):
         """Validate and create binding."""
         neuron_name = self.neuron_combo.currentData()
@@ -219,7 +309,8 @@ class OutputBindingDialog(QDialog):
             threshold=self.threshold_spin.value(),
             trigger_mode=trigger_mode,
             cooldown=self.cooldown_spin.value(),
-            enabled=self.enabled_check.isChecked()
+            enabled=self.enabled_check.isChecked(),
+            hook_params=self.current_params # Save collected params
         )
         
         super().accept()
@@ -306,6 +397,15 @@ class NeuronOutputsPanel(QWidget):
             
             # Output hook (formatted nicely)
             hook_display = binding.output_hook.replace('neuron_output_', '').replace('_', ' ').title()
+            
+            # Add parameter details (e.g. RGB color) to display
+            if binding.hook_params:
+                if 'red' in binding.hook_params:
+                    r = binding.hook_params.get('red')
+                    g = binding.hook_params.get('green')
+                    b = binding.hook_params.get('blue')
+                    hook_display += f" [RGB: {r},{g},{b}]"
+            
             hook_item = QTableWidgetItem(hook_display)
             if binding.output_hook in STANDARD_OUTPUT_HOOKS:
                 hook_item.setToolTip(STANDARD_OUTPUT_HOOKS[binding.output_hook].get('description', ''))
@@ -335,15 +435,8 @@ class NeuronOutputsPanel(QWidget):
         """Show dialog to add a new binding."""
         dialog = OutputBindingDialog(self.design, parent=self)
         if dialog.exec_() == QDialog.Accepted and dialog.result_binding:
-            # Check for duplicate
-            for existing in self.bindings:
-                if (existing.neuron_name == dialog.result_binding.neuron_name and
-                    existing.output_hook == dialog.result_binding.output_hook):
-                    QMessageBox.warning(
-                        self, "Duplicate",
-                        f"A binding for {existing.neuron_name} → {existing.output_hook} already exists"
-                    )
-                    return
+            # Duplicate check REMOVED to allow multiple bindings for same neuron/hook
+            # (e.g. one for Rising threshold, one for Falling)
             
             self.bindings.append(dialog.result_binding)
             self.refresh()

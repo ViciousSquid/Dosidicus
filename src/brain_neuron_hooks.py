@@ -241,13 +241,15 @@ class BrainNeuronHooks:
     
     def calculate_can_see_food(self) -> float:
         """Return 100.0 if food is visible in vision cone, 0.0 otherwise."""
+        # 1. Prefer the VisionWorker result (Most accurate/current)
+        if hasattr(self.logic, 'latest_vision_result') and self.logic.latest_vision_result:
+            return 100.0 if self.logic.latest_vision_result.can_see_food else 0.0
+            
+        # 2. Fallback to synchronous check (Only if worker hasn't reported yet)
         if not hasattr(self.logic, 'squid') or not self.logic.squid:
             return 0.0
-
-        # Force fresh visibility check
-        visible_food = self.logic.squid.get_visible_food()
-        
-        return 100.0 if visible_food else 0.0
+            
+        return 100.0 if self.logic.squid.can_see_food() else 0.0
     
     def calculate_plant_proximity(self) -> float:
         """
@@ -258,6 +260,11 @@ class BrainNeuronHooks:
             0-99 scaled by distance to nearest plant edge if not touching
             0.0 if no plants exist
         """
+        # 1. Prefer VisionWorker result for proximity (smoother/faster)
+        if hasattr(self.logic, 'latest_vision_result') and self.logic.latest_vision_result:
+            # The worker calculates a 0-100 proximity value automatically
+            return getattr(self.logic.latest_vision_result, 'plant_proximity_value', 0.0)
+
         if not hasattr(self.logic, 'user_interface') or not hasattr(self.logic, 'squid'):
             return 0.0
         

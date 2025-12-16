@@ -1358,10 +1358,6 @@ class Ui:
         self.neurogenesis_debug_action.triggered.connect(self.show_neurogenesis_debug) 
         view_menu.addAction(self.neurogenesis_debug_action)
 
-        #self.task_mgr_action = QtWidgets.QAction(loc.get("task_manager"), self.window)
-        #self.task_mgr_action.triggered.connect(self.show_task_manager)
-        #view_menu.addAction(self.task_mgr_action)
-
         self.preferences_action = QtWidgets.QAction(loc.get("preferences"), self.window)
         self.preferences_action.triggered.connect(self.show_preferences)
         self.preferences_action.setShortcut("Ctrl+P")
@@ -1420,12 +1416,27 @@ class Ui:
         self.vision_action = QtWidgets.QAction(loc.get("squid_vision"), self.window)
         self.vision_action.triggered.connect(self.show_vision_window)
         debug_menu.addAction(self.vision_action)
+        
+        self.neuron_monitor_action = QtWidgets.QAction("Neuron Output Monitor", self.window)
+        self.neuron_monitor_action.triggered.connect(self.show_neuron_output_monitor)
+        debug_menu.addAction(self.neuron_monitor_action)
 
         self.rock_test_action = QtWidgets.QAction('Rock test (forced)', self.window)
         self.rock_test_action.triggered.connect(self.trigger_rock_test)
         
         self.plugins_menu = self.menu_bar.addMenu(loc.get("plugins"))
         self.connect_action_buttons()
+
+    def show_neuron_output_monitor(self):
+        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+            if hasattr(self.tamagotchi_logic, 'neuron_output_monitor'):
+                # Force the window to be created and shown
+                self.tamagotchi_logic.neuron_output_monitor._ensure_log_window()
+                if self.tamagotchi_logic.neuron_output_monitor.log_window:
+                    self.tamagotchi_logic.neuron_output_monitor.log_window.show()
+                    self.tamagotchi_logic.neuron_output_monitor.log_window.raise_()
+            else:
+                 print("Neuron output monitor not initialized")
 
     def show_task_manager(self):
         if not hasattr(self, '_task_manager') or not self._task_manager:

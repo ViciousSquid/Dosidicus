@@ -1,5 +1,3 @@
-# src/brain_statistics_tab.py
-
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .display_scaling import DisplayScaling
@@ -69,10 +67,13 @@ class StatisticsTab(BrainBaseTab):
         self.tamagotchi_logic = logic
 
     def update_current_neurons(self, count):
-        """Update the current neuron count in the UI."""
+        """Update the current neuron count in the UI, enforcing only-count-up logic."""
         if hasattr(self, 'stat_labels') and 'current_neurons' in self.stat_labels:
-            self.stat_labels['current_neurons'].setText(str(count))
-            self.statistics['current_neurons'] = count
+            # Check if new count is higher than stored max
+            current_max = self.statistics.get('current_neurons', 0)
+            if count > current_max:
+                self.statistics['current_neurons'] = count
+                self.stat_labels['current_neurons'].setText(str(count))
 
     def _on_neuron_created_update_stats(self, neuron_name: str):
         """Update current neuron count when a new neuron is created"""
@@ -141,7 +142,7 @@ class StatisticsTab(BrainBaseTab):
             ('novelty_neurons_created', loc.get('stat_novelty_neurons')),
             ('stress_neurons_created', loc.get('stat_stress_neurons')),
             ('reward_neurons_created', loc.get('stat_reward_neurons')),
-            ('current_neurons', loc.get('stat_current_neurons')),
+            ('current_neurons', "Max neurons"),  # UPDATED LABEL
         ]
 
         # Ensure the label dictionary exists
@@ -205,15 +206,28 @@ class StatisticsTab(BrainBaseTab):
 
         squid = self.tamagotchi_logic.squid
 
-        # FIX: Use neuron_positions instead of non-existent 'neurons' attribute
+        # --- FIX: ROBUST NEURON COUNT SYNC ---
+        # Ensure we have a valid brain_widget reference
+        if not self.brain_widget:
+            # Attempt to find it from parent if possible (common in some architectures)
+            parent = self.parent()
+            if hasattr(parent, 'brain_widget'):
+                self.brain_widget = parent.brain_widget
+
+        # Pull count directly from widget if available
         if self.brain_widget and hasattr(self.brain_widget, 'neuron_positions'):
-            current_neuron_count = len(self.brain_widget.neuron_positions)
-            self.statistics['current_neurons'] = current_neuron_count
+            real_current_count = len(self.brain_widget.neuron_positions)
+            stored_count = self.statistics.get('current_neurons', 0)
             
-            # Update display labels immediately
-            if hasattr(self, 'stat_labels'):
-                if 'current_neurons' in self.stat_labels:
-                    self.stat_labels['current_neurons'].setText(str(current_neuron_count))
+            # If the actual count in the brain is higher than our stats record, update it
+            if real_current_count > stored_count:
+                self.statistics['current_neurons'] = real_current_count
+                
+                # Also update the persistent squid statistics object if it exists
+                if hasattr(squid, 'statistics') and hasattr(squid.statistics, 'max_neurons_reached'):
+                    if real_current_count > squid.statistics.max_neurons_reached:
+                         squid.statistics.max_neurons_reached = real_current_count
+                         squid.statistics.current_neurons = real_current_count
 
         # Track sleep time
         if squid.is_sleeping:
@@ -311,7 +325,7 @@ class StatisticsTab(BrainBaseTab):
                     f.write(f"{loc.get('stat_sleep')}: {int(self.statistics['total_sleep_time'])}\n")
                     f.write(f"{loc.get('stat_sickness')}: {self.statistics['sickness_episodes']}\n")
                     f.write(f"{loc.get('stat_squid_age')}: {int(self.statistics['squid_age_minutes'])}\n")
-                    
+                    f.write(f"Max Neurons: {self.statistics.get('current_neurons', 7)}\n")
                     f.write("\n" + "=" * 30 + "\n")
                     f.write(f"{loc.get('export_end')}\n")
                 

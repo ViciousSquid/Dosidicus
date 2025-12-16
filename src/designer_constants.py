@@ -8,11 +8,13 @@ class NeuronType(Enum):
     HIDDEN = auto()
     CORE = auto()
     SENSOR = auto()
+    CONNECTOR = auto()
 
 # --- Visual Constants ---
 CORE_NEURON_RING_COLOR = (255, 215, 0)
 INPUT_SENSOR_RING_COLOR = (100, 149, 237)
 CUSTOM_NEURON_RING_COLOR = (180, 180, 180)
+CONNECTOR_COLOR = (0, 0, 000)
 PROTECTED_RING_WIDTH = 3
 NORMAL_RING_WIDTH = 2
 DEFAULT_LAYER_HEIGHT = 120
@@ -25,6 +27,8 @@ DEFAULT_COLORS = {
     'output': (220, 150, 150),
     'hidden': (180, 180, 200),
     'sensor': (150, 200, 220),
+    'connector': (000, 0, 0)
+    
 }
 
 LAYER_COLORS = {
