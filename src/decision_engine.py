@@ -4,6 +4,7 @@
 # Uses BrainNeuronHooks as the single source of perception
 
 import random
+import time
 import math
 from .personality import Personality
 
