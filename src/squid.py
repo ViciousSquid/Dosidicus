@@ -139,7 +139,7 @@ class Squid:
         # Vision update timer - updates worker with squid state
         self._vision_update_timer = QtCore.QTimer()
         self._vision_update_timer.timeout.connect(self._update_vision_worker)
-        self._vision_update_timer.start(50)  # 20 Hz updates
+        self._vision_update_timer.start(100)  # 10 Hz updates
         
         # Scene object cache for vision worker
         self._scene_objects_dirty = True

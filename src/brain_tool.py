@@ -1874,26 +1874,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.learning_data = []
         print("Learning data cleared.")
 
-    def update_learning_interval(self, seconds):
-        """Update the learning interval when spinbox value changes"""
-        # Convert seconds to milliseconds (QTimer uses ms)
-        interval_ms = seconds * 1000
-        
-        # Update config
-        if hasattr(self.config, 'hebbian'):
-            self.config.hebbian['learning_interval'] = interval_ms
-        else:
-            self.config.hebbian = {'learning_interval': interval_ms}
-        
-        # Restart timer with new interval
-        if hasattr(self, 'hebbian_timer'):
-            self.hebbian_timer.setInterval(interval_ms)
-            self.last_hebbian_time = time.time()  # Reset countdown
-        
-        if self.debug_mode:
-            print(f"Learning interval updated to {seconds} seconds ({interval_ms} ms)")
-
-    
 
     def deduce_weight_change_reason(self, pair, value1, value2, prev_weight, new_weight, weight_change):
         neuron1, neuron2 = pair
@@ -2076,41 +2056,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 if i < j:
                     strength = self.brain_widget.get_association_strength(neuron1, neuron2)
                     print(f"{neuron1} - {neuron2}: {strength:.2f}")
-
-    def init_training_data_tab(self):
-        self.show_overview_checkbox = QtWidgets.QCheckBox("Show Training Process Overview")
-        self.show_overview_checkbox.stateChanged.connect(self.toggle_overview)
-        self.training_data_tab_layout.addWidget(self.show_overview_checkbox)
-
-        self.overview_label = QtWidgets.QLabel(
-            "Training Process Overview:\n\n"
-            "1. Data Capture: When 'Capture training data' is checked, the current state of all neurons is recorded each time the brain is stimulated.\n\n"
-            "2. Hebbian Learning: The 'Train Hebbian' button applies the Hebbian learning rule to the captured data.\n\n"
-            "3. Association Strength: The learning process strengthens connections between neurons that are frequently active together.\n\n"
-            "4. Weight Updates: After training, the weights between neurons are updated based on their co-activation patterns.\n\n"
-            "5. Adaptive Behavior: Over time, this process allows the brain to adapt its behavior based on input patterns."
-        )
-        self.overview_label.setWordWrap(True)
-        self.overview_label.hide()  # Hide by default
-        self.training_data_tab_layout.addWidget(self.overview_label)
-
-        self.training_data_table = QtWidgets.QTableWidget()
-        self.training_data_tab_layout.addWidget(self.training_data_table)
-
-        self.training_data_table.setColumnCount(len(self.brain_widget.neuron_positions))
-        self.training_data_table.setHorizontalHeaderLabels(list(self.brain_widget.neuron_positions.keys()))
-
-        self.training_data_timer = QtCore.QTimer()
-        self.training_data_timer.timeout.connect(self.update_training_data_table)
-        self.training_data_timer.start(1000)  # Update every second
-
-        self.checkbox_capture_training_data = QtWidgets.QCheckBox("Capture training data")
-        self.checkbox_capture_training_data.stateChanged.connect(self.toggle_capture_training_data)
-        self.training_data_tab_layout.addWidget(self.checkbox_capture_training_data)
-
-        self.train_button = self.create_button("Train Hebbian", self.train_hebbian, "#ADD8E6")
-        self.train_button.setEnabled(False)  # Initially grey out the train button
-        self.training_data_tab_layout.addWidget(self.train_button)
 
     def toggle_overview(self, state):
         if state == QtCore.Qt.Checked:

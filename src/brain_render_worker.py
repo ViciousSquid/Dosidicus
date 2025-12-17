@@ -337,8 +337,8 @@ class BrainRenderWorker(QThread):
     def _draw_connections(self, painter: QPainter, state: RenderState, scale: float):
         """
         Draw all neural connections with scrolling arrow animations for Hebbian learning.
-        Includes specific coloring for excitatory (green) vs inhibitory (red) weights
-        and weight-based thickness clamping (max 15px or style-defined).
+        Includes specific coloring for excitatory (green) vs inhibitory (red) weights,
+        weight-based thickness, and temporary weight labels during Hebbian cycles.
         """
         current_time = state.animation_time
         
@@ -372,7 +372,7 @@ class BrainRenderWorker(QThread):
                 # Check match (undirected)
                 if anim['pair'] == (src, dst) or anim['pair'] == (dst, src):
                     elapsed = current_time - anim['start_time']
-                    duration = anim['duration']
+                    duration = anim['duration'] # Duration controlled via config/state
                     
                     if 0 <= elapsed < duration:
                         active_anim = anim
@@ -382,60 +382,42 @@ class BrainRenderWorker(QThread):
             # ===== WEIGHT-BASED THICKNESS & COLOR =====
             abs_weight = abs(weight)
             
-            # 1. Base thickness calculation:
-            # Scale weight (0.0 to 1.0) to a range
-            # Define max pixel thickness for strongest connections based on style
             if state.weight_thickness_enabled:
                 MAX_THICKNESS = state.weight_thickness_max
             else:
                 MAX_THICKNESS = 15.0
             
-            # Calculate thickness: Base + (Weight * Scalar), clamped to MAX_THICKNESS
-            # Ensure we don't have negative range if base > max
             thickness_range = max(0.0, MAX_THICKNESS - state.anim_line_base_width)
             calculated_thickness = state.anim_line_base_width + (abs_weight * thickness_range)
-            
-            # Clamp rigidly to MAX_THICKNESS
             base_thickness = min(calculated_thickness, MAX_THICKNESS)
             
-            # 2. Determine Color (Excitatory vs Inhibitory)
             if weight >= 0:
-                # Excitatory = Green (using positive color from state)
                 base_color = QColor(*state.anim_line_col_pos)
             else:
-                # Inhibitory = Red (using negative color from state)
                 base_color = QColor(*state.anim_line_col_neg)
             
-            # Apply Opacity
             base_color.setAlpha(int(state.anim_line_alpha * opacity))
 
-            # Base styling
             line_width = base_thickness * scale
             pen_style = Qt.SolidLine 
             
-            # Dashed line for negative, Dotted for very weak (optional visual aid)
             if weight < 0:
                 pen_style = Qt.DashLine
             if abs_weight < 0.1:
                 pen_style = Qt.DotLine
             
             # ===== ANIMATED LINE STYLING (during Hebbian cycle) =====
-            # Initialize current_thickness with base value
             current_thickness = base_thickness
             line_color = base_color
             
             if active_anim:
-                # Connection becomes bright during Hebbian cycle
                 r, g, b = active_anim['color']
                 line_color = QColor(r, g, b, 255)
                 
-                # Line thickness pulses during animation
                 anim_max_thickness = (MAX_THICKNESS + 3.0) * scale
-                
                 pulse_factor = math.sin(active_anim_progress * math.pi)
                 current_thickness = base_thickness + (pulse_factor * (anim_max_thickness - base_thickness))
-                
-                pen_style = Qt.SolidLine  # Always solid during animation
+                pen_style = Qt.SolidLine
             
             line_width = max(1, int(current_thickness * scale))
             
@@ -444,76 +426,98 @@ class BrainRenderWorker(QThread):
             
             # ===== DRAW SCROLLING ARROWS FOR MOVEMENT ILLUSION =====
             if active_anim and active_anim_progress < 1.0:
-                # Calculate direction vector and angle
                 dx = end.x() - start.x()
                 dy = end.y() - start.y()
                 length = math.sqrt(dx*dx + dy*dy)
                 
-                if length > 10:  # Only draw arrows on longer connections
-                    # Normalize direction
+                if length > 10:
                     dir_x = dx / length
                     dir_y = dy / length
-                    
-                    # Arrow size
                     arrow_size = 12.0 * scale
-                    
-                    # Draw 4 arrows at different positions (trail effect)
                     arrow_positions = [0.20, 0.40, 0.60, 0.80]
-                    
-                    # Offset based on animation progress to create movement
                     progress_offset = active_anim_progress * 0.8
                     
                     for i, base_pos in enumerate(arrow_positions):
-                        # Calculate actual position offset by progress
                         pos_offset = (base_pos + progress_offset) % 1.0
-                        
-                        # Arrow center point
                         center_x = start.x() + pos_offset * dx
                         center_y = start.y() + pos_offset * dy
-                        
-                        # Alpha fades for trail effect (255, 191, 128, 64)
                         alpha = int(255 * (1.0 - (i * 0.25)))
                         
-                        # Create arrow polygon (pointing along the line)
                         arrow = QPolygonF()
-                        
-                        # Arrow points in direction of connection
-                        # Front point
                         point_x = center_x + dir_x * arrow_size
                         point_y = center_y + dir_y * arrow_size
                         arrow.append(QPointF(point_x, point_y))
                         
-                        # Back left
                         back_x = center_x - dir_x * arrow_size * 0.5
                         back_y = center_y - dir_y * arrow_size * 0.5
                         left_x = back_x - dir_y * arrow_size * 0.5
                         left_y = back_y + dir_x * arrow_size * 0.5
                         arrow.append(QPointF(left_x, left_y))
                         
-                        # Back right
                         right_x = back_x + dir_y * arrow_size * 0.5
                         right_y = back_y - dir_x * arrow_size * 0.5
                         arrow.append(QPointF(right_x, right_y))
                         
-                        # Fill arrow with color
                         arrow_color = QColor(line_color)
                         arrow_color.setAlpha(alpha)
                         painter.setBrush(QBrush(arrow_color))
                         painter.setPen(QPen(arrow_color, 1))
                         painter.drawPolygon(arrow)
-            
-            # ===== DRAW WEIGHT TEXT =====
-            if state.show_weights and abs_weight > 0.1:
-                # Calculate angle for rotation
+
+            # ===== BRIEF WEIGHT DISPLAY DURING HEBBIAN CYCLE =====
+            # Renders if an animation is active, even if state.show_weights is False
+            if active_anim:
+                # Interpolate weight for visual feedback
+                current_w = active_anim['start_weight'] + (weight - active_anim['start_weight']) * active_anim_progress
+                text_str = f"{current_w:+.2f}"
+                
+                midpoint = QPointF((start.x() + end.x()) / 2, (start.y() + end.y()) / 2)
+                
+                # Floating effect: moves slightly upward as it fades
+                float_offset = 20 * scale * active_anim_progress
+                text_pos = QPointF(midpoint.x(), midpoint.y() - float_offset)
+                
+                # Fade out text as animation reaches the end
+                text_alpha = int(255 * (1.0 - active_anim_progress))
+                
+                font_size = max(7, int(9 * scale))
+                padding = 5 * scale
+                
+                font = painter.font()
+                font.setPointSize(font_size)
+                font.setBold(True)
+                painter.setFont(font)
+                
+                fm = painter.fontMetrics()
+                text_w = fm.horizontalAdvance(text_str)
+                text_h = fm.height()
+                
+                painter.save()
+                painter.translate(text_pos)
+                
+                rect = QRectF(-text_w/2 - padding, -text_h/2, text_w + padding*2, text_h)
+                
+                # Draw background pill
+                painter.setBrush(QBrush(QColor(255, 255, 255, min(220, text_alpha))))
+                painter.setPen(QPen(QColor(0, 0, 0, min(100, text_alpha)), 1))
+                painter.drawRoundedRect(rect, 4, 4)
+                
+                # Text matches animation color (Green/Red)
+                r, g, b = active_anim['color']
+                painter.setPen(QColor(r, g, b, text_alpha))
+                painter.drawText(rect, Qt.AlignCenter, text_str)
+                
+                painter.restore()
+
+            # ===== STANDARD PERSISTENT WEIGHT TEXT =====
+            # Render only if show_weights is explicitly checked and NOT currently animating
+            elif state.show_weights and abs_weight > 0.1:
                 dx = end.x() - start.x()
                 dy = end.y() - start.y()
                 angle_deg = math.degrees(math.atan2(dy, dx))
                 
-                # Ensure text is readable
-                if angle_deg > 90:
-                    angle_deg -= 180
-                elif angle_deg < -90:
-                    angle_deg += 180
+                if angle_deg > 90: angle_deg -= 180
+                elif angle_deg < -90: angle_deg += 180
                 
                 midpoint = QPointF((start.x() + end.x()) / 2, (start.y() + end.y()) / 2)
                 text_str = f"{weight:.2f}"
@@ -534,14 +538,12 @@ class BrainRenderWorker(QThread):
                 painter.translate(midpoint)
                 painter.rotate(angle_deg)
                 
-                rect = QRectF(-text_w/2 - padding, -text_h/2, 
-                            text_w + padding*2, text_h)
+                rect = QRectF(-text_w/2 - padding, -text_h/2, text_w + padding*2, text_h)
                 
                 painter.setBrush(QBrush(QColor(255, 255, 255, 220)))
                 painter.setPen(QPen(QColor(100, 100, 100, 150), 1))
                 painter.drawRoundedRect(rect, 4, 4)
                 
-                # Text color matches line color logic
                 text_color = QColor(0, 100, 0) if weight >= 0 else QColor(150, 0, 0)
                 painter.setPen(text_color)
                 painter.drawText(rect, Qt.AlignCenter, text_str)

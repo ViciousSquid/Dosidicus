@@ -142,9 +142,17 @@ class ShowmanNeurogenesis:
         """
         return self.en.get_global_cooldown_remaining()
 
-    def capture_experience_context(self, trigger, state, actions, env):
-        """Delegate to real system"""
-        return self.en.capture_experience_context(trigger, state, actions, env)
+    def capture_experience_context(self, trigger_type, brain_state, recent_actions, environment):
+        """
+        Showman wrapper: Delegate to real system using standard keyword arguments.
+        This fixes the TypeError: unexpected keyword argument 'trigger_type'.
+        """
+        return self.en.capture_experience_context(
+            trigger_type=trigger_type, 
+            brain_state=brain_state, 
+            recent_actions=recent_actions, 
+            environment=environment
+        )
 
     def should_create_neuron(self, ctx) -> bool:
         """
@@ -257,18 +265,20 @@ class ShowmanNeurogenesis:
         
         Note: Respects showmanship config flag - returns False if disabled.
         """
-        # Check if showmanship is enabled
+        # 1. Configuration Guard: Check if showmanship is enabled
         if not self.is_showmanship_enabled():
             return False
         
+        # 2. Duplicate Guard: Don't trigger the same semantic event twice
         if event in self._triggered_events:
-            return False  # Already triggered
+            return False
         
+        # 3. Pacing Guard: Respect the showman-specific cooldown
         now = time.time()
         if now - self.last_showman_creation < self.showman_cooldown:
             return False
         
-        # Map events to trigger types
+        # 4. Semantic Mapping: Convert the event into a standard trigger type
         event_to_trigger = {
             NeurogenesisEvent.FIRST_FEEDING: 'reward',
             NeurogenesisEvent.FIRST_ROCK: 'novelty',
@@ -287,21 +297,21 @@ class ShowmanNeurogenesis:
         
         trigger_type = event_to_trigger.get(event, 'novelty')
         
-        # Create a minimal context
-        from .neurogenesis import ExperienceContext
-        ctx = ExperienceContext(
+        # 5. Context Capture: Pull current state from the brain widget
+        current_brain_state = dict(self.en.brain_widget.state)
+
+        # 6. Synchronize: Call our fixed capture method to build the ExperienceContext
+        ctx = self.capture_experience_context(
             trigger_type=trigger_type,
-            active_neurons=dict(self.en.brain_widget.state),
+            brain_state=current_brain_state,
             recent_actions=[event.value],
-            environmental_state={},
-            outcome='positive',
-            timestamp=now
+            environment={}
         )
         
         print(f"🎭 Manual event trigger: {event.value}")
-        self._fire_event(event)
+        self._fire_event(event) # Records event and fires achievement callbacks
         
-        # Create the neuron
+        # 7. Creation: Finalize the dramatic neuron birth
         result = self.create_functional_neuron(ctx)
         return result is not None
 
