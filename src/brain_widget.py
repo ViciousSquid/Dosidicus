@@ -138,8 +138,7 @@ class BrainWidget(QtWidgets.QWidget):
         self.weight_change_events = {} #
         self.activity_duration = 0.5 #
 
-        # ADDED IN 2.4.5.0: Replace simple neurogenesis_data with enhanced system
-        self.enhanced_neurogenesis = EnhancedNeurogenesis(self, self.config)
+       # Get experience buffer from the already-wrapped neurogenesis system
         self.experience_buffer = self.enhanced_neurogenesis.experience_buffer
 
         # Ensure neurogenesis config exists
@@ -263,7 +262,7 @@ class BrainWidget(QtWidgets.QWidget):
             set_game_running(True)  # Mark game as running
             print("🔗 Brain state export enabled for designer sync")
         
-        self.animation_timer.start(40)  # 2.5.0.0 performance fix
+        self.animation_timer.start(50)  # 20 fps  - 2.6.1.0 performance fix
         self._last_animation_update = 0  # For throttling
         
         # ===== PERFORMANCE FIX: Cache for expensive paint objects =====
