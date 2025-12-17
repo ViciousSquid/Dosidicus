@@ -232,18 +232,6 @@ class TamagotchiLogic:
         # NOW load the game after statistics_window exists AND plugins are initialized
         self.load_game()
 
-        # Setup additional timers
-        self.score_update_timer = QtCore.QTimer()
-        self.score_update_timer.timeout.connect(self.update_score)
-        self.score_update_timer.start(5000)
-
-        self.brain_update_timer = QtCore.QTimer()
-        self.brain_update_timer.timeout.connect(self.update_squid_brain)
-        self.brain_update_timer.start(1000)
-
-        self.autosave_timer = QtCore.QTimer()
-        self.autosave_timer.timeout.connect(self.autosave)
-
         # Initialize goal neurons
         self.squid.satisfaction = 50
         self.squid.anxiety = 10
@@ -3048,23 +3036,6 @@ class TamagotchiLogic:
 
         self.squid.anxiety += anxiety_change * self.simulation_speed
         self.squid.anxiety = max(0, min(100, self.squid.anxiety))
-
-    def update_curiosity(self):
-        # Update curiosity based on satisfaction and anxiety
-        if self.squid.satisfaction > 70 and self.squid.anxiety < 30:
-            curiosity_change = 0.2 * self.simulation_speed
-        else:
-            curiosity_change = -0.1 * self.simulation_speed
-
-        # Adjust curiosity change based on personality
-        if self.squid.personality == Personality.TIMID:
-            curiosity_change *= 0.5  # Timid squids are less curious
-        elif self.squid.personality == Personality.ADVENTUROUS:
-            curiosity_change *= 1.5  # Adventurous squids are more curious
-
-        self.squid.curiosity += curiosity_change
-        self.squid.curiosity = max(0, min(100, self.squid.curiosity))
-
 
     def trigger_rock_test(self):
         """Trigger rock test from UI using the interaction manager"""
