@@ -2,9 +2,9 @@
   "version": "2.0",
   "format": "dosidicus",
   "metadata": {
-    "name": "Untitled",
-    "description": "",
-    "author": "",
+    "name": "Feed-Forward-Hidden-Layer",
+    "description": "A hidden layer of 4 neurons",
+    "author": "Rufus Pearce",
     "version": "1.0",
     "created": "",
     "modified": ""
@@ -544,4 +544,5 @@
     "hidden0_3"
   ],
   "required_complete": true
+
 }
