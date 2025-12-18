@@ -143,6 +143,7 @@ On modern hardware, expect:
 - A 50,000 tick training session completes in ~2 seconds
 - A 1,000,000 tick session completes in ~30 seconds
 
+
 ## Integration with Dosidicus-2
 
 The trained brain JSON files are fully compatible with:
