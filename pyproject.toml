@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "dosidicus"
+version = "2.6.1.0"
+description = "Tamagotchi-style digital pet with a neural network"
+authors = ["ViciousSquid"]
+readme = "README.md"
+packages = [{include = "src"}]
+include = ["images/**/*", "plugins/**/*", "tools/**/*", "main.py", "config.ini"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+PyQt5 = "^5.15"
+numpy = "^1.21"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
