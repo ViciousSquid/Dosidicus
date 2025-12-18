@@ -114,7 +114,7 @@ Any neuron not in the core/sensor lists is treated as a custom neuron and will p
 ## Example Workflow
 
 ### 1. Create a custom brain in the Brain Designer
-Use the Dosidicus-2 Brain Designer to create your architecture, then export it as JSON.
+Use the [Brain Designer](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) to create your architecture, then export it as JSON.
 
 ### 2. Train the brain headlessly
 ```bash
@@ -125,8 +125,8 @@ python headless_trainer.py -b my_design.json -t 50000 -o trained_v1.json
 python headless_trainer.py -b my_design.json -s stress_test -o stress_trained.json
 ```
 
-### 3. Load the trained brain back into Dosidicus-2
-Use the "Load Brain" button in the Network tab to load your trained brain.
+### 3. Load the trained brain back into Dosidicus
+Use the "Load Brain" button in the [Network tab](https://github.com/ViciousSquid/Dosidicus/wiki/Network-Tab) to load your trained brain.
 
 ## Training Tips
 
@@ -152,4 +152,4 @@ The trained brain JSON files are fully compatible with:
 
 ## License
 
-Part of Dosidicus-2 project.
+Part of Dosidicus-2 project. [GPL-2.0 license](https://github.com/ViciousSquid/Dosidicus/blob/v2.6.1.0__b1218_LatestVersion/LICENSE)
