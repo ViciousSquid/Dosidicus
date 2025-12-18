@@ -1,4 +1,4 @@
-# Dosidicus-2 Headless Brain Trainer
+# Headless Brain Trainer
 
 A standalone training system for Dosidicus-2 neural network brains that runs without GUI overhead, enabling fast accelerated training of custom brain architectures.
 
