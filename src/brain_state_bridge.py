@@ -278,6 +278,10 @@ def convert_to_brain_design(live_state: Dict) -> Optional['BrainDesign']:
         
         neurons_data = live_state.get('neurons', {})
         connections_data = live_state.get('connections', {})
+        # FALLBACK: Check 'weights' if connections is empty/missing
+        if not connections_data:
+            connections_data = live_state.get('weights', {})
+
         state_data = live_state.get('state', {})
         
         # Create neurons
@@ -304,7 +308,7 @@ def convert_to_brain_design(live_state: Dict) -> Optional['BrainDesign']:
             )
             design.add_neuron(neuron)
         
-        # Create connections - Handle both List (new) and Dict (legacy) formats
+        # Create connections - Handle List, Dict (connections), and Dict (weights) formats
         if isinstance(connections_data, list):
             # NEW: Handle list of dicts [{'source': 'A', 'target': 'B', 'weight': 0.5}, ...]
             for conn in connections_data:
@@ -320,7 +324,7 @@ def convert_to_brain_design(live_state: Dict) -> Optional['BrainDesign']:
                         design.connections.append(new_conn)
 
         elif isinstance(connections_data, dict):
-            # LEGACY: Handle dict {'A->B': 0.5, ...}
+            # LEGACY/WEIGHTS: Handle dict {'A->B': 0.5, ...} OR {'A|B': 0.5}
             for conn_key, weight in connections_data.items():
                 if '->' in conn_key:
                     source, target = conn_key.split('->')
@@ -334,8 +338,10 @@ def convert_to_brain_design(live_state: Dict) -> Optional['BrainDesign']:
                 
                 # Only add if both neurons exist
                 if source in design.neurons and target in design.neurons:
-                    conn = DesignerConnection(source=source, target=target, weight=weight)
-                    design.connections.append(conn)
+                    # Check for duplicates before adding
+                    if not design.get_connection(source, target):
+                        conn = DesignerConnection(source=source, target=target, weight=weight)
+                        design.connections.append(conn)
         
         # Load layers if present
         for layer_data in live_state.get('layers', []):

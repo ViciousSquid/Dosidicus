@@ -79,6 +79,7 @@ class BrainWidget(QtWidgets.QWidget):
         # State update batching
         self._pending_state_update = False
         self.state_update_queue = []
+        self.show_directions = False
         
         # Caches for neuron data
         self.neurons = {}
@@ -352,6 +353,12 @@ class BrainWidget(QtWidgets.QWidget):
         self.brain_worker.error_occurred.connect(self._on_worker_error)
         
         print("🧵 BrainWidget received external BrainWorker")
+
+    def toggle_directions(self, state):
+        """Slot to toggle the ➤ arrows visibility."""
+        self.show_directions = (state == QtCore.Qt.Checked)
+        self.mark_render_dirty() # Force the render worker to update
+        self.update()
 
     # =========================================================================
     # BRAIN STATE BRIDGE METHODS (for designer synchronization)
@@ -766,20 +773,26 @@ class BrainWidget(QtWidgets.QWidget):
         self._comm_glow_last_spawn[conn_key] = current_time
 
     def find_orphan_neurons(self):
-        """Find neurons with no connections in the weights dictionary"""
+        """Find neurons with no connections (or only very weak ones) in the weights dictionary"""
         orphans = []
         
         # Define neurons that should be checked even if they are in excluded_neurons
         explicitly_allowed = {'can_see_food', 'plant_proximity', 'is_fleeing'}
         
+        # Threshold for a "real" connection to prevent 0.0 weights from masking orphans
+        significant_threshold = 0.01
+
         for neuron in self.neuron_positions.keys():
             # Skip if the neuron is excluded, unless it's in our allowed list
             if neuron in self.excluded_neurons and neuron not in explicitly_allowed:
                 continue
             
-            # Check for any connection (incoming or outgoing)
-            has_connection = any(src == neuron or dst == neuron 
-                                for (src, dst) in self.weights.keys())
+            # Check for any SIGNIFICANT connection (incoming or outgoing)
+            has_connection = False
+            for (src, dst), weight in self.weights.items():
+                if (src == neuron or dst == neuron) and abs(weight) > significant_threshold:
+                    has_connection = True
+                    break
             
             if not has_connection:
                 orphans.append(neuron)
@@ -1182,10 +1195,13 @@ class BrainWidget(QtWidgets.QWidget):
             traceback.print_exc()
             
     def _on_hebbian_complete(self, result: dict):
-        """Handle Hebbian learning result from worker thread (called on main thread)."""
+        """
+        Callback in brain_widget.py triggered by the BrainWorker signal.
+        Handles results and resets the master countdown timestamp.
+        """
         self._pending_hebbian_learning = False
         
-        # Always reset the timer so countdown restarts properly
+        # CRITICAL RESET: Update last_hebbian_time to NOW so the master timer restarts accurately
         self.last_hebbian_time = time.time()
         
         updated_pairs = result.get('updated_pairs', [])
@@ -1195,75 +1211,50 @@ class BrainWidget(QtWidgets.QWidget):
             self.update()
             return
             
-        # [NEW] Pre-generate distinct colors for this batch to ensure uniqueness
-        import random
-        from PyQt5.QtGui import QColor
-        
-        new_connections_created = []  # Track newly formed connections
-        
-        # Apply the weight updates (main thread only)
+        # Define specific highlight colors as requested (Yellow, Cyan, Pink)
+        # We cycle through these for concurrent updates
+        HIGHLIGHT_PALETTE = [
+            #(255, 255, 0),    # Yellow
+            (0, 255, 255),    # Cyan
+            #(255, 105, 180)   # Pink
+        ]
+            
+        # Apply the weight updates calculated in the background
         for i, (pair_str, update_data) in enumerate(weight_updates.items()):
-            # Convert string key back to tuple if needed
+            # Convert string key back to tuple if the worker serialized it
             if isinstance(pair_str, str):
                 pair = tuple(pair_str.split(','))
             else:
                 pair = pair_str
             
-            # Check if this is a new connection being created by Hebbian learning
+            # Create new connections if Hebbian learning discovered a new pathway
             is_new_connection = update_data.get('is_new_connection', False)
-            
             if is_new_connection and pair not in self.weights:
-                # Create the new connection - Hebbian learning forming new pathways!
-                self.weights[pair] = 0.0  # Initialize with zero weight
-                new_connections_created.append(pair)
+                self.weights[pair] = 0.0
                 
             if pair in self.weights:
                 old_weight = update_data['old_weight']
                 new_weight = update_data['new_weight']
                 self.weights[pair] = new_weight
                 
-                # [NEW] Generate unique vibrant color using HSL (Hue, Saturation, Lightness)
-                # Offset hue by index to ensure pairs get different colors
-                hue = (random.random() + (i * 0.618033988749895)) % 1.0  # Golden ratio spacing
-                unique_color = QColor.fromHslF(hue, 0.95, 0.6).toRgb()
-                color_tuple = (unique_color.red(), unique_color.green(), unique_color.blue())
+                # Use strict color cycling from our palette
+                custom_color = HIGHLIGHT_PALETTE[i % len(HIGHLIGHT_PALETTE)]
                 
-                # [NEW] Randomize speed (duration) between 0.8s (fast) and 2.0s (slow)
-                unique_duration = random.uniform(0.8, 2.0)
+                # [CHANGE] Significantly increased duration for 10 FPS visibility
+                unique_duration = 3.0 
                 
-                # Add animation for visual feedback with custom parameters
                 n1, n2 = pair
                 self.add_weight_animation(
                     n1, n2, old_weight, new_weight, 
-                    custom_color=color_tuple, 
+                    custom_color=custom_color, 
                     custom_duration=unique_duration
                 )
                 
-        # Update tracking (convert lists to tuples for consistency)
+        # Update tracking history to avoid learning loops
         self.recently_updated_neuron_pairs = [tuple(p) if isinstance(p, list) else p for p in updated_pairs]
-        self.last_hebbian_time = time.time()
         
-        # Console output
-        if updated_pairs:
-            COLORS = ["\033[96m", "\033[93m", "\033[95m", "\033[92m", "\033[94m"]
-            RESET = "\033[0m"
-            colored = []
-            for i, pair in enumerate(updated_pairs):
-                if isinstance(pair, (list, tuple)) and len(pair) == 2:
-                    a, b = pair
-                    color = COLORS[i % len(COLORS)]
-                    # Mark new connections with a ✨
-                    marker = " ✨" if pair in new_connections_created else ""
-                    colored.append(f"{color}{a} ↔ {b}{marker}{RESET}")
-            if colored:
-                print("     Hebbian learning chosen pairs: " + "  ".join(colored))
-        
-        # Log new connections formed
-        if new_connections_created:
-            print(f"     🔗 New connections formed: {len(new_connections_created)}")
-            # Sync connections list from weights after creating new connections
-            self.sync_connections_from_weights()
-            
+        # Trigger a redraw of the brain visualization
+        self.mark_render_dirty()
         self.update()
         
 
@@ -1474,15 +1465,21 @@ class BrainWidget(QtWidgets.QWidget):
                 not self.neuron_reveal_animations and not self.show_links):
                 self._enable_links_after_reveal()
 
-        # 3. Weight animations - check if any are active
+        # 3. [UPDATE] Weight animations - check if any are active
         if self.weight_animations:
-            old_count = len(self.weight_animations)
-            self.weight_animations = [
+            # Filter out expired animations
+            active_anims = [
                 anim for anim in self.weight_animations
                 if current_time - anim['start_time'] < anim['duration']
             ]
-            if self.weight_animations or old_count > 0:
+            
+            # If we have active animations, or if the count changed (some just finished), repaint
+            if active_anims or len(self.weight_animations) != len(active_anims):
+                self.weight_animations = active_anims
                 needs_repaint = True
+                
+                # CRITICAL: Force render dirty to ensure worker picks up the change
+                self.mark_render_dirty()
         
         # 4. VIBRANT: Ambient pulses - only update if enabled AND we have connections
         if self.anim_ambient_pulse_enabled and self._ambient_pulse_state:
@@ -1509,6 +1506,8 @@ class BrainWidget(QtWidgets.QWidget):
         # Only trigger repaint when needed
         if needs_repaint:
             self.update()
+            # Ensure render request is queued for the worker
+            self._request_render_if_dirty()
         
         # Performance tracking end
         if _PERF_TRACKING_AVAILABLE:
@@ -1793,24 +1792,29 @@ class BrainWidget(QtWidgets.QWidget):
         if self._pending_neurogenesis_check:
             return
         
-        # Prioritise Orphan Rescue ---
-        if hasattr(self, 'enhanced_neurogenesis') and hasattr(self.enhanced_neurogenesis, 'rescue_orphan'):
+        # [FIX] 1. EMERGENCY CHECK FIRST
+        # If anxiety is critical (>= 90), we MUST prioritize stress relief over housekeeping (orphans).
+        # This prevents an orphan from blocking the creation of an emergency stress neuron.
+        current_anxiety = self.state.get('anxiety', 50)
+        is_emergency = current_anxiety >= 90
+
+        # [FIX] 2. Prioritise Orphan Rescue ONLY if system is stable (not in emergency)
+        if not is_emergency and hasattr(self, 'enhanced_neurogenesis') and hasattr(self.enhanced_neurogenesis, 'rescue_orphan'):
             orphans = self.find_orphan_neurons()
             if orphans:
                 orphan = orphans[0]
                 print(f"🚑 Orphan detected: {orphan}. Creating connector neuron...")
                 
-                # ADD ERROR HANDLING
                 try:
                     self.enhanced_neurogenesis.rescue_orphan(orphan)
                     self.update()
-                    return  # Skip normal neurogenesis this tick
+                    return  # Skip normal neurogenesis this tick to allow rescue to complete
                 except Exception as e:
                     print(f"⚠️ Failed to rescue orphan {orphan}: {e}")
                     import traceback
                     traceback.print_exc()
         
-        # Build state with context and check neurogenesis triggers
+        # 3. Standard checks (this handles the actual Emergency Stress creation if is_emergency is True)
         state_with_context = self.state.copy()
         self._pending_neurogenesis_check = True
         
@@ -1829,6 +1833,7 @@ class BrainWidget(QtWidgets.QWidget):
                 traceback.print_exc()
             finally:
                 self._pending_neurogenesis_check = False
+
 
     def toggle_pruning(self, enabled):
         """Enable or disable the pruning mechanisms for neurogenesis"""
@@ -2258,6 +2263,27 @@ class BrainWidget(QtWidgets.QWidget):
         # Accept the close event 
         event.accept()
 
+    def keyPressEvent(self, event):
+        """Handle keyboard shortcuts."""
+        if event.key() == QtCore.Qt.Key_F5:
+            print("🔄 Manual refresh triggered (F5)")
+            # 1. Force state to be dirty
+            self.mark_render_dirty()
+            
+            # 2. Reset throttle to ensure immediate processing
+            self._last_render_request = 0
+            
+            # 3. Force re-calculation of visible links (fixes invisible connection bug)
+            if self.show_links:
+                self.toggle_links(QtCore.Qt.Checked)
+            
+            # 4. Request render immediately
+            self._request_render()
+            self.update()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
     def save_brain_state(self):
         return {
             'weights': self.weights,
@@ -2278,10 +2304,17 @@ class BrainWidget(QtWidgets.QWidget):
         # Sync connections list from loaded weights
         self.sync_connections_from_weights()
 
-        # ADD THESE THREE LINES
         self.neuron_shapes = state.get('neuron_shapes', {})  # Load shapes
-        self.state_colors = state.get('state_colors', {})    # Load colors
-        print(f"📦 Loaded {len(self.neuron_shapes)} neuron shapes")  # Debug print
+        self.state_colors = state.get('state_colors', {})
+    
+        # RECONSTRUCT CUSTOM NEURON TRACKING
+        self.custom_neurons = set()
+        for name, details in state.get('neuron_details', {}).items():
+            if details.get('is_custom') or details.get('neuron_type') == 'custom':
+                self.custom_neurons.add(name)
+        # Fallback: check names if details are missing
+        if not self.custom_neurons:
+            self.custom_neurons = {n for n, s in self.neuron_shapes.items() if s == 'pentagon'}
 
         # Ensure all neurons in neuron_positions exist in state
         for neuron in self.neuron_positions:
@@ -3675,21 +3708,18 @@ class BrainWidget(QtWidgets.QWidget):
         painter.restore()
 
     def draw_neurons(self, painter, scale=1.0):
-        """Main neuron drawing routine."""
-        # ------------------------------------------------------------------
-        # Explicit list of true binary (on/off) neurons
-        # ------------------------------------------------------------------
+        """Main neuron drawing routine with custom neuron overrides."""
         BINARY_NEURONS = {
             "can_see_food", "is_eating", "is_sleeping",
             "is_sick", "is_fleeing", "pursuing_food", "is_startled",
             "external_stimulus", "plant_proximity"
         }
 
-        # Font size for labels - use config value directly
         label_font = QtGui.QFont("Arial", self.neuron_label_font_size)
         label_font.setBold(True)
         painter.setFont(label_font)
-        font_metrics = painter.fontMetrics()
+        
+        custom_neurons = getattr(self, 'custom_neurons', set())
 
         for name, pos in self.neuron_positions.items():
             if name not in self.visible_neurons and not self.is_tutorial_mode:
@@ -3697,153 +3727,89 @@ class BrainWidget(QtWidgets.QWidget):
             if name in self.excluded_neurons:
                 continue
 
-            x_logical, y_logical = pos
-            x = x_logical * scale
-            y = y_logical * scale
+            x, y = pos[0] * scale, pos[1] * scale
             radius = 20 * scale
 
-            # Check shape early
+            # --- MANDATORY OVERRIDE FOR CUSTOM NEURONS ---
+            # Custom neurons are ALWAYS purple circles (#360F5A)
+            if name in custom_neurons:
+                color = QtGui.QColor(54, 15, 90) # Purple #360F5A
+                painter.setBrush(QtGui.QBrush(color))
+                painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), max(1, int(2 * scale))))
+                painter.drawEllipse(QtCore.QPointF(x, y), radius, radius)
+                self._draw_standard_label(painter, name, x, y, scale, self.neuron_label_font_size)
+                continue
+
             shape = self.neuron_shapes.get(name, 'circle')
 
-            # --- BINARY NEURONS (always squares) ---
+            # --- BINARY NEURONS (Squares) ---
             if name in BINARY_NEURONS or name == "can_see_food":
                 raw_value = self.state.get(name, 0)
-                
-                # Value calculation logic
                 value = 100.0 if float(raw_value) > 50 else 0.0
                 is_active = value > 50
                 color = QtGui.QColor(0, 255, 0) if is_active else QtGui.QColor(255, 0, 0)
 
-                # Draw Square
                 painter.setBrush(QtGui.QBrush(color))
                 painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), max(1, int(2 * scale))))
-                
-                size = radius * 1.8 
+                size = radius * 1.8
                 rect = QtCore.QRectF(x - size/2, y - size/2, size, size)
                 painter.drawRect(rect)
 
-                # [NEW] Draw Checkmark or Cross inside
                 symbol = "✓" if is_active else "✗"
-                
                 painter.save()
                 symbol_font = QtGui.QFont("Arial", int(size * 0.7))
                 symbol_font.setBold(True)
                 painter.setFont(symbol_font)
-                painter.setPen(QtGui.QColor(0, 0, 0)) # Black text
+                painter.setPen(QtGui.QColor(0, 0, 0))
                 painter.drawText(rect, QtCore.Qt.AlignCenter, symbol)
                 painter.restore()
 
-                if name == "can_see_food":
-                    # Custom "Small Black Label" Logic for can_see_food
-                    
-                    # Get Localised Name
-                    from .localisation import Localisation
-                    loc = Localisation.instance()
-                    display_name = loc.get(name)
-                    if display_name == name: display_name = name.replace("_", " ").title()
-
-                    # Smaller Font (0.75x)
-                    small_font = painter.font()
-                    small_font.setPointSize(max(4, int(self.neuron_label_font_size * 0.75 * scale)))
-                    painter.setFont(small_font)
-                    fm = painter.fontMetrics()
-
-                    text_width = fm.horizontalAdvance(display_name)
-                    padding = 4 * scale
-                    rect_width = text_width + padding * 2
-                    rect_height = fm.height() + 2
-
-                    text_rect = QtCore.QRectF(
-                        x - rect_width / 2,
-                        y + size/2 + 4 * scale,
-                        rect_width,
-                        rect_height
-                    )
-
-                    # Black Background
-                    painter.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 0))) 
-                    painter.setPen(QtCore.Qt.NoPen)
-                    painter.drawRoundedRect(text_rect, 2, 2)
-
-                    # White Text
-                    painter.setPen(QtGui.QColor(255, 255, 255))
-                    painter.drawText(text_rect, QtCore.Qt.AlignCenter, display_name)
-
-                    # Restore Font
-                    painter.setFont(label_font)
-                else:
-                    # Standard Label for other binary neurons
-                    self._draw_standard_label(painter, name, x, y, scale, self.neuron_label_font_size)
-                
+                self._draw_standard_label(painter, name, x, y, scale, self.neuron_label_font_size)
                 continue
 
             # --- SHAPE-BASED NEURONS ---
-            elif shape == 'hexagon':
-                # --- HEXAGON LOGIC ---
+            if shape == 'hexagon':
                 color = QtGui.QColor(*self.state_colors.get(name, (160, 32, 240)))
-                
-                # Draw hexagon
                 painter.save()
                 painter.translate(x, y)
-                
                 sides = 6
                 polygon = QtGui.QPolygonF()
                 angle_step = 360.0 / sides
                 for i in range(sides):
                     angle = math.radians(i * angle_step - 90)
-                    polygon.append(QtCore.QPointF(radius * math.cos(angle), 
-                                                radius * math.sin(angle)))
-                
+                    polygon.append(QtCore.QPointF(radius * math.cos(angle), radius * math.sin(angle)))
                 painter.setBrush(QtGui.QBrush(color))
                 painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0)))
                 painter.drawPolygon(polygon)
                 
-                # Draw 'C' inside
                 font = QtGui.QFont("Arial", int(14 * scale))
                 font.setBold(True)
                 painter.setFont(font)
                 painter.setPen(QtGui.QColor(255, 255, 255))
-                
-                rect_size = radius * 2
-                rect = QtCore.QRectF(-radius, -radius, rect_size, rect_size)
-                painter.drawText(rect, QtCore.Qt.AlignCenter, "c")
+                painter.drawText(QtCore.QRectF(-radius, -radius, radius * 2, radius * 2), QtCore.Qt.AlignCenter, "c")
                 painter.restore()
-                
-                # SKIP External Label for connectors
                 continue
             
+            elif shape == 'pentagon':
+                # Note: This is now only used for neurogenesis, as custom is overridden above
+                color = QtGui.QColor(*self.state_colors.get(name, (200, 200, 200)))
+                self._draw_polygon_neuron(painter, x, y, 5, radius, color, name, scale, rotation=0)
             elif shape == 'diamond':
                 color = QtGui.QColor(*self.state_colors.get(name, (152, 251, 152)))
                 self._draw_polygon_neuron(painter, x, y, 4, radius, color, name, scale, rotation=0)
-                continue
-            
             elif shape == 'square':
                 color = QtGui.QColor(*self.state_colors.get(name, (152, 251, 152)))
                 self._draw_polygon_neuron(painter, x, y, 4, radius, color, name, scale, rotation=45)
-                continue
-            
             elif shape == 'triangle':
                 color = QtGui.QColor(*self.state_colors.get(name, (255, 255, 150)))
                 self._draw_polygon_neuron(painter, x, y, 3, radius, color, name, scale, rotation=0)
-                continue
-            
-            else:  # circle (default)
-                # Color logic
+            else: # DEFAULT: Circle
                 raw_value = self.state.get(name, 0)
-                value = float(raw_value) if isinstance(raw_value, (int, float, bool)) else 50.0
-                value = max(0, min(100, value))
-                
-                if name in self.state_colors:
-                    color = QtGui.QColor(*self.state_colors[name])
-                else:
-                    color = QtGui.QColor(220, 220, 220)  # Grey
-
-                # Draw Circle
+                value = max(0, min(100, float(raw_value)))
+                color = QtGui.QColor(*self.state_colors.get(name, (220, 220, 220)))
                 painter.setBrush(QtGui.QBrush(color))
                 painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), max(1, int(2 * scale))))
                 painter.drawEllipse(QtCore.QPointF(x, y), radius, radius)
-
-                # Draw Label
                 self._draw_standard_label(painter, name, x, y, scale, self.neuron_label_font_size)
 
     def _draw_standard_label(self, painter, name, x, y, scale, font_size=None):
@@ -4884,23 +4850,27 @@ class NetworkRenderingMixin:
     def draw_neurons_static(
         painter, neuron_positions, neuron_states,
         visible_neurons=None, excluded_neurons=None,
-        scale=1.0, base_font_size=6):
+        neuron_shapes=None, scale=1.0, base_font_size=6):
         """
-        Static neuron drawing with full localisation fallback support.
+        Static neuron drawing with full shape and localisation fallback support.
         """
         import re
+        import math
         from .localisation import Localisation
         loc = Localisation.instance()
 
         BINARY_NEURONS = {
             "can_see_food", "is_eating", "is_sleeping",
-            "is_sick", "is_fleeing", "pursuing_food", "is_startled"
+            "is_sick", "is_fleeing", "pursuing_food", "is_startled",
+            "external_stimulus", "plant_proximity"
         }
 
         if visible_neurons is None:
             visible_neurons = set(neuron_positions.keys())
         if excluded_neurons is None:
             excluded_neurons = set()
+        if neuron_shapes is None:
+            neuron_shapes = {}
 
         label_font = QtGui.QFont("Arial", int(base_font_size * scale))
         label_font.setBold(True)
@@ -4912,8 +4882,9 @@ class NetworkRenderingMixin:
                 continue
 
             raw_value = neuron_states.get(name, 0)
+            shape = neuron_shapes.get(name, 'circle')
 
-            # Determine color and value (binary vs continuous)
+            # Determine color and value
             if name in BINARY_NEURONS:
                 value = 100.0 if float(raw_value) > 50 else 0.0
                 is_active = value > 50
@@ -4922,12 +4893,14 @@ class NetworkRenderingMixin:
                 value = float(raw_value) if isinstance(raw_value, (int, float, bool)) else 50.0
                 value = max(0, min(100, value))
                 normalized = value / 100.0
-                if normalized > 0.7:
-                    color = QtGui.QColor(76, 175, 80)
-                elif normalized > 0.4:
-                    color = QtGui.QColor(255, 193, 7)
-                else:
-                    color = QtGui.QColor(244, 67, 54)
+                # Custom/Core color logic
+                if name.startswith('stress_'): color = QtGui.QColor(244, 67, 54)
+                elif name.startswith('novelty_'): color = QtGui.QColor(255, 193, 7)
+                elif name.startswith('reward_'): color = QtGui.QColor(76, 175, 80)
+                elif shape == 'pentagon': color = QtGui.QColor(147, 112, 219) # Purple
+                elif normalized > 0.7: color = QtGui.QColor(76, 175, 80)
+                elif normalized > 0.4: color = QtGui.QColor(255, 193, 7)
+                else: color = QtGui.QColor(244, 67, 54)
 
             x = pos[0] * scale
             y = pos[1] * scale
@@ -4935,52 +4908,55 @@ class NetworkRenderingMixin:
 
             painter.setBrush(QtGui.QBrush(color))
             painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), max(1, int(2 * scale))))
-            painter.drawEllipse(QtCore.QPointF(x, y), radius, radius)
 
-            # === Localisation with multi-level fallback ===
+            # Shape Rendering Logic
+            if shape == 'hexagon':
+                sides = 6
+                polygon = QtGui.QPolygonF()
+                for i in range(sides):
+                    angle = math.radians(i * (360/sides) - 90)
+                    polygon.append(QtCore.QPointF(x + radius * math.cos(angle), y + radius * math.sin(angle)))
+                painter.drawPolygon(polygon)
+            elif shape == 'pentagon':
+                sides = 5
+                polygon = QtGui.QPolygonF()
+                for i in range(sides):
+                    angle = math.radians(i * (360/sides) - 90)
+                    polygon.append(QtCore.QPointF(x + radius * math.cos(angle), y + radius * math.sin(angle)))
+                painter.drawPolygon(polygon)
+            elif shape == 'diamond' or (name in BINARY_NEURONS and shape == 'circle'):
+                # Binary are squares, diamonds are rotated squares
+                size = radius * 1.8
+                painter.save()
+                painter.translate(x, y)
+                if shape == 'diamond': painter.rotate(0)
+                else: painter.rotate(45) # Square
+                painter.drawRect(QtCore.QRectF(-size/2, -size/2, size, size))
+                painter.restore()
+            elif shape == 'triangle':
+                polygon = QtGui.QPolygonF([
+                    QtCore.QPointF(x, y - radius),
+                    QtCore.QPointF(x - radius, y + radius),
+                    QtCore.QPointF(x + radius, y + radius)
+                ])
+                painter.drawPolygon(polygon)
+            else: # Circle
+                painter.drawEllipse(QtCore.QPointF(x, y), radius, radius)
+
+            # Localisation and Label drawing
             display_name = loc.get(name)
-
-            # Fallback 1: space-separated key
             if display_name == name:
-                space_key = name.replace("_", " ")
-                display_name = loc.get(space_key)
-                if display_name == space_key:
-                    display_name = None
-
-            # Fallback 2: neurogenesis numbered neuron
-            if not display_name:
-                match = re.match(r"^([a-z_]+)_(\d+)$", name)
-                if match:
-                    base = match.group(1)
-                    idx = match.group(2)
-                    base_loc = loc.get(base)
-                    if base_loc != base:
-                        display_name = f"{base_loc} {idx}"
-                    else:
-                        display_name = f"{base.replace('_', ' ').title()} {idx}"
-
-            # Final fallback
-            if not display_name:
                 display_name = name.replace("_", " ").title()
 
             text_width = font_metrics.horizontalAdvance(display_name)
             padding = 10 * scale
-            rect_width = text_width + padding * 2
-            rect_height = font_metrics.height() + 4
-
-            text_rect = QtCore.QRectF(
-                x - rect_width / 2,
-                y + radius + 5 * scale,
-                rect_width,
-                rect_height,
-            )
-
+            rect_rect = QtCore.QRectF(x - (text_width/2 + padding), y + radius + 5*scale, text_width + padding*2, font_metrics.height() + 4)
+            
             painter.setBrush(QtGui.QBrush(QtGui.QColor(26, 26, 26, 200)))
             painter.setPen(QtCore.Qt.NoPen)
-            painter.drawRoundedRect(text_rect, 4, 4)
-
+            painter.drawRoundedRect(rect_rect, 4, 4)
             painter.setPen(QtGui.QColor(224, 224, 224))
-            painter.drawText(text_rect, QtCore.Qt.AlignCenter, display_name)
+            painter.drawText(rect_rect, QtCore.Qt.AlignCenter, display_name)
 
     
     @staticmethod

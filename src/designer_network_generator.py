@@ -227,6 +227,36 @@ class SparseNetworkGenerator:
                     added += 1
                     
         return added
+
+    def remove_non_core_neurons(self, design) -> int:
+        """
+        Remove all non-core neurons from the design.
+        
+        Core neurons are: hunger, happiness, cleanliness, sleepiness,
+                          satisfaction, anxiety, curiosity, can_see_food
+        
+        Args:
+            design: BrainDesign to modify
+            
+        Returns:
+            Number of neurons removed
+        """
+        from designer_constants import is_core_neuron, is_required_neuron
+        
+        # Find neurons to remove (not core and not can_see_food)
+        to_remove = []
+        for name in list(design.neurons.keys()):
+            if not is_core_neuron(name) and not is_required_neuron(name):
+                to_remove.append(name)
+        
+        # Remove them
+        removed = 0
+        for name in to_remove:
+            success, _ = design.remove_neuron(name)
+            if success:
+                removed += 1
+        
+        return removed
     
     def _should_create_connection(self, template: ConnectionTemplate, 
                                    density_multiplier: float = 1.0) -> bool:
@@ -240,25 +270,18 @@ class SparseNetworkGenerator:
                               weight_noise: float = 1.0
                               ) -> List[Tuple[str, str, float]]:
         """
-        Generate sparse connections between core neurons.
-        
-        Args:
-            density: Multiplier for connection probability (0.5 = sparser, 1.5 = denser)
-            include_feedback_loops: If True, may add some bidirectional connections
-            weight_noise: Multiplier for weight variance (0.5 = less noise, 2.0 = more noise)
-        
-        Returns:
-            List of (source, target, weight) tuples
+        Generate connections between neurons with a strong preference 
+        for bidirectional (reciprocal) relationships.
         """
         connections = []
         created_pairs = set()
         
-        # Process each template
+        # 1. First Pass: Create Forward Connections from Templates
         for template in self.templates:
             if not self._should_create_connection(template, density):
                 continue
             
-            # Generate noisy weight
+            # Generate noisy weight based on variance and global noise multiplier
             adjusted_template = ConnectionTemplate(
                 template.source, template.target,
                 template.base_weight,
@@ -274,20 +297,39 @@ class SparseNetworkGenerator:
             
             connections.append((template.source, template.target, weight))
             created_pairs.add((template.source, template.target))
-        
-        # Optionally add feedback loops (reverse connections)
+
+            # 2. Immediate Reciprocal Generation: Ensure Bidirectional Flow
+            # If we created A -> B, try to create B -> A immediately if it makes biological sense.
+            # We use a slightly inverted weight of the original to create a feedback loop.
+            if include_feedback_loops:
+                # Higher base probability for reciprocal connections to ensure they "always exist"
+                # while still respecting the density setting.
+                reciprocal_prob = 0.85 * density 
+                
+                if (template.target, template.source) not in created_pairs:
+                    if self.rng.random() < reciprocal_prob:
+                        # Feedback is often inhibitory or dampening (negative of forward)
+                        fb_weight_base = -0.2 if weight > 0 else 0.1
+                        fb_noise = self.rng.gauss(0, 0.1 * weight_noise)
+                        fb_weight = round(max(-1.0, min(1.0, fb_weight_base + fb_noise)), 3)
+                        
+                        if abs(fb_weight) >= 0.02:
+                            connections.append((template.target, template.source, fb_weight))
+                            created_pairs.add((template.target, template.source))
+
+        # 3. Dedicated Biological Feedback Loops
+        # These handle specific relationships like Hunger ↔ Satisfaction loops.
         if include_feedback_loops:
             feedback_candidates = [
-                ("satisfaction", "hunger", -0.15, 0.4),  # Being satisfied reduces hunger drive
-                ("happiness", "sleepiness", -0.10, 0.3),  # Being happy reduces tiredness
-                ("anxiety", "hunger", 0.10, 0.25),  # Stress eating?
-                ("curiosity", "anxiety", 0.08, 0.2),  # Exploration can be slightly stressful
+                ("satisfaction", "hunger", -0.25, 0.9),  # Strong satiety loop
+                ("happiness", "sleepiness", -0.15, 0.7), # Mood suppressing fatigue
+                ("anxiety", "hunger", 0.15, 0.6),        # Stress-induced hunger
+                ("curiosity", "anxiety", 0.10, 0.5),     # Exploration tension
+                ("happiness", "satisfaction", 0.20, 0.8) # Positive reinforcement
             ]
             
             for source, target, base_w, prob in feedback_candidates:
-                # Don't create if forward connection doesn't exist or reverse already exists
-                if (target, source) not in created_pairs:
-                    continue
+                # Only add if not already created by the reciprocal logic above
                 if (source, target) in created_pairs:
                     continue
                     
@@ -298,13 +340,14 @@ class SparseNetworkGenerator:
                         connections.append((source, target, weight))
                         created_pairs.add((source, target))
         
-        # Shuffle to avoid predictable order
+        # Shuffle to avoid predictable order in the UI/data structures
         self.rng.shuffle(connections)
         
         return connections
     
     def generate_for_design(self, design, 
                             clear_existing: bool = True,
+                            clear_non_core_neurons: bool = False,
                             density: float = 1.0,
                             include_feedback: bool = True,
                             weight_noise: float = 1.0,        # ADDED to match call sig
@@ -319,6 +362,7 @@ class SparseNetworkGenerator:
         Args:
             design: BrainDesign instance to modify
             clear_existing: If True, removes existing connections first
+            clear_non_core_neurons: If True, removes all non-core neurons first
             density: Connection density multiplier
             include_feedback: Include feedback loops
             weight_noise: Multiplier for random weight variance
@@ -338,6 +382,12 @@ class SparseNetworkGenerator:
             self.set_seed(seed)
             if not silent:
                 actions.append(f"Using seed: {seed}")
+        
+        # 0. Remove non-core neurons if requested (do this first!)
+        if clear_non_core_neurons:
+            removed = self.remove_non_core_neurons(design)
+            if removed > 0 and not silent:
+                actions.append(f"Removed {removed} non-core neurons")
         
         # Ensure required neurons exist
         missing = design.get_missing_required_neurons()

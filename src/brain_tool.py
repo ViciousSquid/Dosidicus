@@ -827,127 +827,68 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
     def set_brain_state(self, state):
         """
         Load the brain state from a saved state dictionary.
-        Uses robust fallback logic to handle missing keys and incomplete data.
-        
-        IMPORTANT: Core neuron values (hunger, happiness, etc.) are NOT loaded here.
-        Call sync_state_from_squid() after this method to populate them from the squid.
+        Reconstructs custom neuron tracking to ensure correct circle/purple rendering.
         """
-        # Load weights (handle new list format and potentially old dict format)
+        # Load weights
         if 'weights_list' in state:
             weights = {}
             for item in state['weights_list']:
                 if isinstance(item, list) and len(item) == 3:
                     weights[(item[0], item[1])] = item[2]
             self.brain_widget.weights = weights
-        elif 'weights' in state:  # Fallback for old format (acknowledging its bug)
-            print("Warning: Loading old 'weights' format. May cause issues with new neurons.")
-            weights = {}
-            for k, v in state['weights'].items():
-                if '_' in k:
-                    key = tuple(k.split('_'))  # This is the buggy part
-                else:
-                    key = k
-                weights[key] = v
+        elif 'weights' in state:
+            weights = {tuple(k.split('|')): v for k, v in state['weights'].items() if '|' in k}
             self.brain_widget.weights = weights
-        else:
-            print("⚠️  No weights data in state, preserving current weights")
 
-        # Load neuron positions, defaulting to original if not found
+        # Positions and Base State
         self.brain_widget.neuron_positions = state.get('neuron_positions', self.brain_widget.original_neuron_positions.copy())
+        self.brain_widget.state = state.get('neuron_states', {}).copy()
 
-        # Load non-core neuron states (booleans, direction, position, new neuron values)
-        # Core stat values will be synced from squid via sync_state_from_squid()
-        loaded_states = state.get('neuron_states', {})
-        self.brain_widget.state = loaded_states.copy()
-
-        # Load neurogenesis_data (basic tracking for brain_widget display)
+        # Neurogenesis Tracking
         self.brain_widget.neurogenesis_data = state.get('neurogenesis_data', {
             'new_neurons': [], 'last_neuron_time': time.time(), 'new_neurons_details': {}
         })
-        if 'new_neurons' not in self.brain_widget.neurogenesis_data:
-            self.brain_widget.neurogenesis_data['new_neurons'] = []
-        if 'new_neurons_details' not in self.brain_widget.neurogenesis_data:
-            self.brain_widget.neurogenesis_data['new_neurons_details'] = {}
 
-        # Load state colors (with fallback)
-        self.brain_widget.state_colors = state.get('state_colors', {
-            'is_sick': (255, 204, 204), 'is_eating': (204, 255, 204),
-            'is_sleeping': (204, 229, 255), 'pursuing_food': (255, 229, 204),
-            'direction': (229, 204, 255)
-        })
+        # --- RECONSTRUCT CUSTOM NEURON TRACKING ---
+        self.brain_widget.custom_neurons = set()
+        details = self.brain_widget.neurogenesis_data.get('new_neurons_details', {})
+        for name, info in details.items():
+            if info.get('is_custom') or info.get('neuron_type') == 'custom':
+                self.brain_widget.custom_neurons.add(name)
+        
+        # Fallback: identify neurons that are neither core nor standard neurogenesis
+        core_names = set(self.brain_widget.original_neuron_positions.keys())
+        for name in self.brain_widget.neuron_positions.keys():
+            if name not in core_names and name not in self.brain_widget.neurogenesis_data['new_neurons']:
+                # These were likely purple lab neurons
+                self.brain_widget.custom_neurons.add(name)
 
-        # =====================================================================
-        # LOAD FULL EnhancedNeurogenesis STATE
-        # =====================================================================
+        # Enhanced Neurogenesis logic
         if hasattr(self.brain_widget, 'enhanced_neurogenesis'):
-            # Prefer new 'enhanced_neurogenesis' key with full state
             if 'enhanced_neurogenesis' in state:
-                try:
-                    self.brain_widget.enhanced_neurogenesis.from_dict(state['enhanced_neurogenesis'])
-                    fn_count = len(self.brain_widget.enhanced_neurogenesis.functional_neurons)
-                    print(f"✅ Loaded full EnhancedNeurogenesis state ({fn_count} functional neurons)")
-                    
-                    # If from_dict failed to load neurons, try direct loading
-                    if fn_count == 0 and 'functional_neurons' in state['enhanced_neurogenesis']:
-                        print("⚠️  from_dict returned 0 neurons, attempting direct load...")
-                        self._direct_load_functional_neurons(state['enhanced_neurogenesis']['functional_neurons'])
-                except Exception as e:
-                    print(f"⚠️  Error loading EnhancedNeurogenesis: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # Fall back to legacy loading
-                    self._load_legacy_functional_neurons(state)
-            # Fallback: legacy 'functional_neurons' key only
+                self.brain_widget.enhanced_neurogenesis.from_dict(state['enhanced_neurogenesis'])
             elif 'functional_neurons' in state:
                 self._load_legacy_functional_neurons(state)
-                print("ℹ️  Loaded legacy functional_neurons format")
 
-        # =====================================================================
-        # FORCIBLY REBUILD NEUROGENESIS NEURONS FROM functional_neurons OR state
-        # =====================================================================
+        # Forcibly rebuild shapes and colors
         self._force_rebuild_neurogenesis_neurons(state)
 
-        # --- Critical Step: Ensure brain_widget consistency after loading ---
+        # Consistency check for state and colors
         all_neurons = list(self.brain_widget.neuron_positions.keys())
-        new_neurons_list = self.brain_widget.neurogenesis_data.get('new_neurons', [])
-
-        # Get config colors for new neurons
-        cfg_appearance = self.config.neurogenesis.get('appearance', {})
-        cfg_colors = cfg_appearance.get('colors', {})
-        default_colors = {'novelty': (255, 255, 150), 'stress': (255, 150, 150), 'reward': (150, 255, 150)}
-
         for neuron in all_neurons:
-            # Ensure all neurons exist in the state dictionary (default 50 for new neurons)
             if neuron not in self.brain_widget.state:
                 self.brain_widget.state[neuron] = 50
+            if neuron in self.brain_widget.custom_neurons:
+                self.brain_widget.state_colors[neuron] = (54, 15, 90) # Correct Purple
+                self.brain_widget.neuron_shapes[neuron] = 'circle'
 
-            # Ensure all neurons exist in communication events
-            if hasattr(self.brain_widget, 'communication_events') and neuron not in self.brain_widget.communication_events:
-                self.brain_widget.communication_events[neuron] = 0
-
-            # Ensure new neurons have a color entry
-            if neuron in new_neurons_list and neuron not in self.brain_widget.state_colors:
-                if neuron.startswith('novel'):
-                    color = tuple(cfg_colors.get('novelty', default_colors['novelty']))
-                elif neuron.startswith('stress'):
-                    color = tuple(cfg_colors.get('stress', default_colors['stress']))
-                elif neuron.startswith('reward'):
-                    color = tuple(cfg_colors.get('reward', default_colors['reward']))
-                else:
-                    color = (200, 200, 200)
-                self.brain_widget.state_colors[neuron] = color
-
-        # Ensure all core neurons have their original positions if missing
+        # Sync core positions and reveal
         for name, pos in self.brain_widget.original_neuron_positions.items():
             if name not in self.brain_widget.neuron_positions:
                 self.brain_widget.neuron_positions[name] = pos
 
-        # Reveal all core neurons for loaded games
         self.brain_widget.reveal_all_core_neurons()
-        
-        # Trigger staggered link fade animation when loading a save
-        if self.brain_widget.show_links:
-            self.brain_widget._enable_links_after_reveal()
+        self.brain_widget.mark_render_dirty()
         self.brain_widget.update()
 
     def _load_legacy_functional_neurons(self, state):
@@ -1184,9 +1125,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def init_timers(self):
         # Hebbian learning timer
+        # [SYNC FIX] We disable the direct connection to perform_hebbian_learning here.
+        # Instead, we rely on the countdown timer (update_countdown) to trigger it exactly at 0.
+        # This prevents the "firing at 25s" desync issue caused by QTimer drift vs Timestamp logic.
         self.hebbian_timer = QtCore.QTimer()
-        self.hebbian_timer.timeout.connect(self.brain_widget.perform_hebbian_learning)
-        self.hebbian_timer.start(self.config.hebbian.get('learning_interval', 30000))
+        self.hebbian_timer.start(1000) # Keep running just for heartbeat if needed, but logic moves to countdown
         
         # Hebbian countdown
         self.hebbian_countdown_seconds = int(self.config.hebbian.get('learning_interval', 30000) / 1000)
@@ -1784,40 +1727,50 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
 
     def update_countdown(self):
-        """Update the Hebbian learning countdown display"""
-        # Check if simulation is paused
+        """
+        Master timer in brain_tool.py.
+        Calculates remaining seconds based on the actual timestamp of the last learning event.
+        Triggers learning exactly when countdown reaches zero.
+        """
+        # 1. Determine if the simulation is currently paused
         is_paused = False
         if hasattr(self, 'tamagotchi_logic') and hasattr(self.tamagotchi_logic, 'simulation_speed'):
             is_paused = (self.tamagotchi_logic.simulation_speed == 0)
         
-        # Calculate time until next learning cycle
+        # 2. Calculate remaining time based on the last recorded Hebbian event
         if not is_paused and hasattr(self.brain_widget, 'last_hebbian_time'):
             elapsed = time.time() - self.brain_widget.last_hebbian_time
+            # Get the interval from config (defaulting to 30s)
             interval_sec = self.config.hebbian.get('learning_interval', 30000) / 1000
             remaining = max(0, interval_sec - elapsed)
+            
+            # Update the integer value stored in the widget for UI consumers
             self.brain_widget.hebbian_countdown_seconds = int(remaining)
-        elif not hasattr(self.brain_widget, 'last_hebbian_time'):
-            self.brain_widget.hebbian_countdown_seconds = 0
+        else:
+            pass
 
-        # Debug print statements
-        #print(f"Elapsed time: {elapsed:.1f}s")
-        #print(f"Interval: {interval_sec:.1f}s")
-        #print(f"Remaining: {remaining:.1f}s")
-        #print(f"Hebbian countdown seconds: {self.brain_widget.hebbian_countdown_seconds}")
-
-        # If we have the neural network visualizer tab initialized, update its countdown
+        # 3. Update the Neural Network Visualizer tab (Learning tab) countdown
         if hasattr(self, 'nn_viz_tab') and hasattr(self.nn_viz_tab, 'countdown_label') and self.nn_viz_tab.countdown_label is not None:
-            # Update the formatted display
             if is_paused:
                 self.nn_viz_tab.countdown_label.setText("PAUSED")
             else:
                 self.nn_viz_tab.countdown_label.setText(f"{self.brain_widget.hebbian_countdown_seconds} seconds")
         
-        # If countdown reached zero and not paused, trigger learning
-        # (moved outside nn_viz_tab check so learning always fires)
+        # 4. TRIGGER: If countdown hit zero and not paused, trigger the background worker
+        # [SYNC FIX] This is now the ONLY place where periodic Hebbian learning is triggered
         if self.brain_widget.hebbian_countdown_seconds == 0 and not is_paused:
-            print(">> Countdown hit zero, calling perform_hebbian_learning()")
-            self.brain_widget.perform_hebbian_learning()
+            print(">> Master Timer hit zero, queueing Hebbian learning...")
+            
+            # Reset the timestamp IMMEDIATELY to prevent multiple triggers while worker is busy
+            # The worker will refine this timestamp when it finishes, but this prevents "0... 0... 0..." spam
+            self.brain_widget.last_hebbian_time = time.time()
+            
+            # Queue the work to the background thread via the worker
+            if hasattr(self, 'brain_worker') and self.brain_worker:
+                self.brain_worker.queue_hebbian_learning()
+            elif hasattr(self.brain_widget, 'perform_hebbian_learning'):
+                # Fallback for sync mode
+                self.brain_widget.perform_hebbian_learning()
 
     def check_memory_decay(self):
         """Check for short-term memory decay and transfer important memories to long-term"""

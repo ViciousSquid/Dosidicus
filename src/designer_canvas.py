@@ -27,7 +27,10 @@ from designer_constants import (
 
 
 class SmartConnectionItem(QGraphicsItem):
-    """Visual representation of a neural connection with organic growth animation."""
+    """Visual representation of a neural connection with organic growth animation and scrolling arrows."""
+    
+    # Maximum connection width (increased from 8 to 15)
+    MAX_CONNECTION_WIDTH = 15.0
     
     def __init__(self, source_pos, target_pos, weight=0.5, source_name="", target_name="", parent=None):
         super().__init__(parent)
@@ -52,6 +55,12 @@ class SmartConnectionItem(QGraphicsItem):
         
         # Pulse animation (standard)
         self.pulse_phase = 0.0
+        
+        # --- REVISED ARROW ANIMATION ---
+        self.arrow_phase = 0.0
+        # Reduced base speed (from 0.03 to 0.005) and desynced via source + target hash
+        seed = hash(str(source_pos) + str(target_pos))
+        self.arrow_speed = 0.005 + (seed % 100) * 0.0001
         
         self.setAcceptHoverEvents(True)
         self.setZValue(-5) 
@@ -89,7 +98,7 @@ class SmartConnectionItem(QGraphicsItem):
         super().hoverLeaveEvent(event)
     
     def advance_animation(self):
-        """Calculates one frame of growth/retreat logic."""
+        """Calculates one frame of growth/retreat logic and arrow scrolling."""
         
         # 1. Handle Dying (Retreating)
         if self.is_dying:
@@ -113,6 +122,14 @@ class SmartConnectionItem(QGraphicsItem):
             current_speed = 0.02 + (abs(self.weight) * 0.06)
             self.pulse_phase += current_speed
             if self.pulse_phase > 1.0: self.pulse_phase = 0.0
+        
+        # 4. Arrow scrolling animation (always active once grown)
+        if self.growth > 0.5:
+            # Dampened weight influence to maintain slow organic movement
+            effective_speed = self.arrow_speed * (0.8 + abs(self.weight) * 0.5)
+            self.arrow_phase += effective_speed
+            if self.arrow_phase > 1.0:
+                self.arrow_phase -= 1.0
 
         self.update()
         return False # Still alive
@@ -135,12 +152,15 @@ class SmartConnectionItem(QGraphicsItem):
         # Adjust alpha by opacity (growth animation)
         base_color.setAlpha(int(255 * self.opacity))
         
-        # Determine thickness (magnitude of weight)
-        thickness = 2 + abs(self.weight) * 6
+        # Determine thickness (magnitude of weight) - max width now 15px
+        thickness = 2 + abs(self.weight) * (self.MAX_CONNECTION_WIDTH - 2)
         
         # Pulse effect for thickness
         pulse = math.sin(self.pulse_phase * math.pi * 2) * 0.5 + 0.5
         thickness += pulse * 1.5
+        
+        # Cap thickness at max
+        thickness = min(thickness, self.MAX_CONNECTION_WIDTH + 2)
 
         # Draw selection highlight (yellow glow when selected)
         if self.is_selected:
@@ -150,7 +170,88 @@ class SmartConnectionItem(QGraphicsItem):
         painter.setPen(QPen(base_color, thickness, Qt.SolidLine, Qt.RoundCap))
         painter.drawLine(self.source_pos, self.target_pos)
         
+        # Draw scrolling arrows (only when sufficiently grown and visible)
+        if self.growth > 0.7 and self.opacity > 0.3:
+            self._draw_scrolling_arrows(painter, base_color, thickness)
+        
         painter.restore()
+    
+    def _draw_scrolling_arrows(self, painter, base_color, line_thickness):
+        """Draw animated arrows scrolling along the connection to show direction."""
+        dx = self.target_pos.x() - self.source_pos.x()
+        dy = self.target_pos.y() - self.source_pos.y()
+        length = math.sqrt(dx * dx + dy * dy)
+        
+        if length < 50:  # Don't draw arrows on very short connections
+            return
+        
+        # Normalize direction
+        dir_x = dx / length
+        dir_y = dy / length
+        
+        # Calculate perpendicular for arrow wings
+        perp_x = -dir_y
+        perp_y = dir_x
+        
+        # Arrow parameters
+        arrow_size = max(8, min(14, line_thickness * 1.2))  # Scale with line thickness
+        num_arrows = max(2, int(length / 80))  # More arrows for longer connections
+        
+        # Arrow color - slightly brighter than line
+        arrow_color = QColor(base_color)
+        arrow_color.setAlpha(int(min(255, base_color.alpha() * 1.3)))
+        
+        # Make arrows white/bright for better visibility
+        highlight_color = QColor(255, 255, 255, int(180 * self.opacity))
+        
+        painter.setBrush(QBrush(highlight_color))
+        painter.setPen(Qt.NoPen)
+        
+        # Draw multiple arrows at different positions along the line
+        for i in range(num_arrows):
+            # Calculate base position for this arrow (evenly spaced)
+            base_t = (i + 0.5) / num_arrows
+            
+            # Add scrolling offset
+            t = (base_t + self.arrow_phase) % 1.0
+            
+            # Avoid drawing arrows too close to endpoints (within neuron radius)
+            if t < 0.15 or t > 0.85:
+                continue
+            
+            # Position along the line
+            cx = self.source_pos.x() + t * dx
+            cy = self.source_pos.y() + t * dy
+            
+            # Draw arrow triangle pointing in direction of flow
+            # Tip of arrow (forward)
+            tip_x = cx + dir_x * arrow_size * 0.6
+            tip_y = cy + dir_y * arrow_size * 0.6
+            
+            # Back corners of arrow
+            back_x = cx - dir_x * arrow_size * 0.4
+            back_y = cy - dir_y * arrow_size * 0.4
+            
+            wing_offset = arrow_size * 0.4
+            
+            arrow = QPolygonF([
+                QPointF(tip_x, tip_y),
+                QPointF(back_x + perp_x * wing_offset, back_y + perp_y * wing_offset),
+                QPointF(back_x - perp_x * wing_offset, back_y - perp_y * wing_offset)
+            ])
+            
+            # Fade arrows based on position (fade near endpoints)
+            fade = 1.0
+            if t < 0.25:
+                fade = (t - 0.15) / 0.10
+            elif t > 0.75:
+                fade = (0.85 - t) / 0.10
+            
+            fade_color = QColor(highlight_color)
+            fade_color.setAlpha(int(highlight_color.alpha() * fade * self.opacity))
+            painter.setBrush(QBrush(fade_color))
+            
+            painter.drawPolygon(arrow)
 
 
 class ConnectorNeuronItem(QGraphicsItem):
@@ -772,7 +873,7 @@ class BrainCanvas(QGraphicsView):
         if not self.design.neurons or self.pan_active: return
         valid_positions = []
         for n in self.design.neurons.values():
-            if n.position is not None:
+            if n.position is None:
                 try:
                     x, y = n.position
                     if x is not None and y is not None:

@@ -175,15 +175,15 @@ class NetworkTab(BrainBaseTab):
         self.checkbox_links.setChecked(True)
         if self.brain_widget:
             self.checkbox_links.stateChanged.connect(self.brain_widget.toggle_links)
-            # Connect to neurogenesis signal to refresh links display when new neuron is created
-            self.brain_widget.neuronCreated.connect(self._on_neuron_created)
         bottom_bar.addWidget(self.checkbox_links)
 
-        self.checkbox_weights = QtWidgets.QCheckBox(loc.get("chk_weights"))
-        self.checkbox_weights.setChecked(False)
+        # REPLACED: Show Weights -> Show Directions
+        self.checkbox_directions = QtWidgets.QCheckBox(loc.get("chk_directions", "Show Directions"))
+        self.checkbox_directions.setChecked(False)
         if self.brain_widget:
-            self.checkbox_weights.stateChanged.connect(self.brain_widget.toggle_weights)
-        bottom_bar.addWidget(self.checkbox_weights)
+            # We connect this to a new toggle method or reuse toggle_weights logic
+            self.checkbox_directions.stateChanged.connect(self.toggle_directions)
+        bottom_bar.addWidget(self.checkbox_directions)
 
         self.checkbox_pruning = QtWidgets.QCheckBox(loc.get("chk_pruning"))
         self.checkbox_pruning.setChecked(True)
@@ -199,7 +199,7 @@ class NetworkTab(BrainBaseTab):
 
         self.layout.addLayout(bottom_bar)
 
-        # --------------------  FUNCTIONAL EXISTING HELPERS  -------------------- 
+        # --------------------  FUNCTIONAL HELPERS  -------------------- 
         self.update_metrics_display()
         self.update_hebbian_label()
 
@@ -214,6 +214,15 @@ class NetworkTab(BrainBaseTab):
     # ------------------------------------------------------------------
     #  MISC EXISTING HELPERS
     # ------------------------------------------------------------------
+    def toggle_directions(self, state):
+        """Toggle the visibility of Unicode direction arrows."""
+        if hasattr(self, 'brain_widget') and self.brain_widget:
+            self.brain_widget.show_directions = (state == QtCore.Qt.Checked)
+            if hasattr(self.brain_widget, 'mark_render_dirty'):
+                self.brain_widget.mark_render_dirty()
+            self.brain_widget.update()
+    
+    
     def _clear_layout_recursively(self, layout_to_clear):
         """Helper to recursively clear a layout and delete its widgets."""
         if layout_to_clear is None:
@@ -307,9 +316,13 @@ class NetworkTab(BrainBaseTab):
         self._update_global_cooldown_label()
 
     def _on_every_second(self):
-        """Called every second by the single QTimer."""
+        """
+        Passive observer in brain_network_tab.py.
+        Syncs the UI label with the master countdown calculated in brain_tool.py.
+        """
         loc = Localisation.instance()
-        # === NEW: Check pause state ===
+        
+        # 1. Check if simulation is paused via logic
         is_paused = False
         if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'simulation_speed'):
             is_paused = (self.tamagotchi_logic.simulation_speed == 0)
@@ -317,24 +330,15 @@ class NetworkTab(BrainBaseTab):
         if is_paused:
             if hasattr(self, 'hebbian_timer_label'):
                 self.hebbian_timer_label.setText(f"{loc.get('hebbian_cycle')}: {loc.get('hebbian_paused')}")
-            # Don't decrement counter
             return
 
-        # 1. Update Hebbian counter (count down to 0, show 0 for one full second)
-        if self.hebbian_timer_value > 0:
-            self.hebbian_timer_value -= 1
-        else:
-            # When we leave the "00" second and reset the timer → fire Hebbian learning
-            parent_window = self.brain_widget.parent()  # SquidBrainWindow
-            if parent_window and hasattr(parent_window, 'brain_worker') and parent_window.brain_worker:
-                parent_window.brain_worker.queue_hebbian_learning()
-
-            # Reset timer for next cycle
-            self.hebbian_timer_value = getattr(self.config, 'hebbian_cycle_seconds', 30)
-
+        # 2. SYNC FIX: Pull the remaining seconds directly from the brain_widget.
+        # This value is updated once per second by the master update_countdown in brain_tool.
+        if self.brain_widget and hasattr(self.brain_widget, 'hebbian_countdown_seconds'):
+            self.hebbian_timer_value = self.brain_widget.hebbian_countdown_seconds
+        
+        # 3. Update the labels and counters
         self.update_hebbian_label()
-
-        # 2. Update global-cooldown counter
         self._update_global_cooldown_label()
 
     def update_hebbian_timer(self):

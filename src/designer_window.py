@@ -6,21 +6,25 @@ including neurons, connections, layers, sensors, and output bindings.
 """
 
 import sys
+import random
+import math
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QTabWidget, QStatusBar,
     QAction, QToolBar, QLabel, QComboBox, QPushButton, QMessageBox, QFileDialog,
-    QDialog, QInputDialog, QFrame, QSizePolicy, QToolButton, QMenu, QSplitter
+    QDialog, QInputDialog, QFrame, QSizePolicy, QToolButton, QMenu, QSplitter,
+    QFormLayout, QSpinBox, QDoubleSpinBox, QDialogButtonBox, QLineEdit,
+    QColorDialog, QGroupBox, QApplication, QCheckBox
 )
 from PyQt5.QtGui import (
     QKeySequence, QIcon, QFont, QFontMetrics, QPainter, QColor, QPalette,
     QTextDocument, QAbstractTextDocumentLayout
 )
-# [FIX] Added QRectF to imports
-from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QRectF, QSizeF, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QRectF, QSizeF, pyqtSignal, QPointF
 
 from designer_logging import get_logger, log_exceptions, safe_call, OperationLogger
-from designer_core import BrainDesign
+from designer_core import BrainDesign, DesignerNeuron, DesignerLayer, DesignerConnection
 from designer_canvas import BrainCanvas
+from designer_constants import NeuronType, DEFAULT_COLORS
 
 # Import brain state bridge for game communication
 try:
@@ -34,6 +38,7 @@ try:
 except ImportError:
     _HAS_BRAIN_BRIDGE = False
     print("[BrainDesigner] Warning: brain_state_bridge not found, live import disabled")
+
 from designer_panels import (
     LayersPanel, SensorsPanel, NeuronPropertiesPanel, ConnectionsTable, AddNeuronDialog
 )
@@ -66,7 +71,7 @@ class ScrollingTicker(QWidget):
         
         # Calculate dimensions
         self.text_width = self.doc.idealWidth()
-        self.text_height = self.doc.size().height()  # FIX: Call method with ()
+        self.text_height = self.doc.size().height()
         
         # Separator
         self.sep_doc = QTextDocument()
@@ -75,10 +80,10 @@ class ScrollingTicker(QWidget):
         self.sep_doc.setTextWidth(-1)
         self.sep_width = self.sep_doc.idealWidth()
         
-        # Timer - don't start it yet
+        # Timer
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.scroll_text)
-        self.timer.setInterval(30)  # ~33fps
+        self.timer.setInterval(30)
         
         # Style
         self.setStyleSheet("background-color: transparent;")
@@ -87,7 +92,6 @@ class ScrollingTicker(QWidget):
     def showEvent(self, event):
         """Start timer when widget becomes visible."""
         super().showEvent(event)
-        # Start timer on first show (prevents premature updates)
         if not self.timer.isActive():
             self.timer.start()
     
@@ -104,23 +108,16 @@ class ScrollingTicker(QWidget):
         self.update()
     
     def paintEvent(self, event):
-        """Paint the scrolling text with proper painter lifecycle."""
+        """Paint the scrolling text."""
         painter = QPainter(self)
-        
-        # Ensure painter is valid before proceeding
         if not painter.isActive():
             return
         
-        # Removed the try...finally block - Qt handles painter lifecycle automatically
         painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Center vertically
         y_pos = (self.height() - self.text_height) / 2
         
-        # Draw copies of the text until we fill the width
         current_x = self.offset
         while current_x < self.width():
-            # Draw Main Text
             painter.save()
             painter.translate(current_x, y_pos)
             self.doc.drawContents(painter, QRectF(0, 0, self.text_width, self.text_height))
@@ -128,29 +125,27 @@ class ScrollingTicker(QWidget):
             
             current_x += self.text_width
             
-            # Draw Separator
             painter.save()
             painter.translate(current_x, y_pos)
             self.sep_doc.drawContents(painter, QRectF(0, 0, self.sep_width, self.text_height))
             painter.restore()
             
             current_x += self.sep_width
-        
-        # REMOVED: No need for finally block or manual painter.end()
 
 
 class BrainDesignerWindow(QMainWindow):
     """Main window for the Brain Designer application."""
 
-    # Signal to notify parent when user wants to exit/return
     exitRequested = pyqtSignal()
 
     def __init__(self, parent=None, embedded_mode=False):
         super().__init__(parent)
         self.logger = get_logger("brain_designer.window")
-        self.logger.info("Initializing BrainDesignerWindow")
-        
         self.embedded_mode = embedded_mode
+        
+        # Layer management for feedforward networks
+        self.network_layers = {}  # name -> {'neurons': [...], 'color': QColor}
+        self.layer_counter = 0
 
         try:
             self.design = BrainDesign()
@@ -159,43 +154,35 @@ class BrainDesignerWindow(QMainWindow):
             self.setWindowTitle("Brain Designer - Dosidicus-2")
             self.setMinimumSize(1280, 900)
 
-            with OperationLogger("Setting up UI", self.logger):
-                self.setup_ui()
+            self.setup_ui()
+            self.setup_menus()
+            self.setup_toolbar()
 
-            with OperationLogger("Setting up menus", self.logger):
-                self.setup_menus()
-
-            with OperationLogger("Setting up toolbar", self.logger):
-                self.setup_toolbar()
-
-            # Only auto-generate if NOT embedded (embedded mode will load existing state)
             if not self.embedded_mode:
-                with OperationLogger("Initializing brain network", self.logger):
-                    self._imported_from_game = False
-                    if not self._try_import_from_game():
-                        # No game running, generate random network
-                        self.generate_initial_network()
+                self._imported_from_game = False
+                if not self._try_import_from_game():
+                    self.generate_initial_network()
                 
-                # Show import notification if applicable
                 if self._imported_from_game:
                     self._show_import_notification()
 
-            # Force UI refresh
             self.refresh_all()
             self.update_status()
-            self.logger.info("BrainDesignerWindow initialized successfully")
+            
+            # Collapse the right panel by default after UI is set up
+            QTimer.singleShot(100, self._collapse_right_panel_on_start)
 
         except Exception as e:
             self.logger.critical(f"Failed to initialize window: {e}", exc_info=True)
             raise
 
-    # ==========================================================================
-    # INITIALIZATION AND SETUP
-    # ==========================================================================
+    def _collapse_right_panel_on_start(self):
+        """Collapse the right panel on startup."""
+        if not self.sidebar_collapsed:
+            self.toggle_right_panel()
 
     def setup_ui(self):
         """Setup the main UI layout."""
-        # Main splitter layout
         self.splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(self.splitter)
 
@@ -207,11 +194,8 @@ class BrainDesignerWindow(QMainWindow):
         canvas_container.setContentsMargins(0, 0, 0, 0)
         canvas_container.setSpacing(5)
 
-        # Canvas toolbar
-        canvas_toolbar = self.create_canvas_toolbar()
-        canvas_container.addWidget(canvas_toolbar)
+        canvas_container.addWidget(self.create_canvas_toolbar())
 
-        # Main canvas
         self.canvas = BrainCanvas(self.design)
         self.canvas.neuronSelected.connect(self.on_neuron_selected)
         self.canvas.connectionCreated.connect(self.on_connection_created)
@@ -220,38 +204,42 @@ class BrainDesignerWindow(QMainWindow):
         self.canvas.connectionDeleted.connect(self.on_connection_deleted)
 
         canvas_container.addWidget(self.canvas)
-
-        # Canvas help bar
-        help_bar = self.create_help_bar()
-        canvas_container.addWidget(help_bar)
+        canvas_container.addWidget(self.create_help_bar())
 
         self.splitter.addWidget(canvas_wrapper)
 
         # === RIGHT PANEL (Tabbed Panels) ===
         self.right_panel = QTabWidget()
-        self.right_panel.setTabPosition(QTabWidget.West)  # Vertical tabs on the left edge
-        self.right_panel.setMinimumWidth(350)
+        self.right_panel.setTabPosition(QTabWidget.West)
+        self.right_panel.setMinimumWidth(32)  # Allow it to shrink to just the tab bar
+        
+        # Apply style for blue selected tab
+        self.right_panel.setStyleSheet("""
+            QTabBar::tab:selected {
+                background: #2196F3;
+                color: white;
+                font-weight: bold;
+            }
+        """)
+        
+        # Connect tab click to auto-expand logic
+        self.right_panel.tabBarClicked.connect(self.on_tab_bar_clicked)
 
-        # 1. Layers Panel
         self.layers_panel = LayersPanel(self.design)
         self.layers_panel.layersChanged.connect(self.on_design_changed)
         self.right_panel.addTab(self.layers_panel, "Layers")
 
-        # 2. Sensors Panel (Input neurons)
         self.sensors_panel = SensorsPanel(self.design)
         self.sensors_panel.sensorsChanged.connect(self.on_design_changed)
         self.right_panel.addTab(self.sensors_panel, "Sensors")
 
-        # 3. Properties Panel
         self.props_panel = NeuronPropertiesPanel(self.design)
         self.props_panel.neuronChanged.connect(self.on_design_changed)
         self.right_panel.addTab(self.props_panel, "Properties")
 
-        # 4. Connections Table
         self.connections_table = ConnectionsTable(self.design)
         self.right_panel.addTab(self.connections_table, "Connections")
 
-        # 5. Outputs Panel (Actuator neurons) - NEW!
         if _HAS_OUTPUTS_PANEL:
             self.outputs_panel = NeuronOutputsPanel(self.design)
             self.outputs_panel.outputsChanged.connect(self.on_design_changed)
@@ -260,161 +248,142 @@ class BrainDesignerWindow(QMainWindow):
             self.outputs_panel = None
 
         self.splitter.addWidget(self.right_panel)
-        
-        # Set Sensors as the default tab (index 1)
-        self.right_panel.setCurrentIndex(1)
-
-        # Set initial splitter sizes (approx 70% canvas, 30% sidebar)
-        self.splitter.setCollapsible(0, False)
-        self.splitter.setCollapsible(1, False)
-        
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 0)
-        
         self.splitter.setSizes([850, 400])
+        
+        # Start collapsed
+        self.sidebar_collapsed = False
+        self.last_sidebar_width = 400
 
-        # Status bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
 
+        if self.embedded_mode:
+            self.return_btn = QPushButton("Switch to Game")
+            self.return_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #673AB7;
+                    color: white;
+                    font-weight: bold;
+                    padding: 2px 15px;
+                    margin-right: 5px;
+                    border-radius: 3px;
+                }
+            """)
+            self.return_btn.clicked.connect(self.exitRequested.emit)
+            self.status_bar.addPermanentWidget(self.return_btn)
+
+    def on_tab_bar_clicked(self, index):
+        """Triggered when a tab is clicked. Expands the sidebar if it was collapsed."""
+        if self.sidebar_collapsed:
+            self.toggle_right_panel()
+
+    def toggle_right_panel(self):
+        """Toggle the visibility of the right property/layer panel, leaving tabs visible."""
+        sizes = self.splitter.sizes()
+        
+        # Calculate the approximate width of the vertical tab bar
+        tab_bar_width = self.right_panel.tabBar().sizeHint().width() + 4
+        
+        if not self.sidebar_collapsed:
+            # COLLAPSE: Shrink to just the tab bar width
+            self.last_sidebar_width = sizes[1] if sizes[1] > tab_bar_width else 400
+            self.splitter.setSizes([sum(sizes) - tab_bar_width, tab_bar_width])
+            self.toggle_btn.setText("◀")
+            self.sidebar_collapsed = True
+        else:
+            # RESTORE: Return to previous width
+            width = self.last_sidebar_width
+            self.splitter.setSizes([sum(sizes) - width, width])
+            self.toggle_btn.setText("▶")
+            self.sidebar_collapsed = False
+
     def create_canvas_toolbar(self) -> QFrame:
-        """Create the toolbar above the canvas."""
+        """Create the toolbar with the requested button order."""
         toolbar = QFrame()
         toolbar.setFrameStyle(QFrame.StyledPanel)
         toolbar.setMaximumHeight(45)
         layout = QHBoxLayout(toolbar)
         layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(10)
 
-        # Generate button (prominent)
+        # 1. Tiny Generator (Dice) - NOW FIRST
+        self.dice_btn = QPushButton("🎲")
+        self.dice_btn.setToolTip("Instant chaotic shuffle")
+        self.dice_btn.setFixedWidth(35)
+        self.dice_btn.setStyleSheet("""
+            QPushButton { background-color: #FF9800; color: white; font-size: 16px; padding: 4px; border-radius: 4px; }
+            QPushButton:hover { background-color: #F57C00; }
+        """)
+        self.dice_btn.clicked.connect(self.instant_random_generate)
+        layout.addWidget(self.dice_btn)
+
+        # 2. Main Generate Button
         generate_btn = QPushButton("🎲 Generate")
-        generate_btn.setToolTip("Generate random connections between core neurons")
         generate_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                font-weight: bold;
-                padding: 6px 16px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
+            QPushButton { background-color: #2196F3; color: white; font-weight: bold; padding: 6px 16px; border-radius: 4px; }
+            QPushButton:hover { background-color: #1976D2; }
         """)
         generate_btn.clicked.connect(self.show_sparse_network_dialog)
         layout.addWidget(generate_btn)
 
-        # Quick generate menu
-        quick_gen_btn = QToolButton()
-        quick_gen_btn.setText("▼")
-        quick_gen_btn.setPopupMode(QToolButton.InstantPopup)
-        quick_menu = QMenu(quick_gen_btn)
-
-        generator = SparseNetworkGenerator()
-        for key, info in generator.get_preset_styles().items():
-            action = quick_menu.addAction(f"{info['name']} - {info['description']}")
-            action.setData(key)
-            action.triggered.connect(lambda checked, k=key: self.quick_generate(k))
-
-        quick_gen_btn.setMenu(quick_menu)
-        layout.addWidget(quick_gen_btn)
-        
-        # Quick dice button - instant random generation
-        dice_btn = QPushButton("🎲")
-        dice_btn.setToolTip("Instantly shuffle positions and generate a chaotic network (no dialog)")
-        dice_btn.setFixedWidth(40)
-        dice_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FF9800;
-                color: white;
-                font-size: 18px;
-                padding: 6px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #F57C00;
-            }
-        """)
-        dice_btn.clicked.connect(self.instant_random_generate)
-        layout.addWidget(dice_btn)
-
-        layout.addSpacing(20)
-
-        # Divider
-        divider = QFrame()
-        divider.setFrameShape(QFrame.VLine)
-        divider.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(divider)
-
-        layout.addSpacing(10)
-
-        # + Neuron button (colorful, prominent)
+        # 3. Add Neuron
         add_neuron_btn = QPushButton("➕ Neuron")
-        add_neuron_btn.setToolTip("Add a new neuron (Shift+N)")
-        add_neuron_btn.setShortcut("Shift+N")
         add_neuron_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                font-weight: bold;
-                padding: 6px 14px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #43A047;
-            }
+            QPushButton { background-color: #4CAF50; color: white; font-weight: bold; padding: 6px 14px; border-radius: 4px; }
+            QPushButton:hover { background-color: #43A047; }
         """)
         add_neuron_btn.clicked.connect(self.show_add_neuron_dialog)
         layout.addWidget(add_neuron_btn)
 
-        layout.addSpacing(10)
+        # 4. Export
+        export_btn = QPushButton("📤 EXPORT")
+        export_btn.setStyleSheet("""
+            QPushButton { background-color: #FF5722; color: white; font-weight: bold; padding: 6px 14px; border-radius: 4px; }
+            QPushButton:hover { background-color: #E64A19; }
+        """)
+        export_btn.clicked.connect(self.export_design)
+        layout.addWidget(export_btn)
 
-        # Auto-fix button
-        fix_btn = QPushButton("🔧 Auto-Fix")
-        fix_btn.setToolTip("Automatically fix orphan neurons and connectivity issues")
-        fix_btn.clicked.connect(self.run_auto_fix)
-        #layout.addWidget(fix_btn)
+        # 5. Clear Connections
+        clear_btn = QPushButton("🗑 Clear")
+        clear_btn.setStyleSheet("color: #d32f2f; font-weight: bold;")
+        clear_btn.clicked.connect(self.clear_all_connections)
+        layout.addWidget(clear_btn)
+        
+        # 6. Quick Gen Menu (Tiny dropdown) - NOW LAST in group
+        quick_gen_btn = QToolButton()
+        quick_gen_btn.setText("▼")
+        quick_gen_btn.setPopupMode(QToolButton.InstantPopup)
+        quick_menu = QMenu(quick_gen_btn)
+        generator = SparseNetworkGenerator()
+        for key, info in generator.get_preset_styles().items():
+            action = quick_menu.addAction(f"{info['name']}")
+            action.setData(key)
+            action.triggered.connect(lambda checked, k=key: self.quick_generate(k))
+        quick_gen_btn.setMenu(quick_menu)
+        layout.addWidget(quick_gen_btn)
 
-        # Validate button
-        validate_btn = QPushButton("✓ Validate")
-        validate_btn.setToolTip("Check design for issues")
-        validate_btn.clicked.connect(self.check_status)
-        #layout.addWidget(validate_btn)
-
-        # Placeholder for sync button - will be added later if game is detected
         self._sync_btn_container = QFrame()
         self._sync_btn_layout = QHBoxLayout(self._sync_btn_container)
         self._sync_btn_layout.setContentsMargins(0, 0, 0, 0)
-        self._sync_btn_container.hide()  # Hidden by default
+        self._sync_btn_container.hide()
         layout.addWidget(self._sync_btn_container)
-        
-        # Add RETURN button if embedded
-        if self.embedded_mode:
-            layout.addSpacing(20)
-            return_btn = QPushButton("💾 Save & Return to Game")
-            return_btn.setToolTip("Save changes and return to game view")
-            return_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #673AB7;
-                    color: white;
-                    font-weight: bold;
-                    padding: 6px 14px;
-                    border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #5E35B1;
-                }
-            """)
-            return_btn.clicked.connect(self.exitRequested.emit)
-            layout.addWidget(return_btn)
 
         layout.addStretch()
 
-        # Clear connections button
-        clear_btn = QPushButton("🗑 Clear Connections")
-        clear_btn.setToolTip("Remove all connections (keeps neurons)")
-        clear_btn.setStyleSheet("color: #d32f2f;")
-        clear_btn.clicked.connect(self.clear_all_connections)
-        layout.addWidget(clear_btn)
+        # 7. Sidebar Hide Toggle - Far Right
+        self.toggle_btn = QPushButton("▶")
+        self.toggle_btn.setToolTip("Toggle Right Panel (Ctrl+B)")
+        self.toggle_btn.setShortcut("Ctrl+B")
+        self.toggle_btn.setFixedWidth(35)
+        self.toggle_btn.setStyleSheet("""
+            QPushButton { background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; }
+            QPushButton:hover { background-color: #e0e0e0; }
+        """)
+        self.toggle_btn.clicked.connect(self.toggle_right_panel)
+        layout.addWidget(self.toggle_btn)
 
         return toolbar
 
@@ -426,7 +395,6 @@ class BrainDesignerWindow(QMainWindow):
         layout = QHBoxLayout(help_bar)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # Create scrolling ticker with comprehensive shortcuts
         self.help_ticker = ScrollingTicker(
             "<span style='color:#333'>💡 <b> Left-Drag</b> from neuron to create connection </span>"
             "<span style='color:#333'><b> Ctrl+Drag</b> neuron to move it </span>"
@@ -453,11 +421,8 @@ class BrainDesignerWindow(QMainWindow):
 
     def setup_menus(self):
         """Setup the menu bar."""
-        # In embedded mode, menus might not show up if parent is not main window.
-        # But for QMainWindow they usually work.
         menu = self.menuBar()
 
-        # File menu
         file_menu = menu.addMenu("File")
         
         if self.embedded_mode:
@@ -474,11 +439,6 @@ class BrainDesignerWindow(QMainWindow):
 
         file_menu.addSeparator()
 
-        save_action = QAction("Save...", self)
-        save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self.save_design)
-        #file_menu.addAction(save_action)
-
         export_action = QAction("Export for Dosidicus...", self)
         export_action.setShortcut("Ctrl+E")
         export_action.triggered.connect(self.export_design)
@@ -491,7 +451,6 @@ class BrainDesignerWindow(QMainWindow):
         open_action.triggered.connect(self.open_design)
         file_menu.addAction(open_action)
 
-        # Edit menu
         edit_menu = menu.addMenu("Edit")
 
         generate_action = QAction("Generate Network...", self)
@@ -505,23 +464,49 @@ class BrainDesignerWindow(QMainWindow):
         auto_fix.triggered.connect(self.run_auto_fix)
         edit_menu.addAction(auto_fix)
 
-        validate_action = QAction("Validate Design", self)
-        validate_action.triggered.connect(self.check_status)
-        #edit_menu.addAction(validate_action)
-
         edit_menu.addSeparator()
 
         clear_conn_action = QAction("Clear All", self)
         clear_conn_action.triggered.connect(self.clear_all_connections)
         edit_menu.addAction(clear_conn_action)
         
-        # Clear outputs action
         if _HAS_OUTPUTS_PANEL:
             clear_outputs_action = QAction("Clear all Bindings", self)
             clear_outputs_action.triggered.connect(self.clear_all_outputs)
             edit_menu.addAction(clear_outputs_action)
 
-        # Templates menu
+        # === NEW: Network Menu ===
+        network_menu = menu.addMenu("Network")
+        
+        add_layer_action = QAction("Add Hidden Layer...", self)
+        add_layer_action.setToolTip("Add a layer of neurons at once")
+        add_layer_action.triggered.connect(self.show_add_layer_dialog)
+        network_menu.addAction(add_layer_action)
+        
+        connect_layers_action = QAction("Connect Layers...", self)
+        connect_layers_action.setToolTip("Connect neurons between two layers")
+        connect_layers_action.triggered.connect(self.show_connect_layers_dialog)
+        network_menu.addAction(connect_layers_action)
+        
+        network_menu.addSeparator()
+        
+        feedforward_action = QAction("Create Feedforward Network...", self)
+        feedforward_action.setToolTip("Create a complete feedforward neural network")
+        feedforward_action.triggered.connect(self.show_feedforward_dialog)
+        network_menu.addAction(feedforward_action)
+        
+        network_menu.addSeparator()
+        
+        auto_layout_action = QAction("Auto-Layout Network", self)
+        auto_layout_action.setToolTip("Arrange neurons automatically using force-directed layout")
+        auto_layout_action.triggered.connect(self.auto_layout_network)
+        network_menu.addAction(auto_layout_action)
+        
+        decluster_action = QAction("Decluster Neurons", self)
+        decluster_action.setToolTip("Push apart neurons that are too close together")
+        decluster_action.triggered.connect(lambda: self.decluster_neurons(120))
+        network_menu.addAction(decluster_action)
+
         tpl_menu = menu.addMenu("Templates")
         for key, info in TemplateManager.get_templates().items():
             a = QAction(info['name'], self)
@@ -529,7 +514,6 @@ class BrainDesignerWindow(QMainWindow):
             a.triggered.connect(self.load_template)
             tpl_menu.addAction(a)
 
-        # Network generation presets
         gen_menu = menu.addMenu("Generate")
 
         gen_dialog_action = QAction("🎲 Generate...", self)
@@ -542,7 +526,6 @@ class BrainDesignerWindow(QMainWindow):
         generator = SparseNetworkGenerator()
         for key, info in generator.get_preset_styles().items():
             action = QAction(f"{info['name']}", self)
-            action.setToolTip(info['description'])
             action.setData(key)
             action.triggered.connect(lambda checked, k=key: self.quick_generate(k))
             gen_menu.addAction(action)
@@ -553,44 +536,615 @@ class BrainDesignerWindow(QMainWindow):
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
-        # File actions
         toolbar.addAction("📂 Open", self.open_design)
         toolbar.addAction("💾 Save", self.save_design)
 
         toolbar.addSeparator()
-
-        if _HAS_BRAIN_BRIDGE:
-            push_action = QAction("🚀 Push to Game", self)
-            push_action.setToolTip("Export current design directly to the running Dosidicus game")
-            push_action.triggered.connect(self.push_to_game)
-            toolbar.addAction(push_action)
-            toolbar.addSeparator()
-
-        # Template dropdown
         toolbar.addAction("📋 Templates", self.show_template_menu)
 
+    # ========== NEW: Network Menu Methods ==========
+    
+    def show_add_layer_dialog(self):
+        """Show dialog to add a layer of hidden neurons."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add Hidden Layer")
+        dialog.setMinimumWidth(350)
+        layout = QFormLayout(dialog)
+        
+        # Prefix for neuron names
+        prefix_edit = QLineEdit(f"hidden{self.layer_counter}_")
+        prefix_edit.setToolTip("Prefix for neuron names in this layer")
+        layout.addRow("Name Prefix:", prefix_edit)
+        
+        # Number of neurons
+        count_spin = QSpinBox()
+        count_spin.setRange(1, 50)
+        count_spin.setValue(4)
+        count_spin.setToolTip("Number of neurons to create")
+        layout.addRow("Neuron Count:", count_spin)
+        
+        # X position
+        x_spin = QSpinBox()
+        x_spin.setRange(-2000, 2000)
+        x_spin.setValue(300 + self.layer_counter * 200)
+        x_spin.setToolTip("X position of the layer")
+        layout.addRow("X Position:", x_spin)
+        
+        # Y position (center)
+        y_spin = QSpinBox()
+        y_spin.setRange(-2000, 2000)
+        y_spin.setValue(200)
+        y_spin.setToolTip("Y position (center of layer)")
+        layout.addRow("Y Position:", y_spin)
+        
+        # Vertical spacing
+        spacing_spin = QSpinBox()
+        spacing_spin.setRange(30, 200)
+        spacing_spin.setValue(80)
+        spacing_spin.setToolTip("Vertical spacing between neurons")
+        layout.addRow("Spacing:", spacing_spin)
+        
+        # Color picker
+        color_list = [150, 150, 220]
+        color_btn = QPushButton()
+        color_btn.setStyleSheet(f"background-color: rgb({color_list[0]},{color_list[1]},{color_list[2]});")
+        color_btn.setText(f"#{color_list[0]:02x}{color_list[1]:02x}{color_list[2]:02x}")
+        
+        def pick_color():
+            color = QColorDialog.getColor(QColor(*color_list), dialog, "Select Layer Color")
+            if color.isValid():
+                color_list[0] = color.red()
+                color_list[1] = color.green()
+                color_list[2] = color.blue()
+                color_btn.setStyleSheet(f"background-color: {color.name()};")
+                color_btn.setText(color.name())
+        
+        color_btn.clicked.connect(pick_color)
+        layout.addRow("Color:", color_btn)
+        
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addRow(buttons)
+        
+        if dialog.exec_() == QDialog.Accepted:
+            prefix = prefix_edit.text()
+            count = count_spin.value()
+            x = x_spin.value()
+            y_center = y_spin.value()
+            spacing = spacing_spin.value()
+            color = tuple(color_list)
+            
+            # Calculate starting y position to center the layer
+            total_height = (count - 1) * spacing
+            y_start = y_center - total_height / 2
+            
+            layer_name = f"layer{self.layer_counter}"
+            layer_neurons = []
+            
+            for i in range(count):
+                # Generate unique name
+                base_name = f"{prefix}{i}"
+                actual_name = base_name
+                idx = 0
+                while actual_name in self.design.neurons:
+                    actual_name = f"{base_name}_{idx}"
+                    idx += 1
+                
+                y_pos = y_start + i * spacing
+                
+                neuron = DesignerNeuron(
+                    name=actual_name,
+                    neuron_type=NeuronType.HIDDEN,
+                    position=(x, y_pos),
+                    color=color,
+                    shape='circle'
+                )
+                self.design.add_neuron(neuron)
+                layer_neurons.append(actual_name)
+            
+            # Track the layer for connecting later
+            self.network_layers[layer_name] = {
+                'neurons': layer_neurons,
+                'color': QColor(*color).name()
+            }
+            self.layer_counter += 1
+            
+            self.on_design_changed()
+            self.status_bar.showMessage(f"Added layer '{layer_name}' with {count} neurons", 3000)
+
+    def show_connect_layers_dialog(self):
+        """Show dialog to connect two layers."""
+        if len(self.network_layers) < 2:
+            QMessageBox.warning(
+                self, "Connect Layers", 
+                "Need at least 2 layers to connect.\n\nUse 'Network > Add Hidden Layer' to create layers first."
+            )
+            return
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Connect Layers")
+        dialog.setMinimumWidth(350)
+        layout = QFormLayout(dialog)
+        
+        layer_names = list(self.network_layers.keys())
+        
+        # Source layer
+        source_combo = QComboBox()
+        source_combo.addItems(layer_names)
+        layout.addRow("Source Layer:", source_combo)
+        
+        # Target layer
+        target_combo = QComboBox()
+        target_combo.addItems(layer_names)
+        if len(layer_names) >= 2:
+            target_combo.setCurrentIndex(1)
+        layout.addRow("Target Layer:", target_combo)
+        
+        # Connection type
+        type_combo = QComboBox()
+        type_combo.addItems(["Fully Connected", "One-to-One (Matching Size)"])
+        type_combo.setToolTip("Fully Connected: Every source neuron connects to every target\nOne-to-One: Each source connects to corresponding target")
+        layout.addRow("Connection Type:", type_combo)
+        
+        # Weight range
+        min_weight = QDoubleSpinBox()
+        min_weight.setRange(-1.0, 1.0)
+        min_weight.setValue(-0.5)
+        min_weight.setSingleStep(0.1)
+        min_weight.setDecimals(2)
+        layout.addRow("Min Weight:", min_weight)
+        
+        max_weight = QDoubleSpinBox()
+        max_weight.setRange(-1.0, 1.0)
+        max_weight.setValue(0.5)
+        max_weight.setSingleStep(0.1)
+        max_weight.setDecimals(2)
+        layout.addRow("Max Weight:", max_weight)
+        
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addRow(buttons)
+        
+        if dialog.exec_() == QDialog.Accepted:
+            source_name = source_combo.currentText()
+            target_name = target_combo.currentText()
+            
+            if source_name == target_name:
+                QMessageBox.warning(self, "Error", "Source and target layers must be different.")
+                return
+            
+            source_neurons = self.network_layers[source_name]['neurons']
+            target_neurons = self.network_layers[target_name]['neurons']
+            conn_type = type_combo.currentText()
+            w_min = min_weight.value()
+            w_max = max_weight.value()
+            
+            added = 0
+            
+            if conn_type == "Fully Connected":
+                for src in source_neurons:
+                    for tgt in target_neurons:
+                        if src in self.design.neurons and tgt in self.design.neurons:
+                            weight = random.uniform(w_min, w_max)
+                            self.design.add_connection(src, tgt, weight)
+                            added += 1
+            else:  # One-to-One
+                if len(source_neurons) != len(target_neurons):
+                    QMessageBox.warning(
+                        self, "Size Mismatch",
+                        f"One-to-One requires matching layer sizes.\n"
+                        f"Source has {len(source_neurons)}, target has {len(target_neurons)}."
+                    )
+                    return
+                for src, tgt in zip(source_neurons, target_neurons):
+                    if src in self.design.neurons and tgt in self.design.neurons:
+                        weight = random.uniform(w_min, w_max)
+                        self.design.add_connection(src, tgt, weight)
+                        added += 1
+            
+            self.on_design_changed()
+            self.status_bar.showMessage(f"Added {added} connections from {source_name} to {target_name}", 3000)
+
+    def show_feedforward_dialog(self):
+        """Show dialog to create a complete feedforward network using core neurons."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Create Feedforward Network")
+        dialog.setMinimumWidth(400)
+        layout = QVBoxLayout(dialog)
+        
+        # Info section
+        info = QLabel(
+            "<b>Feedforward Network</b><br><br>"
+            "<b>Input neurons (always included):</b><br>"
+            "hunger, happiness, cleanliness, sleepiness<br><br>"
+            "<b>Output neurons (always included):</b><br>"
+            "satisfaction, anxiety, curiosity<br><br>"
+            "The network flows from top (inputs) to bottom (outputs)."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet("background-color: #E3F2FD; padding: 10px; border-radius: 6px;")
+        layout.addWidget(info)
+        
+        # Optional sensors group
+        sensors_group = QGroupBox("Optional Input Sensors")
+        sensors_layout = QVBoxLayout(sensors_group)
+        
+        self._ff_sensor_checks = {}
+        optional_sensors = ['can_see_food', 'is_fleeing', 'plant_proximity']
+        for sensor in optional_sensors:
+            cb = QCheckBox(sensor.replace('_', ' ').title())
+            cb.setProperty('sensor_name', sensor)
+            # Check if already in design
+            if sensor in self.design.neurons:
+                cb.setChecked(True)
+            self._ff_sensor_checks[sensor] = cb
+            sensors_layout.addWidget(cb)
+        
+        layout.addWidget(sensors_group)
+        
+        # Hidden layers group
+        hidden_group = QGroupBox("Hidden Layers")
+        hidden_layout = QFormLayout(hidden_group)
+        
+        hidden_edit = QLineEdit("4")
+        hidden_edit.setPlaceholderText("e.g., 4 or 4,3 for multiple layers")
+        hidden_edit.setToolTip(
+            "Enter neuron counts for hidden layers.\n"
+            "Examples:\n"
+            "  4 = one hidden layer with 4 neurons\n"
+            "  4,3 = two hidden layers (4 then 3 neurons)\n"
+            "  Leave empty for no hidden layers"
+        )
+        hidden_layout.addRow("Layer sizes:", hidden_edit)
+        
+        layout.addWidget(hidden_group)
+        
+        # Clear option
+        clear_check = QCheckBox("Remove existing non-core neurons")
+        clear_check.setChecked(True)
+        clear_check.setToolTip("Remove custom and sensor neurons before creating the network")
+        layout.addWidget(clear_check)
+        
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        
+        if dialog.exec_() == QDialog.Accepted:
+            # Parse hidden layers
+            hidden_text = hidden_edit.text().strip()
+            hidden_sizes = []
+            if hidden_text:
+                try:
+                    hidden_sizes = [int(s.strip()) for s in hidden_text.split(',') 
+                                    if s.strip().isdigit() and int(s.strip()) > 0]
+                except ValueError:
+                    pass
+            
+            # Get selected sensors
+            selected_sensors = [sensor for sensor, cb in self._ff_sensor_checks.items() 
+                               if cb.isChecked()]
+            
+            # Clear non-core if requested
+            if clear_check.isChecked():
+                from designer_network_generator import SparseNetworkGenerator
+                generator = SparseNetworkGenerator()
+                generator.remove_non_core_neurons(self.design)
+                self.design.connections.clear()
+                self.network_layers.clear()
+                self.layer_counter = 0
+            
+            # Create the network
+            self._create_feedforward_network(hidden_sizes, selected_sensors)
+
+    def _create_feedforward_network(self, hidden_layer_sizes, optional_sensors):
+        """
+        Create a feedforward network using core neurons as inputs/outputs.
+        
+        Layout: TOP to BOTTOM
+          - Input layer (top): hunger, happiness, cleanliness, sleepiness + optional sensors
+          - Hidden layers (middle): user-defined sizes
+          - Output layer (bottom): satisfaction, anxiety, curiosity
+        """
+        # Core input neurons (always used)
+        core_inputs = ['hunger', 'happiness', 'cleanliness', 'sleepiness']
+        
+        # Core output neurons (always used)
+        core_outputs = ['satisfaction', 'anxiety', 'curiosity']
+        
+        # Add optional sensors to inputs
+        input_neurons = core_inputs.copy()
+        for sensor in optional_sensors:
+            if sensor not in self.design.neurons:
+                self.design.add_sensor(sensor, create_default_connections=False)
+            if sensor not in input_neurons:
+                input_neurons.append(sensor)
+        
+        # Ensure all core neurons exist
+        self.design.add_missing_required_neurons()
+        
+        # ====================================================================
+        # LAYOUT PARAMETERS - Adjust these to change network appearance
+        # ====================================================================
+        x_center = 400              # Horizontal center of the network
+        y_start = 50                # Input layer Y position (top)
+        y_spacing = 150             # Vertical spacing between layers
+        neuron_spacing = 180        # Horizontal spacing between neurons (increase if crowded)
+        
+        all_layer_neurons = []
+        current_y = y_start
+        
+        # === INPUT LAYER (TOP) ===
+        # Position input neurons horizontally centered
+        total_width = (len(input_neurons) - 1) * neuron_spacing
+        x_start = x_center - total_width / 2
+        
+        for i, name in enumerate(input_neurons):
+            x_pos = x_start + i * neuron_spacing
+            if name in self.design.neurons:
+                self.design.neurons[name].position = (x_pos, current_y)
+        
+        all_layer_neurons.append(input_neurons)
+        self.network_layers['ff_input'] = {
+            'neurons': input_neurons.copy(),
+            'color': '#96DC96'  # Greenish
+        }
+        
+        current_y += y_spacing
+        
+        # === HIDDEN LAYERS (MIDDLE) ===
+        for layer_idx, size in enumerate(hidden_layer_sizes):
+            layer_name = f"ff_hidden{layer_idx}"
+            layer_neurons = []
+            
+            total_width = (size - 1) * neuron_spacing
+            x_start = x_center - total_width / 2
+            
+            # Color for hidden layers (bluish, varying shades)
+            hue_offset = (layer_idx * 20) % 60
+            color = (150 - hue_offset, 150 - hue_offset, 220)
+            
+            for i in range(size):
+                neuron_name = f"hidden{layer_idx}_{i}"
+                x_pos = x_start + i * neuron_spacing
+                
+                # Make sure name is unique
+                while neuron_name in self.design.neurons:
+                    neuron_name = f"hidden{layer_idx}_{i}_{random.randint(0, 999)}"
+                
+                neuron = DesignerNeuron(
+                    name=neuron_name,
+                    neuron_type=NeuronType.HIDDEN,
+                    position=(x_pos, current_y),
+                    color=color,
+                    shape='circle'
+                )
+                self.design.add_neuron(neuron)
+                layer_neurons.append(neuron_name)
+            
+            all_layer_neurons.append(layer_neurons)
+            self.network_layers[layer_name] = {
+                'neurons': layer_neurons,
+                'color': QColor(*color).name()
+            }
+            
+            current_y += y_spacing
+        
+        # === OUTPUT LAYER (BOTTOM) ===
+        total_width = (len(core_outputs) - 1) * neuron_spacing
+        x_start = x_center - total_width / 2
+        
+        for i, name in enumerate(core_outputs):
+            x_pos = x_start + i * neuron_spacing
+            if name in self.design.neurons:
+                self.design.neurons[name].position = (x_pos, current_y)
+        
+        all_layer_neurons.append(core_outputs)
+        self.network_layers['ff_output'] = {
+            'neurons': core_outputs.copy(),
+            'color': '#DC9696'  # Reddish
+        }
+        
+        # === CREATE CONNECTIONS (fully connected between adjacent layers) ===
+        for layer_i in range(len(all_layer_neurons) - 1):
+            source_layer = all_layer_neurons[layer_i]
+            target_layer = all_layer_neurons[layer_i + 1]
+            
+            for src in source_layer:
+                for tgt in target_layer:
+                    if src in self.design.neurons and tgt in self.design.neurons:
+                        weight = random.uniform(-0.5, 0.5)
+                        self.design.add_connection(src, tgt, weight)
+        
+        self.layer_counter = len(hidden_layer_sizes) + 2
+        self.on_design_changed()
+        
+        if self.canvas:
+            self.canvas.center_on_neurons()
+        
+        # Calculate stats
+        total_neurons = len(input_neurons) + sum(hidden_layer_sizes) + len(core_outputs)
+        layer_sizes = [len(input_neurons)] + hidden_layer_sizes + [len(core_outputs)]
+        total_connections = sum(layer_sizes[i] * layer_sizes[i+1] for i in range(len(layer_sizes)-1))
+        
+        self.status_bar.showMessage(
+            f"Created feedforward network: {layer_sizes} ({total_neurons} neurons, {total_connections} connections)", 
+            5000
+        )
+
+    def decluster_neurons(self, min_distance: float = 120):
+        """
+        Push apart any neurons that are too close together.
+        
+        Args:
+            min_distance: Minimum distance between neuron centers (default 120px)
+        """
+        if len(self.design.neurons) < 2:
+            return
+        
+        neurons = list(self.design.neurons.values())
+        iterations = 10  # Multiple passes to resolve chain reactions
+        
+        for _ in range(iterations):
+            moved = False
+            for i, n1 in enumerate(neurons):
+                if n1.position is None:
+                    continue
+                x1, y1 = n1.position
+                
+                for n2 in neurons[i+1:]:
+                    if n2.position is None:
+                        continue
+                    x2, y2 = n2.position
+                    
+                    # Calculate distance
+                    dx = x2 - x1
+                    dy = y2 - y1
+                    dist = math.sqrt(dx*dx + dy*dy)
+                    
+                    if dist < min_distance and dist > 0:
+                        # Push apart
+                        overlap = min_distance - dist
+                        push = overlap / 2 + 5  # Extra 5px buffer
+                        
+                        # Normalize direction
+                        nx = dx / dist
+                        ny = dy / dist
+                        
+                        # Move both neurons away from each other
+                        n1.position = (x1 - nx * push, y1 - ny * push)
+                        n2.position = (x2 + nx * push, y2 + ny * push)
+                        moved = True
+                    elif dist == 0:
+                        # Identical positions - move randomly
+                        n2.position = (x2 + random.uniform(50, 100), y2 + random.uniform(-30, 30))
+                        moved = True
+            
+            if not moved:
+                break
+        
+        self.on_design_changed()
+
+    def auto_layout_network(self):
+        """Apply force-directed layout to arrange neurons automatically."""
+        if len(self.design.neurons) < 2:
+            self.status_bar.showMessage("Need at least 2 neurons to layout.", 3000)
+            return
+        
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.status_bar.showMessage("Applying auto-layout...")
+        QApplication.processEvents()
+        
+        try:
+            # Get canvas bounds
+            if self.canvas and self.canvas.viewport():
+                view_rect = self.canvas.mapToScene(self.canvas.viewport().rect()).boundingRect()
+                center_x = view_rect.center().x()
+                center_y = view_rect.center().y()
+                width = max(600, view_rect.width() * 0.8)
+                height = max(400, view_rect.height() * 0.8)
+            else:
+                center_x, center_y = 300, 250
+                width, height = 600, 400
+            
+            # Force-directed layout parameters
+            iterations = 80
+            area = width * height
+            k = math.sqrt(area / max(1, len(self.design.neurons)))  # Optimal distance
+            temp = width / 8  # Initial temperature
+            cooling = 0.95
+            
+            # Get current positions
+            pos = {}
+            for name, neuron in self.design.neurons.items():
+                pos[name] = QPointF(neuron.position[0], neuron.position[1])
+            
+            names = list(self.design.neurons.keys())
+            
+            for iteration in range(iterations):
+                # Calculate displacement for each neuron
+                disp = {n: QPointF(0, 0) for n in names}
+                
+                # Repulsive forces between all pairs
+                for i, n1 in enumerate(names):
+                    for n2 in names[i+1:]:
+                        delta = pos[n1] - pos[n2]
+                        dist = math.hypot(delta.x(), delta.y()) or 0.01
+                        force = (k * k) / dist
+                        normalized = QPointF(delta.x() / dist, delta.y() / dist)
+                        disp[n1] += normalized * force
+                        disp[n2] -= normalized * force
+                
+                # Attractive forces along connections
+                for conn in self.design.connections:
+                    if conn.source in pos and conn.target in pos:
+                        delta = pos[conn.target] - pos[conn.source]
+                        dist = math.hypot(delta.x(), delta.y()) or 0.01
+                        force = (dist * dist) / k
+                        normalized = QPointF(delta.x() / dist, delta.y() / dist)
+                        disp[conn.source] += normalized * force
+                        disp[conn.target] -= normalized * force
+                
+                # Apply displacements with temperature limiting
+                for n in names:
+                    d = disp[n]
+                    d_mag = math.hypot(d.x(), d.y()) or 0.01
+                    # Limit displacement by temperature
+                    limited = min(d_mag, temp)
+                    new_pos = pos[n] + QPointF(d.x() / d_mag, d.y() / d_mag) * limited
+                    
+                    # Keep within bounds
+                    new_pos.setX(max(center_x - width/2, min(center_x + width/2, new_pos.x())))
+                    new_pos.setY(max(center_y - height/2, min(center_y + height/2, new_pos.y())))
+                    pos[n] = new_pos
+                
+                temp *= cooling
+                
+                # Update display periodically
+                if iteration % 15 == 0:
+                    for name, p in pos.items():
+                        self.design.neurons[name].position = (p.x(), p.y())
+                    self.canvas.rebuild()
+                    QApplication.processEvents()
+            
+            # Final position update
+            for name, p in pos.items():
+                self.design.neurons[name].position = (p.x(), p.y())
+            
+            self.on_design_changed()
+            self.status_bar.showMessage("Auto-layout applied.", 3000)
+            
+        except Exception as e:
+            self.logger.error(f"Auto-layout failed: {e}")
+            self.status_bar.showMessage(f"Layout failed: {e}", 5000)
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    # ========== END Network Menu Methods ==========
+
     def push_to_game(self):
-        """Export current design, state, and bindings directly to the running game."""
+        """Export current design directly to the running game via the bridge."""
         if not _HAS_BRAIN_BRIDGE:
             return
 
         if not is_game_running():
-            QMessageBox.warning(self, "Game Not Found", 
-                              "Dosidicus does not appear to be running.\nStart the game to push designs.")
+            QMessageBox.warning(self, "Game Not Found", "Dosidicus does not appear to be running.")
             return
 
         try:
-            # 1. Ensure bindings are up to date
             if self.outputs_panel:
                 self.design.output_bindings = self.outputs_panel.export_bindings()
 
-            # 2. Convert to the format the game expects
             data = self.design.to_dosidicus_format()
             
-            # 3. Push via bridge
             if export_design_to_game(data):
-                self.status_bar.showMessage("Design pushed to running game", 3000)
-                self.tamagotchi_logic.show_message("Custom Brain was pushed from Designer")
+                self.status_bar.showMessage("Design pushed to bridge!", 5000)
+                QMessageBox.information(self, "Push Successful", "Brain design has been sent to the game.")
             else:
                 QMessageBox.warning(self, "Export Failed", "Could not write bridge file.")
                 
@@ -598,49 +1152,28 @@ class BrainDesignerWindow(QMainWindow):
             self.logger.error(f"Push to game failed: {e}", exc_info=True)
             QMessageBox.critical(self, "Error", f"Failed to push design:\n{e}")
 
-    # ==========================================================================
-    # DATA LOADING AND CONVERSION
-    # ==========================================================================
-    
     def load_from_brain_widget_state(self, state):
-        """
-        Load design from a brain widget state dictionary.
-        Used for in-process switching with robust fallback.
-        """
+        """Load design from a brain widget state dictionary."""
         try:
             imported_design = None
-            
-            # Attempt 1: Try using the bridge if available
             try:
                 from brain_state_bridge import convert_to_brain_design
                 imported_design = convert_to_brain_design(state)
             except ImportError:
-                # Bridge not found, proceed to fallback
                 pass
             
-            # Attempt 2: Direct conversion using DesignerCore (Fallback)
             if imported_design is None:
-                # If bridge failed or returned None, use the core method directly
-                # This ensures we don't need the bridge to be active/present
                 from designer_core import BrainDesign
-                # Try dosidicus format first (likely coming from BrainWidget)
                 imported_design = BrainDesign.from_dosidicus_format(state)
             
             if imported_design is None:
-                self.logger.warning("Could not convert state to BrainDesign")
                 return False
             
-            # Apply the design
             self.design = imported_design
             self.refresh_all()
             
-            # Force canvas to center on the new nodes
             if hasattr(self, 'canvas'):
                 self.canvas.center_on_neurons()
-            
-            self.logger.info(
-                f"Loaded design from memory: {len(self.design.neurons)} neurons"
-            )
             return True
             
         except Exception as e:
@@ -648,23 +1181,14 @@ class BrainDesignerWindow(QMainWindow):
             return False
 
     def get_current_design_state(self):
-        """
-        Get the current design as a state dictionary compatible with BrainWidget.
-        """
+        """Get the current design as a state dictionary compatible with BrainWidget."""
         try:
-            # Sync output bindings first
             if self.outputs_panel:
                 self.design.output_bindings = self.outputs_panel.export_bindings()
-            
-            # Export to dosidicus format (compatible with loader)
             return self.design.to_dosidicus_format()
         except Exception as e:
             self.logger.error(f"Error exporting state: {e}", exc_info=True)
             return None
-
-    # ==========================================================================
-    # REFRESH AND STATUS
-    # ==========================================================================
 
     def refresh_all(self):
         """Refresh all panels with current design."""
@@ -674,7 +1198,6 @@ class BrainDesignerWindow(QMainWindow):
         self.sensors_panel.design = self.design
         self.connections_table.design = self.design
         
-        # Refresh outputs panel and load bindings from design
         if self.outputs_panel:
             self.outputs_panel.design = self.design
             self.outputs_panel.load_bindings(self.design.output_bindings)
@@ -684,15 +1207,12 @@ class BrainDesignerWindow(QMainWindow):
     def update_status(self):
         """Update the status bar."""
         stats = self.design.get_stats()
-        
-        # Build status message
         status_parts = [
             f"Neurons: {stats['total_neurons']}",
             f"Connections: {stats['connections']}",
             f"Required: {'✓' if stats['has_all_required'] else '✗'}"
         ]
         
-        # Add output bindings count if available
         if self.outputs_panel:
             binding_count = len(self.outputs_panel.bindings)
             if binding_count > 0:
@@ -700,81 +1220,45 @@ class BrainDesignerWindow(QMainWindow):
         
         self.status_bar.showMessage(" | ".join(status_parts))
 
-    # ==========================================================================
-    # NETWORK GENERATION AND CLEARING
-    # ==========================================================================
-
     def generate_initial_network(self):
-        """Generate a random network on startup without user interaction."""
-        import random
+        """Generate a random network on startup."""
         try:
             generator = SparseNetworkGenerator()
-            
-            # 50% chance of minimalist configuration (sparse, no feedback)
-            # This creates a variety of startup experiences for the user
-            if random.random() < 0.5:
-                density = 0.5
-                include_feedback = False
-                mode = "minimalist"
-            else:
-                density = 1.0
-                include_feedback = True
-                mode = "balanced"
+            density = 0.5 if random.random() < 0.5 else 1.0
+            include_feedback = random.random() < 0.5
 
-            count, _ = generator.generate_for_design(
+            generator.generate_for_design(
                 self.design,
                 clear_existing=True,
                 density=density,
                 include_feedback=include_feedback,
                 silent=True
             )
-            self.logger.debug(f"Generated initial network ({mode}) with {count} connections")
         except Exception as e:
             self.logger.warning(f"Could not generate initial network: {e}")
 
     def _try_import_from_game(self) -> bool:
-        """
-        Attempt to import brain state from a running game instance.
-        
-        Returns:
-            True if import was successful, False otherwise
-        """
+        """Attempt to import brain state from a running game instance."""
         if not _HAS_BRAIN_BRIDGE:
             return False
         
         try:
-            # Check if game is running
             if not is_game_running():
-                self.logger.debug("No running game detected, will generate random network")
                 return False
             
-            self.logger.info("Detected running game, attempting to import brain state...")
-            
-            # Import the brain state
             live_state = import_brain_state_for_designer()
             if live_state is None:
-                self.logger.warning("Could not import brain state from game")
                 return False
             
-            # Convert to BrainDesign
             imported_design = convert_to_brain_design(live_state)
             if imported_design is None:
-                self.logger.warning("Could not convert imported state to BrainDesign")
                 return False
             
-            # Replace current design with imported one
             self.design = imported_design
-            
-            # Update canvas reference
             if hasattr(self, 'canvas'):
                 self.canvas.design = self.design
             
             self._imported_from_game = True
-            self.logger.info(
-                f"Successfully imported brain from game: "
-                f"{len(self.design.neurons)} neurons, "
-                f"{len(self.design.connections)} connections"
-            )
             return True
             
         except Exception as e:
@@ -783,116 +1267,57 @@ class BrainDesignerWindow(QMainWindow):
 
     def _show_import_notification(self):
         """Show notification that brain was imported from running game."""
-        from PyQt5.QtWidgets import QMessageBox
-        from PyQt5.QtCore import QTimer
-        
-        # Show the sync button now that we know game is running
         self._show_sync_button()
         
-        # Create a non-modal notification
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Information)
         msg.setWindowTitle("Live Brain Import")
         msg.setText("🧠 Active brain imported from running game")
-        msg.setInformativeText(
-            f"The designer is now showing the exact neural network "
-            f"from your running Dosidicus game.\n\n"
-            f"• {len(self.design.neurons)} neurons\n"
-            f"• {len(self.design.connections)} connections\n\n"
-            f"Changes made here will NOT affect the running game."
-        )
+        msg.setInformativeText("Changes made here will NOT affect the running game.")
         msg.setStandardButtons(QMessageBox.Ok)
-        
-        # Show and auto-close after 5 seconds
         msg.show()
         QTimer.singleShot(5000, msg.close)
         
-        # Update window title to indicate imported state
         self.setWindowTitle("Brain Designer - Dosidicus-2 [Imported from Game]")
-        
-        # Update status bar
-        self.status_bar.showMessage(
-            "✨ Active brain imported from running game", 10000
-        )
+        self.status_bar.showMessage("✨ Active brain imported from running game", 10000)
 
     def _show_sync_button(self):
         """Show the sync button when game connection is established."""
         if not _HAS_BRAIN_BRIDGE:
             return
         
-        # Clear any existing content
         while self._sync_btn_layout.count():
             item = self._sync_btn_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
-        # Add divider
         divider = QFrame()
         divider.setFrameShape(QFrame.VLine)
         divider.setFrameShadow(QFrame.Sunken)
         self._sync_btn_layout.addWidget(divider)
         
-        # Add sync button
         sync_btn = QPushButton("🔄 Sync from Game")
-        sync_btn.setToolTip("Refresh brain state from running Dosidicus game")
         sync_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #9C27B0;
-                color: white;
-                font-weight: bold;
-                padding: 6px 12px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #7B1FA2;
-            }
+            QPushButton { background-color: #9C27B0; color: white; font-weight: bold; padding: 6px 12px; border-radius: 4px; }
         """)
         sync_btn.clicked.connect(self.sync_from_running_game)
         self._sync_btn_layout.addWidget(sync_btn)
-        
-        # Show the container
         self._sync_btn_container.show()
 
     def sync_from_running_game(self):
-        """
-        Manually sync brain state from running game.
-        Called when user clicks the Sync from Game button.
-        """
-        # Check if game is still running
+        """Manually sync brain state from running game."""
         if not is_game_running():
-            QMessageBox.information(
-                self, "Game Not Running",
-                "The Dosidicus game is no longer running.\n\n"
-                "Start the game again to sync."
-            )
-            # Hide the sync button since game is gone
+            QMessageBox.information(self, "Game Not Running", "The Dosidicus game is no longer running.")
             self._sync_btn_container.hide()
             self.setWindowTitle("Brain Designer - Dosidicus-2")
             return
         
-        # Confirm before replacing current design
-        reply = QMessageBox.question(
-            self, "Sync from Game",
-            "Replace current design with the latest brain state from the game?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
+        reply = QMessageBox.question(self, "Sync from Game", "Replace current design with state from game?", 
+                                   QMessageBox.Yes | QMessageBox.No)
         
-        if reply != QMessageBox.Yes:
-            return
-        
-        # Try to import
-        if self._try_import_from_game():
+        if reply == QMessageBox.Yes and self._try_import_from_game():
             self.refresh_all()
-            self.status_bar.showMessage(
-                f"✨ Synced: {len(self.design.neurons)} neurons, "
-                f"{len(self.design.connections)} connections", 5000
-            )
-        else:
-            QMessageBox.warning(
-                self, "Sync Failed",
-                "Could not import brain state from game."
-            )
+            self.status_bar.showMessage("✨ Synced with game brain.", 5000)
 
     def show_sparse_network_dialog(self):
         """Show the sparse network generation dialog."""
@@ -905,136 +1330,70 @@ class BrainDesignerWindow(QMainWindow):
         try:
             generator = SparseNetworkGenerator()
             presets = generator.get_preset_styles()
-            
             if style_key not in presets:
                 return
             
             preset = presets[style_key]
-            
-            # Determine dynamic bounds from the canvas view if available
             bounds = (-450, -250, 650, 500)
             if hasattr(self, 'canvas') and self.canvas.viewport():
                 try:
-                    view_rect = self.canvas.viewport().rect()
-                    scene_poly = self.canvas.mapToScene(view_rect)
-                    brect = scene_poly.boundingRect()
+                    brect = self.canvas.mapToScene(self.canvas.viewport().rect()).boundingRect()
                     bounds = (brect.left(), brect.top(), brect.right(), brect.bottom())
-                except Exception:
-                    pass
+                except: pass
 
-            count, connections = generator.generate_for_design(
-                self.design,
-                clear_existing=True,
+            count, _ = generator.generate_for_design(
+                self.design, clear_existing=True,
                 density=preset.get('density', 1.0),
                 include_feedback=preset.get('include_feedback', False),
-                position_variance=preset.get('position_variance', 0.2),
-                sensor_probability=preset.get('sensor_probability', 0.0),
+                bounds=bounds
+            )
+            self.on_design_changed()
+            self.status_bar.showMessage(f"Generated {count} connections.", 3000)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Generation failed: {e}")
+
+    def instant_random_generate(self):
+        """Instantly generate a random network, shuffling positions."""
+        try:
+            generator = SparseNetworkGenerator()
+            bounds = (-450, -250, 650, 500)
+            if hasattr(self, 'canvas') and self.canvas.viewport():
+                try:
+                    brect = self.canvas.mapToScene(self.canvas.viewport().rect()).boundingRect()
+                    bounds = (brect.left(), brect.top(), brect.right(), brect.bottom())
+                except: pass
+            
+            count, _ = generator.generate_for_design(
+                self.design, clear_existing=True,
+                density=random.uniform(0.7, 1.4),
+                include_feedback=random.random() > 0.3,
+                position_variance=random.uniform(0.6, 1.0),
                 bounds=bounds
             )
             
             self.on_design_changed()
-            self.status_bar.showMessage(
-                f"Generated {count} connections using '{preset['name']}' preset", 3000
-            )
-        except Exception as e:
-            self.logger.error(f"Error in quick_generate: {e}", exc_info=True)
-            QMessageBox.warning(self, "Error", f"Generation failed: {e}")
-
-    def instant_random_generate(self):
-        """Instantly generate a random network without any dialog, shuffling positions."""
-        import random
-        
-        try:
-            generator = SparseNetworkGenerator()
-            presets = generator.get_preset_styles()
-            
-            # Pick a random preset as a base
-            style_key = random.choice(list(presets.keys()))
-            preset = presets[style_key]
-            
-            # Randomize connection parameters
-            density = random.uniform(0.7, 1.4)
-            
-            # !! CHAOS MODE !!
-            # Use high variance to shuffle neurons around the visible canvas
-            position_variance = random.uniform(0.6, 1.0) 
-            
-            # Calculate dynamic bounds from the actual visible canvas area
-            if hasattr(self, 'canvas') and self.canvas.viewport():
-                try:
-                    view_rect = self.canvas.viewport().rect()
-                    scene_poly = self.canvas.mapToScene(view_rect)
-                    brect = scene_poly.boundingRect()
-                    bounds = (brect.left(), brect.top(), brect.right(), brect.bottom())
-                except Exception:
-                    # Fallback if calculation fails
-                    bounds = (-450, -250, 650, 500)
-            else:
-                bounds = (-450, -250, 650, 500)
-            
-            count, _ = generator.generate_for_design(
-                self.design,
-                clear_existing=True,
-                density=density,
-                include_feedback=random.random() > 0.3,
-                position_variance=position_variance,
-                bounds=bounds,
-                sensor_probability=0.2  # Add some random sensors for flavor
-            )
-            
-            self.on_design_changed()
-            
-            # Ensure the canvas recenters on the new chaotic layout
             if self.canvas:
                 self.canvas.center_on_neurons()
-                
-            self.status_bar.showMessage(
-                f"🎲 Chaos! Shuffled positions & made {count} connections ({preset['name']} style)", 3000
-            )
+            self.status_bar.showMessage(f"🎲 Chaos! Made {count} connections.", 3000)
         except Exception as e:
-            self.logger.error(f"Error in instant_random_generate: {e}", exc_info=True)
+            self.logger.error(f"Error in chaotic generate: {e}")
 
     def clear_all_connections(self):
         """Clear all connections from the design."""
-        reply = QMessageBox.question(
-            self, "Clear Connections",
-            f"Remove all {len(self.design.connections)} connections?\n\n"
-            "Neurons will be kept.",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
+        reply = QMessageBox.question(self, "Clear Connections", "Remove all connections?", QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
-            count = len(self.design.connections)
             self.design.connections.clear()
             self.on_design_changed()
-            self.status_bar.showMessage(f"Cleared {count} connections", 3000)
 
     def clear_all_outputs(self):
-        """Clear all output bindings from the design."""
-        if not self.outputs_panel:
-            return
-        
-        if not self.outputs_panel.bindings:
-            QMessageBox.information(self, "Clear Outputs", "No output bindings to clear.")
-            return
-        
-        reply = QMessageBox.question(
-            self, "Clear Output Bindings",
-            f"Remove all {len(self.outputs_panel.bindings)} output bindings?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        
+        """Clear all output bindings."""
+        if not self.outputs_panel: return
+        reply = QMessageBox.question(self, "Clear Bindings", "Remove all output bindings?", QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
-            count = len(self.outputs_panel.bindings)
             self.outputs_panel.bindings.clear()
             self.outputs_panel.refresh()
             self.design.output_bindings = []
             self.on_design_changed()
-            self.status_bar.showMessage(f"Cleared {count} output bindings", 3000)
-
-    # ==========================================================================
-    # EVENT HANDLERS / CALLBACKS
-    # ==========================================================================
 
     def on_design_changed(self):
         """Called when the design is modified."""
@@ -1043,43 +1402,32 @@ class BrainDesignerWindow(QMainWindow):
             self.connections_table.refresh()
             self.sensors_panel.refresh()
             self.layers_panel.refresh()
-            
-            # Refresh outputs panel
             if self.outputs_panel:
                 self.outputs_panel.refresh()
-            
             self.update_status()
         except Exception as e:
-            self.logger.error(f"Error updating design view: {e}", exc_info=True)
+            self.logger.error(f"Error updating view: {e}")
 
     def on_neuron_selected(self, name):
         """Called when a neuron is selected on the canvas."""
         self.props_panel.set_neuron(name)
-        # Switch to properties tab if a neuron is selected
         if name:
             self.right_panel.setCurrentWidget(self.props_panel)
 
     def show_add_neuron_dialog(self, x=None, y=None):
         """Show dialog to add a new neuron."""
-        pos = (x, y) if x is not None else None
-        dlg = AddNeuronDialog(self.design, pos, self)
+        dlg = AddNeuronDialog(self.design, (x, y) if x is not None else None, self)
         if dlg.exec_() == QDialog.Accepted:
             self.on_design_changed()
 
     def on_connection_created(self, source, target):
-        """Called when a new connection is created via drag."""
-        weight, ok = QInputDialog.getDouble(
-            self, "Connection Weight",
-            f"Set weight for {source} → {target}:",
-            0.5, -1.0, 1.0, 2
-        )
+        """Called when a new connection is created."""
+        weight, ok = QInputDialog.getDouble(self, "Weight", f"{source} → {target}:", 0.5, -1.0, 1.0, 2)
         if ok:
             conn = self.design.get_connection(source, target)
-            if conn:
-                conn.weight = weight
+            if conn: conn.weight = weight
             self.on_design_changed()
         else:
-            # Cancel: remove the connection
             self.design.remove_connection(source, target)
             self.on_design_changed()
 
@@ -1087,213 +1435,97 @@ class BrainDesignerWindow(QMainWindow):
         """Called when a connection is selected."""
         conn = self.design.get_connection(source, target)
         if conn:
-            self.status_bar.showMessage(
-                f"Selected: {source} → {target} (weight: {conn.weight:+.3f})"
-            )
+            self.status_bar.showMessage(f"Selected: {source} → {target} ({conn.weight:+.3f})")
 
     def on_weight_changed(self, source, target, new_weight):
         """Called when a connection weight is changed."""
         self.connections_table.refresh()
-        self.status_bar.showMessage(
-            f"Weight updated: {source} → {target} = {new_weight:+.3f}", 2000
-        )
 
     def on_connection_deleted(self, source, target):
         """Called when a connection is deleted."""
         self.on_design_changed()
-        self.status_bar.showMessage(f"Deleted connection: {source} → {target}", 2000)
-
-    # ==========================================================================
-    # FILE AND UTILITY OPERATIONS
-    # ==========================================================================
 
     def new_design(self):
-        """Create a new empty design."""
-        reply = QMessageBox.question(
-            self, "New Design",
-            "Start a new design? Unsaved changes will be lost.",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if reply == QMessageBox.Yes:
+        """Create a new design."""
+        if QMessageBox.question(self, "New", "Start new design?", QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
             self.design = BrainDesign()
             self.design.add_missing_required_neurons()
+            self.network_layers.clear()
+            self.layer_counter = 0
             self.refresh_all()
 
     def run_auto_fix(self):
-        """Run auto-fix on the design."""
+        """Run auto-fix connectivity."""
         count, actions = self.design.auto_fix_connectivity()
         if count > 0:
-            self.on_design_changed()
-            # [FIX] Force immediate repaint so changes are visible behind the message box
-            if self.canvas:
-                self.canvas.viewport().repaint()
-            
-            QMessageBox.information(
-                self, "Auto-Fix",
-                f"Created {count} connections:\n\n" + "\n".join(actions[:10])
-            )
+            # Full refresh to ensure connections are displayed
+            self.refresh_all()
+            QMessageBox.information(self, "Auto-Fix", f"Created {count} connections.")
         else:
             QMessageBox.information(self, "Auto-Fix", "No issues found.")
 
     def save_design(self):
-        """Save the design to file."""
-        try:
-            # Sync output bindings from panel to design BEFORE saving
-            if self.outputs_panel:
-                self.design.output_bindings = self.outputs_panel.export_bindings()
-            
-            path, _ = QFileDialog.getSaveFileName(
-                self, "Save Design", "brain.json", "JSON (*.json)"
-            )
-            if path:
-                self.logger.info(f"Saving design to: {path}")
-                success, msg = self.design.save(path)
-                if success:
-                    self.logger.info(f"Design saved successfully: {msg}")
-                    
-                    # Add output binding info to message
-                    if self.outputs_panel and self.outputs_panel.bindings:
-                        msg += f"\n({len(self.outputs_panel.bindings)} output bindings included)"
-                    
-                    QMessageBox.information(self, "Saved", msg)
-                else:
-                    self.logger.warning(f"Save failed: {msg}")
-                    QMessageBox.warning(self, "Error", msg)
-        except Exception as e:
-            self.logger.error(f"Error saving design: {e}", exc_info=True)
-            QMessageBox.warning(self, "Error", f"Failed to save design:\n\n{e}")
+        """Save design to file."""
+        if self.outputs_panel:
+            self.design.output_bindings = self.outputs_panel.export_bindings()
+        path, _ = QFileDialog.getSaveFileName(self, "Save", "brain.json", "JSON (*.json)")
+        if path:
+            success, msg = self.design.save(path)
+            if success: QMessageBox.information(self, "Saved", msg)
+            else: QMessageBox.warning(self, "Error", msg)
 
     def export_design(self):
         """Export in Dosidicus format."""
-        try:
-            # Sync output bindings from panel to design BEFORE exporting
-            if self.outputs_panel:
-                self.design.output_bindings = self.outputs_panel.export_bindings()
-            
-            path, _ = QFileDialog.getSaveFileName(
-                self, "Export", "dosidicus_brain.json", "JSON (*.json)"
-            )
-            if path:
-                self.logger.info(f"Exporting design to: {path}")
-                success, msg = self.design.export_dosidicus(path)
-                if success:
-                    self.logger.info(f"Design exported successfully")
-                    
-                    # Add output binding info to message
-                    if self.outputs_panel and self.outputs_panel.bindings:
-                        msg += f"\n({len(self.outputs_panel.bindings)} output bindings included)"
-                    
-                    QMessageBox.information(self, "Exported", msg)
-                else:
-                    self.logger.warning(f"Export failed: {msg}")
-                    QMessageBox.warning(self, "Error", msg)
-        except Exception as e:
-            self.logger.error(f"Error exporting design: {e}", exc_info=True)
-            QMessageBox.warning(self, "Error", f"Failed to export design:\n\n{e}")
+        if self.outputs_panel:
+            self.design.output_bindings = self.outputs_panel.export_bindings()
+        path, _ = QFileDialog.getSaveFileName(self, "Export", "dosidicus_brain.json", "JSON (*.json)")
+        if path:
+            success, msg = self.design.export_dosidicus(path)
+            if success: QMessageBox.information(self, "Exported", msg)
+            else: QMessageBox.warning(self, "Error", msg)
 
     def open_design(self):
         """Open a design file."""
-        try:
-            path, _ = QFileDialog.getOpenFileName(
-                self, "Open Design", "", "JSON (*.json)"
-            )
-            if path:
-                self.logger.info(f"Opening design from: {path}")
-                self.design = BrainDesign.load(path)
-                self.logger.info(
-                    f"Design loaded: {len(self.design.neurons)} neurons, "
-                    f"{len(self.design.connections)} connections"
-                )
-                
-                # Load output bindings into the panel
-                if self.outputs_panel:
-                    self.outputs_panel.load_bindings(self.design.output_bindings)
-                    if self.design.output_bindings:
-                        self.logger.info(f"Loaded {len(self.design.output_bindings)} output bindings")
-                
-                self.refresh_all()
-        except Exception as e:
-            self.logger.error(f"Error opening design: {e}", exc_info=True)
-            QMessageBox.warning(self, "Error", f"Could not load design:\n\n{e}")
+        path, _ = QFileDialog.getOpenFileName(self, "Open", "", "JSON (*.json)")
+        if path:
+            self.design = BrainDesign.load(path)
+            if self.outputs_panel:
+                self.outputs_panel.load_bindings(self.design.output_bindings)
+            self.refresh_all()
 
     def show_template_menu(self):
-        """Show templates as a popup."""
+        """Show load template dialog."""
         templates = TemplateManager.get_templates()
-        items = [f"{info['name']} - {info['description']}" for info in templates.values()]
-        keys = list(templates.keys())
-
-        item, ok = QInputDialog.getItem(
-            self, "Load Template", "Select a template:", items, 0, False
-        )
+        items = [f"{info['name']}" for info in templates.values()]
+        item, ok = QInputDialog.getItem(self, "Template", "Select Template:", items, 0, False)
         if ok and item:
-            idx = items.index(item)
-            key = keys[idx]
-            if QMessageBox.question(
-                self, "Load Template", "Replace current design?",
-                QMessageBox.Yes | QMessageBox.No
-            ) == QMessageBox.Yes:
+            key = list(templates.keys())[items.index(item)]
+            if QMessageBox.question(self, "Load", "Replace design?", QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
                 self.design = TemplateManager.create_template(key)
                 self.refresh_all()
 
     def load_template(self):
-        """Load a template from menu action."""
+        """Load template from menu."""
         key = self.sender().data()
-        if QMessageBox.question(
-            self, "Load Template", "Replace current design?",
-            QMessageBox.Yes | QMessageBox.No
-        ) == QMessageBox.Yes:
+        if QMessageBox.question(self, "Load", "Replace design?", QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
             self.design = TemplateManager.create_template(key)
             self.refresh_all()
 
     def check_status(self):
-        """Validate and show design status."""
-        self.on_design_changed()
+        """Validate design."""
         stats = self.design.get_stats()
         _, issues, _ = self.design.validate(auto_fix=False)
+        msg = f"Neurons: {stats['total_neurons']}\nConnections: {stats['connections']}\n"
+        if issues: msg += "\nIssues:\n" + "\n".join(issues)
+        else: msg += "\nStatus: OK"
+        QMessageBox.information(self, "Status", msg)
 
-        msg = (
-            f"Neurons: {stats['total_neurons']}\n"
-            f"  • Required: {stats['required_neurons']}\n"
-            f"  • Sensors: {stats['sensor_neurons']}\n"
-            f"  • Custom: {stats['custom_neurons']}\n\n"
-            f"Connections: {stats['connections']}\n"
-            f"Layers: {stats['layers']}\n"
-        )
-        
-        # Add output binding info
-        if self.outputs_panel:
-            binding_count = len(self.outputs_panel.bindings)
-            enabled_count = sum(1 for b in self.outputs_panel.bindings if b.enabled)
-            msg += f"Output Bindings: {binding_count} ({enabled_count} enabled)\n"
-            
-            # Validate bindings
-            binding_warnings = self.outputs_panel.validate_bindings()
-            if binding_warnings:
-                issues.extend(binding_warnings)
-
-        if issues:
-            msg += "\n⚠️ ISSUES:\n" + "\n".join(f"  • {i}" for i in issues)
-        else:
-            msg += "\n✅ Status: OK"
-
-        QMessageBox.information(self, "Design Status", msg)
-
-
-# =============================================================================
-# MAIN ENTRY POINT
-# =============================================================================
 
 def main():
-    """Main entry point for the Brain Designer application."""
     from PyQt5.QtWidgets import QApplication
-    
     app = QApplication(sys.argv)
-    app.setApplicationName("Brain Designer (Beta)")
-    app.setOrganizationName("Dosidicus")
-    
     window = BrainDesignerWindow()
     window.show()
-    
     sys.exit(app.exec_())
 
 

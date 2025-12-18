@@ -8,12 +8,25 @@ from heapq import nlargest
 
 from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker, QWaitCondition
 
+
+# PURE_INPUTS: These neurons receive external input and should NOT be modified by learning
+# They are read-only sensors that reflect game state
+PURE_INPUTS = {
+    "can_see_food", "is_eating", "is_sleeping", "is_sick", 
+    "pursuing_food", "is_fleeing", "is_startled", "external_stimulus", 
+    "plant_proximity"
+}
+
+
 class BrainWorker(QThread):
     """
     Background worker for handling expensive brain logic operations:
     - Neurogenesis checks
     - Hebbian learning calculations
     - State decay and update processing
+    
+    Custom neurons (user-created neurons) ARE included in Hebbian learning
+    and can form new connections through this system.
     """
     
     # Signals for results (emitted to main thread)
@@ -24,7 +37,7 @@ class BrainWorker(QThread):
     
     def __init__(self, brain_widget=None):
         super().__init__()
-        self.brain_widget = brain_widget  # Optional weak ref if needed, usually avoided for thread safety
+        self.brain_widget = brain_widget
         self._running = True
         self._paused = False
         
@@ -40,6 +53,7 @@ class BrainWorker(QThread):
             'config': None,
             'excluded_neurons': set(),
             'connector_neurons': set(),
+            'custom_neurons': set(),  # NEW: Track custom neurons
             'learning_rate': 0.1,
             'new_neurons': set()
         }
@@ -51,10 +65,22 @@ class BrainWorker(QThread):
         self.queue_mutex = QMutex()
 
     def update_cache(self, state, weights, positions, config, excluded_neurons=None, 
-                     connector_neurons=None, learning_rate=0.1, new_neurons=None):
+                     connector_neurons=None, learning_rate=0.1, new_neurons=None,
+                     custom_neurons=None):
         """
         Update the local cache of brain state.
         Called from main thread before triggering heavy tasks.
+        
+        Args:
+            state: Current neuron activation values
+            weights: Current connection weights
+            positions: Neuron positions
+            config: Learning configuration
+            excluded_neurons: Neurons to exclude from learning (system neurons)
+            connector_neurons: Connector neurons from neurogenesis
+            learning_rate: Base learning rate for Hebbian updates
+            new_neurons: Recently created neurons (get learning boost)
+            custom_neurons: User-created custom neurons (participate in learning)
         """
         with QMutexLocker(self._cache_mutex):
             # Deep copy or safe copy important structures
@@ -64,6 +90,7 @@ class BrainWorker(QThread):
             self.cache['config'] = config
             self.cache['excluded_neurons'] = excluded_neurons if excluded_neurons else set()
             self.cache['connector_neurons'] = connector_neurons if connector_neurons else set()
+            self.cache['custom_neurons'] = custom_neurons if custom_neurons else set()
             self.cache['learning_rate'] = learning_rate
             self.cache['new_neurons'] = new_neurons if new_neurons else set()
 
@@ -71,7 +98,6 @@ class BrainWorker(QThread):
         self._add_task('neurogenesis', {'state': state_context})
 
     def queue_hebbian_learning(self):
-        # print("🧵 BrainWorker: Hebbian learning queued")  # Uncomment for verbose queuing logs
         self._add_task('hebbian', {})
 
     def queue_state_update(self, update_data):
@@ -87,7 +113,6 @@ class BrainWorker(QThread):
         with QMutexLocker(self.queue_mutex):
             self.wait_condition.wakeAll()
 
-    # --- Pause and Resume Methods ---
     def pause(self):
         """Pause the worker thread."""
         with QMutexLocker(self.queue_mutex):
@@ -98,7 +123,6 @@ class BrainWorker(QThread):
         with QMutexLocker(self.queue_mutex):
             self._paused = False
             self.wait_condition.wakeAll()
-    # --------------------------------
 
     def run(self):
         print("🧵 BrainWorker thread started")
@@ -116,8 +140,7 @@ class BrainWorker(QThread):
                     break
 
                 if self.task_queue.empty():
-                    self.wait_condition.wait(self.queue_mutex, 200) # Timeout allows checking _running
-                    # Re-check pause after wait
+                    self.wait_condition.wait(self.queue_mutex, 200)
                     if self._paused: 
                         continue
                     if self.task_queue.empty():
@@ -180,7 +203,6 @@ class BrainWorker(QThread):
             trigger_val = state.get('recent_rewards', 0)
             
         if trigger_type:
-            # Emit result back to main thread to finalize creation
             self.neurogenesis_result.emit({
                 'should_create': True,
                 'neuron_type': trigger_type,
@@ -192,85 +214,52 @@ class BrainWorker(QThread):
             self.neurogenesis_result.emit({'should_create': False})
 
     def _perform_hebbian_learning(self):
-        """Perform Hebbian learning calculations using cached state."""
-        # Retrieve snapshot of cache
+        """Hebbian learning with bug fix for weight lookup and custom neuron boost."""
         with QMutexLocker(self._cache_mutex):
             state = self.cache['state']
             weights = self.cache['weights']
             neuron_list = list(self.cache['positions'].keys())
             excluded = self.cache['excluded_neurons']
             connector_neurons = self.cache['connector_neurons']
+            custom_neurons = self.cache['custom_neurons']
             config = self.cache['config']
             base_learning_rate = self.cache['learning_rate']
             new_neurons = self.cache['new_neurons']
 
-        # DEBUG: Check if we have the basics
-        if not config:
-            print("⚠️ BrainWorker: Hebbian skipped - No 'config' in cache yet.")
-            return
-        
-        if not neuron_list:
-            print("⚠️ BrainWorker: Hebbian skipped - No neurons in cache 'positions'.")
+        if not config or not neuron_list:
             return
 
-        # PURE_INPUTS (Sensors) - Do not include in Hebbian learning
-        PURE_INPUTS = {
-            "can_see_food", "is_eating", "is_sleeping", "is_sick", 
-            "pursuing_food", "is_fleeing", "is_startled", "external_stimulus", 
-            "plant_proximity"
-        }
-
-        # Filter available neurons
-        # Exclude system neurons, connector neurons AND pure inputs
         learning_candidates = [
             n for n in neuron_list 
             if n not in excluded and n not in connector_neurons and n not in PURE_INPUTS
         ]
         
-        # DEBUG: Check if we have enough candidates
         if len(learning_candidates) < 2:
-            print(f"⚠️ BrainWorker: Hebbian skipped - Not enough candidates ({len(learning_candidates)}).")
-            # print(f"   Excluded: {len(excluded)}, Connectors: {len(connector_neurons)}, Total: {len(neuron_list)}")
             self.hebbian_result.emit({'updated_pairs': []})
             return
 
-        # Calculate scores
         scored_pairs = []
         for i, n1 in enumerate(learning_candidates):
             for n2 in learning_candidates[i + 1:]:
-                # Base Score: Sum of activations
                 v1 = self._get_neuron_value(state.get(n1, 50))
                 v2 = self._get_neuron_value(state.get(n2, 50))
-                score = v1 + v2
+                score = v1 + v2 + random.uniform(0, 40)
 
-                # 1. Add Random Noise to break deterministic loops
-                score += random.uniform(0, 40)
-
-                # 2. Cooldown Penalty: Check if pair was used in last cycle
-                # Sort tuple to ensure (A,B) is treated same as (B,A)
                 pair_key = tuple(sorted((n1, n2)))
                 if pair_key in self._last_hebbian_pairs:
-                    score -= 500  # Massive penalty ensures rotation
+                    score -= 500
+                
+                if n1 in custom_neurons or n2 in custom_neurons:
+                    score += 15
 
                 scored_pairs.append((score, n1, n2, v1, v2))
 
-        if not scored_pairs:
-            print("⚠️ BrainWorker: Hebbian skipped - No valid pairs formed.")
-            return
-
-        # Select top pairs
-        top_k = 2  # Default
-        if hasattr(config, 'neurogenesis'):
-            top_k = config.neurogenesis.get('max_hebbian_pairs', 2)
-            
+        top_k = config.neurogenesis.get('max_hebbian_pairs', 2) if hasattr(config, 'neurogenesis') else 2
         top_pairs = nlargest(top_k, scored_pairs)
-        
-        # Update history for next run
         self._last_hebbian_pairs = [tuple(sorted((n1, n2))) for _, n1, n2, _, _ in top_pairs]
         
         weight_updates = {}
         updated_pairs_list = []
-        
         hebbian_config = getattr(config, 'hebbian', {})
         decay_rate = hebbian_config.get('weight_decay', 0.01)
         
@@ -278,41 +267,31 @@ class BrainWorker(QThread):
             pair = (n1, n2)
             reverse_pair = (n2, n1)
             
-            # Find existing weight key
+            # --- ROBUST WEIGHT LOOKUP (Fixes KeyError: ('neuron', None)) ---
             use_pair = None
             if pair in weights:
                 use_pair = pair
             elif reverse_pair in weights:
                 use_pair = reverse_pair
             
-            if not use_pair:
-                # CREATE NEW CONNECTION if it doesn't exist
-                # This allows Hebbian learning to form new pathways between neurons
-                # that are frequently co-active, not just strengthen existing ones
+            is_new = False
+            if use_pair is None:
+                # If connection doesn't exist, we will create a new one using (n1, n2)
                 use_pair = pair
-                old_w = 0.0  # New connections start at zero
-                # Mark this as a new connection that needs to be created
-                weight_updates[use_pair] = {
-                    'old_weight': old_w,
-                    'new_weight': 0.0,  # Will be updated below
-                    'is_new_connection': True  # Signal to brain_widget to create this
-                }
+                old_w = 0.0
+                is_new = True
             else:
                 old_w = weights[use_pair]
             
-            # Boost learning rate for new neurons
+            # Calculate learning rate with boosts
             lr = base_learning_rate
             if n1 in new_neurons or n2 in new_neurons:
                 lr *= 2.0
+            if n1 in custom_neurons or n2 in custom_neurons:
+                lr *= 1.5 # 1.5x boost for custom purple circles
                 
-            # Hebbian rule: delta = lr * act1 * act2
             delta = lr * (v1 / 100.0) * (v2 / 100.0)
-            
-            new_w = old_w + delta - (old_w * decay_rate)
-            new_w = max(-1.0, min(1.0, new_w))
-            
-            # Check if this was a new connection we're creating
-            is_new = use_pair in weight_updates and weight_updates[use_pair].get('is_new_connection', False)
+            new_w = max(-1.0, min(1.0, old_w + delta - (old_w * decay_rate)))
             
             weight_updates[use_pair] = {
                 'old_weight': old_w,
@@ -321,20 +300,13 @@ class BrainWorker(QThread):
             }
             updated_pairs_list.append(use_pair)
 
-        if updated_pairs_list:
-            print(f"🧠 BrainWorker: Hebbian update calculated for {len(updated_pairs_list)} pairs.")
-        else:
-            print("⚠️ BrainWorker: Hebbian calculated, but no weights were updated (missing connections?).")
-
         self.hebbian_result.emit({
             'updated_pairs': updated_pairs_list,
             'weight_updates': weight_updates
         })
 
     def _process_state_update(self, data):
-        """
-        Process state decay and noise logic.
-        """
+        """Process state decay and noise logic."""
         if data.get('health_check'):
             self.state_update_result.emit({'health_check': True})
             return
@@ -343,15 +315,9 @@ class BrainWorker(QThread):
             current_state = self.cache['state']
             weights = self.cache['weights']
             excluded = self.cache['excluded_neurons']
+            custom_neurons = self.cache['custom_neurons']
 
         updated_state = {}
-        
-        # PURE_INPUTS (Sensors) - Do not decay these
-        PURE_INPUTS = {
-            "can_see_food", "is_eating", "is_sleeping", "is_sick", 
-            "pursuing_food", "is_fleeing", "is_startled", "external_stimulus", 
-            "plant_proximity"
-        }
 
         # 1. Decay and Noise
         for neuron, val in current_state.items():
@@ -364,6 +330,11 @@ class BrainWorker(QThread):
                 decay = 0.95 
                 noise = random.uniform(-0.5, 0.5)
                 
+                # Custom neurons may have slightly different dynamics
+                # They decay a bit slower to maintain their learned state
+                if neuron in custom_neurons:
+                    decay = 0.97  # Slower decay for custom neurons
+                
                 new_val = val * decay + noise
                 updated_state[neuron] = new_val
 
@@ -372,11 +343,12 @@ class BrainWorker(QThread):
         
         for (src, dst), w in weights.items():
             if src in current_state and dst in current_state:
-                if dst in PURE_INPUTS: continue
+                if dst in PURE_INPUTS: 
+                    continue
                 
                 src_val = current_state[src]
                 if isinstance(src_val, (int, float)):
-                    effect = src_val * w * 0.1 # Small timestep factor
+                    effect = src_val * w * 0.1
                     connection_deltas[dst] = connection_deltas.get(dst, 0) + effect
                     
         # Apply deltas
@@ -394,6 +366,7 @@ class BrainWorker(QThread):
         self.state_update_result.emit({'processed_state': final_state})
 
     def _get_neuron_value(self, val):
+        """Convert various value types to float for calculations."""
         if isinstance(val, (int, float)):
             return float(val)
         if isinstance(val, bool):

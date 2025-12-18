@@ -2,6 +2,7 @@
 Enhanced Canvas Utilities for Brain Designer
 
 Additional visual feedback for wiring operations and activation display.
+Includes support for custom neurons with distinctive visual styling.
 """
 
 from PyQt5.QtWidgets import (
@@ -11,10 +12,18 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QPointF, QRectF, QTimer
 from PyQt5.QtGui import (
     QPainter, QPen, QBrush, QColor, QFont, QFontMetrics,
-    QPainterPath, QRadialGradient, QLinearGradient
+    QPainterPath, QRadialGradient, QLinearGradient, QPolygonF
 )
 
 import math
+
+# Import custom neuron color
+try:
+    from designer_constants import CUSTOM_NEURON_COLOR, is_custom_neuron
+except ImportError:
+    CUSTOM_NEURON_COLOR = (147, 112, 219)
+    def is_custom_neuron(name):
+        return False
 
 
 class WiringPreviewItem(QGraphicsItem):
@@ -129,9 +138,7 @@ class WiringPreviewItem(QGraphicsItem):
 
 
 class ActivationBadge(QGraphicsItem):
-    """
-    Badge showing a neuron's current activation value.
-    """
+    """Badge showing a neuron's current activation value."""
     
     def __init__(self, center: QPointF, value: float, 
                  is_binary: bool = False, parent=None):
@@ -164,12 +171,10 @@ class ActivationBadge(QGraphicsItem):
             # Gradient from blue (low) to red (high)
             ratio = self.value / 100.0
             if ratio < 0.5:
-                # Blue to yellow
                 r = int(50 + ratio * 2 * 205)
                 g = int(50 + ratio * 2 * 155)
                 b = int(200 - ratio * 2 * 150)
             else:
-                # Yellow to red
                 r = 255
                 g = int(205 - (ratio - 0.5) * 2 * 155)
                 b = int(50 - (ratio - 0.5) * 2 * 50)
@@ -188,9 +193,7 @@ class ActivationBadge(QGraphicsItem):
 
 
 class ConnectionStrengthIndicator(QGraphicsItem):
-    """
-    Visual indicator of connection strength shown during weight editing.
-    """
+    """Visual indicator of connection strength shown during weight editing."""
     
     def __init__(self, pos: QPointF, weight: float, parent=None):
         super().__init__(parent)
@@ -240,9 +243,7 @@ class ConnectionStrengthIndicator(QGraphicsItem):
 
 
 class NeuronHighlightRing(QGraphicsEllipseItem):
-    """
-    Animated highlight ring for neuron selection/hover states.
-    """
+    """Animated highlight ring for neuron selection/hover states."""
     
     def __init__(self, center: QPointF, radius: float, 
                  color: QColor, parent=None):
@@ -299,6 +300,51 @@ class NeuronHighlightRing(QGraphicsEllipseItem):
         painter.drawEllipse(self.center, self.base_radius + 3, self.base_radius + 3)
 
 
+class CustomNeuronBadge(QGraphicsItem):
+    """
+    Badge indicating a custom neuron with distinctive styling.
+    Shows a purple star icon next to the neuron.
+    """
+    
+    def __init__(self, center: QPointF, parent=None):
+        super().__init__(parent)
+        self.center = center
+        self.setPos(center.x() + 22, center.y() - 22)  # Upper right
+        self.setZValue(10)
+    
+    def boundingRect(self) -> QRectF:
+        return QRectF(0, 0, 18, 18)
+    
+    def paint(self, painter, option, widget):
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Background circle
+        painter.setBrush(QBrush(QColor(*CUSTOM_NEURON_COLOR)))
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.drawEllipse(QRectF(0, 0, 18, 18))
+        
+        # Star icon (simplified)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(QColor(255, 255, 255)))
+        
+        # Draw a simple star shape
+        center = QPointF(9, 9)
+        outer_r = 6
+        inner_r = 3
+        points = 5
+        
+        star = QPolygonF()
+        for i in range(points * 2):
+            angle = math.radians(i * 36 - 90)  # Start at top
+            r = outer_r if i % 2 == 0 else inner_r
+            star.append(QPointF(
+                center.x() + r * math.cos(angle),
+                center.y() + r * math.sin(angle)
+            ))
+        
+        painter.drawPolygon(star)
+
+
 def get_weight_color(weight: float) -> QColor:
     """Get color for a connection weight."""
     if weight >= 0:
@@ -319,6 +365,71 @@ def get_weight_color(weight: float) -> QColor:
         )
 
 
+def get_neuron_color(name: str, neuron_type: str = None) -> QColor:
+    """Get the appropriate color for a neuron based on its type or name."""
+    if is_custom_neuron(name):
+        return QColor(*CUSTOM_NEURON_COLOR)
+    
+    # Default colors by type
+    type_colors = {
+        'core': QColor(150, 150, 220),
+        'sensor': QColor(150, 200, 220),
+        'connector': QColor(0, 0, 0),
+        'stress': QColor(244, 67, 54),
+        'novelty': QColor(255, 193, 7),
+        'reward': QColor(76, 175, 80),
+        'custom': QColor(*CUSTOM_NEURON_COLOR),
+    }
+    
+    if neuron_type and neuron_type.lower() in type_colors:
+        return type_colors[neuron_type.lower()]
+    
+    # Check by name prefix
+    if name.startswith('stress_'):
+        return type_colors['stress']
+    elif name.startswith('novelty_'):
+        return type_colors['novelty']
+    elif name.startswith('reward_'):
+        return type_colors['reward']
+    elif name.startswith('connector_'):
+        return type_colors['connector']
+    
+    return QColor(180, 180, 200)  # Default hidden
+
+
 def format_neuron_name(name: str) -> str:
     """Format a neuron name for display."""
     return name.replace('_', ' ').title()
+
+
+def draw_pentagon(painter, center: QPointF, radius: float, 
+                  fill_color: QColor, border_color: QColor = None,
+                  border_width: float = 2):
+    """
+    Draw a pentagon shape for custom neurons.
+    
+    Args:
+        painter: QPainter to draw with
+        center: Center point of the pentagon
+        radius: Radius of the pentagon
+        fill_color: Fill color
+        border_color: Border color (default: darker fill)
+        border_width: Border width
+    """
+    if border_color is None:
+        border_color = fill_color.darker(120)
+    
+    # Create pentagon polygon
+    polygon = QPolygonF()
+    sides = 5
+    for i in range(sides):
+        angle = math.radians(i * 72 - 90)  # Start at top
+        polygon.append(QPointF(
+            center.x() + radius * math.cos(angle),
+            center.y() + radius * math.sin(angle)
+        ))
+    
+    # Draw
+    painter.setBrush(QBrush(fill_color))
+    painter.setPen(QPen(border_color, border_width))
+    painter.drawPolygon(polygon)

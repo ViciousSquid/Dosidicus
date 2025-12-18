@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from designer_constants import (
     NeuronType, DEFAULT_COLORS, REQUIRED_NEURONS, CORE_NEURONS,
     INPUT_SENSORS, is_core_neuron, is_required_neuron, is_input_sensor,
-    is_binary_neuron, get_neuron_category, get_default_connections_for_sensor
+    is_binary_neuron, get_neuron_category, get_default_connections_for_sensor,
+    is_custom_neuron, is_neurogenesis_neuron, CUSTOM_NEURON_COLOR, CUSTOM_NEURON_SHAPE
 )
 
 @dataclass
@@ -52,6 +53,14 @@ class DesignerNeuron:
     shape: str = 'circle'
     
     def __post_init__(self):
+        # PROTECT EXISTING SHAPE: If shape is already set to a non-default 
+        # (e.g. pentagon from a save), do not overwrite it based on name patterns.
+        if self.shape not in ('circle', 'circle'):
+            # Ensure the neuron_type matches the custom shape
+            if self.shape == CUSTOM_NEURON_SHAPE:
+                self.neuron_type = NeuronType.CUSTOM
+            return
+
         # 1. CORE neurons (Circle)
         if is_core_neuron(self.name):
             self.neuron_type = NeuronType.CORE
@@ -74,13 +83,16 @@ class DesignerNeuron:
         # 4. NEUROGENESIS TYPES (Shapes)
         elif self.name.startswith('novelty_'):
             self.shape = 'diamond'
-            # Typically yellowish
+            if self.color == (150, 150, 220):  # Default color, override
+                self.color = (255, 193, 7)  # Yellowish
         elif self.name.startswith('stress_'):
             self.shape = 'square'
-            # Typically reddish
+            if self.color == (150, 150, 220):
+                self.color = (244, 67, 54)  # Reddish
         elif self.name.startswith('reward_'):
             self.shape = 'triangle'
-            # Typically greenish or blueish
+            if self.color == (150, 150, 220):
+                self.color = (76, 175, 80)  # Greenish
             
         # 5. INPUT SENSORS (Square)
         elif is_input_sensor(self.name):
@@ -88,16 +100,31 @@ class DesignerNeuron:
             self.color = DEFAULT_COLORS['sensor']
             self.is_binary = is_binary_neuron(self.name)
             self.shape = 'square'
+        
+        # 6. CUSTOM neurons (Pentagon)
+        elif self.neuron_type == NeuronType.CUSTOM or is_custom_neuron(self.name):
+            self.neuron_type = NeuronType.CUSTOM
+            if self.color == (150, 150, 220):  # Default color
+                self.color = CUSTOM_NEURON_COLOR
+            self.shape = CUSTOM_NEURON_SHAPE
 
     @property
     def is_core(self) -> bool: return is_core_neuron(self.name)
+    
     @property
     def is_required(self) -> bool: return is_required_neuron(self.name)
+    
     @property
     def is_sensor(self) -> bool: 
         return self.neuron_type == NeuronType.SENSOR or self.name == 'can_see_food'
+    
     @property
     def is_protected(self) -> bool: return self.is_required
+    
+    @property
+    def is_custom(self) -> bool: 
+        return self.neuron_type == NeuronType.CUSTOM or is_custom_neuron(self.name)
+    
     @property
     def category(self) -> str: return get_neuron_category(self.name)
     
@@ -111,7 +138,8 @@ class DesignerNeuron:
             'description': self.description,
             'is_binary': self.is_binary,
             'category': self.category,
-            'shape': self.shape
+            'shape': self.shape,
+            'is_custom': self.is_custom  # New: Track custom status
         }
     
     @classmethod
@@ -146,7 +174,7 @@ class DesignerNeuron:
             shape=data.get('shape', 'circle')
         )
 
-# ... (rest of designer_core.py is compatible as provided in prompt) ...
+
 @dataclass
 class DesignerConnection:
     source: str
@@ -159,6 +187,7 @@ class DesignerConnection:
     @classmethod
     def from_dict(cls, data: dict) -> 'DesignerConnection':
         return cls(source=data['source'], target=data['target'], weight=data.get('weight', 0.5))
+
 
 class BrainDesign:
     def __init__(self):
@@ -214,6 +243,41 @@ class BrainDesign:
         self.neurons[neuron.name] = neuron
         return True
     
+    def add_custom_neuron(self, name: str, position: Tuple[float, float] = None, 
+                          description: str = "") -> Tuple[bool, str]:
+        """
+        Convenience method for adding a custom neuron.
+        
+        Args:
+            name: The name for the custom neuron
+            position: Optional position, will auto-generate if None
+            description: Optional description
+            
+        Returns:
+            (success: bool, message: str)
+        """
+        if name in self.neurons:
+            return False, f"Neuron '{name}' already exists"
+        
+        if is_core_neuron(name) or is_required_neuron(name) or is_input_sensor(name):
+            return False, f"'{name}' is a reserved neuron name"
+        
+        pos = position if position else self._generate_custom_position()
+        
+        neuron = DesignerNeuron(
+            name=name,
+            neuron_type=NeuronType.CUSTOM,
+            position=pos,
+            color=CUSTOM_NEURON_COLOR,
+            description=description,
+            shape=CUSTOM_NEURON_SHAPE
+        )
+        
+        success = self.add_neuron(neuron)
+        if success:
+            return True, f"Created custom neuron '{name}'"
+        return False, f"Failed to create neuron '{name}'"
+    
     def remove_neuron(self, name: str) -> Tuple[bool, str]:
         if name not in self.neurons: return False, f"Neuron '{name}' not found"
         if is_required_neuron(name):
@@ -236,6 +300,10 @@ class BrainDesign:
     
     def get_neuron(self, name: str) -> Optional[DesignerNeuron]:
         return self.neurons.get(name)
+    
+    def get_custom_neurons(self) -> List[str]:
+        """Get list of all custom neuron names."""
+        return [name for name, neuron in self.neurons.items() if neuron.is_custom]
     
     def add_connection(self, source: str, target: str, weight: float = 0.5) -> bool:
         if source not in self.neurons or target not in self.neurons: return False
@@ -341,7 +409,7 @@ class BrainDesign:
             tendencies = {
                 ('sensor', 'core'): (0.3, 0.6), ('sensor', 'sensor'): (-0.2, 0.4),
                 ('custom', 'core'): (-0.4, 0.8), ('custom', 'custom'): (-0.5, 0.5),
-                ('core', 'core'): (-0.3, 0.7),
+                ('core', 'core'): (-0.3, 0.7), ('core', 'custom'): (-0.3, 0.6),
             }
             key = (source_cat, target_cat)
             if key not in tendencies: key = (target_cat, source_cat)
@@ -448,6 +516,7 @@ class BrainDesign:
         return not any("BLOCKING" in i for i in issues), issues, auto_added
     
     def get_stats(self) -> Dict:
+        custom_count = sum(1 for n in self.neurons.values() if n.is_custom)
         return {
             'total_neurons': len(self.neurons),
             'connections': len(self.connections),
@@ -458,7 +527,7 @@ class BrainDesign:
             'sensors_used': self.get_sensors_in_design(),
             'required_neurons': sum(1 for n in self.neurons.values() if n.is_required),
             'sensor_neurons': sum(1 for n in self.neurons.values() if n.is_sensor and not n.is_required),
-            'custom_neurons': sum(1 for n in self.neurons.values() if not n.is_required and not n.is_sensor),
+            'custom_neurons': custom_count,
             'layers': len(self.layers)
         }
 
@@ -471,6 +540,7 @@ class BrainDesign:
                 'is_binary': obj.is_binary,
                 'is_core': obj.is_core,
                 'is_sensor': obj.is_sensor,
+                'is_custom': obj.is_custom,  # New: Include custom flag
                 'activation': 0.0 if obj.is_binary else (50.0 if obj.is_core else 0.0),
             }
         
@@ -503,6 +573,7 @@ class BrainDesign:
             'layer_structure': [l.to_dict() for l in self.layers],
             'neuron_details': {n: obj.to_dict() for n, obj in self.neurons.items()},
             'sensors_used': self.get_sensors_in_design(),
+            'custom_neurons': self.get_custom_neurons(),  # New: List of custom neurons
             'required_complete': self.has_all_required_neurons()
         }
     
@@ -518,6 +589,7 @@ class BrainDesign:
                 'description': n.description,
                 'is_binary': n.is_binary,
                 'category': n.category,
+                'is_custom': n.is_custom,  # New: Include custom flag
                 'activation': 0.0 if n.is_binary else (50.0 if n.is_core else 0.0),
                 'shape': n.shape
             }
@@ -569,17 +641,25 @@ class BrainDesign:
         
         neurons_data = data.get('neurons', {})
         shapes_data = data.get('neuron_shapes', {})
+        custom_neurons_list = data.get('custom_neurons', [])
         
         if neurons_data and isinstance(neurons_data, dict):
             for name, nd in neurons_data.items():
                 pos = nd.get('position', [0, 0])
                 ntype_str = nd.get('type', 'hidden').upper()
+                
+                # Check if this is a custom neuron
+                is_custom = nd.get('is_custom', False) or name in custom_neurons_list
+                
                 try:
                     ntype = NeuronType[ntype_str]
                 except KeyError:
-                    ntype = NeuronType.CORE if is_core_neuron(name) else (
-                        NeuronType.SENSOR if is_input_sensor(name) else NeuronType.HIDDEN
-                    )
+                    if is_custom:
+                        ntype = NeuronType.CUSTOM
+                    else:
+                        ntype = NeuronType.CORE if is_core_neuron(name) else (
+                            NeuronType.SENSOR if is_input_sensor(name) else NeuronType.HIDDEN
+                        )
                 
                 shape = shapes_data.get(name, 'circle')
                 
@@ -598,9 +678,13 @@ class BrainDesign:
                     neuron = DesignerNeuron.from_dict(details[name])
                     design.add_neuron(neuron)
                 else:
-                    ntype = NeuronType.CORE if is_core_neuron(name) else (
-                        NeuronType.SENSOR if is_input_sensor(name) else NeuronType.HIDDEN
-                    )
+                    is_custom = name in custom_neurons_list
+                    if is_custom:
+                        ntype = NeuronType.CUSTOM
+                    else:
+                        ntype = NeuronType.CORE if is_core_neuron(name) else (
+                            NeuronType.SENSOR if is_input_sensor(name) else NeuronType.HIDDEN
+                        )
                     shape = shapes_data.get(name, 'circle')
                     neuron = DesignerNeuron(name=name, neuron_type=ntype, position=tuple(pos), shape=shape)
                     design.add_neuron(neuron)

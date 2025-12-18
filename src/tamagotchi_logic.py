@@ -320,7 +320,24 @@ class TamagotchiLogic:
             tab.statistics['max_long_term_memories'] = max(tab.statistics['max_long_term_memories'], ltm)
             tab.update_display()
 
-    
+
+    def check_for_designer_imports(self):
+        """Check if the Brain Designer has pushed a new brain."""
+        from brain_state_bridge import consume_pending_import
+        
+        pending_data = consume_pending_import()
+        if pending_data:
+            # 1. Apply the new design to the brain widget
+            if hasattr(self.brain_window, 'brain_widget'):
+                self.brain_window.brain_widget.load_custom_brain(pending_data)
+            
+            # 2. Re-sync output bindings to the monitor
+            if hasattr(self, 'neuron_output_monitor'):
+                self.neuron_output_monitor.load_bindings_from_brain(pending_data)
+                
+            # 3. Show the message the Designer couldn't show directly
+            self.show_message("🧠 Custom Brain received from Designer!")
+            print("[Game] Successfully imported brain pushed from Designer.")
 
     def set_squid(self, squid):
         self.squid = squid

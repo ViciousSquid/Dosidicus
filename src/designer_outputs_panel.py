@@ -364,10 +364,6 @@ class NeuronOutputsPanel(QWidget):
         add_btn.clicked.connect(self.add_binding)
         toolbar.addWidget(add_btn)
         
-        edit_btn = QPushButton("✏️ Edit")
-        edit_btn.clicked.connect(self.edit_binding)
-        toolbar.addWidget(edit_btn)
-        
         remove_btn = QPushButton("🗑️ Remove")
         remove_btn.clicked.connect(self.remove_binding)
         toolbar.addWidget(remove_btn)
