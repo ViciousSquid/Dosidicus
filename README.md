@@ -1,5 +1,5 @@
 What if a Tamagotchi had a neural network and could learn stuff?
-# Dosidicus electronicae
+# Dosidicus electronicus
 Digital pet squid with a dynamic neural network.
 
 - Part educational neuro tool and part sim game.
@@ -14,6 +14,7 @@ Digital pet squid with a dynamic neural network.
  <img src="https://github.com/user-attachments/assets/496cec0d-0810-4f47-8618-11165e0dd50d" width="380">
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
