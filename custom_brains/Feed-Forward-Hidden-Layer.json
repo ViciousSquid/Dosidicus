@@ -3,11 +3,11 @@
   "format": "dosidicus",
   "metadata": {
     "name": "Feed-Forward-Hidden-Layer",
-    "description": "A hidden layer of 4 neurons",
+    "description": "Hidden layer of 4 neurons, improves learning",
     "author": "Rufus Pearce",
-    "version": "1.0",
-    "created": "",
-    "modified": ""
+    "version": "1.1",
+    "created": "18-12-25",
+    "modified": "22-12-25"
   },
   "neurons": {
     "hunger": {
