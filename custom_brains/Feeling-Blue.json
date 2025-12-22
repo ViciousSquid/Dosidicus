@@ -2,12 +2,12 @@
   "version": "2.0",
   "format": "dosidicus",
   "metadata": {
-    "name": "Imported from Running Game",
-    "description": "Brain state imported from active Dosidicus game",
-    "author": "Live Import",
+    "name": "Feeling-Blue",
+    "description": "Turn actually blue when depressed",
+    "author": "Rufus Pearce",
     "version": "1.0",
-    "created": "",
-    "modified": ""
+    "created": "16-12-25",
+    "modified": "22-12-25"
   },
   "neurons": {
     "can_see_food": {
@@ -385,4 +385,5 @@
     "can_see_food"
   ],
   "required_complete": true
+
 }
