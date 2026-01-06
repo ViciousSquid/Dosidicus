@@ -27,18 +27,17 @@ Digital pet squid with a dynamic neural network.
 - **Core Structure:** Modular codebase in `src/` including brain designer, decision engine, learning algorithms, personality traits, memory management, UI components, and interaction systems. Entry point via `main.py`.
 
 ### Key Project Components
-- **Plugins System:** Extensible architecture with built-in plugins for achievements (tracking milestones) and multiplayer (networked interactions).
+- **Plugin System:** Extensible architecture with built-in plugins for achievements (tracking milestones) and multiplayer (networked interactions).
 - **Save System:** Persistent saves in `saves/` for pet states, autosaves, and achievement logs.
 - **Headless Mode:** Standalone training and simulation in `headless/` for GUI-less operation, ideal for background training or server environments.
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Grasshopper") for quick behavior setup.
-- **Assets:** Comprehensive image assets in `images/` for UI, animations, decorations, and icons.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
-- **Logs and Output:** Debugging logs in `logs/` and data export in `output/`.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
 
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
