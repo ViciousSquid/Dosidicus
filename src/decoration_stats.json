@@ -1,0 +1,149 @@
+{
+  "plant01.png": {
+    "happiness": 2,
+    "cleanliness": 1,
+    "anxiety": -2,
+    "category": "plant"
+  },
+  "plant02.png": {
+    "happiness": 2,
+    "cleanliness": 1,
+    "anxiety": -3,
+    "category": "plant"
+  },
+  "plant03.png": {
+    "happiness": 2,
+    "cleanliness": 1,
+    "anxiety": -2,
+    "category": "plant"
+  },
+  "plant04.png": {
+    "happiness": 2,
+    "cleanliness": 1,
+    "anxiety": -3,
+    "category": "plant"
+  },
+  "plant05.png": {
+    "happiness": 2,
+    "cleanliness": 1,
+    "anxiety": -4,
+    "category": "plant"
+  },
+  "plant06.png": {
+    "happiness": 2,
+    "cleanliness": 1,
+    "category": "plant",
+    "anxiety": -2
+  },
+  "plant07.png": {
+    "happiness": 2,
+    "cleanliness": 2,
+    "anxiety": -3,
+    "category": "plant"
+  },
+  "plant08.png": {
+    "happiness": 2,
+    "cleanliness": 2,
+    "anxiety": -4,
+    "category": "plant"
+  },
+  "plant09.png": {
+    "happiness": 1,
+    "cleanliness": 2,
+    "anxiety": -2,
+    "category": "plant"
+  },
+  "plant10.png": {
+    "happiness": 1,
+    "cleanliness": 2,
+    "anxiety": -3,
+    "category": "plant"
+  },
+  "plant11.png": {
+    "happiness": 1,
+    "cleanliness": 2,
+    "anxiety": -4,
+    "category": "plant"
+  },
+  "plant12.png": {
+    "happiness": 2,
+    "cleanliness": 2,
+    "anxiety": -5,
+    "category": "plant"
+  },
+  "sml_plant01.png": {
+    "happiness": 2,
+    "cleanliness": 2,
+    "anxiety": -4,
+    "category": "plant"
+  },
+  "sml_plant02.png": {
+    "happiness": 2,
+    "cleanliness": 2,
+    "anxiety": -5,
+    "category": "plant"
+  },
+  "rock03.png": {
+    "happiness": 4,
+    "satisfaction": 4,
+    "category": "rock"
+  },
+  "rock01.png": {
+    "happiness": 4,
+    "satisfaction": 4,
+    "category": "rock"
+  },
+  "rock02.png": {
+    "happiness": 4,
+    "satisfaction": 3,
+    "category": "rock"
+  },
+  "Znewplant01.png": {
+    "happiness": 2,
+    "cleanliness": 1,
+    "anxiety": -3,
+    "category": "plant"
+  },
+  "Znewplant02.png": {
+    "happiness": 2,
+    "cleanliness": 2,
+    "anxiety": -4,
+    "category": "plant"
+  },
+  "Znewplant03.png": {
+    "happiness": 2,
+    "cleanliness": 1,
+    "anxiety": -2,
+    "category": "plant"
+  },
+  "Znewplant04.png": {
+    "happiness": 1,
+    "cleanliness": 2,
+    "anxiety": -3,
+    "category": "plant"
+  },
+  "Znewplant05.png": {
+    "happiness": 2,
+    "cleanliness": 2,
+    "anxiety": -5,
+    "category": "plant"
+  },
+  "Znewplant06.png": {
+    "happiness": 2,
+    "cleanliness": 1,
+    "category": "plant",
+    "anxiety": -2
+  },
+  "Znewplant07.png": {
+    "happiness": 1,
+    "cleanliness": 2,
+    "anxiety": -4,
+    "category": "plant"
+  },
+  "Znewplant08.png": {
+    "happiness": 2,
+    "cleanliness": 2,
+    "anxiety": -5,
+    "category": "plant"
+  }
+}
