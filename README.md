@@ -18,6 +18,7 @@ Digital pet squid with a dynamic neural network.
 ## Project Overview
 
 **Project Name:** Dosidicus
+
 **Description:** A Tamagotchi-style digital pet simulator with an integrated neural network brain. The pet learns, adapts, and requires user interaction for care, feeding, and training. Features customizable neural networks for diverse behaviors and personalities.
 
 - **Dependencies:**
@@ -37,6 +38,7 @@ Digital pet squid with a dynamic neural network.
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
