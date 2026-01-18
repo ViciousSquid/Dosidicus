@@ -3,14 +3,13 @@
 import uuid
 import time
 import socket
-import queue # Retaining import
+import queue
 import zlib
 import json
-import traceback # Retaining import
+import traceback
 import threading
-import logging # Ensure logging is imported
+import logging
 
-# Import constants
 from .mp_constants import MULTICAST_GROUP, MULTICAST_PORT, MAX_PACKET_SIZE
 
 
@@ -26,7 +25,7 @@ class NetworkNode:
                                                A default one is created if not provided.
         """
         try:
-            # Attempt to use NetworkUtilities if available (from a previous iteration)
+            # Attempt to use NetworkUtilities if available
             from plugins.multiplayer.network_utilities import NetworkUtilities
             self.node_id = node_id or NetworkUtilities.generate_node_id()
             self.utils = NetworkUtilities
@@ -57,7 +56,7 @@ class NetworkNode:
         if logger is not None:
             self.logger = logger
         else:
-            _logger_name = f"{__name__}.NetworkNode.{self.node_id[:4]}" # More specific logger name
+            _logger_name = f"{__name__}.NetworkNode.{self.node_id[:4]}"
             self.logger = logging.getLogger(_logger_name)
             if not self.logger.handlers: # Avoid adding multiple handlers if logger is passed around
                 handler = logging.StreamHandler()
@@ -567,4 +566,5 @@ class NetworkNode:
                 if self.debug_mode: self.logger.debug(f"Error closing socket (may already be closed): {e_sock_close}")
             self.socket = None # Clear socket reference
             
+
         self.logger.info(f"Network node {self.node_id} closed.")
