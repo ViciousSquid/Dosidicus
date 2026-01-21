@@ -102,7 +102,7 @@ translations = {
     "view_certificate": "View Certificate",
     "care_tips": "Care Tips",
     "care_tips_for": "Care Tips for {personality} Squids",
-    "dosidicus_title": "Dosidicus electronicae",
+    "dosidicus_title": "Dosidicus electronicus",
     "dosidicus_desc": "A Tamagotchi-style digital pet with a simple neural network",
     "string_acronym": "Simulated Tamagotchi Reactions via Inferencing and Neurogenesis (STRINg)",
     "research_project": "This is a research project. Please suggest features.",

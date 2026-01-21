@@ -97,7 +97,7 @@ translations = {
     "view_certificate": "Voir le Certificat",
     "care_tips": "Conseils de Soin",
     "care_tips_for": "Conseils de Soin pour les Calmars {personality}",
-    "dosidicus_title": "Dosidicus electronicae",
+    "dosidicus_title": "Dosidicus electronicus",
     "dosidicus_desc": "Un animal de compagnie numerique style Tamagotchi avec un reseau neuronal simple",
     "string_acronym": "Reacciones de Tamagotchi Simuladas mediante Inferencia y Neurogenesis (STRINg)",
     "research_project": "Ceci est un projet de recherche. Veuillez suggerer des fonctionnalites.",

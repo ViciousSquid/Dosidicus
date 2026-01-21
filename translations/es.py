@@ -102,7 +102,7 @@ translations = {
     "view_certificate": "Ver Certificado",
     "care_tips": "Consejos de Cuidado",
     "care_tips_for": "Consejos de Cuidado para Calamares {personality}",
-    "dosidicus_title": "Dosidicus electronicae",
+    "dosidicus_title": "Dosidicus electronicus",
     "dosidicus_desc": "Una mascota digital estilo Tamagotchi con una red neuronal simple",
     "string_acronym": "Reacciones de Tamagotchi Simuladas mediante Inferencia y Neurogenesis (STRINg)",
     "research_project": "Este es un proyecto de investigacion. Por favor, sugiere funciones.",
