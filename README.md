@@ -32,14 +32,15 @@ Digital pet squid with a dynamic neural network.
 ### Key Project Components
 - **Plugin System:** Extensible architecture with built-in plugins for achievements (tracking milestones) and multiplayer (networked interactions).
 - **Save System:** Persistent saves in `saves/` for pet states, autosaves, and achievement logs.
-- **Headless Mode:** Standalone training and simulation in `headless/` for GUI-less operation, ideal for background training or server environments.
-- **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Grasshopper") for quick behavior setup.
+- **Headless Mode:** Standalone training and simulation in `headless/` for GUI-less operation, ideal for background training or server environments (experimental)
+- **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
 
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
