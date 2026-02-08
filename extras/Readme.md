@@ -5,8 +5,6 @@ Adds *temporal causality* to learning, enabling the squid to learn cause-and-eff
 
 Everything needed to implement this can be found in [STDP.zip](https://github.com/ViciousSquid/Dosidicus/blob/v2.6.1.0__b1218_LatestVersion/extras/STDP.zip)
 
-
-
 -----------------------------------
 
 ## What is STDP?
