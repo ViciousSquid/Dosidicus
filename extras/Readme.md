@@ -23,7 +23,7 @@ Post-synaptic neuron fires BEFORE pre-synaptic neuron
 → "Correlation without causation"
 ```
 
-This is fundamentally different from classical Hebbian learning ("neurons that fire together wire together"), which only considers whether neurons are simultaneously active.
+This is fundamentally different from classical Hebbian learning (current implementation), which only considers whether neurons are simultaneously active.
 
 ### Why STDP Matters for Dosidicus-2
 
