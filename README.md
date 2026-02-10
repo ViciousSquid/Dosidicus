@@ -6,7 +6,7 @@ Digital pet squid with a dynamic neural network.
 - Features Hebbian learning, Neurogenesis and a retro aesthetic
 
 - [Design your own squid brain](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) with GUI tools and watch it evolve and learn!
-- Entirely custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) - *does not use Tensorflow or Pytorch*
+- Entirely custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) - **does not use Tensorflow or Pytorch**
 - Rejects the standard "black box" approach in favour of transparent, biologically inspired learning.
 
 - -----------------------------
@@ -42,6 +42,7 @@ Digital pet squid with a dynamic neural network.
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
