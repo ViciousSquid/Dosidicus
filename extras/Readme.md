@@ -9,8 +9,6 @@ Everything needed to implement this can be found in [STDP.zip](https://github.co
 
 ## What is STDP?
 
-### The Biological Inspiration
-
 In biological neurons, the timing of action potentials (spikes) relative to each other determines whether synaptic connections strengthen or weaken:
 
 ```
