@@ -1,10 +1,9 @@
 """
 Neurogenesis ver3.3_stress_cap
 
-Key changes:
 - STRICT 5-neuron cap for 'stress' type.
-- Emergency triggers now STRENGTHEN existing neurons if cap is reached.
-- Enhanced anxiety reduction logic based on multipliers.
+- Emergency triggers STRENGTHEN existing neurons if cap is reached.
+- Anxiety reduction logic based on multipliers.
 """
 
 import time
