@@ -4,12 +4,6 @@ ShowmanNeurogenesis v2.5.0
 Wrapper around EnhancedNeurogenesis that keeps all the *real* logic
 but guarantees the player *sees* a neuron when something cool happens.
 
-FIXES in 2.5.0:
-- Fixed _migrate_neuron to update all references (visible_neurons, animations, etc.)
-- Added achievement integration via callbacks
-- Added more dramatic moment triggers
-- Added event-driven architecture for semantic events
-- Improved burst color variety
 """
 
 import time
