@@ -1,3 +1,10 @@
+"""
+Old feature, currently unused - for future reimplementation
+
+Generate a certificate with top statistics
+"""
+
+
 import datetime
 from PyQt5 import QtCore, QtGui, QtWidgets
 
