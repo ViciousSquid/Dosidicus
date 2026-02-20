@@ -1,9 +1,9 @@
 """
 network_adapter.py - Adapter bridging Project 1's Network to Project 2's brain systems
 
-This adapter wraps a Project 1 Network object and exposes it through the
+This adapter wraps a Network object and exposes it through the
 BrainProtocol interface, allowing custom networks with different topologies
-to plug into the Dosidicus-2 brain visualization and learning systems.
+to plug into the brain visualization and learning systems.
 
 Usage:
     from NeuralNetwork.core import Network
@@ -14,7 +14,7 @@ Usage:
     custom_network.add_neuron("input1", 50.0, (100, 100), 'input')
     ...
     
-    # Wrap it for use with Dosidicus-2
+    # Wrap it for use with Dosidicus
     adapted_brain = NetworkAdapter(custom_network)
     
     # Now it can be used with BrainWidget, BrainWorker, etc.
