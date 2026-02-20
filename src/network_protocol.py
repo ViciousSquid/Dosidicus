@@ -2,11 +2,10 @@
 network_protocol.py - Protocol definition for pluggable brain networks
 
 Defines the interface that any brain implementation must follow to work
-with the Dosidicus-2 brain_tool, brain_widget, and neurogenesis systems.
+with the brain_tool, brain_widget, and neurogenesis systems.
 
-This allows custom networks (like those from Project 1's NeuralNetwork system)
-to be swapped in while maintaining full compatibility with all visualization
-and learning features.
+This allows custom networks to be swapped in while maintaining full 
+compatibility with all visualization and learning features.
 """
 
 from typing import Protocol, Dict, Tuple, List, Set, Any, Optional, runtime_checkable
