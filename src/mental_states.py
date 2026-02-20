@@ -19,7 +19,7 @@ class MentalStateManager:
 
         self.mental_states = {                                      #   List of possible mental states:
             "sick": MentalState("sick", "sick.png"),                #   SICK
-            "thinking": MentalState("thinking", "think.png"),       #   THINKING
+            "thinking": MentalState("thinking", "think.png"),       #   THINKING - CURRENTLY UNUSED
             "startled": MentalState("startled", "startled.png"),    #   STARTLED
             "curious": MentalState("curious", "curious.png")        #   CURIOUS
         }
