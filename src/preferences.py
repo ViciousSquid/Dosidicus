@@ -15,13 +15,12 @@ ZIP_FILENAME = "languages.zip"
 class PreferencesWindow(QtWidgets.QDialog):
     """Floating preferences window for Dosidicus configuration"""
     
-    # NOTE: The LANGUAGE_MAP is now only used for displaying the name in the preferences window
+    # NOTE: LANGUAGE_MAP is only used for displaying the name in the preferences window
     # if the localisation system failed to provide a name.
     LANGUAGE_MAP = {
         'en': 'English',
         'es': 'Spanish (Español)',
         'fr': 'French (Français)',
-        # Add any other widely expected languages here for display purposes
         'de': 'German (Deutsch)',
         'pl': 'Polish (Polski)',
         'uk': 'Ukrainian (Українська)',
@@ -30,7 +29,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         'pt': 'Portuguese (Português)',
         'cy': 'Welsh (Cymraeg)',
         'ga': 'Irish (Gaeilge)',
-        'gen_z': 'Gen Z Slang',
+        'ml': 'Millennial',
     }
 
     def __init__(self, parent=None):
