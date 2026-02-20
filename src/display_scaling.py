@@ -1,4 +1,4 @@
-# Create new file: display_scaling.py
+
 class DisplayScaling:
     DESIGN_WIDTH = 2880
     DESIGN_HEIGHT = 1920
