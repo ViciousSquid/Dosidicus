@@ -1,16 +1,16 @@
 import os
 import importlib.util
-import inspect # Retained as it was in the original file
+import inspect
 import logging
-import sys # For sys.stdout and potentially sys.modules if discover_plugins uses it
+import sys
 from typing import Dict, List, Callable, Any
 
-# ANSI escape codes for colors
+# ANSI escape codes for console colours
 class ANSI:
     BLUE = "\x1b[34m"
     RED = "\x1b[31m"
-    YELLOW = "\x1b[33m" # For warnings
-    CYAN = "\x1b[36m"   # For debug
+    YELLOW = "\x1b[33m"
+    CYAN = "\x1b[36m"
     RESET = "\x1b[0m"
 
 class ColoredFormatter(logging.Formatter):
@@ -24,7 +24,7 @@ class ColoredFormatter(logging.Formatter):
         logging.INFO: ANSI.CYAN,
         logging.WARNING: ANSI.YELLOW,
         logging.ERROR: ANSI.RED,
-        logging.CRITICAL: ANSI.RED, # Can use BOLD_RED if needed
+        logging.CRITICAL: ANSI.RED,
     }
 
     def __init__(self, fmt="%(levelname)s:%(name)s:%(message)s", datefmt=None, style='%'):
