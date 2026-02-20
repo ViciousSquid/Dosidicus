@@ -2,6 +2,10 @@
 
 A standalone training system for Dosidicus neural network brains that runs without GUI overhead, enabling fast accelerated training of custom brain architectures.
 
+```
+BUGGY, work in progress, brains exported by the headless trainer cannot be imported into the simulation.. yet
+```
+
 ## Features
 
 - **Headless Operation**: No GUI required, runs purely on CPU
