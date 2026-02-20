@@ -1,8 +1,6 @@
 # 2.4.5.1 | rev3_dec25
 #  --------------------------------------------------------------
-#  Powerful all-in-one viewer + editor for every neuron, especially
-#  those born via neurogenesis.  Excitatory vs inhibitory, beautiful
-#  cards, live edit mode (locked by default), educational hints.
+#  NEURON LABORATORY
 #  --------------------------------------------------------------
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
