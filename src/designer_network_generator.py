@@ -1,5 +1,5 @@
 """
-Sparse Neural Network Generator for Dosidicus-2
+Sparse Neural Network Generator
 
 Generates realistic, biologically-inspired connections between the core neurons
 with random noise so no two generations are identical.
