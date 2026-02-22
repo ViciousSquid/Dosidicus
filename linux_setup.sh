@@ -3,6 +3,9 @@
 #  Dosidicus - Linux Setup & Launch Script
 #  https://github.com/ViciousSquid/Dosidicus
 # =============================================================
+#
+# If you hit a Qt platform error like `could not load the Qt platform plugin "xcb", run the following:
+# sudo apt install libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xkb1 libxkbcommon-x11-0
 
 set -e
 
