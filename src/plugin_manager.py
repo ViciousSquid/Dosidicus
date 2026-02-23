@@ -50,13 +50,11 @@ class ColoredFormatter(logging.Formatter):
                 if record.exc_text:
                     message = message + "\n" + record.exc_text
             
-            # Construct the final colored log string
-            # Only the prefix is colored; the message remains default (white/black) until RESET
+            # Construct the final coloured log string
+            # Only the prefix is coloured; the message remains default (white/black) until RESET
             return f"{color}{prefix}{ANSI.RESET} {message}"
         else:
-            # For any other logger, use the default formatter behavior (uncolored)
-            # You might want to define a specific format here if needed,
-            # but super().format(record) uses the 'fmt' passed during __init__.
+            # For any other logger, use the default formatter behavior (uncoloured)
             return super().format(record)
 
 class PluginManager:
@@ -80,7 +78,7 @@ class PluginManager:
         self.enabled_plugins: set[str] = set()    # Names of enabled plugins (use lowercase)
         self.auto_load_blacklist: set[str] = {"multiplayer"}  ### FIX: Stop Multiplayer plugin freaking out at startup  ** ESSENTIAL **
                                                                 ## This is actually important. All plugins start austomatically unless
-                                                                ## specifically blacklisted here. DO NOT LET MULTIPLAYER AUTO START!!. 
+                                                                ## specifically blacklisted here... DO NOT LET MULTIPLAYER AUTO START!!. 
         
         # Custom neuron handlers registered by plugins
         # Maps neuron_name -> {'handler': callable, 'plugin': plugin_name, 'metadata': dict}
