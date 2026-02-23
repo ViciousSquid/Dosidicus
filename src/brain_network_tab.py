@@ -323,13 +323,13 @@ class NetworkTab(BrainBaseTab):
                     'CPUExecutionProvider':      'CPU',
                 }
                 provider = short.get(raw, raw.replace('ExecutionProvider', ''))
-            text   = f'Using ONNX · {provider}' if provider else 'Using ONNX'
+            text   = f' ONNX · {provider}' if provider else ' ONNX'
             colour = '#0055aa'
         elif 'unavailable' in name:
-            text   = 'Using NumPy (ONNX unavailable)'
+            text   = ' NumPy (ONNX unavailable)'
             colour = '#aa5500'
         else:
-            text   = 'Using NumPy'
+            text   = ' NumPy'
             colour = '#333333'
 
         self.backend_label.setText(text)

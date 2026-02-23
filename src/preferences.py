@@ -1,4 +1,4 @@
-# preferences.py
+
 import os
 import sys
 import glob
@@ -9,7 +9,7 @@ from .localisation import Localization
 from .display_scaling import DisplayScaling
 import zipfile
 
-# Define the path to the ZIP file - must match localisation.py
+# Define the path to the ZIP file - must match localisation.py - NEEDED FOR BACKWARDS COMPAT
 ZIP_FILENAME = "languages.zip"
 
 class PreferencesWindow(QtWidgets.QDialog):
@@ -75,15 +75,14 @@ class PreferencesWindow(QtWidgets.QDialog):
     def _apply_styles(self):
         """Apply global stylesheet with scaling logic"""
         
-        # SIGNIFICANTLY INCREASED BASE SIZES
+        # BASE SIZES
         base_font = DisplayScaling.font_size(18)    
         header_font = DisplayScaling.font_size(22)  
         small_font = DisplayScaling.font_size(14)   
         
-        # Keep Language Huge
         large_font = DisplayScaling.font_size(32)   
         
-        # INCREASED SUBTITLE SIZE
+        # SUBTITLE SIZE
         subtitle_font = DisplayScaling.font_size(24) 
         
         padding_std = DisplayScaling.scale(12)      
@@ -91,9 +90,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         radius = DisplayScaling.scale(8)
         border_width = max(1, DisplayScaling.scale(2))
         
-        # =====================================================================
         # DEVELOPER: ADJUST THE VALUE BELOW TO CHANGE TOP TAB WIDTH
-        # =====================================================================
         tab_min_width = DisplayScaling.scale(150)
         
         css = f"""
@@ -138,7 +135,7 @@ class PreferencesWindow(QtWidgets.QDialog):
                 border-top-right-radius: {radius}px;
                 margin-right: {DisplayScaling.scale(4)}px;
                 font-weight: bold;
-                min-width: {tab_min_width}px; /* WIDER TABS APPLIED HERE */
+                min-width: {tab_min_width}px;
                 alignment: center;
             }}
             QTabBar::tab:selected {{
@@ -184,7 +181,7 @@ class PreferencesWindow(QtWidgets.QDialog):
                 background-color: #95a5a6;
             }}
             
-            /* ESPECIALLY LARGE LANGUAGE SELECTION */
+            /* LARGE LANGUAGE SELECTION */
             QComboBox#LanguageCombo {{
                 font-size: {large_font}px;
                 height: {DisplayScaling.scale(80)}px;
@@ -215,7 +212,7 @@ class PreferencesWindow(QtWidgets.QDialog):
                 font-style: italic;
             }}
             
-            /* NEW: Two-column layout for interactions */
+            /* Two-column layout for interactions */
             QFrame#ColumnFrame {{
                 border: {border_width}px solid #bdc3c7;
                 border-radius: {radius}px;
@@ -302,7 +299,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         button_layout.setSpacing(DisplayScaling.scale(15))
         button_layout.addStretch()
         
-        self.save_button = QtWidgets.QPushButton("Save & Restart")
+        self.save_button = QtWidgets.QPushButton("Save && Restart")
         self.save_button.setObjectName("SaveButton") # ID for styling
         self.save_button.clicked.connect(self.save_and_restart)
         self.save_button.setEnabled(False)
@@ -342,40 +339,32 @@ class PreferencesWindow(QtWidgets.QDialog):
         
         # Add description
         desc_label = QtWidgets.QLabel("Requires restart to take effect")
-        desc_label.setObjectName("DescriptionLabel") # Styled specifically smaller
+        desc_label.setObjectName("DescriptionLabel")
         layout.addWidget(desc_label)
-        
-        # Decorations group - NEW
-        decorations_group = QtWidgets.QGroupBox("🦑")
-        decorations_layout = QtWidgets.QFormLayout()
-        decorations_layout.setSpacing(DisplayScaling.scale(15))
-        
-        self.decorations_enabled = QtWidgets.QCheckBox("")
-        self.decorations_enabled.stateChanged.connect(self._on_change)
-        #decorations_layout.addRow(self.decorations_enabled)
-        
-        self.decorations_max_shows = QtWidgets.QSpinBox()
-        self.decorations_max_shows.setRange(1, 10)
-        self.decorations_max_shows.valueChanged.connect(self._on_change)
-        #decorations_layout.addRow("Max Shows:", self.decorations_max_shows)
-        
-        self.decorations_min_interval = QtWidgets.QDoubleSpinBox()
-        self.decorations_min_interval.setRange(30.0, 600.0)
-        self.decorations_min_interval.setSingleStep(30.0)
-        self.decorations_min_interval.setSuffix(" sec")
-        self.decorations_min_interval.valueChanged.connect(self._on_change)
-        #decorations_layout.addRow("Min Interval:", self.decorations_min_interval)
-        
-        self.decorations_max_interval = QtWidgets.QDoubleSpinBox()
-        self.decorations_max_interval.setRange(60.0, 1800.0)
-        self.decorations_max_interval.setSingleStep(60.0)
-        self.decorations_max_interval.setSuffix(" sec")
-        self.decorations_max_interval.valueChanged.connect(self._on_change)
-        #decorations_layout.addRow("Max Interval:", self.decorations_max_interval)
-        
-        decorations_group.setLayout(decorations_layout)
-        #layout.addWidget(decorations_group)
-        
+
+        facts_group = QtWidgets.QGroupBox("🦑 Random Squid Facts")
+        facts_layout = QtWidgets.QFormLayout()
+        facts_layout.setSpacing(DisplayScaling.scale(15))
+
+        self.facts_enabled = QtWidgets.QCheckBox("Enable Humboldt squid facts")
+        self.facts_enabled.stateChanged.connect(self._on_change)
+        facts_layout.addRow(self.facts_enabled)
+
+        self.facts_interval = QtWidgets.QSpinBox()
+        self.facts_interval.setRange(1, 60)
+        self.facts_interval.setSuffix(" minutes")
+        self.facts_interval.valueChanged.connect(self._on_change)
+        facts_layout.addRow("Show every:", self.facts_interval)
+
+        self.facts_display = QtWidgets.QSpinBox()
+        self.facts_display.setRange(5, 60)
+        self.facts_display.setSuffix(" seconds")
+        self.facts_display.valueChanged.connect(self._on_change)
+        facts_layout.addRow("Display for:", self.facts_display)
+
+        facts_group.setLayout(facts_layout)
+        layout.addWidget(facts_group)
+
         # Link Blink group
         linkblink_group = QtWidgets.QGroupBox("Connection Blink Effects")
         linkblink_layout = QtWidgets.QFormLayout()
@@ -410,7 +399,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         return widget
 
     def _create_interactions_tab(self):
-        """NEW: Create combined Rock & Poop Interactions tab with two columns"""
+        """Combined Rock & Poop Interactions tab with two columns"""
         widget = QtWidgets.QWidget()
         main_layout = QtWidgets.QVBoxLayout()
         main_layout.setSpacing(DisplayScaling.scale(25))
@@ -596,7 +585,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.showmanship_enabled.stateChanged.connect(self._on_change)
         layout.addWidget(self.showmanship_enabled)
         
-        # Pruning checkbox - NEW
+        # Pruning checkbox
         self.pruning_enabled = QtWidgets.QCheckBox("Enable Pruning (Remove weak neurons)")
         self.pruning_enabled.stateChanged.connect(self._on_change)
         layout.addWidget(self.pruning_enabled)
@@ -616,7 +605,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         appearance_subtab = self._create_neurogenesis_appearance()
         sub_tabs.addTab(appearance_subtab, "Appearance")
         
-        # Advanced sub-tab - NEW
+        # Advanced sub-tab
         advanced_subtab = self._create_neurogenesis_advanced()
         sub_tabs.addTab(advanced_subtab, "Advanced")
         
@@ -658,7 +647,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.neuro_initial_count.valueChanged.connect(self._on_change)
         layout.addRow("Initial Neuron Count:", self.neuro_initial_count)
 
-        # --- Positioning & Physics Group ---
+        #Positioning & Physics
         pos_group = QtWidgets.QGroupBox("Positioning & Physics")
         pos_layout = QtWidgets.QFormLayout()
         pos_layout.setSpacing(DisplayScaling.scale(15))
@@ -788,7 +777,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         layout.setSpacing(DisplayScaling.scale(20))
         layout.setContentsMargins(DisplayScaling.scale(25), DisplayScaling.scale(25), DisplayScaling.scale(25), DisplayScaling.scale(25))
         
-        # Colors for each type
+        # Colours for each type
         self.novelty_color = self._create_color_button()
         self.novelty_color.clicked.connect(self._on_change)
         layout.addRow("Novelty Color:", self.novelty_color)
@@ -908,17 +897,17 @@ class PreferencesWindow(QtWidgets.QDialog):
         return widget
     
     def _create_color_button(self):
-        """Create a color picker button"""
+        """Create a colour picker button"""
         button = QtWidgets.QPushButton()
-        # Scale the color button size
-        size = DisplayScaling.scale(40) # Larger color buttons
+        # Scale the colour button size
+        size = DisplayScaling.scale(40)
         button.setFixedSize(size * 2, size)
         button.setStyleSheet("background-color: white; border: 1px solid gray;")
         button.clicked.connect(self._pick_color)
         return button
     
     def _pick_color(self):
-        """Open color picker dialog"""
+        """Open colour picker dialog"""
         button = self.sender()
         color = QtWidgets.QColorDialog.getColor()
         if color.isValid():
@@ -926,7 +915,7 @@ class PreferencesWindow(QtWidgets.QDialog):
             self._on_change()
     
     def _create_display_tab(self):
-        """Create Display settings tab"""
+
         widget = QtWidgets.QWidget()
         layout = QtWidgets.QFormLayout()
         layout.setSpacing(DisplayScaling.scale(20))
@@ -1022,15 +1011,18 @@ class PreferencesWindow(QtWidgets.QDialog):
             if item_text.startswith(f"{current_lang} -"):
                 self.language_combo.setCurrentIndex(i)
                 break
-        
-        # Decorations config - NEW
-        decorations_config = self.config_manager.get_decorations_config()
-        self.decorations_enabled.setChecked(decorations_config['message_enabled'])
-        self.decorations_max_shows.setValue(decorations_config['message_max_shows'])
-        self.decorations_min_interval.setValue(decorations_config['message_min_interval'])
-        self.decorations_max_interval.setValue(decorations_config['message_max_interval'])
-        
-        # LinkBlink config - NEW
+
+        self.facts_enabled.setChecked(
+            self.config_manager.config.getboolean('Facts', 'enabled', fallback=True)
+        )
+        self.facts_interval.setValue(
+            self.config_manager.config.getint('Facts', 'interval_minutes', fallback=5)
+        )
+        self.facts_display.setValue(
+            self.config_manager.config.getint('Facts', 'display_seconds', fallback=18)
+        )
+
+        # LinkBlink config
         linkblink_config = self.config_manager.get_linkblink_config()
         self.linkblink_interval_min.setValue(linkblink_config['interval_min'])
         self.linkblink_interval_max.setValue(linkblink_config['interval_max'])
@@ -1049,7 +1041,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.rock_memory_decay.setValue(rock_config['memory_decay_rate'])
         self.rock_max_memories.setValue(rock_config['max_rock_memories'])
         
-        # Poop config - NEW
+        # Poop config
         poop_config = self.config_manager.get_poop_config()
         self.poop_pickup_prob.setValue(poop_config['pickup_prob'])
         self.poop_throw_prob.setValue(poop_config['throw_prob'])
@@ -1061,13 +1053,13 @@ class PreferencesWindow(QtWidgets.QDialog):
         neuro_config = self.config_manager.get_neurogenesis_config()
         self.neurogenesis_enabled.setChecked(neuro_config['general']['enabled'])
         self.showmanship_enabled.setChecked(neuro_config['general']['showmanship'])
-        self.pruning_enabled.setChecked(neuro_config['general']['pruning_enabled'])  # NEW
+        self.pruning_enabled.setChecked(neuro_config['general']['pruning_enabled'])
         self.neuro_cooldown.setValue(neuro_config['general']['cooldown'])
         self.neuro_per_type_cooldown.setValue(neuro_config['general']['per_type_cooldown'])
         self.neuro_max_neurons.setValue(neuro_config['general']['max_neurons'])
         self.neuro_initial_count.setValue(neuro_config['general']['initial_neuron_count'])
         
-        # Advanced neurogenesis - NEW
+        # Advanced neurogenesis
         self.max_novelty_neurons.setValue(neuro_config['general']['max_novelty_neurons'])
         self.pattern_threshold.setValue(neuro_config['general']['pattern_threshold'])
         self.experience_buffer_size.setValue(neuro_config['general']['experience_buffer_size'])
@@ -1102,7 +1094,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.highlight_duration.setValue(neuro_config['visual_effects']['highlight_duration'])
         self.pulse_effect.setChecked(neuro_config['visual_effects']['pulse_effect'])
         
-        # Hebbian config - NEW
+        # Hebbian config
         hebbian_config = self.config_manager.get_hebbian_config()
         self.hebbian_learning_interval.setValue(hebbian_config['learning_interval'])
         self.hebbian_base_rate.setValue(hebbian_config['base_learning_rate'])
@@ -1162,20 +1154,14 @@ class PreferencesWindow(QtWidgets.QDialog):
         selected_lang_display = self.language_combo.currentText()
         language_code = selected_lang_display.split(' - ')[0]
         self.config_manager.config.set('General', 'language', language_code)
-        
-        # Debug
-        if not self.config_manager.config.has_section('Debug'):
-            self.config_manager.config.add_section('Debug')
-        
-        # Decorations - NEW
-        if not self.config_manager.config.has_section('Decorations'):
-            self.config_manager.config.add_section('Decorations')
-        self.config_manager.config.set('Decorations', 'message_enabled', str(self.decorations_enabled.isChecked()))
-        self.config_manager.config.set('Decorations', 'message_max_shows', str(self.decorations_max_shows.value()))
-        self.config_manager.config.set('Decorations', 'message_min_interval', str(self.decorations_min_interval.value()))
-        self.config_manager.config.set('Decorations', 'message_max_interval', str(self.decorations_max_interval.value()))
-        
-        # LinkBlink - NEW
+
+        if not self.config_manager.config.has_section('Facts'):
+            self.config_manager.config.add_section('Facts')
+        self.config_manager.config.set('Facts', 'enabled', str(self.facts_enabled.isChecked()))
+        self.config_manager.config.set('Facts', 'interval_minutes', str(self.facts_interval.value()))
+        self.config_manager.config.set('Facts', 'display_seconds', str(self.facts_display.value()))
+
+        # LinkBlink
         if not self.config_manager.config.has_section('LinkBlink'):
             self.config_manager.config.add_section('LinkBlink')
         self.config_manager.config.set('LinkBlink', 'interval_min', str(self.linkblink_interval_min.value()))
@@ -1196,7 +1182,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.config_manager.config.set('RockInteractions', 'memory_decay_rate', str(self.rock_memory_decay.value()))
         self.config_manager.config.set('RockInteractions', 'max_rock_memories', str(self.rock_max_memories.value()))
         
-        # Poop Interactions - NEW SECTION
+        # Poop Interactions
         if not self.config_manager.config.has_section('PoopInteractions'):
             self.config_manager.config.add_section('PoopInteractions')
         self.config_manager.config.set('PoopInteractions', 'pickup_probability', str(self.poop_pickup_prob.value()))

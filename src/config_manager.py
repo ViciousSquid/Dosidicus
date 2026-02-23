@@ -245,6 +245,18 @@ class ConfigManager:
         """
         return self.config.getboolean('Neurogenesis', 'showmanship', fallback=True)
 
+
+    def get_facts_enabled(self):
+        return self.config.getboolean('Facts', 'enabled', fallback=True)
+
+    def get_fact_interval_ms(self):
+        mins = self.config.getint('Facts', 'interval_minutes', fallback=5)
+        return mins * 60 * 1000
+
+    def get_fact_display_ms(self):
+        secs = self.config.getint('Facts', 'display_seconds', fallback=18)
+        return secs * 1000
+
     def get_rock_config(self):
         return {
             'pickup_prob': float(self.config['RockInteractions']['pickup_probability']),

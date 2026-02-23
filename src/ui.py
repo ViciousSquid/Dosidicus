@@ -358,6 +358,14 @@ class ComputeBackendOverlay:
         else:
             return "NUMPY", "#1e1e1e", "#cccccc"    # dark grey / light grey
 
+    def show_colored_message(self, text, color="#FFFFFF", duration=5000):
+        """Show a temporary colored message in the status bar."""
+        if hasattr(self, 'status_bar') and self.status_bar:
+            original_style = self.status_bar.styleSheet()
+            self.status_bar.setStyleSheet(f"color: {color}; background-color: black; font-size: 11px;")
+            self.status_bar.showMessage(text, duration)
+            QtCore.QTimer.singleShot(duration, lambda: self.status_bar.setStyleSheet(original_style))
+
 
 class Ui:
     def __init__(self, window, debug_mode=False):
