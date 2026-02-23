@@ -77,8 +77,9 @@ class PluginManager:
         self.hooks: Dict[str, List[Dict]] = {}    # Registered hooks and their subscribers
         self.enabled_plugins: set[str] = set()    # Names of enabled plugins (use lowercase)
         self.auto_load_blacklist: set[str] = {"multiplayer"}  ### FIX: Stop Multiplayer plugin freaking out at startup  ** ESSENTIAL **
-                                                                ## This is actually important. All plugins start austomatically unless
-                                                                ## specifically blacklisted here... DO NOT LET MULTIPLAYER AUTO START!!. 
+                                                                ## This is super important. All plugins start austomatically unless
+                                                                ## specifically blacklisted here... DO NOT LET MULTIPLAYER AUTO START.
+                                                                 
         
         # Custom neuron handlers registered by plugins
         # Maps neuron_name -> {'handler': callable, 'plugin': plugin_name, 'metadata': dict}
