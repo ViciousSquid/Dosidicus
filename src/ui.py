@@ -1492,7 +1492,7 @@ class Ui:
 
         self.neurogenesis_debug_action = QtWidgets.QAction(loc.get("neuron_lab"), self.window)
         self.neurogenesis_debug_action.triggered.connect(self.show_neurogenesis_debug) 
-        view_menu.addAction(self.neurogenesis_debug_action)
+        # view_menu.addAction(self.neurogenesis_debug_action)
 
         self.preferences_action = QtWidgets.QAction(loc.get("preferences"), self.window)
         self.preferences_action.triggered.connect(self.show_preferences)
