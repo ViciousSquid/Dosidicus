@@ -37,6 +37,8 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 
   "It thinks, therefore it inks"
 
+-----------------------------------
+
 
 ## Project Overview
 
@@ -58,6 +60,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
