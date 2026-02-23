@@ -2,7 +2,7 @@
 — [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/) , [Hackernews](https://news.ycombinator.com/item?id=43765748)
 
 # _Dosidicus electronicus_
-Digital pet squid with a dynamic neural network that teaches core neural network concepts through emergent behavior.
+Digital pet squid with a dynamic neural network (NN) that attempts to teach core NN concepts through emergent behavior.
 
 - Part neuroscience simulator, part Tamagotchi, part fever dream
 - Hebbian learning & Neurogenesis - squid can create new neurons and become smarter
@@ -58,6 +58,7 @@ That either means it's good or he's unwell. Either way, it's commitment:
  <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="38" width="174"></a>
 
   "It thinks, therefore it inks"
+
 
 
 
