@@ -10,7 +10,8 @@
 set -e
 
 REPO_URL="https://github.com/ViciousSquid/Dosidicus.git"
-INSTALL_DIR="$HOME/Dosidicus"
+# Use the current directory where the script lives
+INSTALL_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 VENV_DIR="$INSTALL_DIR/.venv"
 
 # ── Colours ──────────────────────────────────────────────────
@@ -55,7 +56,7 @@ for pkg in git python3-venv python3-dev; do
 done
 
 # PyQt5 often needs these on Linux
-for pkg in libxcb-xinerama0 libxcb-cursor0 libgl1; do
+for pkg in libxcb-xinerama0 libxcb-cursor0 libgl1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xkb1 libxkbcommon-x11-0; do
     if ! dpkg -s "$pkg" &>/dev/null 2>&1; then
         MISSING_PKGS+=("$pkg")
     fi
@@ -72,11 +73,12 @@ else
 fi
 
 # ── 3. Clone or update repo ───────────────────────────────────
+# If we are already inside a git repo, just pull.
 if [[ -d "$INSTALL_DIR/.git" ]]; then
     info "Repo already exists at $INSTALL_DIR — pulling latest..."
     git -C "$INSTALL_DIR" pull --ff-only
     success "Updated to latest"
-else
+elif [[ ! -f "$INSTALL_DIR/main.py" ]]; then
     info "Cloning Dosidicus into $INSTALL_DIR..."
     git clone "$REPO_URL" "$INSTALL_DIR"
     success "Cloned successfully"
@@ -101,27 +103,31 @@ source "$VENV_DIR/bin/activate"
 info "Installing Python dependencies..."
 pip install --upgrade pip --quiet
 
-# Core requirements
-pip install --quiet "PyQt5>=5.15" "numpy>=1.21"
+if [[ -f "requirements.txt" ]]; then
+    pip install -r requirements.txt --quiet
+else
+    pip install --quiet "PyQt5>=5.15" "numpy>=1.21"
+fi
 
-# Optional but recommended
+# Optional but recommended for PyQt5
 pip install --quiet "pyqt5-sip" 2>/dev/null || true
 
 success "Python packages installed"
 
 # ── 6. Create launcher script ─────────────────────────────────
 LAUNCHER="$INSTALL_DIR/run.sh"
-cat > "$LAUNCHER" << 'LAUNCH'
+cat > "$LAUNCHER" << LAUNCH
 #!/usr/bin/env bash
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$DIR/.venv/bin/activate"
+DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+source "\$DIR/.venv/bin/activate"
 
 # Fix for Qt/XCB issues on some Linux setups
-export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
-export PYTHONPATH="$DIR:$PYTHONPATH"
+export QT_QPA_PLATFORM="\${QT_QPA_PLATFORM:-xcb}"
+# Crucial: This ensures main.py can find the 'src' folder
+export PYTHONPATH="\$DIR:\$PYTHONPATH"
 
-cd "$DIR"
-exec python3 main.py "$@"
+cd "\$DIR"
+exec python3 main.py "\$@"
 LAUNCH
 chmod +x "$LAUNCHER"
 success "Launcher script created: $LAUNCHER"
