@@ -1,8 +1,8 @@
 """
-compute_backend.py  –  Optional NPU / AI Accelerator support for Dosidicus
+Optional NPU / AI Accelerator support via ONNX Runtime
 ===========================================================================
 
-Provides a thin abstraction over the core matrix operations used by the
+A thin abstraction over the core matrix operations used by the
 brain engine (forward pass MatMul, Hebbian outer-product update, zeros
 initialisation) so that an ONNX Runtime execution provider can be dropped
 in without touching the rest of the codebase.
