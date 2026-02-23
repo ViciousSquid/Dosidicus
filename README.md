@@ -24,7 +24,16 @@ Digital pet squid with a dynamic neural network and a retro aesthetic
 <img width="2482" height="980" alt="image" src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" />
  <img src="https://github.com/user-attachments/assets/496cec0d-0810-4f47-8618-11165e0dd50d" width="380">
 
-----------------------------
+------------------
+
+#### The developer got a **tattoo of this project** to celebrate its first birthday
+
+<img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
+
+ <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="38" width="174"></a>
+
+  "It thinks, therefore it inks"
+
 
 ## Project Overview
 
@@ -47,15 +56,7 @@ Digital pet squid with a dynamic neural network and a retro aesthetic
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
 
-------------------
 
-#### The developer got a **tattoo of this project** to celebrate its first birthday
-
-<img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
-
- <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="38" width="174"></a>
-
-  "It thinks, therefore it inks"
 
 
 
