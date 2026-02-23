@@ -9,7 +9,7 @@ Digital pet squid with a dynamic neural network.
 
 Combining AI with an electronic pet to transform "play" into "learning."
 - [Design your own squid brain](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) with GUI tools and watch it evolve and learn!
-- Learn neuroscience by raising a squid that might develop irrational fears (or it might not!)"
+- Learn neuroscience by raising a squid that might develop irrational fears (or it might not!)
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **does not use Tensorflow or Pytorch**
 - No black boxes - every neuron is visible, stimulatable, and understandable.
  
@@ -57,6 +57,7 @@ Combining AI with an electronic pet to transform "play" into "learning."
 <img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
 
  <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="38" width="174"></a>
+
 
 
 
