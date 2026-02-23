@@ -4,7 +4,7 @@
 # _Dosidicus electronicus_
 Digital pet squid with a dynamic neural network.
 
-- Part educational neuro tool and part sim game with a retro aesthetic
+- Part neuroscience simulator, part Tamagotchi, part fever dream
 - Hebbian learning & Neurogenesis - squid can create new neurons and become smarter
 
 Combining AI with an electronic pet to transform "play" into "learning."
@@ -12,6 +12,7 @@ Combining AI with an electronic pet to transform "play" into "learning."
 - Learn neuroscience by raising a squid that **might develop irrational fears** (or it might not!)
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **does not use Tensorflow or Pytorch**
 - No **black boxes** - every neuron is visible, stimulatable, and understandable.
+- "It thinks, therefore it inks"
  
 - -----------------------------
 
@@ -52,11 +53,15 @@ Combining AI with an electronic pet to transform "play" into "learning."
 
 ------------------
 
-### **AUTHOR GOT A TATTOO** to celebrate 1 year of this project!
+### The developer got a tattoo of this project. 
+That either means it's good or he's unwell. Either way, it's commitment:
 
 <img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
 
  <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="38" width="174"></a>
+
+  "It thinks, therefore it inks"
+
 
 
 
