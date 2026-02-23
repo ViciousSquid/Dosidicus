@@ -255,25 +255,32 @@ class RockInteractionManager:
         self.logic.statistics_window.award(50)
         
         # Simplified positive memory
+        rock_filename = getattr(rock, 'filename', '') or ''
+        is_urchin = 'rock03' in rock_filename.lower()
         memory_details = {
-            "activity": "rock_throwing",
+            "activity": "urchin_throwing" if is_urchin else "rock_throwing",
+            "item": rock_filename,
             "effects": {
                 "happiness": config['happiness_boost'],
                 "satisfaction": config['satisfaction_boost'],
                 "anxiety": -config['anxiety_reduction']
             },
-            "description": "Had fun throwing a rock!",
+            "description": "Had fun throwing an urchin!" if is_urchin else "Had fun throwing a rock!",
             "is_positive": True
         }
 
         # Update rocks thrown counter
         if hasattr(self.squid, 'statistics'):
             self.squid.statistics.total_rocks_thrown += 1
+
+        # Update statistics tab and achievements plugin
+        if hasattr(self.logic, 'track_rock_thrown'):
+            self.logic.track_rock_thrown()
         
         # Add with importance (2) and positive formatting
         self.squid.memory_manager.add_short_term_memory(
             'play',
-            'rock_throwing',
+            memory_details["activity"],
             memory_details,
             importance=2
         )
@@ -628,3 +635,6 @@ class RockInteractionManager:
                         'observation', 'rock_thrown',
                         f"Startled by rock thrown by remote squid ({source_node_id[-4:]})"
                     )
+
+
+

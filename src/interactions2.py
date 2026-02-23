@@ -224,6 +224,7 @@ class PoopInteractionManager:
         # Simplified negative memory
         memory_details = {
             "activity": "poop_throwing",
+            "item": getattr(poop, 'filename', '') or '',
             "effects": {
                 "happiness": -5,
                 "satisfaction": -3,
@@ -357,3 +358,6 @@ class PoopInteractionManager:
         """Configure timer intervals"""
         self.poop_test_timer.setInterval(interval)
         self.throw_animation_timer.setInterval(50)
+
+
+

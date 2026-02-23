@@ -1153,6 +1153,14 @@ class TamagotchiLogic:
                 'behavior', 'startle_response', memory_value
             )
 
+            # Fear memory when anxiety is very high
+            if self.squid.anxiety >= 80:
+                self.squid.memory_manager.add_short_term_memory(
+                    'emotion', 'fear',
+                    f'Gripped by fear! Anxiety at {int(self.squid.anxiety)}.',
+                    importance=6
+                )
+
             self.show_message(message)
             if produce_ink:
                 self.create_ink_cloud()
@@ -1825,6 +1833,13 @@ class TamagotchiLogic:
         
         # Increase curiosity
         self.squid.curiosity = min(100, self.squid.curiosity + 20)
+
+        # Memory
+        self.squid.memory_manager.add_short_term_memory(
+            'emotion', 'intense_curiosity',
+            'Overwhelmed by intense curiosity!',
+            importance=4
+        )
         
         # Schedule the end of the curious state
         QtCore.QTimer.singleShot(5000, self.end_curious)  # End curious after 5 seconds
@@ -2373,6 +2388,11 @@ class TamagotchiLogic:
         if self.squid:
             self.squid.cleanliness = 100
             self.squid.happiness = min(100, self.squid.happiness + 20)
+            self.squid.memory_manager.add_short_term_memory(
+                'cleanliness', 'washed_clean',
+                'Washed clean! Feeling fresh.',
+                importance=3
+            )
         
         # Clear all DIRTY text immediately when cleaned
         self.user_interface.clear_dirty_text()
@@ -3238,3 +3258,5 @@ class TamagotchiLogic:
                 if self.squid.throw_poop(direction):
                     self.squid.status = "roaming"
                     self.squid.current_poop_target = None
+
+

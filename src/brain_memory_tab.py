@@ -48,6 +48,15 @@ class MemoryTab(BrainBaseTab):
         self.stm_layout.addWidget(self.stm_scroll)
         
         # Configure LTM tab
+        self.ltm_header_label = QtWidgets.QLabel("it happened often...")
+        ltm_header_font = self.ltm_header_label.font()
+        ltm_header_font.setItalic(True)
+        ltm_header_font.setPointSize(11)
+        self.ltm_header_label.setFont(ltm_header_font)
+        self.ltm_header_label.setAlignment(QtCore.Qt.AlignLeft)
+        self.ltm_header_label.setContentsMargins(6, 4, 0, 2)
+        self.ltm_layout.addWidget(self.ltm_header_label)
+
         self.ltm_scroll = QtWidgets.QScrollArea()
         self.ltm_scroll.setWidgetResizable(True)
         self.ltm_content = QtWidgets.QWidget()
@@ -128,6 +137,10 @@ class MemoryTab(BrainBaseTab):
                         seen_keys.add(key)
                         ltm_deduped.append(m)
                 
+                # Save scroll positions before rebuilding
+                stm_scroll_pos = self.stm_scroll.verticalScrollBar().value()
+                ltm_scroll_pos = self.ltm_scroll.verticalScrollBar().value()
+
                 # Clear existing content
                 self._clear_layout(self.stm_content_layout)
                 self._clear_layout(self.ltm_content_layout)
@@ -149,6 +162,10 @@ class MemoryTab(BrainBaseTab):
                 # Make sure the scroll areas show their content
                 self.stm_scroll.setWidget(self.stm_content)
                 self.ltm_scroll.setWidget(self.ltm_content)
+
+                # Restore scroll positions
+                self.stm_scroll.verticalScrollBar().setValue(stm_scroll_pos)
+                self.ltm_scroll.verticalScrollBar().setValue(ltm_scroll_pos)
                 
         except Exception as e:
             print(f"Error updating memory tab: {e}")
@@ -165,75 +182,66 @@ class MemoryTab(BrainBaseTab):
 
     def _is_displayable_memory(self, memory):
         """Check if a memory should be displayed in the UI"""
-        # Basic type check
         if not isinstance(memory, dict):
             return False
-
-        # Ensure it has at least a category
         if 'category' not in memory:
             return False
-
-        # Filter out memories with None or empty values
         if 'value' not in memory or memory.get('value') is None or memory.get('value') == "":
             return False
 
-        # Filter out internal behavior status changes
-        if memory.get('category') == 'behavior':
-            value = str(memory.get('value', '')).lower()
-            formatted_value = str(memory.get('formatted_value', '')).lower()
+        cat = memory.get('category', '').lower()
+        key = memory.get('key', '')
 
-            # Filter status transition messages
-            if 'returned to' in value or 'returned to' in formatted_value:
-                return False
+        # Always-show categories (no further filtering needed)
+        _ALWAYS_SHOW = {
+            'play', 'food', 'favourite_plant',
+            'mental_state', 'behaviour', 'behavior',
+            'environment', 'social', 'observation',
+            'travel', 'emotion', 'achievement', 'cleanliness',
+        }
+        if cat in _ALWAYS_SHOW:
+            return True
 
-            if 'status changed' in value or 'status changed' in formatted_value:
-                return False
-
-            if 'after fleeing' in value or 'after fleeing' in formatted_value:
-                return False
-
-            # Also filter status-only messages
-            if len(value.split()) <= 3 and any(s in value for s in ['status', 'roaming', 'fleeing']):
-                return False
-
-        # Filter out interactions with raw JSON or None items
-        if memory.get('category') == 'interaction':
+        # interaction: skip raw dicts with None
+        if cat == 'interaction':
             value = str(memory.get('value', ''))
             if '{' in value and '}' in value and 'None' in value:
                 return False
+            return True
 
-        # Filter out memories with timestamp values or keys
-        key = memory.get('key', '')
-        if isinstance(key, str) and key.replace('.', '', 1).isdigit():
-            return False  # Skip timestamp-like keys
-
-        # Always show food and decoration memories (with timestamp filtering)
-        if memory.get('category') in ['food', 'decorations', 'interaction']:
-            # But filter out timestamp-named items
+        # decorations: skip timestamp-keyed entries
+        if cat == 'decorations':
+            if isinstance(key, str) and key.replace('.', '', 1).isdigit():
+                return False
             formatted_value = memory.get('formatted_value', '')
             if 'interaction with' in formatted_value.lower():
-                # Extract the filename part
                 parts = formatted_value.split('with')
                 if len(parts) > 1:
-                    filename = parts[1].strip().split(':')[0].strip()
-                    # Check if filename looks like a timestamp (mostly digits with maybe a dot)
-                    if any(c.isdigit() for c in filename) and '.' in filename:
+                    fname = parts[1].strip().split(':')[0].strip()
+                    if any(c.isdigit() for c in fname) and '.' in fname:
                         return False
             return True
 
-        # Get formatted value or raw value
+        # Filter out internal behavior status messages
+        if cat == 'behavior':
+            value = str(memory.get('value', '')).lower()
+            if any(s in value for s in ('returned to', 'status changed', 'after fleeing')):
+                return False
+            if len(value.split()) <= 3 and any(s in value for s in ('status', 'roaming', 'fleeing')):
+                return False
+
+        # Skip timestamp-like keys
+        if isinstance(key, str) and key.replace('.', '', 1).isdigit():
+            return False
+
+        # Skip timestamp-containing values
         formatted_value = memory.get('formatted_value', '')
         value = str(memory.get('value', ''))
-
-        # Filter out timestamp-containing values
         if 'timestamp' in formatted_value.lower() or 'timestamp' in value.lower():
             return False
 
-        # If it has a formatted_value, it's likely displayable
         if formatted_value:
             return True
-
-        # If it has a value field with content, it's likely displayable
         if value and not value.replace('.', '', 1).isdigit():
             return True
 
@@ -261,118 +269,476 @@ class MemoryTab(BrainBaseTab):
         else:
             print("ERROR: Could not find squid.memory_manager")
     
+    # ------------------------------------------------------------------ #
+    #  Thumbnail helper                                                    #
+    # ------------------------------------------------------------------ #
+    def _make_thumbnail(self, image_path, size, angle_deg=0):
+        """
+        Load *image_path*, scale to *size*×*size* (keeping aspect ratio),
+        then rotate by *angle_deg* degrees (small random tilt).
+        Returns a QLabel ready to drop into a layout, or None if the
+        image can't be loaded.
+        """
+        import os as _os
+        if not image_path or not _os.path.exists(image_path):
+            return None
+
+        src = QtGui.QPixmap(image_path)
+        if src.isNull():
+            return None
+
+        scaled = src.scaled(size, size,
+                            QtCore.Qt.KeepAspectRatio,
+                            QtCore.Qt.SmoothTransformation)
+
+        if angle_deg != 0:
+            # Rotate onto a transparent canvas large enough to avoid clipping
+            pad = int(size * 0.45)
+            canvas = QtGui.QPixmap(size + pad * 2, size + pad * 2)
+            canvas.fill(QtCore.Qt.transparent)
+            painter = QtGui.QPainter(canvas)
+            painter.setRenderHint(QtGui.QPainter.SmoothPixmapTransform)
+            cx = canvas.width() / 2
+            cy = canvas.height() / 2
+            painter.translate(cx, cy)
+            painter.rotate(angle_deg)
+            painter.translate(-scaled.width() / 2, -scaled.height() / 2)
+            painter.drawPixmap(0, 0, scaled)
+            painter.end()
+            scaled = canvas
+
+        label = QtWidgets.QLabel()
+        label.setPixmap(scaled)
+        label.setFixedSize(scaled.size())
+        label.setAlignment(QtCore.Qt.AlignCenter)
+        return label
+
+    # ------------------------------------------------------------------ #
+    #  Effect-pills helper                                                 #
+    # ------------------------------------------------------------------ #
+    def _make_effect_pills(self, effects, scale_fn, font_size_fn):
+        """Return a QWidget containing coloured stat pills, or None."""
+        if not effects:
+            return None
+        _EMOJI = {
+            'happiness': '😊', 'satisfaction': '✨',
+            'anxiety': '😰', 'hunger': '🍖', 'energy': '⚡',
+            'cleanliness': '🚿', 'curiosity': '🔍',
+        }
+        pills_widget = QtWidgets.QWidget()
+        pills_layout = QtWidgets.QHBoxLayout(pills_widget)
+        pills_layout.setContentsMargins(0, 0, 0, 0)
+        pills_layout.setSpacing(scale_fn(4))
+        for stat, delta in effects.items():
+            try:
+                delta = float(delta)
+            except (TypeError, ValueError):
+                continue
+            sign = '+' if delta >= 0 else ''
+            emoji = _EMOJI.get(stat, '')
+            pill = QtWidgets.QLabel(f"{emoji} {stat.capitalize()} {sign}{int(delta)}")
+            color = '#D1FFD1' if delta > 0 else '#FFD1DC' if delta < 0 else '#FFFACD'
+            pill.setStyleSheet(
+                f"background:{color}; border-radius:{scale_fn(8)}px;"
+                f" padding:2px {scale_fn(6)}px;"
+                f" font-size:{font_size_fn(11)}px;"
+            )
+            pills_layout.addWidget(pill)
+        pills_layout.addStretch()
+        return pills_widget
+
+    # ------------------------------------------------------------------ #
+    #  Card metadata resolver                                              #
+    # ------------------------------------------------------------------ #
+    def _card_meta(self, memory):
+        """
+        Return (header_str, thumb_path_or_None, content_str, effects_dict_or_None)
+        for every memory category the squid can produce.
+        """
+        import os as _os
+        cat   = memory.get('category', '').lower()
+        key   = memory.get('key', '')
+        value = memory.get('value', '')
+
+        # ---- play -------------------------------------------------------
+        if cat == 'play' and isinstance(value, dict):
+            activity    = value.get('activity', '')
+            description = value.get('description', activity.replace('_', ' ').capitalize())
+            effects     = value.get('effects', {})
+            item_file   = value.get('item', '')   # filename stored at throw time
+            _TITLES = {
+                'rock_throwing':   'Rock Throwing',
+                'urchin_throwing': 'Urchin Throwing',
+                'poop_throwing':   'Poop Throwing',
+            }
+            _DEFAULT_THUMBS = {
+                'rock_throwing':   'images/decoration/rock01.png',
+                'urchin_throwing': 'images/decoration/rock03.png',
+                'poop_throwing':   'images/poop1.png',
+            }
+            # Prefer the actual item filename if it exists on disk
+            thumb = (item_file if item_file and _os.path.exists(item_file)
+                     else _DEFAULT_THUMBS.get(activity))
+            return (_TITLES.get(activity, 'Play'),
+                    thumb,
+                    description,
+                    effects)
+
+        # ---- food -------------------------------------------------------
+        if cat == 'food':
+            thumb = f'images/{key}.png'
+            return ('Eating', thumb, str(value), None)
+
+        # ---- favourite_plant (long-term) --------------------------------
+        if cat == 'favourite_plant':
+            plant_name = _os.path.splitext(_os.path.basename(key))[0]
+            lines = [plant_name]
+            if isinstance(value, dict):
+                if value.get('reason'):
+                    lines.append(value['reason'])
+                if value.get('anxiety_reduction'):
+                    lines.append('Reduces anxiety')
+            return ('Favourite Plant', key, '\n'.join(lines), None)
+
+        # ---- interaction ------------------------------------------------
+        if cat == 'interaction':
+            if key == 'plant_contact' and isinstance(value, dict):
+                plant_path = value.get('plant_key', '')
+                plant_name = _os.path.splitext(_os.path.basename(plant_path))[0]
+                return ('Plant Contact', plant_path,
+                        f'Touched {plant_name} – feeling calmer', None)
+            if 'rock' in key:
+                item_path = value.get('item', '') if isinstance(value, dict) else ''
+                return ('Picked Up Rock', item_path or 'images/decoration/rock01.png',
+                        'Picked up a rock', None)
+            if 'poop' in key:
+                item_path = value.get('item', '') if isinstance(value, dict) else ''
+                return ('Picked Up Poop', item_path or 'images/poop1.png',
+                        'Picked up some poop…', None)
+            return ('Interaction', None, str(value), None)
+
+        # ---- mental_state -----------------------------------------------
+        if cat == 'mental_state':
+            if key == 'startled':
+                return ('Startled!', 'images/startled.png', str(value), None)
+            return ('Mental State', None, str(value), None)
+
+        # ---- behaviour / behavior ---------------------------------------
+        if cat in ('behaviour', 'behavior'):
+            if key == 'ink_cloud':
+                return ('Ink Cloud!', 'images/inkcloud.png', str(value), None)
+            if key == 'startle_response':
+                return ('Startle Response', 'images/startled.png', str(value), None)
+            if key == 'calm_after_startle':
+                return ('Calmed Down', None, str(value), None)
+            return ('Behaviour', None, str(value), None)
+
+        # ---- environment ------------------------------------------------
+        if cat == 'environment':
+            if key == 'plant_calming_effect':
+                return ('Plant Calming', 'images/plant.png', str(value), None)
+            if key == 'window_enlarged':
+                return ('More Space!', None, str(value), None)
+            if key == 'window_reduced':
+                return ('Less Space', None, str(value), None)
+            return ('Environment', None, str(value), None)
+
+        # ---- decorations ------------------------------------------------
+        if cat == 'decorations':
+            thumb = key if (_os.path.exists(key) if key else False) else None
+            name  = _os.path.splitext(_os.path.basename(key))[0] if key else 'decoration'
+            if isinstance(value, dict):
+                content = ', '.join(
+                    f"{k.capitalize()} {'+' if v >= 0 else ''}{v:.0f}"
+                    for k, v in value.items() if isinstance(v, (int, float))
+                ) or str(value)
+            else:
+                content = str(value)
+            return (name.replace('_', ' ').capitalize(), thumb, content, None)
+
+        # ---- social -----------------------------------------------------
+        if cat == 'social':
+            _SOCIAL = {
+                'squid_meeting':        'Met Another Squid',
+                'squid_detection':      'Spotted a Squid',
+                'squid_lost':           'Lost Sight of Squid',
+                'decoration_exchange':  'Decoration Exchange',
+                'targeted':             'Targeted by Rock',
+            }
+            return (_SOCIAL.get(key, 'Social'), None, str(value), None)
+
+        # ---- observation ------------------------------------------------
+        if cat == 'observation':
+            if 'rock' in key:
+                return ('Saw Rock Thrown', 'images/decoration/rock01.png',
+                        str(value), None)
+            return ('Observation', None, str(value), None)
+
+        # ---- travel -----------------------------------------------------
+        if cat == 'travel':
+            _TRAVEL = {
+                'ate_on_trip':        'Ate on Trip',
+                'played_on_trip':     'Played on Trip',
+                'completed_journey':  'Journey Complete',
+            }
+            return (_TRAVEL.get(key, 'Travel'), None, str(value), None)
+
+        # ---- cleanliness ------------------------------------------------
+        if cat == 'cleanliness':
+            return ('Washed Clean', 'images/icons/clean.png', str(value), None)
+
+        # ---- emotion ----------------------------------------------------
+        if cat == 'emotion':
+            _EMO = {
+                'happy_return':     'Happy Return',
+                'calm_return':      'Calm Return',
+                'intense_curiosity': 'Intense Curiosity',
+                'fear':             'Fear',
+            }
+            _EMO_THUMBS = {
+                'intense_curiosity': 'images/curious.png',
+                'fear':              'images/startled.png',
+            }
+            return (_EMO.get(key, 'Emotion'),
+                    _EMO_THUMBS.get(key),
+                    str(value), None)
+
+        # ---- achievement ------------------------------------------------
+        if cat == 'achievement':
+            return (key.replace('_', ' ').capitalize(), None, str(value), None)
+
+        # ---- fallback ---------------------------------------------------
+        content = memory.get('formatted_value', str(value))
+        return (cat.capitalize(), None, content, None)
+
+    # ------------------------------------------------------------------ #
+    #  Card builder                                                        #
+    # ------------------------------------------------------------------ #
     def _create_memory_widget(self, memory, target_layout):
         """Create a memory card widget and add it to the target layout"""
+        import random as _random
         from .display_scaling import DisplayScaling
 
-        # Create a frame with styled background
+        THUMB_SIZE  = DisplayScaling.scale(64)   # bigger thumbnails
+        MAX_ANGLE   = 12                          # ± degrees of random tilt
+
         memory_widget = QtWidgets.QFrame()
         memory_widget.setFrameStyle(QtWidgets.QFrame.Box | QtWidgets.QFrame.Raised)
         memory_widget.setLineWidth(DisplayScaling.scale(2))
 
-        # Set color based on memory valence
         bg_color = self._get_memory_color(memory)
         memory_widget.setStyleSheet(f"background-color: {bg_color};")
-
-        # Set scaled size constraints
-        memory_widget.setMinimumHeight(DisplayScaling.scale(220))
+        memory_widget.setMinimumHeight(DisplayScaling.scale(200))
         memory_widget.setMinimumWidth(DisplayScaling.scale(300))
-        memory_widget.setMaximumHeight(DisplayScaling.scale(220))
+        memory_widget.setMaximumHeight(DisplayScaling.scale(250))
 
-        # Create layout
         card_layout = QtWidgets.QVBoxLayout(memory_widget)
+        card_layout.setSpacing(DisplayScaling.scale(4))
 
-        # Category header
-        # Uses translated category name if available, or capitalizes the key
-        # We rely on "unknown" as a fallback
         cat_key = memory.get('category', 'unknown').lower()
-        # You might want to add specific translations for category names in localisation.py
-        # For now we just capitalize, but strictly we should map 'food' -> 'Comida' etc.
-        # Simple capitalization for now unless keys exist
-        display_category = cat_key.capitalize()
-        
-        header = QtWidgets.QLabel(f"{display_category}")
-        font = header.font()
-        font.setBold(True)
-        font.setPointSize(DisplayScaling.font_size(12))
-        header.setFont(font)
+
+        # --- resolve metadata -------------------------------------------
+        header_text, thumb_path, content_text, effects = self._card_meta(memory)
+
+        # --- header label -----------------------------------------------
+        header = QtWidgets.QLabel(header_text)
+        hfont = header.font()
+        hfont.setBold(True)
+        hfont.setPointSize(DisplayScaling.font_size(12))
+        header.setFont(hfont)
         card_layout.addWidget(header)
 
-        # Content
-        content = memory.get('formatted_value', str(memory.get('value', '')))
-        content_label = QtWidgets.QLabel(content)
-        content_label.setWordWrap(True)
-        content_font = content_label.font()
-        content_font.setPointSize(DisplayScaling.font_size(10))
-        content_label.setFont(content_font)
-        card_layout.addWidget(content_label)
+        # --- thumbnail + content row ------------------------------------
+        row_widget = QtWidgets.QWidget()
+        row_layout = QtWidgets.QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(DisplayScaling.scale(8))
 
-        # Timestamp at bottom
+        angle = _random.uniform(-MAX_ANGLE, MAX_ANGLE)
+        thumb_label = self._make_thumbnail(thumb_path, THUMB_SIZE, angle)
+        if thumb_label:
+            row_layout.addWidget(thumb_label, alignment=QtCore.Qt.AlignVCenter)
+
+        content_label = QtWidgets.QLabel(content_text)
+        content_label.setWordWrap(True)
+        cfont = content_label.font()
+        cfont.setPointSize(DisplayScaling.font_size(10))
+        content_label.setFont(cfont)
+        row_layout.addWidget(content_label, stretch=1)
+        card_layout.addWidget(row_widget)
+
+        # --- effect pills -----------------------------------------------
+        pills = self._make_effect_pills(effects, DisplayScaling.scale,
+                                        DisplayScaling.font_size)
+        if pills:
+            card_layout.addWidget(pills)
+
+        # --- timestamp --------------------------------------------------
         timestamp = memory.get('timestamp', '')
-        if isinstance(timestamp, str):
+        if isinstance(timestamp, (int, float)) and timestamp > 0:
+            from datetime import datetime
+            timestamp = datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
+        elif isinstance(timestamp, str):
             try:
                 from datetime import datetime
                 timestamp = datetime.fromisoformat(timestamp).strftime("%H:%M:%S")
-            except Exception as e:
-                timestamp = str(memory.get('timestamp', ''))
+            except Exception:
+                pass
 
-        # Localized Time Label
         time_label = QtWidgets.QLabel(f"{self.loc.get('time_label')} {timestamp}")
-        time_font = time_label.font()
-        time_font.setPointSize(DisplayScaling.font_size(8))
-        time_label.setFont(time_font)
+        tfont = time_label.font()
+        tfont.setPointSize(DisplayScaling.font_size(8))
+        time_label.setFont(tfont)
         card_layout.addWidget(time_label, alignment=QtCore.Qt.AlignRight)
 
-        # Importance indicator (if available)
-        if 'importance' in memory:
-            importance = memory.get('importance', 1)
-            if importance >= 5:
-                # Localized Important Label
-                importance_label = QtWidgets.QLabel(f"⭐ {self.loc.get('important_label')}")
-                importance_label.setStyleSheet(f"color: #FF5733; font-weight: bold; font-size: {DisplayScaling.font_size(8)}px;")
-                card_layout.addWidget(importance_label, alignment=QtCore.Qt.AlignRight)
+        # --- importance star --------------------------------------------
+        if memory.get('importance', 0) >= 5:
+            imp_label = QtWidgets.QLabel(f"⭐ {self.loc.get('important_label')}")
+            imp_label.setStyleSheet(
+                f"color:#FF5733; font-weight:bold;"
+                f" font-size:{DisplayScaling.font_size(8)}px;"
+            )
+            card_layout.addWidget(imp_label, alignment=QtCore.Qt.AlignRight)
 
-        # Add to layout
+        # --- wire up ----------------------------------------------------
         target_layout.addWidget(memory_widget)
-        
-        # Set Tooltip
         memory_widget.setToolTip(self._create_memory_tooltip(memory))
+        memory_widget.mousePressEvent = (
+            lambda event, mem=memory: self._on_memory_card_clicked(mem)
+        )
 
-        # Add click handler to increase importance and potentially transfer to long-term
-        memory_widget.mousePressEvent = lambda event, mem=memory: self._on_memory_card_clicked(mem)
+        # Plant hover tint
+        if cat_key == 'favourite_plant':
+            plant_key = memory.get('key', '')
+            memory_widget.enterEvent = (
+                lambda event, k=plant_key: self._tint_scene_plant(k)
+            )
+            memory_widget.leaveEvent = (
+                lambda event, k=plant_key: self._untint_scene_plant(k)
+            )
 
         return memory_widget
     
+    def _tint_scene_plant(self, filename):
+        """Apply a green tint to the matching plant decoration in the live scene."""
+        item = self._find_scene_decoration(filename)
+        if item is None:
+            return
+        try:
+            original = item.original_pixmap or item.pixmap()
+            if original.isNull():
+                return
+            tinted = QtGui.QPixmap(original.size())
+            tinted.fill(QtCore.Qt.transparent)
+            painter = QtGui.QPainter(tinted)
+            painter.drawPixmap(0, 0, original)
+            painter.setCompositionMode(QtGui.QPainter.CompositionMode_SourceAtop)
+            painter.fillRect(tinted.rect(), QtGui.QColor(0, 200, 80, 120))  # semi-transparent green
+            painter.end()
+            item.setPixmap(tinted)
+        except Exception as e:
+            print(f"[MemoryTab] Could not tint plant: {e}")
+
+    def _untint_scene_plant(self, filename):
+        """Restore the plant decoration in the live scene to its original pixmap."""
+        item = self._find_scene_decoration(filename)
+        if item is None:
+            return
+        try:
+            original = item.original_pixmap
+            if original and not original.isNull():
+                item.setPixmap(original)
+        except Exception as e:
+            print(f"[MemoryTab] Could not restore plant: {e}")
+
+    def _find_scene_decoration(self, filename):
+        """Return the ResizablePixmapItem in the scene whose filename matches."""
+        try:
+            scene = self.tamagotchi_logic.user_interface.scene
+            for item in scene.items():
+                if hasattr(item, 'filename') and item.filename == filename:
+                    return item
+        except Exception:
+            pass
+        return None
+
     def _get_memory_color(self, memory):
         """Determine the background color for a memory based on its valence"""
-        # Check for "positive:" or "negative:" prefix in the formatted value
-        formatted_value = memory.get('formatted_value', '').lower()
-        if formatted_value.startswith('positive:'):
-            return "#D1FFD1"  # Pastel green for positive
-        if formatted_value.startswith('negative:'):
-            return "#FFD1DC"  # Pastel red for negative
-            
-        # Check for negative memories (startled events)
-        if memory.get('category') == 'mental_state' and memory.get('key') == 'startled':
-            return "#FFD1DC"  # Pastel red for negative
+        cat = memory.get('category', '').lower()
+        key = memory.get('key', '')
+        val = memory.get('value', '')
 
-        # ADDED: Check for plant calming effect memory
-        if memory.get('key') == 'plant_calming_effect':
-            return "#E0FFD1" # Pastel green for positive
-        
-        # Check for memories with numerical effects
-        if isinstance(memory.get('raw_value'), dict):
-            # Calculate total effect
-            total_effect = sum(float(val) for val in memory['raw_value'].values() 
-                            if isinstance(val, (int, float)))
-            
-            if total_effect > 0:
-                return "#D1FFD1"  # Pastel green for positive
-            elif total_effect < 0:
-                return "#FFD1DC"  # Pastel red for negative
-        
-        # Default for neutral memories
-        return "#FFFACD"  # Pastel yellow
+        # Explicit prefix overrides
+        formatted_value = memory.get('formatted_value', str(val)).lower()
+        if formatted_value.startswith('positive:'):
+            return "#D1FFD1"
+        if formatted_value.startswith('negative:'):
+            return "#FFD1DC"
+
+        # Play activities
+        if cat == 'play' and isinstance(val, dict):
+            return "#D1FFD1" if val.get('is_positive', True) else "#FFD1DC"
+
+        # Food is always positive
+        if cat == 'food':
+            return "#D1FFD1"
+
+        # Favourite plant / plant calming
+        if cat == 'favourite_plant':
+            return "#C8F7C5"
+        if key == 'plant_calming_effect':
+            return "#E0FFD1"
+
+        # Plant contact = positive
+        if cat == 'interaction' and key == 'plant_contact':
+            return "#E0FFD1"
+
+        # Startled / scary events
+        if cat == 'mental_state' and key == 'startled':
+            return "#FFD1DC"
+        if cat in ('behaviour', 'behavior') and key in ('ink_cloud', 'startle_response'):
+            return "#FFD1DC"
+        if cat in ('behaviour', 'behavior') and key == 'calm_after_startle':
+            return "#D1FFD1"
+
+        # Environment
+        if cat == 'environment':
+            if key == 'window_enlarged':
+                return "#D1FFD1"
+            if key == 'window_reduced':
+                return "#FFD1DC"
+
+        # Social
+        if cat == 'social':
+            if key == 'targeted':
+                return "#FFD1DC"
+            return "#E8F4FD"  # pale blue
+
+        # Cleanliness always positive
+        if cat == 'cleanliness':
+            return "#B8D4F0"  # mid-tone cornflower blue — distinct from curiosity #E8F4FD
+
+        # Emotion sub-types
+        if cat == 'emotion':
+            if key == 'fear':
+                return "#FFD1DC"
+            if key == 'intense_curiosity':
+                return "#E8F4FD"  # pale blue
+            if 'happy' in key:
+                return "#D1FFD1"
+            return "#FFFACD"
+        if cat == 'achievement':
+            return "#FFF3CD"  # gold-ish
+
+        # Numeric dict values – sum to decide
+        if isinstance(val, dict):
+            total = sum(float(v) for v in val.values() if isinstance(v, (int, float)))
+            if total > 0:
+                return "#D1FFD1"
+            if total < 0:
+                return "#FFD1DC"
+
+        return "#FFFACD"  # default pastel yellow
 
     
     def _create_memory_tooltip(self, memory):

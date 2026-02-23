@@ -79,7 +79,7 @@ class NumpyBackend(ComputeBackend):
     def __init__(self):
         import numpy as _np  # already a project dependency
         self._np = _np
-        print("            ++       🧠 Compute backend: NumPy")
+        print("🧠 Compute backend: NumPy")
 
     # --- ComputeBackend interface -------------------------------------------
 
@@ -159,11 +159,11 @@ class ONNXBackend(ComputeBackend):
                     break
 
             self._available = True
-            print(f"            ++        🧠 Compute backend: ONNX Runtime  [{self._provider}]")
+            print(f"🧠 Compute backend: ONNX Runtime  [{self._provider}]")
             print(f"   Available providers: {available_providers}")
 
         except ImportError as exc:
-            print(f"            ++        ⚠️  ONNX Runtime not available ({exc}).")
+            print(f"⚠️  ONNX Runtime not available ({exc}).")
             print("   Falling back to NumPy backend.  "
                   "Install 'onnxruntime' (or 'onnxruntime-directml') to enable NPU support.")
 
