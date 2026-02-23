@@ -7,7 +7,7 @@ Digital pet squid with a dynamic neural network.
 
 - [Design your own squid brain](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) with GUI tools and watch it evolve and learn!
 - Entirely custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) - **does not use Tensorflow or Pytorch**
-- Supports [AI accelerators via onnx](https://github.com/ViciousSquid/Dosidicus/wiki/AI-accelerator-support)
+- Supports [hardware AI accelerators via ONNX Runtime](https://github.com/ViciousSquid/Dosidicus/wiki/AI-accelerator-support)
 - Rejects the standard "black box" approach in favour of transparent, biologically inspired learning.
 
 - -----------------------------
@@ -44,6 +44,7 @@ Digital pet squid with a dynamic neural network.
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
