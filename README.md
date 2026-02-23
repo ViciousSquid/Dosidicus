@@ -10,7 +10,7 @@ Digital pet squid with a dynamic neural network.
 Combining AI with an electronic pet to transform "play" into "learning."
 - [Design your own squid brain](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) with GUI tools and watch it evolve and learn!
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **does not use Tensorflow or Pytorch**
-- Rejects the standard "black box" approach in favour of transparent, biologically inspired learning.
+- No black boxes - every neuron is visible, stimulatable, and understandable.
  
 - -----------------------------
 
@@ -52,6 +52,7 @@ Combining AI with an electronic pet to transform "play" into "learning."
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
