@@ -30,7 +30,7 @@ Digital pet squid with a dynamic neural network.
   - Python ^3.9
   - PyQt5 ^5.15 (GUI framework)
   - numpy ^1.21 (neural network computations)
-  - **OPTIONAL** onnxruntime or onnxruntime-directml
+  - **OPTIONAL** onnxruntime or onnxruntime-directml ([more info](https://github.com/ViciousSquid/Dosidicus/wiki/AI-accelerator-support))
 - **Core Structure:** Modular codebase in `src/` including brain designer, decision engine, learning algorithms, personality traits, memory management, UI components, and interaction systems. Entry point via `main.py`.
 
 ### Key Project Components
@@ -44,6 +44,7 @@ Digital pet squid with a dynamic neural network.
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
