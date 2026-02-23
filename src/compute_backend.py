@@ -79,7 +79,7 @@ class NumpyBackend(ComputeBackend):
     def __init__(self):
         import numpy as _np  # already a project dependency
         self._np = _np
-        print("🧠 Compute backend: NumPy")
+        print("            ++       🧠 Compute backend: NumPy")
 
     # --- ComputeBackend interface -------------------------------------------
 
