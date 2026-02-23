@@ -1,5 +1,5 @@
 "What if a Tamagotchi had a neural network and could learn stuff?"
-— [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/)
+— [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/) , [Hackernews](https://news.ycombinator.com/item?id=43765748)
 
 # _Dosidicus electronicus_
 Digital pet squid with a dynamic neural network.
@@ -50,6 +50,7 @@ Combining AI with an electronic pet to transform "play" into "learning."
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
