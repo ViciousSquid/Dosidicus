@@ -10,8 +10,7 @@ Combining AI with an electronic pet to transform "play" into "learning."
 - Entirely custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) - **does not use Tensorflow or Pytorch**
 - (optional) [hardware AI acceleration via ONNX Runtime](https://github.com/ViciousSquid/Dosidicus/wiki/AI-accelerator-support) (experimental)
 - Rejects the standard "black box" approach in favour of transparent, biologically inspired learning.
-
-
+ 
 - -----------------------------
 
 ####   💿 Compiled binary for Windows is available on [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
@@ -49,6 +48,7 @@ Combining AI with an electronic pet to transform "play" into "learning."
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
