@@ -8,7 +8,7 @@ NOTE: As of v2.6.1.2 STDP is NOT currently implemented due to being beyond the (
 Here's a guide for forkers/cloners/contributors anyway x
 ```
 
-Everything needed to implement STDP can be found in [STDP.zip](https://github.com/ViciousSquid/Dosidicus/blob/v2.6.1.0__b1218_LatestVersion/extras/STDP.zip) IN THIS FOLDER
+Everything needed to implement can be found in [STDP.zip](https://github.com/ViciousSquid/Dosidicus/blob/v2.6.1.0__b1218_LatestVersion/extras/STDP.zip) IN THIS FOLDER
 
 -----------------------------------
 
