@@ -12,7 +12,7 @@ Combining AI with an electronic pet to transform "play" into "learning."
 - Learn neuroscience by raising a squid that **might develop irrational fears** (or it might not!)
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **does not use Tensorflow or Pytorch**
 - No **black boxes** - every neuron is visible, stimulatable, and understandable.
-- "It thinks, therefore it inks"
+- 50 Achievements
  
 - -----------------------------
 
@@ -61,6 +61,7 @@ That either means it's good or he's unwell. Either way, it's commitment:
  <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="38" width="174"></a>
 
   "It thinks, therefore it inks"
+
 
 
 
