@@ -2,7 +2,7 @@
 — [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/) , [Hackernews](https://news.ycombinator.com/item?id=43765748)
 
 # _Dosidicus electronicus_
-Digital pet squid with a dynamic neural network (NN) : teaches core NN concepts through emergent behavior.
+Digital pet squid with a dynamic neural network and a retro aesthetic
 
 - Part educational neuro tool, part sim game, part fever dream
 - [Design your own squid brain](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) with GUI tools and watch it evolve and learn!
@@ -56,5 +56,6 @@ Digital pet squid with a dynamic neural network (NN) : teaches core NN concepts 
  <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="38" width="174"></a>
 
   "It thinks, therefore it inks"
+
 
 
