@@ -35,7 +35,7 @@ class ColoredFormatter(logging.Formatter):
         # Check if the log is from our target logger
         if record.name == "PluginManager":
             # Get the appropriate color for the log level
-            color = self.COLORS.get(record.levelno, ANSI.RESET) # Default to RESET if no color found
+            color = self.COLORS.get(record.levelno, ANSI.RESET) # Default to RESET if no colour found
             
             # Create the prefix string (e.g., "INFO:PluginManager:")
             prefix = f"{record.levelname}:{record.name}:"
@@ -79,6 +79,8 @@ class PluginManager:
         self.hooks: Dict[str, List[Dict]] = {}    # Registered hooks and their subscribers
         self.enabled_plugins: set[str] = set()    # Names of enabled plugins (use lowercase)
         self.auto_load_blacklist: set[str] = {"multiplayer"}  ### FIX: Stop Multiplayer plugin freaking out at startup  ** ESSENTIAL **
+                                                                ## This is actually important. All plugins start austomatically unless
+                                                                ## specifically blacklisted here. DO NOT LET MULTIPLAYER AUTO START!!. 
         
         # Custom neuron handlers registered by plugins
         # Maps neuron_name -> {'handler': callable, 'plugin': plugin_name, 'metadata': dict}
