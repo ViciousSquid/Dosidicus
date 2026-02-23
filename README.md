@@ -15,7 +15,7 @@ Combining AI with an electronic pet to transform "play" into "learning."
 
 ###   💿 Compiled binaries for Windows are available on [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
 
-###  user guide and technical stuff can be found on the [wiki](https://github.com/ViciousSquid/Dosidicus/wiki)
+##  Here is [wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | Here is [changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog)
 
 <img width="2482" height="980" alt="image" src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" />
  <img src="https://github.com/user-attachments/assets/496cec0d-0810-4f47-8618-11165e0dd50d" width="380">
@@ -45,6 +45,7 @@ Combining AI with an electronic pet to transform "play" into "learning."
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
