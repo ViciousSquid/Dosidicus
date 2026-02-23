@@ -15,6 +15,7 @@ from datetime import datetime
 
 from .brain_render_worker import BrainRenderWorker, create_render_state_from_widget, RenderState
 from .brain_worker import BrainWorker
+from .compute_backend import get_backend
 from .neurogenesis import EnhancedNeurogenesis, ExperienceBuffer
 from .brain_tooltips import EnhancedBrainTooltips
 from .brain_constants import CORE_NEURONS, INPUT_SENSORS, is_core_neuron
@@ -294,8 +295,13 @@ class BrainWidget(QtWidgets.QWidget):
         self.frozen_weights = None #
         self.history = [] #
         self.training_data = [] #
-        self.associations = np.zeros((len(self.neuron_positions), len(self.neuron_positions))) #
         self.learning_rate = 0.1 #
+
+        # --- Compute backend (NumPy default, optional ONNX for NPU support) ---
+        self.compute_backend = get_backend()
+        self.associations = self.compute_backend.zeros(
+            (len(self.neuron_positions), len(self.neuron_positions))
+        ) #
         self.capture_training_data_enabled = False #
         self.dragging = False #
         self.dragged_neuron = None #
@@ -2974,16 +2980,15 @@ class BrainWidget(QtWidgets.QWidget):
     def train_hebbian(self):
         print("Starting Hebbian training...")
         for sample in self.training_data:
-            for i in range(len(sample)):
-                for j in range(i+1, len(sample)):
-                    self.associations[i][j] += self.learning_rate * sample[i] * sample[j]
-                    self.associations[j][i] = self.associations[i][j]
+            self.associations = self.compute_backend.hebbian(
+                self.associations, sample, self.learning_rate
+            )
         self.training_data = []
 
     def get_association_strength(self, neuron1, neuron2):
         idx1 = list(self.neuron_positions.keys()).index(neuron1)
         idx2 = list(self.neuron_positions.keys()).index(neuron2)
-        return self.associations[idx1][idx2]
+        return self.compute_backend.get_value(self.associations, idx1, idx2)
     
     def draw_layers(self, painter, scale):
         """Draw background rectangles for custom layers (matches BrainDesigner)."""
@@ -5024,3 +5029,5 @@ class NetworkRenderingMixin:
             painter.setFont(font)
             painter.setPen(QtGui.QColor(150, 150, 170))
             painter.drawText(QtCore.QPointF(20, rect_top + 20), name)
+
+

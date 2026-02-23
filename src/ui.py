@@ -11,6 +11,7 @@ import traceback
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import QObject, pyqtProperty
 from PyQt5.QtWidgets import QGraphicsPixmapItem
+from .compute_backend import get_backend
 from .brain_tool import SquidBrainWindow
 from .statistics_window import StatisticsWindow
 from .brain_tool import NeuronInspector as EnhancedNeuronInspector
@@ -267,6 +268,97 @@ class DecorationWindow(QtWidgets.QWidget):
                     row += 1
         self.setFixedHeight(min((row + 1) * (item_size + DisplayScaling.scale(20)) + DisplayScaling.scale(40), DisplayScaling.scale(650)))
 
+
+class ComputeBackendOverlay:
+    """
+    Small badge drawn in the bottom-right corner of the play scene showing
+    the active compute backend (NumPy or ONNX + provider name).
+
+    Constructed once during Ui.__init__ and stays visible for the whole
+    session.
+
+    Colour coding:
+        NumPy          ->  dark grey  (#1e1e1e) with light grey text
+        ONNX           ->  dark blue  (#0d2137) with cyan text
+        ONNX missing   ->  amber      (#2a1a00) with orange text  (warning)
+    """
+
+    _PADDING_X = 10   # horizontal inner padding (pixels, before scaling)
+    _PADDING_Y = 5    # vertical   inner padding
+    _MARGIN    = 8    # gap from window edge
+    _FONT_SIZE = 8    # point size (before DisplayScaling)
+    _Z_VALUE   = 998  # just below the debug watermark at 999
+
+    def __init__(self, scene, window_width: int, window_height: int):
+        from .display_scaling import DisplayScaling
+
+        backend = get_backend()
+        label, bg_color, text_color = self._style_for(backend.name)
+
+        font = QtGui.QFont("Courier New", DisplayScaling.scale(self._FONT_SIZE))
+        font.setBold(True)
+
+        # Measure text so the pill sizes itself to its content
+        fm     = QtGui.QFontMetrics(font)
+        text_w = fm.horizontalAdvance(label)
+        text_h = fm.height()
+        pad_x  = DisplayScaling.scale(self._PADDING_X)
+        pad_y  = DisplayScaling.scale(self._PADDING_Y)
+        margin = DisplayScaling.scale(self._MARGIN)
+
+        pill_w = text_w + pad_x * 2
+        pill_h = text_h + pad_y * 2
+
+        x = window_width  - pill_w - margin
+        y = window_height - pill_h - margin
+
+        # Background pill
+        self._bg = QtWidgets.QGraphicsRectItem(x, y, pill_w, pill_h)
+        self._bg.setBrush(QtGui.QBrush(QtGui.QColor(bg_color)))
+        self._bg.setPen(QtGui.QPen(QtGui.QColor(text_color), 1))
+        self._bg.setOpacity(0.82)
+        self._bg.setZValue(self._Z_VALUE)
+        scene.addItem(self._bg)
+
+        # Text label
+        self._text = QtWidgets.QGraphicsTextItem(label)
+        self._text.setDefaultTextColor(QtGui.QColor(text_color))
+        self._text.setFont(font)
+        self._text.setPos(x + pad_x, y + pad_y - 1)
+        self._text.setZValue(self._Z_VALUE + 1)
+        scene.addItem(self._text)
+
+    @staticmethod
+    def _style_for(backend_name: str):
+        """
+        Return (label_str, bg_hex, text_hex) based on the backend name
+        reported by compute_backend.get_backend().name
+        """
+        name = backend_name.lower()
+
+        if name.startswith("onnx") and "unavailable" not in name:
+            # Extract a short provider name from e.g. "onnx [DmlExecutionProvider]"
+            provider = ""
+            if "[" in backend_name and "]" in backend_name:
+                raw = backend_name.split("[")[1].rstrip("]")
+                short = {
+                    "DmlExecutionProvider":      "DirectML",
+                    "QNNExecutionProvider":      "QNN·HTP",
+                    "OpenVINOExecutionProvider": "OpenVINO",
+                    "CPUExecutionProvider":      "CPU",
+                }
+                provider = short.get(raw, raw.replace("ExecutionProvider", ""))
+            label = f"ONNX · {provider}" if provider else "ONNX"
+            return label, "#0d2137", "#00e5ff"      # dark blue / cyan
+
+        elif "unavailable" in name:
+            # ONNX was requested but onnxruntime is not installed
+            return "NUMPY (onnx n/a)", "#2a1a00", "#ffaa00"   # amber warning
+
+        else:
+            return "NUMPY", "#1e1e1e", "#cccccc"    # dark grey / light grey
+
+
 class Ui:
     def __init__(self, window, debug_mode=False):
         self.window = window
@@ -319,6 +411,14 @@ class Ui:
         self.debug_text.setZValue(999)
         self.debug_text.setVisible(self.debug_mode)
         self.scene.addItem(self.debug_text)
+
+        # ── Compute backend badge ─────────────────────────────────────────
+        self._backend_overlay = ComputeBackendOverlay(
+            scene=self.scene,
+            window_width=self.window_width,
+            window_height=self.window_height,
+        )
+        # ─────────────────────────────────────────────────────────────────
 
         self.decoration_window = DecorationWindow(self.window)
         self.decoration_window.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.Tool)
@@ -1757,3 +1857,5 @@ class Ui:
         for rock in self.get_rock_items():
             rock.is_being_carried = False
             self.highlight_rock(rock, False)
+
+

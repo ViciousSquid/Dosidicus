@@ -3548,3 +3548,5 @@ class NeuronInspector(QtWidgets.QDialog):
         # The primary update path is now through the combobox or direct neuron click.
         if self.neuron_combo.findText(neuron_name) == -1 and neuron_name in self.brain_widget.neuron_positions :
              self.update_neuron_list()
+
+

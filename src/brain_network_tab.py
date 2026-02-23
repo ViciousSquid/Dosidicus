@@ -10,6 +10,7 @@ from .display_scaling import DisplayScaling
 from .laboratory import NeuronLaboratory
 from .animation_styles import get_available_styles, get_style_info
 from .localisation import Localisation
+from .compute_backend import get_backend
 
 class NetworkTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None,
@@ -17,7 +18,6 @@ class NetworkTab(BrainBaseTab):
         super().__init__(parent, tamagotchi_logic, brain_widget, config_manager)
         self.config_manager = config_manager   # store it
         self.debug_mode = debug_mode
-        self.hebbian_timer_value = 0
         self.neurogenesis_timer_value = 0
 
         # Initialize persistent storage for metrics
@@ -91,6 +91,15 @@ class NetworkTab(BrainBaseTab):
         metrics_layout.addWidget(self.emergency_status_label)
 
         metrics_layout.addStretch()
+
+        # Compute backend label (sits just left of the Hebbian timer box)
+        self.backend_label = QtWidgets.QLabel()
+        backend_font = QtGui.QFont()
+        backend_font.setPointSize(DisplayScaling.font_size(14))
+        backend_font.setBold(True)
+        self.backend_label.setFont(backend_font)
+        self._update_backend_label()
+        metrics_layout.addWidget(self.backend_label)
 
         # Hebbian timer display
         timers_container = QtWidgets.QWidget()
@@ -296,58 +305,89 @@ class NetworkTab(BrainBaseTab):
         """Restore the links checkbox to checked state after delay."""
         if hasattr(self, 'checkbox_links') and self.checkbox_links is not None:
             self.checkbox_links.setChecked(True)
+    def _update_backend_label(self):
+        """Set the backend label text and colour from the active compute backend."""
+        if not hasattr(self, 'backend_label'):
+            return
+        backend = get_backend()
+        name = backend.name.lower()
+
+        if name.startswith('onnx') and 'unavailable' not in name:
+            provider = ''
+            if '[' in backend.name and ']' in backend.name:
+                raw = backend.name.split('[')[1].rstrip(']')
+                short = {
+                    'DmlExecutionProvider':      'DirectML',
+                    'QNNExecutionProvider':      'QNN·HTP',
+                    'OpenVINOExecutionProvider': 'OpenVINO',
+                    'CPUExecutionProvider':      'CPU',
+                }
+                provider = short.get(raw, raw.replace('ExecutionProvider', ''))
+            text   = f'Using ONNX · {provider}' if provider else 'Using ONNX'
+            colour = '#0055aa'
+        elif 'unavailable' in name:
+            text   = 'Using NumPy (ONNX unavailable)'
+            colour = '#aa5500'
+        else:
+            text   = 'Using NumPy'
+            colour = '#333333'
+
+        self.backend_label.setText(text)
+        self.backend_label.setStyleSheet(f'color: {colour};')
 
     def setup_timers(self):
-        # --- existing Hebbian timer ---
+        # QTimer fires every second for global-cooldown updates and label refresh.
+        # The Hebbian countdown value is NOT owned here – it is read from
+        # brain_widget.hebbian_countdown_seconds (same source as the Learning tab).
         self.hebbian_countdown = QtCore.QTimer(self)
         self.hebbian_countdown.timeout.connect(self._on_every_second)
-        self.hebbian_timer_value = getattr(self.config, 'hebbian_cycle_seconds', 30)
         self.hebbian_countdown.start(1000)
         self.update_hebbian_label()
         self._update_global_cooldown_label()
 
     def _on_every_second(self):
-        """Called every second by the single QTimer."""
-        loc = Localisation.instance()
-        # === NEW: Check pause state ===
-        is_paused = False
-        if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'simulation_speed'):
-            is_paused = (self.tamagotchi_logic.simulation_speed == 0)
-            
-        if is_paused:
-            if hasattr(self, 'hebbian_timer_label'):
-                self.hebbian_timer_label.setText(f"{loc.get('hebbian_cycle')}: {loc.get('hebbian_paused')}")
-            # Don't decrement counter
-            return
+        """Called every second by the QTimer.
 
-        # 1. Update Hebbian counter (count down to 0, show 0 for one full second)
-        if self.hebbian_timer_value > 0:
-            self.hebbian_timer_value -= 1
-        else:
-            # When we leave the "00" second and reset the timer → fire Hebbian learning
-            parent_window = self.brain_widget.parent()  # SquidBrainWindow
-            if parent_window and hasattr(parent_window, 'brain_worker') and parent_window.brain_worker:
-                parent_window.brain_worker.queue_hebbian_learning()
-
-            # Reset timer for next cycle
-            self.hebbian_timer_value = getattr(self.config, 'hebbian_cycle_seconds', 30)
-
+        The Hebbian countdown is read from brain_widget.hebbian_countdown_seconds
+        – the same source the Learning tab uses – so both displays are always in sync.
+        This method no longer owns or mutates the counter value.
+        """
+        # 1. Refresh Hebbian label from the authoritative source
         self.update_hebbian_label()
 
         # 2. Update global-cooldown counter
         self._update_global_cooldown_label()
 
     def update_hebbian_timer(self):
-        if self.hebbian_timer_value > 0:
-            self.hebbian_timer_value -= 1
-        else:
-            self.hebbian_timer_value = getattr(self.config, 'hebbian_cycle_seconds', 30)
+        """Kept for API compatibility. The counter is owned by brain_widget;
+        this method simply refreshes the display label."""
         self.update_hebbian_label()
 
     def update_hebbian_label(self):
+        """Refresh the Hebbian countdown label from brain_widget.hebbian_countdown_seconds
+        – the same source the Learning tab uses – ensuring both are always in sync."""
         loc = Localisation.instance()
-        if hasattr(self, 'hebbian_timer_label'):
-            self.hebbian_timer_label.setText(f"{loc.get('hebbian_cycle')}: {self.hebbian_timer_value}")
+        if not hasattr(self, 'hebbian_timer_label'):
+            return
+
+        # Pause state check (mirrors Learning tab behaviour exactly)
+        is_paused = (
+            self.tamagotchi_logic is not None
+            and hasattr(self.tamagotchi_logic, 'simulation_speed')
+            and self.tamagotchi_logic.simulation_speed == 0
+        )
+        if is_paused:
+            self.hebbian_timer_label.setText(
+                f"{loc.get('hebbian_cycle')}: {loc.get('hebbian_paused')}"
+            )
+            return
+
+        # Read the authoritative value from brain_widget
+        value = getattr(
+            self.brain_widget, 'hebbian_countdown_seconds',
+            getattr(self.config, 'hebbian_cycle_seconds', 30)
+        )
+        self.hebbian_timer_label.setText(f"{loc.get('hebbian_cycle')}: {value}")
 
     def update_metrics_display(self):
         '''Update the metrics bar with current network statistics - single source of truth'''
