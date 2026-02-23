@@ -11,9 +11,6 @@ Combining AI with an electronic pet to transform "play" into "learning."
 - Supports (optional) [hardware AI accelerators via ONNX Runtime](https://github.com/ViciousSquid/Dosidicus/wiki/AI-accelerator-support) (experimental)
 - Rejects the standard "black box" approach in favour of transparent, biologically inspired learning.
 
-```
-The squid has needs and will get sick or die if not properly cared for
-```
 
 - -----------------------------
 
@@ -52,6 +49,7 @@ The squid has needs and will get sick or die if not properly cared for
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
