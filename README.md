@@ -3,7 +3,7 @@ What if a Tamagotchi had a neural network and could learn stuff?
 Digital pet squid with a dynamic neural network.
 
 - Part educational neuro tool and part sim game with a retro aesthetic
-- Features Hebbian learning & Neurogenesis - squid can create new neurons
+- Hebbian learning & Neurogenesis - squid can create new neurons and become smarter
 
 Combining AI with an electronic pet to transform "play" into "learning."
 - [Design your own squid brain](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) with GUI tools and watch it evolve and learn!
@@ -52,6 +52,7 @@ The squid has needs and will get sick or die if not properly cared for
 ------------------
 
 Thank you for your interest in my project! Please fork and contribute!
+
 
 
 
