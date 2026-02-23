@@ -1,6 +1,15 @@
 # Dosidicus - a digital pet with a neural network
 # main.py Entrypoint 
 
+import sys
+import os
+
+# BOOTSTRAP: Add the current directory and src directory to sys.path
+# This ensures "from src.ui import Ui" works even if launched from elsewhere.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 import time
 import sys
 import json
@@ -294,6 +303,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.debug_mode:
             print(f"DEBUG MODE ENABLED: Console output is being logged to console.txt")
 
+        self.setup_facts_timer()
+
     def preload_brain_window_tabs(self):
         """Force creation of all tab contents to prevent crashes during tutorial"""
         print("Pre-loading brain window tabs...")
@@ -362,9 +373,27 @@ class MainWindow(QtWidgets.QMainWindow):
         sys.stdout = TeeStream(sys._original_stdout, console_log)
         sys.stderr = TeeStream(sys._original_stderr, console_log)
 
+    def setup_facts_timer(self):
+        """Rare ocean-blue Humboldt squid facts every 5 minutes"""
+        config_manager = ConfigManager()          # <-- use ConfigManager
+        if not config_manager.get_facts_enabled():
+            return
+        self.fact_timer = QtCore.QTimer(self)
+        self.fact_timer.timeout.connect(self.show_random_squid_fact)
+        self.fact_timer.start(config_manager.get_fact_interval_ms())
+
+    def show_random_squid_fact(self):
+        """Show one short fact in ocean blue for the configured duration"""
+        try:
+            from src.squid_facts import get_random_fact
+            fact = get_random_fact()
+            config_manager = ConfigManager()      # <-- use ConfigManager
+            duration = config_manager.get_fact_display_ms()
+            self.user_interface.show_colored_message(fact, "#00BFFF", duration)
+        except Exception as e:
+            print(f"[Facts] Error showing fact: {e}")
+
     def initialize_game(self):
-        """Initialize the game based on whether save data exists"""
-        # Clean up any duplicate saves first
         if hasattr(self.save_manager, 'cleanup_duplicate_saves'):
             self.save_manager.cleanup_duplicate_saves()
         
@@ -373,60 +402,46 @@ class MainWindow(QtWidgets.QMainWindow):
             self.squid = Squid(self.user_interface, None, None)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
 
-            # Set up connections
             self.squid.tamagotchi_logic = self.tamagotchi_logic
             self.user_interface.tamagotchi_logic = self.tamagotchi_logic
             self.brain_window.tamagotchi_logic = self.tamagotchi_logic
             if hasattr(self.brain_window, 'set_tamagotchi_logic'):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
 
-            # Now load from save data
             self.load_game()
 
-            # Force immediate statistics update to ensure score displays correctly
             if hasattr(self.tamagotchi_logic, 'statistics_window'):
                 self.tamagotchi_logic.statistics_window.update_statistics()
 
-                # NEW: reveal all neurons with the same fast animation used on
-                #       first-run, so saved-game startups also get the fade-in effect.
                 brain_widget = self.brain_window.brain_widget
 
-                # -- make every neuron visible -------------------------------------
-                # core neurons
                 for name in brain_widget.original_neurons:
                     brain_widget.visible_neurons.add(name)
-                # neurogenesis neurons
                 if hasattr(brain_widget, 'neurogenesis_data'):
                     for name in brain_widget.neurogenesis_data.get('new_neurons_details', {}):
                         brain_widget.visible_neurons.add(name)
 
-                # -- animate them (0.5 s apart) ------------------------------------
                 core = brain_widget.original_neurons
                 for idx, name in enumerate(core):
                     QtCore.QTimer.singleShot(idx * 500, lambda n=name: brain_widget.reveal_neuron(n))
 
-                # -- finally, show window and check menu item ----------------------
                 self.brain_window.show()
                 self.user_interface.brain_action.setChecked(True)
         else:
             print("\x1b[92m--------------  STARTING A NEW SIMULATION --------------\x1b[0m")
 
-            # Create the game immediately
             self.create_new_game(self.specified_personality)
             self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
 
-            # Connect components
             self.squid.tamagotchi_logic = self.tamagotchi_logic
             self.user_interface.tamagotchi_logic = self.tamagotchi_logic
             self.brain_window.tamagotchi_logic = self.tamagotchi_logic
             if hasattr(self.brain_window, 'set_tamagotchi_logic'):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
 
-            # Schedule tutorial check for AFTER initialization
             if not self.save_manager.save_exists():
                 QtCore.QTimer.singleShot(500, self.delayed_tutorial_check)
 
-        # Mark initialization as complete
         self._initialization_complete = True
 
     def delayed_tutorial_check(self):
