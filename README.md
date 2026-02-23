@@ -1,5 +1,5 @@
 "What if a Tamagotchi had a neural network and could learn stuff?"
-— [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/) , [Hackernews](https://news.ycombinator.com/item?id=43765748)
+— [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/)
 
 # _Dosidicus electronicus_
 Digital pet squid with a dynamic neural network and a retro aesthetic
@@ -55,6 +55,7 @@ Digital pet squid with a dynamic neural network and a retro aesthetic
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
