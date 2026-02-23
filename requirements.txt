@@ -1,5 +1,2 @@
-# Dosidicus Dependencies
-# Python version: ^3.9
-
 PyQt5>=5.15
 numpy>=1.21
