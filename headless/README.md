@@ -1,6 +1,5 @@
-# Headless Brain Trainer
-
-A standalone training system for Dosidicus neural network brains that runs without GUI overhead, enabling fast accelerated training of custom brain architectures.
+## Headless Brain Trainer
+A standalone training system for Dosidicus neural network brains that runs without GUI overhead, enabling fast accelerated training of custom brain architectures.   `  ` ` ` ` ` [ please see [issue 23](https://github.com/ViciousSquid/Dosidicus/issues/23) ]
 
 ```
 BUGGY, work in progress, brains exported by the headless trainer cannot be imported into the simulation.. yet
