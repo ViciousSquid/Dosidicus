@@ -51,7 +51,13 @@ Combining AI with an electronic pet to transform "play" into "learning."
 
 ------------------
 
-Thank you for your interest in my project! Please fork and contribute!
+### **AUTHOR GOT A TATTOO** to celebrate 1 year of this project!
+
+<img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
+
+ <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="38" width="174"></a>
+
+
 
 
 
