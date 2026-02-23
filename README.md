@@ -14,7 +14,7 @@ Digital pet squid with a dynamic neural network and a retro aesthetic
 
 ####   💿 Compiled binary for Windows is available on [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
 
- 🌍 `English`, `Français`, `Español`, `Deutsch`, `中文`, `日本語`, `Millennial` _("Bestie is literally starving rn")_.
+ 🌍 `English`, `Français`, `Español`, `Deutsch`, `中文`, `日本語`, `Millennial` _("Bestie is starving rn")_.
 
 
 ##  Here is [wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | Here is [changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog)
@@ -55,6 +55,7 @@ Digital pet squid with a dynamic neural network and a retro aesthetic
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
