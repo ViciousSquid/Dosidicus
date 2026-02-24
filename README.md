@@ -16,7 +16,7 @@
 
 #### Digital pet squid with a dynamic neural network and a retro vibe
 
-- Part educational neuro tool, part sim game, part fever dream
+- Part **educational neuro tool**, part **sim game**, part **fever dream**
 - [Design your own squid brain](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) and watch it evolve and learn!
 - Learn neuroscience by raising a squid that **might develop irrational fears** (or it might not!)
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
@@ -63,6 +63,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
