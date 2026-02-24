@@ -748,7 +748,7 @@ class Squid:
 
         # Wake up the squid
         self.is_sleeping = False
-        # self.sleepiness = 0  # Waking up no longer removes all tiredness
+        # self.sleepiness = 0  # Waking up this way doesn't remove all tiredness
         self.happiness = max(0, self.happiness - 25)  # Increased happiness decrease
         self.anxiety = min(100, self.anxiety + 60)    # Increased anxiety spike
         self.statistics_window.award(-100)

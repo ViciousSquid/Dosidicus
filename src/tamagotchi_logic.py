@@ -1,4 +1,5 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtGui import QPixmap
 import random
 import os
 import time
@@ -83,7 +84,6 @@ class TamagotchiLogic:
         self.decorations_message_check_interval = 300  # 5 minutes in seconds
         self.next_decorations_message_check = time.time() + random.randint(120, 300)  # 2-5 minutes from now
 
-        # -------  curiosity / startle cooldowns  -------
         
         self.mental_states_enabled = True 
         self.curious_cooldown = 0
@@ -93,6 +93,7 @@ class TamagotchiLogic:
         self.startle_cooldown = 1000
         self.startle_cooldown_max = 20 
         self.plant_calming_effect_counter = 0
+        self.sleep_frame = 0
 
         # Add action tracking - new in 2.4.5.0
         self.recent_actions = []
@@ -1321,7 +1322,7 @@ class TamagotchiLogic:
             self.brain_window.statistics_tab.increment_stat('startles_experienced')
 
 
-            ############################################################################################
+            ######################################### UPDATE_SIMULATION METHOD BELOW
 
 
     def update_simulation(self):
@@ -1339,7 +1340,7 @@ class TamagotchiLogic:
         if self.simulation_speed == 0:
             return
         
-        # Check for decorations message (randomly show D key reminder)
+        # Check for decorations message
         self._check_decorations_message()
         
         # 3. World updates
@@ -1348,38 +1349,69 @@ class TamagotchiLogic:
         self.update_statistics()
         self.check_poop_interaction()
         
-        # Update Vision Worker with new world state
+        # Vision Worker
         if self.squid and hasattr(self, 'vision_worker') and self.vision_worker.isRunning():
-            # Send squid state
             vision_state = create_squid_vision_state(self.squid)
             self.vision_worker.update_squid_state(vision_state)
-            
-            # Send scene objects (food + extracted decorations)
-            # Explicitly pass decorations to avoid import issues in extract_scene_objects
             decorations = self._get_cached_decorations()
             scene_objects = extract_scene_objects(self.user_interface.scene, self.food_items, decorations)
             self.vision_worker.update_scene_objects(scene_objects)
 
         if self.squid:
-            # 4. Squid movement & behavior
-            self.squid.move_squid()
-            self.check_for_decoration_attraction()
-            
-            # 5. Mental states
-            if self.mental_states_enabled:
-                self.check_for_startle()
-                self.check_for_curiosity()
-            
-            # 6. Neurogenesis tracking
+            # === FORCE SLEEP WHEN SLEEPINESS == 100 ===
+            if self.squid.sleepiness >= 100.0:
+                if not getattr(self.squid, 'is_sleeping', False):
+                    self.squid.is_sleeping = True
+                    self.squid.status = "sleeping"
+                    if hasattr(self.squid, 'current_action'):
+                        self.squid.current_action = "sleep"
+                    self.user_interface.show_message("💤 The squid is completely exhausted and fell asleep!")
+                    print("💤 FORCED SLEEP: sleepiness hit 100%")
+                    self.sleep_frame = 0
+
+            # === SLEEP ANIMATION (swaps between sleep1.png and sleep2.png) ===
+            if getattr(self.squid, 'is_sleeping', False):
+                self.sleep_frame = (self.sleep_frame + 1) % 2
+                
+                try:
+                    if self.sleep_frame == 0:
+                        pix = QPixmap("images/sleep1.png")
+                    else:
+                        pix = QPixmap("images/sleep2.png")
+                    
+                    if not pix.isNull() and hasattr(self.squid, 'squid_item'):
+                        self.squid.squid_item.setPixmap(pix)
+                        # Optional: make it slightly transparent while sleeping (looks cute)
+                        # self.squid.squid_item.setOpacity(0.95)
+                except Exception as e:
+                    print(f"Sleep animation error: {e}")
+
+                # Faster decay while sleeping + auto-wake
+                self.squid.sleepiness = max(0.0, self.squid.sleepiness - 12 * (1 / 60.0))
+                if self.squid.sleepiness <= 25.0:
+                    self.squid.is_sleeping = False
+                    self.squid.status = "roaming"
+                    self.user_interface.show_message("😴 The squid woke up feeling refreshed!")
+                    self.sleep_frame = 0
+
+            # Normal behavior only when NOT sleeping
+            if not getattr(self.squid, 'is_sleeping', False):
+                self.squid.move_squid()
+                self.check_for_decoration_attraction()
+
+                if self.mental_states_enabled:
+                    self.check_for_startle()
+                    self.check_for_curiosity()
+
+            # Rest of the original code (neurogenesis, brain state, etc.)
             self.track_neurogenesis_triggers()
             
-            # 7. Memory management
             if self.squid.is_sleeping:
                 self.squid.memory_manager.review_and_transfer_memories()
             else:
                 self.squid.memory_manager.periodic_memory_management()
             
-            # 8. Build core brain state
+            # brain_state building
             is_startled_state = False
             if hasattr(self.squid, 'mental_state_manager') and self.squid.mental_state_manager:
                 is_startled_state = self.squid.mental_state_manager.is_state_active('startled')
@@ -1412,15 +1444,12 @@ class TamagotchiLogic:
                 'poop_count': len(self.poop_items),
             }
             
-            # 9. CRITICAL: Merge real-time sensor inputs (can_see_food, etc.)
             if hasattr(self, 'brain_hooks'):
                 input_values = self.brain_hooks.get_input_neuron_values()
-                brain_state.update(input_values)  # This makes can_see_food work!
+                brain_state.update(input_values)
             
-            # 10. Send full state to brain visualization
             self.brain_window.update_brain(brain_state)
             
-            # 11. Neurogenesis experience tracking
             if (hasattr(self.brain_window, 'brain_widget') and 
                 hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis')):
                 neuro = self.brain_window.brain_widget.enhanced_neurogenesis
@@ -1440,26 +1469,23 @@ class TamagotchiLogic:
                 }
                 neuro.check_and_capture_experience(brain_state, environment)
             
-            # 12. Process neuron outputs → game behaviors
-            if hasattr(self, 'neuron_output_monitor'):
-                self.neuron_output_monitor.process_outputs()  # This triggers seek_food, flee, etc.
+            if not getattr(self.squid, 'is_sleeping', False):
+                if hasattr(self, 'neuron_output_monitor'):
+                    self.neuron_output_monitor.process_outputs()
             
-            # 13. Reset per-frame flags
             self.new_object_encountered = False
             self.recent_positive_outcome = False
             
-            # 14. Hunger scoring
             if self.squid.hunger <= 1 or self.squid.hunger >= 99:
                 self.statistics_window.update_score()
         
-        # 15. Decay environmental stimulus trackers (window resize, clicks, etc.)
+        # 15. Decay environmental stimulus trackers
         if hasattr(self, 'brain_hooks'):
             self.brain_hooks.update_decay()
         
         # 16. Post-update hook
         self.plugin_manager.trigger_hook("post_update", tamagotchi_logic=self, squid=self.squid)
         
-        # End performance tracking
         if _PERF_TRACKING_AVAILABLE:
             _sim_elapsed = (time.perf_counter() - _sim_start) * 1000
             perf_tracker.record("simulation_tick", _sim_elapsed)
