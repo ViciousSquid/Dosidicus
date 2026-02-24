@@ -10,7 +10,7 @@ Digital pet squid with a dynamic neural network
 - Learn neuroscience by raising a squid that **might develop irrational fears** (or it might not!)
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) with using Numpy - **does not use Tensorflow or Pytorch**v
-- Squid can create new neurons in response to his environment _(Neurogenesis)_ but also get sick and die if neglected.
+- Squid can create new neurons in response to his environment _(Neurogenesis)_
 
 🌍 `English`, `Français`, `Español`, `Deutsch`, `中文`, `日本語`, `Millennial` _("Bestie is starving rn")_.
  
