@@ -5,7 +5,15 @@
 
 # _Dosidicus electronicus_
 
-Digital pet squid with a dynamic neural network and a retro vibe
+<p align="left">
+  <img src="https://api.visitorbadge.io/api/VisitorHit?user=ViciousSquid&repo=Dosidicus&countColor=%237B1E7A&style=flat" height="20" alt="Visitors">
+  <a href="https://github.com/ViciousSquid/Dosidicus/stargazers"><img src="https://img.shields.io/github/stars/ViciousSquid/Dosidicus?style=flat&logo=github" height="20" alt="Stars"></a>
+  <a href="https://buymeacoffee.com/vicioussquid"><img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" height="20" alt="Buy Me A Coffee"></a>
+  <img src="https://img.shields.io/badge/License-GPL_v2-blue.svg?style=flat" height="20" alt="GPL-2.0">
+  <img src="https://img.shields.io/badge/AI-Neural_Network-9C27B0?style=flat&logo=mindmeister&logoColor=white" height="20" alt="AI">
+</p>
+
+#### Digital pet squid with a dynamic neural network and a retro vibe
 
 - Part educational neuro tool, part sim game, part fever dream
 - [Design your own squid brain](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) and watch it evolve and learn!
@@ -36,9 +44,6 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 
 <img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
 
- <a href="https://www.buymeacoffee.com/vicioussquid" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="38" width="174"></a>
-
-  "It thinks, therefore it inks"
 
 -----------------------------------
 
@@ -61,6 +66,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
 
 ![Visitors](https://api.visitorbadge.io/api/VisitorHit?user=ViciousSquid&repo=Dosidicus&countColor=%237B1E7A)
+
 
 
 
