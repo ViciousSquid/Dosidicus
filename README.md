@@ -30,7 +30,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 
 ------------------
 
-#### The developer got a **tattoo of this project** to celebrate its first birthday
+### A year ago I got a **tattoo of this project** to celebrate its first development milestone
 
 <img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
 
@@ -61,6 +61,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
