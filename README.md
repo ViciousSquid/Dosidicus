@@ -16,8 +16,8 @@
 ### 🦑 Digital pet squid with a dynamic neural network and a retro vibe
 
 - Part **educational neuro tool**, part **sim game**, part **fever dream**
-- [Design your own tiny GPL squid brain](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) and help it evolve and learn!
-- Learn neuroscience by raising a squid that **might develop irrational fears** (or it might not!)
+- [Build-your-own neural network ](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) and learn neuroscience by raising a squid that **might develop irrational fears** (or it might not!)
+- Network grows via **Neurogenesis** and learns via **Hebbian learning**
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **No Tensorflow or PyTorch**
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
 
@@ -27,8 +27,14 @@
 
 ####   💿 Compiled binary for Windows is available on [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
 
-There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/Dosidicus/blob/2.6.1.2_LatestVersion/linux_setup.sh) (untested! please test it!)
+Linux users can try the experimental Linux setup: :
 
+```bash
+
+curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_LatestVersion/linux_setup.sh | bash
+
+```
+----------------------------------
 
 
 ##  Here [is a wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | Here [is changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) 
@@ -64,6 +70,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
