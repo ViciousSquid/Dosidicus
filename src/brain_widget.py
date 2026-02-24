@@ -8,6 +8,9 @@ import random
 import numpy as np
 import json
 
+# This is the biggest, messiest and most shameful of all the files in this project
+# I express my condolences to future devs  that curse the mighty brain_widget on late nights as I do
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QSplitter
 from PyQt5.QtGui import QPixmap, QFont, QImage
