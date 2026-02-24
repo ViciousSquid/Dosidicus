@@ -1,9 +1,8 @@
 
 
 "What if a Tamagotchi had a neural network and could learn stuff?"
-— [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/) , [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/)
+— [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/)
 
-# Dosidicus electronicus
 
 <p align="left">
   <img src="https://img.shields.io/badge/AI-Neural_Network-9C27B0?style=flat&logo=mindmeister&logoColor=white" height="20" alt="AI">
@@ -11,6 +10,8 @@
   <img src="https://img.shields.io/badge/Translations-7-228B22?style=flat&logo=google-translate&logoColor=white&labelColor=333333" height="20" alt="Translations">
     <a href="https://buymeacoffee.com/vicioussquid"><img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" height="20" alt="Buy Me A Coffee"></a>
 </p>
+
+# Dosidicus electronicus
 
 ### 🦑 Digital pet squid with a dynamic neural network and a retro vibe
 
@@ -63,6 +64,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
