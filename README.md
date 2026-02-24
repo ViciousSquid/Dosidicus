@@ -1,3 +1,5 @@
+
+
 "What if a Tamagotchi had a neural network and could learn stuff?"
 — [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/) , [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/)
 
@@ -57,6 +59,8 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
+![Visitors](https://api.visitorbadge.io/api/VisitorHit?user=ViciousSquid&repo=Dosidicus&countColor=%237B1E7A)
 
 
 
