@@ -20,8 +20,8 @@
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **No Tensorflow or PyTorch**
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
 - 8 Neurons - Network grows via **Neurogenesis** and self-learns via **Hebbian learning**
-- Includes new game tutorial, tooltips throughout and a 47 page wiki
-- Includes plugin support and example `achievements`plugin with 50 achievements to collect!
+- Includes new game **tutorial**, tooltips throughout and a 47 page wiki
+- Includes plugin support and example `achievements`plugin with **50 achievements** to collect!
 
   
  
@@ -72,6 +72,7 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
