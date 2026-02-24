@@ -21,8 +21,6 @@
 - Learn neuroscience by raising a squid that **might develop irrational fears** (or it might not!)
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) with using Numpy - **does not use Tensorflow or Pytorch**
-
-🌍 `English`, `Français`, `Español`, `Deutsch`, `中文`, `日本語`, `Millennial` _("Bestie is starving rn")_.
  
 - -----------------------------
 
@@ -65,6 +63,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
