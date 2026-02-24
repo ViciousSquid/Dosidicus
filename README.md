@@ -65,6 +65,11 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 
 
 
+tiny GPL squid brains to conquer the planet 🦑🌍
+
+
+
+
 
 
 
