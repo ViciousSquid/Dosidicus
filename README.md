@@ -28,7 +28,7 @@
 
 ####   💿 Compiled binary for Windows is available on [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
 
-Linux users can try the experimental Linux setup: :
+Linux users can try the experimental bash setup: :
 
 ```bash
 
@@ -71,6 +71,7 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
