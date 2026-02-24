@@ -12,7 +12,7 @@ Backend selection
 Set  [Compute] backend = onnx  in config.ini to enable ONNX.
 Leave as  backend = numpy  (or omit the section entirely) for the default
 NumPy path.  ONNX silently falls back to NumPy if onnxruntime is not
-installed – no crashes, no hard requirement.
+installed.
 
 Public API
 ----------
