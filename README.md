@@ -18,8 +18,10 @@
 - Part **educational neuro tool**, part **sim game**, part **fever dream**
 - [Design your own squid brain](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) and watch it evolve and learn!
 - Learn neuroscience by raising a squid that **might develop irrational fears** (or it might not!)
+- _Tiny GPL squid brains to conquer the planet_ 🦑🌍
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) with using Numpy - **does not use Tensorflow or Pytorch**
+  
  
 - -----------------------------
 
@@ -29,7 +31,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 
 
 
-##  Here [is wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | Here [is changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog)
+##  Here [is wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | Here [is changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) 
 
 ----------------------------
 
@@ -64,8 +66,6 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
 
 
-
-tiny GPL squid brains to conquer the planet 🦑🌍
 
 
 
