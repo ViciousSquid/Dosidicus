@@ -30,7 +30,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 
 
 
-##  Here [is wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | There [is changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) 
+##  Here [is a wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | There [is changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) 
 
 ----------------------------
 
@@ -63,6 +63,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
