@@ -7,10 +7,9 @@
 
 <p align="left">
   <img src="https://api.visitorbadge.io/api/VisitorHit?user=ViciousSquid&repo=Dosidicus&countColor=%237B1E7A&style=flat" height="20" alt="Visitors">
-  <a href="https://github.com/ViciousSquid/Dosidicus/stargazers"><img src="https://img.shields.io/github/stars/ViciousSquid/Dosidicus?style=flat&logo=github" height="20" alt="Stars"></a>
-  <img src="https://img.shields.io/badge/Translations-7-228B22?style=flat&logo=google-translate&logoColor=white&labelColor=333333" height="20" alt="Translations">
   <img src="https://img.shields.io/badge/License-GPL_v2-blue.svg?style=flat" height="20" alt="GPL-2.0">
-  <img src="https://img.shields.io/badge/AI-Neural_Network-9C27B0?style=flat&logo=mindmeister&logoColor=white" height="20" alt="AI">
+    <img src="https://img.shields.io/badge/AI-Neural_Network-9C27B0?style=flat&logo=mindmeister&logoColor=white" height="20" alt="AI">
+  <img src="https://img.shields.io/badge/Translations-7-228B22?style=flat&logo=google-translate&logoColor=white&labelColor=333333" height="20" alt="Translations">
     <a href="https://buymeacoffee.com/vicioussquid"><img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" height="20" alt="Buy Me A Coffee"></a>
 </p>
 
@@ -63,6 +62,7 @@ There is a linux setup script: [linux_setup.sh](https://github.com/ViciousSquid/
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
