@@ -1,7 +1,6 @@
-# decision_engine.py
-# Version 4.0 — Fully Neural-Driven Decision Making
-# December 2025
-# Uses BrainNeuronHooks as the single source of perception
+# DECISION ENGINE
+# exploration of emergent behavioral complexity via dynamic, biologically-inspired neural architecture rather than a static state machine. 
+# Version 4.0 — Fully Neural-Driven Decision Making | December 2025
 
 import random
 import math
