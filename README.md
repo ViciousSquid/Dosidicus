@@ -20,7 +20,7 @@ __A transparent neural network sandbox disguised as a digital pet__
 - [Build-your-own neural network ](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) - learn neuroscience by raising a squid that **might develop irrational fears**
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **No Tensorflow or PyTorch**
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
-- 8 Neurons - can grow via **Neurogenesis** and self-learn via **Hebbian learning**
+- Starts with 8 neurons — grows via **neurogenesis** and rewires using **Hebbian learning**.
 - Includes `achievements` with **50** to collect!
   
  
@@ -75,6 +75,7 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
 ### A year ago I got a **tattoo of this project** to celebrate its first development milestone!
 
 <img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
+
 
 
 
