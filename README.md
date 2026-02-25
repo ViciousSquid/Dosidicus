@@ -21,7 +21,7 @@
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
 - 8 Neurons - Network grows via **Neurogenesis** and self-learns via **Hebbian learning**
 - Includes `achievements` with **50** to collect!
-
+- __A transparent neural network sandbox disguised as a digital pet__
   
  
 - -----------------------------
@@ -75,6 +75,7 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
