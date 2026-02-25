@@ -1,4 +1,4 @@
-# DECISION ENGINE
+# DECISION ENGINE - https://github.com/ViciousSquid/Dosidicus
 # exploration of emergent behavioural complexity via dynamic, biologically-inspired neural architecture rather than a static state machine. 
 # Version 4.0 — Fully Neural-Driven Decision Making | December 2025
 
