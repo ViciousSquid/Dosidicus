@@ -13,7 +13,7 @@
 
 # _Dosidicus electronicus_
 
-#### 🦑 Digital pet squid with a reinforcement-learning neural network that evolves through user interaction.
+#### 🦑 Digital pet squid with a neural network you can **see thinking**.
 
 - Part **educational neuro tool**, part **sim game**, part **fever dream**
 - [Build-your-own neural network ](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) - learn neuroscience by raising a squid that **might develop irrational fears**
@@ -75,6 +75,7 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+
 
 
 
