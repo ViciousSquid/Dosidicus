@@ -11,7 +11,7 @@ class DecisionEngine:
     """
     Neural-first decision engine.
     All perception flows through BrainNeuronHooks → no manual vision checks.
-    Behavior emerges purely from the current brain state + memory + personality.
+    Behaviour emerges purely from the current brain state + memory + personality.
     """
 
     def __init__(self, squid):
