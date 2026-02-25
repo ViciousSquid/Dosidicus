@@ -12,7 +12,7 @@ _"What if a Tamagotchi had a neural network and could learn stuff?"_
 # _Dosidicus electronicus_
 
 #### 🦑 Digital pet squid with a neural network you can **see thinking**.
-__A transparent neural network sandbox _disguised as a digital pet__
+_A transparent neural network sandbox disguised as a digital pet_
 
 - Part **educational neuro tool**, part **sim game**, part **fever dream**
 - [Build-your-own neural network ](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) - learn neuroscience by raising a squid that **might develop irrational fears**
@@ -73,6 +73,7 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
 ### A year ago I got a **tattoo of this project** to celebrate its first development milestone!
 
 <img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
+
 
 
 
