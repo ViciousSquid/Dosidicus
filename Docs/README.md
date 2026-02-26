@@ -1,5 +1,3 @@
-# Dosidicus electronicus — Documentation
-
 
 _"What if a Tamagotchi had a neural network and could learn stuff?"_
 — [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/)
@@ -29,7 +27,7 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 
 ---
 
-## 📖 Getting Started
+### Getting Started
 
 | Page | Description |
 |------|-------------|
@@ -40,7 +38,7 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 
 ---
 
-## ⚙️ STRINg Simulation Engine
+### STRINg Simulation Engine
 
 | Page | Description |
 |------|-------------|
@@ -55,7 +53,7 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 
 ---
 
-## 🧠 Neural Network
+### Neural Network
 
 | Page | Description |
 |------|-------------|
@@ -70,7 +68,7 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 
 ---
 
-## 🔬 Brain Tool
+### Brain Tool
 
 | Page | Description |
 |------|-------------|
@@ -85,7 +83,7 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 
 ---
 
-## 📂 Source Reference
+### Source Reference
 
 Documentation for individual source files:
 
@@ -101,7 +99,7 @@ Documentation for individual source files:
 
 ---
 
-## 🎮 Extras
+### Extras
 
 | Page | Description |
 |------|-------------|
