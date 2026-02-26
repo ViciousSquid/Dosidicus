@@ -11,7 +11,7 @@ _"What if a Tamagotchi had a neural network and could learn stuff?"_
 
 # _Dosidicus electronicus_
 
-🦑 _A transparent neural sandbox disguised as a digital pet squid with a neural network you can **see thinking**_
+🦑 _A transparent cognitive sandbox disguised as a digital pet squid with a neural network you can **see thinking**_
 
 Micro neural engine for small autonomous agents that learn via Hebbian dynamics and grow new structure
 
@@ -81,6 +81,7 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
 ---------------------------
 
 **My dream**: _Countless weird, slightly neurotic, differently wired GPL squids living in sandboxes across the internet._
+
 
 
 
