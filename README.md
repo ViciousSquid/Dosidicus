@@ -78,6 +78,12 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
 <img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
 
 
+---------------------------
+
+**My dream**: _Countless weird, slightly neurotic, differently wired GPL squids living in sandboxes across the internet._
+
+
+
 
 
 
