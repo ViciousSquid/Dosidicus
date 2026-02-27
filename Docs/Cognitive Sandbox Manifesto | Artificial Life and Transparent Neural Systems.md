@@ -3,185 +3,135 @@
 ----------------------------------------
 ## 1. Why This Exists
 
-Most artificial intelligence today is powerful, fast, and opaque: Large neural networks are trained on vast datasets producing remarkable outputs.
-However the learning process itself is hidden inside millions or billions of parameters.
+Most AI today is powerful, fast, and impossible to understand. You feed it data, it spits out answers—but what’s actually *happening* inside? The learning, the thinking, the *mind*—it’s all buried under layers of math and code.
 
-* You cannot watch a mind form - you can only inspect the result.
+We built **Dosidicus** because we wanted to see something different: **a mind forming in real time.**
 
-Dosidicus was created from a different question:
+Not a simulation of one. Not a visualization slapped on top. But the actual, messy, dynamic process of neurons wiring themselves together—learning, adapting, changing.
 
-* What if cognition could be SEEN emerging?
+---
 
-Not as a metaphor or as a visualisation layered on top, but at the level of individual neurons.
+## What Is a Cognitive Sandbox?
 
-## 2. The Cognitive Sandbox
+A sandbox isn’t a finished product. It’s a space where things *happen*—where systems bump into each other, evolve, and start behaving in ways you didn’t predict.
 
-Dosidicus is a cognitive sandbox.
+In Dosidicus, every squid:
+- Starts with a brain of just **eight randomly connected neurons.**
+- Learns through **Hebbian dynamics** (neurons that fire together, wire together).
+- Grows new neurons over time.
+- Forms memories.
+- Develops habits, quirks, and preferences.
 
-A sandbox is not a finished product.
-It is a contained environment where systems interact, evolve, and reveal behaviour.
+No two squids are the same. Each one is a record of its own experiences—its own little digital life.
 
-Each squid:
+This isn’t about building the smartest AI. It’s about **watching structure emerge from interaction.**
 
-* Is born with a randomly wired neural architecture
-* Starts with 8 neurons
-* Learns through Hebbian dynamics
-* Grows new structure through neurogenesis
-* Forms memories
-* Develops behavioural tendencies
+---
 
-No two squids are identical.
+## Transparency by Design
 
-Every save file becomes a record of accumulated experience.
+Most AI is a black box. You put something in, something comes out, and the rest is a mystery. Dosidicus flips that:
 
-The sandbox does not prescribe intelligence, it allows structure to form through interaction.
+- Every neuron is **visible.**
+- Every connection is **inspectable.**
+- You can **stimulate** neurons directly.
+- You can **rewire** them.
 
-## 3. Transparency as a Design Principle
+You don’t just see the squid’s behavior—you see *why* it behaves that way. You watch as connections strengthen or fade, as new neurons sprout, as memories form.
 
-Most AI systems are black boxes. Dosidicus rejects opacity as default. Every neuron is:
+This isn’t industrial AI. It’s **small, deliberate, and transparent.** The goal isn’t performance—it’s **understanding.**
 
-* Visible
-* Inspectable
-* Directly stimulatable
-* Modifiable
+---
 
-You can see activation values and observe connection strengths change.
-You can influence structural growth.
+## Artificial Life, Not Artificial Intelligence
 
-This is not industrial-scale AI, it is intentionally small-scale and transparent.
+Dosidicus isn’t trying to be a superintelligence. It’s a tiny, constrained world where squids:
+- Get hungry.
+- React to stimuli.
+- Remember things.
+- Develop simple drives.
 
-The goal is not performance but **visibility**.
+And yet, within those limits, something **feels alive.**
 
-Transparency transforms AI from a service into an object of study.
+Artificial life isn’t about scale. It’s about **process.** A system that adapts, accumulates experience, and starts to feel like it has a will of its own—even though it’s just code.
 
-## 4. Artificial Life
+That tension—between mechanism and the *illusion* of life—is the point.
 
-Dosidicus is not an attempt at AGI. It is a constrained, evolving, micro-organism simulation which exists in a narrow world:
+---
 
-* Hunger
-* Interaction
-* Stimulus
-* Memory
-* Simple drives
+## Why We Get Attached to Digital Creatures
 
-Yet within these constraints, patterns emerge.
+Humans bond with simple things:
+- Tamagotchis.
+- Virtual pets.
+- Even glitchy robots.
 
-Artificial life is not about scale.
-It is about process.
+Dosidicus adds a twist: **you can see inside.**
 
-A small system that adapts and accumulates experience over time can evoke something that feels alive — even when it is mechanistic.
-This boundary between mechanism and perceived life is intentional.
+If your squid starts avoiding a certain stimulus, you can trace the neural path that led to that behavior. You’re not just caring for a scripted pet—you’re shaping a **developing mind.**
 
-## 5. Attachment to Visible Minds
+That changes everything. **Responsibility feels real.** Every interaction leaves a mark.
 
-Humans bond with simple systems.
+---
 
-We bond with:
+## Retro as a Design Choice
 
-* Tamagotchi
-* Virtual pets
-* Pixel creatures
-* Even malfunctioning robots
+Dosidicus looks simple:
+- Two-frame tentacle animations.
+- Hand-drawn sprites.
+- No flashy graphics.
 
-Dosidicus introduces a twist:
+That’s intentional. **Complex visuals distract from what matters—the brain.**
 
-You can see the internal cause of behaviour.
+The squid is the art. The brain is the system. Together, they create something new: **a drawn creature whose behavior emerges from real learning.**
 
-If your squid develops an aversion to something,
-you can trace the neural path that led there.
+---
 
-This changes the psychology of attachment.
+## STRINg: The Engine Under the Hood
 
-Instead of caring for a scripted creature you are shaping a developing structure.
+Dosidicus runs on the **STRINg**  custom simulation engine:
+- **S**imulated **T**amagotchi **R**eactions via **I**nferencing and **N**eurogenesis.
+- Built from scratch in **NumPy** (no TensorFlow, no PyTorch).
+- Simulates neurons **one by one.**
+- Supports **Hebbian learning, neurogenesis, and dual memory systems.**
 
-* Responsibility becomes more concrete.
-* Every interaction leaves a trace.
+STRINg isn’t optimized for speed or scale. It’s built to **let you watch a mind grow.**
 
-## 6. Retro as Constraint
+---
 
-Dosidicus uses minimal animation.
-Two tentacle frames.
-Hand-drawn sprites.
-Deliberately simple presentation.
+## A Tool for Learning
 
-It is a design constraint.
+Dosidicus is:
+- A way to **see neural dynamics in action.**
+- A sandbox for **experimenting with artificial life.**
+- A bridge between **play and neuroscience.**
 
-Complex graphics distract from internal complexity.
+Instead of teaching neural networks as abstract equations, it lets you **raise one.**
 
-The squid is art.
+Understanding becomes **experiential.**
 
-The brain is system.
+---
 
-Together, they create **computational meta-art**:
-a drawn creature whose behaviour emerges from real learning dynamics.
+## No Two Squids Are Alike
 
-## 7. STRINg: The Simulation Engine
+Every squid starts with a **randomly wired brain.** Early experiences shape it. Small differences snowball.
 
-Under the hood runs a custom engine:
+This mirrors a fundamental truth in biology:
+**Structure + Experience = Behavior.**
 
-STRINg
-`S`imulated `T`amagotchi `R`eactions via `I`nferencing and `N`eurogenesis
+We’re not claiming this is how real brains work. But it *does* show how sensitive structure is to experience.
 
-Built from scratch using NumPy.
+No two digital lives unfold the same way.
 
-* No TensorFlow.
-* No PyTorch.
+---
 
-#### Core properties:
+## What This Isn’t
 
-* Explicit neuron-level simulation
-* Hebbian plasticity
-* Structural growth (neurogenesis)
-* Dual memory system (short-term and long-term)
-* Headless training capability
-* Plugin extensibility
+- **Not Skynet.** (Thankfully.)
+- **Not a chatbot.**
+- **Not a pre-trained monolith.**
+- **Not optimized for speed or efficiency.**
 
-STRINg is not optimised for interpretability not scale.
+It’s a **visible micro-mind.**
 
-It treats neural networks not as static architectures, but as evolving structures.
-
-## 8. Educational Intent
-
-Dosidicus functions as:
-
-* A learning tool for understanding neural dynamics
-* A demonstration of Hebbian learning
-* A sandbox for artificial life experimentation
-* A way to visualise structural plasticity
-* A gateway into neuroscience concepts through play
-
-Instead of teaching neural networks as equations alone, it allows learners to raise one.
-
-Understanding becomes experiential.
-
-## 9. Individuality Through Random Birth
-
-Every squid begins differently.
-* Initial wiring is randomised.
-* Early experiences alter trajectory.
-* Small differences amplify over time.
-
-This models a core biological principle:
-
-_**Structure + experience = behaviour.**_
-
-The system does not claim biological realism.
-
-It demonstrates structural sensitivity.
-
-No two digital lives are identical.
-
-## 10. What This Is Not
-
-* Not Skynet.
-* Not a productivity AI.
-* Not a chatbot.
-* Not a pretrained monolith.
-* Not an optimised inference engine.
-
-It is a visible micro-mind.
-
-Contained.
-Hackable.
-Inspectable.
-Evolving.
+Small. Hackable. Inspectable. **Alive in its own way.**
