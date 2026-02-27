@@ -136,7 +136,7 @@ Built from scratch using NumPy.
 * Headless training capability
 * Plugin extensibility
 
-STRINg is not optimised for interpretability not scale.
+STRINg is optimised for interpretability not scale.
 
 It treats neural networks not as static architectures, but as evolving structures.
 
