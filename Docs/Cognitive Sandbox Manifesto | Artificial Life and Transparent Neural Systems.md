@@ -10,7 +10,7 @@ However the learning process itself is hidden inside millions or billions of par
 
 Dosidicus was created from a different question:
 
-* What if you could see cognition emerge?
+* What if cognition could be SEEN emerging?
 
 Not as a metaphor or as a visualisation layered on top, but at the level of individual neurons.
 
