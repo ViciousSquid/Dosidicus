@@ -1,6 +1,6 @@
 # Dosidicus - a digital pet with a neural network
 # main.py Entrypoint 
-
+from PyQt5 import QtWidgets, QtCore, QtGui
 import sys
 import os
 
@@ -375,7 +375,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def setup_facts_timer(self):
         """Rare ocean-blue Humboldt squid facts every 5 minutes"""
-        config_manager = ConfigManager()          # <-- use ConfigManager
+        config_manager = ConfigManager()
         if not config_manager.get_facts_enabled():
             return
         self.fact_timer = QtCore.QTimer(self)
@@ -383,13 +383,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fact_timer.start(config_manager.get_fact_interval_ms())
 
     def show_random_squid_fact(self):
-        """Show one short fact in ocean blue for the configured duration"""
+        """Show one short Humboldt squid fact – big, bright blue, always visible"""
         try:
             from src.squid_facts import get_random_fact
             fact = get_random_fact()
-            config_manager = ConfigManager()      # <-- use ConfigManager
-            duration = config_manager.get_fact_display_ms()
-            self.user_interface.show_colored_message(fact, "#00BFFF", duration)
+            if not fact:
+                return
+
+            msg = f"🌊 Humboldt Fact: {fact}"
+
+            # Preferred: status bar (works everywhere, supports color)
+            if hasattr(self.user_interface, 'status_bar') and self.user_interface.status_bar:
+                colored_msg = f'<span style="color:#00BFFF; font-weight:bold; font-size:14px;">{msg}</span>'
+                self.user_interface.status_bar.showMessage(colored_msg, 8000)  # 8 seconds
+            else:
+                # Fallback: plain message
+                self.user_interface.show_message(msg)
+
+            print(f"[Facts] DISPLAYED: {fact[:80]}...")  # helpful console confirmation
+
         except Exception as e:
             print(f"[Facts] Error showing fact: {e}")
 
