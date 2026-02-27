@@ -83,7 +83,33 @@ Every save file is a cognitive history.
 
  Want the full conceptual philosophy behind Dosidicus? → Read the [Cognitive Sandbox Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems)
 
-------------------------------
+--------------------------------------
+
+🦑 Share Your Squid
+
+No two squids are wired the same.
+
+Early interactions permanently alter their structure.
+Tiny differences amplify.
+Habits form. Fears emerge. Personalities drift.
+
+Your squid’s brain is a cognitive history — shaped by you.
+
+So share it.
+
+- Export save files and let others explore your squid’s neural structure.
+- Post screenshots of strange activation patterns and unexpected growth.
+- Show bizarre learned behaviors (Why is yours afraid of poop?)
+- Compare cognitive histories and trace how experience shaped structure.
+
+- Did yours grow 40 neurons?
+- Did it develop a persistent avoidance loop?
+- Did you accidentally create a neurotic reward spiral?
+
+Every squid is an experiment.
+
+---------------------------
+
 
 ## Project Overview
 
@@ -102,8 +128,7 @@ Every save file is a cognitive history.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
 
---------------------------------------
-
+----------------------
 
 ### A year ago I got a **tattoo of this project** to celebrate its first development milestone!
 
@@ -111,9 +136,6 @@ Every save file is a cognitive history.
 
 
 ---------------------------
-
-**My dream**: Countless weird, neurotic, differently wired GPL squids living in sandboxes across the internet. (_**NOT** Skynet!_)
-
 
 
 
