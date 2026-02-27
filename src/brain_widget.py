@@ -2067,6 +2067,13 @@ class BrainWidget(QtWidgets.QWidget):
         One full Hebbian update cycle.
         Queues work to background thread for non-blocking operation.
         """
+        # === Disable Hebbian while squid is sleeping ===
+        if (hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic and
+            hasattr(self.tamagotchi_logic.squid, 'is_sleeping') and
+            self.tamagotchi_logic.squid.is_sleeping):
+            # print("DEBUG: Hebbian learning skipped - squid is sleeping")
+            return
+
         # Skip if already pending
         if self._pending_hebbian_learning:
             return
@@ -2078,12 +2085,10 @@ class BrainWidget(QtWidgets.QWidget):
             # Queue the work to the background thread
             self._pending_hebbian_learning = True
             self.brain_worker.queue_hebbian_learning()
-            
-            # NOTE: BrainWorker must exclude connector neurons from learning pairs
-            # Connector neurons are passed via update_cache() and stored in _cached_connector_neurons
         else:
             # Fallback: synchronous processing
             self._perform_hebbian_learning_sync()
+
 
     def _perform_hebbian_learning_sync(self):
         """Original synchronous Hebbian learning (fallback if threading disabled)."""
@@ -2115,7 +2120,6 @@ class BrainWidget(QtWidgets.QWidget):
         }
 
         # Combine excluded neurons, connector neurons, and pure inputs
-        # Connectors AND Inputs should NOT participate in Hebbian learning
         learning_excluded = set(self.excluded_neurons) | connector_neurons | PURE_INPUTS
         
         neurons = [n for n in self.neuron_positions.keys() if n not in learning_excluded]
@@ -2148,7 +2152,6 @@ class BrainWidget(QtWidgets.QWidget):
                     score -= 500 # Heavy penalty
 
                 scored_pairs.append((score, n1, n2, v1, v2))
-
         top_k = self.config.neurogenesis.get('max_hebbian_pairs', 2)
         top_pairs = nlargest(top_k, scored_pairs)
         print(f"   [Sync] Top {top_k} pairs selected from {len(scored_pairs)} candidates")

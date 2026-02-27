@@ -1816,7 +1816,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # If countdown reached zero and not paused, trigger learning
         # (moved outside nn_viz_tab check so learning always fires)
         if self.brain_widget.hebbian_countdown_seconds == 0 and not is_paused:
-            print(">> Countdown hit zero, calling perform_hebbian_learning()")
+            # print("brain_tool.py >> Countdown hit zero, calling perform_hebbian_learning()")
             self.brain_widget.perform_hebbian_learning()
 
     def check_memory_decay(self):

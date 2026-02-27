@@ -1,17 +1,20 @@
 import random
 
 SQUID_FACTS = [
-    "Humboldt squid reach 5 feet mantle length",
-    "Dosidicus Gigas is latin for Humboldt squid",
-    "Squid have copper-based blue blood!",
-    "Instantly change colour for camouflage",
-    "Dosidicus lives only one to two years",
-    "Jet propulsion allows fast swimming",
-    "Release ink clouds to escape",
-    "Vertical migrators 3000 feet daily",
-    "Has a hard beak like a parrot!",
-    "Fastest growing marine invertebrate",
-    "Mantle grows up to 1.5 meters",
+    "Dosidicus Gigas is the scientific name for Humboldt squid",
+    "Humboldt squid can reach a mantle length of 1.5 m (5 ft)",
+    "Cephalopods have a hard beak like a parrot!",
+    "The Humboldt squid has about 35,000 teeth inside its beak",
+    "Cephalopod blood is blue because it is copper-based",
+    "These predators thrive in the `Oxygen Minimum Zone.`",
+    "A squid's beak is the only rigid part of its body.",
+    "Some squids have reached speeds of 25 km/h!",
+    "Cannibalism occurs among the species when food is scarce.",
+    "The Kraken is a legendary, ship-sinking gigantic squid",
+    "Cephalopods are the fastest growing marine invertebrate",
+    "Giant Squid can grow to 30-foot-long in just a few years",
+    "Squids use jet propulsion to move quickly through the water",
+    "Squids breathe using gills located inside their mantle",
 ]
 
 def get_random_fact():

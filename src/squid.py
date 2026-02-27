@@ -34,6 +34,8 @@ class Squid:
         self.push_animation = None
         self.startled_icon = None
         self.startled_icon_offset = QtCore.QPointF(0, -100)
+        self.ng_icon = None
+        self.ng_icon_offset = QtCore.QPointF(0, -100)
         self.tint_color = None
         self.name = random.choice(SQUID_NAMES)
         self.statistics = SquidStatistics(self)
@@ -650,6 +652,16 @@ class Squid:
             QtCore.Qt.KeepAspectRatio,
             QtCore.Qt.SmoothTransformation
         )
+
+        # Scale neurogenesis icon image
+        original_ng = ImageCache.get_pixmap(os.path.join("images", "ng.png"))
+        ng_width = int(original_ng.width() * image_scale)
+        ng_height = int(original_ng.height() * image_scale)
+        self.ng_image = original_ng.scaled(
+            ng_width, ng_height,
+            QtCore.Qt.KeepAspectRatio,
+            QtCore.Qt.SmoothTransformation
+        )
         
         # Update squid dimensions to match scaled size
         self.squid_width = self.images["left1"].width()
@@ -670,6 +682,28 @@ class Squid:
         if self.startled_icon is not None:
             self.ui.scene.removeItem(self.startled_icon)
             self.startled_icon = None
+
+    def show_neurogenesis_icon(self):
+        """Show the neurogenesis (ng.png) icon above the squid's head"""
+        if self.ng_icon is None:
+            self.ng_icon = QtWidgets.QGraphicsPixmapItem(self.ng_image)
+            self.ng_icon.setZValue(500)  # Below DIRTY text (z=1000) but above decorations
+            self.ui.scene.addItem(self.ng_icon)
+        self.update_neurogenesis_icon_position()
+
+    def hide_neurogenesis_icon(self):
+        """Remove the neurogenesis icon"""
+        if self.ng_icon is not None:
+            self.ui.scene.removeItem(self.ng_icon)
+            self.ng_icon = None
+
+    def update_neurogenesis_icon_position(self):
+        """Position the neurogenesis icon above the squid"""
+        if self.ng_icon is not None:
+            self.ng_icon.setPos(
+                self.squid_x + self.squid_width // 2 - self.ng_icon.pixmap().width() // 2 + self.ng_icon_offset.x(),
+                self.squid_y + self.ng_icon_offset.y()
+            )
 
     def update_startled_icon_position(self):
         """Position the startled icon above the squid"""
@@ -722,6 +756,8 @@ class Squid:
         self.update_view_cone()
         if self.startled_icon is not None:
             self.update_startled_icon_position()
+        if self.ng_icon is not None:
+            self.update_neurogenesis_icon_position()
 
     def update_needs(self):
         # This method was moved to TamagotchiLogic 26/07/2024
@@ -2347,3 +2383,5 @@ class Squid:
             self.update_squid_image()  # Changed to use method instead of direct pixmap set
         
         return distance
+
+

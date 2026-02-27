@@ -250,12 +250,38 @@ class TamagotchiLogic:
         self.squid.anxiety = 10
         self.squid.curiosity = 55
 
+        # Connect neurogenesis signal to show icon and store long-term memory
+        if hasattr(self.brain_window, 'brain_widget'):
+            self.brain_window.brain_widget.neuronCreated.connect(self._on_neurogenesis_icon_and_memory)
+
     def handle_vision_update(self, result):
         """Cache the latest vision result and push to brain immediately."""
         self.latest_vision_result = result
         # [FIX] Push to brain now. Waiting for the 1-second timer causes lag/flicker.
         self.apply_input_neurons_to_brain()
 
+    def _on_neurogenesis_icon_and_memory(self, neuron_name: str):
+        """Called when a new neuron is created via neurogenesis.
+        Shows images/ng.png above the squid's head for 4 seconds
+        and records a long-term memory of the event.
+        """
+        # Show the ng icon above the squid's head for 4 seconds
+        if hasattr(self.squid, 'show_neurogenesis_icon'):
+            self.squid.show_neurogenesis_icon()
+            QtCore.QTimer.singleShot(4000, self.squid.hide_neurogenesis_icon)
+
+        # Store a long-term memory
+        if hasattr(self.squid, 'memory_manager'):
+            self.squid.memory_manager.add_long_term_memory(
+                'neurogenesis',
+                f'neurogenesis_{time.time():.0f}',
+                {
+                    'description': 'GREW A NEW NEURON VIA NEUROGENESIS!',
+                    'neuron_name': neuron_name,
+                    'timestamp': time.time(),
+                    'icon': 'images/ng.png'
+                }
+            )
 
     def _initialize_plugins(self):
         """Initialize all plugins before loading game data"""
@@ -1381,18 +1407,37 @@ class TamagotchiLogic:
                     
                     if not pix.isNull() and hasattr(self.squid, 'squid_item'):
                         self.squid.squid_item.setPixmap(pix)
-                        # Optional: make it slightly transparent while sleeping (looks cute)
-                        # self.squid.squid_item.setOpacity(0.95)
                 except Exception as e:
                     print(f"Sleep animation error: {e}")
 
-                # Faster decay while sleeping + auto-wake
-                self.squid.sleepiness = max(0.0, self.squid.sleepiness - 12 * (1 / 60.0))
+                # CONFIGURABLE RECOVERY (from original)
+                recovery_rate = 28.0 * (1 / 60.0)   # ~28 points per second at 60 FPS
+                self.squid.sleepiness = max(0.0, self.squid.sleepiness - recovery_rate)
+
+                # Nice side bonuses while sleeping (from original)
+                self.squid.happiness = min(100.0, self.squid.happiness + 0.45 * (1 / 60.0))
+                self.squid.satisfaction = min(100.0, self.squid.satisfaction + 0.30 * (1 / 60.0))
+
+                # Auto-wake when sufficiently rested (from original)
                 if self.squid.sleepiness <= 25.0:
                     self.squid.is_sleeping = False
                     self.squid.status = "roaming"
                     self.user_interface.show_message("😴 The squid woke up feeling refreshed!")
                     self.sleep_frame = 0
+
+            # ── STUBBORN PERSONALITY: RESIST SLEEP WHEN OTHER NEEDS ARE STRONGER ── (from original)
+            elif self.squid.personality == Personality.STUBBORN:
+                hunger_urge = self.squid.hunger / 100.0
+                curiosity_urge = self.squid.curiosity / 100.0
+                anxiety_urge = self.squid.anxiety / 100.0
+
+                # If any competing need is > 55% and stronger than current sleepiness,
+                # stubborn squid will refuse to fall asleep (even if sleepiness is high)
+                if max(hunger_urge, curiosity_urge * 0.8, anxiety_urge * 0.6) > 0.55:
+                    if self.squid.sleepiness > 65 and random.random() < 0.22:  # 22% chance per frame to resist
+                        self.user_interface.show_message("😤 Stubborn squid refuses to sleep right now!")
+                        # Tiny happiness penalty for fighting sleep
+                        self.squid.happiness = max(15.0, self.squid.happiness - 1.8)
 
             # Normal behavior only when NOT sleeping
             if not getattr(self.squid, 'is_sleeping', False):
@@ -3284,5 +3329,3 @@ class TamagotchiLogic:
                 if self.squid.throw_poop(direction):
                     self.squid.status = "roaming"
                     self.squid.current_poop_target = None
-
-

@@ -48,7 +48,7 @@ class SaveManager:
             if os.path.exists(autosave_path):
                 return autosave_path
 
-        # 3. Fallback to any old-style timestamped save (for backward compatibility)
+        # Optional: fallback to any old-style timestamped save (for backward compatibility)
         old_manual = self._get_manual_save_path()
         if old_manual:
             return old_manual
