@@ -40,7 +40,7 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
  
 ----------------------------------
 
-##  Here [is the wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | Here [is changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) 
+##  [Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems) |   [Wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | [Changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) 
 
 ----------------------------
 
@@ -108,6 +108,7 @@ Every save file is a cognitive history.
 ---------------------------
 
 **My dream**: Countless weird, neurotic, differently wired GPL squids living in sandboxes across the internet. (_**NOT** Skynet!_)
+
 
 
 
