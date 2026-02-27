@@ -2,6 +2,8 @@
 
 ### simulation engine overview:
 
+The architecture of Dosidicus is a "Bottom-Up" sensory system where raw environmental data is distilled into neural inputs, which are then filtered through the squid's personality to produce behavior.
+
 **brains**: small neural networks ([custom **json** format](https://github.com/ViciousSquid/Dosidicus/tree/2.6.1.2_tattoo/headless#brain-json-format)) with **applied inputs**, **learning**, **memories** and **neuron growth**.  
 
 * Default networks are [biologically-inspired](../brain-tool/Brain-Designer.md#generate-sparse-network) semi-random single layers with **8 core neurons**
