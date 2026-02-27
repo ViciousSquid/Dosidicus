@@ -20,7 +20,6 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **No Tensorflow or PyTorch**
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
 - Starts with 8 neurons — grows via **neurogenesis** and rewires using **Hebbian learning**.
-- Includes `achievements` with **50** to collect!
   
  
 - -----------------------------
@@ -52,6 +51,31 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
 
 -----------------------------------
 
+## **Myth & Mechanism**
+
+Dosidicus is a digital squid born with a randomly wired brain.
+
+Feed him., stimulate neurons, watch him learn.
+
+- He starts with 8 neurons.
+- He rewires through Hebbian learning.
+- He grows new structure via neurogenesis.
+- He forms memories.
+- He develops quirks.
+
+Every squid is different.
+Every save file is a cognitive history.
+
+#### Under the hood runs **STRINg** simulation engine:
+
+* Built from scratch in NumPy
+* No TensorFlow. No PyTorch.
+* Fully visible neuron activations
+* Structural growth over time
+* Dual memory system
+* Headless training mode
+* Most AI is a black box: Dosidicus lets you see the mind forming.
+
 
 ## Project Overview
 
@@ -81,6 +105,7 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
 ---------------------------
 
 **My dream**: Countless weird, neurotic, differently wired GPL squids living in sandboxes across the internet. (_**NOT** Skynet!_)
+
 
 
 
