@@ -80,7 +80,8 @@ curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_Lates
 
 ---------------------------
 
-**My dream**: _Countless weird, slightly neurotic, differently wired GPL squids living in sandboxes across the internet._
+**My dream**: Countless weird, neurotic, differently wired GPL squids living in sandboxes across the internet. (_**NOT** Skynet!_)
+
 
 
 
