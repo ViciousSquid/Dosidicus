@@ -4,6 +4,10 @@
 
 - Plugins: Dosidicus has an extensible plugin system (`plugins/`). Existing plugins include Achievements and Multiplayer. You can create new plugins by adding a folder under plugins/ with your code and a plugin.txt descriptor. Plugins can add new behaviors, UI components, or integrate external functionality.
 
+- Share your squids!
+  Export save files and let others explore your squid’s neural structure.
+Post screenshots of strange activation patterns and unexpected growth.
+
 - Brain Templates: The `custom_brains/` directory holds JSON files defining pre-built neural network configurations. Contribute new brain templates by adding JSON files there (e.g. different neural network layouts or parameters). This helps users experiment with diverse behaviors out of the box.
 
 - Scenarios & Tools: Add example scenarios or utility scripts in `example_squids/`; For example, share example saved states or scripts that demonstrate interesting behaviors or training setups.
