@@ -24,7 +24,12 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
  
 - -----------------------------
 ```
-  Run main.py with Python 3.9 or greater after installing dependencies (requirements.txt)
+  ## Quick Start
+
+git clone ...
+cd Dosidicus
+pip install -r requirements.txt
+python main.py
 
 ```
 
@@ -108,6 +113,7 @@ Every save file is a cognitive history.
 ---------------------------
 
 **My dream**: Countless weird, neurotic, differently wired GPL squids living in sandboxes across the internet. (_**NOT** Skynet!_)
+
 
 
 
