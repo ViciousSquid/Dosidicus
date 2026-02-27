@@ -76,6 +76,9 @@ Every save file is a cognitive history.
 * Headless training mode
 * Most AI is a black box: Dosidicus lets you see the mind forming.
 
+ Want the full conceptual philosophy behind Dosidicus? → Read the [Cognitive Sandbox Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems)
+
+------------------------------
 
 ## Project Overview
 
@@ -105,6 +108,7 @@ Every save file is a cognitive history.
 ---------------------------
 
 **My dream**: Countless weird, neurotic, differently wired GPL squids living in sandboxes across the internet. (_**NOT** Skynet!_)
+
 
 
 
