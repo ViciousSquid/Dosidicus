@@ -5,7 +5,7 @@
 
 Most AI today is powerful, fast, and impossible to understand. You feed it data, it spits out answers—but what’s actually *happening* inside? The learning, the thinking, the *mind*—it’s all buried under layers of math and code.
 
-We built **Dosidicus** because we wanted to see something different: **a mind forming in real time.**
+**Dosidicus** was built to see something different: **a mind forming in real time.**
 
 Not a simulation of one. Not a visualization slapped on top. But the actual, messy, dynamic process of neurons wiring themselves together—learning, adapting, changing.
 
@@ -13,7 +13,7 @@ Not a simulation of one. Not a visualization slapped on top. But the actual, mes
 
 ## What Is a Cognitive Sandbox?
 
-A sandbox isn’t a finished product. It’s a space where things *happen*—where systems bump into each other, evolve, and start behaving in ways you didn’t predict.
+A sandbox isn’t a finished product. It’s a space where things *happen*—where systems bump into each other, evolve, and start behaving in unpredictable ways.
 
 In Dosidicus, every squid:
 - Starts with a brain of just **eight randomly connected neurons.**
@@ -37,7 +37,7 @@ Most AI is a black box. You put something in, something comes out, and the rest 
 - You can **stimulate** neurons directly.
 - You can **rewire** them.
 
-You don’t just see the squid’s behavior—you see *why* it behaves that way. You watch as connections strengthen or fade, as new neurons sprout, as memories form.
+You don’t just see the squid’s behaviour—you see *why* it behaves that way. You watch as connections strengthen or fade, as new neurons sprout, as memories form.
 
 This isn’t industrial AI. It’s **small, deliberate, and transparent.** The goal isn’t performance—it’s **understanding.**
 
@@ -68,9 +68,7 @@ Humans bond with simple things:
 
 Dosidicus adds a twist: **you can see inside.**
 
-If your squid starts avoiding a certain stimulus, you can trace the neural path that led to that behavior. You’re not just caring for a scripted pet—you’re shaping a **developing mind.**
-
-That changes everything. **Responsibility feels real.** Every interaction leaves a mark.
+If your squid starts avoiding a certain stimulus, you can trace the neural path that led to that behaviour. You’re not just caring for a scripted pet—you’re shaping a **developing mind.** - **Responsibility feels real.** Every interaction leaves a mark.
 
 ---
 
@@ -83,7 +81,7 @@ Dosidicus looks simple:
 
 That’s intentional. **Complex visuals distract from what matters—the brain.**
 
-The squid is the art. The brain is the system. Together, they create something new: **a drawn creature whose behavior emerges from real learning.**
+The squid is the art. The brain is the system. Together, they create something new: **a drawn creature whose behaviour emerges from real learning.**
 
 ---
 
@@ -117,7 +115,7 @@ Understanding becomes **experiential.**
 Every squid starts with a **randomly wired brain.** Early experiences shape it. Small differences snowball.
 
 This mirrors a fundamental truth in biology:
-**Structure + Experience = Behavior.**
+**Structure + Experience = Behaviour.**
 
 We’re not claiming this is how real brains work. But it *does* show how sensitive structure is to experience.
 
