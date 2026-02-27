@@ -2,7 +2,7 @@
 
 ### simulation engine overview:
 
-The architecture of Dosidicus is a "Bottom-Up" sensory system where raw environmental data is distilled into neural inputs, which are then filtered through the squid's personality to produce behavior.
+The architecture of Dosidicus is a "Bottom-Up" sensory system where raw environmental data is distilled into neural inputs, which are then filtered through the squid's [personality](https://github.com/ViciousSquid/Dosidicus/wiki/Personality) to produce behavior.
 
 **brains**: small neural networks ([custom **json** format](https://github.com/ViciousSquid/Dosidicus/tree/2.6.1.2_tattoo/headless#brain-json-format)) with **applied inputs**, **learning**, **memories** and **neuron growth**.  
 
