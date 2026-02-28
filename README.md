@@ -113,6 +113,8 @@ Every squid is an experiment.
 
 ## Project Overview
 
+- ~80K lines, one developer, 28 months
+
 - **Dependencies:**
   - Python ^3.9
   - PyQt5 ^5.15 (GUI framework)
@@ -136,6 +138,7 @@ Every squid is an experiment.
 
 
 ---------------------------
+
 
 
 
