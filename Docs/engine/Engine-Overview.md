@@ -2,15 +2,23 @@
 
 ### simulation engine overview:
 
-The architecture of Dosidicus is a "Bottom-Up" sensory system where raw environmental data is distilled into neural inputs, which are then filtered through the squid's [personality](https://github.com/ViciousSquid/Dosidicus/wiki/Personality) to produce behavior.
+The architecture of Dosidicus is a "Bottom-Up" sensory system where raw environmental data is distilled into neural inputs, which are then filtered through the squid's [personality](https://github.com/ViciousSquid/Dosidicus/wiki/Personality) to produce behaviour.
 
-**brains**: small neural networks ([custom **json** format](https://github.com/ViciousSquid/Dosidicus/tree/2.6.1.2_tattoo/headless#brain-json-format)) with **applied inputs**, **learning**, **memories** and **neuron growth**.  
+Built from scratch using NumPy.
 
-* Default networks are [biologically-inspired](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer#generate-sparse-network) semi-random single layers with **8 core neurons**
+- No TensorFlow.
+- No PyTorch.
 
-### * **No Tensorflow, No Pytorch**
-* Rejects the standard "black box" approach in favour of transparent, biologically inspired learning.
-* [decision engine](https://github.com/ViciousSquid/Dosidicus/wiki/Decision-Engine) is **entirely neural network driven**
+### Core properties:
+* Explicit neuron-level simulation
+* Hebbian plasticity
+* Structural growth (neurogenesis)
+* Dual memory system (short-term and long-term)
+* Headless training capability
+* Plugin extensibility
+* STRINg is optimised for interpretability not scale.
+
+It treats neural networks not as static architectures, but as evolving structures.
 
 ---------------------
 
