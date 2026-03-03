@@ -12,6 +12,8 @@ PLUGIN_REQUIRES = [] # Names of other plugins this one depends on
 # These define the network parameters for multicast communication.
 MULTICAST_GROUP = '224.3.29.71'   # IP address for the multicast group
 MULTICAST_PORT = 10000            # Port number for multicast communication
+
+MULTICAST_BIND_IP = ''            # Override: set to your LAN IP (e.g. '192.168.1.50') if peer detection fails due to VPN/virtual adapters. Leave blank for auto-detect.
 SYNC_INTERVAL = 1.0               # Default seconds between game state sync broadcasts
 MAX_PACKET_SIZE = 1472           # Maximum UDP packet size, to prevent fragmentation
 
@@ -26,3 +28,6 @@ REMOTE_SQUID_OPACITY = 1.0        # Default opacity for remote squids (0.0 to 1.
 SHOW_REMOTE_LABELS = True         # Default setting for showing labels on remote entities
 
 SHOW_CONNECTION_LINES = True      # Default setting for showing lines connecting to remote squids
+
+
+
