@@ -33,7 +33,6 @@ class NetworkNode:
             self.node_id = node_id or f"squid_{uuid.uuid4().hex[:8]}"
             self.utils = None # Mark utils as unavailable
 
-        self.local_ip = self._get_local_ip()
         self.socket = None
         self.initialized = False # Socket structure initialized (IP_ADD_MEMBERSHIP etc.)
         self.is_connected = False # Socket bound and ready for I/O
@@ -46,13 +45,21 @@ class NetworkNode:
         self.auto_reconnect = True # Flag to control auto-reconnect attempts
         self.use_compression = True # Flag to control message compression
 
-        self.incoming_queue = queue.Queue() # Thread-safe queue for received messages
+        self.incoming_queue = queue.Queue(maxsize=500)  # Bounded: if drain stops, old packets are dropped rather than eating RAM
         self.queue_lock = threading.Lock() # Used with incoming_message_queue in one of the versions, ensure consistency
+
+        # Deduplication: on a single machine every multicast packet is received once
+        # per membership (once per interface + the 0.0.0.0 catch-all), so the same
+        # message can arrive 2-3× in the queue.  We track (node_id, timestamp) tuples
+        # and silently drop duplicates for self._dedup_ttl seconds.
+        self._seen_message_ids: dict = {}  # {(node_id, timestamp): time_first_seen}
+        self._dedup_ttl: float = 10.0      # seconds before a seen-key is expired
 
         self.known_nodes = {} # Stores info about other detected nodes
         self.last_sync_time = 0 # Timestamp of the last sync operation
         self.debug_mode = False # Controlled by MultiplayerPlugin
 
+        # Logger must be set up before _get_local_ip() which uses self.logger
         if logger is not None:
             self.logger = logger
         else:
@@ -65,22 +72,138 @@ class NetworkNode:
                 self.logger.addHandler(handler)
                 # Initial level, can be updated by MultiplayerPlugin if debug_mode changes
                 self.logger.setLevel(logging.DEBUG if self.debug_mode else logging.INFO)
+
+        self.local_ip = self._get_local_ip()
         
         self.initialize_socket_structure() # Initialize socket when a NetworkNode is created
 
     def _get_local_ip(self):
-        """Tries to get the primary local IP that can connect externally."""
+        """
+        Detects the best local LAN IP for multicast by enumerating all interfaces
+        and ranking them. Prefers 192.168.x.x (typical home/office LAN) over
+        172.16.x.x, then 10.x.x.x -- avoiding VPN/virtual adapters that may have
+        captured the default route and share the same IP across machines.
+
+        Set MULTICAST_BIND_IP in mp_constants.py to a specific IP to override.
+        """
+        # Allow manual override via config
+        from . import mp_constants as _mc
+        override = getattr(_mc, 'MULTICAST_BIND_IP', '').strip()
+        if override and override != '0.0.0.0':
+            self.logger.info(f"[IP] Using manually configured MULTICAST_BIND_IP: {override}")
+            return override
+
+        candidates = []
+
+        # Strategy 1: enumerate all IPs via getaddrinfo on hostname
         try:
-            # This creates a dummy socket and connects to a public DNS server (doesn't send data)
-            # to determine the preferred outgoing IP address.
+            hostname = socket.gethostname()
+            for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+                ip = info[4][0]
+                if ip not in candidates:
+                    candidates.append(ip)
+        except Exception:
+            pass
+
+        # Strategy 2: also grab the default-route IP the OS prefers
+        try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                s.settimeout(0.1) # Prevent long blocking if network is down
-                s.connect(("8.8.8.8", 80)) # Google's public DNS server
-                local_ip = s.getsockname()[0]
-            return local_ip
-        except Exception as e:
-            self.logger.warning(f"Error getting local IP: {e}. Defaulting to 127.0.0.1 for same-machine testing or if no external network.")
-            return '127.0.0.1' # Fallback, might only work for same-machine communication
+                s.settimeout(0.1)
+                s.connect(("8.8.8.8", 80))
+                default_ip = s.getsockname()[0]
+                if default_ip not in candidates:
+                    candidates.append(default_ip)
+        except Exception:
+            pass
+
+        self.logger.info(f"[IP] All detected IPs on this machine: {candidates}")
+
+        def score(ip):
+            """Higher score = more likely a real LAN interface."""
+            if ip.startswith('127.') or ip.startswith('169.254.'):
+                return -1   # loopback / link-local: skip
+            if ip.startswith('192.168.'):
+                return 3    # classic home/office LAN -- highest priority
+            if ip.startswith('172.'):
+                parts = ip.split('.')
+                try:
+                    if 16 <= int(parts[1]) <= 31:
+                        return 2  # RFC1918 172.16-31 range
+                except (IndexError, ValueError):
+                    pass
+            if ip.startswith('10.'):
+                return 1    # Could be LAN or VPN; lower priority
+            return 0
+
+        scored = [(score(ip), ip) for ip in candidates if score(ip) >= 0]
+        scored.sort(key=lambda x: x[0], reverse=True)
+
+        self.logger.info(f"[IP] Scored candidates (higher=better): {scored}")
+
+        if scored:
+            chosen = scored[0][1]
+            if len(scored) > 1 and scored[0][0] == scored[1][0]:
+                all_ips = [ip for _, ip in scored]
+                self.logger.warning(
+                    f"[IP] Multiple equal-score IPs: {all_ips}. Using {chosen}. "
+                    f"If wrong (e.g. a VPN IP), set MULTICAST_BIND_IP in mp_constants.py to your real LAN IP."
+                )
+            else:
+                self.logger.info(f"[IP] Selected local IP for multicast: {chosen}")
+            return chosen
+
+        self.logger.warning("[IP] Could not detect a suitable LAN IP. Falling back to 127.0.0.1.")
+        return '127.0.0.1'
+
+    def _get_all_send_ips(self):
+        """
+        Returns all local IPv4 addresses that are valid for multicast sending,
+        scored so the best LAN IPs come first. Always includes 0.0.0.0 (default
+        interface) as a fallback at the end so same-machine loopback always works
+        even if NIC enumeration misses something.
+        """
+        def score(ip):
+            if ip.startswith('127.') or ip.startswith('169.254.'):
+                return -1
+            if ip.startswith('192.168.'):
+                return 3
+            if ip.startswith('172.'):
+                try:
+                    if 16 <= int(ip.split('.')[1]) <= 31:
+                        return 2
+                except (IndexError, ValueError):
+                    pass
+            if ip.startswith('10.'):
+                return 1
+            return 0
+
+        candidates = set()
+        try:
+            for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+                candidates.add(info[4][0])
+        except Exception:
+            pass
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.settimeout(0.1)
+                s.connect(("8.8.8.8", 80))
+                candidates.add(s.getsockname()[0])
+        except Exception:
+            pass
+
+        scored = sorted(
+            [(score(ip), ip) for ip in candidates if score(ip) >= 0],
+            key=lambda x: x[0], reverse=True
+        )
+        result = [ip for _, ip in scored]
+
+        # Always ensure 0.0.0.0 is last — it lets the OS pick the default route
+        # interface, which covers same-machine loopback if nothing else does.
+        if '0.0.0.0' not in result:
+            result.append('0.0.0.0')
+
+        self.logger.info(f"[MCAST] Send interfaces: {result}")
+        return result
 
     def initialize_socket_structure(self):
         """Initializes the socket, sets options, binds, and joins the multicast group."""
@@ -104,51 +227,59 @@ class NetworkNode:
                     if self.debug_mode: self.logger.debug(f"SO_REUSEPORT not supported or error setting it: {e}")
 
             try:
-                self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 0)
+                # Enable loopback so packets are delivered to other sockets on the same host.
+                # Value 1 = enabled (was incorrectly set to 0, which disabled same-machine peer detection).
+                self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
                 if self.debug_mode: self.logger.debug("Multicast loopback enabled.")
             except socket.error as e_loop:
                 self.logger.warning(f"Could not enable multicast loopback: {e_loop}. May impact same-machine testing.")
 
             self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2) # Time-to-live for multicast packets
 
-            max_bind_attempts = 3
-            current_attempt = 0
-            bind_port = MULTICAST_PORT # Start with default port
-            bind_success = False
-
-            # Attempt to bind, incrementing port on failure (for local testing)
-            while current_attempt < max_bind_attempts:
-                try:
-                    self.socket.bind(('', bind_port)) # Bind to all interfaces on this port
-                    bind_success = True
-                    self.logger.info(f"Socket bound successfully to port {bind_port}.")
-                    break
-                except OSError as bind_error:
-                    current_attempt += 1
-                    self.logger.warning(f"Port {bind_port} in use (Attempt {current_attempt}/{max_bind_attempts}). Error: {bind_error}")
-                    if current_attempt >= max_bind_attempts:
-                        self.logger.error(f"Critical error: Could not bind socket after {max_bind_attempts} attempts.")
-                        self.is_connected = False
-                        self.initialized = False
-                        return False
-                    bind_port += 1 # Try next port if available
-
-            if not bind_success: # Should be caught above, but as a safeguard
+            # All instances MUST bind to the same port (MULTICAST_PORT) so they all
+            # receive packets sent to that port. The old port-increment fallback was
+            # broken: if instance 2 bumped to 10001, it sent to 10000 but listened on
+            # 10001, so it never heard anything. SO_REUSEADDR (set above) allows
+            # multiple processes to share a UDP multicast port on Windows.
+            try:
+                self.socket.bind(('', MULTICAST_PORT))
+                self.logger.info(f"Socket bound successfully to port {MULTICAST_PORT}.")
+            except OSError as bind_error:
+                self.logger.error(
+                    f"Could not bind to port {MULTICAST_PORT}: {bind_error}. "
+                    f"Ensure SO_REUSEADDR is supported and no non-multicast process has exclusively claimed this port."
+                )
                 self.is_connected = False
                 self.initialized = False
                 return False
             
-            # Join the multicast group
-            # Using "0.0.0.0" for imr_interface to listen on all available interfaces for the group
-            mreq_struct = socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton("0.0.0.0")
-            self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq_struct)
+            # Join the multicast group on every valid local interface so we receive
+            # packets whether they arrive from the loopback (same-machine peers) or
+            # from the physical LAN adapter (remote peers).
+            self._multicast_send_ips = self._get_all_send_ips()
+            joined_count = 0
+            for iface_ip in self._multicast_send_ips:
+                try:
+                    mreq = socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton(iface_ip)
+                    self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+                    joined_count += 1
+                    self.logger.info(f"[MCAST] Joined multicast group on interface {iface_ip}")
+                except OSError as e_join:
+                    self.logger.warning(f"[MCAST] Could not join group on {iface_ip}: {e_join}")
+            # Always also join via 0.0.0.0 as a catch-all safety net
+            try:
+                mreq_any = socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton("0.0.0.0")
+                self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq_any)
+                self.logger.info(f"[MCAST] Also joined via 0.0.0.0 (catch-all). Total explicit joins: {joined_count}")
+            except OSError:
+                pass  # Already joined on all interfaces - OS treats 0.0.0.0 as duplicate, harmless
             
             self.socket.settimeout(0.1) # Non-blocking recvfrom
 
             self.is_connected = True  # Socket is bound and ready
             self.initialized = True # Full structure (options, group) is set up
             self.last_connection_attempt = time.time()
-            self.logger.info(f"Socket structure initialized on {self.local_ip} (listening on all interfaces, port {bind_port}) for multicast group {MULTICAST_GROUP}.")
+            self.logger.info(f"Socket structure initialized on {self.local_ip} (listening on all interfaces, port {MULTICAST_PORT}) for multicast group {MULTICAST_GROUP}.")
             return True
 
         except Exception as e:
@@ -176,8 +307,23 @@ class NetworkNode:
                 raw_data, addr = self.socket.recvfrom(MAX_PACKET_SIZE)
 
                 if raw_data:
-                    # Use the thread-safe queue for passing data to the main thread
-                    self.incoming_queue.put({'raw_data': raw_data, 'addr': addr})
+                    # Use the thread-safe queue for passing data to the main thread.
+                    # put_nowait raises queue.Full (never blocks) so the listener
+                    # thread can't be stalled if the main thread stops draining.
+                    try:
+                        self.incoming_queue.put_nowait({'raw_data': raw_data, 'addr': addr})
+                    except queue.Full:
+                        # Queue is full – main thread has stopped draining.  Drop
+                        # the oldest packet to make room (FIFO discard) rather than
+                        # losing the newest one entirely.
+                        try:
+                            self.incoming_queue.get_nowait()
+                        except queue.Empty:
+                            pass
+                        try:
+                            self.incoming_queue.put_nowait({'raw_data': raw_data, 'addr': addr})
+                        except queue.Full:
+                            pass  # Give up on this packet – main thread is very stuck
             except socket.timeout:
                 continue # Normal behavior for non-blocking socket, allows checking _is_listening_active
             except OSError as e: # Handle socket closed or other OS errors
@@ -196,6 +342,36 @@ class NetworkNode:
     def is_listening(self):
         """Checks if the listener thread is active and alive."""
         return self._is_listening_active and self.listener_thread is not None and self.listener_thread.is_alive()
+
+    def watchdog_check(self) -> bool:
+        """
+        Call this periodically (e.g. from the plugin's connection_timer) to
+        detect and recover a silently-dead listener thread.
+
+        A thread can die silently when an unexpected exception escapes the
+        while-loop (shouldn't happen given the broad except clause, but OS
+        signal delivery or interpreter shutdown edge cases can still kill it).
+
+        Returns True if everything is healthy, False if a restart was attempted.
+        """
+        if not self._is_listening_active:
+            return True  # We deliberately stopped – not a fault
+
+        if self.listener_thread is None or not self.listener_thread.is_alive():
+            self.logger.error(
+                f"Watchdog: Listener thread for node {self.node_id} has died unexpectedly! "
+                f"Attempting automatic restart."
+            )
+            self._is_listening_active = False   # Reset flag so start_listening doesn't bail early
+            self.listener_thread = None
+            restarted = self.start_listening()
+            if restarted:
+                self.logger.info("Watchdog: Listener thread restarted successfully.")
+            else:
+                self.logger.error("Watchdog: Listener thread restart FAILED.")
+            return False  # Signal that a recovery was needed
+
+        return True  # Thread is alive and well
 
     def start_listening(self):
         """Starts the multicast listener thread if not already running."""
@@ -305,14 +481,27 @@ class NetworkNode:
             if len(data_to_send) > MAX_PACKET_SIZE:
                 self.logger.warning(f"Message '{message_type}' size ({len(data_to_send)}) exceeds MAX_PACKET_SIZE. May fail or be fragmented (UDP handles this, but can be less reliable).")
 
-            if self.socket: # Ensure socket object exists
-                self.socket.sendto(data_to_send, (MULTICAST_GROUP, MULTICAST_PORT))
-                if self.debug_mode and message_type not in ['object_sync', 'squid_move', 'heartbeat']: # Avoid flooding logs
-                    self.logger.debug(f"Sent '{message_type}' ({len(data_to_send)} bytes).")
-                return True
-            else:
+            if not self.socket:
                 self.logger.error(f"Cannot send '{message_type}', socket is None.")
                 return False
+
+            # Send on every valid local interface so that:
+            #   - same-machine peers receive it via IP_MULTICAST_LOOP loopback
+            #   - LAN peers receive it via the physical NIC
+            send_ips = getattr(self, '_multicast_send_ips', None) or ['0.0.0.0']
+            sent_ok = False
+            for iface_ip in send_ips:
+                try:
+                    iface_bytes = socket.inet_aton(iface_ip)
+                    self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, iface_bytes)
+                    self.socket.sendto(data_to_send, (MULTICAST_GROUP, MULTICAST_PORT))
+                    sent_ok = True
+                except OSError as e_send:
+                    self.logger.warning(f"[MCAST] Send on interface {iface_ip} failed: {e_send}")
+
+            if self.debug_mode and message_type not in ['object_sync', 'squid_move', 'heartbeat']:
+                self.logger.debug(f"Sent '{message_type}' ({len(data_to_send)} bytes) on {len(send_ips)} interface(s).")
+            return sent_ok
         except socket.error as sock_err: # Specific socket errors
             self.logger.error(f"Socket error sending message '{message_type}': {sock_err}")
             self.is_connected = False # Assume connection is broken
@@ -356,14 +545,22 @@ class NetworkNode:
             if len(data_to_send) > MAX_PACKET_SIZE:
                 self.logger.warning(f"Batch message size ({len(data_to_send)}) exceeds MAX_PACKET_SIZE. Transmission may fail.")
 
-            if self.socket:
-                self.socket.sendto(data_to_send, (MULTICAST_GROUP, MULTICAST_PORT))
-                if self.debug_mode:
-                    self.logger.debug(f"Sent batch message ({len(data_to_send)} bytes) with {len(messages)} sub-messages.")
-                return True
-            else:
+            if not self.socket:
                 self.logger.error("Cannot send batch, socket is None.")
                 return False
+
+            send_ips = getattr(self, '_multicast_send_ips', None) or ['0.0.0.0']
+            sent_ok = False
+            for iface_ip in send_ips:
+                try:
+                    self.socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(iface_ip))
+                    self.socket.sendto(data_to_send, (MULTICAST_GROUP, MULTICAST_PORT))
+                    sent_ok = True
+                except OSError as e_send:
+                    self.logger.warning(f"[MCAST] Batch send on interface {iface_ip} failed: {e_send}")
+            if self.debug_mode:
+                self.logger.debug(f"Sent batch ({len(data_to_send)} bytes, {len(messages)} msgs) on {len(send_ips)} interface(s).")
+            return sent_ok
         except socket.error as sock_err:
             self.logger.error(f"Socket error sending message batch: {sock_err}")
             self.is_connected = False
@@ -456,7 +653,29 @@ class NetworkNode:
             
             # Critical filter: Ignore messages from self
             if final_sender_node_id == self.node_id:
-                continue 
+                continue
+
+            # ── Deduplication ────────────────────────────────────────────────────────
+            # On a single machine every multicast send is received once per membership
+            # (once per NIC interface + the 0.0.0.0 catch-all join), so the same
+            # logical message can arrive 2-3× in the queue.  We key on
+            # (sender_node_id, timestamp) – every outgoing envelope already stamps a
+            # float timestamp – and silently drop copies seen within _dedup_ttl seconds.
+            _now = time.time()
+            # Prune expired entries so the dict stays small
+            self._seen_message_ids = {
+                k: v for k, v in self._seen_message_ids.items()
+                if _now - v < self._dedup_ttl
+            }
+            msg_dedup_key = (final_sender_node_id, message_dict.get('timestamp'))
+            if msg_dedup_key in self._seen_message_ids:
+                if self.debug_mode:
+                    self.logger.debug(
+                        f"Dropping duplicate message key={msg_dedup_key} from {addr}"
+                    )
+                continue
+            self._seen_message_ids[msg_dedup_key] = _now
+            # ─────────────────────────────────────────────────────────────────────────
 
             # Log decoded message details
             if self.debug_mode:
@@ -568,3 +787,9 @@ class NetworkNode:
             
 
         self.logger.info(f"Network node {self.node_id} closed.")
+
+
+
+
+
+
