@@ -18,6 +18,7 @@ SQUID_FACTS = [
 ]
 
 def get_random_fact():
-    """Return a short, meaningful Humboldt squid fact"""
+    """Return a squid fact"""
+
 
     return random.choice(SQUID_FACTS)
