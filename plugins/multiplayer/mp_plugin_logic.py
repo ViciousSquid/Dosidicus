@@ -61,9 +61,6 @@ class MultiplayerPlugin:
         self.connection_lines: Dict[str, QtWidgets.QGraphicsLineItem] = {}
         self.last_message_times: Dict[str, float] = {}
 
-        # --- Encounter Memory ---
-        self.squid_encounters: set = set()  # Track remote node IDs we've met before (first-meeting detection)
-
         # --- Configuration ---
         self.MULTICAST_GROUP = mp_constants.MULTICAST_GROUP
         self.MULTICAST_PORT = mp_constants.MULTICAST_PORT
@@ -232,11 +229,12 @@ class MultiplayerPlugin:
             else:
                 self.logger.warning("message_process_timer is None in enable(). Skipping.")
 
-            if self.sync_thread and self.sync_thread.is_alive():
-                if self.debug_mode: self.logger.debug("Sync thread already running.")
+            if hasattr(self, 'sync_timer') and self.sync_timer:
+                if not self.sync_timer.isActive():
+                    self.logger.info("Sync timer not active, starting/restarting it.")
+                    self.start_sync_timer()
             else:
-                self.logger.info("Sync thread not active, starting it.")
-                self.start_sync_timer()
+                self.logger.warning("sync_timer not found or is None. Skipping.")
 
             # Update status widget if applicable
             if self.status_widget:
@@ -416,17 +414,6 @@ class MultiplayerPlugin:
         node_port = self.MULTICAST_PORT # Use the constant
         self.logger.info(f"Setup complete. Node: {node_id_val} on IP: {node_ip}. Listening for multicast on port: {node_port}")
         self.is_setup = True
-
-        # Start the listener and sync thread here so they run regardless of
-        # whether enable() is called separately. Both are safe to call if already running.
-        if self.network_node:
-            if not self.network_node.is_connected:
-                self.network_node.initialize_socket_structure()
-            if not self.network_node.is_listening():
-                self.network_node.start_listening()
-
-        self.start_sync_timer()
-
         return True
 
     def _process_network_node_queue(self, **kwargs):
@@ -485,84 +472,18 @@ class MultiplayerPlugin:
         """Handles interactions between the local squid and a detected remote squid."""
         if not self.logger: return
         if not local_squid or not remote_squid_data or not self.tamagotchi_logic: return
-
         local_pos = (local_squid.squid_x, local_squid.squid_y)
-        remote_pos = (remote_squid_data.get('x', 0.0), remote_squid_data.get('y', 0.0))
+        remote_pos = (remote_squid_data.get('x',0.0), remote_squid_data.get('y',0.0))
         distance = math.hypot(local_pos[0] - remote_pos[0], local_pos[1] - remote_pos[1])
-        interaction_distance_threshold = 80
-
+        interaction_distance_threshold = 80 # Example threshold
         if distance < interaction_distance_threshold:
-            is_first_meeting = remote_node_id not in self.squid_encounters
-            short_id = remote_node_id[-6:]
-
-            # Always add a short-term memory of the encounter
             if hasattr(local_squid, 'memory_manager') and hasattr(local_squid.memory_manager, 'add_short_term_memory'):
                 local_squid.memory_manager.add_short_term_memory(
                     category='social', event_type='squid_meeting',
-                    description=f"{'First meeting' if is_first_meeting else 'Reunited'} with squid {short_id} from another tank.",
-                    importance=7 if is_first_meeting else 5
+                    description=f"Met squid {remote_node_id[-6:]} from another tank.",
+                    importance=5
                 )
-
-            if is_first_meeting:
-                self.squid_encounters.add(remote_node_id)
-                self._create_squid_encounter_memory_and_neuron(local_squid, remote_node_id, remote_squid_data)
-
             self.attempt_gift_exchange(local_squid, remote_node_id)
-
-    def _create_squid_encounter_memory_and_neuron(self, local_squid, remote_node_id, remote_squid_data):
-        """
-        On first encounter with a remote squid:
-        - Permanently records the meeting in long-term memory.
-        - Creates a dedicated 'social' neuron that persists in the brain.
-        """
-        short_id = remote_node_id[-6:]
-        remote_name = remote_squid_data.get('name', f"Squid-{short_id}")
-        encounter_time = time.strftime("%Y-%m-%d %H:%M")
-
-        # 1. Permanent long-term memory of the encounter
-        if hasattr(local_squid, 'memory_manager'):
-            mm = local_squid.memory_manager
-            if hasattr(mm, 'add_long_term_memory'):
-                mm.add_long_term_memory(
-                    category='social',
-                    key=f"squid_encounter_{remote_node_id}",
-                    value={
-                        'remote_id': remote_node_id,
-                        'name': remote_name,
-                        'first_met': encounter_time,
-                        'position': (remote_squid_data.get('x', 0), remote_squid_data.get('y', 0)),
-                    }
-                )
-                self.logger.info(f"[MP] Long-term memory saved: first meeting with {remote_name} ({short_id})")
-
-        # 2. Permanent social neuron via enhanced_neurogenesis
-        try:
-            ui = getattr(self.tamagotchi_logic, 'user_interface', None)
-            brain_window = getattr(ui, 'squid_brain_window', None) if ui else None
-            brain_widget = getattr(brain_window, 'brain_widget', None) if brain_window else None
-            eng = getattr(brain_widget, 'enhanced_neurogenesis', None) if brain_widget else None
-
-            if eng and hasattr(eng, 'create_neuron'):
-                brain_state = dict(brain_widget.state) if brain_widget else {}
-                neuron_name = eng.create_neuron(
-                    neuron_type='social',
-                    brain_state=brain_state,
-                    environment={'remote_squid_id': remote_node_id, 'remote_name': remote_name},
-                    trigger_value=1.0
-                )
-                if neuron_name and brain_widget:
-                    # Mark it permanent so any pruning logic won't remove it
-                    if not hasattr(brain_widget, 'permanent_neurons'):
-                        brain_widget.permanent_neurons = set()
-                    brain_widget.permanent_neurons.add(neuron_name)
-                    self.logger.info(f"[MP] Permanent social neuron created: '{neuron_name}' for encounter with {remote_name}")
-
-                    if hasattr(self.tamagotchi_logic, 'show_message'):
-                        self.tamagotchi_logic.show_message(
-                            f"🧠 Your squid formed a lasting memory of {remote_name}! New neuron: '{neuron_name}'"
-                        )
-        except Exception as e:
-            self.logger.warning(f"[MP] Could not create social neuron for encounter: {e}")
 
     def attempt_gift_exchange(self, local_squid, remote_node_id: str):
         """Allows squids to exchange a random decoration item if conditions are met."""
@@ -2843,5 +2764,3 @@ class MultiplayerPlugin:
         #         self.logger.info(f"Remote squid {sender_node_id[-6:]} performed special action: {action_type}")
 
         # Add more specific logic here based on the content and purpose of 'state_update' messages.
-
-
