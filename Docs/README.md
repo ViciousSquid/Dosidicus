@@ -21,7 +21,8 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
 - Starts with 8 neurons — grows via **neurogenesis** and rewires using **Hebbian learning**.
 - Includes `achievements` with **50** to collect!
-  
+
+ <img src="https://github.com/user-attachments/assets/23e98046-23a6-44a1-b4c8-a57abfff5501" width="180">
  
 - -----------------------------
 
