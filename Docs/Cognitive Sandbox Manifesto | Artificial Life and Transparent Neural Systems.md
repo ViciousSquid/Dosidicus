@@ -1,6 +1,7 @@
-## Cognitive Sandbox Manifesto / Artificial Life and Transparent Neural Systems
 
-----------------------------------------
+ <img src="https://github.com/user-attachments/assets/315aac09-f08e-422a-92f1-636af59ccc01" width="200">
+
+
 ## 1. Why This Exists
 
 Most artificial intelligence today is powerful, fast, and opaque: Large neural networks are trained on vast datasets producing remarkable outputs.
@@ -72,7 +73,7 @@ It is about process.
 A small system that adapts and accumulates experience over time can evoke something that feels alive — even when it is mechanistic.
 This boundary between mechanism and perceived life is intentional.
 
-## 5. Attachment to Visible Minds (psychology of attachment)
+## 5. Attachment to Visible Minds
 
 Humans bond with simple systems.
 
