@@ -1,7 +1,7 @@
 
 ![image](https://github.com/user-attachments/assets/bed7c083-80d3-4ecd-8375-dd6c8746d3d4)
 
-# Press `T` to open the decorations window
+# Press `D` to open the decorations window
 *  ## or use the `View > Decorations` menu
 
 ------------------------
