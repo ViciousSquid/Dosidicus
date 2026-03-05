@@ -1,7 +1,8 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors:
-  - name: "Rufus Pearce"
+  - family-names: "Pearce"
+    given-names: "Rufus"
 title: "Dosidicus"
 abstract: "A Tamagotchi-style digital pet powered by a transparent neural network, featuring neurogenesis and Hebbian learning."
 version: 2.6.1.2
