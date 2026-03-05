@@ -1,12 +1,11 @@
 ### _A transparent neural sandbox disguised as a digital pet_
+A micro neural engine for small autonomous agents that learn via Hebbian dynamics and grow new structure when exposed to novelty.
 
 ----------------------------------
 
 ##  [Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems) |   [Wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | [Changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) 
 
 ----------------------------
-
-A micro neural engine for small autonomous agents that learn via Hebbian dynamics and grow new structure when exposed to novelty.
 
 ## Getting Started
 New to Dosidicus? Start here to understand how to interact with your squid.
