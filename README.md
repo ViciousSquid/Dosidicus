@@ -113,7 +113,7 @@ Every squid is an experiment.
 
 ## Project Overview
 
-- ~80K lines, one developer, 28 months
+- ~50K lines, one developer, 28 months, GPL 2.0 license
 
 - **Dependencies:**
   - Python ^3.9
@@ -138,23 +138,6 @@ Every squid is an experiment.
 
 
 ---------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
