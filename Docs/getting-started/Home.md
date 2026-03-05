@@ -1,7 +1,10 @@
-| <img width="145" height="215" alt="Dosidicus Squid" src="https://github.com/user-attachments/assets/ecf3be94-3021-4112-a2e7-5a5631f9257c" /> | <br> ![Version](https://img.shields.io/badge/Version-2.6.1.2-0077be?style=for-the-badge) <br> Here [is changelog](../getting-started/Changelog.md) <br><br><br> Wiki still under construction <br><br>  <a href="https://buymeacoffee.com/vicioussquid"><br><br> |
-| :--- | :--- |
-
 ### _A transparent neural sandbox disguised as a digital pet_
+
+----------------------------------
+
+##  [Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems) |   [Wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | [Changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) 
+
+----------------------------
 
 A micro neural engine for small autonomous agents that learn via Hebbian dynamics and grow new structure when exposed to novelty.
 
