@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - name: "Rufus Pearce"
+title: "Dosidicus"
+abstract: "A Tamagotchi-style digital pet powered by a transparent neural network, featuring neurogenesis and Hebbian learning."
+version: 2.6.1.2
+date-released: 2025-03-05
+url: "https://github.com/ViciousSquid/Dosidicus"
+repository-code: "https://github.com/ViciousSquid/Dosidicus"
+license: GPL-2.0
+keywords:
+  - tamagotchi
+  - hebbian-learning
+  - neurogenesis
+  - artificial-life
+  - neural-networks
+  - squid
