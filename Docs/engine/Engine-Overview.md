@@ -47,3 +47,13 @@ It treats neural networks not as static architectures, but as evolving structure
 
 - [Decision Engine](https://github.com/ViciousSquid/Dosidicus/wiki/Decision-Engine)
 - [Brain Widget](https://github.com/ViciousSquid/Dosidicus/wiki/brain_widget.py)
+
+External links
+
+* https://medium.com/@reutdayan1/hebbian-learning-biologically-plausible-alternative-to-backpropagation-6ee0a24deb00
+* https://informatics.ed.ac.uk/sites/default/files/2024-03/Qiuye%20Zhang%20Lovelace%20Colloquium%20Poster.pdf
+* https://en.wikipedia.org/wiki/Hebbian_theory
+* https://www.youtube.com/watch?v=TvTQQO5yTa4
+
+
+
