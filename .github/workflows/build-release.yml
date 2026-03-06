@@ -43,8 +43,13 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      # 1. Checkout — sparse on all platforms to exclude Docs/
-      #    (contains a pipe character in a filename, illegal on Windows NTFS)
+      # 1. Windows git rejects pipe characters ( | ) in filenames before sparse
+      #    filtering even gets a chance to run. Disable that check globally first.
+      - name: Allow pipe characters in paths (Windows only)
+        if: matrix.platform == 'windows'
+        run: git config --global core.protectNTFS false
+
+      # 2. Checkout — sparse on all platforms to exclude Docs/
       - name: Checkout
         uses: actions/checkout@v4
         with:
