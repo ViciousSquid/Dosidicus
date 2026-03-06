@@ -76,11 +76,13 @@ class PluginManager:
         self.plugins: Dict[str, Dict] = {}        # Stores loaded plugins' metadata and instances
         self.hooks: Dict[str, List[Dict]] = {}    # Registered hooks and their subscribers
         self.enabled_plugins: set[str] = set()    # Names of enabled plugins (use lowercase)
-        self.auto_load_blacklist: set[str] = {"multiplayer"}  ### FIX: Stop Multiplayer plugin freaking out at startup  ** ESSENTIAL **
+        self.auto_load_blacklist: set[str] = {"multiplayer", "stdp"}  ### FIX: Stop Multiplayer plugin freaking out at startup  ** ESSENTIAL **
                                                                 ## This is super important. All plugins start austomatically unless
                                                                 ## specifically blacklisted here... DO NOT LET MULTIPLAYER AUTO START.
+
+        self.auto_load_allowlist: set[str] = set()  # If non-empty, ONLY these plugins load
+        self._whitelist: set[str] = set()  # Populated from whitelist.txt; controls auto-enable
                                                                  
-        
         # Custom neuron handlers registered by plugins
         # Maps neuron_name -> {'handler': callable, 'plugin': plugin_name, 'metadata': dict}
         self._neuron_handlers: Dict[str, Dict] = {}
@@ -163,6 +165,10 @@ class PluginManager:
         
         # Custom menu action hooks
         self.register_hook("register_menu_actions")
+
+        # Plugin lifecycle hooks
+        self.register_hook("on_plugin_enabled")
+        self.register_hook("on_plugin_disabled")
         
         # Custom neuron hooks - allows plugins to register input neuron handlers
         self.register_hook("register_neuron_handlers")
@@ -442,7 +448,8 @@ class PluginManager:
                 elif plugin_name in self.plugins:
                      self.logger.info(f"Success")
 
-                if plugin_name != "multiplayer":
+                if plugin_name not in self.auto_load_blacklist \
+                        and (not self._whitelist or plugin_name in self._whitelist):
                     self.enabled_plugins.add(plugin_name)
                 
                 return True
@@ -457,31 +464,42 @@ class PluginManager:
     def load_all_plugins(self) -> Dict[str, bool]:
         """
         Load all discovered plugins except those in auto_load_blacklist.
+        If a whitelist.txt exists in the plugin directory, only those plugins load.
         """
         self.logger.info("  Discovering plugins...")
         self.plugins.clear()
         self.enabled_plugins.clear()
-        
-        self._discovered_plugins = self.discover_plugins() 
+
+        # --- Whitelist ---
+        self._whitelist = set()
+        whitelist_path = os.path.join(self.plugin_directory, 'whitelist.txt')
+        if os.path.exists(whitelist_path):
+            with open(whitelist_path, 'r') as f:
+                for line in f:
+                    name = line.strip().lower()
+                    if name and not name.startswith('#'):
+                        self._whitelist.add(name)
+            self.logger.info(f"             Whitelist active: {sorted(self._whitelist)}")
+
+        self._discovered_plugins = self.discover_plugins()
         if not self._discovered_plugins:
             return {}
-            
+
         results = {}
-        # Skip plugins in auto_load_blacklist
         plugins_to_load_ordered = [
-            name for name in self._discovered_plugins.keys() 
+            name for name in self._discovered_plugins.keys()
             if name not in self.auto_load_blacklist
+            and (not self._whitelist or name in self._whitelist)
         ]
 
         for plugin_name_key in plugins_to_load_ordered:
-            result = self.load_plugin(plugin_name_key) 
+            result = self.load_plugin(plugin_name_key)
             results[plugin_name_key] = result
 
-        # Log skipped plugins
         blacklisted_found = [name for name in self._discovered_plugins.keys() if name in self.auto_load_blacklist]
         if blacklisted_found:
             self.logger.info(f"Skipped auto-loading of {blacklisted_found}")
-        
+
         return results
     
     def unload_plugin(self, plugin_name: str) -> bool:
@@ -635,6 +653,7 @@ class PluginManager:
         
         self.enabled_plugins.remove(plugin_name_lower)
         self.logger.info(f"Plugin '{plugin_name_lower}' disabled.")
+        self.trigger_hook("on_plugin_disabled", plugin_key=plugin_name_lower)
         return True
     
     def get_plugin_info(self, plugin_name: str) -> Dict | None:

@@ -41,7 +41,8 @@ class BrainWorker(QThread):
             'excluded_neurons': set(),
             'connector_neurons': set(),
             'learning_rate': 0.1,
-            'new_neurons': set()
+            'new_neurons': set(),
+            'custom_neurons': set()
         }
 
         # History tracking to prevent Hebbian loops
@@ -51,7 +52,8 @@ class BrainWorker(QThread):
         self.queue_mutex = QMutex()
 
     def update_cache(self, state, weights, positions, config, excluded_neurons=None, 
-                     connector_neurons=None, learning_rate=0.1, new_neurons=None):
+                     connector_neurons=None, learning_rate=0.1, new_neurons=None,
+                     custom_neurons=None):
         """
         Update the local cache of brain state.
         Called from main thread before triggering heavy tasks.
@@ -66,6 +68,7 @@ class BrainWorker(QThread):
             self.cache['connector_neurons'] = connector_neurons if connector_neurons else set()
             self.cache['learning_rate'] = learning_rate
             self.cache['new_neurons'] = new_neurons if new_neurons else set()
+            self.cache['custom_neurons'] = custom_neurons if custom_neurons else set()
 
     def queue_neurogenesis_check(self, state_context):
         self._add_task('neurogenesis', {'state': state_context})
@@ -322,9 +325,7 @@ class BrainWorker(QThread):
             updated_pairs_list.append(use_pair)
 
         if updated_pairs_list:
-            print(f"🧠 BrainWorker: Hebbian update calculated for {len(updated_pairs_list)} pairs.")
-        else:
-            print("⚠️ BrainWorker: Hebbian calculated, but no weights were updated (missing connections?).")
+            print(f"🧠 Hebbian: updated {len(updated_pairs_list)} pair(s)")
 
         self.hebbian_result.emit({
             'updated_pairs': updated_pairs_list,

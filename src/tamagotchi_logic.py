@@ -2166,7 +2166,7 @@ class TamagotchiLogic:
             # Update squid needs
             if not self.squid.is_sleeping:
                 self.squid.hunger      = min(100, self.squid.hunger      + (0.1 * self.simulation_speed))
-                self.squid.sleepiness  = min(100, self.squid.sleepiness  + (0.25 * self.simulation_speed))
+                self.squid.sleepiness  = min(100, self.squid.sleepiness  + (0.12 * self.simulation_speed))
                 self.squid.happiness   = max(0,   self.squid.happiness   - (0.1 * self.simulation_speed))
                 self.squid.cleanliness = max(0,   self.squid.cleanliness - (0.1 * self.simulation_speed))
 

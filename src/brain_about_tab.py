@@ -3,6 +3,7 @@ import os
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .localisation import Localisation
+from .compute_backend import get_backend
 
 # Predefined list of approved squid names
 SQUID_NAMES = [
@@ -68,6 +69,26 @@ class AboutTab(BrainBaseTab):
     def initialize_ui(self):
         # Get version info first
         version_info = self.get_version_info()
+
+        # Resolve compute backend display string
+        _backend = get_backend()
+        _bname = _backend.name.lower()
+        if _bname.startswith('onnx') and 'unavailable' not in _bname:
+            _provider = ''
+            if '[' in _backend.name and ']' in _backend.name:
+                _raw = _backend.name.split('[')[1].rstrip(']')
+                _short = {
+                    'DmlExecutionProvider':      'DirectML',
+                    'QNNExecutionProvider':      'QNN·HTP',
+                    'OpenVINOExecutionProvider': 'OpenVINO',
+                    'CPUExecutionProvider':      'CPU',
+                }
+                _provider = _short.get(_raw, _raw.replace('ExecutionProvider', ''))
+            backend_text = f'ONNX · {_provider}' if _provider else 'ONNX'
+        elif 'unavailable' in _bname:
+            backend_text = 'NumPy (ONNX unavailable)'
+        else:
+            backend_text = 'NumPy'
         
         from .display_scaling import DisplayScaling
         
@@ -120,6 +141,7 @@ class AboutTab(BrainBaseTab):
                 {self.loc.get('version_brain_tool')} {version_info['brain_tool']}<br>
                 {self.loc.get('version_decision')} {version_info['decision_engine']}<br>
                 {self.loc.get('version_neuro')} {version_info['neurogenesis']}<br>
+                Backend: {backend_text}<br>
                 <p>{self.loc.get('research_project')}</p><br><br>
                 </ul>
                         """
@@ -327,8 +349,8 @@ class AboutTab(BrainBaseTab):
     def get_version_info(self):
         """Read version information from the version file"""
         version_info = {
-            "dosidicus": "Dosidicus-2 2.6.1.0 b1216",
-            "brain_tool": "STRINg 3",
+            "dosidicus": "Dosidicus-2 2.6.2.0 STRINg2",
+            "brain_tool": "06.03.26",
             "decision_engine": "4.0",
             "neurogenesis": "ver3_unified"
         }

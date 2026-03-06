@@ -135,6 +135,7 @@ class TutorialManager:
                 self.ui.squid_brain_window.brain_widget):
                 self.ui.squid_brain_window.brain_widget.start_tutorial_glow(duration_ms=3000)
                 logging.debug("Started tutorial glow on brain widget")
+                self._flash_brain_window_background(self.ui.squid_brain_window)
             
             win_width = self.ui.window_width
             win_height = self.ui.window_height
@@ -623,6 +624,29 @@ class TutorialManager:
         else:
             self.end_tutorial()
     
+    def _flash_brain_window_background(self, window, flash_colour="#00FFFF", flashes=4, interval_ms=220):
+        """Flash the entire background of the brain window with a stark colour."""
+        original_style = window.styleSheet()
+        flash_style = f"background-color: {flash_colour};"
+        self._flash_state = False
+        self._flash_count = [0]
+        total_toggles = flashes * 2  # on + off per flash
+
+        def _toggle():
+            self._flash_count[0] += 1
+            self._flash_state = not self._flash_state
+            if self._flash_state:
+                window.setStyleSheet(flash_style)
+            else:
+                window.setStyleSheet(original_style)
+            if self._flash_count[0] >= total_toggles:
+                self._bg_flash_timer.stop()
+                window.setStyleSheet(original_style)
+
+        self._bg_flash_timer = QtCore.QTimer()
+        self._bg_flash_timer.timeout.connect(_toggle)
+        self._bg_flash_timer.start(interval_ms)
+
     def end_tutorial(self):
         """End the tutorial sequence and clean up"""
         self.cancel_auto_dismiss_timer()

@@ -92,14 +92,7 @@ class NetworkTab(BrainBaseTab):
 
         metrics_layout.addStretch()
 
-        # Compute backend label (sits just left of the Hebbian timer box)
-        self.backend_label = QtWidgets.QLabel()
-        backend_font = QtGui.QFont()
-        backend_font.setPointSize(DisplayScaling.font_size(14))
-        backend_font.setBold(True)
-        self.backend_label.setFont(backend_font)
-        self._update_backend_label()
-        metrics_layout.addWidget(self.backend_label)
+        # Backend label has moved to the About tab
 
         # Hebbian timer display
         timers_container = QtWidgets.QWidget()
@@ -306,7 +299,8 @@ class NetworkTab(BrainBaseTab):
         if hasattr(self, 'checkbox_links') and self.checkbox_links is not None:
             self.checkbox_links.setChecked(True)
     def _update_backend_label(self):
-        """Set the backend label text and colour from the active compute backend."""
+        """Backend label has moved to the About tab - this is now a no-op."""
+        return
         if not hasattr(self, 'backend_label'):
             return
         backend = get_backend()

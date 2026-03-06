@@ -4,6 +4,15 @@ import random
 import time
 from .localisation import Localisation
 
+try:
+    from display_scaling import DisplayScaling
+except ImportError:
+    class DisplayScaling:
+        @classmethod
+        def font_size(cls, size): return size
+        @classmethod
+        def scale_css(cls, css): return css
+
 class NeuralNetworkVisualizerTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
 
@@ -327,17 +336,17 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         card_layout = QtWidgets.QVBoxLayout(card)
         card_layout.setSpacing(8)
 
-        title_label = QtWidgets.QLabel(f"<b style='font-size: 18px;'>{title}</b>")
+        title_label = QtWidgets.QLabel(f"<b style='font-size: {DisplayScaling.font_size(18)}px;'>{title}</b>")
         card_layout.addWidget(title_label)
 
         desc_label = QtWidgets.QLabel(description)
         desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #495057; font-size: 14px;")
+        desc_label.setStyleSheet(f"color: #495057; font-size: {DisplayScaling.font_size(14)}px;")
         card_layout.addWidget(desc_label)
 
         return card
 
-    def _create_learning_pair_card(self, pair, weight, weight_change=None):
+    def _create_learning_pair_card(self, pair, weight, weight_change=None, stdp_meta=None):
         """Create a card displaying a learning pair"""
         loc = Localisation.instance()
         # Determine colors based on weight
@@ -365,9 +374,18 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         # Weight change indicator
         change_indicator = ""
         if weight_change == "increase":
-            change_indicator = "<span style='color: #4caf50; font-size: 24px; margin-left: 10px;'>↗</span>"
+            change_indicator = f"<span style='color: #4caf50; font-size: {DisplayScaling.font_size(24)}px; margin-left: 10px;'>↗</span>"
         elif weight_change == "decrease":
-            change_indicator = "<span style='color: #f44336; font-size: 24px; margin-left: 10px;'>↘</span>"
+            change_indicator = f"<span style='color: #f44336; font-size: {DisplayScaling.font_size(24)}px; margin-left: 10px;'>↘</span>"
+
+        # STDP: resolve directional arrow and LTP/LTD info
+        stdp_direction = stdp_meta.get('stdp_direction', 'none') if stdp_meta else 'none'
+        if stdp_direction == 'n1_to_n2':
+            arrow_char = "→"
+        elif stdp_direction == 'n2_to_n1':
+            arrow_char = "←"
+        else:
+            arrow_char = "↔"
 
         card = QtWidgets.QWidget()
         card.setStyleSheet(f"""
@@ -391,7 +409,7 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         connection_layout.setSpacing(20)
 
         # Neuron 1 - large and prominent
-        neuron1_label = QtWidgets.QLabel(f"<span style='font-size: 24px; font-weight: bold; color: #2c3e50;'>{pair[0].upper()}</span>")
+        neuron1_label = QtWidgets.QLabel(f"<span style='font-size: {DisplayScaling.font_size(24)}px; font-weight: bold; color: #2c3e50;'>{pair[0].upper()}</span>")
         neuron1_label.setAlignment(QtCore.Qt.AlignCenter)
         connection_layout.addWidget(neuron1_label, 1)
 
@@ -401,12 +419,12 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         arrow_layout.setSpacing(5)
         arrow_layout.setContentsMargins(0, 0, 0, 0)
 
-        arrow_label = QtWidgets.QLabel("<span style='font-size: 36px; color: #607d8b;'>↔</span>")
+        arrow_label = QtWidgets.QLabel(f"<span style='font-size: {DisplayScaling.font_size(36)}px; color: #607d8b;'>{arrow_char}</span>")
         arrow_label.setAlignment(QtCore.Qt.AlignCenter)
         arrow_layout.addWidget(arrow_label)
 
         weight_display = QtWidgets.QLabel(
-            f"<span style='font-size: 20px; font-weight: bold; color: {weight_color};'>{weight:.3f}</span>"
+            f"<span style='font-size: {DisplayScaling.font_size(20)}px; font-weight: bold; color: {weight_color};'>{weight:.3f}</span>"
         )
         weight_display.setAlignment(QtCore.Qt.AlignCenter)
         arrow_layout.addWidget(weight_display)
@@ -414,24 +432,71 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         connection_layout.addWidget(arrow_widget, 0)
 
         # Neuron 2 - large and prominent
-        neuron2_label = QtWidgets.QLabel(f"<span style='font-size: 24px; font-weight: bold; color: #2c3e50;'>{pair[1].upper()}</span>")
+        neuron2_label = QtWidgets.QLabel(f"<span style='font-size: {DisplayScaling.font_size(24)}px; font-weight: bold; color: #2c3e50;'>{pair[1].upper()}</span>")
         neuron2_label.setAlignment(QtCore.Qt.AlignCenter)
         connection_layout.addWidget(neuron2_label, 1)
 
         card_layout.addLayout(connection_layout)
 
+        # STDP badge row (only when STDP contributed a timing signal)
+        if stdp_meta and stdp_direction != 'none':
+            is_ltp      = stdp_meta.get('is_ltp', False)
+            is_ltd      = stdp_meta.get('is_ltd', False)
+            stdp_delta  = stdp_meta.get('stdp_delta', 0.0)
+            stdp_weight = stdp_meta.get('stdp_weight', 0.0)
+
+            if is_ltp or is_ltd:
+                badge_row = QtWidgets.QHBoxLayout()
+                badge_row.setSpacing(8)
+
+                # LTP / LTD pill
+                if is_ltp:
+                    ltp_ltd_color  = "#00897b"
+                    ltp_ltd_bg     = "#e0f2f1"
+                    ltp_ltd_border = "#80cbc4"
+                    ltp_ltd_text   = "⚡ LTP"
+                else:
+                    ltp_ltd_color  = "#c62828"
+                    ltp_ltd_bg     = "#ffebee"
+                    ltp_ltd_border = "#ef9a9a"
+                    ltp_ltd_text   = "⚡ LTD"
+
+                badge = QtWidgets.QLabel(ltp_ltd_text)
+                badge.setStyleSheet(f"""
+                    font-size: {DisplayScaling.font_size(14)}px;
+                    font-weight: 700;
+                    color: {ltp_ltd_color};
+                    background: {ltp_ltd_bg};
+                    border: 1px solid {ltp_ltd_border};
+                    border-radius: 4px;
+                    padding: 3px 9px;
+                """)
+                badge_row.addWidget(badge)
+
+                # Delta value
+                sign = "+" if stdp_delta >= 0 else ""
+                delta_label = QtWidgets.QLabel(
+                    f"<span style='font-size: {DisplayScaling.font_size(14)}px; color: #546e7a;'>"
+                    f"STDP Δ {sign}{stdp_delta:.4f} &nbsp;·&nbsp; "
+                    f"blend {int(stdp_weight * 100)}% spike-timing</span>"
+                )
+                badge_row.addWidget(delta_label)
+                badge_row.addStretch()
+
+                card_layout.addLayout(badge_row)
+
         # Bottom row - metadata
         meta_layout = QtWidgets.QHBoxLayout()
 
         strength_label = QtWidgets.QLabel(
-            f"<span style='font-size: 16px; font-weight: 600; color: {weight_color};'>{strength}</span>{change_indicator}"
+            f"<span style='font-size: {DisplayScaling.font_size(16)}px; font-weight: 600; color: {weight_color};'>{strength}</span>{change_indicator}"
         )
         meta_layout.addWidget(strength_label)
 
         meta_layout.addStretch()
 
         timestamp_label = QtWidgets.QLabel(
-            f"<span style='color: #6c757d; font-size: 13px;'>{time.strftime('%H:%M:%S')}</span>"
+            f"<span style='color: #6c757d; font-size: {DisplayScaling.font_size(13)}px;'>{time.strftime('%H:%M:%S')}</span>"
         )
         meta_layout.addWidget(timestamp_label)
 
@@ -471,7 +536,7 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         b = max(0, int(b * (100 - percent) / 100))
         return f'#{r:02x}{g:02x}{b:02x}'
 
-    def add_log_entry(self, message, pair=None, weight_change=None):
+    def add_log_entry(self, message, pair=None, weight_change=None, stdp_meta=None):
         """Add a new learning pair card to the display"""
         if pair and hasattr(self, 'learning_content_layout'):
             # Remove placeholder if it exists
@@ -484,7 +549,7 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
             weight = getattr(self.brain_widget, 'weights', {}).get(pair, 0)
 
             # Create card
-            card = self._create_learning_pair_card(pair, weight, weight_change)
+            card = self._create_learning_pair_card(pair, weight, weight_change, stdp_meta)
 
             # Insert at the top (before stretch)
             self.learning_content_layout.insertWidget(0, card)
