@@ -1,4 +1,75 @@
-name: Build Releases
+name: Build and Release
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      # Linux build
+      - name: Build Linux AppImage
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          chmod +x packaging/build_linux.sh
+          packaging/build_linux.sh
+
+      # macOS build
+      - name: Build macOS DMG
+        if: matrix.os == 'macos-latest'
+        run: |
+          chmod +x packaging/build_macos.sh
+          packaging/build_macos.sh
+
+      # Windows build
+      - name: Build Windows EXE
+        if: matrix.os == 'windows-latest'
+        run: |
+          powershell packaging/build_windows.ps1
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}
+          path: |
+            *.AppImage
+            *.dmg
+            *.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*.AppImage
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
