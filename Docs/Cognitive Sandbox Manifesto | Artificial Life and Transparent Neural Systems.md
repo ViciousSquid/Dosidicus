@@ -116,6 +116,8 @@ The brain is system.
 Together, they create **computational meta-art**:
 a drawn creature whose behaviour emerges from real learning dynamics.
 
+ <img src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" width="800">
+
 ## 7. STRINg: The Simulation Engine
 
 Under the hood runs a custom engine:
