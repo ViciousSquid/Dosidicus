@@ -10,7 +10,7 @@ on:
       tag:
         description: 'Release tag  (e.g. v2.6.1.2)'
         required: true
-        default: 'v2.6.1.2'
+        default: 'v2.6.2.0'
       release_name:
         description: 'Release title  (leave blank to use tag)'
         required: false
@@ -43,9 +43,37 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      # 1. Checkout source
-      - name: Checkout
+      # 1a. Checkout — macOS & Linux (full checkout is fine)
+      - name: Checkout (macOS & Linux)
+        if: matrix.platform != 'windows'
         uses: actions/checkout@v4
+
+      # 1b. Checkout — Windows sparse
+      #     "Docs/Cognitive Sandbox Manifesto | ..." contains a pipe character
+      #     which is illegal on Windows NTFS; git exits 128 trying to create it.
+      #     Sparse checkout lets us include only the folders needed for the build.
+      - name: Checkout (Windows — sparse)
+        if: matrix.platform == 'windows'
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            src
+            plugins
+            translations
+            custom_brains
+            example_squids
+            images
+            headless
+            extras
+            main.py
+            requirements.txt
+            config.ini
+            version
+            dosidicus.spec
+            SaveViewer.html
+            CITATION.cff
+            LICENSE
+          sparse-checkout-cone-mode: false
 
       # 2. Python 3.11 — good balance of compatibility and PyQt5 support
       - name: Set up Python
