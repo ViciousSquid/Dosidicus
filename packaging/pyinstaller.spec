@@ -27,7 +27,7 @@ exe = EXE(
     pyz,
     a.scripts,
     name='dosidicus',
-    console=False
+    console=True
 )
 
 coll = COLLECT(
