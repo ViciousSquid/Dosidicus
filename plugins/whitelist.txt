@@ -1,0 +1,3 @@
+# Only these plugins load at startup.
+# Add one plugin name per line. Lines starting with # are ignored.
+achievements
