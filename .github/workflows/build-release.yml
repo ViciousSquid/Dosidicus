@@ -10,7 +10,7 @@ on:
       tag:
         description: 'Release tag  (e.g. v2.6.1.2)'
         required: true
-        default: 'v2.6.2.0'
+        default: 'v2.6.1.2'
       release_name:
         description: 'Release title  (leave blank to use tag)'
         required: false
@@ -43,17 +43,9 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      # 1a. Checkout — macOS & Linux (full checkout is fine)
-      - name: Checkout (macOS & Linux)
-        if: matrix.platform != 'windows'
-        uses: actions/checkout@v4
-
-      # 1b. Checkout — Windows sparse
-      #     "Docs/Cognitive Sandbox Manifesto | ..." contains a pipe character
-      #     which is illegal on Windows NTFS; git exits 128 trying to create it.
-      #     Sparse checkout lets us include only the folders needed for the build.
-      - name: Checkout (Windows — sparse)
-        if: matrix.platform == 'windows'
+      # 1. Checkout — sparse on all platforms to exclude Docs/
+      #    (contains a pipe character in a filename, illegal on Windows NTFS)
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
