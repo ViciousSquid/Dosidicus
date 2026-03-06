@@ -215,6 +215,7 @@ class MainWindow(QtWidgets.QMainWindow):
         logging.debug("Initializing PluginManager")
         self.plugin_manager = PluginManager()
         print(f"> Plugin manager initialized: {self.plugin_manager}")
+        self.plugin_manager.auto_load_allowlist = {'achievements'}
         
         self.specified_personality = specified_personality
         self.neuro_cooldown = neuro_cooldown
@@ -261,7 +262,11 @@ class MainWindow(QtWidgets.QMainWindow):
         plugin_results = self.plugin_manager.load_all_plugins()
         
         # Setup plugins with tamagotchi_logic reference
+        # Only call setup() on plugins that are enabled (i.e. on the whitelist)
+        enabled = self.plugin_manager.enabled_plugins
         for plugin_name, plugin_data in self.plugin_manager.plugins.items():
+            if plugin_name not in enabled:
+                continue
             instance = plugin_data.get('instance')
             if instance and hasattr(instance, 'setup') and not plugin_data.get('is_setup', False):
                 try:
