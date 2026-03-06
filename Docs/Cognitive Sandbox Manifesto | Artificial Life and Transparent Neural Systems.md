@@ -1,7 +1,7 @@
-#### Cognitive Sandbox Manifesto | Artificial Life and Transparent Neural Systems
-by ViciousSquid (Rufus Pearce) | March 2026
- 
- <img src="https://github.com/user-attachments/assets/315aac09-f08e-422a-92f1-636af59ccc01" width="200">
+
+ <img src="https://github.com/user-attachments/assets/309ea7b0-a7c1-49f3-8f44-1b541734954d" width="220">
+
+
 
 
 ## 1. Why This Exists
@@ -122,9 +122,9 @@ a drawn creature whose behaviour emerges from real learning dynamics.
 
 ## 7. STRINg: The Simulation Engine
 
-Under the hood runs a custom engine:
+Under the hood runs a [custom engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview):
 
-STRINg
+[STRINg](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview)
 `S`imulated `T`amagotchi `R`eactions via `I`nferencing and `N`eurogenesis
 
 Built from scratch using NumPy.
