@@ -1,4 +1,5 @@
 #### Cognitive Sandbox Manifesto | Artificial Life and Transparent Neural Systems
+by ViciousSquid (Rufus Pearce) | March 2026
  
  <img src="https://github.com/user-attachments/assets/315aac09-f08e-422a-92f1-636af59ccc01" width="200">
 
