@@ -49,6 +49,7 @@ jobs:
         python -m nuitka \
           --standalone \
           --assume-yes-for-downloads \
+          --enable-plugin=pyqt5 \
           --output-dir=build \
           --output-filename=Dosidicus \
           --include-package=src \
