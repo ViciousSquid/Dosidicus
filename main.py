@@ -1,4 +1,4 @@
-# Dosidicus - a digital pet with a neural network
+# Dosidicus - a digital pet with a neural network   |   2.1.2.0 March 2026
 # main.py Entrypoint 
 from PyQt5 import QtWidgets, QtCore, QtGui
 import sys
@@ -27,6 +27,7 @@ from src.squid import Squid, Personality
 from src.splash_screen import SplashScreen
 from src.save_manager import SaveManager
 from src.brain_tool import SquidBrainWindow
+from src.display_scaling import DisplayScaling
 from src.learning import LearningConfig
 from src.plugin_manager import PluginManager
 from src.brain_worker import BrainWorker
@@ -115,11 +116,12 @@ class TimedMessageBox(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout()
         
         self.message_label = QtWidgets.QLabel(message)
+        self.message_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(13)}pt;")
         layout.addWidget(self.message_label)
         
         # Auto-decline message
         self.timer_label = QtWidgets.QLabel(self.loc.get("auto_decline", seconds=self.remaining_seconds))
-        self.timer_label.setStyleSheet("color: gray; font-size: 10px;")
+        self.timer_label.setStyleSheet(f"color: gray; font-size: {DisplayScaling.font_size(11)}pt;")
         layout.addWidget(self.timer_label)
         
         # Buttons
@@ -215,7 +217,6 @@ class MainWindow(QtWidgets.QMainWindow):
         logging.debug("Initializing PluginManager")
         self.plugin_manager = PluginManager()
         print(f"> Plugin manager initialized: {self.plugin_manager}")
-        self.plugin_manager.auto_load_allowlist = {'achievements'}
         
         self.specified_personality = specified_personality
         self.neuro_cooldown = neuro_cooldown
@@ -262,11 +263,7 @@ class MainWindow(QtWidgets.QMainWindow):
         plugin_results = self.plugin_manager.load_all_plugins()
         
         # Setup plugins with tamagotchi_logic reference
-        # Only call setup() on plugins that are enabled (i.e. on the whitelist)
-        enabled = self.plugin_manager.enabled_plugins
         for plugin_name, plugin_data in self.plugin_manager.plugins.items():
-            if plugin_name not in enabled:
-                continue
             instance = plugin_data.get('instance')
             if instance and hasattr(instance, 'setup') and not plugin_data.get('is_setup', False):
                 try:
