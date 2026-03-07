@@ -46,7 +46,12 @@ jobs:
 
     - name: Copy repository structure (excluding Docs)
       run: |
-        rsync -a --exclude Docs ./ release/
+        for item in *; do
+          case "$item" in
+            Docs|release|dist|build|__pycache__) ;;
+            *) cp -r "$item" release/ 2>/dev/null || true ;;
+          esac
+        done
 
     - name: Remove python entrypoint
       run: |
