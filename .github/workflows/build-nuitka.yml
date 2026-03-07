@@ -44,10 +44,9 @@ jobs:
       run: |
         mkdir release
 
-    - name: Copy repository structure
+    - name: Copy repository structure (excluding Docs)
       run: |
-        shopt -s dotglob
-        cp -r * release/ || true
+        rsync -a --exclude Docs ./ release/
 
     - name: Remove python entrypoint
       run: |
