@@ -5,7 +5,6 @@ on:
 
 jobs:
   build:
-
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
@@ -17,7 +16,6 @@ jobs:
         shell: bash
 
     steps:
-
     - name: Checkout repo
       uses: actions/checkout@v4
 
@@ -36,12 +34,24 @@ jobs:
       if: runner.os == 'macOS'
       run: pip install imageio
 
-    - name: Disable Windows Defender (prevents false positive on Nuitka output)
+    - name: Disable Windows Defender (Robust)
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
+        # Disable all real-time and heuristic scanning
         Set-MpPreference -DisableRealtimeMonitoring $true
+        Set-MpPreference -DisableBehaviorMonitoring $true
+        Set-MpPreference -DisableOnAccessProtection $true
+        Set-MpPreference -DisableIOAVProtection $true
+        # Exclude workspace, temp, and Nuitka cache
         Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+        Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\Nuitka"
+        Add-MpPreference -ExclusionPath "C:\Users\runneradmin\AppData\Local\Temp"
+        # Exclude the compiler and python processes
+        Add-MpPreference -ExclusionProcess "python.exe"
+        Add-MpPreference -ExclusionProcess "gcc.exe"
+        Add-MpPreference -ExclusionProcess "g++.exe"
+        Add-MpPreference -ExclusionProcess "ld.exe"
 
     - name: Build executable
       run: |
@@ -53,8 +63,10 @@ jobs:
           ICON_FLAG="--macos-app-icon=images/icons/squidblack.png"
         fi
 
+        # Added --deployment to minimize AV false positives
         python -m nuitka \
           --mode=app \
+          --deployment \
           --windows-console-mode=force \
           --assume-yes-for-downloads \
           --enable-plugin=pyqt5 \
@@ -66,34 +78,23 @@ jobs:
           $ICON_FLAG \
           main.py
 
-    - name: Show build output
-      run: find build -maxdepth 2 | sort
-
     - name: Create release directory
-      run: mkdir release
-
-    - name: Copy repository structure
       run: |
+        mkdir -p release
+        # Copy repo structure excluding build artifacts
         for item in *; do
           case "$item" in
             release|dist|build|__pycache__|*.spec) ;;
             *) cp -r "$item" release/ 2>/dev/null || true ;;
           esac
         done
-
-    - name: Remove python entrypoint
-      run: rm -f release/main.py || true
+        rm -f release/main.py || true
 
     - name: Insert compiled executable
       run: |
         if [[ "${{ runner.os }}" == "macOS" ]]; then
           APP=$(find build -maxdepth 1 -name "*.app" | head -1)
-          if [ -n "$APP" ]; then
-            cp -r "$APP" release/Dosidicus.app
-          else
-            BIN=$(find build -maxdepth 1 -type f ! -name "*.cmd" | head -1)
-            cp "$BIN" release/Dosidicus
-          fi
+          [ -n "$APP" ] && cp -r "$APP" release/Dosidicus.app || cp $(find build -maxdepth 1 -type f ! -name "*.cmd" | head -1) release/Dosidicus
         elif [[ "${{ runner.os }}" == "Windows" ]]; then
           EXE=$(find build -maxdepth 1 -name "*.exe" | head -1)
           cp "$EXE" release/Dosidicus.exe
@@ -102,13 +103,19 @@ jobs:
           cp "$BIN" release/Dosidicus
         fi
 
-    - name: Create zip
+    - name: Create zip and checksum
       run: |
         OS_NAME=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
-        python -c "import shutil; shutil.make_archive('Dosidicus${{ github.ref_name }}-${OS_NAME}', 'zip', 'release')"
+        ZIP_NAME="Dosidicus-${{ github.ref_name }}-${OS_NAME}.zip"
+        python -c "import shutil; shutil.make_archive('${ZIP_NAME%.zip}', 'zip', 'release')"
+        # Generate SHA256 Checksum
+        shasum -a 256 "$ZIP_NAME" > "${ZIP_NAME}.sha256"
+        echo "ARCHIVE_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: nuitka-${{ runner.os }}
-        path: Dosidicus${{ github.ref_name }}-*.zip
+        path: |
+          Dosidicus-*.zip
+          Dosidicus-*.sha256
