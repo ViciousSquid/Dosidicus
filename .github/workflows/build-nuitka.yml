@@ -93,10 +93,12 @@ jobs:
 
     - name: Create zip
       run: |
-        python -c "import shutil; shutil.make_archive('app-nuitka-${{ runner.os }}', 'zip', 'release')"
+        OS_NAME=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
+        BRANCH="${{ github.ref_name }}"
+        python -c "import shutil; shutil.make_archive('Dosidicus${{ github.ref_name }}-${OS_NAME}', 'zip', 'release')"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: nuitka-${{ runner.os }}
-        path: app-nuitka-${{ runner.os }}.zip
+        path: Dosidicus${{ github.ref_name }}-*.zip
