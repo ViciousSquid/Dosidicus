@@ -60,11 +60,10 @@ jobs:
           main.py
 
     - name: Show build output
-      run: ls -la build/ && ls -la build/main.dist/ || ls -la build/main.app/ || true
+      run: ls -la build/
 
     - name: Create release directory
-      run: |
-        mkdir release
+      run: mkdir release
 
     - name: Copy repository structure
       run: |
@@ -76,15 +75,16 @@ jobs:
         done
 
     - name: Remove python entrypoint
-      run: |
-        rm -f release/main.py || true
+      run: rm -f release/main.py || true
 
     - name: Insert compiled executable
       run: |
         if [[ "${{ runner.os }}" == "macOS" ]]; then
-          cp -r build/main.app release/
+          cp -r build/Dosidicus.app release/
+        elif [[ "${{ runner.os }}" == "Windows" ]]; then
+          cp build/Dosidicus.exe release/
         else
-          cp -r build/main.dist/* release/
+          cp build/Dosidicus release/
         fi
 
     - name: Create zip
