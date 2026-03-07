@@ -59,6 +59,7 @@ jobs:
           --assume-yes-for-downloads \
           --output-dir=build \
           --output-filename=Dosidicus \
+          --include-package=src \
           --include-module=plugins.achievements.display_scaling \
           --include-module=plugins.achievements.achievements_data \
           --include-module=uuid \
