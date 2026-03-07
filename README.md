@@ -30,18 +30,9 @@ git clone ...
 cd Dosidicus
 pip install -r requirements.txt
 python main.py
-
 ```
 
- ### Windows Download: see [Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
-
-**Linux** users can try the experimental bash setup: :
-
-```bash
-
-curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.1.2_LatestVersion/linux_setup.sh | bash
-
-```
+ ### Windows, Mac and Linux binaries: [see Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
  
 ----------------------------------
 
@@ -140,6 +131,7 @@ Every squid is an experiment.
 ---------------------------
 
 ![Visitors](https://api.visitorbadge.io/api/visitors?path=YOUR_GITHUB_USERNAME&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+
 
 
 
