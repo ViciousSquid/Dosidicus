@@ -59,9 +59,6 @@ jobs:
           $ICON_FLAG \
           main.py
 
-    - name: Show build output
-      run: ls -la build/
-
     - name: Create release directory
       run: |
         mkdir release
@@ -82,9 +79,9 @@ jobs:
     - name: Insert compiled executable
       run: |
         if [[ "${{ runner.os }}" == "macOS" ]]; then
-          cp -r build/Dosidicus.app release/
+          cp -r build/main.app release/
         else
-          cp -r build/Dosidicus.dist/* release/
+          cp -r build/main.dist/* release/
         fi
 
     - name: Create zip
