@@ -38,10 +38,7 @@ jobs:
         python -c "
         from PIL import Image
         img = Image.open('images/icons/squidblack.ico')
-        if '${{ runner.os }}' == 'macOS':
-            img.save('images/icons/squidblack.icns')
-        else:
-            img.save('images/icons/squidblack.png')
+        img.save('images/icons/squidblack.png')
         "
 
     - name: Build executable
@@ -51,7 +48,7 @@ jobs:
         elif [[ "${{ runner.os }}" == "Linux" ]]; then
           ICON_FLAG="--linux-icon=images/icons/squidblack.png"
         else
-          ICON_FLAG="--macos-app-icon=images/icons/squidblack.icns"
+          ICON_FLAG="--macos-app-icon=images/icons/squidblack.png"
         fi
 
         python -m nuitka \
