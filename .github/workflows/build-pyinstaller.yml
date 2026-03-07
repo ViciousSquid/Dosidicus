@@ -40,6 +40,7 @@ jobs:
           --noconfirm \
           --name Dosidicus \
           --icon images/icons/squidblack.ico \
+          --collect-submodules src \
           --hidden-import plugins.achievements.display_scaling \
           --hidden-import plugins.achievements.achievements_data \
           --hidden-import uuid \
