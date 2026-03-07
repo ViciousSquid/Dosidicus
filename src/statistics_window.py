@@ -97,7 +97,7 @@ class StatisticsWindow(QtWidgets.QWidget):
             font = QtGui.QFont("Arial", 40, QtGui.QFont.Bold)
 
         # ---------------- score label ---------------------------------
-        self.score_label = QtWidgets.QLabel("0000")
+        self.score_label = QtWidgets.QLabel("00000")
         self.score_label.setAlignment(QtCore.Qt.AlignCenter)
         self.score_label.setFont(font)
         self.score_label.setStyleSheet("color:#000000;")
@@ -218,8 +218,8 @@ class StatisticsWindow(QtWidgets.QWidget):
         if abs(diff) > 0:
             step = math.copysign(max(1, abs(diff) // 8), diff)
             self.display_score += step
-            self.display_score = max(0, min(9999, self.display_score))
-            self.score_label.setText(f"{int(self.display_score):04d}")
+            self.display_score = max(0, min(99999, self.display_score))
+            self.score_label.setText(f"{int(self.display_score):05d}")
 
         # Update combo timer
         if self.combo_timer > 0:
