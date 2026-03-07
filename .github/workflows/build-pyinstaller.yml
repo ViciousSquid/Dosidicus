@@ -41,16 +41,8 @@ jobs:
           --name Dosidicus \
           --icon images/icons/squidblack.ico \
           --collect-submodules src \
-          --hidden-import plugins.achievements.display_scaling \
-          --hidden-import plugins.achievements.achievements_data \
+          --collect-submodules plugins \
           --hidden-import uuid \
-          --hidden-import brain_designer \
-          --hidden-import designer_window \
-          --hidden-import designer_core \
-          --hidden-import designer_constants \
-          --hidden-import designer_logging \
-          --hidden-import designer_dialogs \
-          --hidden-import brain_state_bridge \
           main.py
 
     - name: Create release directory
