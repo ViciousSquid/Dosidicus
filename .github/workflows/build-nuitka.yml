@@ -117,6 +117,82 @@ jobs:
           codesign --deep --force --sign - release/Dosidicus
         fi
 
+    # ─── Smoke tests ────────────────────────────────────────────────────────────
+    # Launch the binary, capture stdout, and look for the startup print from
+    # MainWindow.__init__: "📄 Applied language from config:"
+    # This fires after Qt initialises and all imports resolve, confirming the
+    # build is not silently broken.
+
+    - name: Install Xvfb (Linux)
+      if: runner.os == 'Linux'
+      run: sudo apt-get install -y xvfb
+
+    - name: Smoke test (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        xvfb-run -a ./release/Dosidicus > smoke.log 2>&1 &
+        PID=$!
+        echo "Started PID $PID"
+
+        # Poll for the expected startup line, up to 30s
+        for i in $(seq 1 30); do
+          sleep 1
+          if grep -q "Applied language from config" smoke.log 2>/dev/null; then
+            echo "✅ Startup confirmed at ${i}s"
+            kill $PID 2>/dev/null || true
+            exit 0
+          fi
+          # Bail early if the process already died
+          if ! kill -0 $PID 2>/dev/null; then
+            echo "❌ Process exited before printing startup line"
+            echo "--- stdout/stderr ---"
+            cat smoke.log
+            exit 1
+          fi
+        done
+
+        echo "❌ Startup line not seen after 30s"
+        echo "--- stdout/stderr ---"
+        cat smoke.log
+        kill $PID 2>/dev/null || true
+        exit 1
+
+    - name: Smoke test (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        APP=$(find release -maxdepth 1 -name "*.app" | head -1)
+        if [ -n "$APP" ]; then
+          BIN=$(find "$APP" -type f -perm +111 -name "Dosidicus" | head -1)
+        else
+          BIN=release/Dosidicus
+        fi
+
+        "$BIN" > smoke.log 2>&1 &
+        PID=$!
+        echo "Started PID $PID"
+
+        for i in $(seq 1 30); do
+          sleep 1
+          if grep -q "Applied language from config" smoke.log 2>/dev/null; then
+            echo "✅ Startup confirmed at ${i}s"
+            kill $PID 2>/dev/null || true
+            exit 0
+          fi
+          if ! kill -0 $PID 2>/dev/null; then
+            echo "❌ Process exited before printing startup line"
+            echo "--- stdout/stderr ---"
+            cat smoke.log
+            exit 1
+          fi
+        done
+
+        echo "❌ Startup line not seen after 30s"
+        echo "--- stdout/stderr ---"
+        cat smoke.log
+        kill $PID 2>/dev/null || true
+        exit 1
+    # ────────────────────────────────────────────────────────────────────────────
+
     # Zip may strip execute permissions - restore them before archiving
     - name: Mark Linux binary executable
       if: runner.os == 'Linux'
