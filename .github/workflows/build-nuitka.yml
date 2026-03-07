@@ -60,7 +60,7 @@ jobs:
           main.py
 
     - name: Show build output
-      run: ls -la build/
+      run: find build -maxdepth 2 | sort
 
     - name: Create release directory
       run: mkdir release
@@ -80,11 +80,19 @@ jobs:
     - name: Insert compiled executable
       run: |
         if [[ "${{ runner.os }}" == "macOS" ]]; then
-          cp -r build/Dosidicus.app release/
+          APP=$(find build -maxdepth 1 -name "*.app" | head -1)
+          if [ -n "$APP" ]; then
+            cp -r "$APP" release/Dosidicus.app
+          else
+            BIN=$(find build -maxdepth 1 -type f ! -name "*.cmd" | head -1)
+            cp "$BIN" release/Dosidicus
+          fi
         elif [[ "${{ runner.os }}" == "Windows" ]]; then
-          cp build/Dosidicus.exe release/
+          EXE=$(find build -maxdepth 1 -name "*.exe" | head -1)
+          cp "$EXE" release/Dosidicus.exe
         else
-          cp build/Dosidicus release/
+          BIN=$(find build -maxdepth 1 -type f -not -name "*.cmd" | head -1)
+          cp "$BIN" release/Dosidicus
         fi
 
     - name: Create zip
