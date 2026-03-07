@@ -123,14 +123,10 @@ jobs:
     # This fires after Qt initialises and all imports resolve, confirming the
     # build is not silently broken.
 
-    - name: Install Xvfb (Linux)
-      if: runner.os == 'Linux'
-      run: sudo apt-get install -y xvfb
-
     - name: Smoke test (Linux)
       if: runner.os == 'Linux'
       run: |
-        xvfb-run -a ./release/Dosidicus > smoke.log 2>&1 &
+        QT_QPA_PLATFORM=offscreen ./release/Dosidicus > smoke.log 2>&1 &
         PID=$!
         echo "Started PID $PID"
 
