@@ -36,7 +36,12 @@ jobs:
       if: runner.os == 'macOS'
       run: pip install imageio
 
-    - name: Disable Windows Defender (prevents false positive on Nuitka output)
+    # Standalone mode produces a folder of files rather than a single
+    # self-extracting binary. This avoids Defender false positives on Windows
+    # which flag onefile/packed executables as suspicious by default.
+    # Defender is also disabled during build to prevent it quarantining
+    # Nuitka's intermediate files mid-compile.
+    - name: Disable Windows Defender during build
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
@@ -58,6 +63,7 @@ jobs:
           --windows-console-mode=force \
           --assume-yes-for-downloads \
           --enable-plugin=pyqt5 \
+          --disable-plugin=options-nanny \
           --output-dir=build \
           --output-filename=Dosidicus \
           --include-package=src \
@@ -96,6 +102,25 @@ jobs:
         else
           cp -r build/main.dist/. release/
         fi
+
+    # Ad-hoc signing suppresses some Gatekeeper warnings on macOS.
+    # This is free but NOT a substitute for full notarization ($99/yr Apple
+    # Developer account). Users on macOS will still need to right-click ->
+    # Open -> Open Anyway the first time. Document this in your README.
+    - name: Ad-hoc sign for macOS
+      if: runner.os == 'macOS'
+      run: |
+        APP=$(find release -maxdepth 1 -name "*.app" | head -1)
+        if [ -n "$APP" ]; then
+          codesign --deep --force --sign - "$APP"
+        else
+          codesign --deep --force --sign - release/Dosidicus
+        fi
+
+    # Zip may strip execute permissions - restore them before archiving
+    - name: Mark Linux binary executable
+      if: runner.os == 'Linux'
+      run: chmod +x release/Dosidicus
 
     - name: Create zip
       run: |
