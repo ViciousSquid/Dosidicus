@@ -63,8 +63,7 @@ jobs:
 
     - name: Create zip
       run: |
-        cd release
-        zip -r ../app-nuitka-${{ runner.os }}.zip .
+        python -c "import shutil; shutil.make_archive('app-nuitka-${{ runner.os }}', 'zip', 'release')"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
