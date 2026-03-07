@@ -76,10 +76,11 @@ jobs:
 
     - name: Create zip
       run: |
-        python -c "import shutil; shutil.make_archive('app-pyinstaller-${{ runner.os }}', 'zip', 'release')"
+        OS_NAME=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
+        python -c "import shutil; shutil.make_archive('Dosidicus${{ github.ref_name }}-${OS_NAME}', 'zip', 'release')"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: pyinstaller-${{ runner.os }}
-        path: app-pyinstaller-${{ runner.os }}.zip
+        path: Dosidicus${{ github.ref_name }}-*.zip
