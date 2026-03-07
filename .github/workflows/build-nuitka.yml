@@ -36,6 +36,13 @@ jobs:
       if: runner.os == 'macOS'
       run: pip install imageio
 
+    - name: Disable Windows Defender (prevents false positive on Nuitka output)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Set-MpPreference -DisableRealtimeMonitoring $true
+        Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+
     - name: Build executable
       run: |
         if [[ "${{ runner.os }}" == "Windows" ]]; then
