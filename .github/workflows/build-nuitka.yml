@@ -5,7 +5,6 @@ on:
 
 jobs:
   build:
-
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
@@ -17,7 +16,6 @@ jobs:
         shell: bash
 
     steps:
-
     - name: Checkout repo
       uses: actions/checkout@v4
 
@@ -60,8 +58,7 @@ jobs:
           main.py
 
     - name: Create release directory
-      run: |
-        mkdir release
+      run: mkdir release
 
     - name: Copy repository structure
       run: |
@@ -73,8 +70,7 @@ jobs:
         done
 
     - name: Remove python entrypoint
-      run: |
-        rm -f release/main.py || true
+      run: rm -f release/main.py || true
 
     - name: Insert compiled executable
       run: |
@@ -94,3 +90,61 @@ jobs:
       with:
         name: nuitka-${{ runner.os }}
         path: Dosidicus${{ github.ref_name }}-*.zip
+
+  smoke-test:
+    needs: build
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nuitka-${{ runner.os }}
+          path: test-dir
+
+      - name: Extract and Prep
+        shell: bash
+        run: |
+          cd test-dir
+          unzip *.zip
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            chmod +x Dosidicus.app/Contents/MacOS/Dosidicus
+            echo "BINARY=./Dosidicus.app/Contents/MacOS/Dosidicus" >> $GITHUB_ENV
+          else
+            chmod +x Dosidicus
+            echo "BINARY=./Dosidicus" >> $GITHUB_ENV
+          fi
+
+      - name: Install Linux GUI Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xinput0 libxcb-xfixes0
+
+      - name: Run Smoke Test
+        shell: bash
+        run: |
+          cd test-dir
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            xvfb-run --auto-servernum $BINARY > output.log 2>&1 &
+          else
+            $BINARY > output.log 2>&1 &
+          fi
+          
+          PID=$!
+          echo "Process started (PID: $PID). Waiting 20s for squid initialization..."
+          sleep 20
+          kill $PID || true
+          
+          echo "--- LOG OUTPUT ---"
+          cat output.log
+          echo "--- END LOG ---"
+          
+          if grep -q "\*\*\* A SQUID HAS HATCHED! \*\*\*" output.log; then
+            echo "Success: Hatching confirmed on ${{ runner.os }}!"
+          else
+            echo "Error: Hatching string not found in logs."
+            exit 1
+          fi
