@@ -27,11 +27,6 @@ _"What if a Tamagotchi had a neural network and could learn stuff?"_
 
 ----------------------------
 
-
-- Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **No Tensorflow or PyTorch**
-- Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
-- Starts with 8 neurons — grows via **neurogenesis** and rewires using **Hebbian learning**.
-
 ## **Myth & Mechanism**
 
 Dosidicus is a digital squid born with a randomly wired brain.
@@ -40,14 +35,14 @@ Feed him., stimulate neurons, watch him learn.
 
 - He starts with 8 neurons.
 - He rewires through Hebbian learning.
-- He grows new structure via neurogenesis.
+- He grows new structure via **neurogenesis** and rewires using **Hebbian learning**
 - He forms memories.
 - He develops quirks.
 
 Every squid is different.
 Every save file is a cognitive history.
 
-#### Under the hood runs **STRINg** simulation engine:
+#### Under the hood runs [**STRINg** simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview):
 
 * Built from scratch in NumPy
 * No TensorFlow. No PyTorch.
@@ -55,7 +50,7 @@ Every save file is a cognitive history.
 * Structural growth over time
 * Dual memory system
 * Headless training mode
-* Most AI is a black box: Dosidicus lets you see the mind forming.
+* Most AI is a black box: Dosidicus lets you see the mind forming - every neuron is visible, stimulatable, understandable.
 
  Want the full conceptual philosophy behind Dosidicus? → Read the [Cognitive Sandbox Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems)
 
@@ -116,6 +111,7 @@ Every squid is an experiment.
 ---------------------------
 
 ![Visitors](https://api.visitorbadge.io/api/visitors?path=ViciousSquid&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+
 
 
 
