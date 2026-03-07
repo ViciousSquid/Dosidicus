@@ -1,0 +1,69 @@
+name: Build (Nuitka)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: pip
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install nuitka pyqt5 numpy
+
+    - name: Build executable
+      run: |
+        python -m nuitka \
+          --standalone \
+          --assume-yes-for-downloads \
+          --output-dir=build \
+          main.py
+
+    - name: Create release directory
+      run: |
+        mkdir release
+
+    - name: Copy repository structure
+      run: |
+        shopt -s dotglob
+        cp -r * release/ || true
+
+    - name: Remove python entrypoint
+      run: |
+        rm -f release/main.py || true
+
+    - name: Insert compiled executable
+      run: |
+        cp -r build/main.dist/* release/
+
+    - name: Create zip
+      run: |
+        cd release
+        zip -r ../app-nuitka-${{ runner.os }}.zip .
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: nuitka-${{ runner.os }}
+        path: app-nuitka-${{ runner.os }}.zip
