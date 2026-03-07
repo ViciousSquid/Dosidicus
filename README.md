@@ -21,17 +21,6 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
 - Starts with 8 neurons — grows via **neurogenesis** and rewires using **Hebbian learning**.
   
- 
-- -----------------------------
-```
-  ## Quick Start
-
-git clone ...
-cd Dosidicus
-pip install -r requirements.txt
-python main.py
-```
-
  ### Windows, Mac and Linux binaries: [see Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
  
 ----------------------------------
@@ -131,6 +120,7 @@ Every squid is an experiment.
 ---------------------------
 
 ![Visitors](https://api.visitorbadge.io/api/visitors?path=YOUR_GITHUB_USERNAME&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+
 
 
 
