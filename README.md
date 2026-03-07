@@ -13,28 +13,24 @@ _"What if a Tamagotchi had a neural network and could learn stuff?"_
 
 🦑 _A transparent cognitive sandbox disguised as a digital pet squid with a neural network you can **see thinking**_
 
-Micro neural engine for small autonomous agents that learn via Hebbian dynamics and grow new structure
-
 - Part **educational neuro tool**, part **sim game**, part **fever dream**
 - [Build-your-own neural network ](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) - learn neuroscience by raising a squid that **might develop irrational fears**
-- Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **No Tensorflow or PyTorch**
-- Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
-- Starts with 8 neurons — grows via **neurogenesis** and rewires using **Hebbian learning**.
   
- ### Windows, Mac and Linux binaries: [see Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
- 
+ ### Windows, Mac and Linux downloads: [see Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
+
+<img width="2482" height="980" alt="image" src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" />
+ <img src="https://github.com/user-attachments/assets/496cec0d-0810-4f47-8618-11165e0dd50d" width="380">
+
 ----------------------------------
 
 ##  [Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems) |   [Wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | [Changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) 
 
 ----------------------------
 
-<img width="2482" height="980" alt="image" src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" />
- <img src="https://github.com/user-attachments/assets/496cec0d-0810-4f47-8618-11165e0dd50d" width="380">
 
-
-
------------------------------------
+- Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **No Tensorflow or PyTorch**
+- Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
+- Starts with 8 neurons — grows via **neurogenesis** and rewires using **Hebbian learning**.
 
 ## **Myth & Mechanism**
 
@@ -120,6 +116,7 @@ Every squid is an experiment.
 ---------------------------
 
 ![Visitors](https://api.visitorbadge.io/api/visitors?path=ViciousSquid&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+
 
 
 
