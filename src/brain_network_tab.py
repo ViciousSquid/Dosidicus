@@ -63,36 +63,40 @@ class NetworkTab(BrainBaseTab):
                                         DisplayScaling.scale(10), 0)
         metrics_layout.setSpacing(DisplayScaling.scale(20))
 
+        metrics_font = QtGui.QFont()
+        metrics_font.setPointSize(DisplayScaling.font_size(10))
+
         self.neurons_label = QtWidgets.QLabel(f"{loc.get('stats_neurons')}: N/A")
         self.neurons_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.neurons_label.setFont(metrics_font)
         metrics_layout.addWidget(self.neurons_label)
 
         self.connections_label = QtWidgets.QLabel(f"{loc.get('stats_connections')}: N/A")
         self.connections_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.connections_label.setFont(metrics_font)
         metrics_layout.addWidget(self.connections_label)
 
         self.health_label = QtWidgets.QLabel(f"{loc.get('stats_health')}: N/A")
         self.health_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.health_label.setFont(metrics_font)
         metrics_layout.addWidget(self.health_label)
 
         self.emergency_status_label = QtWidgets.QLabel()
-        self.emergency_status_label.setStyleSheet("""
-            QLabel {
+        self.emergency_status_label.setStyleSheet(f"""
+            QLabel {{
                 color: white;
                 background-color: #d32f2f;
                 padding: 5px;
                 border-radius: 5px;
                 font-weight: bold;
-                font-size: 10pt;
-            }
+                font-size: {DisplayScaling.font_size(10)}px;
+            }}
         """)
         self.emergency_status_label.setVisible(False)
         self.emergency_status_label.setFixedWidth(DisplayScaling.scale(200))
         metrics_layout.addWidget(self.emergency_status_label)
 
         metrics_layout.addStretch()
-
-        # Backend label has moved to the About tab
 
         # Hebbian timer display
         timers_container = QtWidgets.QWidget()
@@ -104,7 +108,7 @@ class NetworkTab(BrainBaseTab):
                                     DisplayScaling.scale(5))
         timers_layout.setSpacing(DisplayScaling.scale(10))
 
-        font_size_timers = DisplayScaling.font_size(12)
+        font_size_timers = DisplayScaling.font_size(10)
         timer_font = QtGui.QFont()
         timer_font.setPointSize(font_size_timers)
 
@@ -166,7 +170,14 @@ class NetworkTab(BrainBaseTab):
         
         self.anim_combo.currentIndexChanged.connect(self._change_animation_style)
 
-        bottom_bar.addWidget(QtWidgets.QLabel(loc.get("style_label")))
+        # Shared small font for all bottom-bar controls
+        bottom_bar_font = QtGui.QFont()
+        bottom_bar_font.setPointSize(DisplayScaling.font_size(10))
+        self.anim_combo.setFont(bottom_bar_font)
+
+        style_label = QtWidgets.QLabel(loc.get("style_label"))
+        style_label.setFont(bottom_bar_font)
+        bottom_bar.addWidget(style_label)
         bottom_bar.addWidget(self.anim_combo)
 
         # Spacing
@@ -174,6 +185,7 @@ class NetworkTab(BrainBaseTab):
 
         # 2. CHECKBOXES (Center-Left)
         self.checkbox_links = QtWidgets.QCheckBox(loc.get("chk_links"))
+        self.checkbox_links.setFont(bottom_bar_font)
         self.checkbox_links.setChecked(True)
         if self.brain_widget:
             self.checkbox_links.stateChanged.connect(self.brain_widget.toggle_links)
@@ -182,12 +194,14 @@ class NetworkTab(BrainBaseTab):
         bottom_bar.addWidget(self.checkbox_links)
 
         self.checkbox_weights = QtWidgets.QCheckBox(loc.get("chk_weights"))
+        self.checkbox_weights.setFont(bottom_bar_font)
         self.checkbox_weights.setChecked(False)
         if self.brain_widget:
             self.checkbox_weights.stateChanged.connect(self.brain_widget.toggle_weights)
         bottom_bar.addWidget(self.checkbox_weights)
 
         self.checkbox_pruning = QtWidgets.QCheckBox(loc.get("chk_pruning"))
+        self.checkbox_pruning.setFont(bottom_bar_font)
         self.checkbox_pruning.setChecked(True)
         self.checkbox_pruning.stateChanged.connect(self.toggle_pruning)
         bottom_bar.addWidget(self.checkbox_pruning)
@@ -299,35 +313,8 @@ class NetworkTab(BrainBaseTab):
         if hasattr(self, 'checkbox_links') and self.checkbox_links is not None:
             self.checkbox_links.setChecked(True)
     def _update_backend_label(self):
-        """Backend label has moved to the About tab - this is now a no-op."""
-        return
-        if not hasattr(self, 'backend_label'):
-            return
-        backend = get_backend()
-        name = backend.name.lower()
-
-        if name.startswith('onnx') and 'unavailable' not in name:
-            provider = ''
-            if '[' in backend.name and ']' in backend.name:
-                raw = backend.name.split('[')[1].rstrip(']')
-                short = {
-                    'DmlExecutionProvider':      'DirectML',
-                    'QNNExecutionProvider':      'QNN·HTP',
-                    'OpenVINOExecutionProvider': 'OpenVINO',
-                    'CPUExecutionProvider':      'CPU',
-                }
-                provider = short.get(raw, raw.replace('ExecutionProvider', ''))
-            text   = f' ONNX · {provider}' if provider else ' ONNX'
-            colour = '#0055aa'
-        elif 'unavailable' in name:
-            text   = ' NumPy (ONNX unavailable)'
-            colour = '#aa5500'
-        else:
-            text   = ' NumPy'
-            colour = '#333333'
-
-        self.backend_label.setText(text)
-        self.backend_label.setStyleSheet(f'color: {colour};')
+        """Backend label removed from UI — no-op kept for call-site compatibility."""
+        pass
 
     def setup_timers(self):
         # QTimer fires every second for global-cooldown updates and label refresh.
@@ -484,6 +471,9 @@ class NetworkTab(BrainBaseTab):
                 margin: 5px 5px 5px 8px;
             }
         """)
+        stats_font = QtGui.QFont()
+        stats_font.setPointSize(DisplayScaling.font_size(11))
+        self.functional_stats_label.setFont(stats_font)
         self.stats_and_button_layout.addWidget(self.functional_stats_label, 1)
 
         # 2. Button container (single button for Brain Designer)
@@ -693,7 +683,7 @@ class NetworkTab(BrainBaseTab):
         padding_val = DisplayScaling.scale(5)
         btn_width = DisplayScaling.scale(150)   # Adjusted for potentially more buttons
         btn_height = DisplayScaling.scale(40)   # Adjusted height
-        font_size_val = DisplayScaling.font_size(10)
+        font_size_val = DisplayScaling.font_size(11)
 
         button.setStyleSheet(f"background-color: {color_hex}; border: 1px solid black; padding: {padding_val}px;")
         button.setFixedSize(btn_width, btn_height)

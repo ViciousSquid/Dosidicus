@@ -88,30 +88,34 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
 
         # Create tab widget for different sections
         self.tab_widget = QtWidgets.QTabWidget()
-        self.tab_widget.setStyleSheet("""
-            QTabWidget::pane {
+        tab_font = QtGui.QFont()
+        tab_font.setPointSize(DisplayScaling.font_size(11))
+        self.tab_widget.setFont(tab_font)
+        self.tab_widget.setStyleSheet(f"""
+            QTabWidget::pane {{
                 border: 2px solid #e1e5eb;
                 border-radius: 12px;
                 background-color: #f8f9fa;
-            }
-            QTabBar::tab {
+            }}
+            QTabBar::tab {{
                 background: #f8f9fa;
                 border: 1px solid #e1e5eb;
                 padding: 10px 20px;
+                min-width: 120px;
                 margin-right: 5px;
                 border-top-left-radius: 8px;
                 border-top-right-radius: 8px;
-                font-size: 16px;
+                font-size: {DisplayScaling.font_size(11)}pt;
                 color: #2c3e50;
-            }
-            QTabBar::tab:selected {
+            }}
+            QTabBar::tab:selected {{
                 background: #ffffff;
                 border-bottom: none;
                 font-weight: 600;
-            }
-            QTabBar::tab:hover {
+            }}
+            QTabBar::tab:hover {{
                 background: #e9ecef;
-            }
+            }}
         """)
 
         # ====== LEARNING PAIRS TAB ======

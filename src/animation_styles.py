@@ -22,7 +22,7 @@ class AnimationStyle:
     """
     # ===== STYLE METADATA =====
     name: str = "vibrant"
-    display_name: str = "Default"
+    display_name: str = "Thick"
     description: str = "Living connections that breathe and pulse organically"
     
     # ===== CONNECTION LINE APPEARANCE =====
@@ -131,7 +131,7 @@ class VibrantStyle(AnimationStyle):
     "alive" feel like a biological neural network. Tuned for 10 FPS.
     """
     name: str = "vibrant"
-    display_name: str = "Default"
+    display_name: str = "Thick"
     description: str = "Living connections that breathe and pulse organically"
     
     # Explicitly matches defaults, listed here for clarity

@@ -227,6 +227,16 @@ class MemoryManager:
         timestamp_str = datetime.fromtimestamp(timestamp).strftime("%H:%M:%S") if isinstance(timestamp, (int,float)) and timestamp > 0 else "N/A"
         formatted_memory = f"[{timestamp_str}] {memory.get('value', '')}"
 
+        # --- Neurogenesis special card ---
+        if memory.get('category') == 'neurogenesis':
+            return (
+                f"<div style='background-color: #4169E1; color: white; padding: 5px; margin: 5px; "
+                f"border-radius: 5px; display: flex; align-items: center; gap: 6px;'>"
+                f"<img src='images/ng.png' style='width:20px; height:20px; filter: invert(1); vertical-align: middle;' />"
+                f"<span>{formatted_memory}</span>"
+                f"<br><font color='#ADD8E6'><b>Neurogenesis</b></font><hr style='border-color:#6699FF;'></div>"
+            )
+
         interaction_type = "<b>Neutral</b>"
         background_color = "#FFFACD"  # Pastel yellow
 

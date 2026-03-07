@@ -545,7 +545,25 @@ class EnhancedNeurogenesis:
         if hasattr(self.brain_widget, 'visible_neurons'): self.brain_widget.visible_neurons.add(neuron_name)
         self.brain_widget.neurogenesis_highlight = {'neuron': neuron_name, 'start_time': time.time(), 'duration': 8.0 if trigger_type == 'connector' else 4.0, 'pulse_phase': 0}
         self._log_neuron_creation(neuron_name, trigger_type, spec, trigger_value_for_log)
+        self._record_neurogenesis_memory(neuron_name)
         return neuron_name
+
+    def _record_neurogenesis_memory(self, neuron_name: str):
+        """Permanently records a new neuron growth event in long-term memory."""
+        try:
+            if (hasattr(self.brain_widget, 'tamagotchi_logic') and
+                    self.brain_widget.tamagotchi_logic and
+                    hasattr(self.brain_widget.tamagotchi_logic, 'squid') and
+                    self.brain_widget.tamagotchi_logic.squid and
+                    hasattr(self.brain_widget.tamagotchi_logic.squid, 'memory_manager')):
+                mm = self.brain_widget.tamagotchi_logic.squid.memory_manager
+                mm.add_long_term_memory(
+                    'neurogenesis',
+                    f'grew_neuron_{neuron_name}',
+                    f'GREW A NEW NEURON!: {neuron_name}'
+                )
+        except Exception as e:
+            print(f"⚠️ Could not record neurogenesis memory: {e}")
 
     def _on_neuron_created(self, neuron_name: str, neuron_type: str):
         self._trigger_link_toggle_effect()
@@ -645,6 +663,7 @@ class EnhancedNeurogenesis:
         if hasattr(self.brain_widget, 'visible_neurons'): self.brain_widget.visible_neurons.add(neuron_name)
         self.brain_widget.neurogenesis_highlight = {'neuron': neuron_name, 'start_time': time.time(), 'duration': 8.0, 'pulse_phase': 0}
         self.brain_widget.log_neurogenesis_event(neuron_name, "created", details={'trigger_type': 'connector', 'trigger_value': 1.0, 'specialization': 'orphan_rescue', 'display_name': func_neuron.display_name})
+        self._record_neurogenesis_memory(neuron_name)
         print(f"🔗 Connector neuron {neuron_name} created to rescue {orphan_name} (connected to closest: {targets[0] if targets else 'None'})")
     
     def _set_neuron_appearance(self, name: str, func_neuron: FunctionalNeuron):

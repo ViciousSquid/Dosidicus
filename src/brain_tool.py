@@ -66,7 +66,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # Initialize font size FIRST
         from .display_scaling import DisplayScaling
 
-        self.base_font_size = DisplayScaling.font_size(8)
+        self.base_font_size = DisplayScaling.font_size(10)
         self.debug_mode = debug_mode
         self.config_manager = ConfigManager()      # real manager
         self.config        = self.config_manager   # keep old name for compat

@@ -272,10 +272,11 @@ class MemoryTab(BrainBaseTab):
     # ------------------------------------------------------------------ #
     #  Thumbnail helper                                                    #
     # ------------------------------------------------------------------ #
-    def _make_thumbnail(self, image_path, size, angle_deg=0):
+    def _make_thumbnail(self, image_path, size, angle_deg=0, invert=False):
         """
         Load *image_path*, scale to *size*×*size* (keeping aspect ratio),
         then rotate by *angle_deg* degrees (small random tilt).
+        If *invert* is True the colours are flipped to white (for dark cards).
         Returns a QLabel ready to drop into a layout, or None if the
         image can't be loaded.
         """
@@ -290,6 +291,18 @@ class MemoryTab(BrainBaseTab):
         scaled = src.scaled(size, size,
                             QtCore.Qt.KeepAspectRatio,
                             QtCore.Qt.SmoothTransformation)
+
+        if invert:
+            # Paint a white rectangle over the image using Difference blending,
+            # which flips every channel to its inverse while preserving alpha.
+            inverted = QtGui.QPixmap(scaled.size())
+            inverted.fill(QtCore.Qt.transparent)
+            painter = QtGui.QPainter(inverted)
+            painter.drawPixmap(0, 0, scaled)
+            painter.setCompositionMode(QtGui.QPainter.CompositionMode_Difference)
+            painter.fillRect(inverted.rect(), QtGui.QColor(255, 255, 255))
+            painter.end()
+            scaled = inverted
 
         if angle_deg != 0:
             # Rotate onto a transparent canvas large enough to avoid clipping
@@ -507,6 +520,10 @@ class MemoryTab(BrainBaseTab):
         if cat == 'achievement':
             return (key.replace('_', ' ').capitalize(), None, str(value), None)
 
+        # ---- neurogenesis -----------------------------------------------
+        if cat == 'neurogenesis':
+            return ('Neurogenesis', None, str(value), None)
+
         # ---- fallback ---------------------------------------------------
         content = memory.get('formatted_value', str(value))
         return (cat.capitalize(), None, content, None)
@@ -546,6 +563,8 @@ class MemoryTab(BrainBaseTab):
         hfont.setBold(True)
         hfont.setPointSize(DisplayScaling.font_size(12))
         header.setFont(hfont)
+        if cat_key == 'neurogenesis':
+            header.setStyleSheet("color: white;")
         card_layout.addWidget(header)
 
         # --- thumbnail + content row ------------------------------------
@@ -555,15 +574,25 @@ class MemoryTab(BrainBaseTab):
         row_layout.setSpacing(DisplayScaling.scale(8))
 
         angle = _random.uniform(-MAX_ANGLE, MAX_ANGLE)
-        thumb_label = self._make_thumbnail(thumb_path, THUMB_SIZE, angle)
-        if thumb_label:
-            row_layout.addWidget(thumb_label, alignment=QtCore.Qt.AlignVCenter)
+        if cat_key == 'neurogenesis':
+            brain_label = QtWidgets.QLabel("🧠")
+            bfont = brain_label.font()
+            bfont.setPointSize(DisplayScaling.font_size(32))
+            brain_label.setFont(bfont)
+            brain_label.setAlignment(QtCore.Qt.AlignCenter)
+            row_layout.addWidget(brain_label, alignment=QtCore.Qt.AlignVCenter)
+        else:
+            thumb_label = self._make_thumbnail(thumb_path, THUMB_SIZE, angle)
+            if thumb_label:
+                row_layout.addWidget(thumb_label, alignment=QtCore.Qt.AlignVCenter)
 
         content_label = QtWidgets.QLabel(content_text)
         content_label.setWordWrap(True)
         cfont = content_label.font()
         cfont.setPointSize(DisplayScaling.font_size(10))
         content_label.setFont(cfont)
+        if cat_key == 'neurogenesis':
+            content_label.setStyleSheet("color: white;")
         row_layout.addWidget(content_label, stretch=1)
         card_layout.addWidget(row_widget)
 
@@ -587,8 +616,10 @@ class MemoryTab(BrainBaseTab):
 
         time_label = QtWidgets.QLabel(f"{self.loc.get('time_label')} {timestamp}")
         tfont = time_label.font()
-        tfont.setPointSize(DisplayScaling.font_size(8))
+        tfont.setPointSize(DisplayScaling.font_size(9))
         time_label.setFont(tfont)
+        if cat_key == 'neurogenesis':
+            time_label.setStyleSheet("color: #ADD8E6;")
         card_layout.addWidget(time_label, alignment=QtCore.Qt.AlignRight)
 
         # --- importance star --------------------------------------------
@@ -596,7 +627,7 @@ class MemoryTab(BrainBaseTab):
             imp_label = QtWidgets.QLabel(f"⭐ {self.loc.get('important_label')}")
             imp_label.setStyleSheet(
                 f"color:#FF5733; font-weight:bold;"
-                f" font-size:{DisplayScaling.font_size(8)}px;"
+                f" font-size:{DisplayScaling.font_size(9)}px;"
             )
             card_layout.addWidget(imp_label, alignment=QtCore.Qt.AlignRight)
 
@@ -729,6 +760,10 @@ class MemoryTab(BrainBaseTab):
             return "#FFFACD"
         if cat == 'achievement':
             return "#FFF3CD"  # gold-ish
+
+        # Neurogenesis — royal blue
+        if cat == 'neurogenesis':
+            return "#4169E1"
 
         # Numeric dict values – sum to decide
         if isinstance(val, dict):
