@@ -40,9 +40,14 @@ jobs:
       run: |
         mkdir release
 
-    - name: Copy repository structure (excluding Docs)
+    - name: Copy repository structure
       run: |
-        rsync -a --exclude Docs ./ release/
+        for item in *; do
+          case "$item" in
+            release|dist|build|__pycache__) ;;
+            *) cp -r "$item" release/ 2>/dev/null || true ;;
+          esac
+        done
 
     - name: Remove python entrypoint
       run: |
