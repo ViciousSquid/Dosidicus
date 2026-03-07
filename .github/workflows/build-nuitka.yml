@@ -34,10 +34,28 @@ jobs:
 
     - name: Build executable
       run: |
+        # Windows-only flags (icon)
+        EXTRA_FLAGS=""
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          EXTRA_FLAGS="--windows-icon-from-ico=images/icons/squidblack.ico"
+        fi
+
         python -m nuitka \
           --standalone \
           --assume-yes-for-downloads \
           --output-dir=build \
+          --output-filename=Dosidicus \
+          --include-module=plugins.achievements.display_scaling \
+          --include-module=plugins.achievements.achievements_data \
+          --include-module=uuid \
+          --include-module=brain_designer \
+          --include-module=designer_window \
+          --include-module=designer_core \
+          --include-module=designer_constants \
+          --include-module=designer_logging \
+          --include-module=designer_dialogs \
+          --include-module=brain_state_bridge \
+          $EXTRA_FLAGS \
           main.py
 
     - name: Create release directory
