@@ -34,7 +34,23 @@ jobs:
 
     - name: Build executable
       run: |
-        pyinstaller --onedir --clean --noconfirm main.py
+        pyinstaller \
+          --onedir \
+          --clean \
+          --noconfirm \
+          --name Dosidicus \
+          --icon images/icons/squidblack.ico \
+          --hidden-import plugins.achievements.display_scaling \
+          --hidden-import plugins.achievements.achievements_data \
+          --hidden-import uuid \
+          --hidden-import brain_designer \
+          --hidden-import designer_window \
+          --hidden-import designer_core \
+          --hidden-import designer_constants \
+          --hidden-import designer_logging \
+          --hidden-import designer_dialogs \
+          --hidden-import brain_state_bridge \
+          main.py
 
     - name: Create release directory
       run: |
@@ -55,12 +71,11 @@ jobs:
 
     - name: Insert compiled executable
       run: |
-        cp -r dist/main/* release/
+        cp -r dist/Dosidicus/* release/
 
     - name: Create zip
       run: |
-        cd release
-        zip -r ../app-pyinstaller-${{ runner.os }}.zip .
+        python -c "import shutil; shutil.make_archive('app-pyinstaller-${{ runner.os }}', 'zip', 'release')"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
