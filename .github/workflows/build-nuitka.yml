@@ -30,14 +30,28 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install nuitka pyqt5 numpy
+        pip install nuitka pyqt5 numpy pillow
+
+    - name: Convert icon for Linux / macOS
+      if: runner.os != 'Windows'
+      run: |
+        python -c "
+        from PIL import Image
+        img = Image.open('images/icons/squidblack.ico')
+        if '${{ runner.os }}' == 'macOS':
+            img.save('images/icons/squidblack.icns')
+        else:
+            img.save('images/icons/squidblack.png')
+        "
 
     - name: Build executable
       run: |
-        # Windows-only flags (icon)
-        EXTRA_FLAGS=""
         if [[ "${{ runner.os }}" == "Windows" ]]; then
-          EXTRA_FLAGS="--windows-icon-from-ico=images/icons/squidblack.ico"
+          ICON_FLAG="--windows-icon-from-ico=images/icons/squidblack.ico"
+        elif [[ "${{ runner.os }}" == "Linux" ]]; then
+          ICON_FLAG="--linux-icon=images/icons/squidblack.png"
+        else
+          ICON_FLAG="--macos-app-icon=images/icons/squidblack.icns"
         fi
 
         python -m nuitka \
@@ -55,7 +69,7 @@ jobs:
           --include-module=designer_logging \
           --include-module=designer_dialogs \
           --include-module=brain_state_bridge \
-          $EXTRA_FLAGS \
+          $ICON_FLAG \
           main.py
 
     - name: Create release directory
