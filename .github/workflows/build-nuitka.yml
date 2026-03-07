@@ -135,6 +135,8 @@ jobs:
           sleep 1
           if grep -q "Applied language from config" smoke.log 2>/dev/null; then
             echo "✅ Startup confirmed at ${i}s"
+            echo "--- stdout/stderr ---"
+            cat smoke.log
             kill $PID 2>/dev/null || true
             exit 0
           fi
@@ -171,6 +173,8 @@ jobs:
           sleep 1
           if grep -q "Applied language from config" smoke.log 2>/dev/null; then
             echo "✅ Startup confirmed at ${i}s"
+            echo "--- stdout/stderr ---"
+            cat smoke.log
             kill $PID 2>/dev/null || true
             exit 0
           fi
