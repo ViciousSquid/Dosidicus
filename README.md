@@ -119,7 +119,8 @@ Every squid is an experiment.
 
 ---------------------------
 
-![Visitors](https://api.visitorbadge.io/api/visitors?path=YOUR_GITHUB_USERNAME&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+![Visitors](https://api.visitorbadge.io/api/visitors?path=ViciousSquid&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+
 
 
 
