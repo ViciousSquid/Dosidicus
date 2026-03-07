@@ -44,11 +44,11 @@ jobs:
       run: |
         mkdir release
 
-    - name: Copy repository structure (excluding Docs)
+    - name: Copy repository structure
       run: |
         for item in *; do
           case "$item" in
-            Docs|release|dist|build|__pycache__) ;;
+            release|dist|build|__pycache__) ;;
             *) cp -r "$item" release/ 2>/dev/null || true ;;
           esac
         done
