@@ -49,7 +49,6 @@ jobs:
         python -m nuitka \
           --mode=app \
           --windows-console-mode=force \
-          --standalone \
           --assume-yes-for-downloads \
           --enable-plugin=pyqt5 \
           --output-dir=build \
