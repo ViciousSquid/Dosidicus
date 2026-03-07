@@ -32,6 +32,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install nuitka pyqt5 numpy
 
+    - name: Install macOS icon dependency
+      if: runner.os == 'macOS'
+      run: pip install imageio
+
     - name: Build executable
       run: |
         if [[ "${{ runner.os }}" == "Windows" ]]; then
