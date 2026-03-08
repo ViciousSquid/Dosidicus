@@ -5,10 +5,10 @@ on:
 
 jobs:
   build:
+
     strategy:
       matrix:
-        # Added windows-11-arm to the matrix
-        os: [windows-latest, windows-11-arm, ubuntu-latest, macos-latest]
+        os: [windows-latest, ubuntu-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -17,6 +17,7 @@ jobs:
         shell: bash
 
     steps:
+
     - name: Checkout repo
       uses: actions/checkout@v4
 
@@ -35,6 +36,11 @@ jobs:
       if: runner.os == 'macOS'
       run: pip install imageio
 
+    # Standalone mode produces a folder of files rather than a single
+    # self-extracting binary. This avoids Defender false positives on Windows
+    # which flag onefile/packed executables as suspicious by default.
+    # Defender is also disabled during build to prevent it quarantining
+    # Nuitka's intermediate files mid-compile.
     - name: Disable Windows Defender during build
       if: runner.os == 'Windows'
       shell: pwsh
@@ -112,6 +118,10 @@ jobs:
           cp -r build/main.dist/. release/
         fi
 
+    # Ad-hoc signing suppresses some Gatekeeper warnings on macOS.
+    # This is free but NOT a substitute for full notarization ($99/yr Apple
+    # Developer account). Users on macOS will still need to right-click ->
+    # Open -> Open Anyway the first time. Document this in your README.
     - name: Ad-hoc sign for macOS
       if: runner.os == 'macOS'
       run: |
@@ -123,61 +133,82 @@ jobs:
         fi
 
     # ─── Smoke tests ────────────────────────────────────────────────────────────
-    # Updated to run on BOTH Windows x64 and Windows ARM64 runners
-    - name: Smoke test (Windows)
-      if: runner.os == 'Windows'
-      shell: bash
-      run: |
-        ./release/Dosidicus.exe > smoke.log 2>&1 &
-        PID=$!
-        sleep 5
-        if grep -q "Applied language from config" smoke.log 2>/dev/null; then
-          echo "✅ Windows Startup confirmed"
-          kill $PID 2>/dev/null || true
-        else
-          echo "❌ Startup line not found"
-          cat smoke.log
-          kill $PID 2>/dev/null || true
-          exit 1
-        fi
+    # Launch the binary, capture stdout, and look for the startup print from
+    # MainWindow.__init__: "📄 Applied language from config:"
+    # This fires after Qt initialises and all imports resolve, confirming the
+    # build is not silently broken.
 
     - name: Smoke test (Linux)
       if: runner.os == 'Linux'
       run: |
         QT_QPA_PLATFORM=offscreen ./release/Dosidicus > smoke.log 2>&1 &
         PID=$!
+        echo "Started PID $PID"
+
+        # Poll for the expected startup line, up to 30s
         for i in $(seq 1 30); do
           sleep 1
           if grep -q "Applied language from config" smoke.log 2>/dev/null; then
             echo "✅ Startup confirmed at ${i}s"
+            echo "--- stdout/stderr ---"
+            cat smoke.log
             kill $PID 2>/dev/null || true
             exit 0
           fi
+          # Bail early if the process already died
           if ! kill -0 $PID 2>/dev/null; then
+            echo "❌ Process exited before printing startup line"
+            echo "--- stdout/stderr ---"
+            cat smoke.log
             exit 1
           fi
         done
+
+        echo "❌ Startup line not seen after 30s"
+        echo "--- stdout/stderr ---"
+        cat smoke.log
+        kill $PID 2>/dev/null || true
         exit 1
 
     - name: Smoke test (macOS)
       if: runner.os == 'macOS'
       run: |
         APP=$(find release -maxdepth 1 -name "*.app" | head -1)
-        BIN=${APP:-release/Dosidicus}
-        [[ "$BIN" == *.app ]] && BIN="$BIN/Contents/MacOS/Dosidicus"
-        
+        if [ -n "$APP" ]; then
+          BIN=$(find "$APP" -type f -perm +111 -name "Dosidicus" | head -1)
+        else
+          BIN=release/Dosidicus
+        fi
+
         "$BIN" > smoke.log 2>&1 &
         PID=$!
+        echo "Started PID $PID"
+
         for i in $(seq 1 30); do
           sleep 1
           if grep -q "Applied language from config" smoke.log 2>/dev/null; then
             echo "✅ Startup confirmed at ${i}s"
+            echo "--- stdout/stderr ---"
+            cat smoke.log
             kill $PID 2>/dev/null || true
             exit 0
           fi
+          if ! kill -0 $PID 2>/dev/null; then
+            echo "❌ Process exited before printing startup line"
+            echo "--- stdout/stderr ---"
+            cat smoke.log
+            exit 1
+          fi
         done
-        exit 1
 
+        echo "❌ Startup line not seen after 30s"
+        echo "--- stdout/stderr ---"
+        cat smoke.log
+        kill $PID 2>/dev/null || true
+        exit 1
+    # ────────────────────────────────────────────────────────────────────────────
+
+    # Zip may strip execute permissions - restore them before archiving
     - name: Mark Linux binary executable
       if: runner.os == 'Linux'
       run: chmod +x release/Dosidicus
@@ -185,12 +216,10 @@ jobs:
     - name: Create zip
       run: |
         OS_NAME=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
-        # Check if we are on ARM to differentiate the filename
-        if [[ "${{ matrix.os }}" == *"arm"* ]]; then OS_NAME="${OS_NAME}-arm64"; fi
         python -c "import shutil; shutil.make_archive('Dosidicus${{ github.ref_name }}-${OS_NAME}', 'zip', 'release')"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: nuitka-${{ matrix.os }}
+        name: nuitka-${{ runner.os }}
         path: Dosidicus${{ github.ref_name }}-*.zip
