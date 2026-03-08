@@ -36,14 +36,8 @@ from src.localisation import Localisation
 
 def launch_brain_designer_process():
     """Entry point for Brain Designer in a separate process"""
-    import sys
-    from PyQt5.QtWidgets import QApplication
-    from src.brain_designer import BrainDesignerWindow
-    
-    app = QApplication(sys.argv)
-    window = BrainDesignerWindow()
-    window.show()
-    sys.exit(app.exec_())
+    from src.brain_designer_launcher import launch_brain_designer_process as _launch
+    _launch()
 
 def setup_logging_configuration():
     """Initialize logging configuration"""
