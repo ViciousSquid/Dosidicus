@@ -18,8 +18,8 @@ from PyQt5.QtGui import (
     QRadialGradient, QTransform, QCursor, QPainterPathStroker, QPolygonF
 )
 
-from designer_core import BrainDesign
-from designer_constants import (
+from .designer_core import BrainDesign
+from .designer_constants import (
     NeuronType, CORE_NEURON_RING_COLOR, INPUT_SENSOR_RING_COLOR, 
     CUSTOM_NEURON_RING_COLOR, PROTECTED_RING_WIDTH, NORMAL_RING_WIDTH, 
     DEFAULT_LAYER_HEIGHT

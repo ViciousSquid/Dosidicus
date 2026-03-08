@@ -5,7 +5,7 @@ import math
 from typing import Dict, List, Optional, Tuple, Set
 from dataclasses import dataclass
 
-from designer_constants import (
+from .designer_constants import (
     NeuronType, DEFAULT_COLORS, REQUIRED_NEURONS, CORE_NEURONS,
     INPUT_SENSORS, is_core_neuron, is_required_neuron, is_input_sensor,
     is_binary_neuron, get_neuron_category, get_default_connections_for_sensor

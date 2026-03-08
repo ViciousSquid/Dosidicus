@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont
 
-from designer_network_generator import SparseNetworkGenerator
+from .designer_network_generator import SparseNetworkGenerator
 
 
 class SparseNetworkDialog(QDialog):

@@ -30,18 +30,15 @@ from .localisation import Localisation, set_language
 # 2.6.1.0 Robust import for Designer
 _DESIGNER_AVAILABLE = False
 try:
-    # 1. Try relative import
     from .designer_window import BrainDesignerWindow
     _DESIGNER_AVAILABLE = True
-except ImportError:
-    # 2. Try absolute path fallback if relative fails
+except Exception as e:
+    print(f"Warning: BrainDesignerWindow could not be imported: {type(e).__name__}: {e}")
     try:
-        import sys, os
-        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-        from designer_window import BrainDesignerWindow
+        from src.designer_window import BrainDesignerWindow
         _DESIGNER_AVAILABLE = True
-    except ImportError as e:
-        print(f"Warning: BrainDesignerWindow could not be imported: {e}")
+    except Exception as e2:
+        print(f"Warning: src fallback also failed: {type(e2).__name__}: {e2}")
 
 # 2.6.1.0 Define _HAS_BRAIN_BRIDGE variable
 _HAS_BRAIN_BRIDGE = False
@@ -166,19 +163,6 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         
         # Setup decorations window shortcut
         self.setup_decorations_shortcut()
-        
-        # Initialize designer mode integration
-        self.designer_controller = None
-        try:
-            from .brain_tool_designer_integration import integrate_designer_mode, add_designer_menu
-            self.designer_controller = integrate_designer_mode(self)
-            if self.designer_controller:
-                add_designer_menu(self)
-                print("🎨 Designer mode integration loaded")
-        except ImportError as e:
-            print(f"Designer mode not available: {e}")
-        except Exception as e:
-            print(f"Designer mode integration error: {e}")
 
         # Bridge Import Listener
         # Polls for designs pushed from the Designer window

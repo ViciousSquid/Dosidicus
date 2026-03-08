@@ -1,5 +1,5 @@
-from designer_core import BrainDesign, DesignerLayer, DesignerNeuron
-from designer_constants import NeuronType, REQUIRED_NEURONS, CORE_NEURONS, INPUT_SENSORS, DEFAULT_LAYER_SPACING
+from .designer_core import BrainDesign, DesignerLayer, DesignerNeuron
+from .designer_constants import NeuronType, REQUIRED_NEURONS, CORE_NEURONS, INPUT_SENSORS, DEFAULT_LAYER_SPACING
 import random
 
 class TemplateManager:

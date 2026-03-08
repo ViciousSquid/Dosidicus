@@ -6,20 +6,26 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from typing import Optional, Dict
 
-from designer_core import BrainDesign, DesignerNeuron, DesignerLayer
-from designer_constants import (
+from .designer_core import BrainDesign, DesignerNeuron, DesignerLayer
+from .designer_constants import (
     NeuronType, INPUT_SENSORS, REQUIRED_NEURONS, DEFAULT_SENSOR_CONNECTIONS,
     is_required_neuron, is_input_sensor
 )
 
 # Optional: Import sensor discovery for plugin sensors
 try:
-    from designer_sensor_discovery import get_all_available_sensors, is_plugin_sensor
+    from .designer_sensor_discovery import get_all_available_sensors, is_plugin_sensor
     _HAS_SENSOR_DISCOVERY = True
 except ImportError:
     _HAS_SENSOR_DISCOVERY = False
     def get_all_available_sensors():
-        return dict(INPUT_SENSORS)
+        # Wrap raw (x,y) tuples from INPUT_SENSORS into proper info dicts
+        return {
+            name: {'description': name.replace('_', ' ').title(),
+                   'is_binary': False, 'category': 'Built-in', 'plugin': None,
+                   'default_connections': []}
+            for name in INPUT_SENSORS
+        }
     def is_plugin_sensor(name):
         return False
 

@@ -18,13 +18,13 @@ from PyQt5.QtGui import (
 # [FIX] Added QRectF to imports
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QRectF, QSizeF, pyqtSignal
 
-from designer_logging import get_logger, log_exceptions, safe_call, OperationLogger
-from designer_core import BrainDesign
-from designer_canvas import BrainCanvas
+from .designer_logging import get_logger, log_exceptions, safe_call, OperationLogger
+from .designer_core import BrainDesign
+from .designer_canvas import BrainCanvas
 
 # Import brain state bridge for game communication
 try:
-    from brain_state_bridge import (
+    from .brain_state_bridge import (
         is_game_running,
         import_brain_state_for_designer,
         convert_to_brain_design,
@@ -34,16 +34,16 @@ try:
 except ImportError:
     _HAS_BRAIN_BRIDGE = False
     print("[BrainDesigner] Warning: brain_state_bridge not found, live import disabled")
-from designer_panels import (
+from .designer_panels import (
     LayersPanel, SensorsPanel, NeuronPropertiesPanel, ConnectionsTable, AddNeuronDialog
 )
-from designer_templates import TemplateManager
-from designer_dialogs import SparseNetworkDialog, ActivationEditorDialog
-from designer_network_generator import SparseNetworkGenerator
+from .designer_templates import TemplateManager
+from .designer_dialogs import SparseNetworkDialog, ActivationEditorDialog
+from .designer_network_generator import SparseNetworkGenerator
 
 # Import the new outputs panel
 try:
-    from designer_outputs_panel import NeuronOutputsPanel
+    from .designer_outputs_panel import NeuronOutputsPanel
     _HAS_OUTPUTS_PANEL = True
 except ImportError:
     _HAS_OUTPUTS_PANEL = False
@@ -612,7 +612,7 @@ class BrainDesignerWindow(QMainWindow):
             
             # Attempt 1: Try using the bridge if available
             try:
-                from brain_state_bridge import convert_to_brain_design
+                from .brain_state_bridge import convert_to_brain_design
                 imported_design = convert_to_brain_design(state)
             except ImportError:
                 # Bridge not found, proceed to fallback
@@ -622,7 +622,7 @@ class BrainDesignerWindow(QMainWindow):
             if imported_design is None:
                 # If bridge failed or returned None, use the core method directly
                 # This ensures we don't need the bridge to be active/present
-                from designer_core import BrainDesign
+                from .designer_core import BrainDesign
                 # Try dosidicus format first (likely coming from BrainWidget)
                 imported_design = BrainDesign.from_dosidicus_format(state)
             

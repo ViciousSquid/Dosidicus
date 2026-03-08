@@ -10,7 +10,7 @@ import math
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 
-from designer_constants import CORE_NEURONS, REQUIRED_NEURON_NAMES
+from .designer_constants import CORE_NEURONS, REQUIRED_NEURON_NAMES
 
 
 @dataclass

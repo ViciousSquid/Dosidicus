@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional
 
 # Try to import designer constants
 try:
-    from designer_constants import INPUT_SENSORS, REQUIRED_NEURONS, BINARY_NEURONS
+    from .designer_constants import INPUT_SENSORS, REQUIRED_NEURONS, BINARY_NEURONS
 except ImportError:
     # Fallbacks if constants file is missing or structure is different
     INPUT_SENSORS = {}
