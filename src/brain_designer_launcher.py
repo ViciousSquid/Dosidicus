@@ -16,18 +16,11 @@ def launch_brain_designer_process(debug_mode: bool = False):
     Args:
         debug_mode: If True, enables logging in the designer
     """
-    # Everything is in src/ folder
-    script_dir = os.path.dirname(os.path.abspath(__file__))  # src/
-    
-    # Ensure src/ is in path
-    if script_dir not in sys.path:
-        sys.path.insert(0, script_dir)
-    
     # Build command line args
     if debug_mode:
         if '-d' not in sys.argv:
             sys.argv.append('-d')
     
     # Import and run the designer's main function
-    from brain_designer import main as designer_main
+    from src.brain_designer import main as designer_main
     designer_main()
