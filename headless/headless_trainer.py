@@ -417,15 +417,28 @@ class HeadlessBrain:
             self.positions.clear()
             self.custom_neurons.clear()
             
-            # Load positions/neurons
-            positions = brain_data.get('positions', brain_data.get('neurons', {}))
-            for name, pos in positions.items():
+            # Load positions/neurons — accept both 'positions' (headless export)
+            # and 'neurons' (Designer / game format).
+            positions_raw = brain_data.get('positions', brain_data.get('neurons', {}))
+            for name, pos in positions_raw.items():
                 if isinstance(pos, dict):
-                    self.positions[name] = (pos.get('x', 0), pos.get('y', 0))
+                    # Designer format: {'position': [x, y], 'is_custom': bool}
+                    # Headless export format: {'x': float, 'y': float, 'is_custom': bool}
+                    if 'position' in pos:
+                        p = pos['position']
+                        self.positions[name] = (float(p[0]), float(p[1]))
+                    elif 'x' in pos and 'y' in pos:
+                        self.positions[name] = (float(pos['x']), float(pos['y']))
+                    else:
+                        self.positions[name] = (0.0, 0.0)
                     if pos.get('is_custom', False):
                         self.custom_neurons.add(name)
+                elif isinstance(pos, (list, tuple)) and len(pos) >= 2:
+                    self.positions[name] = (float(pos[0]), float(pos[1]))
                 else:
-                    self.positions[name] = tuple(pos) if isinstance(pos, list) else pos
+                    # Fallback: unknown shape — park at origin rather than
+                    # storing a raw unsupported value.
+                    self.positions[name] = (0.0, 0.0)
                     
                 # Initialize state
                 if name in CORE_NEURONS:
@@ -437,12 +450,16 @@ class HeadlessBrain:
                     self.custom_neurons.add(name)
                     
             # Load weights/connections
+            # Accept list format (Designer) and dict format (headless export).
             weights_data = brain_data.get('weights', brain_data.get('connections', {}))
             if isinstance(weights_data, dict):
                 for key, weight in weights_data.items():
-                    # Handle string keys like "hunger,satisfaction"
+                    # Handle string keys like "hunger,satisfaction" or "hunger->satisfaction"
                     if isinstance(key, str):
-                        parts = key.replace('(', '').replace(')', '').replace("'", "").split(',')
+                        if '->' in key:
+                            parts = key.split('->')
+                        else:
+                            parts = key.replace('(', '').replace(')', '').replace("'", "").split(',')
                         if len(parts) >= 2:
                             src = parts[0].strip()
                             dst = parts[1].strip()
@@ -488,39 +505,47 @@ class HeadlessBrain:
             return False
             
     def export_brain(self) -> Dict:
-        """Export brain state to dictionary"""
-        # Convert positions to serializable format
-        positions = {}
+        """
+        Export brain in the Designer/game format understood by
+        custom_brain_loader.BrainLoader._parse() (Format 2: neurons dict +
+        connections list).  This ensures trained brains can be loaded
+        straight back into the game without any manual conversion.
+        """
+        # neurons dict — position as list, is_custom flag
+        neurons = {}
         for name, pos in self.positions.items():
-            positions[name] = {
-                'x': pos[0],
-                'y': pos[1],
-                'is_custom': name in self.custom_neurons
+            neurons[name] = {
+                'position': [pos[0], pos[1]],
+                'is_custom': name in self.custom_neurons,
             }
-            
-        # Convert weights
-        weights = {}
+
+        # connections as a list of {source, target, weight} dicts
+        # (BrainLoader._parse() Format 2 expects this exact structure)
+        connections = []
         for (src, dst), w in self.weights.items():
-            weights[f"{src},{dst}"] = w
-            
+            connections.append({'source': src, 'target': dst, 'weight': float(w)})
+
         return {
             'metadata': {
                 'exported_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'exported_by': 'headless_trainer',
                 'neuron_count': len(self.positions),
                 'connection_count': len(self.weights),
                 'custom_neuron_count': len(self.custom_neurons),
             },
-            'positions': positions,
-            'weights': weights,
-            'neuron_shapes': self.neuron_shapes,
+            # ── game-loader-compatible keys ──────────────────────────────────
+            'neurons': neurons,        # _parse() checks for 'neurons' key
+            'connections': connections, # _parse() Format 2: list of dicts
+            # ────────────────────────────────────────────────────────────────
+            'neuron_shapes': dict(self.neuron_shapes),
             'output_bindings': self.output_bindings,
+            'state': {k: v for k, v in self.state.items()},
             'neurogenesis_data': {
                 'neurons_created': self.neurogenesis_data.get('neurons_created', 0),
-                'stress_neurons': self.stress_neuron_count,
+                'stress_neurons':  self.stress_neuron_count,
                 'novelty_neurons': self.novelty_neuron_count,
-                'reward_neurons': self.reward_neuron_count,
+                'reward_neurons':  self.reward_neuron_count,
             },
-            'state': {k: v for k, v in self.state.items()},
         }
         
     def save_brain(self, filepath: str) -> bool:
