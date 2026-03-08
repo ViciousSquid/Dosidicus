@@ -106,7 +106,7 @@ def main():
     check_dependencies()
     
     # Import logging after dependency check
-    from designer_logging import (
+    from src.designer_logging import (
         initialize_error_handling, 
         get_logger,
         OperationLogger
@@ -149,7 +149,7 @@ def main():
         palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
         app.setPalette(palette)
         
-        from designer_window import BrainDesignerWindow
+        from src.designer_window import BrainDesignerWindow
         
         window = BrainDesignerWindow()
         
