@@ -38,7 +38,6 @@ Dosidicus is a digital squid born with a randomly wired brain.
 Feed him., stimulate neurons, watch him learn.
 
 - He starts with 8 neurons.
-- He rewires through Hebbian learning.
 - He grows new structure via **neurogenesis** and rewires using **Hebbian learning**
 - He forms memories.
 - He develops quirks.
@@ -115,6 +114,7 @@ Every squid is an experiment.
 ---------------------------
 
 ![Visitors](https://api.visitorbadge.io/api/visitors?path=ViciousSquid&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+
 
 
 
