@@ -27,7 +27,7 @@ class DisplayScaling:
     @classmethod
     def font_size(cls, size):
         scaled = cls.scale(size)
-        return max(8, scaled)
+        return max(10, scaled)
     
     @classmethod
     def get_scale_factor(cls):

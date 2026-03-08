@@ -5,7 +5,7 @@ Brain Designer panel for configuring neuron output bindings.
 This panel allows users to:
 1. Bind neurons to output hooks (actuators)
 2. Configure trigger thresholds and modes
-3. Manage cooldowns and parameters (including color selection)
+3. Manage cooldowns and parameters (including colour selection)
 
 When the squid runs this brain, neurons that exceed their threshold
 will trigger the bound behaviors (flee, seek food, ink, etc.)
@@ -21,10 +21,16 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
 
-from brain_neuron_outputs import (
-    NeuronOutputBinding, OutputTriggerMode, 
-    STANDARD_OUTPUT_HOOKS, get_output_hooks_by_category
-)
+try:
+    from .brain_neuron_outputs import (
+        NeuronOutputBinding, OutputTriggerMode,
+        STANDARD_OUTPUT_HOOKS, get_output_hooks_by_category
+    )
+except ImportError:
+    from brain_neuron_outputs import (
+        NeuronOutputBinding, OutputTriggerMode,
+        STANDARD_OUTPUT_HOOKS, get_output_hooks_by_category
+    )
 
 
 class OutputBindingDialog(QDialog):

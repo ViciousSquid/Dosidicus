@@ -126,10 +126,20 @@ def main():
         from PyQt5.QtWidgets import QApplication
         from PyQt5.QtGui import QColor, QPalette
         from PyQt5.QtCore import Qt
-        
+
+        # Enable HiDPI scaling — must be set before QApplication is created
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
         app = QApplication(sys.argv)
         app.setApplicationName("Brain Designer (Beta)")
         app.setApplicationVersion("1.1.0")
+
+        # Enforce minimum readable font size across all widgets
+        _app_font = app.font()
+        if _app_font.pointSize() < 10:
+            _app_font.setPointSize(10)
+            app.setFont(_app_font)
         
         # Light theme setup
         app.setStyle('Fusion')

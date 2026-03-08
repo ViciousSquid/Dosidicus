@@ -467,6 +467,162 @@ class Ui:
         self._neurogenesis_debug_dialog.show()
         self._neurogenesis_debug_dialog.raise_()
 
+    def show_neuron_laboratory(self):
+        if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
+            self.show_message("Brain Tool not initialized")
+            return
+        brain_widget = getattr(self.squid_brain_window, 'brain_widget', None)
+        if brain_widget is None:
+            self.show_message("Brain widget not available")
+            return
+        if not hasattr(self, '_neuron_laboratory') or self._neuron_laboratory is None:
+            self._neuron_laboratory = NeuronLaboratory(brain_widget, self.window)
+        self._neuron_laboratory.show()
+        self._neuron_laboratory.raise_()
+        self._neuron_laboratory.activateWindow()
+
+    # ── Export helpers ────────────────────────────────────────────────────
+
+    def _get_exports_dir(self):
+        exports_dir = os.path.normpath(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "exports")
+        )
+        os.makedirs(exports_dir, exist_ok=True)
+        return exports_dir
+
+    def _exports_timestamp(self):
+        return time.strftime("%Y%m%d_%H%M%S")
+
+    def export_memory(self, mode):
+        """Export STM, LTM, or all memories to /exports as JSON. mode: 'stm'|'ltm'|'all'"""
+        try:
+            squid = None
+            if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
+                squid = getattr(self.tamagotchi_logic, 'squid', None)
+            if squid is None:
+                self.show_message("No squid loaded – cannot export memories.")
+                return
+
+            def _get(obj, *names):
+                for n in names:
+                    v = getattr(obj, n, None)
+                    if v is not None:
+                        return v
+                return None
+
+            stm = _get(squid, 'short_term_memory', 'stm', 'short_term', 'recent_memories')
+            ltm = _get(squid, 'long_term_memory',  'ltm', 'long_term',  'memories')
+
+            exports_dir = self._get_exports_dir()
+            ts = self._exports_timestamp()
+
+            def _serialise(obj):
+                try:
+                    return json.loads(json.dumps(obj, default=str))
+                except Exception:
+                    return str(obj)
+
+            if mode in ("stm", "all") and stm is not None:
+                path = os.path.join(exports_dir, f"memory_stm_{ts}.json")
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(_serialise(stm), f, indent=2)
+                print(f"[Export] STM saved → {path}")
+
+            if mode in ("ltm", "all") and ltm is not None:
+                path = os.path.join(exports_dir, f"memory_ltm_{ts}.json")
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(_serialise(ltm), f, indent=2)
+                print(f"[Export] LTM saved → {path}")
+
+            if mode == "all":
+                path = os.path.join(exports_dir, f"memory_all_{ts}.json")
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump({"stm": _serialise(stm), "ltm": _serialise(ltm)}, f, indent=2)
+                print(f"[Export] All memory saved → {path}")
+
+            label = {"stm": "STM", "ltm": "LTM", "all": "All Memory"}[mode]
+            self.show_message(f"{label} exported to /exports")
+
+        except Exception as e:
+            print(f"[Export] Memory export error: {e}")
+            traceback.print_exc()
+            self.show_message(f"Export failed: {e}")
+
+    def export_weights(self, fmt):
+        """Export brain weights to /exports as CSV or TXT. fmt: 'csv'|'txt'"""
+        try:
+            brain = None
+            if hasattr(self, 'squid_brain_window') and self.squid_brain_window:
+                brain = getattr(self.squid_brain_window, 'brain_widget', None)
+            if brain is None or not hasattr(brain, 'weights'):
+                self.show_message("Brain not initialised – cannot export weights.")
+                return
+
+            weights = brain.weights
+            exports_dir = self._get_exports_dir()
+            ts = self._exports_timestamp()
+            sorted_weights = sorted(weights.items(), key=lambda x: (str(x[0][0]), str(x[0][1])))
+
+            if fmt == "csv":
+                path = os.path.join(exports_dir, f"weights_{ts}.csv")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("from,to,weight\n")
+                    for (src, dst), w in sorted_weights:
+                        f.write(f"{src},{dst},{w}\n")
+            else:
+                path = os.path.join(exports_dir, f"weights_{ts}.txt")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(f"Weights export – {ts}\n")
+                    f.write(f"{'From':<30} {'To':<30} {'Weight':>12}\n")
+                    f.write("-" * 74 + "\n")
+                    for (src, dst), w in sorted_weights:
+                        f.write(f"{str(src):<30} {str(dst):<30} {w:>12.6f}\n")
+
+            print(f"[Export] Weights ({fmt.upper()}) saved → {path}")
+            self.show_message(f"Weights exported as {fmt.upper()} to /exports")
+
+        except Exception as e:
+            print(f"[Export] Weights export error: {e}")
+            traceback.print_exc()
+            self.show_message(f"Export failed: {e}")
+
+    def export_neurons(self):
+        """Export a list of all neurons to /exports as JSON."""
+        try:
+            brain = None
+            if hasattr(self, 'squid_brain_window') and self.squid_brain_window:
+                brain = getattr(self.squid_brain_window, 'brain_widget', None)
+            if brain is None:
+                self.show_message("Brain not initialised – cannot export neurons.")
+                return
+
+            if hasattr(brain, 'neuron_positions'):
+                neuron_names = sorted(brain.neuron_positions.keys())
+            elif hasattr(brain, 'neurons'):
+                neuron_names = sorted(brain.neurons.keys() if isinstance(brain.neurons, dict) else brain.neurons)
+            else:
+                neuron_names = []
+
+            if not neuron_names:
+                self.show_message("No neurons found to export.")
+                return
+
+            exports_dir = self._get_exports_dir()
+            ts = self._exports_timestamp()
+            path = os.path.join(exports_dir, f"neurons_{ts}.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"exported_at": ts, "count": len(neuron_names), "neurons": neuron_names}, f, indent=2)
+
+            print(f"[Export] Neurons ({len(neuron_names)}) saved → {path}")
+            self.show_message(f"{len(neuron_names)} neurons exported to /exports")
+
+        except Exception as e:
+            print(f"[Export] Neuron export error: {e}")
+            traceback.print_exc()
+            self.show_message(f"Export failed: {e}")
+
+    # ─────────────────────────────────────────────────────────────────────
+
     def setup_decorations_shortcut(self):
         self.decorations_shortcut = QtWidgets.QShortcut(
             QtGui.QKeySequence(QtCore.Qt.Key_D), 
@@ -1499,8 +1655,8 @@ class Ui:
         view_menu.addAction(self.brain_action)
 
         self.neurogenesis_debug_action = QtWidgets.QAction(loc.get("neuron_lab"), self.window)
-        self.neurogenesis_debug_action.triggered.connect(self.show_neurogenesis_debug) 
-        # view_menu.addAction(self.neurogenesis_debug_action)
+        self.neurogenesis_debug_action.triggered.connect(self.show_neuron_laboratory)
+        view_menu.addAction(self.neurogenesis_debug_action)
 
         self.preferences_action = QtWidgets.QAction(loc.get("preferences"), self.window)
         self.preferences_action.triggered.connect(self.show_preferences)
@@ -1572,6 +1728,43 @@ class Ui:
         self.experience_buffer_action.triggered.connect(self.show_experience_buffer)
         self.experience_buffer_action.setToolTip("View neurogenesis experience buffer")
         debug_menu.addAction(self.experience_buffer_action)
+
+        # ── Export submenu ────────────────────────────────────────────────
+        debug_menu.addSeparator()
+        export_menu = debug_menu.addMenu("Export…")
+
+        memories_submenu = export_menu.addMenu("Memories")
+        self.export_stm_action = QtWidgets.QAction("Export STM", self.window)
+        self.export_stm_action.setToolTip("Export short-term memory to /exports folder")
+        self.export_stm_action.triggered.connect(lambda: self.export_memory("stm"))
+        memories_submenu.addAction(self.export_stm_action)
+
+        self.export_ltm_action = QtWidgets.QAction("Export LTM", self.window)
+        self.export_ltm_action.setToolTip("Export long-term memory to /exports folder")
+        self.export_ltm_action.triggered.connect(lambda: self.export_memory("ltm"))
+        memories_submenu.addAction(self.export_ltm_action)
+
+        self.export_all_memory_action = QtWidgets.QAction("Export All", self.window)
+        self.export_all_memory_action.setToolTip("Export all memory to /exports folder")
+        self.export_all_memory_action.triggered.connect(lambda: self.export_memory("all"))
+        memories_submenu.addAction(self.export_all_memory_action)
+
+        weights_submenu = export_menu.addMenu("Weights")
+        self.export_weights_csv_action = QtWidgets.QAction("CSV", self.window)
+        self.export_weights_csv_action.setToolTip("Export weights as CSV to /exports folder")
+        self.export_weights_csv_action.triggered.connect(lambda: self.export_weights("csv"))
+        weights_submenu.addAction(self.export_weights_csv_action)
+
+        self.export_weights_txt_action = QtWidgets.QAction("TXT", self.window)
+        self.export_weights_txt_action.setToolTip("Export weights as TXT to /exports folder")
+        self.export_weights_txt_action.triggered.connect(lambda: self.export_weights("txt"))
+        weights_submenu.addAction(self.export_weights_txt_action)
+
+        self.export_neurons_action = QtWidgets.QAction("Neurons", self.window)
+        self.export_neurons_action.setToolTip("Export neuron list to /exports folder")
+        self.export_neurons_action.triggered.connect(self.export_neurons)
+        export_menu.addAction(self.export_neurons_action)
+        # ─────────────────────────────────────────────────────────────────
         
         self.plugins_menu = self.menu_bar.addMenu(loc.get("plugins"))
         self.connect_action_buttons()
