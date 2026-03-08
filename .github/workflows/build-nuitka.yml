@@ -69,6 +69,13 @@ jobs:
           --include-package=src \
           --include-package=plugins \
           --include-module=uuid \
+          --include-module=src.brain_designer \
+          --include-module=src.designer_window \
+          --include-module=src.designer_core \
+          --include-module=src.designer_constants \
+          --include-module=src.designer_logging \
+          --include-module=src.designer_dialogs \
+          --include-module=src.brain_state_bridge \
           $ICON_FLAG \
           main.py
 
