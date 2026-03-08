@@ -26,7 +26,7 @@ error()   { echo -e "${RED}✖ $*${NC}"; exit 1; }
 echo -e "${BOLD}"
 echo "  DOSIDICUS  by ViciousSquid"
 echo -e "${NC}"
-echo -e "  ${BOLD}Tamagotchi squid with a neural network${NC}"
+echo -e "  ${BOLD}A cognitive sandbox for raising digital squids${NC}"
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -138,7 +138,7 @@ mkdir -p "$(dirname "$DESKTOP_FILE")"
 cat > "$DESKTOP_FILE" << DESKTOP
 [Desktop Entry]
 Name=Dosidicus
-Comment=Tamagotchi squid with a neural network
+Comment=A cognitive sandbox for raising digital squids
 Exec=$LAUNCHER
 Icon=$INSTALL_DIR/images/icon.png
 Terminal=false
