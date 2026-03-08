@@ -19,7 +19,7 @@ _"What if a Tamagotchi had a neural network and could learn stuff?"_
  ### Windows, Mac and Linux downloads: [see Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
 
  ```
-curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/main/linux_setup.sh | bash
+curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.2.0_LatestVersion/linux_setup.sh | bash
 ```
 
 <img width="2482" height="980" alt="image" src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" />
@@ -115,6 +115,7 @@ Every squid is an experiment.
 ---------------------------
 
 ![Visitors](https://api.visitorbadge.io/api/visitors?path=ViciousSquid&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+
 
 
 
