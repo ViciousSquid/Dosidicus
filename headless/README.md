@@ -13,7 +13,7 @@ BUGGY, work in progress, brains exported by the headless trainer cannot be impor
 - **Neurogenesis**: Automatic creation of new neurons based on stress/novelty/reward triggers
 - **Hebbian Learning**: Continuous weight updates based on co-activation
 - **Training Scenarios**: Predefined scenarios for different training goals
-- ~~**Export Trained Brains**: Save trained brains back to JSON for use in the main game~~ ([23](https://github.com/ViciousSquid/Dosidicus/issues/23))
+- **Export Trained Brains**: Save trained brains back to JSON for use in the main game
 
 ## Installation
 
