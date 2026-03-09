@@ -14,6 +14,7 @@ _"What if a Tamagotchi had a neural network and could learn stuff?"_
 🦑 _A transparent cognitive sandbox disguised as a digital pet squid with a neural network you can **see thinking**_
 
 - Part **educational neuro tool**, part **sim game**, part **fever dream**
+- a unique intersection of 1990s retro-gaming aesthetic and modern computational neuroscience.
 - [Build-your-own neural network ](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) - learn neuroscience by raising a squid that **might develop irrational fears**
   
  ### Windows, Mac and Linux downloads: [see Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
@@ -114,6 +115,7 @@ Every squid is an experiment.
 ---------------------------
 
 ![Visitors](https://api.visitorbadge.io/api/visitors?path=ViciousSquid&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+
 
 
 
