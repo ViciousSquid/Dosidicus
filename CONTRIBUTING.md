@@ -1,23 +1,49 @@
-## Ways to Contribute
+## Contributing to Dosidicus 🦑
+Dosidicus isn't just a repository; it’s an open-ended experiment in transparent artificial life. We are building a world where cognition isn't a black box, but a visible, hackable structure. Whether you are a neuro-enthusiast, a Python wizard, or a digital explorer, there is a place for you in the sandbox.
 
-- Core Code: Improve the main codebase in `src/`; Fix bugs, optimize neural algorithms, enhance the UI, or add new features. Look at open issues or suggest new ideas for the project.
+### 🧠 1. Evolve the Core (src/)
+The STRINg engine is the beating heart of the project. We’ve avoided heavy frameworks like TensorFlow to keep things "bare metal" and interpretable.
 
-- Plugins: Dosidicus has an extensible plugin system (`plugins/`). Existing plugins include Achievements and Multiplayer. You can create new plugins by adding a folder under plugins/ with your code and a plugin.txt descriptor. Plugins can add new behaviors, UI components, or integrate external functionality.
+The Challenge: Optimize neural algorithms, refine Hebbian plasticity logic, or enhance the real-time UI.
 
-- Share your squids!
-  Export save files and let others explore your squid’s neural structure.
-Post screenshots of strange activation patterns and unexpected growth.
+Goal: Make the simulation faster and the neural dynamics more expressive.
 
-- Brain Templates: The `custom_brains/` directory holds JSON files defining pre-built neural network configurations. Contribute new brain templates by adding JSON files there (e.g. different neural network layouts or parameters). This helps users experiment with diverse behaviors out of the box.
+### 🧩 2. Architect New Realities (plugins/)
+Dosidicus is designed to be modular. Our plugin system allows you to inject new logic without touching the core engine.
 
-- Scenarios & Tools: Add example scenarios or utility scripts in `example_squids/`; For example, share example saved states or scripts that demonstrate interesting behaviors or training setups.
+The Challenge: Create a new plugin folder with a plugin.txt descriptor.
 
-- Translations: The `translations/` folder contains language files (.py) for internationalization (e.g.` en.py`, `de.py`). Add support for a new language or improve existing translations by editing these files with appropriate text.
+Ideas: Environmental stressors, advanced "Achievement" triggers, or even a Twitch-integrated "Chat-controlled Evolution."
 
-- Documentation: We need help creating better documentation! Examples, and screenshots help new users and contributors get up to speed. Update comments and docstrings in code as well.
+### 🧬 3. Map the Connectome (custom_brains/)
+Help us build a library of diverse neural starting points. By contributing JSON templates to custom_brains/, you define the "DNA" that users experiment with.
 
-- Testing & Bug Reports: Test Dosidicus on your system. Report any bugs or issues on GitHub with clear reproduction steps. If you're able, add automated tests or validation scripts to ensure stability.
+The Challenge: Design a unique neural layout—perhaps a highly recurrent "memory loop" or a sensory-heavy "predator" build.
 
-- Community & Outreach: Answer questions in discussions or forums, create demo videos, or write blog posts about Dosidicus. Spreading the word helps the project grow and attracts more contributors.
+### 📂 4. Share Your Specimens (example_squids/)
+In this sandbox, Structure + Experience = Behavior. No two squids are identical.
 
-We appreciate all contributions. Please feel encouraged to start discussions in the Issues or PRs if you're unsure about an idea.
+The Challenge: Export your .json save files and share them. Did your squid develop a strange obsession with a specific corner of the map? Did it grow a massive neural cluster after a specific training session?
+
+Action: Submit your most interesting "trained" squids as examples for others to study.
+
+### 🌍 5. Bridge the Language Gap (translations/)
+We want "visible minds" to be accessible to everyone.
+
+The Challenge: Add a new language file (e.g., fr.py, jp.py) to the translations/ directory. Help us ensure that concepts like Neurogenesis and Activation Patterns translate clearly across cultures.
+
+### 🛠️ 6. Documentation & Educational Outreach
+If a newcomer can’t understand how to "read" a squid’s mind, the transparency is lost.
+
+The Challenge: Improve docstrings, write "Field Guides" for new users, or record a video of a specific behavioral emergence.
+
+Goal: Turn complex neuroscience concepts into playable tutorials.
+
+### 🚀 How to Get Started
+Check the "Ahead" Forks: See what the community is already building in the Network Graph.
+
+Open an Issue: Have a wild idea for a new neuron type? Let's discuss it first!
+
+Submit a PR: We welcome all PRs, from single-typo fixes to massive engine overhauls.
+
+Every commit is a mutation. Every contribution helps the system grow.
