@@ -1,8 +1,0 @@
-first_feeding | Tuesday, March 10, 2026 @ 173345 | First Bite
-first_feeding | Tuesday, March 10, 2026 @ 173345 | First Bite
-first_clean | Tuesday, March 10, 2026 @ 173346 | First Scrub
-first_clean | Tuesday, March 10, 2026 @ 173346 | First Scrub
-first_medicine | Tuesday, March 10, 2026 @ 173346 | First Aid
-first_medicine | Tuesday, March 10, 2026 @ 173346 | First Aid
-curiosity_100 | Tuesday, March 10, 2026 @ 173406 | Curious George
-curiosity_100 | Tuesday, March 10, 2026 @ 173406 | Curious George
