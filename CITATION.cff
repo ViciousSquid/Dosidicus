@@ -4,8 +4,8 @@ authors:
   - family-names: "Pearce"
     given-names: "Rufus"
 title: "Dosidicus"
-abstract: "A Tamagotchi-style digital pet powered by a transparent neural network, featuring neurogenesis and Hebbian learning."
-version: 2.6.1.2
+abstract: "A cognitive sandbox: Raise digital squids whose brains grow & rewire themselves through Hebbian learning and Neurogenesis"
+version: 2.6.2.0
 date-released: 2025-03-05
 url: "https://github.com/ViciousSquid/Dosidicus"
 repository-code: "https://github.com/ViciousSquid/Dosidicus"
