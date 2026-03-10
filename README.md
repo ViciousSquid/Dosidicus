@@ -1,6 +1,5 @@
-
 _"What if a Tamagotchi had a neural network and could learn stuff?"_
-— [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/)
+- [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/)
 
 <p align="left">
   <img src="https://img.shields.io/badge/AI-Neural_Network-9C27B0?style=flat&logo=mindmeister&logoColor=white" height="20" alt="AI">
@@ -11,32 +10,32 @@ _"What if a Tamagotchi had a neural network and could learn stuff?"_
 
 # _Dosidicus electronicus_
 
-🦑 _A transparent cognitive sandbox disguised as a digital pet squid with a neural network you can **see thinking**_
+_A transparent cognitive sandbox disguised as a digital pet squid with a neural network you can **see thinking**_
 
 - Part **educational neuro tool**, part **sim game**, part **fever dream**
-- a unique intersection of 1990s retro-gaming aesthetic and modern computational neuroscience.
-- [Build-your-own neural network ](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) - learn neuroscience by raising a squid that **might develop irrational fears**
-  
- ### Compiled binaries for Windows, Mac and Linux: [see Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
+- A unique intersection of 1990s retro-gaming aesthetic and modern computational neuroscience.
+- [Build-your-own neural network](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) - learn neuroscience by raising a squid that **might develop irrational fears**
 
- ```
+### Compiled binaries for Windows, Mac and Linux: [see Releases](https://github.com/ViciousSquid/Dosidicus/releases) page
+
+```bash
 curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.2.0_LatestVersion/linux_setup.sh | bash
 ```
 
 <img width="2482" height="980" alt="image" src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" />
- <img src="https://github.com/user-attachments/assets/496cec0d-0810-4f47-8618-11165e0dd50d" width="380">
+<img src="https://github.com/user-attachments/assets/496cec0d-0810-4f47-8618-11165e0dd50d" width="380">
 
-----------------------------------
+---
 
-##  [Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems) |   [Wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | [Changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) 
+## [Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems) | [Wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | [Changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog)
 
-----------------------------
+---
 
 ## **Myth & Mechanism**
 
 Dosidicus is a digital squid born with a randomly wired brain.
 
-Feed him., stimulate neurons, watch him learn.
+Feed him, stimulate neurons, watch him learn.
 
 - He starts with 8 neurons.
 - He grows new structure via **neurogenesis** and rewires using **Hebbian learning**
@@ -56,13 +55,13 @@ Every save file is a cognitive history.
 * Headless training mode
 * Most AI is a black box: Dosidicus lets you see the mind forming - every neuron is visible, stimulatable, understandable.
 
-The squid serves as a digital pioneer in our quest to understand the mechanisms of thought and the evolution of autonomy in a synthetic world. 
+The squid serves as a digital pioneer in our quest to understand the mechanisms of thought and the evolution of autonomy in a synthetic world.
 
- Want the full conceptual philosophy behind Dosidicus? → Read the [Cognitive Sandbox Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems)
+Want the full conceptual philosophy behind Dosidicus? Read the [Cognitive Sandbox Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems)
 
---------------------------------------
+---
 
-🦑 Share Your Squid
+## Share Your Squid
 
 No two squids are wired the same.
 
@@ -70,11 +69,11 @@ Early interactions permanently alter their structure.
 Tiny differences amplify.
 Habits form. Fears emerge. Personalities drift.
 
-Your squid’s brain is a cognitive history — shaped by you.
+Your squid's brain is a cognitive history - shaped by you.
 
 So share it.
 
-- Export save files and let others explore your squid’s neural structure.
+- Export save files and let others explore your squid's neural structure.
 - Post screenshots of strange activation patterns and unexpected growth.
 - Show bizarre learned behaviors (Why is yours afraid of poop?)
 - Compare cognitive histories and trace how experience shaped structure.
@@ -85,8 +84,50 @@ So share it.
 
 Every squid is an experiment.
 
----------------------------
+---
 
+## Docker
+
+Two targets are provided: `headless` (CLI trainer) and `gui` (PyQt5 app with X11).
+
+Headless (recommended for containers):
+```bash
+docker build -t dosidicus:headless --target headless .
+docker run --rm -v ${PWD}/headless_output:/app/output dosidicus:headless --ticks 10000 --output /app/output/trained_brain.json
+```
+
+GUI (Linux host with X11 or WSLg):
+```bash
+docker build -t dosidicus:gui --target gui .
+docker run --rm \
+  -e DISPLAY=$DISPLAY \
+  -e QT_X11_NO_MITSHM=1 \
+  -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+  -v ${PWD}/saves:/app/saves \
+  -v ${PWD}/logs:/app/logs \
+  dosidicus:gui
+```
+
+Compose:
+```bash
+docker compose up --build
+docker compose --profile gui up --build
+```
+
+WSLg note: If the GUI fails to start with a Qt platform plugin error, try:
+```bash
+export QT_QPA_PLATFORM=wayland
+docker compose --profile gui up --build
+```
+
+Note: On Windows without WSLg, you will need an X server and a valid `DISPLAY` value to run the GUI container.
+
+Troubleshooting (quick):
+- If `DISPLAY` is empty in WSL: WSLg is not active. Use WSLg or run an X server on Windows.
+- If Docker errors mention `docker_engine`/pipe not found: start Docker Desktop and ensure WSL integration is enabled.
+- If GUI still exits with Qt plugin errors: rebuild the image (`docker compose --profile gui build --no-cache`) and retry.
+
+---
 
 ## Project Overview
 
@@ -107,32 +148,12 @@ Every squid is an experiment.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
 
-----------------------
+---
 
 ### A year ago I got a **tattoo of this project** to celebrate its first development milestone!
 
 <img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
 
-
----------------------------
+---
 
 ![Visitors](https://api.visitorbadge.io/api/visitors?path=ViciousSquid&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

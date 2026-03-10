@@ -1,0 +1,25 @@
+services:
+  headless:
+    build:
+      context: .
+      target: headless
+    volumes:
+      - ./headless_output:/app/output
+    command: ["--ticks", "10000", "--output", "/app/output/trained_brain.json"]
+
+  gui:
+    build:
+      context: .
+      target: gui
+    environment:
+      - DISPLAY=${DISPLAY}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/mnt/wslg/runtime-dir}
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /mnt/wslg:/mnt/wslg
+      - ./saves:/app/saves
+      - ./logs:/app/logs
+    profiles:
+      - gui
