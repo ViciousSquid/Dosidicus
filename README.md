@@ -49,7 +49,7 @@ Every save file is a cognitive history.
 #### Under the hood runs [**STRINg** simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview):
 
 * Built from scratch in NumPy
-* No TensorFlow. No PyTorch.
+* No TensorFlow. No PyTorch. No NEAT.
 * Fully visible neuron activations
 * Structural growth over time
 * Dual memory system
@@ -117,6 +117,7 @@ Every squid is an experiment.
 ---------------------------
 
 ![Visitors](https://api.visitorbadge.io/api/visitors?path=ViciousSquid&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+
 
 
 
