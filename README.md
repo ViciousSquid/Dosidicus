@@ -1,4 +1,4 @@
-_"What if a Tamagotchi had a neural network and could learn stuff?"_ - [Gigazine review](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/)
+_"What if a Tamagotchi had a neural network and could learn stuff?"_ - [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/)
 
 <p align="left">
   <img src="https://img.shields.io/badge/AI-Neural_Network-9C27B0?style=flat&logo=mindmeister&logoColor=white" height="20" alt="AI">
