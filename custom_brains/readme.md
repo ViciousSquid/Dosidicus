@@ -46,6 +46,8 @@ This is a more complex specialized brain. It uses a unique plant_proximity senso
 ## Change_colour_when_see_food:
  This squid has a very high novelty_object_investigation drive. Interestingly, investigating novelty significantly reduces its hunger (-0.728), suggesting that for this child, curiosity and discovery are almost as fulfilling as eating.
 
+ This squid has an output binding (set in the designer) that makes it change colour when it can see food
+
 
 --------------------
 
