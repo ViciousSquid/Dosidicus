@@ -6,12 +6,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /app
 
+# Install core dependencies needed by ALL targets
+RUN python -m pip install --no-cache-dir numpy>=1.21
+
 # ------------------------------
 # Headless trainer target
 # ------------------------------
 FROM base AS headless
+# Only copy what is needed for headless training
 COPY headless/ ./headless/
 COPY custom_brains/ ./custom_brains/
+
 ENTRYPOINT ["python", "headless/headless_trainer.py"]
 CMD ["--ticks", "10000", "--output", "trained_brain.json"]
 
@@ -19,6 +24,7 @@ CMD ["--ticks", "10000", "--output", "trained_brain.json"]
 # GUI target (requires X11)
 # ------------------------------
 FROM base AS gui
+# Install system libraries for GUI support
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libgl1-mesa-dri \
@@ -61,9 +67,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libwayland-egl1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./requirements.txt
-RUN python -m pip install --no-cache-dir -r requirements.txt
+# Install GUI-specific Python dependencies
+RUN python -m pip install --no-cache-dir PyQt5>=5.15
 
+# Copy the entire project for the GUI
 COPY . .
+
 ENV QT_X11_NO_MITSHM=1
 ENTRYPOINT ["python", "main.py"]
