@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dosidicus Save Viewer v2.0 (Web)</title>
+    <title>Dosidicus Save Viewer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         :root {
@@ -16,6 +16,8 @@
             --accent-hover: #4d7a9b;
             --border: #444;
             --code-font: 'Consolas', 'Monaco', monospace;
+            --squid-pink: #FF69B4;
+            --squid-pink-hover: #FF8ABF;
         }
 
         body {
@@ -29,7 +31,6 @@
             overflow: hidden;
         }
 
-        /* Toolbar */
         header {
             background-color: var(--bg-header);
             border-bottom: 1px solid var(--border);
@@ -53,10 +54,31 @@
             font-size: 0.9rem;
         }
         button:hover { background-color: var(--accent-hover); }
+
+        /* === ENLARGED PINK OPEN BUTTON (matches 🦑 squid emoji pink) === */
+        .open-save-btn {
+            background-color: var(--squid-pink);
+            color: white;
+            font-size: 1.15rem;
+            padding: 14px 32px;
+            border-radius: 6px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 12px rgba(255, 105, 180, 0.3);
+        }
+        .open-save-btn:hover {
+            background-color: var(--squid-pink-hover);
+            transform: scale(1.03);
+        }
+
+        .export-btn {
+            background-color: #2e7d32;
+            margin-left: 10px;
+        }
+        .export-btn:hover { background-color: #388e3c; }
         
         input[type="file"] { display: none; }
 
-        /* Tabs */
         .tabs {
             background-color: var(--bg-header);
             display: flex;
@@ -83,7 +105,6 @@
             background-color: var(--bg-dark);
         }
 
-        /* Content Area */
         #content-area {
             flex-grow: 1;
             overflow-y: auto;
@@ -94,7 +115,6 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
-        /* Welcome Screen */
         #welcome-screen {
             display: flex;
             flex-direction: column;
@@ -106,7 +126,6 @@
         }
         #welcome-screen .icon { font-size: 64px; margin-bottom: 20px; }
 
-        /* Components */
         .section {
             margin-bottom: 20px;
             border-radius: 6px;
@@ -147,12 +166,11 @@
         .kv-key {
             color: #7fbadc;
             font-weight: bold;
-            min-width: 180px;
-            width: 180px;
+            min-width: 220px;
+            width: 220px;
         }
         .kv-val { color: #e0e0e0; flex-grow: 1; word-break: break-all; }
 
-        /* Canvas */
         #network-canvas {
             background-color: #1a1a1a;
             border-radius: 4px;
@@ -160,7 +178,6 @@
         }
         #network-canvas:active { cursor: grabbing; }
 
-        /* JSON Tree */
         .json-tree { font-family: var(--code-font); font-size: 0.9rem; }
         .json-tree ul { list-style: none; padding-left: 20px; margin: 0; }
         .json-tree li { margin: 2px 0; }
@@ -175,7 +192,6 @@
         .boolean { color: #569cd6; }
         .null { color: #569cd6; }
 
-        /* Specific Widgets */
         .memory-card {
             background-color: #252525;
             border-left: 3px solid #3d6a8b;
@@ -206,33 +222,129 @@
             font-size: 1.1em;
         }
 
+        .bio-summary {
+            background: #2d5a7b;
+            padding: 18px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            font-size: 1.15em;
+            line-height: 1.5;
+        }
+        .memory-dashboard { display: flex; flex-direction: column; gap: 15px; }
+        .filter-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .memory-columns {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .memory-column {
+            flex: 1;
+            min-width: 380px;
+        }
+        .memory-list {
+            max-height: 520px;
+            overflow-y: auto;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 8px;
+        }
+        .summary-card {
+            background: #252525;
+            padding: 14px;
+            border-radius: 6px;
+            border-left: 4px solid var(--accent);
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .network-summary {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+        .summary-item {
+            background: #252525;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #3d6a8b;
+        }
+        .progress-container {
+            height: 14px;
+            background: #333;
+            border-radius: 7px;
+            overflow: hidden;
+            margin: 6px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(to right, #4CAF50, #8BC34A);
+            transition: width 0.4s ease;
+        }
+        .tooltip {
+            position: absolute;
+            background: #252525;
+            border: 1px solid #666;
+            padding: 8px 12px;
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 9999;
+            font-size: 0.85rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+            display: none;
+            white-space: nowrap;
+        }
+        table.neuro-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        table.neuro-table th, table.neuro-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+        table.neuro-table th { background: #2d5a7b; }
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
     </style>
 </head>
 <body>
 
 <header>
-    <h1>Dosidicus Save Viewer</h1>
-    <button onclick="document.getElementById('file-input').click()">📂 Open Save File (.zip)</button>
+    <h1>Save Viewer v2.1.3</h1>
+    
+    <button class="open-save-btn" onclick="document.getElementById('file-input').click()">
+        📂 Open Save File (.zip)
+    </button>
+    
     <input type="file" id="file-input" accept=".zip" onchange="handleFileSelect(event)">
     <span id="file-name" style="color: var(--text-dim);">No file loaded</span>
+    
+    <button id="export-stats-btn" class="export-btn" style="display:none" onclick="exportStatistics()">📊 Stats CSV</button>
+    <button id="export-memories-btn" class="export-btn" style="display:none" onclick="exportMemories()">💭 Memories JSON</button>
+    <button id="export-brain-btn" class="export-btn" style="display:none" onclick="exportBrainPNG()">🧠 Brain PNG</button>
 </header>
 
-<div class="tabs" id="tabs-nav">
-    </div>
+<div class="tabs" id="tabs-nav"></div>
 
 <div id="content-area">
     <div id="welcome-screen">
         <div class="icon">🦑</div>
-        <h2>Dosidicus Save Viewer</h2>
-        <p>Upload a .zip save file to view its contents.</p>
+        <h2>Dosidicus Save Viewer v2.1.3</h2>
+        <p>https://github.com/ViciousSquid/Dosidicus</p>
+        <p>Use the pink button to load a squid</p>
     </div>
 </div>
 
 <script>
     let saveData = {};
+    let currentCanvas = null;
+    let tooltip = null;
 
-    // --- File Handling ---
-
+    // ==================== STRICT UUID VALIDATION ====================
     async function handleFileSelect(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -243,83 +355,104 @@
         try {
             const contents = await zip.loadAsync(file);
             saveData = {};
-            
-            // Process files
-            const promises = [];
-            
-            // Explicitly look for uuid.txt first
-            if(contents.files['uuid.txt']) {
-                promises.push(contents.files['uuid.txt'].async('string').then(text => {
-                    saveData['uuid_txt'] = text.trim();
-                }));
+
+            let uuidText = '';
+            if (contents.files['uuid.txt']) {
+                uuidText = (await contents.files['uuid.txt'].async('string')).trim();
+                saveData['uuid_txt'] = uuidText;
             }
 
-            // Process all JSON files
+            if (!uuidText || !uuidText.startsWith('SquidSignature')) {
+                alert(`❌ INVALID SAVE FILE\n\n` +
+                      `This zip does not contain a valid uuid.txt file.\n\n` +
+                      `A real Dosidicus save must start with:\n` +
+                      `SquidSignature    xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n\n` +
+                      `File rejected.`);
+                document.getElementById('file-name').textContent = '❌ Invalid save (no SquidSignature)';
+                return;
+            }
+
+            const promises = [];
             for (const filename in contents.files) {
                 if (filename.endsWith('.json')) {
                     const p = contents.files[filename].async('string').then(text => {
                         try {
                             const key = filename.replace('.json', '');
                             saveData[key] = JSON.parse(text);
-                        } catch (e) {
-                            console.error(`Error parsing ${filename}`, e);
-                        }
+                        } catch (e) {}
                     });
                     promises.push(p);
                 }
             }
-
             await Promise.all(promises);
+
             buildUI();
+
+            document.getElementById('export-stats-btn').style.display = 'inline-block';
+            document.getElementById('export-memories-btn').style.display = 'inline-block';
+            document.getElementById('export-brain-btn').style.display = saveData.brain_state ? 'inline-block' : 'none';
 
         } catch (err) {
             alert("Error reading zip file: " + err.message);
             console.error(err);
         }
     }
+    // ===============================================================
 
-    // --- UI Building ---
+    function exportStatistics() {
+        if (!saveData.statistics) return alert("No statistics data");
+        let csv = "Key,Value\n";
+        Object.entries(saveData.statistics).forEach(([k,v]) => csv += `"${k.replace(/"/g,'""')}","${v}"\n`);
+        downloadFile(csv, "statistics.csv", "text/csv");
+    }
+    function exportMemories() {
+        const all = [...(saveData.ShortTerm||[]), ...(saveData.LongTerm||[])];
+        downloadFile(JSON.stringify(all, null, 2), "memories.json", "application/json");
+    }
+    function exportBrainPNG() {
+        if (!currentCanvas) return;
+        const link = document.createElement('a');
+        link.download = 'brain_network.png';
+        link.href = currentCanvas.toDataURL('image/png');
+        link.click();
+    }
+    function downloadFile(content, filename, mime) {
+        const blob = new Blob([content], {type: mime});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+    }
 
     function buildUI() {
         const tabsNav = document.getElementById('tabs-nav');
         const contentArea = document.getElementById('content-area');
-        
-        // Clear previous
         tabsNav.innerHTML = '';
         contentArea.innerHTML = '';
 
-        // 1. Overview Tab
         createTab('Overview', '📋 Overview', renderOverview, true);
+        if (saveData['brain_state']) createTab('Network', '🕸️ Network', renderNetwork);
+        if (saveData['ShortTerm'] || saveData['LongTerm']) createTab('Memories', '💭 Memories', renderMemoryDashboard);
+        if (saveData['achievements']) createTab('Achievements', '🏆 Achievements', renderEnhancedAchievements);
+        createTab('Metadata', '📋 Metadata', renderSaveMetadata);
 
-        // 2. Network Tab (if brain_state exists)
-        if (saveData['brain_state']) {
-            createTab('Network', '🕸️ Network', renderNetwork);
-        }
-
-        // 3. File Tabs
-        const fileOrder = ['game_state', 'brain_state', 'statistics', 'ShortTerm', 'LongTerm', 'achievements'];
-        
-        // Add specific order tabs first
+        const fileOrder = ['game_state', 'brain_state', 'statistics'];
         fileOrder.forEach(key => {
             if (saveData[key]) {
                 const icon = getIconForKey(key);
-                createTab(key, `${icon} ${key}.json`, () => renderJsonView(key, saveData[key], true)); // true = human readable mode
+                createTab(key, `${icon} ${key}.json`, () => renderJsonView(key, saveData[key]));
             }
         });
 
-        // Add remaining files
         Object.keys(saveData).forEach(key => {
-            if (!fileOrder.includes(key) && key !== 'uuid_txt') {
+            if (!fileOrder.includes(key) && key !== 'uuid_txt' && !['ShortTerm','LongTerm','achievements'].includes(key)) {
                 createTab(key, `📄 ${key}.json`, () => renderJsonTree(saveData[key]));
             }
         });
     }
 
     function getIconForKey(key) {
-        const icons = {
-            'game_state': '🦑', 'brain_state': '🧠', 'statistics': '📊',
-            'ShortTerm': '💭', 'LongTerm': '🧠', 'achievements': '🏆'
-        };
+        const icons = {'game_state': '🦑', 'brain_state': '🧠', 'statistics': '📊'};
         return icons[key] || '📄';
     }
 
@@ -327,20 +460,17 @@
         const nav = document.getElementById('tabs-nav');
         const contentArea = document.getElementById('content-area');
 
-        // Button
         const btn = document.createElement('button');
         btn.className = `tab-btn ${isActive ? 'active' : ''}`;
         btn.textContent = label;
         btn.onclick = () => switchTab(id);
         nav.appendChild(btn);
 
-        // Content Div
         const div = document.createElement('div');
         div.id = `tab-${id}`;
         div.className = `tab-content ${isActive ? 'active' : ''}`;
         contentArea.appendChild(div);
 
-        // Render content immediately
         if (renderFunction) {
             const content = renderFunction();
             if (content) div.appendChild(content);
@@ -350,30 +480,28 @@
     function switchTab(id) {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        const contentDiv = document.getElementById(`tab-${id}`);
+        if (contentDiv) contentDiv.classList.add('active');
         
-        // Find button by text content is tricky, let's rely on index or reconstruct logic. 
-        // Easier: Attach ID to button or use event.target.
-        // Re-implementing correctly:
-        const index = Array.from(document.getElementById('content-area').children).findIndex(child => child.id === `tab-${id}`);
-        document.querySelectorAll('.tab-btn')[index].classList.add('active');
-        document.getElementById(`tab-${id}`).classList.add('active');
+        const allBtns = document.querySelectorAll('.tab-btn');
+        for (let btn of allBtns) {
+            if (btn.textContent.includes(id)) {
+                btn.classList.add('active');
+                break;
+            }
+        }
     }
-
-    // --- Component Helpers ---
 
     function createCollapsible(title, contentNode, startOpen = true) {
         const section = document.createElement('div');
         section.className = `section ${startOpen ? 'open' : ''}`;
-
         const header = document.createElement('div');
         header.className = 'section-header';
         header.textContent = title;
         header.onclick = () => section.classList.toggle('open');
-
         const content = document.createElement('div');
         content.className = 'section-content';
         content.appendChild(contentNode);
-
         section.appendChild(header);
         section.appendChild(content);
         return section;
@@ -382,15 +510,12 @@
     function createKVRow(key, val) {
         const row = document.createElement('div');
         row.className = 'kv-row';
-        
         const k = document.createElement('div');
         k.className = 'kv-key';
         k.textContent = key + ':';
-        
         const v = document.createElement('div');
         v.className = 'kv-val';
         v.textContent = val;
-
         row.appendChild(k);
         row.appendChild(v);
         return row;
@@ -399,35 +524,63 @@
     function createNeuronRow(name, value) {
         const row = document.createElement('div');
         row.className = 'kv-row';
-        
         const k = document.createElement('div');
         k.className = 'kv-key';
-        k.style.color = '#b0b0b0'; // distinct from main keys
+        k.style.color = '#b0b0b0';
         k.textContent = name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-
         const v = document.createElement('div');
         v.className = 'kv-val';
-        
-        // Simple numeric display without coloured bars
-        if (typeof value === 'number') {
-            v.textContent = Math.round(value * 100) / 100;
-            v.style.fontWeight = 'bold';
-        } else {
-            v.textContent = value;
-        }
-
+        v.textContent = typeof value === 'number' ? Math.round(value * 100) / 100 : value;
+        v.style.fontWeight = 'bold';
         row.appendChild(k);
         row.appendChild(v);
         return row;
     }
 
-    // --- RENDERERS ---
+    function formatAge(seconds) {
+        if (!seconds) return "0s";
+        const d = Math.floor(seconds / 86400);
+        const h = Math.floor((seconds % 86400) / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        return `${d}d ${h}h ${m}m ${s}s`.replace(/^0d /, '').replace(/^0h /, '').replace(/^0m /, '');
+    }
 
-    // 1. Overview Renderer
+    function createBiography() {
+        const stats = saveData.statistics || {};
+        const squid = saveData.game_state?.squid || {};
+        const enhanced = (saveData.brain_state || {}).enhanced_neurogenesis || {};
+        
+        let distanceRaw = 0;
+        for (const k in stats) {
+            if (k.toLowerCase().includes('distance') || k.toLowerCase().includes('swum')) {
+                distanceRaw = stats[k];
+                break;
+            }
+        }
+        const distance = (distanceRaw / 100).toFixed(1);
+
+        const poops = stats.poops_created || 0;
+        const poopText = poops === 1 ? '1 poop' : `${poops} poops`;
+
+        const bio = document.createElement('div');
+        bio.className = 'bio-summary';
+        bio.innerHTML = `
+            <strong>🦑 Squid Biography</strong><br>
+            This squid lived <strong>${formatAge(stats.total_age_seconds || 0)}</strong>, 
+            swam <strong>${distance} meters</strong>, 
+            created <strong>${poopText}</strong>, 
+            experienced <strong>${stats.startles_experienced || 0} startles</strong>, 
+            and developed <strong>${enhanced.novelty_neuron_count || 0} novelty neurons</strong>.
+            ${squid.personality ? ` Personality: <strong>${squid.personality}</strong>` : ''}
+        `;
+        return bio;
+    }
+
     function renderOverview() {
         const container = document.createElement('div');
+        container.appendChild(createBiography());
 
-        // Squid Info
         const squidData = saveData.game_state?.squid || {};
         const stats = saveData.statistics || {};
         
@@ -437,147 +590,171 @@
         infoDiv.appendChild(createKVRow('Health', squidData.is_sick ? 'Sick 🤒' : `Healthy (${squidData.health}%)`));
         infoDiv.appendChild(createKVRow('Age', formatAge(stats.total_age_seconds || 0)));
         if(squidData.uuid) infoDiv.appendChild(createKVRow('UUID', squidData.uuid));
-        
         container.appendChild(createCollapsible('🦑 Squid Information', infoDiv));
 
-        // Neuron Values
         const neuronDiv = document.createElement('div');
         const keys = ['hunger', 'happiness', 'cleanliness', 'sleepiness', 'satisfaction', 'anxiety', 'curiosity', 'health'];
         keys.forEach(k => {
-            if (squidData[k] !== undefined) {
-                neuronDiv.appendChild(createNeuronRow(k, squidData[k]));
-            }
+            if (squidData[k] !== undefined) neuronDiv.appendChild(createNeuronRow(k, squidData[k]));
         });
         container.appendChild(createCollapsible('🧠 Core Neuron Values', neuronDiv));
 
-        // Neurogenesis
         const brain = saveData.brain_state || {};
         const enhanced = brain.enhanced_neurogenesis || {};
         const funcNeurons = enhanced.functional_neurons || {};
-        
-        const neuroDiv = document.createElement('div');
-        neuroDiv.appendChild(createKVRow('Total Neurogenesis Neurons', Object.keys(funcNeurons).length));
-        neuroDiv.appendChild(createKVRow('Novelty Neurons', enhanced.novelty_neuron_count || 0));
-        
+        const neuroContainer = document.createElement('div');
+        neuroContainer.appendChild(createKVRow('Total Functional Neurons', Object.keys(funcNeurons).length));
+        neuroContainer.appendChild(createKVRow('Novelty Neurons', enhanced.novelty_neuron_count || 0));
         if (Object.keys(funcNeurons).length > 0) {
-            const list = document.createElement('div');
-            list.style.marginTop = '10px';
+            const table = document.createElement('table');
+            table.className = 'neuro-table';
+            table.innerHTML = `<thead><tr><th>Name</th><th>Type</th><th>Utility</th><th>Connections</th></tr></thead><tbody></tbody>`;
+            const tbody = table.querySelector('tbody');
             for (const [name, data] of Object.entries(funcNeurons)) {
-                const item = document.createElement('div');
-                item.style.padding = '5px 0';
-                item.style.borderTop = '1px solid #333';
-                item.innerHTML = `<span style="color:#4CAF50">🧬 ${name}</span> (${data.neuron_type}) - Util: ${data.utility_score?.toFixed(2)}`;
-                list.appendChild(item);
+                const row = document.createElement('tr');
+                row.innerHTML = `<td><span style="color:#4CAF50">🧬 ${name}</span></td><td>${data.neuron_type || 'unknown'}</td><td>${(data.utility_score || 0).toFixed(2)}</td><td>${data.connections ? Object.keys(data.connections).length : '—'}</td>`;
+                tbody.appendChild(row);
             }
-            neuroDiv.appendChild(list);
+            neuroContainer.appendChild(table);
         }
-        
-        container.appendChild(createCollapsible('🧬 Neurogenesis', neuroDiv));
+        container.appendChild(createCollapsible('🧬 Neurogenesis Deep Dive', neuroContainer));
 
-        // Stats (v2)
-        if (Object.keys(stats).length > 0) {
-            const statsDiv = document.createElement('div');
-            
-            const groups = {
-                "Food & Consumption": ['cheese_eaten', 'sushi_eaten', 'poops_created'],
-                "Interactions": ['startles_experienced', 'ink_clouds_created', 'rocks_thrown'],
-                "Neural Development": ['current_neurons', 'max_neurons_reached', 'novelty_neurons_created']
-            };
-
-            for (const [group, fields] of Object.entries(groups)) {
-                const title = document.createElement('div');
-                title.className = 'stat-group-title';
-                title.textContent = group;
-                statsDiv.appendChild(title);
-                
-                fields.forEach(f => {
-                    if (stats[f] !== undefined) {
-                        statsDiv.appendChild(createKVRow(f.replace(/_/g, ' '), stats[f]));
-                    }
-                });
-            }
-            container.appendChild(createCollapsible('📊 Statistics', statsDiv));
+        const statsDiv = document.createElement('div');
+        const groups = {
+            "📊 General": ['total_age_seconds', 'total_playtime_seconds', 'distance_swum'],
+            "🍣 Food & Consumption": ['cheese_eaten', 'sushi_eaten', 'poops_created', 'food_thrown'],
+            "🤝 Interactions": ['startles_experienced', 'ink_clouds_created', 'rocks_thrown', 'rocks_carried', 'decorations_interacted'],
+            "🧠 Neural": ['current_neurons', 'max_neurons_reached', 'novelty_neurons_created', 'hebbian_updates', 'neurons_pruned'],
+            "💤 Sleep & Health": ['total_sleep_seconds', 'average_sleep_quality', 'health_restored', 'sickness_episodes'],
+            "🌍 Exploration": ['distance_swum', 'time_moving', 'unique_locations_visited']
+        };
+        for (const [groupName, keyList] of Object.entries(groups)) {
+            const title = document.createElement('div');
+            title.className = 'stat-group-title';
+            title.textContent = groupName;
+            statsDiv.appendChild(title);
+            keyList.forEach(k => {
+                if (stats[k] !== undefined) {
+                    let val = stats[k];
+                    const pretty = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    if (k.includes('distance')) val = (val / 100).toFixed(1) + ' m';
+                    else if (k.includes('seconds')) val = formatAge(val);
+                    statsDiv.appendChild(createKVRow(pretty, val));
+                }
+            });
         }
+        const usedKeys = Object.values(groups).flat();
+        Object.keys(stats).filter(k => !usedKeys.includes(k)).forEach(k => {
+            const pretty = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            statsDiv.appendChild(createKVRow(pretty, stats[k]));
+        });
+        container.appendChild(createCollapsible('📊 Full Statistics', statsDiv));
 
         return container;
     }
 
-    // 2. Network Renderer (Canvas)
     function renderNetwork() {
         const container = document.createElement('div');
         container.style.height = '100%';
         container.style.display = 'flex';
         container.style.flexDirection = 'column';
 
+        const controlsDiv = document.createElement('div');
+        controlsDiv.style.margin = '8px 0 12px 0';
+        controlsDiv.style.display = 'flex';
+        controlsDiv.style.alignItems = 'center';
+        controlsDiv.style.gap = '12px';
+        controlsDiv.style.flexWrap = 'wrap';
+
+        const label = document.createElement('label');
+        label.style.color = '#ccc';
+        label.style.fontSize = '0.95rem';
+        label.style.cursor = 'pointer';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(' Show connection weight labels'));
+        controlsDiv.appendChild(label);
+
+        const resetBtn = document.createElement('button');
+        resetBtn.textContent = 'Reset View';
+        resetBtn.style.padding = '4px 12px';
+        resetBtn.style.fontSize = '0.85rem';
+        resetBtn.onclick = () => { scale = initialScale; offsetX = initialOffsetX; offsetY = initialOffsetY; redrawNetwork(); };
+        controlsDiv.appendChild(resetBtn);
+
+        container.appendChild(controlsDiv);
+
         const canvas = document.createElement('canvas');
         canvas.id = 'network-canvas';
-        // Size will be set dynamically, but initial size:
-        canvas.width = 1000;
-        canvas.height = 700;
+        canvas.width = 1100;
+        canvas.height = 720;
         canvas.style.width = '100%';
-        canvas.style.height = 'auto';
-        canvas.style.maxWidth = '1000px';
-
+        canvas.style.maxWidth = '1100px';
+        currentCanvas = canvas;
         container.appendChild(canvas);
+
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'network-summary';
+        container.appendChild(summaryDiv);
 
         const brain = saveData.brain_state || {};
         const positions = brain.neuron_positions || {};
         const weightsList = brain.weights_list || [];
         const states = brain.neuron_states || brain.state || {};
 
-        // Convert weights list to helpful structure
-        const weights = [];
-        weightsList.forEach(w => {
-            if (Array.isArray(w) && w.length === 3) {
-                weights.push({ src: w[0], dst: w[1], weight: w[2] });
-            }
+        const weights = weightsList.filter(w => Array.isArray(w) && w.length === 3)
+                                 .map(w => ({src: w[0], dst: w[1], weight: w[2]}));
+
+        let scale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+        let initialScale = 1;
+        let initialOffsetX = 0;
+        let initialOffsetY = 0;
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        let showWeightLabels = true;
+
+        checkbox.addEventListener('change', () => {
+            showWeightLabels = checkbox.checked;
+            redrawNetwork();
         });
 
-        // Ensure positions exist if missing
-        if (Object.keys(positions).length === 0) {
-            const keys = Object.keys(states);
-            keys.forEach((k, i) => {
-                positions[k] = [100 + (i % 5) * 150, 100 + Math.floor(i / 5) * 150];
-            });
-        }
-
-        // Draw function
-        setTimeout(() => {
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Background
-            ctx.fillStyle = '#1a1a1a';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Scale to fit
-            // Find bounds
+        function calculateInitialView() {
             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
             for (const key in positions) {
                 const [x, y] = positions[key];
                 minX = Math.min(minX, x); maxX = Math.max(maxX, x);
                 minY = Math.min(minY, y); maxY = Math.max(maxY, y);
             }
-            
-            // Add padding
-            const padding = 50;
-            const dataWidth = maxX - minX + padding * 2;
-            const dataHeight = maxY - minY + padding * 2;
-            
-            // Calculate scale
-            const scaleX = canvas.width / dataWidth;
-            const scaleY = canvas.height / dataHeight;
-            const scale = Math.min(scaleX, scaleY, 1.2); // cap scale
-            
-            const offsetX = (canvas.width - dataWidth * scale) / 2 - minX * scale + padding * scale;
-            const offsetY = (canvas.height - dataHeight * scale) / 2 - minY * scale + padding * scale;
+            const padding = 80;
+            const dataW = maxX - minX + padding * 2;
+            const dataH = maxY - minY + padding * 2;
+            const fitScale = Math.min(canvas.width / dataW, canvas.height / dataH, 1.0);
+            const centerX = (canvas.width - dataW * fitScale) / 2 - minX * fitScale + padding * fitScale;
+            const centerY = (canvas.height - dataH * fitScale) / 2 - minY * fitScale + padding * fitScale;
 
-            // Draw Connections
+            scale = fitScale;
+            offsetX = centerX;
+            offsetY = centerY;
+            initialScale = fitScale;
+            initialOffsetX = centerX;
+            initialOffsetY = centerY;
+        }
+
+        function redrawNetwork() {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
             weights.forEach(w => {
                 const p1 = positions[w.src];
                 const p2 = positions[w.dst];
                 if (!p1 || !p2) return;
-
                 const x1 = p1[0] * scale + offsetX;
                 const y1 = p1[1] * scale + offsetY;
                 const x2 = p2[0] * scale + offsetX;
@@ -586,94 +763,233 @@
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
-                
-                // Color based on weight (Green +, Red -)
-                const intensity = Math.min(Math.abs(w.weight), 1.0);
-                if (w.weight > 0) {
-                    ctx.strokeStyle = `rgba(0, ${Math.floor(255 * intensity)}, 0, 0.6)`;
-                } else {
-                    ctx.strokeStyle = `rgba(${Math.floor(255 * intensity)}, 0, 0, 0.6)`;
-                }
-                
-                ctx.lineWidth = Math.max(1, 2 * intensity + 0.5);
-                if (w.weight < 0 && Math.abs(w.weight) < 0.3) {
-                    ctx.setLineDash([5, 5]);
-                } else {
-                    ctx.setLineDash([]);
-                }
+                const intensity = Math.min(Math.abs(w.weight), 1);
+                ctx.strokeStyle = w.weight > 0 
+                    ? `rgba(0, ${Math.floor(255 * intensity)}, 0, 0.75)` 
+                    : `rgba(${Math.floor(255 * intensity)}, 0, 0, 0.75)`;
+                ctx.lineWidth = Math.max(2, 4 * intensity);
                 ctx.stroke();
-
-                // Draw weight label for strong connections
-                if (Math.abs(w.weight) > 0.1) {
-                    const mx = (x1 + x2) / 2;
-                    const my = (y1 + y2) / 2;
-                    ctx.fillStyle = 'rgba(30, 30, 30, 0.8)';
-                    ctx.fillRect(mx - 15, my - 8, 30, 16);
-                    ctx.fillStyle = '#ccc';
-                    ctx.font = '10px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(w.weight.toFixed(2), mx, my + 4);
-                }
             });
 
-            // Draw Neurons
-            for (const name in positions) {
-                const [rawX, rawY] = positions[name];
-                const x = rawX * scale + offsetX;
-                const y = rawY * scale + offsetY;
-                const val = states[name] || 0;
+            if (showWeightLabels) {
+                ctx.font = 'bold 13px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                weights.forEach(w => {
+                    const p1 = positions[w.src];
+                    const p2 = positions[w.dst];
+                    if (!p1 || !p2) return;
+                    const x1 = p1[0] * scale + offsetX;
+                    const y1 = p1[1] * scale + offsetY;
+                    const x2 = p2[0] * scale + offsetX;
+                    const y2 = p2[1] * scale + offsetY;
+                    const mx = (x1 + x2) / 2;
+                    const my = (y1 + y2) / 2;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText(w.weight.toFixed(2), mx, my);
+                });
+            }
 
-                // Color based on value (Green > Yellow > Red)
+            for (const name in positions) {
+                const [rx, ry] = positions[name];
+                const x = rx * scale + offsetX;
+                const y = ry * scale + offsetY;
+                const val = states[name] || 0;
                 let fill = '#999';
                 if (typeof val === 'number') {
                     const norm = Math.max(0, Math.min(1, val / 100));
-                    if (norm > 0.7) fill = '#4CAF50';
-                    else if (norm > 0.4) fill = '#FFC107';
-                    else fill = '#F44336';
+                    fill = norm > 0.7 ? '#4CAF50' : norm > 0.4 ? '#FFC107' : '#F44336';
                 }
-
                 ctx.beginPath();
-                ctx.arc(x, y, 15, 0, Math.PI * 2);
+                ctx.arc(x, y, 16, 0, Math.PI * 2);
                 ctx.fillStyle = fill;
                 ctx.fill();
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#111';
+                ctx.lineWidth = 3;
                 ctx.stroke();
 
-                // Label
-                ctx.fillStyle = '#e0e0e0';
-                ctx.font = 'bold 12px Arial';
-                ctx.textAlign = 'center';
-                const displayName = name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                
-                // Text background
-                const textWidth = ctx.measureText(displayName).width;
-                ctx.fillStyle = 'rgba(0,0,0,0.5)';
-                ctx.fillRect(x - textWidth/2 - 4, y + 20, textWidth + 8, 16);
-                
                 ctx.fillStyle = '#fff';
-                ctx.fillText(displayName, x, y + 32);
+                ctx.font = 'bold 13px Arial';
+                ctx.textAlign = 'center';
+                const disp = name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                ctx.fillText(disp, x, y + 38);
+            }
+        }
+
+        let lastWheelTime = 0;
+        canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            const now = Date.now();
+            if (now - lastWheelTime < 16) return;
+            lastWheelTime = now;
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+
+            const worldX = (mouseX - offsetX) / scale;
+            const worldY = (mouseY - offsetY) / scale;
+
+            scale *= zoomFactor;
+            scale = Math.max(0.2, Math.min(4.0, scale));
+
+            offsetX = mouseX - worldX * scale;
+            offsetY = mouseY - worldY * scale;
+
+            redrawNetwork();
+        });
+
+        canvas.addEventListener('mousedown', e => {
+            if (e.button === 0) {
+                isDragging = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                canvas.style.cursor = 'grabbing';
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            if (canvas) canvas.style.cursor = 'grab';
+        });
+
+        canvas.addEventListener('mousemove', e => {
+            if (!isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                let found = null;
+                for (const name in positions) {
+                    const nx = positions[name][0] * scale + offsetX;
+                    const ny = positions[name][1] * scale + offsetY;
+                    if (Math.hypot(nx - mx, ny - my) < 22) {
+                        found = {name, val: states[name] || 0, x: nx, y: ny};
+                        break;
+                    }
+                }
+                if (found) {
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = `${found.x + 25}px`;
+                    tooltip.style.top = `${found.y - 10}px`;
+                    tooltip.innerHTML = `<strong>${found.name}</strong><br>Value: ${found.val.toFixed(1)}`;
+                } else {
+                    tooltip.style.display = 'none';
+                }
+                return;
             }
 
-        }, 100);
+            const dx = e.clientX - lastMouseX;
+            const dy = e.clientY - lastMouseY;
+            offsetX += dx;
+            offsetY += dy;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            redrawNetwork();
+        });
+
+        setTimeout(() => {
+            calculateInitialView();
+            redrawNetwork();
+
+            tooltip = document.createElement('div');
+            tooltip.className = 'tooltip';
+            container.appendChild(tooltip);
+
+            canvas.onmouseleave = () => tooltip.style.display = 'none';
+        }, 50);
+
+        const totalNeurons = Object.keys(positions).length;
+        const totalConn = weights.length;
+        const avgWeight = weights.length ? (weights.reduce((a,w)=>a+Math.abs(w.weight),0)/weights.length).toFixed(2) : 0;
+        const positive = weights.filter(w => w.weight > 0).length;
+        const strongest = weights.reduce((max,w) => Math.abs(w.weight) > Math.abs(max.weight) ? w : max, {weight:0});
+
+        summaryDiv.innerHTML = `
+            <div class="summary-item"><strong>Total Neurons</strong><br>${totalNeurons}</div>
+            <div class="summary-item"><strong>Connections</strong><br>${totalConn} (avg weight ${avgWeight})</div>
+            <div class="summary-item"><strong>Positive Weights</strong><br>${positive} / ${totalConn}</div>
+            <div class="summary-item"><strong>Strongest Link</strong><br>${strongest.src} → ${strongest.dst} (${strongest.weight.toFixed(2)})</div>
+        `;
 
         return container;
     }
 
-    // 3. Render Human Readable JSON (Memories, Achievements)
-    function renderJsonView(key, data, isHumanReadable) {
+    function renderMemoryDashboard() {
         const container = document.createElement('div');
+        container.className = 'memory-dashboard';
 
-        if (key === 'ShortTerm' || key === 'LongTerm') {
-            if (!Array.isArray(data) || data.length === 0) {
-                container.textContent = "No memories found.";
-                return container;
+        const shortTermMem = saveData.ShortTerm || [];
+        const longTermMem = saveData.LongTerm || [];
+        const allMemForCats = [...shortTermMem, ...longTermMem];
+
+        const summaryRow = document.createElement('div');
+        summaryRow.innerHTML = `
+            <span class="summary-card">Short-term: <strong>${shortTermMem.length}</strong></span>
+            <span class="summary-card">Long-term: <strong>${longTermMem.length}</strong></span>
+            <span class="summary-card">Avg importance: <strong>${allMemForCats.length ? (allMemForCats.reduce((s,m)=>s+(m.importance||0),0)/allMemForCats.length).toFixed(1) : 0}</strong></span>
+        `;
+        container.appendChild(summaryRow);
+
+        const filterRow = document.createElement('div');
+        filterRow.className = 'filter-row';
+        
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Search key or value...';
+        searchInput.style.width = '280px';
+        filterRow.appendChild(searchInput);
+
+        const catSelect = document.createElement('select');
+        const categories = [...new Set(allMemForCats.map(m => m.category || 'UNK'))];
+        catSelect.innerHTML = `<option value="">All categories</option>` + categories.map(c => `<option value="${c}">${c}</option>`).join('');
+        filterRow.appendChild(catSelect);
+
+        container.appendChild(filterRow);
+
+        const columnsContainer = document.createElement('div');
+        columnsContainer.className = 'memory-columns';
+        container.appendChild(columnsContainer);
+
+        const shortColumn = document.createElement('div');
+        shortColumn.className = 'memory-column';
+        const shortHeader = document.createElement('div');
+        shortHeader.className = 'stat-group-title';
+        shortHeader.textContent = `📌 Short Term Memories (${shortTermMem.length})`;
+        shortColumn.appendChild(shortHeader);
+        const shortListDiv = document.createElement('div');
+        shortListDiv.className = 'memory-list';
+        shortColumn.appendChild(shortListDiv);
+        columnsContainer.appendChild(shortColumn);
+
+        const longColumn = document.createElement('div');
+        longColumn.className = 'memory-column';
+        const longHeader = document.createElement('div');
+        longHeader.className = 'stat-group-title';
+        longHeader.textContent = `📌 Long Term Memories (${longTermMem.length})`;
+        longColumn.appendChild(longHeader);
+        const longListDiv = document.createElement('div');
+        longListDiv.className = 'memory-list';
+        longColumn.appendChild(longListDiv);
+        columnsContainer.appendChild(longColumn);
+
+        function renderMemoryList(targetDiv, memArray, filterText = '', catFilter = '') {
+            targetDiv.innerHTML = '';
+            const filtered = memArray.filter(m => {
+                const matchText = (m.key || '') + (m.value || '') + (m.category || '');
+                return (!filterText || matchText.toLowerCase().includes(filterText.toLowerCase())) &&
+                       (!catFilter || (m.category || 'UNK') === catFilter);
+            });
+
+            if (!filtered.length) {
+                targetDiv.innerHTML = '<p style="color:#666; text-align:center; padding:20px;">No memories match filter</p>';
+                return;
             }
-            
-            data.forEach(mem => {
+
+            filtered.forEach(mem => {
                 const card = document.createElement('div');
                 card.className = 'memory-card';
-                
                 const header = document.createElement('div');
                 header.style.display = 'flex';
                 header.style.justifyContent = 'space-between';
@@ -681,7 +997,7 @@
 
                 const left = document.createElement('div');
                 const tag = document.createElement('span');
-                tag.className = `tag ${mem.category || ''}`;
+                tag.className = `tag ${mem.category || 'UNK'}`;
                 tag.textContent = mem.category || 'UNK';
                 left.appendChild(tag);
                 
@@ -690,21 +1006,19 @@
                 title.style.color = '#7fbadc';
                 title.textContent = (mem.key || 'Unknown').replace(/_/g, ' ');
                 left.appendChild(title);
-                
                 header.appendChild(left);
-                
+
                 if (mem.importance) {
                     const imp = document.createElement('span');
                     imp.style.color = '#FFD700';
                     imp.textContent = `★ ${mem.importance}`;
                     header.appendChild(imp);
                 }
-
                 card.appendChild(header);
 
                 const val = document.createElement('div');
                 val.textContent = mem.value;
-                val.style.marginBottom = '5px';
+                val.style.marginBottom = '6px';
                 card.appendChild(val);
 
                 const meta = document.createElement('div');
@@ -714,60 +1028,92 @@
                 meta.textContent = `🕐 ${date}`;
                 card.appendChild(meta);
 
-                container.appendChild(card);
+                targetDiv.appendChild(card);
             });
-        } else if (key === 'achievements') {
-            const unlocked = data.unlocked || {};
-            const list = document.createElement('div');
-            
-            const title = document.createElement('h3');
-            title.textContent = `Unlocked (${Object.keys(unlocked).length})`;
-            title.style.color = '#e0e0e0';
-            list.appendChild(title);
-
-            for(const k in unlocked) {
-                const item = document.createElement('div');
-                item.style.padding = '5px';
-                item.textContent = `🏆 ${k.replace(/_/g, ' ').toUpperCase()}`;
-                list.appendChild(item);
-            }
-            container.appendChild(list);
-
-            const progDiv = document.createElement('div');
-            progDiv.style.marginTop = '20px';
-            const progTitle = document.createElement('h3');
-            progTitle.textContent = "Progress";
-            progTitle.style.color = '#e0e0e0';
-            progDiv.appendChild(progTitle);
-
-            const progress = data.progress || {};
-            for(const k in progress) {
-                progDiv.appendChild(createKVRow(k.replace(/_/g, ' '), progress[k]));
-            }
-            container.appendChild(progDiv);
-
-        } else {
-            // Default to Tree for game_state etc if passed here, 
-            // but usually we use specific human-readable parsers in Python.
-            // For JS simplicity, fallback to Tree if not memory/achievement
-            if (key === 'game_state' || key === 'brain_state' || key === 'statistics') {
-                // We actually handled these in Overview mostly.
-                // Let's just show the raw JSON tree for full detail access.
-                return renderJsonTree(data);
-            }
         }
+
+        function updateLists() {
+            const ft = searchInput.value;
+            const cf = catSelect.value;
+            renderMemoryList(shortListDiv, shortTermMem, ft, cf);
+            renderMemoryList(longListDiv, longTermMem, ft, cf);
+        }
+
+        searchInput.oninput = updateLists;
+        catSelect.onchange = updateLists;
+        updateLists();
 
         return container;
     }
 
-    // 4. Generic JSON Tree Renderer
-    function formatAge(seconds) {
-        if (!seconds) return "0s";
-        const d = Math.floor(seconds / 86400);
-        const h = Math.floor((seconds % 86400) / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = Math.floor(seconds % 60);
-        return `${d}d ${h}h ${m}m ${s}s`.replace(/^0d /, '').replace(/^0h /, '');
+    function renderEnhancedAchievements() {
+        const container = document.createElement('div');
+        const data = saveData.achievements || {};
+        const unlocked = data.unlocked || {};
+        const progress = data.progress || {};
+
+        const unlockedDiv = document.createElement('div');
+        const uTitle = document.createElement('h3');
+        uTitle.textContent = `Unlocked (${Object.keys(unlocked).length})`;
+        unlockedDiv.appendChild(uTitle);
+
+        Object.keys(unlocked).forEach(k => {
+            const item = document.createElement('div');
+            item.style.padding = '8px';
+            item.style.margin = '4px 0';
+            item.style.background = '#1e3a2f';
+            item.textContent = `🏆 ${k.replace(/_/g, ' ').toUpperCase()}`;
+            unlockedDiv.appendChild(item);
+        });
+        container.appendChild(unlockedDiv);
+
+        const progTitle = document.createElement('h3');
+        progTitle.textContent = 'Progress';
+        progTitle.style.marginTop = '25px';
+        container.appendChild(progTitle);
+
+        Object.entries(progress).forEach(([k, v]) => {
+            const row = document.createElement('div');
+            row.style.marginBottom = '12px';
+            
+            const label = document.createElement('div');
+            label.textContent = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            row.appendChild(label);
+
+            const progContainer = document.createElement('div');
+            progContainer.className = 'progress-container';
+            
+            const bar = document.createElement('div');
+            bar.className = 'progress-bar';
+            const percent = Math.min(100, typeof v === 'number' ? v * 5 : 50);
+            bar.style.width = `${percent}%`;
+            progContainer.appendChild(bar);
+            
+            row.appendChild(progContainer);
+            row.appendChild(createKVRow('Progress', `${v} ${percent > 95 ? '✅' : ''}`));
+            container.appendChild(row);
+        });
+
+        return container;
+    }
+
+    function renderSaveMetadata() {
+        const container = document.createElement('div');
+        container.className = 'metadata-grid';
+
+        const uuid = saveData.uuid_txt || saveData.game_state?.squid?.uuid || '—';
+        container.appendChild(createKVRow('UUID', uuid));
+        container.appendChild(createKVRow('Loaded JSON files', Object.keys(saveData).filter(k => k !== 'uuid_txt').length));
+        container.appendChild(createKVRow('Total Neurons', (saveData.brain_state?.neuron_positions ? Object.keys(saveData.brain_state.neuron_positions).length : 0)));
+        container.appendChild(createKVRow('File version (inferred)', saveData.game_state?.version || '2.6+'));
+        const stats = saveData.statistics || {};
+        container.appendChild(createKVRow('Total playtime', formatAge(stats.total_playtime_seconds || stats.total_age_seconds || 0)));
+
+        return container;
+    }
+
+    function renderJsonView(key, data) {
+        return renderJsonTree(data);
     }
 
     function renderJsonTree(data) {
@@ -776,13 +1122,10 @@
         
         function createNode(key, value) {
             const li = document.createElement('li');
-            
             if (typeof value === 'object' && value !== null) {
                 const isArray = Array.isArray(value);
-                const isEmpty = Object.keys(value).length === 0;
-                
                 const span = document.createElement('span');
-                if (!isEmpty) {
+                if (Object.keys(value).length > 0) {
                     span.className = 'caret caret-right';
                     span.onclick = function() {
                         this.classList.toggle('caret-down');
@@ -790,10 +1133,8 @@
                         this.parentElement.querySelector('.nested').classList.toggle('active');
                     };
                 } else {
-                    span.className = 'caret'; // No arrow
                     span.innerHTML = '&nbsp;';
                 }
-                
                 li.appendChild(span);
                 
                 const keySpan = document.createElement('span');
@@ -806,17 +1147,14 @@
                 typeSpan.textContent = isArray ? `[${value.length}]` : `{${Object.keys(value).length}}`;
                 li.appendChild(typeSpan);
 
-                if (!isEmpty) {
+                if (Object.keys(value).length > 0) {
                     const ul = document.createElement('ul');
                     ul.className = 'nested';
-                    for (const k in value) {
-                        ul.appendChild(createNode(k, value[k]));
-                    }
+                    for (const k in value) ul.appendChild(createNode(k, value[k]));
                     li.appendChild(ul);
                 }
             } else {
                 const span = document.createElement('span');
-                span.className = 'caret';
                 span.innerHTML = '&nbsp;';
                 li.appendChild(span);
 
@@ -846,20 +1184,16 @@
 
         const ul = document.createElement('ul');
         ul.style.paddingLeft = '0';
-        // Root nodes
         if (Array.isArray(data)) {
-            data.forEach((item, index) => ul.appendChild(createNode(index, item)));
+            data.forEach((item, i) => ul.appendChild(createNode(i, item)));
         } else {
-            for (const key in data) {
-                ul.appendChild(createNode(key, data[key]));
-            }
+            for (const key in data) ul.appendChild(createNode(key, data[key]));
         }
-        
         container.appendChild(ul);
         return container;
     }
 
+    window.switchTab = switchTab;
 </script>
-
 </body>
 </html>
