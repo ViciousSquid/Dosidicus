@@ -7,7 +7,7 @@ import threading
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 class RemoteSquidController:
-    """Controls behavior of squids away from their home instance"""
+    """Controls behaviour of squids away from their home instance"""
 
     def __init__(self, squid_data, scene, plugin_instance=None, debug_mode=False, remote_entity_manager=None):
         self.squid_data = squid_data.copy() # Ensure it's a copy
