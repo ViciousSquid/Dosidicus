@@ -1,0 +1,49 @@
+name: Squid Gallery Bot
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  add-to-gallery:
+    if: contains(github.event.issue.labels.*.name, 'squid-submission')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Process Squid Save
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          # 1. Extract URL and Nickname
+          FILE_URL=$(echo "$ISSUE_BODY" | grep -o 'https://github.com/[^)]*' | head -n 1)
+          NICKNAME=$(echo "$ISSUE_BODY" | grep -A 1 "Squid Nickname" | tail -n 1 | xargs | tr -d ' ')
+          
+          mkdir -p gallery
+          curl -L $FILE_URL -o "temp_squid.zip"
+
+          # 2. Verify ZIP and extract UUID
+          if unzip -l temp_squid.zip | grep -q "uuid.txt"; then
+            UUID=$(unzip -p temp_squid.zip uuid.txt | head -n 1 | xargs)
+            FINAL_NAME="${NICKNAME}_${UUID}.zip"
+            
+            mv temp_squid.zip "gallery/${FINAL_NAME}"
+            
+            # 3. Commit to repo
+            git config user.name "SquidBot"
+            git config user.email "bot@github.com"
+            git add gallery/
+            git commit -m "New Squid verified: ${NICKNAME} (${UUID})"
+            git push
+            
+            gh issue comment $ISSUE_NUMBER --body "✅ **Squid Verified!** $NICKNAME has been added to the gallery. UUID: \`$UUID\`"
+            gh issue close $ISSUE_NUMBER
+          else
+            gh issue comment $ISSUE_NUMBER --body "❌ **Validation Failed:** This ZIP does not contain a \`uuid.txt\`. Please check your save file and try again."
+            exit 1
+          fi
