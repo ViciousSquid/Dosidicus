@@ -6,3 +6,9 @@ https://github.com/ViciousSquid/Dosidicus/wiki/Multiplayer
 
 ### STDP
 https://github.com/ViciousSquid/Dosidicus/wiki/Spike%E2%80%90Timing%E2%80%90Dependent-Plasticity-(STDP)
+
+
+
+-------------------------
+
+#### [Plugin system overview](https://github.com/ViciousSquid/Dosidicus/wiki/Plugin-system)
