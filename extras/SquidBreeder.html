@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Squid Breeder</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<style>
+body {
+    font-family: Arial;
+    background: #0f1220;
+    color: #e0e6ff;
+    padding: 20px;
+}
+
+.container {
+    display: flex;
+    gap: 20px;
+}
+
+.panel {
+    flex: 1;
+    background: #1a1f3a;
+    padding: 15px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+textarea {
+    width: 100%;
+    min-height: 150px;
+    resize: both;
+    background: #0b0e1a;
+    color: #cfd8ff;
+    border: none;
+    padding: 10px;
+}
+
+.canvas-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+canvas {
+    width: 400px;
+    height: 300px;
+    background: #0b0e1a;
+}
+
+.controls {
+    font-size: 13px;
+    margin-top: 10px;
+}
+
+label { margin-right: 10px; }
+</style>
+</head>
+
+<body>
+
+<h1>🧬 Squid Breeder</h1>
+
+<div class="container">
+<div class="panel">
+<h3>Squid A</h3>
+<input type="file" onchange="loadFile(event,'A')">
+<textarea id="inputA"></textarea>
+<div class="canvas-wrapper"><canvas id="canvasA" width="400" height="300"></canvas></div>
+</div>
+
+<div class="panel">
+<h3>Squid B</h3>
+<input type="file" onchange="loadFile(event,'B')">
+<textarea id="inputB"></textarea>
+<div class="canvas-wrapper"><canvas id="canvasB" width="400" height="300"></canvas></div>
+</div>
+</div>
+
+<button onclick="breed()" style="background: #ff69b4; color: white; padding: 20px 40px; font-size: 26px; border: none; border-radius: 10px; cursor: pointer; display: block; margin: 20px auto;">BREED</button>
+
+<button id="saveBtn" onclick="saveJSON()" style="background: #3399ff; color: white; padding: 15px 30px; font-size: 20px; border: none; border-radius: 10px; cursor: pointer; display: none; margin: -10px auto 20px auto;">💾 Save Child Brain</button>
+
+<div class="panel">
+<h3>Offspring</h3>
+
+<div class="controls">
+<b>Inherited From:</b><br>
+<label><input type="checkbox" id="fA" checked>Parent A</label>
+<label><input type="checkbox" id="fB" checked>Parent B</label>
+<label><input type="checkbox" id="fBoth" checked>Both Parents</label>
+
+<br><br><b>Neuron Type:</b><br>
+<label><input type="checkbox" id="fCore" checked>Core</label>
+<label><input type="checkbox" id="fCustom" checked>Custom</label>
+
+<br><br><b>View Mode:</b><br>
+<label><input type="checkbox" id="heatmap">Weight Δ Heatmap</label>
+
+<br><br><b>Mutation:</b><br>
+Rate <input type="range" id="mutRate" min="0" max="1" step="0.01" value="0.1">
+Strength <input type="range" id="mutStrength" min="0" max="2" step="0.1" value="0.3">
+</div>
+
+<textarea id="output"></textarea>
+<div class="canvas-wrapper">
+<canvas id="canvasOffspring" width="400" height="300"></canvas>
+</div>
+
+<div id="probe"></div>
+</div>
+
+<script>
+
+// ================= LOAD =================
+
+async function loadFile(e,t){
+    const f=e.target.files[0];
+    if(!f) return;
+
+    if(f.name.endsWith(".zip")){
+        const zip=await JSZip.loadAsync(f);
+        for(const k of Object.keys(zip.files)){
+            if(k.endsWith(".json")){
+                const txt=await zip.files[k].async("string");
+                input(t).value=txt;
+                renderNetwork(t);
+                return;
+            }
+        }
+    } else {
+        input(t).value=await f.text();
+        renderNetwork(t);
+    }
+}
+
+const input = t => document.getElementById("input"+t);
+
+// ================= BREED =================
+
+function breed(){
+    const A=JSON.parse(inputA.value);
+    const B=JSON.parse(inputB.value);
+
+    const child=structuredClone(A);
+    child._lineage={neurons:{},weights:{}};
+
+    // neurons
+    for(let n in B.neurons){
+        if(!child.neurons[n]){
+            child.neurons[n]=B.neurons[n];
+            child._lineage.neurons[n]="B";
+        } else child._lineage.neurons[n]="both";
+    }
+    for(let n in A.neurons){
+        if(!child._lineage.neurons[n]) child._lineage.neurons[n]="A";
+    }
+
+    // weights
+    child.weights={};
+    const keys=new Set([...Object.keys(A.weights),...Object.keys(B.weights)]);
+    keys.forEach(k=>{
+        const inA=k in A.weights;
+        const inB=k in B.weights;
+
+        const wa=A.weights[k]??rand();
+        const wb=B.weights[k]??rand();
+
+        child.weights[k]=(wa+wb)/2;
+
+        child._lineage.weights[k]=inA&&inB?"both":(inA?"A":"B");
+    });
+
+    mutate(child);
+
+    output.value=JSON.stringify(child,null,2);
+    renderOffspring(child);
+
+    window._offspring=child;
+    window._parentA=A;
+    window._parentB=B;
+
+    // Reveal save button
+    document.getElementById("saveBtn").style.display = "block";
+}
+
+// ================= SAVE =================
+
+function saveJSON() {
+    const data = document.getElementById("output").value;
+    if (!data) return;
+
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    link.href = url;
+    link.download = `squid_offspring_${timestamp}.json`;
+    
+    document.body.appendChild(link);
+    link.click();
+    
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// ================= MUTATION =================
+
+function mutate(net){
+    const rate=+mutRate.value;
+    const strength=+mutStrength.value;
+
+    for(let k in net.weights){
+        if(Math.random()<rate){
+            net.weights[k]+=rand()*strength;
+        }
+    }
+
+    // structural mutation (rare)
+    if(Math.random()<rate){
+        const nodes=Object.keys(net.neurons);
+        const a=nodes[Math.floor(Math.random()*nodes.length)];
+        const b=nodes[Math.floor(Math.random()*nodes.length)];
+        const key=a+"|"+b;
+        net.weights[key]=rand();
+        net._lineage.weights[key]="novel";
+    }
+}
+
+const rand=()=>Math.random()*2-1;
+
+// ================= RENDER =================
+
+function renderNetwork(t){
+    try{ render(JSON.parse(input(t).value),"canvas"+t); }catch{}
+}
+
+function renderOffspring(d){ render(d,"canvasOffspring",true); }
+
+function render(data,id,isOffspring=false){
+    const c=document.getElementById(id);
+    const ctx=c.getContext("2d");
+    ctx.clearRect(0,0,c.width,c.height);
+
+    if(!data.neurons) return;
+
+    const scale=fit(data.neurons);
+
+    const heat=heatmap.checked;
+
+    // connections
+    for(let k in data.weights||{}){
+        const [a,b]=k.split("|");
+        if(!data.neurons[a]||!data.neurons[b]) continue;
+
+        const origin=data._lineage?.weights?.[k]||"both";
+        if(!pass(origin)) continue;
+
+        const p1=scale(data.neurons[a].position);
+        const p2=scale(data.neurons[b].position);
+
+        ctx.beginPath();
+        ctx.moveTo(...p1);
+        ctx.lineTo(...p2);
+
+        ctx.strokeStyle = heat ? heatColor(k) : color(origin);
+        ctx.globalAlpha = origin==="novel"?1:0.7;
+        ctx.stroke();
+    }
+
+    // neurons
+    for(let n in data.neurons){
+        const neuron=data.neurons[n];
+        const origin=data._lineage?.neurons?.[n]||"both";
+
+        if(!pass(origin)) continue;
+        if(neuron.is_core && !fCore.checked) continue;
+        if(neuron.is_custom && !fCustom.checked) continue;
+
+        const [x,y]=scale(neuron.position);
+
+        ctx.beginPath();
+        ctx.arc(x,y,8,0,Math.PI*2);
+        ctx.fillStyle=color(origin);
+        ctx.fill();
+    }
+
+    // click probe
+    c.onclick=e=>probeClick(e,data,scale);
+}
+
+// ================= HELPERS =================
+
+function pass(o){
+    return (o==="A"&&fA.checked)||(o==="B"&&fB.checked)||(o==="both"&&fBoth.checked)||(o==="novel");
+}
+
+function color(o){
+    if(o==="A") return "#00ff88";
+    if(o==="B") return "#3399ff";
+    if(o==="novel") return "#ffcc00";
+    return "#ffffff";
+}
+
+function heatColor(k){
+    const a=window._parentA?.weights?.[k]??0;
+    const b=window._parentB?.weights?.[k]??0;
+    const d=a-b;
+
+    const v=Math.min(1,Math.abs(d));
+    if(d>0) return `rgba(0,255,0,${v})`;
+    return `rgba(255,0,0,${v})`;
+}
+
+// fit network into canvas
+function fit(neurons){
+    const xs=Object.values(neurons).map(n=>n.position[0]);
+    const ys=Object.values(neurons).map(n=>n.position[1]);
+
+    const minX=Math.min(...xs), maxX=Math.max(...xs);
+    const minY=Math.min(...ys), maxY=Math.max(...ys);
+
+    const w=maxX-minX, h=maxY-minY;
+
+    return ([x,y])=>{
+        return [
+            ((x-minX)/w)*350+25,
+            ((y-minY)/h)*250+25
+        ];
+    };
+}
+
+// ================= PROBE =================
+
+function probeClick(e,data,scale){
+    const rect=e.target.getBoundingClientRect();
+    const x=e.clientX-rect.left;
+    const y=e.clientY-rect.top;
+
+    for(let n in data.neurons){
+        const [nx,ny]=scale(data.neurons[n].position);
+        if(Math.hypot(nx-x,ny-y)<10){
+            const val=forward(data,n);
+            probe.innerText=`Neuron: ${n} → ${val.toFixed(3)}`;
+            return;
+        }
+    }
+}
+
+function forward(net,target){
+    let val=net.state?.[target]||0;
+
+    for(let k in net.weights){
+        const [a,b]=k.split("|");
+        if(b===target){
+            val += (net.state?.[a]||0)*net.weights[k];
+        }
+    }
+
+    return Math.tanh(val);
+}
+
+// ================= UI =================
+
+["fA","fB","fBoth","fCore","fCustom","heatmap"].forEach(id=>{
+    document.getElementById(id).onchange=()=>{
+        if(window._offspring) renderOffspring(window._offspring);
+    };
+});
+
+</script>
+
+</body>
+</html>
