@@ -5,6 +5,8 @@
 
 </details> </div>
 
+-----------------------------
+
 _"What if a Tamagotchi had a neural network and could learn stuff?"_ - [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/) , [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/)
 
 <p align="left">
