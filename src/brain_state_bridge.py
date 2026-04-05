@@ -178,6 +178,7 @@ def update_brain_state_from_widget(brain_widget) -> bool:
 def is_game_running() -> bool:
     """
     Check if the main Dosidicus game is currently running.
+    We do this because the designer can be run standalone (python main.py -designer)
     
     Returns:
         True if game appears to be running and has exported brain state
