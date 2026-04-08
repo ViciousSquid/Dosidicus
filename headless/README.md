@@ -14,7 +14,7 @@ A standalone training system for Dosidicus neural network brains that runs witho
 
 ## Installation
 
-No additional dependencies required beyond Python 3.6+. The trainer is self-contained.
+**No additional dependencies required** beyond Python 3.6+. The trainer is self-contained.
 
 ```bash
 # Make executable (optional)
