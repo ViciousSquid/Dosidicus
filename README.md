@@ -133,7 +133,7 @@ Troubleshooting (quick):
 
 ## Project Overview
 
-- 51,994 lines, one developer, 28 months, GPL 2.0 license
+-  41,636 lines, one developer, 28 months, GPL 2.0 license
 
 - **Dependencies:**
   - Python ^3.9
