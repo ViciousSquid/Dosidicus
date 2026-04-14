@@ -54,7 +54,7 @@ This is a more complex specialized brain. It uses a unique plant_proximity senso
 
 ## Feeling-Blue:
 
- This structure is a study in depression. It features a fascinating connector_rescue neuron. You’ve wired it so that cleanliness and happiness both have powerful positive influences on sleepiness (0.81 and 0.566 respectively), creating a squid that likely retreats into sleep when it feels good—or perhaps uses sleep as a primary emotional regulator.
+ This structure is a study in depression. It features a fascinating connector_rescue neuron. It is wired so that cleanliness and happiness both have powerful positive influences on sleepiness (0.81 and 0.566 respectively), creating a squid that likely retreats into sleep when it feels good—or perhaps uses sleep as a primary emotional regulator.
 
 
 ------------------
