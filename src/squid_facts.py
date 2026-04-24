@@ -1,10 +1,9 @@
 import random
 
 SQUID_FACTS = [
-    "Dosidicus Gigas is the scientific name for Humboldt squid",
+    "Dosidicus Gigas: scientific name for Humboldt squid",
     "Humboldt squid can reach a mantle length of 1.5 m (5 ft)",
     "Cephalopods have a hard beak like a parrot!",
-    "The Humboldt squid has about 35,000 teeth inside its beak",
     "Cephalopod blood is blue because it is copper-based",
     "These predators thrive in the `Oxygen Minimum Zone.`",
     "A squid's beak is the only rigid part of its body.",
