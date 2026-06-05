@@ -65,9 +65,9 @@ Want the full conceptual philosophy behind Dosidicus? Read the [Cognitive Sandbo
 
 No two squids are wired the same.
 
-Early interactions permanently alter their structure.
-Tiny differences amplify.
-Habits form. Fears emerge. Personalities drift.
+- Early interactions permanently alter their structure (good or bad!).
+- Tiny differences amplify.
+- Habits form. Fears emerge. Personalities drift.
 
 Your squid's brain is a cognitive history - shaped by you.
 
