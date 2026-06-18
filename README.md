@@ -19,10 +19,15 @@ _A transparent cognitive sandbox disguised as a digital pet squid with a neural 
 ### [Compiled binaries for Windows, Mac and Linux](https://github.com/ViciousSquid/Dosidicus/releases/tag/v2.6.2.0)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.2.0_LatestVersion/linux_setup.sh | bash
+git clone https://github.com/ViciousSquid/Dosidicus.git
+cd Dosidicus
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate (Windows)
+pip install -r requirements.txt
+python main.py
 ```
 
-<img width="2482" height="980" alt="image" src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" />
+<img src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" width="900">
 <img src="https://github.com/user-attachments/assets/496cec0d-0810-4f47-8618-11165e0dd50d" width="380">
 
 ---
