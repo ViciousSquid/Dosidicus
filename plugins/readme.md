@@ -7,7 +7,7 @@
 #### [STDP](https://github.com/ViciousSquid/Dosidicus/wiki/Spike%E2%80%90Timing%E2%80%90Dependent-Plasticity-(STDP))
 
 
-
+#### [Sleep_replay](https://github.com/ViciousSquid/Dosidicus/wiki/Sleep-Replay-&-Consolidation)
 
 -------------------------
 
