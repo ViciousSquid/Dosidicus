@@ -1,3 +1,7 @@
+#### [Plugin system overview](https://github.com/ViciousSquid/Dosidicus/wiki/Plugin-system)
+
+-----------
+
 #### [Achievements](https://github.com/ViciousSquid/Dosidicus/wiki/Achievements)
 
 
@@ -8,7 +12,3 @@
 
 
 #### [Sleep_replay](https://github.com/ViciousSquid/Dosidicus/wiki/Sleep-Replay-&-Consolidation)
-
--------------------------
-
-#### [Plugin system overview](https://github.com/ViciousSquid/Dosidicus/wiki/Plugin-system)
