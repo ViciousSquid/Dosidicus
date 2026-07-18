@@ -882,7 +882,7 @@ def initialize(plugin_manager) -> bool:
             'description':         PLUGIN_DESCRIPTION,
             'requires':            PLUGIN_REQUIRES,
             'is_setup':            False,
-            'is_enabled_by_default': False,
+            'is_enabled_by_default': True,
         }
 
         print(f"⚡ {PLUGIN_NAME} v{PLUGIN_VERSION} by {PLUGIN_AUTHOR} registered.")
