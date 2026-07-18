@@ -86,18 +86,6 @@ jobs:
     - name: Create release directory
       run: mkdir release
 
-    - name: Copy repository structure
-      run: |
-        for item in *; do
-          case "$item" in
-            release|dist|build|__pycache__|*.spec) ;;
-            *) cp -r "$item" release/ 2>/dev/null || true ;;
-          esac
-        done
-
-    - name: Remove python entrypoint
-      run: rm -f release/main.py || true
-
     - name: Insert compiled executable & configure bundle
       run: |
         if [[ "${{ runner.os }}" == "macOS" ]]; then
@@ -108,20 +96,34 @@ jobs:
         Plugins = ../MacOS/PyQt5/Qt5/plugins
         EOF
           
-          # Move the app bundle to the release folder
+          # Move the clean app bundle base straight to the release folder
           cp -r build/main.app release/Dosidicus.app
         else
+          # Windows and Linux use the standard standalone flat directory
           cp -r build/main.dist/. release/
         fi
+
+    - name: Copy repository structure (Assets & Data)
+      run: |
+        # Determine the target directory based on OS
+        if [[ "${{ runner.os }}" == "macOS" ]]; then
+          TARGET_DIR="release/Dosidicus.app/Contents/MacOS"
+        else
+          TARGET_DIR="release"
+        fi
+
+        # Copy runtime dependencies into the correct target directory
+        for item in *; do
+          case "$item" in
+            release|dist|build|__pycache__|*.spec|main.py) ;;
+            *) cp -r "$item" "$TARGET_DIR/" 2>/dev/null || true ;;
+          esac
+        done
 
     - name: Ad-hoc sign for macOS
       if: runner.os == 'macOS'
       run: |
-        if [ -d "release/Dosidicus.app" ]; then
-          codesign --deep --force --sign - "release/Dosidicus.app"
-        else
-          codesign --deep --force --sign - release/Dosidicus
-        fi
+        codesign --deep --force --sign - "release/Dosidicus.app"
 
     # ─── Smoke tests ────────────────────────────────────────────────────────────
     - name: Smoke test (Linux)
@@ -191,7 +193,15 @@ jobs:
     - name: Create zip
       run: |
         OS_NAME=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
-        python -c "import shutil; shutil.make_archive('Dosidicus-${OS_NAME}', 'zip', 'release')"
+        if [[ "${{ runner.os }}" == "macOS" ]]; then
+          # On macOS, zip ONLY the .app bundle itself from within the release folder
+          cd release
+          zip -r -y "../Dosidicus-${OS_NAME}.zip" Dosidicus.app
+          cd ..
+        else
+          # Windows and Linux zip the entire contents of the release directory
+          python -c "import shutil; shutil.make_archive('Dosidicus-${OS_NAME}', 'zip', 'release')"
+        fi
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
