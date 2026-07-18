@@ -620,6 +620,18 @@ class SleepReplayPlugin:
             if layout is None:
                 return
 
+            # Idempotent: the app reloads plugins at startup (load_all_plugins
+            # replaces instances), so setup()/_inject can run more than once.
+            # Sweep any existing Sleep Replay banner(s) out of the shared Learning
+            # tab first so we never stack duplicates.
+            if self._banner_timer is not None:
+                self._banner_timer.stop()
+            for _old in nn_viz_tab.findChildren(QtWidgets.QWidget, "sleep_replay_banner"):
+                _old.setParent(None)
+                _old.deleteLater()
+            self._ui_banner = None
+            self._banner_stats_label = None
+
             banner = QtWidgets.QWidget()
             banner.setObjectName("sleep_replay_banner")
             banner.setStyleSheet("""
@@ -688,6 +700,10 @@ class SleepReplayPlugin:
                 f"today {s['samples_today']} · "
                 f"replayed {s['total_replayed']} · pruned {s['total_pruned']}"
             )
+        except RuntimeError:
+            # Banner was swept by a reloaded instance – stop this stale timer.
+            if self._banner_timer is not None:
+                self._banner_timer.stop()
         except Exception:
             pass
 
