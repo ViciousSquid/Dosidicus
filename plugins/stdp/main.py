@@ -359,6 +359,18 @@ class STDPPlugin:
             if layout is None:
                 return
 
+            # Idempotent: the app reloads plugins at startup (load_all_plugins
+            # replaces instances), so setup()/_inject can run more than once.
+            # Sweep any existing STDP banner(s) out of the shared Learning tab
+            # first so we never stack duplicates.
+            if self._banner_update_timer is not None:
+                self._banner_update_timer.stop()
+            for _old in nn_viz_tab.findChildren(QtWidgets.QWidget, "stdp_banner"):
+                _old.setParent(None)
+                _old.deleteLater()
+            self._ui_banner = None
+            self._banner_stats_label = None
+
             # Build the banner widget
             banner = QtWidgets.QWidget()
             banner.setObjectName("stdp_banner")
@@ -439,6 +451,10 @@ class STDPPlugin:
             self._banner_stats_label.setText(
                 f"LTP {ltp}  ·  LTD {ltd}  ·  spikes {spikes}"
             )
+        except RuntimeError:
+            # Banner was swept by a reloaded instance – stop this stale timer.
+            if self._banner_update_timer is not None:
+                self._banner_update_timer.stop()
         except Exception:
             pass
 
@@ -882,7 +898,7 @@ def initialize(plugin_manager) -> bool:
             'description':         PLUGIN_DESCRIPTION,
             'requires':            PLUGIN_REQUIRES,
             'is_setup':            False,
-            'is_enabled_by_default': False,
+            'is_enabled_by_default': True,
         }
 
         print(f"⚡ {PLUGIN_NAME} v{PLUGIN_VERSION} by {PLUGIN_AUTHOR} registered.")

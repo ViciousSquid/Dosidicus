@@ -76,9 +76,11 @@ class PluginManager:
         self.plugins: Dict[str, Dict] = {}        # Stores loaded plugins' metadata and instances
         self.hooks: Dict[str, List[Dict]] = {}    # Registered hooks and their subscribers
         self.enabled_plugins: set[str] = set()    # Names of enabled plugins (use lowercase)
-        self.auto_load_blacklist: set[str] = {"multiplayer", "stdp"}  ### FIX: Stop Multiplayer plugin freaking out at startup  ** ESSENTIAL **
+        self.auto_load_blacklist: set[str] = {"multiplayer"}  ### FIX: Stop Multiplayer plugin freaking out at startup  ** ESSENTIAL **
                                                                 ## This is super important. All plugins start austomatically unless
                                                                 ## specifically blacklisted here... DO NOT LET MULTIPLAYER AUTO START.
+                                                                ## (stdp is allowed to auto-start; it is gated instead by its own
+                                                                ##  is_enabled_by_default flag and the whitelist.)
 
         self.auto_load_allowlist: set[str] = set()  # If non-empty, ONLY these plugins load
         self._whitelist: set[str] = set()  # Populated from whitelist.txt; controls auto-enable

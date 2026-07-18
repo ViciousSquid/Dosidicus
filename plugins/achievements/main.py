@@ -427,6 +427,13 @@ class AchievementsPlugin:
 
         self.is_setup = True
         self.logger.info(f"{PLUGIN_NAME} setup complete. {len(self.unlocked)} achievements loaded.")
+
+        # Enabled by default: start the age/stat achievement timers now.
+        # setup() only *creates* the timers; enable() *starts* them, and nothing
+        # calls enable() at startup, so without this the timed/stat achievements
+        # would stay dormant until the plugin was toggled manually.
+        self.enable()
+
         return True
 
     def _subscribe_to_hooks(self):
