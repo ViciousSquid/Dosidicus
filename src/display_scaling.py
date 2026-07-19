@@ -23,7 +23,25 @@ class DisplayScaling:
     @classmethod
     def scale(cls, value):
         return int(value * cls._scale_factor)
-        
+
+    @classmethod
+    def age_scale_factor(cls, age, max_age=6, min_factor=0.3):
+        """Return a growth factor (min_factor..1.0) based on squid age.
+
+        Newly hatched squid are small; they grow linearly to full size
+        at ``max_age`` years.
+        """
+        if age >= max_age:
+            return 1.0
+        if age <= 0:
+            return min_factor
+        return min_factor + (1.0 - min_factor) * (age / max_age)
+
+    @classmethod
+    def scale_with_age(cls, value, age, max_age=6):
+        """Scale a pixel dimension by both display factor and squid age."""
+        return int(value * cls._scale_factor * cls.age_scale_factor(age, max_age))
+
     @classmethod
     def font_size(cls, size):
         scaled = cls.scale(size)
