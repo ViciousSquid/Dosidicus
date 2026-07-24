@@ -36,19 +36,23 @@ python main.py
 
 ---
 
-## **Myth & Mechanism**
+## **Why this exists**
 
-Dosidicus is a digital squid born with a randomly wired brain.
+Modern AI systems are astonishing—but they're also opaque.
 
-Feed him, stimulate neurons, watch him learn.
+Dosidicus explores a different question:
 
-- He starts with 8 neurons.
-- He grows new structure via **neurogenesis** and rewires using **Hebbian learning**
-- He forms memories.
-- He develops quirks.
+What if you could understand every neuron inside a learning creature?
 
-Every squid is different.
-Every save file is a cognitive history.
+The project is designed to make artificial cognition visible.
+
+Instead of hiding intelligence inside millions of parameters, Dosidicus starts with just eight neurons. Every connection can be inspected. Every activation can be visualised. Every learned behaviour can be traced back to experience.
+
+As the squid lives, its brain rewires itself through Hebbian learning, strengthens useful pathways using STDP, and grows entirely new neurons through neurogenesis.
+
+No two brains ever develop the same way.
+
+Every save file becomes a permanent cognitive history.
 
 #### Under the hood runs [**STRINg** simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview):
 
