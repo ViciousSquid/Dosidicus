@@ -32,7 +32,7 @@ python main.py
 
 ---
 
-## [Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems) | [Wiki](https://github.com/ViciousSquid/Dosidicus/wiki) | [Changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog)
+## [Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems) | [Changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) | [Wiki](https://github.com/ViciousSquid/Dosidicus/wiki) (53 pages)
 
 ---
 
