@@ -143,10 +143,16 @@ class BrainNeuronHooks:
         config = getattr(brain_widget, 'config', {})
         neurons_config = config.get_neurogenesis_config().get('neurons', {})
         
-        # Merge plugin-registered handlers with built-in handlers
-        all_handlers = {**self.handlers}
+        # Merge plugin-registered handlers with built-in handlers.
+        # Only allocate a merged dict when plugins actually contribute a
+        # handler; otherwise reuse the built-in dict directly. all_handlers is
+        # read-only below, so sharing the reference is safe and avoids copying
+        # the dict on every simulation tick.
         plugin_handlers = self._get_plugin_handlers()
-        all_handlers.update(plugin_handlers)
+        if plugin_handlers:
+            all_handlers = {**self.handlers, **plugin_handlers}
+        else:
+            all_handlers = self.handlers
         
         for neuron_name in brain_widget.neuron_positions.keys():
             # Skip core stat neurons

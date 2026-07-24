@@ -19,6 +19,7 @@ from .plugin_manager import PluginManager
 from .brain_neuron_hooks import BrainNeuronHooks
 from .brain_neuron_outputs import NeuronOutputMonitor
 from .vision_worker import VisionWorker, create_squid_vision_state, extract_scene_objects
+from .image_cache import ImageCache
 
 from .custom_brain_loader import (
     get_custom_brain_save_data, 
@@ -1400,11 +1401,13 @@ class TamagotchiLogic:
                 self.sleep_frame = (self.sleep_frame + 1) % 2
                 
                 try:
+                    # Reuse the shared image cache instead of decoding the PNG
+                    # from disk on every tick while the squid sleeps.
                     if self.sleep_frame == 0:
-                        pix = QPixmap("images/sleep1.png")
+                        pix = ImageCache.get_pixmap(os.path.join("images", "sleep1.png"))
                     else:
-                        pix = QPixmap("images/sleep2.png")
-                    
+                        pix = ImageCache.get_pixmap(os.path.join("images", "sleep2.png"))
+
                     if not pix.isNull() and hasattr(self.squid, 'squid_item'):
                         self.squid.squid_item.setPixmap(pix)
                 except Exception as e:
@@ -2604,8 +2607,10 @@ class TamagotchiLogic:
 
     def animate_poops(self):
         if self.squid is not None:
-            for poop_item in self.poop_items:
-                current_frame = self.poop_items.index(poop_item) % 2
+            # enumerate() gives the index directly – avoids an O(n) list.index()
+            # lookup per item (previously O(n^2) over all poops each tick).
+            for index, poop_item in enumerate(self.poop_items):
+                current_frame = index % 2
                 poop_item.setPixmap(self.squid.poop_images[current_frame])
 
     def game_over(self):

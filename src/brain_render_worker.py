@@ -823,44 +823,61 @@ def create_render_state_from_widget(brain_widget) -> RenderState:
     state.neuron_shapes = dict(getattr(brain_widget, 'neuron_shapes', {}))
     
     # --- Pre-calculate Localized Labels on Main Thread ---
-    labels = {}
-    
     # We only need to calculate labels for neurons that might be drawn
     visible = getattr(brain_widget, 'visible_neurons', brain_widget.neuron_positions.keys())
     excluded = getattr(brain_widget, 'excluded_neurons', set())
-    
-    for name in state.neuron_positions.keys():
-        if name in excluded:
-            continue
-            
-        # 1. Try exact key lookup
-        display_name = loc.get(name)
-        
-        # 2. Fallback: space-separated key
-        if display_name == name:
-            space_key = name.replace("_", " ")
-            display_name = loc.get(space_key)
-            if display_name == space_key:
-                display_name = None # Mark as not found yet
-        
-        # 3. Fallback: Neurogenesis pattern (e.g., novelty_1 -> Novelty 1)
-        if not display_name:
-            match = re.match(r"^([a-z_]+)_(\d+)$", name)
-            if match:
-                base = match.group(1)
-                idx = match.group(2)
-                base_loc = loc.get(base)
-                if base_loc != base:
-                    display_name = f"{base_loc} {idx}"
-                else:
-                    display_name = f"{base.replace('_', ' ').title()} {idx}"
-        
-        # 4. Final Fallback: Title Case
-        if not display_name:
-            display_name = name.replace("_", " ").title()
-            
-        labels[name] = display_name
-    
+
+    # Labels are a pure function of (neuron names, current language, exclusions)
+    # and only change when neurons are added/renamed or the language switches.
+    # This helper runs on every render request (~10x/sec), so cache the result
+    # on the widget and skip the per-neuron regex / localisation lookups while
+    # that signature is unchanged. A rebuild always allocates a fresh dict, so
+    # any RenderState already handed to the worker thread keeps its own copy.
+    label_sig = (
+        getattr(loc, 'current_language', None),
+        tuple(state.neuron_positions.keys()),
+        tuple(sorted(excluded)),
+    )
+    cached_labels = getattr(brain_widget, '_render_label_cache', None)
+    if cached_labels is not None and getattr(brain_widget, '_render_label_sig', None) == label_sig:
+        labels = cached_labels
+    else:
+        labels = {}
+        for name in state.neuron_positions.keys():
+            if name in excluded:
+                continue
+
+            # 1. Try exact key lookup
+            display_name = loc.get(name)
+
+            # 2. Fallback: space-separated key
+            if display_name == name:
+                space_key = name.replace("_", " ")
+                display_name = loc.get(space_key)
+                if display_name == space_key:
+                    display_name = None # Mark as not found yet
+
+            # 3. Fallback: Neurogenesis pattern (e.g., novelty_1 -> Novelty 1)
+            if not display_name:
+                match = re.match(r"^([a-z_]+)_(\d+)$", name)
+                if match:
+                    base = match.group(1)
+                    idx = match.group(2)
+                    base_loc = loc.get(base)
+                    if base_loc != base:
+                        display_name = f"{base_loc} {idx}"
+                    else:
+                        display_name = f"{base.replace('_', ' ').title()} {idx}"
+
+            # 4. Final Fallback: Title Case
+            if not display_name:
+                display_name = name.replace("_", " ").title()
+
+            labels[name] = display_name
+
+        brain_widget._render_label_cache = labels
+        brain_widget._render_label_sig = label_sig
+
     state.neuron_labels = labels
     # -----------------------------------------------------
 
