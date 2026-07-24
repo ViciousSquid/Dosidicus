@@ -1938,10 +1938,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
 
     def get_neuron_value(self, value):
-        if isinstance(value, (int, float)):
-            return float(value)
-        elif isinstance(value, bool):
+        # bool must be checked before int/float: bool is a subclass of int, so
+        # an ordinary (int, float) test would catch True/False first and return
+        # 1.0/0.0 instead of the intended 100.0/0.0.
+        if isinstance(value, bool):
             return 100.0 if value else 0.0
+        elif isinstance(value, (int, float)):
+            return float(value)
         elif isinstance(value, str):
             # For string values (like 'direction'), return a default value
             return 75.0

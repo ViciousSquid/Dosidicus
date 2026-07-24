@@ -501,16 +501,9 @@ class NeuronOutputMonitor:
             if val is not None:
                 return float(val)
 
-        # 3. Fallback: check config state
-        if hasattr(brain_widget, 'config'):
-            try:
-                state = brain_widget.config.get_neurogenesis_config().get('state', {})
-                val = state.get(neuron_name)
-                if val is not None:
-                    return float(val)
-            except:
-                pass
-        
+        # (A former 3rd fallback read get_neurogenesis_config().get('state', {}),
+        # but that getter never provides a 'state' key, so it always yielded
+        # None. Removed – the two sources above are authoritative.)
         return None
     
     def _fire_binding(self, binding: NeuronOutputBinding, activation: float, current_time: float):

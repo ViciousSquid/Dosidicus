@@ -395,8 +395,11 @@ class BrainWorker(QThread):
         self.state_update_result.emit({'processed_state': final_state})
 
     def _get_neuron_value(self, val):
-        if isinstance(val, (int, float)):
-            return float(val)
+        # bool must be checked before int/float: bool is a subclass of int, so
+        # `isinstance(True, (int, float))` is True and would return 1.0 instead
+        # of the intended 100.0.
         if isinstance(val, bool):
             return 100.0 if val else 0.0
+        if isinstance(val, (int, float)):
+            return float(val)
         return 0.0

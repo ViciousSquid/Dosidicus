@@ -94,10 +94,20 @@ class NumpyBackend(ComputeBackend):
         arr = np.array(sample, dtype=np.float64)
         delta = np.outer(arr, arr) * learning_rate
         n = len(sample)
-        for i in range(n):
-            for j in range(i + 1, n):
-                associations[i][j] += delta[i][j]
-                associations[j][i]  = associations[i][j]
+        if hasattr(associations, 'shape'):
+            # Vectorised upper-triangle update (associations is a NumPy array).
+            # Increment the strict upper triangle, then mirror it to the lower
+            # triangle. The diagonal is left untouched, exactly as the explicit
+            # double loop did.
+            rows, cols = np.triu_indices(n, k=1)
+            associations[rows, cols] += delta[rows, cols]
+            associations[cols, rows] = associations[rows, cols]
+        else:
+            # Fallback for plain list-of-lists matrices.
+            for i in range(n):
+                for j in range(i + 1, n):
+                    associations[i][j] += delta[i][j]
+                    associations[j][i]  = associations[i][j]
         return associations
 
     def get_value(self, matrix, i: int, j: int) -> float:
@@ -233,10 +243,20 @@ class ONNXBackend(ComputeBackend):
         arr = np.array(sample, dtype=np.float64)
         delta = np.outer(arr, arr) * learning_rate
         n = len(sample)
-        for i in range(n):
-            for j in range(i + 1, n):
-                associations[i][j] += delta[i][j]
-                associations[j][i]  = associations[i][j]
+        if hasattr(associations, 'shape'):
+            # Vectorised upper-triangle update (associations is a NumPy array).
+            # Increment the strict upper triangle, then mirror it to the lower
+            # triangle. The diagonal is left untouched, exactly as the explicit
+            # double loop did.
+            rows, cols = np.triu_indices(n, k=1)
+            associations[rows, cols] += delta[rows, cols]
+            associations[cols, rows] = associations[rows, cols]
+        else:
+            # Fallback for plain list-of-lists matrices.
+            for i in range(n):
+                for j in range(i + 1, n):
+                    associations[i][j] += delta[i][j]
+                    associations[j][i]  = associations[i][j]
         return associations
 
     def get_value(self, matrix, i: int, j: int) -> float:

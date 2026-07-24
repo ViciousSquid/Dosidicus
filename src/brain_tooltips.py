@@ -150,17 +150,10 @@ class EnhancedBrainTooltips:
             if isinstance(neuron_data, dict) and 'is_binary' in neuron_data:
                 return neuron_data['is_binary']
         
-        # Priority 3: Check config's neuron definitions
-        if hasattr(bw, 'config') and bw.config:
-            try:
-                neurons_config = bw.config.get_neurogenesis_config().get('neurons', {})
-                if neuron_name in neurons_config:
-                    neuron_cfg = neurons_config[neuron_name]
-                    if 'is_binary' in neuron_cfg:
-                        return neuron_cfg['is_binary']
-            except:
-                pass
-        
+        # (A former Priority 3 read get_neurogenesis_config().get('neurons', {}),
+        # but that getter never provides a 'neurons' key, so it was always inert.
+        # Removed – the checks below cover the real sources.)
+
         # Priority 4: Check BINARY_NEURONS constant
         try:
             from .brain_constants import BINARY_NEURONS

@@ -1433,7 +1433,7 @@ class BrainWidget(QtWidgets.QWidget):
         current_time = time.time()
         
         # Performance tracking (keep if using task manager)
-        if _PERF_TRACKING_AVAILABLE:
+        if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _anim_start = time.perf_counter()
             perf_tracker.increment("animation_frames")
         
@@ -1521,7 +1521,7 @@ class BrainWidget(QtWidgets.QWidget):
             self.update()
         
         # Performance tracking end
-        if _PERF_TRACKING_AVAILABLE:
+        if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _anim_elapsed = (time.perf_counter() - _anim_start) * 1000
             perf_tracker.record("update_animations", _anim_elapsed)
 
@@ -1891,10 +1891,13 @@ class BrainWidget(QtWidgets.QWidget):
         Returns:
             float: The numerical value of the neuron.
         """
-        if isinstance(value, (int, float)):
-            return float(value)
-        elif isinstance(value, bool):
+        # bool must be checked before int/float: bool is a subclass of int, so
+        # an ordinary (int, float) test would catch True/False first and return
+        # 1.0/0.0 instead of the intended 100.0/0.0.
+        if isinstance(value, bool):
             return 100.0 if value else 0.0
+        elif isinstance(value, (int, float)):
+            return float(value)
         elif isinstance(value, str):
             # For string values (like 'direction'), return a default value
             return 75.0
@@ -2625,20 +2628,15 @@ class BrainWidget(QtWidgets.QWidget):
                     src_val = 100.0 if src_val else 0.0
             else:
                 continue
-                
+
+            # Apply the connection effect exactly once.
             if isinstance(src_val, (int, float)):
                 updated[dst] += src_val * weight
 
-            # Use current state for inputs if not in 'updated' list yet
-            src_val = updated.get(src, self.state.get(src, 0))
-            
-            if dst in updated:
-                updated[dst] += src_val * weight
-        
         # Final pass: clamping
         for neuron, val in updated.items():
             updated[neuron] = max(min(val, 100), -100)
-        
+
         self.state.update(updated)
         self.update()
 
@@ -2654,40 +2652,6 @@ class BrainWidget(QtWidgets.QWidget):
         
         # >>> ADDED: Mark render dirty <<<
         self.mark_render_dirty()
-
-    def _perform_state_update_sync(self):
-        """Synchronous fallback when worker is unavailable"""
-        import random
-        
-        updated = {}
-        BINARY_NEURONS = {"can_see_food"}
-        
-        # First pass: decay and noise
-        for neuron, props in self.neurons.items():
-            if neuron in self.excluded_neurons:
-                continue
-            value = props.get('activation', 0)
-            decay = props.get('decay', 1.0)
-            noise = props.get('noise', 0.0)
-            value *= decay
-            value += random.uniform(-noise, noise)
-            updated[neuron] = value
-        
-        # Second pass: connection effects - USE self.weights as source of truth
-        for (src, dst), weight in self.weights.items():
-            if src in updated and dst in updated:
-                updated[dst] += updated[src] * weight
-        
-        # Final pass: clamping
-        for neuron, val in updated.items():
-            if neuron in BINARY_NEURONS:
-                updated[neuron] = 100.0 if val > 50 else 0.0
-            else:
-                updated[neuron] = max(min(val, 100), -100)
-        
-        self.state.update(updated)
-        self.update()
-
 
     def provide_outcome_feedback(self, outcome_value: float):
         """
@@ -3059,7 +3023,7 @@ class BrainWidget(QtWidgets.QWidget):
             return
 
         # ===== PERFORMANCE TRACKING =====
-        if _PERF_TRACKING_AVAILABLE:
+        if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _conn_start = time.perf_counter()
 
         # absolutely no connections until every core neuron is completely revealed (tutorial mode guard). 
@@ -3358,7 +3322,7 @@ class BrainWidget(QtWidgets.QWidget):
                 f"total_weights={len(self.weights)}, skipped={connections_skipped}")
         
         # ===== END PERFORMANCE TRACKING =====
-        if _PERF_TRACKING_AVAILABLE:
+        if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _conn_elapsed = (time.perf_counter() - _conn_start) * 1000
             perf_tracker.record("draw_connections", _conn_elapsed)
 
@@ -3523,7 +3487,7 @@ class BrainWidget(QtWidgets.QWidget):
         that need to be responsive (like hover effects).
         """
         # Performance tracking
-        if _PERF_TRACKING_AVAILABLE:
+        if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _paint_start = time.perf_counter()
             perf_tracker.increment("paint_calls")
         
@@ -3558,7 +3522,7 @@ class BrainWidget(QtWidgets.QWidget):
         painter.end()
         
         # Performance tracking
-        if _PERF_TRACKING_AVAILABLE:
+        if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _paint_elapsed = (time.perf_counter() - _paint_start) * 1000
             perf_tracker.record("paint_event", _paint_elapsed)
 
@@ -4654,7 +4618,7 @@ class NetworkRenderingMixin:
             return
 
         # ===== PERFORMANCE TRACKING =====
-        if _PERF_TRACKING_AVAILABLE:
+        if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _conn_start = time.perf_counter()
 
         # absolutely no connections until every core neuron is completely revealed (tutorial mode guard). 
@@ -4888,7 +4852,7 @@ class NetworkRenderingMixin:
                 f"total_weights={len(self.weights)}, skipped={connections_skipped}")
         
         # ===== END PERFORMANCE TRACKING =====
-        if _PERF_TRACKING_AVAILABLE:
+        if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _conn_elapsed = (time.perf_counter() - _conn_start) * 1000
             perf_tracker.record("draw_connections", _conn_elapsed)
     

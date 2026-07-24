@@ -30,12 +30,18 @@ class ConfigManager:
         self.config_path = os.path.join(base_path, config_filename)
         
         self.config = configparser.ConfigParser()
+        # Cache for get_neurogenesis_config() – rebuilt lazily and invalidated
+        # whenever the config is reloaded or saved. Avoids ~50 configparser
+        # parses on every simulation tick (this getter is called per-frame).
+        self._neuro_config_cache = None
         self.load_config()
 
     def load_config(self):
         if not os.path.exists(self.config_path):
             self.create_default_config()
         self.config.read(self.config_path)
+        # Config values may have changed on disk – drop the cached dict.
+        self._neuro_config_cache = None
 
     def create_default_config(self):
         
@@ -311,8 +317,18 @@ class ConfigManager:
         return caps
 
     def get_neurogenesis_config(self):
-        """Returns the complete neurogenesis configuration as a dictionary"""
-        return {
+        """Returns the complete neurogenesis configuration as a dictionary.
+
+        The result is memoised because this method rebuilds a large nested
+        dictionary from ~50 configparser lookups, and it is called on every
+        simulation tick (via the input-neuron hooks and output monitor).
+        The cache is invalidated in load_config()/_save_config() whenever the
+        underlying configuration changes.
+        """
+        if self._neuro_config_cache is not None:
+            return self._neuro_config_cache
+
+        self._neuro_config_cache = {
             'general': {
                 'enabled': self.config.getboolean('Neurogenesis', 'enabled', fallback=True),
                 'showmanship': self.config.getboolean('Neurogenesis', 'showmanship', fallback=True),
@@ -394,6 +410,7 @@ class ConfigManager:
                 'animation_style': self.config.get('Neurogenesis.VisualEffects', 'animation_style', fallback='pattern_1')  # NEW KEY
             }
         }
+        return self._neuro_config_cache
 
     def get_hebbian_config(self):
         """NEW METHOD: Get Hebbian learning configuration"""
@@ -634,6 +651,9 @@ class ConfigManager:
 
     def _save_config(self):
         """Save the current configuration to file."""
+        # Settings may have been mutated before this call – drop the cache so
+        # the next get_neurogenesis_config() rebuild reflects the new values.
+        self._neuro_config_cache = None
         try:
             with open(self.config_path, 'w') as f:
                 self.config.write(f)
