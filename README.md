@@ -16,7 +16,7 @@ _A transparent cognitive sandbox disguised as a digital pet squid with a neural 
 - A unique intersection of 1990s retro-gaming aesthetic and modern computational neuroscience.
 - [Build-your-own neural network](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) - learn how an NN works  by [**raising one as a pet**](https://github.com/ViciousSquid/Dosidicus/wiki/Raising-a-Neural-Network-as-a-Pet)
 
-### [Compiled binaries for Windows, Mac and Linux](https://github.com/ViciousSquid/Dosidicus/releases/tag/v2.6.2.0)
+### [Compiled binaries for Windows, Mac and Linux](https://github.com/ViciousSquid/Dosidicus/releases)
 
 ```bash
 git clone https://github.com/ViciousSquid/Dosidicus.git
