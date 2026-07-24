@@ -138,11 +138,7 @@ class BrainNeuronHooks:
         
         brain_widget = self.logic.brain_window.brain_widget
         input_values = {}
-        
-        # Get neuron configurations
-        config = getattr(brain_widget, 'config', {})
-        neurons_config = config.get_neurogenesis_config().get('neurons', {})
-        
+
         # Merge plugin-registered handlers with built-in handlers.
         # Only allocate a merged dict when plugins actually contribute a
         # handler; otherwise reuse the built-in dict directly. all_handlers is
@@ -153,26 +149,25 @@ class BrainNeuronHooks:
             all_handlers = {**self.handlers, **plugin_handlers}
         else:
             all_handlers = self.handlers
-        
+
         for neuron_name in brain_widget.neuron_positions.keys():
             # Skip core stat neurons
-            if neuron_name in ['hunger', 'happiness', 'cleanliness', 'sleepiness', 
+            if neuron_name in ['hunger', 'happiness', 'cleanliness', 'sleepiness',
                               'satisfaction', 'anxiety', 'curiosity']:
                 continue
-            
-            # Check if neuron is marked as input type OR has a handler
-            neuron_cfg = neurons_config.get(neuron_name, {})
-            if neuron_cfg.get('type') == 'input' or neuron_name in all_handlers:
-                # Call handler if exists, otherwise default background noise
-                if neuron_name in all_handlers:
-                    try:
-                        input_values[neuron_name] = all_handlers[neuron_name]()
-                    except Exception as e:
-                        print(f"[BrainNeuronHooks] Error in handler for '{neuron_name}': {e}")
-                        input_values[neuron_name] = 0.0
-                else:
-                    input_values[neuron_name] = random.uniform(5, 10)
-        
+
+            # Drive any neuron that has a registered handler (built-in sensor or
+            # plugin-provided). Handlers are the authoritative source of input
+            # activations. (A previous config-driven `type == 'input'` path read
+            # a 'neurons' key that get_neurogenesis_config() never provides, so
+            # it was always inert and has been removed.)
+            if neuron_name in all_handlers:
+                try:
+                    input_values[neuron_name] = all_handlers[neuron_name]()
+                except Exception as e:
+                    print(f"[BrainNeuronHooks] Error in handler for '{neuron_name}': {e}")
+                    input_values[neuron_name] = 0.0
+
         return input_values
     
     def on_window_resize(self, width_change: int, height_change: int, new_size: tuple):

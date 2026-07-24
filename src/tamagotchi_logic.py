@@ -1356,7 +1356,7 @@ class TamagotchiLogic:
         """
         Main simulation update loop.
         """
-        if _PERF_TRACKING_AVAILABLE:
+        if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _sim_start = time.perf_counter()
             perf_tracker.increment("simulation_ticks")
         
@@ -1380,7 +1380,12 @@ class TamagotchiLogic:
         if self.squid and hasattr(self, 'vision_worker') and self.vision_worker.isRunning():
             vision_state = create_squid_vision_state(self.squid)
             self.vision_worker.update_squid_state(vision_state)
-            decorations = self._get_cached_decorations()
+            # _get_cached_decorations() returns (item, center_x, center_y)
+            # tuples; extract_scene_objects() expects the graphics items
+            # themselves. Unwrap them here – previously the tuples raised inside
+            # extract_scene_objects and were silently swallowed, so decorations
+            # (plants/rocks) never reached the vision worker.
+            decorations = [entry[0] for entry in self._get_cached_decorations()]
             scene_objects = extract_scene_objects(self.user_interface.scene, self.food_items, decorations)
             self.vision_worker.update_scene_objects(scene_objects)
 
@@ -1534,7 +1539,7 @@ class TamagotchiLogic:
         # 16. Post-update hook
         self.plugin_manager.trigger_hook("post_update", tamagotchi_logic=self, squid=self.squid)
         
-        if _PERF_TRACKING_AVAILABLE:
+        if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _sim_elapsed = (time.perf_counter() - _sim_start) * 1000
             perf_tracker.record("simulation_tick", _sim_elapsed)
 
