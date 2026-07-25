@@ -48,7 +48,7 @@ The project is designed to make artificial cognition visible.
 
 Instead of hiding intelligence inside millions of parameters, Dosidicus starts with just eight neurons. Every connection can be inspected. Every activation can be visualised. Every learned behaviour can be traced back to experience.
 
-As the squid lives, its brain rewires itself through Hebbian learning, strengthens useful pathways using STDP, and grows entirely new neurons through neurogenesis.
+As the squid lives, its brain rewires itself through Hebbian learning, strengthens useful pathways using [STDP](https://github.com/ViciousSquid/Dosidicus/wiki/Spike%E2%80%90Timing%E2%80%90Dependent-Plasticity-(STDP)), and grows entirely new neurons through neurogenesis.
 
 No two brains ever develop the same way.
 
