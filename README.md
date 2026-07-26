@@ -9,12 +9,12 @@ _"What if a Tamagotchi had a neural network and could learn stuff?"_ - [Gigazine
 </p>
 
 # _Dosidicus electronicus_
-
+### Learn neuroscience by [**raising a neural network as a pet**](https://github.com/ViciousSquid/Dosidicus/wiki/Raising-a-Neural-Network-as-a-Pet)
 _A transparent cognitive sandbox disguised as a digital pet squid with a neural network you can **see thinking**_
 
+
 - Part **educational neuro tool**, part **sim game**, part **fever dream**
-- A unique intersection of 1990s retro-gaming aesthetic and modern computational neuroscience.
-- Learn how a neural network works by [**raising one as a pet**](https://github.com/ViciousSquid/Dosidicus/wiki/Raising-a-Neural-Network-as-a-Pet)
+- Combining 1990s virtual pet nostalgia with modern computational neuroscience.
 
 ### [Compiled binaries for Windows, Mac and Linux](https://github.com/ViciousSquid/Dosidicus/releases)
 
@@ -54,6 +54,15 @@ No two brains ever develop the same way.
 
 Every save file becomes a permanent cognitive history.
 
+## As the caretaker you will
+
+- Feed, clean and care for your squid.
+- Introduce it to new experiences.
+- Watch neurons fire in real time.
+- Watch memories form and influence future behaviour.
+- Observe fears, habits and preferences emerge.
+- Raise a brain unlike anyone else's.
+
 #### Under the hood runs [**STRINg** simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview):
 
 * Built from scratch in NumPy
@@ -62,9 +71,10 @@ Every save file becomes a permanent cognitive history.
 * Structural growth over time
 * Dual memory system
 * Headless training mode
-* Most AI is a black box: Dosidicus lets you see the mind forming - every neuron is visible, stimulatable, understandable.
 
-The squid serves as a digital pioneer in our quest to understand the mechanisms of thought and the evolution of autonomy in a synthetic world.
+Most AI is a black box: Dosidicus lets you see the mind forming - every neuron is visible, stimulatable, understandable.
+
+The squid isn't driven by scripted behaviours—it develops through experience. By watching its brain change over time, you can explore how simple learning rules give rise to increasingly complex behaviour.
 
 Want the full conceptual philosophy behind Dosidicus? Read the [Cognitive Sandbox Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems)
 
@@ -140,7 +150,7 @@ Troubleshooting (quick):
 
 ---
 
-## Project Overview
+## Technical Overview
 
 -  41,636 lines, one developer, 28 months, GPL 2.0 license
 
