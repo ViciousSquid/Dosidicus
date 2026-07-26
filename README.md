@@ -38,10 +38,6 @@ python main.py
 
 ## **Why this exists**
 
-Modern AI systems are astonishing—but they're also opaque.
-
-Dosidicus explores a different question:
-
 What if you could understand every neuron inside a learning creature?
 
 The project is designed to make artificial cognition visible.
@@ -72,9 +68,9 @@ Every save file becomes a permanent cognitive history.
 * Dual memory system
 * Headless training mode
 
-Most AI is a black box: Dosidicus lets you see the mind forming - every neuron is visible, stimulatable, understandable.
+Most AI is a black box: Dosidicus lets you see the mind forming - every neuron is visible & understandable.
 
-The squid isn't driven by scripted behaviours—it develops through experience. By watching its brain change over time, you can explore how simple learning rules give rise to increasingly complex behaviour.
+The squid isn't driven by scripted behaviours — it develops through experience. By watching its brain change over time, you can explore how simple learning rules give rise to increasingly complex behaviour.
 
 Want the full conceptual philosophy behind Dosidicus? Read the [Cognitive Sandbox Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems)
 
