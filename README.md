@@ -141,7 +141,7 @@ docker compose --profile gui up --build
 
 Note: On Windows without WSLg, you will need an X server and a valid `DISPLAY` value to run the GUI container.
 
-Note: Attempting to build the Docker container on Windows ARM64 will fail because there is no pyqt5 wheel [[32]](https://github.com/ViciousSquid/Dosidicus/pull/32) -  Use the prebuilt binary from [releases](https://github.com/ViciousSquid/Dosidicus/releases/tag/v2.6.2.0) instead
+Note: Attempting to build the Docker container on Windows ARM64 will fail because there is no pyqt5 wheel [[32]](https://github.com/ViciousSquid/Dosidicus/pull/32) -  Use the prebuilt binary from [releases](https://github.com/ViciousSquid/Dosidicus/releases/) instead
 
 Troubleshooting (quick):
 - If `DISPLAY` is empty in WSL: WSLg is not active. Use WSLg or run an X server on Windows.
