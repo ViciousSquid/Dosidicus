@@ -11,6 +11,7 @@ can spot new structure at a glance.
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Line, Ellipse
 from kivy.core.text import Label as CoreLabel
+from kivy.metrics import dp, sp
 
 from ..engine import constants
 
@@ -40,7 +41,7 @@ class BrainView(Widget):
 
     # Map a virtual (0-VW, 0-VH) point into widget space (y flipped for canvas).
     def _map(self, vx, vy):
-        pad = 26
+        pad = dp(26)
         w = max(1, self.width - 2 * pad)
         h = max(1, self.height - 2 * pad)
         x = self.x + pad + (vx / VW) * w
@@ -50,7 +51,7 @@ class BrainView(Widget):
     def _text_texture(self, text):
         tex = self._label_cache.get(text)
         if tex is None:
-            lbl = CoreLabel(text=text, font_size=12)
+            lbl = CoreLabel(text=text, font_size=sp(12))
             lbl.refresh()
             tex = lbl.texture
             self._label_cache[text] = tex
@@ -84,24 +85,27 @@ class BrainView(Widget):
                     Color(0.2, 0.9, 0.4, 0.15 + 0.6 * mag)   # excitatory green
                 else:
                     Color(0.95, 0.3, 0.3, 0.15 + 0.6 * mag)  # inhibitory red
-                Line(points=[x1, y1, x2, y2], width=0.6 + 3.0 * mag)
+                Line(points=[x1, y1, x2, y2], width=dp(0.5) + dp(2.6) * mag)
 
             # --- Neurons ---
             grown = set(brain.neurogenesis.get("new_neurons", []))
             for name, (vx, vy) in brain.neuron_positions.items():
                 cx, cy = self._map(vx, vy)
                 act = brain.state.get(name, 0.0)
-                r = 15 if name in constants.CORE_NEURONS else 12
+                r = dp(11) if name in constants.CORE_NEURONS else dp(9)
                 if name in grown:
-                    r = 13
+                    r = dp(10)
+                ring = dp(3)
 
                 # Rings: gold for grown neurons, blue for sensors, grey core.
                 if name in grown:
                     Color(1.0, 0.84, 0.0, 1)
-                    Ellipse(pos=(cx - r - 3, cy - r - 3), size=(2 * (r + 3), 2 * (r + 3)))
+                    Ellipse(pos=(cx - r - ring, cy - r - ring),
+                            size=(2 * (r + ring), 2 * (r + ring)))
                 elif constants.is_sensor(name):
                     Color(0.39, 0.58, 0.93, 1)
-                    Ellipse(pos=(cx - r - 2, cy - r - 2), size=(2 * (r + 2), 2 * (r + 2)))
+                    Ellipse(pos=(cx - r - ring, cy - r - ring),
+                            size=(2 * (r + ring), 2 * (r + ring)))
 
                 # Fill.
                 if constants.is_binary(name):

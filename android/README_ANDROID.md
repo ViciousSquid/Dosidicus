@@ -67,9 +67,12 @@ android/
 | `brain_widget.py` (visualiser) | `ui/brainview.py`                    | Neurons as heat-mapped circles, weighted colour-coded connections, gold rings on grown neurons. |
 
 ### What's in this MVP
-Raising loop (feed/clean/play/sleep + tap-to-feed), 7 live core stats, sickness,
-the full brain (Hebbian learning + neurogenesis) with a live visualiser, the
-neural decision engine, 7 personalities, and persistent JSON saves.
+Raising loop (feed / clean / tap-to-feed; the squid plays and sleeps on its
+own), 7 live core stats, sickness, **placeable decorations** you can drag and
+pinch-resize (plants soothe, rocks intrigue), the full brain (Hebbian learning +
+neurogenesis) shown in a **tabbed inspector** (Network / Learning / Memory /
+Decisions / Personality / Stats / About), the neural decision engine, 7
+personalities, DPI-aware layout, and persistent JSON saves.
 
 ### Not in this first pass
 Brain Designer, plugins (achievements/multiplayer), the memory tabs, custom

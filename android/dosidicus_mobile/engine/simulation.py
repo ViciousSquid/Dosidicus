@@ -24,7 +24,11 @@ class Simulation:
         self.squid.tank_size = tank_size
         self.food_items = []          # list of {"x","y","type"}
         self.poop_items = []          # list of {"x","y"}
+        # Decorations placed by the caretaker. Each: {id, type (asset file),
+        # category (plant/rock/...), x, y (centre, tank coords), scale}.
+        self.decorations = []
         self._food_id = 0
+        self._decoration_id = 0
         self._poop_timer = 0.0
         self._decision_timer = 0.0
         self._decision_interval = 1.0  # squid re-decides roughly once a second
@@ -50,6 +54,44 @@ class Simulation:
             "type": food_type,
             "id": self._food_id,
         })
+
+    # ------------------------------------------------------- decorations API
+    def add_decoration(self, type, category, x, y, scale=1.0):
+        """Place a decoration; a new object in the tank is a novel stimulus."""
+        self._decoration_id += 1
+        deco = {"id": self._decoration_id, "type": type, "category": category,
+                "x": float(x), "y": float(y), "scale": float(scale)}
+        self.decorations.append(deco)
+        self.squid.brain.register_novelty(2.5)
+        self.squid.curiosity = min(100.0, self.squid.curiosity + 5.0)
+        return deco
+
+    def update_decoration(self, deco_id, x=None, y=None, scale=None):
+        for d in self.decorations:
+            if d["id"] == deco_id:
+                if x is not None:
+                    d["x"] = float(x)
+                if y is not None:
+                    d["y"] = float(y)
+                if scale is not None:
+                    d["scale"] = float(scale)
+                return d
+        return None
+
+    def remove_decoration(self, deco_id):
+        self.decorations = [d for d in self.decorations if d["id"] != deco_id]
+
+    def _decoration_effects(self, dt):
+        """Being near decorations shapes mood: plants soothe, rocks intrigue."""
+        s = self.squid
+        for d in self.decorations:
+            if math.hypot(s.x - d["x"], s.y - d["y"]) < 120 * d.get("scale", 1.0):
+                cat = d["category"]
+                if cat == "plant":
+                    s.anxiety = max(0.0, s.anxiety - 3.0 * dt)
+                    s.satisfaction = min(100.0, s.satisfaction + 1.5 * dt)
+                elif cat == "rock":
+                    s.curiosity = min(100.0, s.curiosity + 2.5 * dt)
 
     def _settle_food(self, dt):
         floor = self.tank_size[1] - 40
@@ -113,6 +155,7 @@ class Simulation:
                     squid.move_towards(target["x"], target["y"])
 
         # 5) World interactions.
+        self._decoration_effects(dt)
         self._settle_food(dt)
         if self._try_eat():
             squid.is_eating = True
@@ -141,6 +184,7 @@ class Simulation:
             "squid": self.squid.to_dict(),
             "food_items": self.food_items,
             "poop_items": self.poop_items,
+            "decorations": self.decorations,
         }
 
     @classmethod
@@ -150,6 +194,8 @@ class Simulation:
         sim = cls(tank, squid)
         sim.food_items = data.get("food_items", [])
         sim.poop_items = data.get("poop_items", [])
+        sim.decorations = data.get("decorations", [])
+        sim._decoration_id = max([d["id"] for d in sim.decorations], default=0)
         return sim
 
     def save(self, path: str):

@@ -33,11 +33,13 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.core.window import Window
+from kivy.metrics import dp, sp
 
 from ..engine import Simulation, Squid, Personality
 from .tankview import TankView
 from .brain_screen import BrainScreen
 from .stats import StatsPanel
+from .decorations import DecorationLayer, open_decoration_palette
 
 TANK_SIZE = (900, 500)
 AUTOSAVE_EVERY = 20.0  # seconds
@@ -57,18 +59,22 @@ class DosidicusApp(App):
 
         # --- Header ---
         self.header = Label(
-            text=self._header_text(), markup=True, size_hint_y=None, height=44,
-            halign="center", valign="middle")
+            text=self._header_text(), markup=True, size_hint_y=None, height=dp(52),
+            halign="center", valign="middle", font_size=sp(16))
         self.header.bind(size=lambda *a: setattr(self.header, "text_size", self.header.size))
         root.add_widget(self.header)
 
-        # --- Main viewport (tank + brain stacked, one shown at a time) ---
+        # --- Main viewport (tank + decorations + brain, one "view" shown) ---
         self.viewport = FloatLayout(size_hint_y=1)
         self.tank = TankView(self.sim, on_drop_food=self._drop_food,
                              size_hint=(1, 1), pos_hint={"x": 0, "y": 0})
+        # Decoration layer sits over the tank so decorations can be dragged/pinched.
+        self.deco_layer = DecorationLayer(self.sim, size_hint=(1, 1),
+                                          pos_hint={"x": 0, "y": 0})
         self.brain = BrainScreen(self.sim,
                                  size_hint=(1, 1), pos_hint={"x": 0, "y": 0})
         self.viewport.add_widget(self.tank)
+        self.viewport.add_widget(self.deco_layer)
         self.viewport.add_widget(self.brain)
         self.showing_brain = False
         self.brain.opacity = 0
@@ -77,24 +83,30 @@ class DosidicusApp(App):
 
         # transient banner (neurogenesis etc.)
         self.banner = Label(text="", markup=True, size_hint_y=None, height=0,
-                            halign="center", valign="middle", color=(1, 0.85, 0.1, 1))
+                            halign="center", valign="middle", font_size=sp(15),
+                            color=(1, 0.85, 0.1, 1))
         root.add_widget(self.banner)
 
         # --- Stats ---
-        self.stats = StatsPanel(self.sim.squid, size_hint_y=None, height=176)
+        self.stats = StatsPanel(self.sim.squid, size_hint_y=None, height=dp(196))
         root.add_widget(self.stats)
 
         # --- Care bar ---
-        bar = BoxLayout(orientation="horizontal", size_hint_y=None, height=64, spacing=3)
-        for label, cb in [
-            ("Feed", self._feed), ("Clean", self._clean), ("Play", self._play),
+        bar = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(72),
+                        spacing=dp(3))
+        TEAL = (0.15, 0.45, 0.6, 1)
+        DARK_GREEN = (0.13, 0.42, 0.18, 1)
+        for label, cb, color in [
+            ("Feed", self._feed, TEAL),
+            ("Clean", self._clean, TEAL),
+            ("Decorations", self._decorations, DARK_GREEN),
         ]:
-            b = Button(text=label, font_size=16, bold=True,
-                       background_color=(0.15, 0.45, 0.6, 1))
+            b = Button(text=label, font_size=sp(17), bold=True,
+                       background_normal="", background_color=color)
             b.bind(on_release=cb)
             bar.add_widget(b)
-        self.toggle_btn = Button(text="Brain", font_size=16, bold=True,
-                                 background_color=(0.5, 0.3, 0.6, 1))
+        self.toggle_btn = Button(text="Brain", font_size=sp(17), bold=True,
+                                 background_normal="", background_color=(0.5, 0.28, 0.72, 1))
         self.toggle_btn.bind(on_release=self._toggle_view)
         bar.add_widget(self.toggle_btn)
         root.add_widget(bar)
@@ -144,15 +156,27 @@ class DosidicusApp(App):
     def _clean(self, *a):
         self.sim.clean_tank()
 
-    def _play(self, *a):
-        self.sim.squid.play()
+    def _decorations(self, *a):
+        # Adding decorations only makes sense over the tank; switch to it first.
+        if self.showing_brain:
+            self._toggle_view()
+        open_decoration_palette(self._add_decoration)
+
+    def _add_decoration(self, deco_type, category):
+        tw, th = self.sim.tank_size
+        deco = self.sim.add_decoration(deco_type, category, x=tw * 0.5, y=th * 0.55)
+        self.deco_layer.add(deco)
+        self._flash("[color=88ff88]Added — drag to move, pinch to resize, "
+                    "double-tap to remove.[/color]", seconds=3.5)
 
     def _toggle_view(self, *a):
         self.showing_brain = not self.showing_brain
         self.brain.opacity = 1 if self.showing_brain else 0
         self.brain.disabled = not self.showing_brain
-        self.tank.opacity = 0 if self.showing_brain else 1
-        self.tank.disabled = self.showing_brain
+        # Tank and its decoration overlay show/hide together.
+        for w in (self.tank, self.deco_layer):
+            w.opacity = 0 if self.showing_brain else 1
+            w.disabled = self.showing_brain
         self.toggle_btn.text = "Tank" if self.showing_brain else "Brain"
 
     def _flash(self, msg, seconds=2.5):

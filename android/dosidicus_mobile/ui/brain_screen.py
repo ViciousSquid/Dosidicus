@@ -26,6 +26,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
+from kivy.metrics import dp, sp
 
 from .brainview import BrainView
 from ..engine.personality import (
@@ -46,7 +47,7 @@ class _ScrollText(ScrollView):
         super().__init__(**kwargs)
         self.label = Label(
             text="", markup=True, size_hint_y=None, halign="left", valign="top",
-            padding=(14, 12), color=(0.92, 0.94, 0.97, 1), font_size=14)
+            padding=(dp(14), dp(12)), color=(0.92, 0.94, 0.97, 1), font_size=sp(15))
         self.label.bind(
             width=lambda *_: setattr(self.label, "text_size", (self.label.width, None)),
             texture_size=lambda *_: setattr(self.label, "height", self.label.texture_size[1]),
@@ -67,15 +68,15 @@ class BrainScreen(BoxLayout):
         self._last_text_refresh = 0.0
 
         # --- Tab strip (horizontally scrollable so 7 tabs fit any width) ---
-        strip = ScrollView(size_hint_y=None, height=40, do_scroll_y=False,
+        strip = ScrollView(size_hint_y=None, height=dp(46), do_scroll_y=False,
                            bar_width=0)
-        row = BoxLayout(orientation="horizontal", size_hint_x=None, spacing=2,
-                       padding=(2, 2))
+        row = BoxLayout(orientation="horizontal", size_hint_x=None, spacing=dp(2),
+                       padding=(dp(2), dp(2)))
         row.bind(minimum_width=row.setter("width"))
         self._tab_buttons = {}
         for name in TABS:
-            b = Button(text=name, size_hint_x=None, width=96, font_size=13, bold=True,
-                       background_normal="", background_color=ACCENT_OFF)
+            b = Button(text=name, size_hint_x=None, width=dp(104), font_size=sp(14),
+                       bold=True, background_normal="", background_color=ACCENT_OFF)
             b.bind(on_release=lambda btn, n=name: self.select(n))
             self._tab_buttons[name] = b
             row.add_widget(b)

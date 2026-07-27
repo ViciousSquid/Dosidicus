@@ -11,6 +11,7 @@ import time
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.core.image import Image as CoreImage
+from kivy.metrics import dp
 
 from .assets import asset
 
@@ -26,9 +27,6 @@ def _load(name):
 
 
 class TankView(Widget):
-    SQUID_W = 90
-    SQUID_H = 90
-
     def __init__(self, simulation=None, on_drop_food=None, **kwargs):
         super().__init__(**kwargs)
         self.sim = simulation
@@ -81,16 +79,25 @@ class TankView(Widget):
             Color(0.55, 0.47, 0.30, 1)
             Rectangle(pos=self.pos, size=(self.width, self.height * 0.06))
 
+            # Sizes are proportional to the tank height (with DPI floors) so the
+            # squid and food read at a comfortable size on any screen density.
+            sq = max(dp(96), self.height * 0.26)
+            food_sz = max(dp(30), self.height * 0.08)
+            poop_sz = max(dp(22), self.height * 0.055)
+            icon_sz = sq * 0.38
+
             # Poop.
             for p in sim.poop_items:
                 px, py = self._map(p["x"], p["y"])
                 tex = self._tex["poop"]
                 Color(1, 1, 1, 1)
                 if tex:
-                    Rectangle(texture=tex, pos=(px - 12, py - 12), size=(24, 24))
+                    Rectangle(texture=tex, pos=(px - poop_sz / 2, py - poop_sz / 2),
+                              size=(poop_sz, poop_sz))
                 else:
                     Color(0.4, 0.25, 0.1, 1)
-                    Rectangle(pos=(px - 8, py - 8), size=(16, 16))
+                    Rectangle(pos=(px - poop_sz / 3, py - poop_sz / 3),
+                              size=(poop_sz * 0.66, poop_sz * 0.66))
 
             # Food.
             for f in sim.food_items:
@@ -98,10 +105,12 @@ class TankView(Widget):
                 tex = self._tex.get(f.get("type"), self._tex["sushi"]) or self._tex["food"]
                 Color(1, 1, 1, 1)
                 if tex:
-                    Rectangle(texture=tex, pos=(fx - 16, fy - 16), size=(32, 32))
+                    Rectangle(texture=tex, pos=(fx - food_sz / 2, fy - food_sz / 2),
+                              size=(food_sz, food_sz))
                 else:
                     Color(1.0, 0.6, 0.2, 1)
-                    Rectangle(pos=(fx - 10, fy - 10), size=(20, 20))
+                    Rectangle(pos=(fx - food_sz / 3, fy - food_sz / 3),
+                              size=(food_sz * 0.66, food_sz * 0.66))
 
             # Squid sprite.
             sx, sy = self._map(squid.x, squid.y)
@@ -112,19 +121,19 @@ class TankView(Widget):
                 tex = self._tex[squid.direction][frame]
             Color(1, 1, 1, 1)
             if tex:
-                Rectangle(texture=tex,
-                          pos=(sx - self.SQUID_W / 2, sy - self.SQUID_H / 2),
-                          size=(self.SQUID_W, self.SQUID_H))
+                Rectangle(texture=tex, pos=(sx - sq / 2, sy - sq / 2), size=(sq, sq))
             else:
                 Color(0.9, 0.5, 0.8, 1)
-                Rectangle(pos=(sx - 30, sy - 30), size=(60, 60))
+                Rectangle(pos=(sx - sq / 3, sy - sq / 3), size=(sq * 0.66, sq * 0.66))
 
             # Status overlays.
             if squid.is_sick and self._tex["sick"]:
                 Color(1, 1, 1, 1)
                 Rectangle(texture=self._tex["sick"],
-                          pos=(sx - 12, sy + self.SQUID_H / 2 - 6), size=(28, 28))
+                          pos=(sx - icon_sz / 2, sy + sq / 2 - icon_sz * 0.2),
+                          size=(icon_sz, icon_sz))
             elif squid.status in ("playing happily", "frolicking") and self._tex["love"]:
                 Color(1, 1, 1, 1)
                 Rectangle(texture=self._tex["love"],
-                          pos=(sx - 12, sy + self.SQUID_H / 2 - 6), size=(24, 24))
+                          pos=(sx - icon_sz / 2, sy + sq / 2 - icon_sz * 0.2),
+                          size=(icon_sz, icon_sz))

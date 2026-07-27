@@ -3,6 +3,7 @@
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle, Line
 from kivy.core.text import Label as CoreLabel
+from kivy.metrics import sp
 
 # For these stats a HIGH value is bad, so the bar turns red as it fills.
 INVERTED = {"hunger", "sleepiness", "anxiety"}
@@ -58,11 +59,11 @@ class StatsPanel(Widget):
                 Rectangle(pos=(bar_x, y), size=(bar_w * frac, bh))
 
                 # Label + value.
-                tex = self._label(f"lab{name}", name.capitalize(), 13)
+                tex = self._label(f"lab{name}", name.capitalize(), sp(15))
                 Color(0.9, 0.92, 0.95, 1)
                 Rectangle(texture=tex, pos=(self.x + pad, y + bh / 2 - tex.height / 2),
                           size=tex.size)
-                vtex = self._label(f"val{name}{int(val)}", str(int(val)), 12)
+                vtex = self._label(f"val{name}{int(val)}", str(int(val)), sp(14))
                 Color(1, 1, 1, 0.9)
                 Rectangle(texture=vtex,
                           pos=(bar_x + bar_w - vtex.width - 4, y + bh / 2 - vtex.height / 2),
