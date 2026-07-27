@@ -47,10 +47,16 @@ jobs:
           java-version: "17"
 
       - name: Install system dependencies
+        # The full autotools set (automake + libtool + libltdl-dev + autopoint)
+        # is required: p4a's libffi recipe runs autoreconf, which needs the
+        # libtool m4 macros (LT_SYS_SYMBOL_USCORE) that libltdl-dev/automake
+        # provide in aclocal's search path — without them the build dies with
+        # "possibly undefined macro: LT_SYS_SYMBOL_USCORE".
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential git zip unzip autoconf libtool pkg-config \
+            build-essential git zip unzip pkg-config \
+            autoconf automake libtool libtool-bin libltdl-dev autopoint gettext \
             zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev
 
       - name: Install Buildozer
