@@ -69,8 +69,13 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
+        # Feed "y" to the Android SDK license prompts via process substitution
+        # (a plain `yes | buildozer` would let SIGPIPE mask buildozer's real
+        # exit code under pipefail). pipefail ensures a build failure fails the
+        # step even though output is teed to build.log.
         run: |
-          buildozer android debug 2>&1 | tee build.log
+          set -o pipefail
+          buildozer android debug < <(yes) 2>&1 | tee build.log
 
       - name: Upload APK
         if: success()
