@@ -1,0 +1,13 @@
+# Buildozer / python-for-android build artifacts
+.buildozer/
+bin/
+*.apk
+*.aab
+
+# Python
+__pycache__/
+*.pyc
+
+# Local squid saves / logs produced while running on desktop
+*.log
+squid_save.json
