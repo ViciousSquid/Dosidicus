@@ -96,23 +96,27 @@ python tests/test_engine.py        # or: python -m pytest tests
 
 ## Build the Android APK
 
-Buildozer runs on Linux/WSL/macOS and downloads the Android SDK/NDK on first run.
+**See [BUILDING.md](BUILDING.md) for the full step-by-step guide** (cloud build,
+local Linux/WSL/macOS, deploying to a phone, and the dev loop).
 
-```bash
-cd android
-pip install buildozer cython
-buildozer -v android debug
-# APK lands in android/bin/
-```
+Two quick paths:
 
-Install on a connected device:
-
-```bash
-buildozer android deploy run logcat
-```
+* **No local setup — build in the cloud.** Push a change under `android/` (or use
+  the Actions tab → *Build Android APK* → *Run workflow*). The
+  [`android-build.yml`](../.github/workflows/android-build.yml) workflow builds
+  the debug APK on a GitHub runner and uploads it as the `dosidicus-debug-apk`
+  artifact.
+* **Local build** (Linux/WSL/macOS, downloads the SDK/NDK on first run):
+  ```bash
+  cd android
+  pip install buildozer "Cython==0.29.37"
+  buildozer android debug          # APK lands in android/bin/
+  buildozer android deploy run logcat   # install + launch on a connected device
+  ```
 
 Notes:
-* First build is slow (it fetches the SDK, NDK, and builds NumPy for ARM).
+* First build is slow (it fetches the SDK, NDK, and builds NumPy for ARM); use
+  **JDK 17** — newer JDKs can break the Gradle step.
 * `numpy` and `pillow` build via their python-for-android recipes — already
   listed in `buildozer.spec`'s `requirements`.
 * Saves are written to the app's private data directory, so no storage

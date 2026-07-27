@@ -1,0 +1,89 @@
+name: Build Android APK
+
+# Builds the Dosidicus Mobile debug APK on a GitHub-hosted runner (which has
+# open internet access to Google's SDK/NDK servers) and uploads it as a
+# downloadable artifact. Trigger it by pushing changes under android/, or run it
+# on demand from the Actions tab ("Run workflow").
+
+on:
+  push:
+    branches:
+      - "claude/android-version-**"
+      - main
+    paths:
+      - "android/**"
+      - ".github/workflows/android-build.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Android SDK + NDK are several GB; reclaim space the runner wastes on
+      # toolchains we don't need so the download has room.
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/lib/android/sdk/ndk" || true
+          df -h /
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Buildozer's Android toolchain is happiest on JDK 17; the runner default
+      # can be newer, so pin it explicitly.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git zip unzip autoconf libtool pkg-config \
+            zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev
+
+      - name: Install Buildozer
+        run: |
+          python -m pip install --upgrade pip
+          pip install buildozer "Cython==0.29.37"
+
+      # Cache the global buildozer dir so the SDK/NDK download only happens once.
+      - name: Cache Buildozer downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          buildozer android debug 2>&1 | tee build.log
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dosidicus-debug-apk
+          path: android/bin/*.apk
+          if-no-files-found: error
+
+      - name: Upload build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-build-log
+          path: android/build.log
+          if-no-files-found: ignore
