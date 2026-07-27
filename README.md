@@ -16,7 +16,7 @@ _A transparent cognitive sandbox disguised as a digital pet squid with a neural 
 - Part **educational neuro tool**, part **sim game**, part **fever dream**
 - Combining 1990s virtual pet nostalgia with modern computational neuroscience.
 
-### [Compiled binaries for Windows, MacOS and Linux](https://github.com/ViciousSquid/Dosidicus/releases)
+### [Compiled binaries for Windows, MacOS, Linux and Android](https://github.com/ViciousSquid/Dosidicus/releases)
 
 ```bash
 git clone https://github.com/ViciousSquid/Dosidicus.git
