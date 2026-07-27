@@ -11,8 +11,12 @@ Portrait, touch-first layout:
     +---------------------------------------+
     |  seven live stat bars                 |
     +---------------------------------------+
-    | Feed | Clean | Play | Sleep | Brain   |   care bar
+    | Feed | Clean | Play | Brain/Tank      |   care bar
     +---------------------------------------+
+
+The Brain view is itself a tabbed inspector (Network / Learning / Memory /
+Decisions / Personality / Stats / About). The squid sleeps on its own when
+tired, so there is no manual sleep button.
 
 The App owns the Simulation, drives it from Kivy's Clock, and autosaves to the
 platform's writable user-data directory so a squid's cognitive history persists
@@ -32,7 +36,7 @@ from kivy.core.window import Window
 
 from ..engine import Simulation, Squid, Personality
 from .tankview import TankView
-from .brainview import BrainView
+from .brain_screen import BrainScreen
 from .stats import StatsPanel
 
 TANK_SIZE = (900, 500)
@@ -62,8 +66,8 @@ class DosidicusApp(App):
         self.viewport = FloatLayout(size_hint_y=1)
         self.tank = TankView(self.sim, on_drop_food=self._drop_food,
                              size_hint=(1, 1), pos_hint={"x": 0, "y": 0})
-        self.brain = BrainView(self.sim.squid.brain,
-                              size_hint=(1, 1), pos_hint={"x": 0, "y": 0})
+        self.brain = BrainScreen(self.sim,
+                                 size_hint=(1, 1), pos_hint={"x": 0, "y": 0})
         self.viewport.add_widget(self.tank)
         self.viewport.add_widget(self.brain)
         self.showing_brain = False
@@ -83,8 +87,7 @@ class DosidicusApp(App):
         # --- Care bar ---
         bar = BoxLayout(orientation="horizontal", size_hint_y=None, height=64, spacing=3)
         for label, cb in [
-            ("Feed", self._feed), ("Clean", self._clean),
-            ("Play", self._play), ("Sleep", self._sleep),
+            ("Feed", self._feed), ("Clean", self._clean), ("Play", self._play),
         ]:
             b = Button(text=label, font_size=16, bold=True,
                        background_color=(0.15, 0.45, 0.6, 1))
@@ -144,9 +147,6 @@ class DosidicusApp(App):
     def _play(self, *a):
         self.sim.squid.play()
 
-    def _sleep(self, *a):
-        self.sim.squid.toggle_sleep()
-
     def _toggle_view(self, *a):
         self.showing_brain = not self.showing_brain
         self.brain.opacity = 1 if self.showing_brain else 0
@@ -170,7 +170,7 @@ class DosidicusApp(App):
 
         # Redraw only the visible view for efficiency.
         if self.showing_brain:
-            self.brain.set_brain(self.sim.squid.brain)
+            self.brain.refresh()
         else:
             self.tank.redraw()
         self.stats.redraw()

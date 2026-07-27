@@ -43,6 +43,7 @@ class Squid:
         self.is_eating = False
         self.status = "just hatched"
         self.age_seconds = 0.0
+        self.last_decision = {}  # trace of the most recent decision (for the UI)
 
     # ----------------------------------------------------------------- stats
     CORE_STATS = ("hunger", "happiness", "cleanliness", "sleepiness",
@@ -205,6 +206,16 @@ class Squid:
             weights[k] *= random.uniform(0.88, 1.12)
 
         decision = max(weights, key=weights.get) if any(weights.values()) else "exploring"
+
+        # Store a trace for the Decisions tab: sorted candidate weights +
+        # confidence (how decisively the winner beat the runner-up).
+        ordered = sorted(weights.values(), reverse=True)
+        confidence = 1.0 if len(ordered) < 2 or ordered[0] == 0 else (ordered[0] - ordered[1]) / ordered[0]
+        self.last_decision = {
+            "weights": dict(weights),
+            "chosen": decision,
+            "confidence": confidence,
+        }
         return self._execute(decision, food_items, can_see_food)
 
     def _execute(self, decision, food_items, can_see_food):
