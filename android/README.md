@@ -67,16 +67,30 @@ android/
 | `brain_widget.py` (visualiser) | `ui/brainview.py`                    | Neurons as heat-mapped circles, weighted colour-coded connections, gold rings on grown neurons. |
 
 ### What's in this MVP
-Raising loop (feed / clean / tap-to-feed; the squid plays and sleeps on its
-own), 7 live core stats, sickness, **placeable decorations** you can drag and
-pinch-resize (plants soothe, rocks intrigue), the full brain (Hebbian learning +
-neurogenesis) shown in a **tabbed inspector** (Network / Learning / Memory /
-Decisions / Personality / Stats / About), the neural decision engine, 7
-personalities, DPI-aware layout, and persistent JSON saves.
+Raising loop (feed / clean / tap-to-feed; the squid plays with rocks — picking
+them up and throwing them — and sleeps on its own), 7 live core stats, sickness,
+a cleaning sweep, **placeable decorations** you can drag and pinch-resize (plants
+soothe, rocks intrigue), the full brain — Hebbian learning + **STDP** +
+neurogenesis + a dual **memory** system — shown in a **tabbed inspector**
+(Network with pinch-zoom / Learning cards / Memory cards / Decisions / Personality
+/ Stats / About), the neural decision engine, 7 personalities, DPI-aware
+responsive layout, persistent JSON saves, and a **hamburger menu** to start a new
+game or **export / import a squid** as a shareable `.zip`.
+
+### Sharing squids (export / import)
+The hamburger menu (top-left) exports the current squid to a `.zip` in the same
+8-file layout the desktop app uses (`game_state.json`, `brain_state.json`,
+`statistics.json`, `ShortTerm/LongTerm.json`, `uuid.txt`, …). On Android the file
+is written to the app's external files dir (`Android/data/<pkg>/files/exports/`,
+reachable from the Files app) and a share sheet is offered; from there you can
+send it via Drive, email, messaging, etc. **Import** opens the Android document
+picker (via plyer) — choose any squid `.zip` (yours, a friend's, or one exported
+from the desktop app) and it loads. Mobile exports round-trip exactly; desktop
+exports are imported best-effort (stats, brain weights/positions, memories).
 
 ### Not in this first pass
-Brain Designer, plugins (achievements/multiplayer), the memory tabs, custom
-brains and the tutorial. The engine is structured so these can be layered on.
+Brain Designer, plugins (achievements/multiplayer), custom brains and the
+tutorial. The engine is structured so these can be layered on.
 
 ## Run on desktop (fastest way to try it)
 

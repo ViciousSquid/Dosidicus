@@ -100,6 +100,10 @@ class DecorationLayer(FloatLayout):
         self._scatters = {}
         self.bind(size=lambda *_: self.rebuild(), pos=lambda *_: self.rebuild())
 
+    def set_simulation(self, sim):
+        self.sim = sim
+        self.rebuild()
+
     # base on-screen height of a decoration at scale 1.0 (responsive, DPI-safe)
     def _base_h(self, category=None):
         if category == "rock":

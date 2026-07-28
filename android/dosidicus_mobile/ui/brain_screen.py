@@ -33,10 +33,11 @@ from kivy.metrics import dp, sp
 
 from .brainview import BrainView
 from .memory_cards import MemoryCards
+from .learning_cards import LearningCards
+from .decisions_panel import DecisionsPanel
 from ..engine.personality import (
     describe, PERSONALITY_STAT_MODIFIERS, PERSONALITY_LEARNING_MODIFIERS,
 )
-from ..engine import constants
 
 TABS = ["Network", "Learning", "Memory", "Decisions", "Personality", "Stats", "About"]
 
@@ -82,6 +83,8 @@ class BrainScreen(BoxLayout):
         self.network_scatter.add_widget(self.network)
         self.textpanel = _ScrollText()
         self.memory_cards = MemoryCards(self.sim)
+        self.learning_cards = LearningCards(self.sim)
+        self.decisions_panel = DecisionsPanel(self.sim)
 
         # Responsive tab strip: a horizontal strip on tablets, a vertical
         # column on phones (where a top strip would be too cramped).
@@ -115,6 +118,14 @@ class BrainScreen(BoxLayout):
         self.add_widget(self.content)
         self.select("Network")
 
+    def set_simulation(self, sim):
+        self.sim = sim
+        self.memory_cards.sim = sim
+        self.learning_cards.sim = sim
+        self.decisions_panel.set_simulation(sim)
+        self.network.set_brain(sim.squid.brain)
+        self.select(self.active)
+
     def _make_tab(self, name, horizontal):
         if horizontal:
             b = Button(text=name, size_hint_x=None, width=dp(104), font_size=sp(14),
@@ -139,6 +150,12 @@ class BrainScreen(BoxLayout):
         elif name == "Memory":
             self.content.add_widget(self.memory_cards)
             self.memory_cards.refresh()
+        elif name == "Learning":
+            self.content.add_widget(self.learning_cards)
+            self.learning_cards.refresh()
+        elif name == "Decisions":
+            self.content.add_widget(self.decisions_panel)
+            self.decisions_panel.refresh()
         else:
             self.content.add_widget(self.textpanel)
             self._refresh_text(force=True)
@@ -155,14 +172,16 @@ class BrainScreen(BoxLayout):
         self._last_text_refresh = now
         if self.active == "Memory":
             self.memory_cards.refresh()
+        elif self.active == "Learning":
+            self.learning_cards.refresh()
+        elif self.active == "Decisions":
+            self.decisions_panel.refresh()
         else:
             self._refresh_text()
 
     def _refresh_text(self, force=False):
         self._last_text_refresh = time.time()
         builder = {
-            "Learning": self._learning_text,
-            "Decisions": self._decisions_text,
             "Personality": self._personality_text,
             "Stats": self._stats_text,
             "About": self._about_text,
@@ -174,53 +193,6 @@ class BrainScreen(BoxLayout):
     def _h(self, title):
         return f"[b][color=b39ddb]{title}[/color][/b]\n"
 
-    def _learning_text(self):
-        b = self.sim.squid.brain
-        boost = "[color=ffd54f]ACTIVE (x1.5)[/color]" if b.neurogenesis_active else "off"
-        out = [self._h("Hebbian learning")]
-        out.append(f"Rule: neurons that fire together wire together.\n")
-        out.append(f"Learning rate: [b]{b.config['base_learning_rate']}[/b]/s   "
-                   f"co-activation threshold: [b]{int(b.config['co_activation_threshold']*100)}%[/b]")
-        out.append(f"Neurogenesis boost: {boost}")
-        out.append(f"[color=b39ddb]STDP[/color]: spike-timing plasticity — "
-                   f"[b]{b.stdp_potentiations}[/b] timing-based strengthenings so far.\n")
-        out.append(self._h("Recent weight changes"))
-        events = list(reversed(b.recent_events[-16:]))
-        if not events:
-            out.append("[color=888888]No learning yet — care for your squid and "
-                       "watch connections form.[/color]")
-        for e in events:
-            if e.get("born"):
-                out.append(f"[color=ffd54f]* grew {e['a']} (from {e['b']})[/color]")
-            else:
-                dw = e["dw"]
-                col = "88ff88" if dw >= 0 else "ff8888"
-                sign = "+" if dw >= 0 else ""
-                tag = " [color=b39ddb](STDP)[/color]" if e.get("stdp") else ""
-                out.append(f"[color={col}]{sign}{dw:.3f}[/color]  {e['a']} <> {e['b']}"
-                           f"  [color=888888](w={e['weight']:+.2f})[/color]{tag}")
-        return "\n".join(out)
-
-    def _decisions_text(self):
-        d = getattr(self.sim.squid, "last_decision", {}) or {}
-        out = [self._h("Latest decision")]
-        if not d:
-            out.append("[color=888888]No decision yet.[/color]")
-            return "\n".join(out)
-        chosen = d.get("chosen", "?")
-        conf = d.get("confidence", 0.0)
-        out.append(f"Chose [b][color=ffd54f]{chosen}[/color][/b]   "
-                   f"confidence [b]{int(conf*100)}%[/b]\n")
-        out.append(self._h("Candidate weights"))
-        weights = d.get("weights", {})
-        mx = max(weights.values()) if weights else 1.0
-        for action, w in sorted(weights.items(), key=lambda kv: kv[1], reverse=True):
-            bars = int((w / mx) * 18) if mx else 0
-            marker = "[color=ffd54f]>[/color] " if action == chosen else "  "
-            out.append(f"{marker}{action:<12} [color=6fa8dc]{'█' * bars}[/color] {w:.1f}")
-        out.append("\n[color=888888]Weights come from the live brain state, memory and "
-                   "personality; the highest wins.[/color]")
-        return "\n".join(out)
 
     def _personality_text(self):
         s = self.sim.squid
@@ -246,33 +218,17 @@ class BrainScreen(BoxLayout):
     def _stats_text(self):
         s = self.sim.squid
         b = s.brain
-        names = b.neuron_names
-        core = sum(1 for n in names if constants.is_core_neuron(n))
-        sensor = sum(1 for n in names if constants.is_sensor(n))
-        grown = b.neurogenesis.get("new_neurons", [])
         conns = sum(1 for (x, y) in b.weights if x < y)
-        births = {}
-        for n in grown:
-            k = n.rsplit("_", 1)[0]
-            births[k] = births.get(k, 0) + 1
-        age = int(s.age_seconds)
-        age_str = f"{age//3600}h {(age%3600)//60}m" if age >= 3600 else f"{age//60}m {age%60}s"
-        out = [self._h("Network")]
-        out.append(f"Neurons: [b]{len(names)}[/b]  "
-                   f"([color=aaddff]{core} core[/color], "
-                   f"[color=6fa8dc]{sensor} sensor[/color], "
-                   f"[color=ffd54f]{len(grown)} grown[/color])")
-        out.append(f"Connections: [b]{conns}[/b]")
-        if births:
-            out.append("Grown by trigger: " + ", ".join(f"{k} x{v}" for k, v in births.items()))
-        out.append(f"STDP strengthenings: [b]{b.stdp_potentiations}[/b]")
-        mem = s.memory
-        out.append(f"Memories: [b]{len(mem.short_term)}[/b] short-term, "
-                   f"[b]{len(mem.long_term)}[/b] long-term")
-        out.append(f"Age: [b]{age_str}[/b]\n")
-        out.append(self._h("Live stats"))
-        for n in s.CORE_STATS:
-            out.append(f"  {n:<13} [b]{int(getattr(s, n))}[/b]")
+        out = [self._h("Lifetime statistics")]
+        # The same labelled figures the desktop Statistics tab shows.
+        for label, value in self.sim.stats.display_items():
+            out.append(f"{label}: [b]{value}[/b]")
+        out.append("")
+        out.append(self._h("Brain"))
+        out.append(f"Connections: [b]{conns}[/b]   "
+                   f"STDP strengthenings: [b]{b.stdp_potentiations}[/b]")
+        out.append(f"Memories: [b]{len(s.memory.short_term)}[/b] short-term, "
+                   f"[b]{len(s.memory.long_term)}[/b] long-term")
         return "\n".join(out)
 
     def _about_text(self):

@@ -13,7 +13,8 @@ source.include_patterns = assets/*,dosidicus_mobile/*
 version = 0.1.0
 
 # Runtime requirements. numpy + pillow have python-for-android recipes.
-requirements = python3,kivy==2.3.1,numpy,pillow
+# plyer powers the "Import squid" native file picker.
+requirements = python3,kivy==2.3.1,numpy,pillow,plyer,android
 
 # Portrait-only touch app.
 orientation = portrait

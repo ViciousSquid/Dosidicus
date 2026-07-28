@@ -16,6 +16,7 @@ import time
 
 from .squid import Squid
 from .personality import Personality
+from .statistics import Statistics
 
 
 class Simulation:
@@ -39,6 +40,10 @@ class Simulation:
         self._was_anxious = False
         self._rock_velocities = {}     # deco_id -> [vx, vy] for thrown rocks
         self.sweep_x = None            # x of the cleaning sweep bar (None = idle)
+        self.stats = Statistics()
+        self._prev_pos = (self.squid.x, self.squid.y)
+        self._was_sick = self.squid.is_sick
+        self._near_plants = set()
 
     # ------------------------------------------------------------- world API
     def food_visible(self):
@@ -155,6 +160,7 @@ class Simulation:
                 squid.remember("play", "rock_throw", "Threw a rock",
                                {"satisfaction": 18, "happiness": 15},
                                importance=2.0, related=["satisfaction", "curiosity"])
+                self.stats.on_rock_thrown()
                 self.last_status = "playfully tossing a rock"
             return
 
@@ -177,14 +183,19 @@ class Simulation:
     def _decoration_effects(self, dt):
         """Being near decorations shapes mood: plants soothe, rocks intrigue."""
         s = self.squid
+        near_now = set()
         for d in self.decorations:
             if math.hypot(s.x - d["x"], s.y - d["y"]) < 120 * d.get("scale", 1.0):
                 cat = d["category"]
                 if cat == "plant":
                     s.anxiety = max(0.0, s.anxiety - 3.0 * dt)
                     s.satisfaction = min(100.0, s.satisfaction + 1.5 * dt)
+                    near_now.add(d["id"])
+                    if d["id"] not in self._near_plants:
+                        self.stats.on_plant_interaction()
                 elif cat == "rock":
                     s.curiosity = min(100.0, s.curiosity + 2.5 * dt)
+        self._near_plants = near_now
 
     def _settle_food(self, dt):
         floor = self.tank_size[1] - 40
@@ -197,6 +208,7 @@ class Simulation:
         for f in self.food_items:
             if math.hypot(self.squid.x - f["x"], self.squid.y - f["y"]) < 45:
                 self.squid.feed(f["type"])
+                self.stats.on_eat(f["type"])
                 eaten.append(f)
         for f in eaten:
             self.food_items.remove(f)
@@ -226,7 +238,11 @@ class Simulation:
             squid.remember("mental_state", "anxious", "Felt very anxious",
                            {"anxiety": 20, "happiness": -10}, importance=2.0,
                            related=["anxiety"])
+            self.stats.on_startle()
         self._was_anxious = squid.anxiety > 85
+        if squid.is_sick and not self._was_sick:
+            self.stats.on_sickness()
+        self._was_sick = squid.is_sick
         clamped = squid.sync_stats_to_brain(can_see_food=can_see)
         squid.brain.propagate(clamped)
         # keep brain's core neurons in lock-step with the authoritative stats
@@ -243,6 +259,7 @@ class Simulation:
             kind = born.rsplit("_", 1)[0]
             squid.remember("neurogenesis", born, f"Grew a {kind} neuron",
                            None, importance=3.0)
+            self.stats.on_neuron_born(kind)
         squid.memory.periodic(squid.brain.sim_time)
 
         # 4) Let rewired/grown neurons nudge mood, then decide + move.
@@ -274,6 +291,12 @@ class Simulation:
             self._poop_timer = 0.0
             self.poop_items.append({"x": squid.x, "y": squid.y + 20})
             squid.cleanliness = max(0.0, squid.cleanliness - 8.0)
+            self.stats.on_poop(len(self.poop_items))
+
+        # Lifetime statistics: distance moved this tick + per-tick accumulation.
+        moved = math.hypot(squid.x - self._prev_pos[0], squid.y - self._prev_pos[1])
+        self._prev_pos = (squid.x, squid.y)
+        self.stats.tick(dt, squid, squid.brain, moved)
 
         return self.last_status
 
@@ -307,6 +330,7 @@ class Simulation:
             "food_items": self.food_items,
             "poop_items": self.poop_items,
             "decorations": self.decorations,
+            "statistics": self.stats.to_dict(),
         }
 
     @classmethod
@@ -318,6 +342,9 @@ class Simulation:
         sim.poop_items = data.get("poop_items", [])
         sim.decorations = data.get("decorations", [])
         sim._decoration_id = max([d["id"] for d in sim.decorations], default=0)
+        sim.stats = Statistics.from_dict(data.get("statistics"))
+        sim._prev_pos = (sim.squid.x, sim.squid.y)
+        sim._was_sick = sim.squid.is_sick
         return sim
 
     def save(self, path: str):

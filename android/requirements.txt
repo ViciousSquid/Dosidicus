@@ -3,3 +3,4 @@
 kivy>=2.3.1
 numpy>=1.21
 pillow>=9.0
+plyer>=2.1

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 import random
+import uuid as _uuid
 
 from .personality import Personality, PERSONALITY_STAT_MODIFIERS
 from .brain import NeuralBrain
@@ -21,6 +22,7 @@ from .memory import MemoryManager
 class Squid:
     def __init__(self, personality: Personality = None, tank_size=(900, 500), brain: NeuralBrain = None):
         self.personality = Personality.from_value(personality) if personality else random.choice(list(Personality))
+        self.uuid = str(_uuid.uuid4())
         self.tank_size = tank_size
         self.brain = brain or NeuralBrain(self.personality)
         self.memory = MemoryManager()
@@ -213,6 +215,10 @@ class Squid:
         weights["playing"] = brain_state.get("satisfaction", 50) * brain_state.get("curiosity", 50) / 50.0
         weights["sleeping"] = sleepiness * math.pow(1.7, sleepiness / 25.0) * 0.5
 
+        # Snapshot the base scores before memory/personality modifiers so the
+        # Decisions tab can show how much those influences shifted things.
+        base_weights = dict(weights)
+
         # Memory influence (ported from DecisionEngine): recent lived experience
         # tilts the odds. Positive food memories make eating more attractive,
         # decoration memories invite exploring/comfort, distress makes the squid
@@ -264,6 +270,7 @@ class Squid:
         confidence = 1.0 if len(ordered) < 2 or ordered[0] == 0 else (ordered[0] - ordered[1]) / ordered[0]
         self.last_decision = {
             "weights": dict(weights),
+            "base_weights": base_weights,
             "chosen": decision,
             "confidence": confidence,
             "memory_mod": memory_mod,
@@ -346,6 +353,7 @@ class Squid:
     def to_dict(self) -> dict:
         return {
             "personality": self.personality.value,
+            "uuid": self.uuid,
             "stats": {name: getattr(self, name) for name in self.CORE_STATS},
             "x": self.x, "y": self.y, "direction": self.direction,
             "is_sleeping": self.is_sleeping, "is_sick": self.is_sick,
@@ -359,6 +367,8 @@ class Squid:
     def from_dict(cls, data: dict, tank_size=(900, 500)) -> "Squid":
         brain = NeuralBrain.from_dict(data["brain"]) if "brain" in data else None
         squid = cls(Personality.from_value(data.get("personality")), tank_size, brain)
+        if data.get("uuid"):
+            squid.uuid = data["uuid"]
         if "memory" in data:
             squid.memory = MemoryManager.from_dict(data["memory"])
         for name, val in data.get("stats", {}).items():

@@ -33,6 +33,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.core.window import Window
+from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp, sp
 
 from ..engine import Simulation, Squid, Personality
@@ -40,6 +41,7 @@ from .tankview import TankView
 from .brain_screen import BrainScreen
 from .stats import StatsPanel
 from .decorations import DecorationLayer, open_decoration_palette
+from .menu import open_menu
 
 TANK_SIZE = (900, 500)
 AUTOSAVE_EVERY = 20.0  # seconds
@@ -57,12 +59,22 @@ class DosidicusApp(App):
 
         root = BoxLayout(orientation="vertical", spacing=2, padding=2)
 
-        # --- Header ---
+        # --- Header: hamburger menu + status line ---
+        topbar = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(52))
+        self.menu_btn = Button(size_hint_x=None, width=dp(52), background_normal="",
+                               background_color=(0.2, 0.22, 0.3, 1))
+        self.menu_btn.bind(on_release=lambda *_: open_menu(self))
+        with self.menu_btn.canvas.after:
+            Color(0.9, 0.92, 0.96, 1)
+            self._burger = [Rectangle(), Rectangle(), Rectangle()]
+        self.menu_btn.bind(pos=self._draw_burger, size=self._draw_burger)
+        topbar.add_widget(self.menu_btn)
         self.header = Label(
-            text=self._header_text(), markup=True, size_hint_y=None, height=dp(52),
+            text=self._header_text(), markup=True, size_hint_x=1,
             halign="center", valign="middle", font_size=sp(16))
         self.header.bind(size=lambda *a: setattr(self.header, "text_size", self.header.size))
-        root.add_widget(self.header)
+        topbar.add_widget(self.header)
+        root.add_widget(topbar)
 
         # --- Main viewport (tank + decorations + brain, one "view" shown) ---
         self.viewport = FloatLayout(size_hint_y=1)
@@ -131,6 +143,35 @@ class DosidicusApp(App):
             self.sim.save(self.save_path)
         except Exception as e:
             print(f"[Dosidicus] Save failed: {e}")
+
+    def save_now(self):
+        self._save()
+
+    def _draw_burger(self, *a):
+        b = self.menu_btn
+        bw, bh, gap = dp(24), dp(3), dp(7)
+        for i, rect in enumerate(self._burger):
+            rect.size = (bw, bh)
+            rect.pos = (b.center_x - bw / 2, b.center_y + gap - i * gap - bh / 2)
+
+    # ------------------------------------------------------- swap the squid
+    def set_simulation(self, sim):
+        """Point every view at a new Simulation (import / new game)."""
+        self.sim = sim
+        sim.tank_size = TANK_SIZE
+        sim.squid.tank_size = TANK_SIZE
+        self.tank.set_simulation(sim)
+        self.deco_layer.set_simulation(sim)
+        self.brain.set_simulation(sim)
+        self.stats.set_squid(sim.squid)
+        if self.showing_brain:
+            self._toggle_view()  # drop back to the tank to see the new squid
+        self.tank.redraw()
+
+    def new_game(self):
+        self.set_simulation(Simulation(tank_size=TANK_SIZE, squid=Squid(tank_size=TANK_SIZE)))
+        self._flash("[color=b39ddb]A new squid has hatched![/color]", seconds=3.0)
+        self.save_now()
 
     # --------------------------------------------------------------- header
     def _header_text(self):
