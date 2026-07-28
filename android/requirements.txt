@@ -1,0 +1,6 @@
+# Desktop development / testing requirements for Dosidicus Mobile.
+# (On Android these are provided by buildozer.spec's `requirements` line.)
+kivy>=2.3.1
+numpy>=1.21
+pillow>=9.0
+plyer>=2.1
