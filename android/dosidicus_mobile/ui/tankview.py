@@ -9,7 +9,7 @@ import os
 import time
 
 from kivy.uix.widget import Widget
-from kivy.graphics import Color, Rectangle
+from kivy.graphics import Color, Rectangle, Ellipse
 from kivy.core.image import Image as CoreImage
 from kivy.metrics import dp
 
@@ -29,6 +29,53 @@ def _load(name):
     return None
 
 
+def _load_egg_frame(rel):
+    """Egg anim frames are black-on-white JPGs; key out the white to alpha and
+    crop to the egg so it sits nicely on the water."""
+    path = asset(rel)
+    if not os.path.exists(path):
+        return None
+    try:
+        import numpy as np
+        from PIL import Image as PILImage
+        from kivy.graphics.texture import Texture
+        arr = np.array(PILImage.open(path).convert("RGBA"))
+        near_white = arr[:, :, :3].min(axis=2) > 235
+        arr[near_white, 3] = 0
+        ys, xs = np.where(arr[:, :, 3] > 0)
+        if len(xs):
+            arr = arr[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+        out = PILImage.fromarray(arr)
+        tex = Texture.create(size=out.size, colorfmt="rgba")
+        tex.blit_buffer(out.tobytes(), colorfmt="rgba", bufferfmt="ubyte")
+        tex.flip_vertical()
+        return tex
+    except Exception:
+        return None
+
+
+def _load_inverted(name):
+    """Load an icon with its RGB inverted (black line-art -> white) so it's
+    visible against the dark water. Alpha is preserved."""
+    path = asset(name)
+    if not os.path.exists(path):
+        return None
+    try:
+        from PIL import Image as PILImage, ImageOps
+        from kivy.graphics.texture import Texture
+        im = PILImage.open(path).convert("RGBA")
+        r, g, b, a = im.split()
+        inv = ImageOps.invert(PILImage.merge("RGB", (r, g, b)))
+        r2, g2, b2 = inv.split()
+        out = PILImage.merge("RGBA", (r2, g2, b2, a))
+        tex = Texture.create(size=out.size, colorfmt="rgba")
+        tex.blit_buffer(out.tobytes(), colorfmt="rgba", bufferfmt="ubyte")
+        tex.flip_vertical()
+        return tex
+    except Exception:
+        return _load(name)
+
+
 class TankView(Widget):
     def __init__(self, simulation=None, on_drop_food=None, **kwargs):
         super().__init__(**kwargs)
@@ -42,11 +89,16 @@ class TankView(Widget):
             "cheese": _load("cheese.png"),
             "food": _load("food.png"),
             "poop": _load("poop1.png"),
-            "sick": _load("sick.png"),
-            "startled": _load("startled.png"),
-            "curious": _load("curious.png"),
+            # Mental-state icons are black line-art; invert to white so they
+            # read against the dark water.
+            "sick": _load_inverted("sick.png"),
+            "startled": _load_inverted("startled.png"),
+            "curious": _load_inverted("curious.png"),
             "ink": _load("inkcloud.png"),
         }
+        self._egg_frames = [f for f in
+                            (_load_egg_frame(f"egg/anim0{i}.jpg") for i in range(1, 7))
+                            if f is not None] or [_load("egg.png")]
         self.bind(pos=lambda *a: self.redraw(), size=lambda *a: self.redraw())
 
     def set_simulation(self, sim):
@@ -94,6 +146,21 @@ class TankView(Widget):
             # Sandy floor.
             Color(0.55, 0.47, 0.30, 1)
             Rectangle(pos=self.pos, size=(self.width, self.height * 0.06))
+
+            # Hatching: show the egg animation (one frame/second) on a lit
+            # backdrop, and skip drawing the squid until it emerges.
+            if getattr(sim, "hatching", False) and self._egg_frames:
+                idx = min(len(self._egg_frames) - 1, int(getattr(sim, "hatch_t", 0)))
+                tex = self._egg_frames[idx]
+                eh = self.height * 0.42
+                ew = eh * (tex.width / tex.height) if tex.height else eh * 0.75
+                cx = self.x + self.width * 0.5
+                cy = self.y + self.height * 0.52
+                Color(0.94, 0.95, 0.90, 0.9)   # soft lit backdrop for contrast
+                Ellipse(pos=(cx - ew * 0.7, cy - eh * 0.62), size=(ew * 1.4, eh * 1.24))
+                Color(1, 1, 1, 1)
+                Rectangle(texture=tex, pos=(cx - ew / 2, cy - eh / 2), size=(ew, eh))
+                return
 
             # Sizes are proportional to the tank height (with DPI floors) so the
             # squid and food read at a comfortable size on any screen density.

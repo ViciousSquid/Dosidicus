@@ -127,15 +127,19 @@ class DosidicusApp(App):
 
         Clock.schedule_interval(self.tick, 1.0 / 30.0)
 
-        # Startup splash (title + project URL) over the game, auto-dismissed.
-        # On first launch, offer the tutorial once the splash has cleared.
-        def _after_splash():
-            if getattr(self, "_is_first_launch", False):
-                Clock.schedule_once(lambda dt: prompt_tutorial(self), 0.3)
+        # First launch (no save): begin as an egg and offer the tutorial once
+        # it hatches (handled in tick()).
+        self._pending_tutorial = False
+        self._was_hatching = False
+        if getattr(self, "_is_first_launch", False):
+            self.sim.start_hatching()
+            self._pending_tutorial = True
+            self._was_hatching = True
 
+        # Startup splash (title + project URL) over the game, auto-dismissed.
         container = FloatLayout()
         container.add_widget(root)
-        self._splash = Splash(on_done=_after_splash)
+        self._splash = Splash()
         container.add_widget(self._splash)
         Clock.schedule_once(lambda dt: self._splash.dismiss(), 2.6)
         return container
@@ -186,9 +190,10 @@ class DosidicusApp(App):
 
     def new_game(self):
         self.set_simulation(Simulation(tank_size=TANK_SIZE, squid=Squid(tank_size=TANK_SIZE)))
+        self.sim.start_hatching()            # a new game begins as an egg
+        self._pending_tutorial = True         # offer the tutorial once it hatches
+        self._was_hatching = True
         self.save_now()
-        # Prompt the caretaker to run the guided tutorial for the new squid.
-        Clock.schedule_once(lambda dt: prompt_tutorial(self), 0.3)
 
     # --------------------------------------------------------------- header
     def _header_text(self):
@@ -248,6 +253,15 @@ class DosidicusApp(App):
     def tick(self, dt):
         dt = min(dt, 0.1)  # clamp after backgrounding so needs don't jump
         status = self.sim.update(dt)
+
+        # Egg just hatched: celebrate and (first time) offer the tutorial.
+        if self._was_hatching and not self.sim.hatching:
+            self._was_hatching = False
+            self._flash("[color=b39ddb]Your squid has hatched![/color]", seconds=3.0)
+            if self._pending_tutorial:
+                self._pending_tutorial = False
+                Clock.schedule_once(lambda dt: prompt_tutorial(self), 0.4)
+
         if self.sim.newborn_neuron:
             kind = self.sim.newborn_neuron.rsplit("_", 1)[0]
             self._flash(f"[b]Neurogenesis![/b] grew a '{kind}' neuron")

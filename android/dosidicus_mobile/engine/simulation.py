@@ -45,6 +45,11 @@ class Simulation:
         self._near_plants = set()
         self.ink_clouds = []           # [{x, y, t (sim_time), ttl}]
         self._startle_cooldown = 0.0
+        # Egg hatching: a new game begins as an egg that plays its frames
+        # (1/second) before the squid emerges.
+        self.hatching = False
+        self.hatch_t = 0.0
+        self.hatch_frames = 6          # anim01..anim06, one per second
 
     # ------------------------------------------------------------- world API
     def food_visible(self):
@@ -267,11 +272,25 @@ class Simulation:
         return bool(eaten)
 
     # ---------------------------------------------------------------- update
+    def start_hatching(self):
+        self.hatching = True
+        self.hatch_t = 0.0
+        self.last_status = "an egg... something stirs inside"
+
     def update(self, dt: float):
         """Advance the whole simulation by ``dt`` seconds."""
         self.newborn_neuron = None
         self.squid._last_dt = dt
         squid = self.squid
+
+        # While hatching, freeze the squid and just advance the egg animation
+        # (one frame per second) until all frames have played.
+        if self.hatching:
+            self.hatch_t += dt
+            if self.hatch_t >= self.hatch_frames:
+                self.hatching = False
+                self.last_status = "your squid has hatched!"
+            return self.last_status
 
         # 1) Needs drift.
         squid.update_needs(dt)
