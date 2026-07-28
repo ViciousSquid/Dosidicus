@@ -87,7 +87,7 @@ class TankView(Widget):
             # The squid sprite is 253x147, so preserve that aspect (no squish).
             squid_w = max(dp(80), self.height * 0.26) * 0.8   # 20% smaller
             squid_h = squid_w / SQUID_ASPECT
-            food_sz = max(dp(30), self.height * 0.08)
+            food_sz = max(dp(22), self.height * 0.06)          # 25% smaller
             poop_sz = max(dp(22), self.height * 0.055)
             icon_sz = squid_h * 0.55
 
@@ -144,3 +144,13 @@ class TankView(Widget):
                 Rectangle(texture=self._tex["love"],
                           pos=(sx - icon_sz / 2, sy + squid_h / 2 - icon_sz * 0.2),
                           size=(icon_sz, icon_sz))
+
+            # Cleaning sweep: a thick bar travelling right->left over the tank.
+            sweep_x = getattr(sim, "sweep_x", None)
+            if sweep_x is not None:
+                lx, _ = self._map(sweep_x, 0)
+                bw = dp(14)
+                Color(0.6, 0.9, 1.0, 0.35)
+                Rectangle(pos=(lx, self.y), size=(self.width - (lx - self.x), self.height))
+                Color(0.75, 0.95, 1.0, 0.9)
+                Rectangle(pos=(lx - bw / 2, self.y), size=(bw, self.height))

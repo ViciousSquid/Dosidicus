@@ -38,6 +38,7 @@ class Simulation:
         self._prev_can_see_food = False
         self._was_anxious = False
         self._rock_velocities = {}     # deco_id -> [vx, vy] for thrown rocks
+        self.sweep_x = None            # x of the cleaning sweep bar (None = idle)
 
     # ------------------------------------------------------------- world API
     def food_visible(self):
@@ -102,21 +103,24 @@ class Simulation:
         squid = self.squid
         now = squid.brain.sim_time
 
-        # Fly any thrown rocks: gravity pulls them down to the sandy floor.
+        # Fly any thrown rocks: gravity pulls them down to the sandy floor. A
+        # rock thrown hard enough can leave the play area, and is then deleted.
         floor = self.tank_size[1] - 40
+        w = self.tank_size[0]
+        margin = 70
         for rid, vel in list(self._rock_velocities.items()):
             rock = self._deco_by_id(rid)
             if rock is None:
                 self._rock_velocities.pop(rid, None)
                 continue
-            vel[1] += 500.0 * dt                       # gravity (y grows downward)
+            vel[1] += 520.0 * dt                       # gravity (y grows downward)
             rock["x"] += vel[0] * dt
             rock["y"] += vel[1] * dt
-            vel[0] *= (1.0 - 1.2 * dt)                 # air/water drag on x
-            w = self.tank_size[0]
-            if rock["x"] < 20 or rock["x"] > w - 20:   # bounce off the walls
-                rock["x"] = max(20, min(w - 20, rock["x"]))
-                vel[0] = -vel[0] * 0.5
+            vel[0] *= (1.0 - 0.4 * dt)                 # light drag on x
+            if rock["x"] < -margin or rock["x"] > w + margin or rock["y"] < -margin:
+                self.remove_decoration(rock["id"])     # left the tank -> gone
+                self._rock_velocities.pop(rid, None)
+                continue
             if rock["y"] >= floor:                     # landed
                 rock["y"] = floor
                 self._rock_velocities.pop(rid, None)
@@ -135,7 +139,11 @@ class Simulation:
             rock["y"] = squid.y - 26
             if now >= squid._carry_until:
                 direction = random.choice([-1.0, 1.0])
-                self._rock_velocities[rock["id"]] = [direction * 260.0, -140.0]
+                # Variable strength: gentle lobs stay in the tank, hard throws
+                # can sail out of the play area (and get cleaned up).
+                vx = direction * random.uniform(220.0, 560.0)
+                vy = -random.uniform(120.0, 340.0)
+                self._rock_velocities[rock["id"]] = [vx, vy]
                 squid.carrying_rock = False
                 squid.carried_rock_id = None
                 squid.satisfaction = min(100.0, squid.satisfaction + 18.0)
@@ -252,6 +260,7 @@ class Simulation:
 
         # 5) World interactions.
         self._update_rock_play(dt)
+        self._update_sweep(dt)
         self._decoration_effects(dt)
         self._settle_food(dt)
         if self._try_eat():
@@ -269,8 +278,24 @@ class Simulation:
         return self.last_status
 
     def clean_tank(self):
-        self.poop_items.clear()
+        # Start a right-to-left sweep that removes food and poop as it passes
+        # (mirrors the desktop cleaning line). The stat boost applies now.
+        if self.sweep_x is None:
+            self.sweep_x = float(self.tank_size[0])
         return self.squid.clean()
+
+    def _update_sweep(self, dt):
+        if self.sweep_x is None:
+            return
+        self.sweep_x -= (self.tank_size[0] / 1.2) * dt   # ~1.2s to cross the tank
+        x = self.sweep_x
+        # Everything the bar has passed (to its right) is swept away.
+        self.food_items = [f for f in self.food_items if f["x"] < x]
+        self.poop_items = [p for p in self.poop_items if p["x"] < x]
+        if self.sweep_x <= 0:
+            self.sweep_x = None
+            self.food_items = []
+            self.poop_items = []
 
     # ---------------------------------------------------------- persistence
     def to_dict(self) -> dict:

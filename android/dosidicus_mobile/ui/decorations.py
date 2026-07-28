@@ -101,7 +101,11 @@ class DecorationLayer(FloatLayout):
         self.bind(size=lambda *_: self.rebuild(), pos=lambda *_: self.rebuild())
 
     # base on-screen height of a decoration at scale 1.0 (responsive, DPI-safe)
-    def _base_h(self):
+    def _base_h(self, category=None):
+        if category == "rock":
+            # Rocks default to ~50% of the squid's size (it picks them up).
+            squid_w = max(dp(80), self.height * 0.26) * 0.8
+            return max(dp(28), 0.5 * squid_w)
         return max(dp(56), self.height * 0.18)
 
     # ---- coordinate mapping between tank space and this widget ----
@@ -116,7 +120,7 @@ class DecorationLayer(FloatLayout):
                 (1.0 - (sy - self.y) / self.height) * th)
 
     def _place(self, scatter, deco):
-        base_h = self._base_h()
+        base_h = self._base_h(deco.get("category"))
         aspect = _aspect(deco["type"])
         scatter.size = (base_h * aspect, base_h)
         scatter.scale = deco.get("scale", 1.0)
@@ -148,7 +152,15 @@ class DecorationLayer(FloatLayout):
 
     def sync_physics(self):
         """Reposition scatters the engine is moving (a carried or thrown rock),
-        so programmatic motion shows without the user touching them."""
+        so programmatic motion shows without the user touching them, and drop
+        scatters whose decoration the engine deleted (e.g. a rock thrown out of
+        the tank)."""
+        live_ids = {d["id"] for d in self.sim.decorations}
+        for did, sc in list(self._scatters.items()):
+            if did not in live_ids:
+                self.remove_widget(sc)
+                self._scatters.pop(did, None)
+
         ids = set(self.sim._rock_velocities.keys())
         if self.sim.squid.carried_rock_id is not None:
             ids.add(self.sim.squid.carried_rock_id)
