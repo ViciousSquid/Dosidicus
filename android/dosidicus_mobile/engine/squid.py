@@ -46,6 +46,7 @@ class Squid:
         self.is_sick = False
         self.is_eating = False
         self.is_dead = False       # set when the squid starves (game over)
+        self.color_tint = None     # (r,g,b) floats 0-1, or None for natural colour
         self.status = "just hatched"
         self.age_seconds = 0.0
         self.last_decision = {}  # trace of the most recent decision (for the UI)
@@ -389,6 +390,10 @@ class Squid:
             "x": self.x, "y": self.y, "direction": self.direction,
             "is_sleeping": self.is_sleeping, "is_sick": self.is_sick,
             "is_dead": self.is_dead,
+            "color_tint": list(self.color_tint) if self.color_tint else None,
+            # desktop compatibility: it stores tint_color as 0-255 ints
+            "tint_color": ([int(c * 255) for c in self.color_tint]
+                           if self.color_tint else None),
             "status": self.status, "age_seconds": self.age_seconds,
             "carrying_rock": self.carrying_rock, "carried_rock_id": self.carried_rock_id,
             "brain": self.brain.to_dict(),
@@ -411,6 +416,10 @@ class Squid:
         squid.is_sleeping = data.get("is_sleeping", False)
         squid.is_sick = data.get("is_sick", False)
         squid.is_dead = data.get("is_dead", False)
+        if data.get("color_tint"):
+            squid.color_tint = tuple(data["color_tint"])
+        elif data.get("tint_color"):   # desktop archive (0-255 ints)
+            squid.color_tint = tuple(c / 255.0 for c in data["tint_color"])
         squid.carrying_rock = data.get("carrying_rock", False)
         squid.carried_rock_id = data.get("carried_rock_id")
         squid.status = data.get("status", "resurfacing")

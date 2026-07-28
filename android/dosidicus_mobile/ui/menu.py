@@ -70,19 +70,51 @@ def _confirm_new_game(app):
 
 # --------------------------------------------------------------- export
 def _export(app):
+    name = f"squid-{app.sim.squid.personality.value}-{time.strftime('%Y%m%d-%H%M%S')}.zip"
+    # Build the archive to a private temp file first, then publish it somewhere
+    # the user can actually reach (the Downloads folder) and offer to share it.
+    tmp = os.path.join(app.user_data_dir, name)
     try:
-        out_dir = sharing.export_dir(app)
-        name = f"squid-{app.sim.squid.personality.value}-{time.strftime('%Y%m%d-%H%M%S')}.zip"
-        path = os.path.join(out_dir, name)
-        export_squid(app.sim, path)
+        export_squid(app.sim, tmp)
     except Exception as e:
         _message("Export failed", f"[color=ff8888]{e}[/color]")
         return
-    shared = sharing.share_file(path, title="Share your squid")
-    if not shared:
-        _message("Squid exported",
-                 f"Saved to:\n[b]{path}[/b]\n\nOpen your Files app to share this "
-                 f".zip, or import it on another device.")
+
+    location, uri, fallback = None, None, None
+    try:
+        location, uri = sharing.save_to_downloads(tmp, name)
+        if sharing.is_android():
+            try:
+                os.remove(tmp)  # the Downloads copy is the keeper
+            except OSError:
+                pass
+    except Exception as e:
+        # Couldn't reach Downloads — keep the private copy and report where.
+        print(f"[Dosidicus] save_to_downloads failed: {e}")
+        fallback = tmp
+
+    _export_result(app, name, location, uri, fallback)
+
+
+def _export_result(app, name, location, uri, fallback):
+    box = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(12))
+    if location:
+        msg = (f"[b]{name}[/b]\n\nSaved to [b]{location}[/b].\n\n"
+               "You can open it from your Files app, back it up, or share it to "
+               "another device — tap Share below.")
+    else:
+        msg = (f"[b]{name}[/b]\n\nSaved to:\n[b]{fallback}[/b]")
+    lbl = Label(text=msg, markup=True, halign="left", valign="top", font_size=sp(15))
+    lbl.bind(size=lambda *_: setattr(lbl, "text_size", lbl.size))
+    box.add_widget(lbl)
+    p = Popup(title="Squid exported", content=box, size_hint=(0.9, 0.55), title_size=sp(17))
+    row = BoxLayout(size_hint_y=None, height=dp(56), spacing=dp(8))
+    if uri is not None:
+        row.add_widget(_btn("Share", lambda *_: sharing.share_uri(uri, "Share your squid"),
+                            color=(0.13, 0.42, 0.18, 1)))
+    row.add_widget(_btn("OK", lambda *_: p.dismiss(), color=(0.3, 0.4, 0.5, 1)))
+    box.add_widget(row)
+    p.open()
 
 
 # --------------------------------------------------------------- import

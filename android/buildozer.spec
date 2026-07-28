@@ -24,8 +24,11 @@ fullscreen = 0
 icon.filename = %(source.dir)s/assets/icon.png
 presplash.filename = %(source.dir)s/assets/icon.png
 
-# No special permissions needed: saves live in the app's private data dir.
-android.permissions =
+# Saves live in the app's private data dir. WRITE_EXTERNAL_STORAGE is only used
+# on legacy Android (API 24-28) to drop exported squids into the public
+# Downloads folder; on API 29+ that goes through MediaStore and needs no
+# permission (the system ignores this one there).
+android.permissions = WRITE_EXTERNAL_STORAGE
 
 # API / NDK levels (defaults known to work with kivy 2.3.1 + p4a).
 android.api = 33

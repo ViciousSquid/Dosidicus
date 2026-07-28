@@ -11,6 +11,7 @@ import time
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle, Ellipse
 from kivy.core.image import Image as CoreImage
+from kivy.core.text import Label as CoreLabel
 from kivy.metrics import dp
 
 from .assets import asset
@@ -99,7 +100,18 @@ class TankView(Widget):
         self._egg_frames = [f for f in
                             (_load_egg_frame(f"egg/anim0{i}.jpg") for i in range(1, 7))
                             if f is not None] or [_load("egg.png")]
+        self._zzz_tex = self._text_texture("Zzz")
         self.bind(pos=lambda *a: self.redraw(), size=lambda *a: self.redraw())
+
+    @staticmethod
+    def _text_texture(text):
+        """Render bold white text to a texture (used for the sleeping 'Zzz')."""
+        try:
+            lbl = CoreLabel(text=text, font_size=48, bold=True, color=(1, 1, 1, 1))
+            lbl.refresh()
+            return lbl.texture
+        except Exception:
+            return None
 
     def set_simulation(self, sim):
         self.sim = sim
@@ -196,30 +208,45 @@ class TankView(Widget):
                 tex = self._tex["sleep"][frame]
             else:
                 tex = self._tex[squid.direction][frame]
+            sq_pos = (sx - squid_w / 2, sy - squid_h / 2)
             Color(1, 1, 1, 1)
             if tex:
-                Rectangle(texture=tex, pos=(sx - squid_w / 2, sy - squid_h / 2),
-                          size=(squid_w, squid_h))
+                Rectangle(texture=tex, pos=sq_pos, size=(squid_w, squid_h))
+                # Colour tint: overlay a translucent wash of the chosen colour,
+                # masked to the squid's shape by re-drawing its own texture
+                # (like the desktop's SourceAtop tint). Texture detail shows
+                # through the ~47% alpha.
+                tint = getattr(squid, "color_tint", None)
+                if tint:
+                    Color(tint[0], tint[1], tint[2], 0.47)
+                    Rectangle(texture=tex, pos=sq_pos, size=(squid_w, squid_h))
+                    Color(1, 1, 1, 1)
             else:
                 Color(0.9, 0.5, 0.8, 1)
-                Rectangle(pos=(sx - squid_w / 2, sy - squid_h / 2),
-                          size=(squid_w, squid_h))
+                Rectangle(pos=sq_pos, size=(squid_w, squid_h))
 
-            # Mental-state icon above the squid, mirroring the desktop set:
-            # startled "!" (takes priority — a fright is salient), then sick
-            # skull, then curious "?" while it's investigating its world.
-            overlay = None
-            if getattr(squid, "is_startled", False) and self._tex["startled"]:
-                overlay = self._tex["startled"]
-            elif squid.is_sick and self._tex["sick"]:
-                overlay = self._tex["sick"]
-            elif self._is_curious(squid) and self._tex["curious"]:
-                overlay = self._tex["curious"]
-            if overlay:
+            # Above the head: while asleep show a "Zzz"; otherwise a mental-state
+            # icon mirroring the desktop set — startled "!" (takes priority — a
+            # fright is salient), then sick skull, then curious "?".
+            icon_pos = (sx - icon_sz / 2, sy + squid_h / 2 - icon_sz * 0.2)
+            if squid.is_sleeping and self._zzz_tex:
+                zt = self._zzz_tex
+                zw = icon_sz * 1.3
+                zh = zw * (zt.height / zt.width) if zt.width else zw * 0.6
                 Color(1, 1, 1, 1)
-                Rectangle(texture=overlay,
-                          pos=(sx - icon_sz / 2, sy + squid_h / 2 - icon_sz * 0.2),
-                          size=(icon_sz, icon_sz))
+                Rectangle(texture=zt, pos=(sx - zw / 2, sy + squid_h / 2 - zh * 0.2),
+                          size=(zw, zh))
+            else:
+                overlay = None
+                if getattr(squid, "is_startled", False) and self._tex["startled"]:
+                    overlay = self._tex["startled"]
+                elif squid.is_sick and self._tex["sick"]:
+                    overlay = self._tex["sick"]
+                elif self._is_curious(squid) and self._tex["curious"]:
+                    overlay = self._tex["curious"]
+                if overlay:
+                    Color(1, 1, 1, 1)
+                    Rectangle(texture=overlay, pos=icon_pos, size=(icon_sz, icon_sz))
 
             # Ink clouds (drawn over the squid, fading out with age).
             now = sim.squid.brain.sim_time

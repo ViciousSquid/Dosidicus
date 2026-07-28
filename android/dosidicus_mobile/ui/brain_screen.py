@@ -25,8 +25,10 @@ import time
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
+from kivy.uix.widget import Widget
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.scatterlayout import ScatterLayout
+from kivy.graphics import Color, Rectangle
 from kivy.graphics.transformation import Matrix
 from kivy.core.window import Window
 from kivy.metrics import dp, sp
@@ -44,6 +46,19 @@ TABS = ["Network", "Learning", "Memory", "Decisions", "Personality", "Stats", "A
 
 ACCENT = (0.5, 0.3, 0.6, 1)
 ACCENT_OFF = (0.22, 0.18, 0.28, 1)
+
+# Squid tint palette cycled by the About-page "Change colour" button. None is
+# the squid's natural colour; the rest are gentle washes (r,g,b floats 0-1).
+SQUID_TINTS = [
+    None,
+    (1.0, 0.45, 0.45),   # coral
+    (0.45, 0.7, 1.0),    # blue
+    (0.55, 1.0, 0.6),    # green
+    (1.0, 0.85, 0.35),   # gold
+    (0.8, 0.55, 1.0),    # violet
+    (1.0, 0.6, 0.9),     # pink
+    (0.4, 0.9, 0.9),     # teal
+]
 
 
 class _ScrollText(ScrollView):
@@ -87,6 +102,8 @@ class BrainScreen(BoxLayout):
         self.memory_cards = MemoryCards(self.sim)
         self.learning_cards = LearningCards(self.sim)
         self.decisions_panel = DecisionsPanel(self.sim)
+        self._tint_index = 0
+        self.about_panel = self._build_about_panel()
 
         # Responsive tab strip: a horizontal strip on tablets, a vertical
         # column on phones (where a top strip would be too cramped).
@@ -126,6 +143,9 @@ class BrainScreen(BoxLayout):
         self.learning_cards.sim = sim
         self.decisions_panel.set_simulation(sim)
         self.network.set_brain(sim.squid.brain)
+        tint = getattr(sim.squid, "color_tint", None)
+        self._tint_index = (SQUID_TINTS.index(tint)
+                            if tint in SQUID_TINTS else 0)
         self.select(self.active)
 
     def _make_tab(self, name, horizontal):
@@ -138,6 +158,44 @@ class BrainScreen(BoxLayout):
         b.bind(on_release=lambda btn, n=name: self.select(n))
         self._tab_buttons[name] = b
         return b
+
+    # ---------------------------------------------------- About panel + tint
+    def _build_about_panel(self):
+        panel = BoxLayout(orientation="vertical")
+        bar = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(58),
+                        spacing=dp(8), padding=(dp(10), dp(6)))
+        btn = Button(text="Change colour", font_size=sp(16), bold=True,
+                     background_normal="", background_color=(0.5, 0.28, 0.72, 1))
+        btn.bind(on_release=lambda *_: self._change_colour())
+        bar.add_widget(btn)
+        # A swatch showing the current tint.
+        self._swatch = Widget(size_hint_x=None, width=dp(58))
+        with self._swatch.canvas:
+            self._swatch_color = Color(0.5, 0.5, 0.5, 1)
+            self._swatch_rect = Rectangle(pos=self._swatch.pos, size=self._swatch.size)
+        self._swatch.bind(
+            pos=lambda *_: setattr(self._swatch_rect, "pos", self._swatch.pos),
+            size=lambda *_: setattr(self._swatch_rect, "size", self._swatch.size))
+        bar.add_widget(self._swatch)
+        panel.add_widget(bar)
+        self.about_scroll = _ScrollText()
+        panel.add_widget(self.about_scroll)
+        return panel
+
+    def _sync_swatch(self):
+        tint = getattr(self.sim.squid, "color_tint", None)
+        r, g, b = tint if tint else (0.75, 0.75, 0.75)
+        self._swatch_color.rgba = (r, g, b, 1)
+
+    def _change_colour(self):
+        """Cycle the squid's tint (mirrors the desktop 'change colour')."""
+        self._tint_index = (self._tint_index + 1) % len(SQUID_TINTS)
+        self.sim.squid.color_tint = SQUID_TINTS[self._tint_index]
+        try:
+            self.sim.stats.times_colour_changed += 1
+        except AttributeError:
+            pass
+        self._sync_swatch()
 
     # ------------------------------------------------------------- tab switch
     def select(self, name):
@@ -158,6 +216,10 @@ class BrainScreen(BoxLayout):
         elif name == "Decisions":
             self.content.add_widget(self.decisions_panel)
             self.decisions_panel.refresh()
+        elif name == "About":
+            self._sync_swatch()
+            self.about_scroll.set_text(self._about_text())
+            self.content.add_widget(self.about_panel)
         else:
             self.content.add_widget(self.textpanel)
             self._refresh_text(force=True)
@@ -183,10 +245,12 @@ class BrainScreen(BoxLayout):
 
     def _refresh_text(self, force=False):
         self._last_text_refresh = time.time()
+        if self.active == "About":
+            self.about_scroll.set_text(self._about_text())
+            return
         builder = {
             "Personality": self._personality_text,
             "Stats": self._stats_text,
-            "About": self._about_text,
         }.get(self.active)
         if builder:
             self.textpanel.set_text(builder())
