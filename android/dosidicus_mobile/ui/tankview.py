@@ -43,8 +43,8 @@ class TankView(Widget):
             "food": _load("food.png"),
             "poop": _load("poop1.png"),
             "sick": _load("sick.png"),
-            "love": _load("love.png"),
             "startled": _load("startled.png"),
+            "curious": _load("curious.png"),
             "ink": _load("inkcloud.png"),
         }
         self.bind(pos=lambda *a: self.redraw(), size=lambda *a: self.redraw())
@@ -52,6 +52,17 @@ class TankView(Widget):
     def set_simulation(self, sim):
         self.sim = sim
         self.redraw()
+
+    @staticmethod
+    def _is_curious(squid):
+        """Curious mental state: actively investigating, and not asleep."""
+        if squid.is_sleeping:
+            return False
+        s = squid.status.lower()
+        if any(k in s for k in ("explor", "curious", "peek", "scout", "seeking",
+                                "going for", "eyeing", "investigat", "wander")):
+            return True
+        return squid.curiosity > 72
 
     def _map(self, tx, ty):
         """Map tank coords to widget coords (tank y grows downward)."""
@@ -135,14 +146,16 @@ class TankView(Widget):
                 Rectangle(pos=(sx - squid_w / 2, sy - squid_h / 2),
                           size=(squid_w, squid_h))
 
-            # Status overlays (sick > startled > playing).
+            # Mental-state icon above the squid, mirroring the desktop set:
+            # startled "!" (takes priority — a fright is salient), then sick
+            # skull, then curious "?" while it's investigating its world.
             overlay = None
-            if squid.is_sick and self._tex["sick"]:
-                overlay = self._tex["sick"]
-            elif getattr(squid, "is_startled", False) and self._tex["startled"]:
+            if getattr(squid, "is_startled", False) and self._tex["startled"]:
                 overlay = self._tex["startled"]
-            elif squid.status in ("playing happily", "frolicking") and self._tex["love"]:
-                overlay = self._tex["love"]
+            elif squid.is_sick and self._tex["sick"]:
+                overlay = self._tex["sick"]
+            elif self._is_curious(squid) and self._tex["curious"]:
+                overlay = self._tex["curious"]
             if overlay:
                 Color(1, 1, 1, 1)
                 Rectangle(texture=overlay,

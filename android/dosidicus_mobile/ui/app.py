@@ -43,6 +43,7 @@ from .stats import StatsPanel
 from .decorations import DecorationLayer, open_decoration_palette
 from .menu import open_menu
 from .tutorial import prompt_tutorial
+from .splash import Splash
 
 TANK_SIZE = (900, 500)
 AUTOSAVE_EVERY = 20.0  # seconds
@@ -125,10 +126,19 @@ class DosidicusApp(App):
         root.add_widget(bar)
 
         Clock.schedule_interval(self.tick, 1.0 / 30.0)
-        # First-ever launch (no save): offer the guided tutorial once laid out.
-        if getattr(self, "_is_first_launch", False):
-            Clock.schedule_once(lambda dt: prompt_tutorial(self), 0.8)
-        return root
+
+        # Startup splash (title + project URL) over the game, auto-dismissed.
+        # On first launch, offer the tutorial once the splash has cleared.
+        def _after_splash():
+            if getattr(self, "_is_first_launch", False):
+                Clock.schedule_once(lambda dt: prompt_tutorial(self), 0.3)
+
+        container = FloatLayout()
+        container.add_widget(root)
+        self._splash = Splash(on_done=_after_splash)
+        container.add_widget(self._splash)
+        Clock.schedule_once(lambda dt: self._splash.dismiss(), 2.6)
+        return container
 
     # ---------------------------------------------------------- persistence
     def _load_or_new(self):
