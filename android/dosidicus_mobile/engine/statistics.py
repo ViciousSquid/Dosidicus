@@ -69,6 +69,9 @@ class Statistics:
     def on_startle(self):
         self.startles_experienced += 1
 
+    def on_ink_cloud(self):
+        self.ink_clouds_created += 1
+
     def on_sickness(self):
         self.sickness_episodes += 1
 

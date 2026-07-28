@@ -37,13 +37,14 @@ class Simulation:
         self.last_status = self.squid.status
         self.newborn_neuron = None     # set for one tick when neurogenesis fires
         self._prev_can_see_food = False
-        self._was_anxious = False
         self._rock_velocities = {}     # deco_id -> [vx, vy] for thrown rocks
         self.sweep_x = None            # x of the cleaning sweep bar (None = idle)
         self.stats = Statistics()
         self._prev_pos = (self.squid.x, self.squid.y)
         self._was_sick = self.squid.is_sick
         self._near_plants = set()
+        self.ink_clouds = []           # [{x, y, t (sim_time), ttl}]
+        self._startle_cooldown = 0.0
 
     # ------------------------------------------------------------- world API
     def food_visible(self):
@@ -129,6 +130,9 @@ class Simulation:
             if rock["y"] >= floor:                     # landed
                 rock["y"] = floor
                 self._rock_velocities.pop(rid, None)
+            elif (self._startle_cooldown <= 0 and not squid.is_fleeing
+                  and math.hypot(squid.x - rock["x"], squid.y - rock["y"]) < 55):
+                self.startle("rock")           # a rock whizzed past — fright!
 
         if squid.is_sleeping:
             return
@@ -179,6 +183,54 @@ class Simulation:
         elif dist < 320:
             squid.move_towards(target["x"], target["y"])
             self.last_status = "going for a rock"
+
+    # --------------------------------------------------------- startle / ink
+    def startle(self, source="ambient"):
+        """Trigger a fright: flee, spike anxiety, ~25% release an ink cloud."""
+        squid = self.squid
+        squid.startle(source)
+        self.stats.on_startle()
+        self._startle_cooldown = 8.0
+        squid.remember("mental_state", "startled", "Startled!",
+                       {"anxiety": 30, "happiness": -8}, importance=2.0,
+                       related=["anxiety"])
+        if random.random() < 0.25:
+            self._create_ink_cloud()
+
+    def _create_ink_cloud(self):
+        squid = self.squid
+        self.ink_clouds.append({"x": squid.x, "y": squid.y,
+                                "t": squid.brain.sim_time, "ttl": 3.0})
+        self.stats.on_ink_cloud()
+        squid.remember("behaviour", "ink_cloud", "Startled — released an ink cloud!",
+                       None, importance=1.5)
+
+    def _update_startle(self, dt):
+        squid = self.squid
+        now = squid.brain.sim_time
+        if self._startle_cooldown > 0:
+            self._startle_cooldown -= dt
+
+        # End a flee once its timer runs out.
+        if squid.is_fleeing and now >= squid._startle_until:
+            squid.is_fleeing = False
+            squid.is_startled = False
+            squid.status = "recovering"
+        if squid.is_fleeing:
+            squid.flee_step()
+            return  # fleeing overrides normal movement
+
+        # Ambient chance of a fright, more likely when anxious (desktop rule).
+        if self._startle_cooldown <= 0 and not squid.is_sleeping:
+            rate = 0.02                       # per second base chance
+            if squid.anxiety > 70:
+                rate *= squid.anxiety / 50.0
+            if random.random() < rate * dt:
+                self.startle("ambient")
+
+    def _update_ink(self, dt):
+        now = self.squid.brain.sim_time
+        self.ink_clouds = [c for c in self.ink_clouds if now - c["t"] < c["ttl"]]
 
     def _decoration_effects(self, dt):
         """Being near decorations shapes mood: plants soothe, rocks intrigue."""
@@ -233,13 +285,6 @@ class Simulation:
         # Sustained distress feeds the stress trigger, weighted by how anxious.
         if squid.anxiety > 60:
             squid.brain.register_stress((squid.anxiety - 60) / 40.0 * dt)
-        # A spike into high anxiety is a memorable (negative) mental state.
-        if squid.anxiety > 85 and not self._was_anxious:
-            squid.remember("mental_state", "anxious", "Felt very anxious",
-                           {"anxiety": 20, "happiness": -10}, importance=2.0,
-                           related=["anxiety"])
-            self.stats.on_startle()
-        self._was_anxious = squid.anxiety > 85
         if squid.is_sick and not self._was_sick:
             self.stats.on_sickness()
         self._was_sick = squid.is_sick
@@ -276,6 +321,8 @@ class Simulation:
                     squid.move_towards(target["x"], target["y"])
 
         # 5) World interactions.
+        self._update_startle(dt)
+        self._update_ink(dt)
         self._update_rock_play(dt)
         self._update_sweep(dt)
         self._decoration_effects(dt)

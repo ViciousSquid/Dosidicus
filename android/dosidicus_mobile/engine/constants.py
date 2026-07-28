@@ -33,6 +33,7 @@ INPUT_SENSORS = {
     "is_sick": (150, 150),
     "is_sleeping": (250, 50),
     "is_eating": (150, 350),
+    "is_startled": (250, 150),
     "anxiety_stimulus": (50, 350),
 }
 
@@ -45,6 +46,7 @@ SENSOR_NEURONS = set(MANDATORY_SENSOR) | set(INPUT_SENSORS)
 # Neurons that read as on/off rather than a gradient.
 BINARY_NEURONS = {
     "can_see_food", "is_eating", "is_sleeping", "is_sick", "pursuing_food",
+    "is_startled",
 }
 
 # Default starting stat values for a freshly hatched squid.

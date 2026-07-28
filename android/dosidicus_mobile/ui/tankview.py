@@ -44,6 +44,8 @@ class TankView(Widget):
             "poop": _load("poop1.png"),
             "sick": _load("sick.png"),
             "love": _load("love.png"),
+            "startled": _load("startled.png"),
+            "ink": _load("inkcloud.png"),
         }
         self.bind(pos=lambda *a: self.redraw(), size=lambda *a: self.redraw())
 
@@ -133,17 +135,34 @@ class TankView(Widget):
                 Rectangle(pos=(sx - squid_w / 2, sy - squid_h / 2),
                           size=(squid_w, squid_h))
 
-            # Status overlays.
+            # Status overlays (sick > startled > playing).
+            overlay = None
             if squid.is_sick and self._tex["sick"]:
-                Color(1, 1, 1, 1)
-                Rectangle(texture=self._tex["sick"],
-                          pos=(sx - icon_sz / 2, sy + squid_h / 2 - icon_sz * 0.2),
-                          size=(icon_sz, icon_sz))
+                overlay = self._tex["sick"]
+            elif getattr(squid, "is_startled", False) and self._tex["startled"]:
+                overlay = self._tex["startled"]
             elif squid.status in ("playing happily", "frolicking") and self._tex["love"]:
+                overlay = self._tex["love"]
+            if overlay:
                 Color(1, 1, 1, 1)
-                Rectangle(texture=self._tex["love"],
+                Rectangle(texture=overlay,
                           pos=(sx - icon_sz / 2, sy + squid_h / 2 - icon_sz * 0.2),
                           size=(icon_sz, icon_sz))
+
+            # Ink clouds (drawn over the squid, fading out with age).
+            now = sim.squid.brain.sim_time
+            ink_sz = squid_w * 1.9
+            for c in sim.ink_clouds:
+                age = now - c["t"]
+                alpha = max(0.0, 1.0 - age / c.get("ttl", 3.0))
+                ix, iy = self._map(c["x"], c["y"])
+                if self._tex["ink"]:
+                    Color(1, 1, 1, alpha)
+                    Rectangle(texture=self._tex["ink"],
+                              pos=(ix - ink_sz / 2, iy - ink_sz / 2), size=(ink_sz, ink_sz))
+                else:
+                    Color(0.05, 0.05, 0.1, alpha * 0.8)
+                    Rectangle(pos=(ix - ink_sz / 2, iy - ink_sz / 2), size=(ink_sz, ink_sz))
 
             # Cleaning sweep: a thick bar travelling right->left over the tank.
             sweep_x = getattr(sim, "sweep_x", None)

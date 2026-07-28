@@ -56,6 +56,12 @@ class Squid:
         self._carry_until = 0.0
         self.wants_to_play = False
 
+        # Startle / flee (a fright response, optionally releasing an ink cloud).
+        self.is_startled = False
+        self.is_fleeing = False
+        self._startle_until = 0.0
+        self._flee_dir = (1.0, 0.0)
+
     # ----------------------------------------------------------------- stats
     CORE_STATS = ("hunger", "happiness", "cleanliness", "sleepiness",
                   "satisfaction", "anxiety", "curiosity")
@@ -118,6 +124,7 @@ class Squid:
         clamped["is_sick"] = 100.0 if self.is_sick else 0.0
         clamped["is_sleeping"] = 100.0 if self.is_sleeping else 0.0
         clamped["is_eating"] = 100.0 if self.is_eating else 0.0
+        clamped["is_startled"] = 100.0 if self.is_startled else 0.0
         clamped["pursuing_food"] = 100.0 if self.status.startswith(("approaching", "eyeing")) else 0.0
         clamped["anxiety_stimulus"] = min(100.0, self.anxiety)
         return clamped
@@ -183,6 +190,25 @@ class Squid:
         self.is_sleeping = not self.is_sleeping
         self.status = "going to sleep" if self.is_sleeping else "waking up"
         return self.status
+
+    def startle(self, source="ambient"):
+        """A fright: the squid bolts and its anxiety spikes. Ported from the
+        desktop startle_squid — a woken squid is startled awake."""
+        self.is_sleeping = False
+        self.is_startled = True
+        self.is_fleeing = True
+        self._startle_until = self.brain.sim_time + random.uniform(2.5, 4.0)
+        self.anxiety = min(100.0, self.anxiety + 30.0)
+        self.happiness = max(0.0, self.happiness - 8.0)
+        self.satisfaction = max(0.0, self.satisfaction - 6.0)
+        self._flee_dir = (random.uniform(-1, 1), random.uniform(-1, 1))
+        self.status = "hiding" if self.personality == Personality.TIMID else "startled!"
+        return self.status
+
+    def flee_step(self):
+        """Fast, erratic escape movement while fleeing."""
+        self._step(self._flee_dir[0], self._flee_dir[1], 2.4)
+        self.status = "fleeing!"
 
     def give_medicine(self):
         self.is_sick = False
