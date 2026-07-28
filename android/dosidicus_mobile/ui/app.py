@@ -199,6 +199,7 @@ class DosidicusApp(App):
             self.brain.refresh()
         else:
             self.tank.redraw()
+            self.deco_layer.sync_physics()  # move carried/thrown rocks
         self.stats.redraw()
         self.header.text = self._header_text()
 

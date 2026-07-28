@@ -47,6 +47,13 @@ class Squid:
         self.age_seconds = 0.0
         self.last_decision = {}  # trace of the most recent decision (for the UI)
 
+        # Rock play: the squid can pick up a rock decoration, carry it, then
+        # throw it (a form of play). Physics live in the Simulation.
+        self.carrying_rock = False
+        self.carried_rock_id = None
+        self._carry_until = 0.0
+        self.wants_to_play = False
+
     # ----------------------------------------------------------------- stats
     CORE_STATS = ("hunger", "happiness", "cleanliness", "sleepiness",
                   "satisfaction", "anxiety", "curiosity")
@@ -245,6 +252,12 @@ class Squid:
 
         decision = max(weights, key=weights.get) if any(weights.values()) else "exploring"
 
+        # While carrying a rock, stay in play mode so the squid follows through
+        # and throws it. Expose the play intent for the Simulation's rock physics.
+        if self.carrying_rock:
+            decision = "playing"
+        self.wants_to_play = (decision == "playing")
+
         # Store a trace for the Decisions tab: sorted candidate weights +
         # confidence (how decisively the winner beat the runner-up).
         ordered = sorted(weights.values(), reverse=True)
@@ -337,6 +350,7 @@ class Squid:
             "x": self.x, "y": self.y, "direction": self.direction,
             "is_sleeping": self.is_sleeping, "is_sick": self.is_sick,
             "status": self.status, "age_seconds": self.age_seconds,
+            "carrying_rock": self.carrying_rock, "carried_rock_id": self.carried_rock_id,
             "brain": self.brain.to_dict(),
             "memory": self.memory.to_dict(),
         }
@@ -354,6 +368,8 @@ class Squid:
         squid.direction = data.get("direction", "right")
         squid.is_sleeping = data.get("is_sleeping", False)
         squid.is_sick = data.get("is_sick", False)
+        squid.carrying_rock = data.get("carrying_rock", False)
+        squid.carried_rock_id = data.get("carried_rock_id")
         squid.status = data.get("status", "resurfacing")
         squid.age_seconds = data.get("age_seconds", 0.0)
         return squid

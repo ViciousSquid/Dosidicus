@@ -146,6 +146,18 @@ class DecorationLayer(FloatLayout):
         self._scatters.pop(scatter.deco["id"], None)
         self.remove_widget(scatter)
 
+    def sync_physics(self):
+        """Reposition scatters the engine is moving (a carried or thrown rock),
+        so programmatic motion shows without the user touching them."""
+        ids = set(self.sim._rock_velocities.keys())
+        if self.sim.squid.carried_rock_id is not None:
+            ids.add(self.sim.squid.carried_rock_id)
+        for did in ids:
+            sc = self._scatters.get(did)
+            deco = next((d for d in self.sim.decorations if d["id"] == did), None)
+            if sc is not None and deco is not None:
+                sc.center = self._to_screen(deco["x"], deco["y"])
+
     def sync(self, scatter):
         """Write a scatter's current centre + scale back to the sim record."""
         tx, ty = self._to_tank(*scatter.center)

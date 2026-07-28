@@ -15,6 +15,7 @@ import random
 import time
 
 from .squid import Squid
+from .personality import Personality
 
 
 class Simulation:
@@ -36,6 +37,7 @@ class Simulation:
         self.newborn_neuron = None     # set for one tick when neurogenesis fires
         self._prev_can_see_food = False
         self._was_anxious = False
+        self._rock_velocities = {}     # deco_id -> [vx, vy] for thrown rocks
 
     # ------------------------------------------------------------- world API
     def food_visible(self):
@@ -83,6 +85,86 @@ class Simulation:
 
     def remove_decoration(self, deco_id):
         self.decorations = [d for d in self.decorations if d["id"] != deco_id]
+
+    # --------------------------------------------------------- rock play
+    def _rock_decorations(self):
+        return [d for d in self.decorations if d.get("category") == "rock"]
+
+    def _deco_by_id(self, deco_id):
+        return next((d for d in self.decorations if d["id"] == deco_id), None)
+
+    def _update_rock_play(self, dt):
+        """The squid can approach a rock, pick it up, carry it, then throw it.
+
+        Ported from the desktop rock interaction: pick up within ~45px when not
+        sleeping, carry for a few seconds, then fling it — a rewarding form of
+        play (extra reward for GREEDY squids)."""
+        squid = self.squid
+        now = squid.brain.sim_time
+
+        # Fly any thrown rocks: gravity pulls them down to the sandy floor.
+        floor = self.tank_size[1] - 40
+        for rid, vel in list(self._rock_velocities.items()):
+            rock = self._deco_by_id(rid)
+            if rock is None:
+                self._rock_velocities.pop(rid, None)
+                continue
+            vel[1] += 500.0 * dt                       # gravity (y grows downward)
+            rock["x"] += vel[0] * dt
+            rock["y"] += vel[1] * dt
+            vel[0] *= (1.0 - 1.2 * dt)                 # air/water drag on x
+            w = self.tank_size[0]
+            if rock["x"] < 20 or rock["x"] > w - 20:   # bounce off the walls
+                rock["x"] = max(20, min(w - 20, rock["x"]))
+                vel[0] = -vel[0] * 0.5
+            if rock["y"] >= floor:                     # landed
+                rock["y"] = floor
+                self._rock_velocities.pop(rid, None)
+
+        if squid.is_sleeping:
+            return
+
+        # Carrying: the rock rides just above the squid until it's thrown.
+        if squid.carrying_rock:
+            rock = self._deco_by_id(squid.carried_rock_id)
+            if rock is None:
+                squid.carrying_rock = False
+                squid.carried_rock_id = None
+                return
+            rock["x"] = squid.x
+            rock["y"] = squid.y - 26
+            if now >= squid._carry_until:
+                direction = random.choice([-1.0, 1.0])
+                self._rock_velocities[rock["id"]] = [direction * 260.0, -140.0]
+                squid.carrying_rock = False
+                squid.carried_rock_id = None
+                squid.satisfaction = min(100.0, squid.satisfaction + 18.0)
+                squid.happiness = min(100.0, squid.happiness + 15.0)
+                squid.curiosity = min(100.0, squid.curiosity + 8.0)
+                if squid.personality == Personality.GREEDY:
+                    squid.satisfaction = min(100.0, squid.satisfaction + 6.0)
+                squid.brain.learn_from_playing()
+                squid.remember("play", "rock_throw", "Threw a rock",
+                               {"satisfaction": 18, "happiness": 15},
+                               importance=2.0, related=["satisfaction", "curiosity"])
+                self.last_status = "playfully tossing a rock"
+            return
+
+        # Not carrying: if the squid wants to play and a settled rock is around,
+        # go for it (ignore rocks still in flight so it doesn't re-grab its throw).
+        rocks = [r for r in self._rock_decorations() if r["id"] not in self._rock_velocities]
+        if not (squid.wants_to_play and rocks):
+            return
+        target = min(rocks, key=lambda r: squid._dist(r["x"], r["y"]))
+        dist = squid._dist(target["x"], target["y"])
+        if dist < 45:
+            squid.carrying_rock = True
+            squid.carried_rock_id = target["id"]
+            squid._carry_until = now + random.uniform(3.0, 7.0)
+            self.last_status = "picked up a rock!"
+        elif dist < 320:
+            squid.move_towards(target["x"], target["y"])
+            self.last_status = "going for a rock"
 
     def _decoration_effects(self, dt):
         """Being near decorations shapes mood: plants soothe, rocks intrigue."""
@@ -169,6 +251,7 @@ class Simulation:
                     squid.move_towards(target["x"], target["y"])
 
         # 5) World interactions.
+        self._update_rock_play(dt)
         self._decoration_effects(dt)
         self._settle_food(dt)
         if self._try_eat():
