@@ -45,6 +45,7 @@ class Squid:
         self.is_sleeping = False
         self.is_sick = False
         self.is_eating = False
+        self.is_dead = False       # set when the squid starves (game over)
         self.status = "just hatched"
         self.age_seconds = 0.0
         self.last_decision = {}  # trace of the most recent decision (for the UI)
@@ -74,31 +75,35 @@ class Squid:
         return PERSONALITY_STAT_MODIFIERS.get(self.personality, {}).get(key, default)
 
     def update_needs(self, dt: float):
-        """Drift the needs over ``dt`` seconds, personality-weighted."""
-        hunger_rate = 1.6 * self._stat_mod("hunger_growth")
-        energy_rate = 1.1 * self._stat_mod("energy_drain")
+        """Drift the needs over ``dt`` seconds, personality-weighted.
+
+        Rates are deliberately gentle so a squid takes minutes (not seconds) to
+        grow hungry or tired — care should feel unhurried, not frantic.
+        """
+        hunger_rate = 0.55 * self._stat_mod("hunger_growth")
+        energy_rate = 0.45 * self._stat_mod("energy_drain")
 
         self.hunger += hunger_rate * dt
-        self.cleanliness -= 0.8 * dt
+        self.cleanliness -= 0.32 * dt
         if self.is_sleeping:
-            self.sleepiness -= 6.0 * dt
-            self.happiness += 0.4 * dt
+            self.sleepiness -= 5.0 * dt
+            self.happiness += 0.25 * dt
         else:
             self.sleepiness += energy_rate * dt
 
         # Derived emotional stats.
         if self.hunger > 75 or self.cleanliness < 25:
-            self.happiness -= 1.2 * dt
-            self.anxiety += 1.0 * dt * self._stat_mod("anxiety_growth")
+            self.happiness -= 0.55 * dt
+            self.anxiety += 0.45 * dt * self._stat_mod("anxiety_growth")
         else:
-            self.happiness += 0.3 * dt
-            self.anxiety -= 0.6 * dt
+            self.happiness += 0.18 * dt
+            self.anxiety -= 0.3 * dt
 
-        if self.cleanliness < 20 and random.random() < 0.02 * dt:
+        if self.cleanliness < 20 and random.random() < 0.01 * dt:
             self.is_sick = True
         if self.is_sick:
-            self.happiness -= 1.5 * dt
-            self.anxiety += 1.5 * dt
+            self.happiness -= 0.7 * dt
+            self.anxiety += 0.7 * dt
             if self.cleanliness > 60:
                 self.is_sick = False
 
@@ -106,8 +111,8 @@ class Squid:
         # stays alive (exploring/playing spike it above baseline, boredom pulls
         # it back down) rather than draining to zero.
         curiosity_baseline = 50.0 * self._stat_mod("curiosity_growth")
-        self.curiosity += (curiosity_baseline - self.curiosity) * 0.06 * dt
-        self.satisfaction -= 0.5 * dt * self._stat_mod("satisfaction_decay")
+        self.curiosity += (curiosity_baseline - self.curiosity) * 0.05 * dt
+        self.satisfaction -= 0.25 * dt * self._stat_mod("satisfaction_decay")
 
         # Wake up if fully rested.
         if self.is_sleeping and self.sleepiness <= 5:
@@ -383,6 +388,7 @@ class Squid:
             "stats": {name: getattr(self, name) for name in self.CORE_STATS},
             "x": self.x, "y": self.y, "direction": self.direction,
             "is_sleeping": self.is_sleeping, "is_sick": self.is_sick,
+            "is_dead": self.is_dead,
             "status": self.status, "age_seconds": self.age_seconds,
             "carrying_rock": self.carrying_rock, "carried_rock_id": self.carried_rock_id,
             "brain": self.brain.to_dict(),
@@ -404,6 +410,7 @@ class Squid:
         squid.direction = data.get("direction", "right")
         squid.is_sleeping = data.get("is_sleeping", False)
         squid.is_sick = data.get("is_sick", False)
+        squid.is_dead = data.get("is_dead", False)
         squid.carrying_rock = data.get("carrying_rock", False)
         squid.carried_rock_id = data.get("carried_rock_id")
         squid.status = data.get("status", "resurfacing")

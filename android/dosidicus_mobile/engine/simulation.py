@@ -45,6 +45,15 @@ class Simulation:
         self._near_plants = set()
         self.ink_clouds = []           # [{x, y, t (sim_time), ttl}]
         self._startle_cooldown = 0.0
+        # Sleep consolidation: replay + memory promotion fire when the squid
+        # falls asleep. Set for one tick after a consolidation so the UI can flash.
+        self._was_sleeping = self.squid.is_sleeping
+        self.sleep_consolidation = None
+        # Starvation / game over: prolonged severe hunger is fatal.
+        self.STARVE_HUNGER = 90.0      # hunger at/above this counts as starving
+        self.STARVE_SECONDS = 300.0    # ...for this long (5 real-world minutes)
+        self._starving_time = 0.0
+        self.game_over = self.squid.is_dead
         # Egg hatching: a new game begins as an egg that plays its frames
         # (1/second) before the squid emerges.
         self.hatching = False
@@ -60,15 +69,21 @@ class Simulation:
             for f in self.food_items
         )
 
+    MAX_FOOD = 5  # never let the tank get more crowded than this
+
     def drop_food(self, x=None, y=None, food_type="sushi"):
+        if len(self.food_items) >= self.MAX_FOOD:
+            return None  # tank is full — ignore extra food
         w, h = self.tank_size
         self._food_id += 1
-        self.food_items.append({
+        item = {
             "x": x if x is not None else random.uniform(40, w - 40),
             "y": y if y is not None else 40,
             "type": food_type,
             "id": self._food_id,
-        })
+        }
+        self.food_items.append(item)
+        return item
 
     # ------------------------------------------------------- decorations API
     def add_decoration(self, type, category, x, y, scale=1.0):
@@ -280,8 +295,13 @@ class Simulation:
     def update(self, dt: float):
         """Advance the whole simulation by ``dt`` seconds."""
         self.newborn_neuron = None
+        self.sleep_consolidation = None
         self.squid._last_dt = dt
         squid = self.squid
+
+        # Game over: the squid has died. Freeze the world.
+        if self.game_over:
+            return self.last_status
 
         # While hatching, freeze the squid and just advance the egg animation
         # (one frame per second) until all frames have played.
@@ -294,6 +314,19 @@ class Simulation:
 
         # 1) Needs drift.
         squid.update_needs(dt)
+
+        # Starvation: severe hunger sustained too long is fatal (game over).
+        if squid.hunger >= self.STARVE_HUNGER:
+            self._starving_time += dt
+        else:
+            self._starving_time = 0.0
+        if self._starving_time >= self.STARVE_SECONDS:
+            self.game_over = True
+            squid.is_dead = True
+            squid.is_sleeping = False
+            squid.status = "starved"
+            self.last_status = "Your squid has died of hunger."
+            return self.last_status
 
         # 2) Perception + brain forward pass.
         can_see = self.food_visible()
@@ -328,6 +361,13 @@ class Simulation:
 
         # 4) Let rewired/grown neurons nudge mood, then decide + move.
         squid.pull_core_from_brain()
+        # While awake, log which neurons are firing together for later replay,
+        # biased toward whatever recent memories reference (what it's dwelling on).
+        if not squid.is_sleeping:
+            bias = set()
+            for m in squid.memory.short_term[-8:]:
+                bias.update(m.get("related_neurons") or [])
+            squid.brain.record_coactivation(dt, bias_neurons=bias)
         self._decision_timer += dt
         if self._decision_timer >= self._decision_interval:
             self._decision_timer = 0.0
@@ -338,6 +378,16 @@ class Simulation:
                 if squid.status.startswith(("approaching", "eyeing")) and self.food_items:
                     target = min(self.food_items, key=lambda f: squid._dist(f["x"], f["y"]))
                     squid.move_towards(target["x"], target["y"])
+
+        # Falling asleep triggers consolidation: replay the strongest recent
+        # co-activations to cement them, and promote meaningful memories to
+        # long-term storage (the mobile analogue of the desktop sleep replay).
+        if squid.is_sleeping and not self._was_sleeping:
+            replay = squid.brain.sleep_replay()
+            promoted = squid.memory.consolidate_sleep(squid.brain.sim_time)
+            self.sleep_consolidation = dict(replay, promoted=promoted)
+            self.last_status = "drifting to sleep — consolidating memories"
+        self._was_sleeping = squid.is_sleeping
 
         # 5) World interactions.
         self._update_startle(dt)
@@ -397,6 +447,8 @@ class Simulation:
             "poop_items": self.poop_items,
             "decorations": self.decorations,
             "statistics": self.stats.to_dict(),
+            "game_over": self.game_over,
+            "starving_time": self._starving_time,
         }
 
     @classmethod
@@ -411,6 +463,9 @@ class Simulation:
         sim.stats = Statistics.from_dict(data.get("statistics"))
         sim._prev_pos = (sim.squid.x, sim.squid.y)
         sim._was_sick = sim.squid.is_sick
+        sim._was_sleeping = sim.squid.is_sleeping
+        sim._starving_time = data.get("starving_time", 0.0)
+        sim.game_over = data.get("game_over", sim.squid.is_dead)
         return sim
 
     def save(self, path: str):

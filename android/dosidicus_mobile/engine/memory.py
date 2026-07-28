@@ -91,6 +91,23 @@ class MemoryManager:
             self._last_cleanup = now
             self.review_and_transfer(now)
 
+    def consolidate_sleep(self, now):
+        """Sleep consolidation: rehearse and promote the day's more meaningful
+        short-term memories into long-term storage. Sleep lowers the promotion
+        bar (an event only needs to be moderately important or to have been
+        revisited), mirroring how the desktop's sleep replay cements memories.
+
+        Returns the number of memories promoted.
+        """
+        promoted = 0
+        for m in list(self.short_term):
+            if (self.should_transfer(m)
+                    or m.get("importance", 1) >= 4
+                    or m.get("access_count", 0) >= 2):
+                self.transfer(m["category"], m["key"], now)
+                promoted += 1
+        return promoted
+
     # ------------------------------------------------------------- read
     def get_active_memories_data(self, now, count=None):
         active = []

@@ -139,6 +139,8 @@ class DosidicusApp(App):
         # Startup splash (title + project URL) over the game, auto-dismissed.
         container = FloatLayout()
         container.add_widget(root)
+        self._container = container
+        self._game_over_overlay = None
         self._splash = Splash()
         container.add_widget(self._splash)
         Clock.schedule_once(lambda dt: self._splash.dismiss(), 2.6)
@@ -189,11 +191,51 @@ class DosidicusApp(App):
         self.tank.redraw()
 
     def new_game(self):
+        self._dismiss_game_over()
         self.set_simulation(Simulation(tank_size=TANK_SIZE, squid=Squid(tank_size=TANK_SIZE)))
         self.sim.start_hatching()            # a new game begins as an egg
         self._pending_tutorial = True         # offer the tutorial once it hatches
         self._was_hatching = True
         self.save_now()
+
+    # ---------------------------------------------------------- game over
+    def _show_game_over(self):
+        """Full-screen 'game over' overlay when the squid has starved."""
+        overlay = FloatLayout()
+        with overlay.canvas.before:
+            Color(0.03, 0.02, 0.04, 0.88)
+            bg = Rectangle(pos=overlay.pos, size=overlay.size)
+        overlay.bind(pos=lambda *_: setattr(bg, "pos", overlay.pos),
+                     size=lambda *_: setattr(bg, "size", overlay.size))
+
+        panel = BoxLayout(orientation="vertical", spacing=dp(14), padding=dp(20),
+                          size_hint=(0.82, None), height=dp(240),
+                          pos_hint={"center_x": 0.5, "center_y": 0.5})
+
+        def _lbl(text, size, color):
+            l = Label(text=text, markup=True, font_size=size, color=color,
+                      halign="center", valign="middle", size_hint_y=None,
+                      height=size * 2.0)
+            l.bind(size=lambda *_: setattr(l, "text_size", l.size))
+            return l
+
+        panel.add_widget(_lbl("[b]Game Over[/b]", sp(30), (1, 0.45, 0.4, 1)))
+        panel.add_widget(_lbl("Your squid starved.\nIt was left too hungry for "
+                              "too long.", sp(16), (0.9, 0.92, 0.96, 1)))
+        btn = Button(text="New game", font_size=sp(18), bold=True,
+                     background_normal="", background_color=(0.5, 0.28, 0.72, 1),
+                     size_hint_y=None, height=dp(56))
+        btn.bind(on_release=lambda *_: self.new_game())
+        panel.add_widget(btn)
+        overlay.add_widget(panel)
+
+        self._game_over_overlay = overlay
+        self._container.add_widget(overlay)
+
+    def _dismiss_game_over(self):
+        if self._game_over_overlay is not None:
+            self._container.remove_widget(self._game_over_overlay)
+            self._game_over_overlay = None
 
     # --------------------------------------------------------------- header
     def _header_text(self):
@@ -265,6 +307,18 @@ class DosidicusApp(App):
         if self.sim.newborn_neuron:
             kind = self.sim.newborn_neuron.rsplit("_", 1)[0]
             self._flash(f"[b]Neurogenesis![/b] grew a '{kind}' neuron")
+
+        # Sleep consolidation just ran: let the caretaker know memories are being
+        # cemented while the squid sleeps.
+        cons = self.sim.sleep_consolidation
+        if cons and (cons.get("strengthened") or cons.get("promoted")):
+            self._flash(
+                f"[color=b39ddb]Sleeping — consolidated {cons.get('strengthened', 0)} "
+                f"connections, {cons.get('promoted', 0)} memories[/color]", seconds=3.0)
+
+        # Game over: the squid starved. Show the overlay once.
+        if self.sim.game_over and self._game_over_overlay is None:
+            self._show_game_over()
 
         # Redraw only the visible view for efficiency.
         if self.showing_brain:

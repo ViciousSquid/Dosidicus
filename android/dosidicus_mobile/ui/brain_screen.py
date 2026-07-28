@@ -35,6 +35,7 @@ from .brainview import BrainView
 from .memory_cards import MemoryCards
 from .learning_cards import LearningCards
 from .decisions_panel import DecisionsPanel
+from .sharing import open_url
 from ..engine.personality import (
     describe, PERSONALITY_STAT_MODIFIERS, PERSONALITY_LEARNING_MODIFIERS,
 )
@@ -56,6 +57,7 @@ class _ScrollText(ScrollView):
         self.label.bind(
             width=lambda *_: setattr(self.label, "text_size", (self.label.width, None)),
             texture_size=lambda *_: setattr(self.label, "height", self.label.texture_size[1]),
+            on_ref_press=lambda _lbl, ref: open_url(ref),
         )
         self.add_widget(self.label)
 
@@ -249,5 +251,8 @@ class BrainScreen(BoxLayout):
                    "fire in quick succession wire up). Sustained novelty, reward or "
                    "stress grows entirely new neurons, and lived events are stored "
                    "as memories that colour future decisions. No two brains develop "
-                   "the same way.")
+                   "the same way.\n")
+        out.append(self._h("Project"))
+        out.append("[ref=https://github.com/vicioussquid/dosidicus]"
+                   "[color=6fa8dc][u]github.com/vicioussquid/dosidicus[/u][/color][/ref]")
         return "\n".join(out)

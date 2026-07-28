@@ -17,7 +17,7 @@ STEPS = [
      "A squid has hatched — it's yours to look after!\n\n"
      "• Feed it when it's hungry ([b]Feed[/b])\n"
      "• Clean the tank when it gets dirty ([b]Clean[/b])\n"
-     "• Tap anywhere in the tank to drop food\n"
+     "• Keep it fed — a squid left too hungry for too long will die\n"
      "• Watch how it behaves to learn its personality"),
     ("The neural network",
      "Tap [b]Brain[/b] to see the squid's neural network on the Network tab.\n\n"
@@ -114,8 +114,7 @@ def prompt_tutorial(app):
     """Offer the tutorial when a new game begins."""
     box = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(14))
     box.add_widget(Label(
-        text="A new squid has hatched!\n\nWould you like a quick guided tour of "
-             "how to care for it and read its brain?",
+        text="A new squid has hatched!\n\nView the tutorial?",
         markup=True, halign="center", valign="middle", font_size=sp(16)))
     p = Popup(title="Welcome to Dosidicus", content=box, size_hint=(0.88, 0.5),
               title_size=sp(17), auto_dismiss=False)

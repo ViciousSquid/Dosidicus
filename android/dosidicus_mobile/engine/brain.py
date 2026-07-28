@@ -51,6 +51,15 @@ class NeuralBrain:
             "stdp_lr": 0.06,                   # potentiation per spike pairing
             "stdp_tau": 2.0,                   # timing sensitivity (sim seconds)
             "stdp_window": 3.0,                # max pre->post gap that still wires
+            # Sleep consolidation / replay (ported from the sleep_replay plugin)
+            "coactivation_threshold": 0.55,    # min activation to log a co-firing
+            "coactivation_decay": 0.985,       # per-second decay of the traces
+            "replay_memory_bias": 0.6,         # extra weight for memory-linked pairs
+            "replay_top_k": 8,                 # strongest pairs replayed on sleep
+            "replay_cycles": 5,                # replay bursts per pair
+            "replay_strength": 0.05,           # strengthening on the first burst
+            "replay_falloff": 0.78,            # per-burst falloff
+            "prune_threshold": 0.06,           # weak, unused synapses pruned to 0
         }
         if config:
             self.config.update(config)
@@ -83,6 +92,11 @@ class NeuralBrain:
         self.last_spike = {}
         self._prev_spike = {}
         self.stdp_potentiations = 0  # count of STDP weight strengthenings (lifetime)
+
+        # Sleep-consolidation bookkeeping: recency-weighted co-activation traces
+        # accumulated while awake, replayed to strengthen connections on sleep.
+        self.coactivation: Dict[Tuple[str, str], float] = {}
+        self.last_consolidation = None   # summary of the most recent sleep replay
 
         # A trace of the most recent learning events for the UI to surface.
         self.recent_events = []
@@ -264,14 +278,88 @@ class NeuralBrain:
                         self._log_event(a, b, self.get_weight(a, b) - prev, stdp=True)
             self.last_spike[b] = now
 
-    def _log_event(self, a: str, b: str, dw: float, stdp: bool = False):
+    def _log_event(self, a: str, b: str, dw: float, stdp: bool = False,
+                   replay: bool = False):
         self.recent_events.append({
             "a": a, "b": b, "dw": round(dw, 4),
             "weight": round(self.get_weight(a, b), 4),
-            "t": time.time(), "stdp": stdp,
+            "t": time.time(), "stdp": stdp, "replay": replay,
         })
         if len(self.recent_events) > 40:
             self.recent_events = self.recent_events[-40:]
+
+    # ------------------------------------------------- sleep consolidation
+    def record_coactivation(self, dt: float, bias_neurons=None):
+        """Accumulate recency-weighted co-activation traces while awake.
+
+        Ported from the desktop sleep_replay ``CoactivationTracker``: every pair
+        of neurons firing together above threshold builds a trace (weighted by
+        how strongly they co-fire), while all traces decay over time so recent
+        experience dominates. Pairs touching a neuron referenced by an active
+        memory are boosted, so what the squid is thinking about gets rehearsed.
+        """
+        thr = self.config["coactivation_threshold"]
+        decay = self.config["coactivation_decay"] ** dt
+        for key in list(self.coactivation.keys()):
+            self.coactivation[key] *= decay
+            if self.coactivation[key] < 1e-4:
+                del self.coactivation[key]
+
+        bias = set(bias_neurons or [])
+        mb = self.config["replay_memory_bias"]
+        active = [(n, self.state.get(n, 0.0) / 100.0)
+                  for n in self.neuron_names if n not in EXCLUDED_NEURONS]
+        active = [(n, v) for n, v in active if v > thr]
+        for i, (a, va) in enumerate(active):
+            for b, vb in active[i + 1:]:
+                key = (a, b) if a < b else (b, a)
+                w = min(va, vb) * dt
+                if a in bias or b in bias:
+                    w *= (1.0 + mb)
+                self.coactivation[key] = self.coactivation.get(key, 0.0) + w
+
+    def sleep_replay(self):
+        """Consolidate on sleep: replay the strongest recent co-activation pairs
+        in decaying bursts to strengthen those connections, then prune weak,
+        unused synapses. Mirrors the desktop sleep_replay plugin.
+
+        Returns a summary dict {strengthened, pruned} for the UI.
+        """
+        strengthened = pruned = 0
+        if self.coactivation:
+            top = sorted(self.coactivation.items(), key=lambda kv: kv[1],
+                         reverse=True)[:self.config["replay_top_k"]]
+            cycles = self.config["replay_cycles"]
+            falloff = self.config["replay_falloff"]
+            for (a, b), _trace in top:
+                if a in EXCLUDED_NEURONS or b in EXCLUDED_NEURONS:
+                    continue
+                if a not in self.state or b not in self.state:
+                    continue
+                prev = self.get_weight(a, b)
+                amt = self.config["replay_strength"]
+                for _ in range(cycles):
+                    self.set_weight(a, b, self.get_weight(a, b) + amt)
+                    amt *= falloff
+                self._log_event(a, b, self.get_weight(a, b) - prev, replay=True)
+                strengthened += 1
+
+        # Prune weak connections that aren't being reinforced by experience.
+        prune_thr = self.config["prune_threshold"]
+        for (a, b), w in list(self.weights.items()):
+            if a >= b:  # visit each undirected pair once (canonical a < b)
+                continue
+            key = (a, b)
+            if 0.0 < abs(w) < prune_thr and self.coactivation.get(key, 0.0) < 1e-3:
+                self.set_weight(a, b, 0.0)
+                pruned += 1
+
+        # Spent traces fade after a consolidation pass.
+        for key in self.coactivation:
+            self.coactivation[key] *= 0.5
+
+        self.last_consolidation = {"strengthened": strengthened, "pruned": pruned}
+        return self.last_consolidation
 
     # Ported behavioural learning hooks -----------------------------------
     def learn_from_eating(self, food_type: str = None):
@@ -398,6 +486,7 @@ class NeuralBrain:
             "sim_time": self.sim_time,
             "last_neurogenesis_time": self.last_neurogenesis_time,
             "last_spike": self.last_spike,
+            "coactivation": {f"{a}|{b}": v for (a, b), v in self.coactivation.items()},
             "config": self.config,
         }
 
@@ -419,4 +508,7 @@ class NeuralBrain:
         brain.sim_time = float(data.get("sim_time", 0.0))
         brain.last_neurogenesis_time = float(data.get("last_neurogenesis_time", 0.0))
         brain.last_spike = {k: float(v) for k, v in data.get("last_spike", {}).items()}
+        for key, v in data.get("coactivation", {}).items():
+            a, b = key.split("|", 1)
+            brain.coactivation[(a, b)] = float(v)
         return brain

@@ -66,6 +66,33 @@ def share_file(path, title="Share squid"):
         return False
 
 
+def open_url(url):
+    """Open a URL in the device browser. Uses an Android VIEW intent on-device,
+    and falls back to the desktop's default browser. Returns True on success."""
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    if is_android():
+        try:
+            from jnius import autoclass, cast
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            Intent = autoclass("android.content.Intent")
+            Uri = autoclass("android.net.Uri")
+            intent = Intent(Intent.ACTION_VIEW)
+            intent.setData(Uri.parse(url))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            PythonActivity.mActivity.startActivity(intent)
+            return True
+        except Exception as e:
+            print(f"[Dosidicus] open_url intent failed: {e}")
+            return False
+    try:
+        import webbrowser
+        return webbrowser.open(url)
+    except Exception as e:
+        print(f"[Dosidicus] webbrowser.open failed: {e}")
+        return False
+
+
 def pick_file(on_choice):
     """Open a file picker for a .zip. Calls on_choice(path) or on_choice(None).
     Returns True if a native/plyer picker was launched, False if the caller

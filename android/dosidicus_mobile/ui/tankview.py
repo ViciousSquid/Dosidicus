@@ -1,8 +1,8 @@
 """TankView - the aquarium: the squid, falling food and poop.
 
 Renders the simulation's world state onto a Kivy canvas each frame. Sprite
-frames reuse the original desktop artwork (right/left/sleep swim frames). Tapping
-the tank drops food at the touch point.
+frames reuse the original desktop artwork (right/left/sleep swim frames). Food
+is only added via the Feed button (tapping the tank does nothing).
 """
 
 import os
@@ -122,14 +122,6 @@ class TankView(Widget):
         x = self.x + (tx / tw) * self.width
         y = self.y + (1.0 - ty / th) * self.height
         return x, y
-
-    def on_touch_down(self, touch):
-        if self.collide_point(*touch.pos) and self.sim and self.on_drop_food:
-            tw, th = self.sim.tank_size
-            tx = (touch.x - self.x) / self.width * tw
-            self.on_drop_food(tx, 20)
-            return True
-        return super().on_touch_down(touch)
 
     def redraw(self, *args):
         self.canvas.clear()
