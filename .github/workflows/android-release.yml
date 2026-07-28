@@ -1,0 +1,143 @@
+name: Build Android Release APK
+
+# Manual-only ("Run workflow" button) build of the NON-debug (release) APK.
+#
+# Unlike android-build.yml (which builds a debug APK on every push under
+# android/), this never runs automatically — trigger it from the Actions tab
+# → "Build Android Release APK" → "Run workflow".
+#
+# Signing: if the four ANDROID_* repository secrets are set (see below) the
+# release APK is signed and zipaligned, ready to install / upload. If they are
+# not set, an *unsigned* release APK is produced instead (it must be signed
+# before it can be installed on a device).
+#
+#   ANDROID_KEYSTORE_BASE64   - base64 of your release .keystore/.jks
+#   ANDROID_KEYSTORE_PASSWORD - keystore password
+#   ANDROID_KEY_ALIAS         - key alias
+#   ANDROID_KEY_PASSWORD      - key (alias) password
+#
+#   # create a keystore once, then base64-encode it for the secret:
+#   keytool -genkey -v -keystore dosidicus.keystore -alias dosidicus \
+#     -keyalg RSA -keysize 2048 -validity 10000
+#   base64 -w0 dosidicus.keystore   # paste into ANDROID_KEYSTORE_BASE64
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: "Optional version name (overrides buildozer.spec `version =`)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Android SDK + NDK are several GB; reclaim space the runner wastes on
+      # toolchains we don't need so the download has room.
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/lib/android/sdk/ndk" || true
+          df -h /
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Buildozer's Android toolchain is happiest on JDK 17; the runner default
+      # can be newer, so pin it explicitly.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install system dependencies
+        # The full autotools set is required: p4a's libffi recipe runs
+        # autoreconf, which needs the libtool m4 macros (LT_SYS_SYMBOL_USCORE)
+        # that libltdl-dev/automake provide in aclocal's search path.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git zip unzip pkg-config \
+            autoconf automake libtool libtool-bin libltdl-dev autopoint gettext \
+            zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev
+
+      - name: Install Buildozer
+        run: |
+          python -m pip install --upgrade pip
+          pip install buildozer "Cython==0.29.37"
+
+      # Cache the global buildozer dir so the SDK/NDK download only happens once.
+      - name: Cache Buildozer downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+
+      - name: Apply version override
+        if: ${{ inputs.version_override != '' }}
+        working-directory: android
+        run: |
+          sed -i "s/^version = .*/version = ${{ inputs.version_override }}/" buildozer.spec
+          grep '^version = ' buildozer.spec
+
+      - name: Decode signing keystore
+        id: keystore
+        if: ${{ env.HAS_KEYSTORE == 'true' }}
+        env:
+          HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          echo "path=$RUNNER_TEMP/release.keystore" >> "$GITHUB_OUTPUT"
+
+      - name: Build release APK
+        working-directory: android
+        # Feed "y" to the Android SDK license prompts via process substitution.
+        # When the signing secrets are present, buildozer picks them up from the
+        # P4A_RELEASE_* env vars and produces a signed, zipaligned APK; otherwise
+        # it produces an unsigned release APK.
+        env:
+          P4A_RELEASE_KEYSTORE: ${{ steps.keystore.outputs.path }}
+          P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          P4A_RELEASE_KEYALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -o pipefail
+          buildozer android release < <(yes) 2>&1 | tee build.log
+
+      - name: Summarise output
+        if: success()
+        working-directory: android
+        run: |
+          ls -la bin/ || true
+          if ls bin/*-release-unsigned.apk >/dev/null 2>&1; then
+            echo "::warning::Built an UNSIGNED release APK. Set the ANDROID_* secrets to get a signed, installable APK."
+          fi
+
+      - name: Upload release APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dosidicus-release-apk
+          path: android/bin/*.apk
+          if-no-files-found: error
+
+      - name: Upload build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-release-build-log
+          path: android/build.log
+          if-no-files-found: ignore
