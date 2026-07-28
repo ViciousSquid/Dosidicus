@@ -101,7 +101,15 @@ class TankView(Widget):
                             (_load_egg_frame(f"egg/anim0{i}.jpg") for i in range(1, 7))
                             if f is not None] or [_load("egg.png")]
         self._zzz_tex = self._text_texture("Zzz")
+        self._name_texs = {}
         self.bind(pos=lambda *a: self.redraw(), size=lambda *a: self.redraw())
+
+    def _name_texture(self, name):
+        tex = self._name_texs.get(name)
+        if tex is None:
+            tex = self._text_texture(name)
+            self._name_texs[name] = tex
+        return tex
 
     @staticmethod
     def _text_texture(text):
@@ -200,6 +208,34 @@ class TankView(Widget):
                     Color(1.0, 0.6, 0.2, 1)
                     Rectangle(pos=(fx - food_sz / 3, fy - food_sz / 3),
                               size=(food_sz * 0.66, food_sz * 0.66))
+
+            # Visiting squids from nearby players: drawn dimmed with a name tag,
+            # behind the resident squid, using the same swim frames.
+            vframe = int(time.time()) % 2
+            vis_w = squid_w * 0.85
+            vis_h = vis_w / SQUID_ASPECT
+            for v in getattr(sim, "visitors", []):
+                vx, vy = self._map(v["x"], v["y"])
+                vtex = self._tex[v.get("dir", "right")][vframe]
+                vpos = (vx - vis_w / 2, vy - vis_h / 2)
+                Color(1, 1, 1, 0.72)
+                if vtex:
+                    Rectangle(texture=vtex, pos=vpos, size=(vis_w, vis_h))
+                    vtint = v.get("tint")
+                    if vtint:
+                        Color(vtint[0], vtint[1], vtint[2], 0.4)
+                        Rectangle(texture=vtex, pos=vpos, size=(vis_w, vis_h))
+                else:
+                    Color(0.7, 0.8, 0.95, 0.7)
+                    Rectangle(pos=vpos, size=(vis_w, vis_h))
+                tag = self._name_texture(v.get("name", "visitor"))
+                if tag:
+                    tw = min(vis_w * 1.4, dp(120))
+                    th = tw * (tag.height / tag.width) if tag.width else tw * 0.3
+                    Color(1, 1, 1, 0.9)
+                    Rectangle(texture=tag, pos=(vx - tw / 2, vy + vis_h / 2),
+                              size=(tw, th))
+                Color(1, 1, 1, 1)
 
             # Squid sprite (aspect-correct; swim frames swap once per second).
             sx, sy = self._map(squid.x, squid.y)

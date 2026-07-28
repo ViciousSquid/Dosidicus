@@ -24,11 +24,16 @@ fullscreen = 0
 icon.filename = %(source.dir)s/assets/icon.png
 presplash.filename = %(source.dir)s/assets/icon.png
 
-# Saves live in the app's private data dir. WRITE_EXTERNAL_STORAGE is only used
-# on legacy Android (API 24-28) to drop exported squids into the public
-# Downloads folder; on API 29+ that goes through MediaStore and needs no
-# permission (the system ignores this one there).
-android.permissions = WRITE_EXTERNAL_STORAGE
+# WRITE_EXTERNAL_STORAGE: legacy (API 24-28) export to public Downloads (API 29+
+# uses MediaStore, no permission). The rest power local peer-to-peer visits via
+# Google Nearby Connections (Bluetooth + Wi-Fi + location, per the Nearby docs).
+android.permissions = WRITE_EXTERNAL_STORAGE, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE, CHANGE_WIFI_STATE, BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT, BLUETOOTH_SCAN, ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION, NEARBY_WIFI_DEVICES
+
+# Google Nearby Connections (local peer-to-peer). Pulls in Play Services, which
+# needs AndroidX; the Java shim in ./java bridges it to Python.
+android.gradle_dependencies = com.google.android.gms:play-services-nearby:18.7.0
+android.enable_androidx = True
+android.add_src = java
 
 # API / NDK levels (defaults known to work with kivy 2.3.1 + p4a).
 android.api = 33

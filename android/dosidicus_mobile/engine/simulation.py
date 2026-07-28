@@ -59,6 +59,10 @@ class Simulation:
         # on_unlock callback for the toast; events fire from update()/care API.
         self.achievements = AchievementManager()
         self._ach_eval_timer = 0.0
+        # Visiting squids received from nearby players (local peer-to-peer). Each
+        # is a transient guest that wanders the tank and then leaves; not saved.
+        self.visitors = []
+        self._visitor_id = 0
         # Egg hatching: a new game begins as an egg that plays its frames
         # (1/second) before the squid emerges.
         self.hatching = False
@@ -262,6 +266,79 @@ class Simulation:
         now = self.squid.brain.sim_time
         self.ink_clouds = [c for c in self.ink_clouds if now - c["t"] < c["ttl"]]
 
+    # --------------------------------------------------------- visitors (P2P)
+    VISIT_SECONDS = 150.0    # how long a guest squid lingers before leaving
+
+    def add_visitor(self, snapshot, name="a friend"):
+        """Spawn a guest squid from a received snapshot (a squid or sim dict).
+
+        The visitor is pure kinematics — it wanders the tank and then swims out
+        again — so it costs nothing to run and never touches the resident
+        squid's brain. Returns the visitor dict.
+        """
+        sq = snapshot.get("squid", snapshot) if isinstance(snapshot, dict) else {}
+        tint = sq.get("color_tint")
+        if not tint and sq.get("tint_color"):
+            tint = [c / 255.0 for c in sq["tint_color"]]
+        w, h = self.tank_size
+        now = self.squid.brain.sim_time
+        from_left = random.random() < 0.5
+        self._visitor_id += 1
+        v = {
+            "id": self._visitor_id,
+            "name": str(name)[:24],
+            "personality": sq.get("personality", "adventurous"),
+            "tint": tuple(tint) if tint else None,
+            "x": -40.0 if from_left else w + 40.0,
+            "y": random.uniform(h * 0.25, h * 0.6),
+            "vx": 60.0 if from_left else -60.0,
+            "vy": random.uniform(-20, 20),
+            "dir": "right" if from_left else "left",
+            "leave_at": now + self.VISIT_SECONDS,
+            "leaving": False,
+        }
+        self.visitors.append(v)
+        self.squid.brain.register_novelty(2.0)   # a newcomer is exciting
+        self.squid.curiosity = min(100.0, self.squid.curiosity + 6.0)
+        return v
+
+    def _update_visitors(self, dt):
+        if not self.visitors:
+            return
+        now = self.squid.brain.sim_time
+        w, h = self.tank_size
+        floor, ceil = h - 40, 40
+        gone = []
+        for v in self.visitors:
+            if not v["leaving"] and now >= v["leave_at"]:
+                v["leaving"] = True
+                # head for whichever side is nearer
+                v["vx"] = 90.0 if v["x"] > w * 0.5 else -90.0
+            if v["leaving"]:
+                v["x"] += v["vx"] * dt
+                v["y"] += v["vy"] * 0.3 * dt
+                if v["x"] < -60 or v["x"] > w + 60:
+                    gone.append(v)
+            else:
+                # gentle wander with a little momentum; bounce off the bounds
+                v["vx"] += random.uniform(-30, 30) * dt
+                v["vy"] += random.uniform(-30, 30) * dt
+                v["vx"] = max(-80, min(80, v["vx"]))
+                v["vy"] = max(-45, min(45, v["vy"]))
+                v["x"] += v["vx"] * dt
+                v["y"] += v["vy"] * dt
+                if v["x"] < 30:
+                    v["x"], v["vx"] = 30, abs(v["vx"])
+                elif v["x"] > w - 30:
+                    v["x"], v["vx"] = w - 30, -abs(v["vx"])
+                if v["y"] < ceil:
+                    v["y"], v["vy"] = ceil, abs(v["vy"])
+                elif v["y"] > floor:
+                    v["y"], v["vy"] = floor, -abs(v["vy"])
+            v["dir"] = "right" if v["vx"] >= 0 else "left"
+        for v in gone:
+            self.visitors.remove(v)
+
     def _decoration_effects(self, dt):
         """Being near decorations shapes mood: plants soothe, rocks intrigue."""
         s = self.squid
@@ -414,6 +491,7 @@ class Simulation:
         # 5) World interactions.
         self._update_startle(dt)
         self._update_ink(dt)
+        self._update_visitors(dt)
         self._update_rock_play(dt)
         self._update_sweep(dt)
         self._decoration_effects(dt)

@@ -19,6 +19,7 @@ brain weights/positions and memories).
 
 from __future__ import annotations
 
+import gzip
 import io
 import json
 import zipfile
@@ -80,6 +81,29 @@ def export_squid(sim: Simulation, path: str):
             z.writestr(name, json.dumps(data, indent=2))
         z.writestr("uuid.txt", f"SquidSignature\t{squid.uuid}")
     return path
+
+
+# -------------------------------------------------- snapshots (local P2P)
+# A snapshot is the full mobile save, JSON-encoded and gzipped, for sending a
+# squid over a short-range link (Nearby Connections). It stays small enough for
+# a single Nearby BYTES payload (~32 KB) for all but the most elaborate brains.
+SNAPSHOT_MAX_BYTES = 32000
+
+
+def snapshot_bytes(sim) -> bytes:
+    raw = json.dumps(sim.to_dict(), separators=(",", ":")).encode("utf-8")
+    return gzip.compress(raw, compresslevel=9)
+
+
+def snapshot_dict(data: bytes) -> dict:
+    return json.loads(gzip.decompress(data).decode("utf-8"))
+
+
+def sim_from_snapshot(data: bytes, tank_size=(900, 500)) -> Simulation:
+    sim = Simulation.from_dict(snapshot_dict(data))
+    sim.tank_size = tank_size
+    sim.squid.tank_size = tank_size
+    return sim
 
 
 # --------------------------------------------------------------------- import
