@@ -2,7 +2,7 @@
 
 A touch-first Android version of **Dosidicus** 
 
-**The cognitive engine is the same.** Every bit of the "brain" — Hebbian
+**The cognitive engine is the same.** Every bit of the brain: Hebbian
 learning, STDP, neurogenesis, the dual short/long-term memory, the neural
 decision engine, the seven personalities, statistics, achievements, sleep
 consolidation and the save format — is the same **STRINg** core the desktop app
