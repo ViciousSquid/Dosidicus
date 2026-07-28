@@ -1,7 +1,6 @@
 # Dosidicus Mobile (Android / Kivy port)
 
-A touch-first Android version of **Dosidicus electronicus** — the digital pet
-squid with a neural network you can *watch* think.
+A touch-first Android version of **Dosidicus** 
 
 **The cognitive engine is the same.** Every bit of the "brain" — Hebbian
 learning, STDP, neurogenesis, the dual short/long-term memory, the neural
