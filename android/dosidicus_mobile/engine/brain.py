@@ -47,6 +47,10 @@ class NeuralBrain:
             "decay_rate": 0.98,                # per-second counter decay (slow burn)
             "new_neuron_connection_strength": 0.5,
             "max_new_neurons": 8,
+            # STDP (spike-timing-dependent plasticity)
+            "stdp_lr": 0.06,                   # potentiation per spike pairing
+            "stdp_tau": 2.0,                   # timing sensitivity (sim seconds)
+            "stdp_window": 3.0,                # max pre->post gap that still wires
         }
         if config:
             self.config.update(config)
@@ -73,6 +77,12 @@ class NeuralBrain:
         self.sim_time = 0.0
         self._neurogenesis_boost_until = 0.0
         self.last_neurogenesis_time = 0.0
+
+        # STDP bookkeeping: when each neuron last "spiked" (crossed the
+        # co-activation threshold on a rising edge) in simulation seconds.
+        self.last_spike = {}
+        self._prev_spike = {}
+        self.stdp_potentiations = 0  # count of STDP weight strengthenings (lifetime)
 
         # A trace of the most recent learning events for the UI to surface.
         self.recent_events = []
@@ -208,11 +218,57 @@ class NeuralBrain:
                     # Relax unused connections toward zero.
                     self.set_weight(a, b, prev * (1.0 - decay))
 
-    def _log_event(self, a: str, b: str, dw: float):
+    def stdp_step(self):
+        """Spike-timing-dependent plasticity.
+
+        A neuron "spikes" when its activation crosses the co-activation
+        threshold on a rising edge. When neuron B spikes shortly after A, the
+        A-B connection is potentiated by the STDP kernel lr * exp(-Δt/tau)
+        (pre-before-post causal strengthening). Because the network stores
+        undirected weights, this reinforces the pair; the closer in time two
+        neurons fire, the more they wire together.
+        """
+        t = self.config["co_activation_threshold"]
+        lr = self.config["stdp_lr"]
+        tau = self.config["stdp_tau"]
+        window = self.config["stdp_window"]
+        now = self.sim_time
+
+        # A neuron "spikes" on a burst of activity: it crosses the threshold on
+        # a rising edge, OR its activation jumps sharply while already active
+        # (e.g. satisfaction leaping when the squid eats). Bursts are what create
+        # the temporally-clustered firing STDP keys off.
+        spiked = []
+        for name in self.neuron_names:
+            if name in EXCLUDED_NEURONS:
+                continue
+            v = self.state.get(name, 0.0) / 100.0
+            prev = self._prev_spike.get(name, v)
+            rising_cross = v > t and prev <= t
+            burst = v > 0.5 and (v - prev) > 0.05
+            if rising_cross or burst:
+                spiked.append(name)
+            self._prev_spike[name] = v
+
+        for b in spiked:
+            for a, ts in list(self.last_spike.items()):
+                if a == b or a in EXCLUDED_NEURONS or a not in self.state:
+                    continue
+                dt_spike = now - ts
+                if 0.0 <= dt_spike <= window:
+                    dw = lr * math.exp(-dt_spike / tau)
+                    if dw > 0.004:
+                        prev = self.get_weight(a, b)
+                        self.set_weight(a, b, prev + dw)
+                        self.stdp_potentiations += 1
+                        self._log_event(a, b, self.get_weight(a, b) - prev, stdp=True)
+            self.last_spike[b] = now
+
+    def _log_event(self, a: str, b: str, dw: float, stdp: bool = False):
         self.recent_events.append({
             "a": a, "b": b, "dw": round(dw, 4),
             "weight": round(self.get_weight(a, b), 4),
-            "t": time.time(),
+            "t": time.time(), "stdp": stdp,
         })
         if len(self.recent_events) > 40:
             self.recent_events = self.recent_events[-40:]
@@ -341,6 +397,7 @@ class NeuralBrain:
             "neurogenesis": self.neurogenesis,
             "sim_time": self.sim_time,
             "last_neurogenesis_time": self.last_neurogenesis_time,
+            "last_spike": self.last_spike,
             "config": self.config,
         }
 
@@ -361,4 +418,5 @@ class NeuralBrain:
             brain.neurogenesis.update(ng)
         brain.sim_time = float(data.get("sim_time", 0.0))
         brain.last_neurogenesis_time = float(data.get("last_neurogenesis_time", 0.0))
+        brain.last_spike = {k: float(v) for k, v in data.get("last_spike", {}).items()}
         return brain

@@ -16,6 +16,9 @@ from kivy.metrics import dp
 from .assets import asset
 
 
+SQUID_ASPECT = 253.0 / 147.0  # native sprite aspect (wider than tall)
+
+
 def _load(name):
     path = asset(name)
     if os.path.exists(path):
@@ -81,10 +84,12 @@ class TankView(Widget):
 
             # Sizes are proportional to the tank height (with DPI floors) so the
             # squid and food read at a comfortable size on any screen density.
-            sq = max(dp(96), self.height * 0.26)
+            # The squid sprite is 253x147, so preserve that aspect (no squish).
+            squid_w = max(dp(80), self.height * 0.26) * 0.8   # 20% smaller
+            squid_h = squid_w / SQUID_ASPECT
             food_sz = max(dp(30), self.height * 0.08)
             poop_sz = max(dp(22), self.height * 0.055)
-            icon_sz = sq * 0.38
+            icon_sz = squid_h * 0.55
 
             # Poop.
             for p in sim.poop_items:
@@ -112,28 +117,30 @@ class TankView(Widget):
                     Rectangle(pos=(fx - food_sz / 3, fy - food_sz / 3),
                               size=(food_sz * 0.66, food_sz * 0.66))
 
-            # Squid sprite.
+            # Squid sprite (aspect-correct; swim frames swap once per second).
             sx, sy = self._map(squid.x, squid.y)
-            frame = int(time.time() * 3) % 2
+            frame = int(time.time()) % 2
             if squid.is_sleeping:
                 tex = self._tex["sleep"][frame]
             else:
                 tex = self._tex[squid.direction][frame]
             Color(1, 1, 1, 1)
             if tex:
-                Rectangle(texture=tex, pos=(sx - sq / 2, sy - sq / 2), size=(sq, sq))
+                Rectangle(texture=tex, pos=(sx - squid_w / 2, sy - squid_h / 2),
+                          size=(squid_w, squid_h))
             else:
                 Color(0.9, 0.5, 0.8, 1)
-                Rectangle(pos=(sx - sq / 3, sy - sq / 3), size=(sq * 0.66, sq * 0.66))
+                Rectangle(pos=(sx - squid_w / 2, sy - squid_h / 2),
+                          size=(squid_w, squid_h))
 
             # Status overlays.
             if squid.is_sick and self._tex["sick"]:
                 Color(1, 1, 1, 1)
                 Rectangle(texture=self._tex["sick"],
-                          pos=(sx - icon_sz / 2, sy + sq / 2 - icon_sz * 0.2),
+                          pos=(sx - icon_sz / 2, sy + squid_h / 2 - icon_sz * 0.2),
                           size=(icon_sz, icon_sz))
             elif squid.status in ("playing happily", "frolicking") and self._tex["love"]:
                 Color(1, 1, 1, 1)
                 Rectangle(texture=self._tex["love"],
-                          pos=(sx - icon_sz / 2, sy + sq / 2 - icon_sz * 0.2),
+                          pos=(sx - icon_sz / 2, sy + squid_h / 2 - icon_sz * 0.2),
                           size=(icon_sz, icon_sz))

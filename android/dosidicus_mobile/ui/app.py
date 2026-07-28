@@ -73,12 +73,12 @@ class DosidicusApp(App):
                                           pos_hint={"x": 0, "y": 0})
         self.brain = BrainScreen(self.sim,
                                  size_hint=(1, 1), pos_hint={"x": 0, "y": 0})
-        self.viewport.add_widget(self.tank)
-        self.viewport.add_widget(self.deco_layer)
-        self.viewport.add_widget(self.brain)
+        # Only the active view is kept in the tree. A hidden-but-present widget
+        # would still swallow touches (a disabled Kivy widget consumes touches
+        # that land on it), which previously blocked dragging decorations.
         self.showing_brain = False
-        self.brain.opacity = 0
-        self.brain.disabled = True
+        self.viewport.add_widget(self.tank)
+        self.viewport.add_widget(self.deco_layer)  # decoration overlay on top
         root.add_widget(self.viewport)
 
         # transient banner (neurogenesis etc.)
@@ -171,13 +171,15 @@ class DosidicusApp(App):
 
     def _toggle_view(self, *a):
         self.showing_brain = not self.showing_brain
-        self.brain.opacity = 1 if self.showing_brain else 0
-        self.brain.disabled = not self.showing_brain
-        # Tank and its decoration overlay show/hide together.
-        for w in (self.tank, self.deco_layer):
-            w.opacity = 0 if self.showing_brain else 1
-            w.disabled = self.showing_brain
-        self.toggle_btn.text = "Tank" if self.showing_brain else "Brain"
+        self.viewport.clear_widgets()
+        if self.showing_brain:
+            self.viewport.add_widget(self.brain)
+            self.toggle_btn.text = "Tank"
+        else:
+            self.viewport.add_widget(self.tank)
+            self.viewport.add_widget(self.deco_layer)
+            self.deco_layer.rebuild()
+            self.toggle_btn.text = "Brain"
 
     def _flash(self, msg, seconds=2.5):
         self.banner.text = msg

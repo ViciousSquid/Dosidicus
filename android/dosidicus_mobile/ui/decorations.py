@@ -19,20 +19,36 @@ from kivy.uix.button import Button
 from kivy.core.image import Image as CoreImage
 from kivy.metrics import dp
 
-from .assets import asset
+import os
+
+from .assets import asset, ASSET_DIR
+
+
+def _categorize(name):
+    n = name.lower()
+    if "plant" in n:
+        return "plant"
+    if "rock" in n or "bigr" in n or n.startswith("st_"):
+        return "rock"
+    if "castle" in n:
+        return "castle"
+    if "urchin" in n:
+        return "urchin"
+    return "decoration"
+
+
+def _build_catalog():
+    """All decoration PNGs bundled under assets/decoration/, categorised by name."""
+    deco_dir = os.path.join(ASSET_DIR, "decoration")
+    try:
+        files = sorted(f for f in os.listdir(deco_dir) if f.lower().endswith(".png"))
+    except OSError:
+        files = []
+    return [(f, _categorize(f)) for f in files]
+
 
 # (asset file under assets/decoration/, category used by the brain effects)
-DECO_CATALOG = [
-    ("plant03.png", "plant"),
-    ("plant07.png", "plant"),
-    ("plant12.png", "plant"),
-    ("Znewplant04.png", "plant"),
-    ("rock01.png", "rock"),
-    ("rock02.png", "rock"),
-    ("bigr02.png", "rock"),
-    ("castle.png", "castle"),
-    ("urchin.png", "urchin"),
-]
+DECO_CATALOG = _build_catalog()
 
 _ASPECT_CACHE = {}
 
@@ -144,9 +160,9 @@ def open_decoration_palette(on_pick):
     popup = Popup(title="Add a decoration", size_hint=(0.92, 0.8),
                   title_size=dp(18))
     scroll = ScrollView()
-    grid = GridLayout(cols=3, spacing=dp(8), padding=dp(8), size_hint_y=None)
+    grid = GridLayout(cols=4, spacing=dp(6), padding=dp(8), size_hint_y=None)
     grid.bind(minimum_height=grid.setter("height"))
-    cell = dp(110)
+    cell = dp(72)
     for deco_type, category in DECO_CATALOG:
         btn = Button(size_hint_y=None, height=cell,
                      background_normal=asset(f"decoration/{deco_type}"),

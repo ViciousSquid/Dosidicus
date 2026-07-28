@@ -15,6 +15,7 @@ import random
 
 from .personality import Personality, PERSONALITY_STAT_MODIFIERS
 from .brain import NeuralBrain
+from .memory import MemoryManager
 
 
 class Squid:
@@ -22,6 +23,7 @@ class Squid:
         self.personality = Personality.from_value(personality) if personality else random.choice(list(Personality))
         self.tank_size = tank_size
         self.brain = brain or NeuralBrain(self.personality)
+        self.memory = MemoryManager()
 
         # Core stats mirror the brain's core neurons (0-100).
         self.hunger = self.brain.state["hunger"]
@@ -121,6 +123,12 @@ class Squid:
                 setattr(self, name, blended)
         self._clamp_stats()
 
+    # ------------------------------------------------------------- memory
+    def remember(self, category, key, text, raw_value=None, importance=1.0, related=None):
+        self.memory.add_short_term(category, key, text, raw_value=raw_value,
+                                   importance=importance, related_neurons=related,
+                                   now=self.brain.sim_time)
+
     # ------------------------------------------------------------- care API
     def feed(self, food_type: str = "sushi"):
         if self.is_sleeping:
@@ -131,6 +139,9 @@ class Squid:
         self.happiness = min(100.0, self.happiness + 12.0)
         self.brain.learn_from_eating(food_type)
         self.status = f"munching {food_type}"
+        self.remember("food", food_type, f"Ate {food_type}",
+                      {"hunger": -45, "satisfaction": 25, "happiness": 12},
+                      importance=2.0, related=["hunger", "satisfaction"])
         return self.status
 
     def clean(self):
@@ -140,6 +151,9 @@ class Squid:
         self.is_sick = False
         self.brain.learn_from_cleaning()
         self.status = "sparkling clean"
+        self.remember("care", "clean", "Tank cleaned",
+                      {"cleanliness": 55, "happiness": 8}, importance=1.5,
+                      related=["cleanliness", "happiness"])
         return self.status
 
     def play(self):
@@ -151,6 +165,9 @@ class Squid:
         self.sleepiness = min(100.0, self.sleepiness + 8.0)
         self.brain.learn_from_playing()
         self.status = "playing happily"
+        self.remember("play", "play", "Played",
+                      {"satisfaction": 20, "happiness": 18, "curiosity": 15},
+                      importance=1.5, related=["satisfaction", "curiosity"])
         return self.status
 
     def toggle_sleep(self):
@@ -189,6 +206,27 @@ class Squid:
         weights["playing"] = brain_state.get("satisfaction", 50) * brain_state.get("curiosity", 50) / 50.0
         weights["sleeping"] = sleepiness * math.pow(1.7, sleepiness / 25.0) * 0.5
 
+        # Memory influence (ported from DecisionEngine): recent lived experience
+        # tilts the odds. Positive food memories make eating more attractive,
+        # decoration memories invite exploring/comfort, distress makes the squid
+        # seek comfort and explore less.
+        memory_mod = {"eating": 1.0, "playing": 1.0, "exploring": 1.0, "comfort": 1.0}
+        for mem in self.memory.get_active_memories_data(self.brain.sim_time, 6):
+            cat = mem.get("category")
+            if cat == "food":                    # eating was rewarding
+                memory_mod["eating"] *= 1.2
+            elif cat == "play":                  # play was fun
+                memory_mod["playing"] *= 1.2
+            elif cat == "decoration":            # something new to investigate
+                memory_mod["exploring"] *= 1.1
+                memory_mod["comfort"] *= 1.15
+            elif cat == "mental_state":          # remembered distress
+                memory_mod["comfort"] *= 1.3
+                memory_mod["exploring"] *= 0.8
+        for action, mod in memory_mod.items():
+            if action in weights:
+                weights[action] *= mod
+
         # Personality flavour (ported subset).
         p = self.personality
         if p == Personality.ADVENTUROUS:
@@ -215,6 +253,7 @@ class Squid:
             "weights": dict(weights),
             "chosen": decision,
             "confidence": confidence,
+            "memory_mod": memory_mod,
         }
         return self._execute(decision, food_items, can_see_food)
 
@@ -299,12 +338,15 @@ class Squid:
             "is_sleeping": self.is_sleeping, "is_sick": self.is_sick,
             "status": self.status, "age_seconds": self.age_seconds,
             "brain": self.brain.to_dict(),
+            "memory": self.memory.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, data: dict, tank_size=(900, 500)) -> "Squid":
         brain = NeuralBrain.from_dict(data["brain"]) if "brain" in data else None
         squid = cls(Personality.from_value(data.get("personality")), tank_size, brain)
+        if "memory" in data:
+            squid.memory = MemoryManager.from_dict(data["memory"])
         for name, val in data.get("stats", {}).items():
             setattr(squid, name, float(val))
         squid.x = data.get("x", squid.x)

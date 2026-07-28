@@ -26,9 +26,13 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.scatterlayout import ScatterLayout
+from kivy.graphics.transformation import Matrix
+from kivy.core.window import Window
 from kivy.metrics import dp, sp
 
 from .brainview import BrainView
+from .memory_cards import MemoryCards
 from ..engine.personality import (
     describe, PERSONALITY_STAT_MODIFIERS, PERSONALITY_LEARNING_MODIFIERS,
 )
@@ -61,37 +65,66 @@ class _ScrollText(ScrollView):
 class BrainScreen(BoxLayout):
     TEXT_REFRESH = 0.35  # seconds between text-tab refreshes
 
+    # Below this width (dp) we treat the device as a phone (vertical tabs).
+    TABLET_MIN_WIDTH = 600
+
     def __init__(self, simulation, **kwargs):
-        super().__init__(orientation="vertical", spacing=0, **kwargs)
+        super().__init__(spacing=0, **kwargs)
         self.sim = simulation
         self.active = "Network"
         self._last_text_refresh = 0.0
 
-        # --- Tab strip (horizontally scrollable so 7 tabs fit any width) ---
-        strip = ScrollView(size_hint_y=None, height=dp(46), do_scroll_y=False,
-                           bar_width=0)
-        row = BoxLayout(orientation="horizontal", size_hint_x=None, spacing=dp(2),
-                       padding=(dp(2), dp(2)))
-        row.bind(minimum_width=row.setter("width"))
+        # Views shared across layouts.
+        self.network = BrainView(self.sim.squid.brain)
+        self.network_scatter = ScatterLayout(
+            do_rotation=False, do_translation=True, do_scale=True,
+            scale_min=0.5, scale_max=6.0)
+        self.network_scatter.add_widget(self.network)
+        self.textpanel = _ScrollText()
+        self.memory_cards = MemoryCards(self.sim)
+
+        # Responsive tab strip: a horizontal strip on tablets, a vertical
+        # column on phones (where a top strip would be too cramped).
+        self.is_tablet = Window.width >= dp(self.TABLET_MIN_WIDTH)
         self._tab_buttons = {}
-        for name in TABS:
+        self.orientation = "vertical" if self.is_tablet else "horizontal"
+
+        if self.is_tablet:
+            strip = ScrollView(size_hint_y=None, height=dp(46), do_scroll_y=False,
+                               bar_width=0)
+            row = BoxLayout(orientation="horizontal", size_hint_x=None,
+                            spacing=dp(2), padding=(dp(2), dp(2)))
+            row.bind(minimum_width=row.setter("width"))
+            for name in TABS:
+                row.add_widget(self._make_tab(name, horizontal=True))
+            strip.add_widget(row)
+            self.add_widget(strip)
+            self.content = BoxLayout(size_hint_y=1)
+        else:
+            col_scroll = ScrollView(size_hint_x=None, width=dp(96),
+                                    do_scroll_x=False, bar_width=0)
+            col = BoxLayout(orientation="vertical", size_hint_y=None,
+                            spacing=dp(2), padding=(dp(2), dp(2)))
+            col.bind(minimum_height=col.setter("height"))
+            for name in TABS:
+                col.add_widget(self._make_tab(name, horizontal=False))
+            col_scroll.add_widget(col)
+            self.add_widget(col_scroll)
+            self.content = BoxLayout(size_hint_x=1)
+
+        self.add_widget(self.content)
+        self.select("Network")
+
+    def _make_tab(self, name, horizontal):
+        if horizontal:
             b = Button(text=name, size_hint_x=None, width=dp(104), font_size=sp(14),
                        bold=True, background_normal="", background_color=ACCENT_OFF)
-            b.bind(on_release=lambda btn, n=name: self.select(n))
-            self._tab_buttons[name] = b
-            row.add_widget(b)
-        strip.add_widget(row)
-        self.add_widget(strip)
-
-        # --- Content area ---
-        self.content = BoxLayout(size_hint_y=1)
-        self.add_widget(self.content)
-
-        # Network tab is a live canvas; the rest share a scrolling text panel.
-        self.network = BrainView(self.sim.squid.brain)
-        self.textpanel = _ScrollText()
-
-        self.select("Network")
+        else:
+            b = Button(text=name, size_hint_y=None, height=dp(54), font_size=sp(13),
+                       bold=True, background_normal="", background_color=ACCENT_OFF)
+        b.bind(on_release=lambda btn, n=name: self.select(n))
+        self._tab_buttons[name] = b
+        return b
 
     # ------------------------------------------------------------- tab switch
     def select(self, name):
@@ -100,8 +133,12 @@ class BrainScreen(BoxLayout):
             b.background_color = ACCENT if n == name else ACCENT_OFF
         self.content.clear_widgets()
         if name == "Network":
+            self.network_scatter.transform = Matrix()  # reset zoom/pan
             self.network.set_brain(self.sim.squid.brain)
-            self.content.add_widget(self.network)
+            self.content.add_widget(self.network_scatter)
+        elif name == "Memory":
+            self.content.add_widget(self.memory_cards)
+            self.memory_cards.refresh()
         else:
             self.content.add_widget(self.textpanel)
             self._refresh_text(force=True)
@@ -111,16 +148,20 @@ class BrainScreen(BoxLayout):
         """Called each tick while the brain screen is visible."""
         if self.active == "Network":
             self.network.set_brain(self.sim.squid.brain)
+            return
+        now = time.time()
+        if now - self._last_text_refresh < self.TEXT_REFRESH:
+            return
+        self._last_text_refresh = now
+        if self.active == "Memory":
+            self.memory_cards.refresh()
         else:
-            now = time.time()
-            if now - self._last_text_refresh >= self.TEXT_REFRESH:
-                self._refresh_text()
+            self._refresh_text()
 
     def _refresh_text(self, force=False):
         self._last_text_refresh = time.time()
         builder = {
             "Learning": self._learning_text,
-            "Memory": self._memory_text,
             "Decisions": self._decisions_text,
             "Personality": self._personality_text,
             "Stats": self._stats_text,
@@ -140,7 +181,9 @@ class BrainScreen(BoxLayout):
         out.append(f"Rule: neurons that fire together wire together.\n")
         out.append(f"Learning rate: [b]{b.config['base_learning_rate']}[/b]/s   "
                    f"co-activation threshold: [b]{int(b.config['co_activation_threshold']*100)}%[/b]")
-        out.append(f"Neurogenesis boost: {boost}\n")
+        out.append(f"Neurogenesis boost: {boost}")
+        out.append(f"[color=b39ddb]STDP[/color]: spike-timing plasticity — "
+                   f"[b]{b.stdp_potentiations}[/b] timing-based strengthenings so far.\n")
         out.append(self._h("Recent weight changes"))
         events = list(reversed(b.recent_events[-16:]))
         if not events:
@@ -153,35 +196,9 @@ class BrainScreen(BoxLayout):
                 dw = e["dw"]
                 col = "88ff88" if dw >= 0 else "ff8888"
                 sign = "+" if dw >= 0 else ""
+                tag = " [color=b39ddb](STDP)[/color]" if e.get("stdp") else ""
                 out.append(f"[color={col}]{sign}{dw:.3f}[/color]  {e['a']} <> {e['b']}"
-                           f"  [color=888888](w={e['weight']:+.2f})[/color]")
-        return "\n".join(out)
-
-    def _memory_text(self):
-        b = self.sim.squid.brain
-        pairs = {}
-        for (x, y), w in b.weights.items():
-            key = tuple(sorted((x, y)))
-            pairs[key] = w
-        strong = sorted(pairs.items(), key=lambda kv: abs(kv[1]), reverse=True)[:12]
-        out = [self._h("Long-term associations")]
-        out.append("The strongest wired connections — what this brain has learned "
-                   "to associate.\n")
-        for (x, y), w in strong:
-            mag = abs(w)
-            strength = "very strong" if mag > 0.8 else "strong" if mag > 0.5 else \
-                       "moderate" if mag > 0.25 else "weak"
-            col = "88ff88" if w >= 0 else "ff8888"
-            kind = "excites" if w >= 0 else "inhibits"
-            out.append(f"[color={col}]{w:+.2f}[/color] [b]{x}[/b] {kind} [b]{y}[/b] "
-                       f"[color=888888]({strength})[/color]")
-        grown = b.neurogenesis.get("new_neurons", [])
-        out.append("\n" + self._h("Neurons grown from experience"))
-        if grown:
-            out.append("  ".join(f"[color=ffd54f]{n}[/color]" for n in grown))
-        else:
-            out.append("[color=888888]None yet. Sustained novelty, reward or stress "
-                       "grows new neurons.[/color]")
+                           f"  [color=888888](w={e['weight']:+.2f})[/color]{tag}")
         return "\n".join(out)
 
     def _decisions_text(self):
@@ -248,6 +265,10 @@ class BrainScreen(BoxLayout):
         out.append(f"Connections: [b]{conns}[/b]")
         if births:
             out.append("Grown by trigger: " + ", ".join(f"{k} x{v}" for k, v in births.items()))
+        out.append(f"STDP strengthenings: [b]{b.stdp_potentiations}[/b]")
+        mem = s.memory
+        out.append(f"Memories: [b]{len(mem.short_term)}[/b] short-term, "
+                   f"[b]{len(mem.long_term)}[/b] long-term")
         out.append(f"Age: [b]{age_str}[/b]\n")
         out.append(self._h("Live stats"))
         for n in s.CORE_STATS:
@@ -268,6 +289,9 @@ class BrainScreen(BoxLayout):
         out.append("Line thickness = connection strength (learned weight).\n")
         out.append(self._h("How it learns"))
         out.append("Hebbian learning strengthens links between neurons that fire "
-                   "together; sustained novelty, reward or stress grows entirely new "
-                   "neurons. No two brains develop the same way.")
+                   "together, and STDP adds spike-timing plasticity (neurons that "
+                   "fire in quick succession wire up). Sustained novelty, reward or "
+                   "stress grows entirely new neurons, and lived events are stored "
+                   "as memories that colour future decisions. No two brains develop "
+                   "the same way.")
         return "\n".join(out)

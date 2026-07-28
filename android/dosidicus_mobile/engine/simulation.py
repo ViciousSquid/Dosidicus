@@ -35,6 +35,7 @@ class Simulation:
         self.last_status = self.squid.status
         self.newborn_neuron = None     # set for one tick when neurogenesis fires
         self._prev_can_see_food = False
+        self._was_anxious = False
 
     # ------------------------------------------------------------- world API
     def food_visible(self):
@@ -64,6 +65,8 @@ class Simulation:
         self.decorations.append(deco)
         self.squid.brain.register_novelty(2.5)
         self.squid.curiosity = min(100.0, self.squid.curiosity + 5.0)
+        self.squid.remember("decoration", category, f"New {category} appeared",
+                            {"curiosity": 5}, importance=1.5)
         return deco
 
     def update_decoration(self, deco_id, x=None, y=None, scale=None):
@@ -128,18 +131,29 @@ class Simulation:
         # Sustained distress feeds the stress trigger, weighted by how anxious.
         if squid.anxiety > 60:
             squid.brain.register_stress((squid.anxiety - 60) / 40.0 * dt)
+        # A spike into high anxiety is a memorable (negative) mental state.
+        if squid.anxiety > 85 and not self._was_anxious:
+            squid.remember("mental_state", "anxious", "Felt very anxious",
+                           {"anxiety": 20, "happiness": -10}, importance=2.0,
+                           related=["anxiety"])
+        self._was_anxious = squid.anxiety > 85
         clamped = squid.sync_stats_to_brain(can_see_food=can_see)
         squid.brain.propagate(clamped)
         # keep brain's core neurons in lock-step with the authoritative stats
         for name in squid.CORE_STATS:
             squid.brain.state[name] = getattr(squid, name)
 
-        # 3) Learning: continuous Hebbian + neurogenesis housekeeping.
+        # 3) Learning: continuous Hebbian + STDP + neurogenesis housekeeping.
         squid.brain.hebbian_step(dt)
+        squid.brain.stdp_step()
         squid.brain.decay_neurogenesis_counters(dt)
         born = squid.brain.check_neurogenesis()
         if born:
             self.newborn_neuron = born
+            kind = born.rsplit("_", 1)[0]
+            squid.remember("neurogenesis", born, f"Grew a {kind} neuron",
+                           None, importance=3.0)
+        squid.memory.periodic(squid.brain.sim_time)
 
         # 4) Let rewired/grown neurons nudge mood, then decide + move.
         squid.pull_core_from_brain()
