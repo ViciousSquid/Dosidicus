@@ -58,6 +58,8 @@ class DosidicusApp(App):
         self.sim = self._load_or_new()
         self._since_save = 0.0
         self._banner_until = 0.0
+        self._ach_queue = []                       # pending achievement toasts
+        self.sim.achievements.on_unlock = self._on_achievement
 
         root = BoxLayout(orientation="vertical", spacing=2, padding=2)
 
@@ -182,6 +184,7 @@ class DosidicusApp(App):
         self.sim = sim
         sim.tank_size = TANK_SIZE
         sim.squid.tank_size = TANK_SIZE
+        sim.achievements.on_unlock = self._on_achievement
         self.tank.set_simulation(sim)
         self.deco_layer.set_simulation(sim)
         self.brain.set_simulation(sim)
@@ -274,11 +277,16 @@ class DosidicusApp(App):
         self._flash("[color=88ff88]Added — drag to move, pinch to resize, "
                     "double-tap to remove.[/color]", seconds=3.5)
 
+    def _on_achievement(self, ach):
+        """Queue an unlock toast (shown one at a time by tick())."""
+        self._ach_queue.append(ach)
+
     def _toggle_view(self, *a):
         self.showing_brain = not self.showing_brain
         self.viewport.clear_widgets()
         if self.showing_brain:
             self.viewport.add_widget(self.brain)
+            self.sim.achievements.on_brain_opened()   # "Brain Surgeon"
             self.toggle_btn.text = "Tank"
         else:
             self.viewport.add_widget(self.tank)
@@ -332,6 +340,13 @@ class DosidicusApp(App):
         if time.time() > self._banner_until and self.banner.height:
             self.banner.text = ""
             self.banner.height = 0
+
+        # Show queued achievement unlocks one at a time when the banner is free.
+        if self._ach_queue and time.time() > self._banner_until:
+            ach = self._ach_queue.pop(0)
+            self._flash(f"[b][color=ffd700]Achievement unlocked![/color][/b]  "
+                        f"[b]{ach.name}[/b]  [color=aaddff]+{ach.points}[/color]",
+                        seconds=3.5)
 
         self._since_save += dt
         if self._since_save >= AUTOSAVE_EVERY:

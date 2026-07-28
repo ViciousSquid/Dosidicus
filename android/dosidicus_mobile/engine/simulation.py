@@ -17,6 +17,7 @@ import time
 from .squid import Squid
 from .personality import Personality
 from .statistics import Statistics
+from .achievements import AchievementManager
 
 
 class Simulation:
@@ -54,6 +55,10 @@ class Simulation:
         self.STARVE_SECONDS = 300.0    # ...for this long (5 real-world minutes)
         self._starving_time = 0.0
         self.game_over = self.squid.is_dead
+        # Achievements (mobile port of the desktop plugin). The app wires an
+        # on_unlock callback for the toast; events fire from update()/care API.
+        self.achievements = AchievementManager()
+        self._ach_eval_timer = 0.0
         # Egg hatching: a new game begins as an egg that plays its frames
         # (1/second) before the squid emerges.
         self.hatching = False
@@ -96,6 +101,7 @@ class Simulation:
         self.squid.curiosity = min(100.0, self.squid.curiosity + 5.0)
         self.squid.remember("decoration", category, f"New {category} appeared",
                             {"curiosity": 5}, importance=1.5)
+        self.achievements.on_decoration_added()
         return deco
 
     def update_decoration(self, deco_id, x=None, y=None, scale=None):
@@ -185,6 +191,7 @@ class Simulation:
                                {"satisfaction": 18, "happiness": 15},
                                importance=2.0, related=["satisfaction", "curiosity"])
                 self.stats.on_rock_thrown()
+                self.achievements.on_rock_throw()
                 self.last_status = "playfully tossing a rock"
             return
 
@@ -199,6 +206,7 @@ class Simulation:
             squid.carrying_rock = True
             squid.carried_rock_id = target["id"]
             squid._carry_until = now + random.uniform(3.0, 7.0)
+            self.achievements.on_rock_pickup()
             self.last_status = "picked up a rock!"
         elif dist < 320:
             squid.move_towards(target["x"], target["y"])
@@ -210,6 +218,7 @@ class Simulation:
         squid = self.squid
         squid.startle(source)
         self.stats.on_startle()
+        self.achievements.on_startle()
         self._startle_cooldown = 8.0
         squid.remember("mental_state", "startled", "Startled!",
                        {"anxiety": 30, "happiness": -8}, importance=2.0,
@@ -222,6 +231,7 @@ class Simulation:
         self.ink_clouds.append({"x": squid.x, "y": squid.y,
                                 "t": squid.brain.sim_time, "ttl": 3.0})
         self.stats.on_ink_cloud()
+        self.achievements.on_ink_cloud()
         squid.remember("behaviour", "ink_cloud", "Startled — released an ink cloud!",
                        None, importance=1.5)
 
@@ -265,6 +275,7 @@ class Simulation:
                     near_now.add(d["id"])
                     if d["id"] not in self._near_plants:
                         self.stats.on_plant_interaction()
+                        self.achievements.on_plant_interaction()
                 elif cat == "rock":
                     s.curiosity = min(100.0, s.curiosity + 2.5 * dt)
         self._near_plants = near_now
@@ -281,6 +292,7 @@ class Simulation:
             if math.hypot(self.squid.x - f["x"], self.squid.y - f["y"]) < 45:
                 self.squid.feed(f["type"])
                 self.stats.on_eat(f["type"])
+                self.achievements.on_feed()
                 eaten.append(f)
         for f in eaten:
             self.food_items.remove(f)
@@ -357,6 +369,7 @@ class Simulation:
             squid.remember("neurogenesis", born, f"Grew a {kind} neuron",
                            None, importance=3.0)
             self.stats.on_neuron_born(kind)
+            self.achievements.on_neuron_born()
         squid.memory.periodic(squid.brain.sim_time)
 
         # 4) Let rewired/grown neurons nudge mood, then decide + move.
@@ -387,7 +400,16 @@ class Simulation:
             promoted = squid.memory.consolidate_sleep(squid.brain.sim_time)
             self.sleep_consolidation = dict(replay, promoted=promoted)
             self.last_status = "drifting to sleep — consolidating memories"
+            self.achievements.on_sleep_consolidated()
+        elif self._was_sleeping and not squid.is_sleeping:
+            self.achievements.on_wake()      # woke from a sleep
         self._was_sleeping = squid.is_sleeping
+
+        # Achievement stat/age/time evaluation, ~once a second.
+        self._ach_eval_timer += dt
+        if self._ach_eval_timer >= 1.0:
+            self._ach_eval_timer = 0.0
+            self.achievements.evaluate(squid, self.stats)
 
         # 5) World interactions.
         self._update_startle(dt)
@@ -421,6 +443,7 @@ class Simulation:
         # (mirrors the desktop cleaning line). The stat boost applies now.
         if self.sweep_x is None:
             self.sweep_x = float(self.tank_size[0])
+        self.achievements.on_clean()
         return self.squid.clean()
 
     def _update_sweep(self, dt):
@@ -447,6 +470,7 @@ class Simulation:
             "poop_items": self.poop_items,
             "decorations": self.decorations,
             "statistics": self.stats.to_dict(),
+            "achievements": self.achievements.to_dict(),
             "game_over": self.game_over,
             "starving_time": self._starving_time,
         }
@@ -461,6 +485,7 @@ class Simulation:
         sim.decorations = data.get("decorations", [])
         sim._decoration_id = max([d["id"] for d in sim.decorations], default=0)
         sim.stats = Statistics.from_dict(data.get("statistics"))
+        sim.achievements = AchievementManager.from_dict(data.get("achievements"))
         sim._prev_pos = (sim.squid.x, sim.squid.y)
         sim._was_sick = sim.squid.is_sick
         sim._was_sleeping = sim.squid.is_sleeping

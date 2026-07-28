@@ -8,6 +8,7 @@ from .personality import Personality, PERSONALITY_LEARNING_MODIFIERS
 from .brain import NeuralBrain
 from .squid import Squid
 from .simulation import Simulation
+from .achievements import AchievementManager, ACHIEVEMENTS
 
 __all__ = [
     "Personality",
@@ -15,4 +16,6 @@ __all__ = [
     "NeuralBrain",
     "Squid",
     "Simulation",
+    "AchievementManager",
+    "ACHIEVEMENTS",
 ]

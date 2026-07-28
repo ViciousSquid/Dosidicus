@@ -11,6 +11,7 @@ from kivy.uix.filechooser import FileChooserListView
 from kivy.metrics import dp, sp
 
 from ..engine.portability import export_squid, import_squid
+from .achievements_screen import open_achievements
 from . import sharing
 
 
@@ -35,13 +36,15 @@ def _message(title, msg):
 
 def open_menu(app):
     box = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(12))
-    popup = Popup(title="Menu", content=box, size_hint=(0.86, 0.62), title_size=sp(18))
+    popup = Popup(title="Menu", content=box, size_hint=(0.86, 0.72), title_size=sp(18))
 
     def close(*_):
         popup.dismiss()
 
     box.add_widget(_btn("New game", lambda *_: (close(), _confirm_new_game(app)),
                         color=(0.5, 0.28, 0.72, 1)))
+    box.add_widget(_btn("Achievements", lambda *_: (close(), open_achievements(app)),
+                        color=(0.42, 0.34, 0.14, 1)))
     box.add_widget(_btn("Export squid", lambda *_: (close(), _export(app)),
                         color=(0.13, 0.42, 0.18, 1)))
     box.add_widget(_btn("Import squid", lambda *_: (close(), _import(app)),

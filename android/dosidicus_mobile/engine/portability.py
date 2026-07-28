@@ -73,7 +73,7 @@ def export_squid(sim: Simulation, path: str):
         "ShortTerm.json": _memories_desktop(squid.memory.short_term),
         "LongTerm.json": _memories_desktop(squid.memory.long_term),
         "custom_brain.json": None,
-        "achievements.json": {},
+        "achievements.json": sim.achievements.to_dict(),
     }
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         for name, data in files.items():
@@ -159,5 +159,7 @@ def _import_desktop(z, game_state, tank_size):
     # Desktop decorations embed base64 pixmaps and don't map to our bundled
     # assets, so they're skipped; everything else is reconstructed.
     from .statistics import Statistics
+    from .achievements import AchievementManager
     sim.stats = Statistics.from_dict(_read_json(z, "statistics.json", {}))
+    sim.achievements = AchievementManager.from_dict(_read_json(z, "achievements.json", {}))
     return sim
