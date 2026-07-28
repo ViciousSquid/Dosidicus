@@ -42,6 +42,7 @@ from .brain_screen import BrainScreen
 from .stats import StatsPanel
 from .decorations import DecorationLayer, open_decoration_palette
 from .menu import open_menu
+from .tutorial import prompt_tutorial
 
 TANK_SIZE = (900, 500)
 AUTOSAVE_EVERY = 20.0  # seconds
@@ -124,6 +125,9 @@ class DosidicusApp(App):
         root.add_widget(bar)
 
         Clock.schedule_interval(self.tick, 1.0 / 30.0)
+        # First-ever launch (no save): offer the guided tutorial once laid out.
+        if getattr(self, "_is_first_launch", False):
+            Clock.schedule_once(lambda dt: prompt_tutorial(self), 0.8)
         return root
 
     # ---------------------------------------------------------- persistence
@@ -133,9 +137,11 @@ class DosidicusApp(App):
                 sim = Simulation.load(self.save_path)
                 sim.tank_size = TANK_SIZE
                 sim.squid.tank_size = TANK_SIZE
+                self._is_first_launch = False
                 return sim
             except Exception as e:
                 print(f"[Dosidicus] Failed to load save ({e}); hatching a new squid.")
+        self._is_first_launch = True  # no save yet -> offer the tutorial
         return Simulation(tank_size=TANK_SIZE, squid=Squid(tank_size=TANK_SIZE))
 
     def _save(self):
@@ -170,8 +176,9 @@ class DosidicusApp(App):
 
     def new_game(self):
         self.set_simulation(Simulation(tank_size=TANK_SIZE, squid=Squid(tank_size=TANK_SIZE)))
-        self._flash("[color=b39ddb]A new squid has hatched![/color]", seconds=3.0)
         self.save_now()
+        # Prompt the caretaker to run the guided tutorial for the new squid.
+        Clock.schedule_once(lambda dt: prompt_tutorial(self), 0.3)
 
     # --------------------------------------------------------------- header
     def _header_text(self):
