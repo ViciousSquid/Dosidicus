@@ -41,21 +41,13 @@ class StatisticsTab(BrainBaseTab):
         self.update_timer.start(1000)  # Update every second
 
         self.is_visible = False
-        self.pending_distance = 0  # Store distance when tab not visible
-
-        # Connect to neuron creation events for real-time updates
-        if self.brain_widget and hasattr(self.brain_widget, 'neuronCreated'):
-            self.brain_widget.neuronCreated.connect(self._on_neuron_created_update_stats)
 
     def showEvent(self, event):
         """Called when tab becomes visible"""
         super().showEvent(event)
         self.is_visible = True
-        # Apply any pending distance
-        if self.pending_distance > 0:
-            self.statistics['distance_swam'] += self.pending_distance
-            self.pending_distance = 0
-            self.update_display()
+        self._sync_from_squid_statistics()
+        self.update_display()
 
     def hideEvent(self, event):
         """Called when tab becomes hidden"""
@@ -65,6 +57,8 @@ class StatisticsTab(BrainBaseTab):
     def set_logic(self, logic):
         """Called by main window after TamagotchiLogic (and squid) exist."""
         self.tamagotchi_logic = logic
+        self._sync_from_squid_statistics()
+        self.update_display()
 
     def _sync_from_squid_statistics(self):
         """Mirror the persistent squid statistics object into the tab state."""
@@ -103,58 +97,17 @@ class StatisticsTab(BrainBaseTab):
         if not squid_stats:
             return False
 
-        attr_map = {
-            'cheese_eaten': 'cheese_consumed',
-            'sushi_eaten': 'sushi_consumed',
-            'poops_created': 'poops_created',
-            'poops_thrown': 'total_poops_thrown',
-            'max_poops_cleaned': 'max_poops_cleaned',
-            'startles_experienced': 'startles_experienced',
-            'ink_clouds_created': 'ink_clouds_created',
-            'times_colour_changed': 'times_colour_changed',
-            'rocks_thrown': 'total_rocks_thrown',
-            'plants_interacted': 'plants_interacted',
-            'novelty_neurons_created': 'novelty_neurons_created',
-            'stress_neurons_created': 'stress_neurons_created',
-            'reward_neurons_created': 'reward_neurons_created',
-        }
-
-        attr_name = attr_map.get(stat_name)
-        if not attr_name or not hasattr(squid_stats, attr_name):
-            return False
-
-        current_value = getattr(squid_stats, attr_name, 0)
-        setattr(squid_stats, attr_name, current_value + amount)
-        return True
-
-    def update_current_neurons(self, count):
-        """Update the current neuron count in the UI, enforcing only-count-up logic.
-        
-        This ensures the max neurons stat only ever increases, never decreases.
-        """
-        if hasattr(self, 'stat_labels') and 'current_neurons' in self.stat_labels:
-            current_max = self.statistics.get('current_neurons', 0)
-            if count > current_max:
-                self.statistics['current_neurons'] = count
-                self.stat_labels['current_neurons'].setText(str(count))
-
-                if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'squid'):
-                    squid = self.tamagotchi_logic.squid
-                    if hasattr(squid, 'statistics') and hasattr(squid.statistics, 'max_neurons_reached'):
-                        squid.statistics.max_neurons_reached = count
-                        squid.statistics.current_neurons = count
-
-    def _on_neuron_created_update_stats(self, neuron_name: str):
-        """Update current neuron count when a new neuron is created"""
-        self.update_statistics()
+        return squid_stats.increment(stat_name, amount)
 
     def track_distance(self, distance):
-        """Track distance swam - only updates if tab is visible"""
-        if self.is_visible:
-            self.statistics['distance_swam'] += distance
-            self.update_display()
-        else:
-            self.pending_distance += distance
+        """Forward a movement event to the canonical model."""
+        if self.tamagotchi_logic and getattr(self.tamagotchi_logic, 'squid', None):
+            squid_stats = getattr(self.tamagotchi_logic.squid, 'statistics', None)
+            if squid_stats:
+                squid_stats.add_distance(distance)
+                self._sync_from_squid_statistics()
+                if self.is_visible:
+                    self.update_display()
 
     def initialize_ui(self):
         """Build the statistics tab interface with DPI scaling"""
@@ -234,52 +187,17 @@ class StatisticsTab(BrainBaseTab):
         self.layout.addStretch()
 
     def update_from_brain_state(self, state):
-        """Update tab based on brain state"""
+        """Refresh the read-only mirror after a brain-state update."""
         if not self.tamagotchi_logic or not self.tamagotchi_logic.squid:
             return
 
-        squid = self.tamagotchi_logic.squid
-
-        current_pos = (squid.squid_x, squid.squid_y)
-        if self.statistics['last_position'] is not None:
-            last_pos = self.statistics['last_position']
-            distance = ((current_pos[0] - last_pos[0])**2 + (current_pos[1] - last_pos[1])**2)**0.5
-            self.statistics['distance_swam'] += distance
-
-        self.statistics['last_position'] = current_pos
-
-        if squid.is_sleeping:
-            current_time = time.time()
-            time_elapsed = current_time - self.statistics['last_update_time']
-            self.statistics['total_sleep_time'] += time_elapsed
-
-        self.statistics['last_update_time'] = time.time()
         self._sync_from_squid_statistics()
         self.update_display()
 
     def update_statistics(self):
-        """Update statistics from squid state"""
+        """Refresh the UI from the canonical squid statistics model."""
         if not self.tamagotchi_logic or not self.tamagotchi_logic.squid:
             return
-
-        squid = self.tamagotchi_logic.squid
-
-        if not self.brain_widget:
-            parent = self.parent()
-            if hasattr(parent, 'brain_widget'):
-                self.brain_widget = parent.brain_widget
-
-        if self.brain_widget and hasattr(self.brain_widget, 'neuron_positions'):
-            real_current_count = len(self.brain_widget.neuron_positions)
-            stored_count = self.statistics.get('current_neurons', 0)
-
-            if real_current_count > stored_count:
-                self.statistics['current_neurons'] = real_current_count
-
-                if hasattr(squid, 'statistics') and hasattr(squid.statistics, 'max_neurons_reached'):
-                    if real_current_count > squid.statistics.max_neurons_reached:
-                        squid.statistics.max_neurons_reached = real_current_count
-                        squid.statistics.current_neurons = real_current_count
 
         self._sync_from_squid_statistics()
         self.statistics['last_update_time'] = time.time()
@@ -305,17 +223,12 @@ class StatisticsTab(BrainBaseTab):
                 label.setText(str(int(value)))
 
     def increment_stat(self, stat_name, amount=1):
-        """Increment a specific statistic"""
-        updated_canonical = self._increment_squid_stat(stat_name, amount)
-
-        if stat_name in self.statistics:
-            self.statistics[stat_name] += amount
-        elif not updated_canonical:
+        """Forward a discrete event to the canonical model."""
+        if not self._increment_squid_stat(stat_name, amount):
             return
 
         self._sync_from_squid_statistics()
         self.update_display()
-        self.save_statistics()
 
     def reset_statistics(self):
         """Reset all statistics to zero"""
@@ -327,12 +240,12 @@ class StatisticsTab(BrainBaseTab):
         )
 
         if reply == QtWidgets.QMessageBox.Yes:
-            for key in self.statistics:
-                if key not in ['last_position', 'last_update_time']:
-                    self.statistics[key] = 0
-            self.statistics['last_update_time'] = time.time()
-            self.update_display()
-            self.save_statistics()
+            if self.tamagotchi_logic and getattr(self.tamagotchi_logic, 'squid', None):
+                squid_stats = getattr(self.tamagotchi_logic.squid, 'statistics', None)
+                if squid_stats:
+                    squid_stats.reset()
+                    self._sync_from_squid_statistics()
+                    self.update_display()
 
     def export_statistics(self):
         """Export statistics to a file"""
@@ -377,19 +290,9 @@ class StatisticsTab(BrainBaseTab):
                 )
 
     def save_statistics(self):
-        """Save statistics to file"""
-        if hasattr(self.tamagotchi_logic, 'save_manager'):
-            try:
-                self.tamagotchi_logic.save_manager.save_statistics(self.statistics)
-            except:
-                pass
+        """Compatibility hook; the main save pipeline persists the model."""
+        self._sync_from_squid_statistics()
 
     def load_statistics(self):
-        """Load statistics from file"""
-        if hasattr(self.tamagotchi_logic, 'save_manager'):
-            try:
-                loaded_stats = self.tamagotchi_logic.save_manager.load_statistics()
-                if loaded_stats:
-                    self.statistics.update(loaded_stats)
-            except:
-                pass
+        """Compatibility hook; the main load pipeline restores the model."""
+        self._sync_from_squid_statistics()
