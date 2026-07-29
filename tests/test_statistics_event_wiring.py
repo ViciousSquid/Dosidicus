@@ -2,7 +2,7 @@ import io
 import unittest
 from contextlib import redirect_stdout
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from src.brain_widget import BrainWidget
 from src.neurogenesis import EnhancedNeurogenesis
@@ -138,7 +138,17 @@ class StatisticsEventWiringTests(unittest.TestCase):
         squid = FakeSquid()
         neuron_name = "reward_test"
         brain_widget = SimpleNamespace(
-            neuron_positions={f"neuron_{index}": (0, 0) for index in range(9)},
+            neuron_positions={
+                **{f"neuron_{index}": (0, 0) for index in range(9)},
+                "is_sick": (0, 0),
+            },
+            excluded_neurons=[
+                "is_sick",
+                "is_eating",
+                "pursuing_food",
+                "direction",
+                "is_sleeping",
+            ],
             enhanced_neurogenesis=SimpleNamespace(
                 functional_neurons={
                     neuron_name: SimpleNamespace(neuron_type="reward"),
@@ -152,6 +162,9 @@ class StatisticsEventWiringTests(unittest.TestCase):
             brain_widget=brain_widget,
             statistics_tab=None,
         )
+        logic.statistics_window = SimpleNamespace(
+            add_score_for_neuron_creation=Mock(),
+        )
 
         with patch("src.tamagotchi_logic.QtCore.QTimer.singleShot") as single_shot:
             logic._on_neurogenesis_icon_and_memory(neuron_name)
@@ -159,10 +172,95 @@ class StatisticsEventWiringTests(unittest.TestCase):
         self.assertEqual(squid.statistics.reward_neurons_created, 1)
         self.assertEqual(squid.statistics.current_neurons, 9)
         self.assertEqual(squid.statistics.max_neurons_reached, 9)
+        logic.statistics_window.add_score_for_neuron_creation.assert_called_once_with()
         single_shot.assert_called_once_with(
             0,
-            logic._observe_current_neuron_count,
+            logic.refresh_neuron_count,
         )
+
+    def test_live_neuron_count_filters_only_excluded_position_keys(self):
+        logic = object.__new__(TamagotchiLogic)
+        logic.brain_window = SimpleNamespace(
+            brain_widget=SimpleNamespace(
+                neuron_positions={
+                    **{f"core_{index}": (0, 0) for index in range(8)},
+                    "is_sick": (0, 0),
+                },
+                excluded_neurons=[
+                    "is_sick",
+                    "is_eating",
+                    "pursuing_food",
+                    "direction",
+                    "is_sleeping",
+                ],
+            )
+        )
+
+        self.assertEqual(logic._live_neuron_count(), 8)
+
+    def test_sleep_elapsed_time_stays_wall_clock_at_faster_speeds(self):
+        logic = object.__new__(TamagotchiLogic)
+
+        for speed in (1, 2, 3):
+            with self.subTest(speed=speed):
+                interval_ms = 1000 // speed
+                logic.simulation_timer = SimpleNamespace(
+                    interval=lambda value=interval_ms: value
+                )
+                elapsed = sum(
+                    logic._statistics_elapsed_seconds()
+                    for _ in range(speed)
+                )
+                self.assertAlmostEqual(elapsed, 1.0, places=2)
+
+    def test_startle_ink_followup_runs_only_when_cloud_is_created(self):
+        memory_manager = SimpleNamespace(
+            add_short_term_memory=Mock(),
+        )
+        squid = SimpleNamespace(
+            status="startled",
+            memory_manager=memory_manager,
+            end_ink_flee=Mock(),
+        )
+        logic = object.__new__(TamagotchiLogic)
+        logic.squid = squid
+        logic.create_ink_cloud = Mock()
+
+        with (
+            patch("src.tamagotchi_logic.random.random", return_value=0.5),
+            patch("src.tamagotchi_logic.QtCore.QTimer.singleShot") as single_shot,
+        ):
+            self.assertFalse(logic._maybe_create_startle_ink_cloud("environment"))
+
+        logic.create_ink_cloud.assert_not_called()
+        memory_manager.add_short_term_memory.assert_not_called()
+        single_shot.assert_not_called()
+        self.assertEqual(squid.status, "startled")
+
+        with (
+            patch("src.tamagotchi_logic.random.random", return_value=0.1),
+            patch("src.tamagotchi_logic.QtCore.QTimer.singleShot") as single_shot,
+        ):
+            self.assertTrue(logic._maybe_create_startle_ink_cloud("environment"))
+
+        logic.create_ink_cloud.assert_called_once_with()
+        memory_manager.add_short_term_memory.assert_called_once_with(
+            'behaviour',
+            'ink_cloud',
+            'Startled! Created an ink cloud',
+        )
+        single_shot.assert_called_once_with(5000, squid.end_ink_flee)
+        self.assertEqual(squid.status, "fleeing!")
+
+    def test_startle_count_does_not_depend_on_statistics_tab(self):
+        squid = FakeSquid()
+        logic = object.__new__(TamagotchiLogic)
+        logic.squid = squid
+        logic.brain_window = SimpleNamespace(statistics_tab=None)
+
+        logic.track_startle()
+
+        self.assertEqual(squid.statistics.startles_experienced, 1)
 
     def test_sickness_funnel_keeps_state_and_transition_count_aligned(self):
         squid = FakeSquid()

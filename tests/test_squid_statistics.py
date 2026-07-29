@@ -1,6 +1,6 @@
 import unittest
 
-from src.squid_statistics import SquidStatistics
+from src.squid_statistics import DEFAULT_NEURON_COUNT, SquidStatistics
 
 
 class FakeSquid:
@@ -16,6 +16,14 @@ class SquidStatisticsTests(unittest.TestCase):
     def setUp(self):
         self.squid = FakeSquid()
         self.statistics = SquidStatistics(self.squid)
+
+    def test_default_neuron_count_matches_the_standard_brain(self):
+        self.assertEqual(DEFAULT_NEURON_COUNT, 8)
+        self.assertEqual(self.statistics.current_neurons, DEFAULT_NEURON_COUNT)
+        self.assertEqual(
+            self.statistics.max_neurons_reached,
+            DEFAULT_NEURON_COUNT,
+        )
 
     def test_sleep_time_uses_explicit_elapsed_time(self):
         self.squid.is_sleeping = True
