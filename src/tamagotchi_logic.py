@@ -254,6 +254,7 @@ class TamagotchiLogic:
         # Connect neurogenesis signal to show icon and store long-term memory
         if hasattr(self.brain_window, 'brain_widget'):
             self.brain_window.brain_widget.neuronCreated.connect(self._on_neurogenesis_icon_and_memory)
+            self._observe_current_neuron_count()
 
     def handle_vision_update(self, result):
         """Cache the latest vision result and push to brain immediately."""
@@ -1793,7 +1794,7 @@ class TamagotchiLogic:
         if random.random() < curious_chance:
             self.make_squid_curious()
 
-    def track_neuron_creation(self, neuron_type, current_count=None):
+    def track_neuron_creation(self, neuron_type, current_count):
         """Record one completed neurogenesis event on the canonical model."""
         statistics = getattr(self.squid, 'statistics', None)
         if not statistics:
@@ -2276,8 +2277,7 @@ class TamagotchiLogic:
                     self.hunger_threshold_time <= 50 * self.simulation_speed)):
                     if random.random() < 0.8:
                         self._set_sickness_state(True)
-                else:
-                    self._set_sickness_state(False)
+                # Sickness persists until medicine or an explicit game reset.
 
                 # New logic for health decrease based on happiness and cleanliness
                 if self.squid.happiness < 20 and self.squid.cleanliness < 20:
@@ -2824,6 +2824,7 @@ class TamagotchiLogic:
             brain_state = data.get('brain_state', {})
             if brain_state and hasattr(self, 'brain_window'):
                 self.brain_window.set_brain_state(brain_state)
+                self._observe_current_neuron_count()
                 
                 # Manually load bindings if not using custom brain
                 # This handles standard saves where bindings are stored in 'brain_state'
@@ -3048,6 +3049,7 @@ class TamagotchiLogic:
             # Load brain state
             brain_state = save_data.get('brain_state', {})
             self.brain_window.set_brain_state(brain_state)
+            self._observe_current_neuron_count()
             
             # Load memories
             self.squid.memory_manager.short_term_memory = save_data.get('ShortTerm', [])
