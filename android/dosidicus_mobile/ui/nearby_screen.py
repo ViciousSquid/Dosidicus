@@ -162,9 +162,10 @@ class NearbyView(Popup):
     # ------------------------------------------------------------- preview/import
     def _preview(self):
         snap = P.snapshot_dict(P.snapshot_bytes(self.app.sim))
-        self.app.sim.add_visitor(snap, name="Preview")
-        self.app._flash("[color=b39ddb]A visiting squid appeared! It'll swim around, "
-                        "then leave.[/color]", seconds=3.5)
+        self.app.sim.add_visitor(snap, name="Preview",
+                                 seconds=self.app.sim.PREVIEW_SECONDS)
+        self.app._flash("[color=b39ddb]A visiting squid appeared! It'll swim around "
+                        "(and maybe pinch some food), then leave.[/color]", seconds=3.5)
         self.dismiss()
 
     def _offer_import(self, name, data):

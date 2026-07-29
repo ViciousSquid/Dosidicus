@@ -156,13 +156,22 @@ class Squid:
         if self.is_sleeping:
             return "zzz... too sleepy to eat"
         self.is_eating = True
-        self.hunger = max(0.0, self.hunger - 45.0)
-        self.satisfaction = min(100.0, self.satisfaction + 25.0)
-        self.happiness = min(100.0, self.happiness + 12.0)
+        # Two foods, like the desktop: sushi is the healthy staple; cheese is a
+        # richer treat — tastier (more satisfaction/happiness) but greasier, so
+        # it fills a little less and dirties the tank a touch.
+        if food_type == "cheese":
+            dh, ds, dp_, dc = -38.0, 30.0, 16.0, -6.0
+        else:  # sushi (default)
+            dh, ds, dp_, dc = -45.0, 25.0, 12.0, 0.0
+        self.hunger = max(0.0, self.hunger + dh)
+        self.satisfaction = min(100.0, self.satisfaction + ds)
+        self.happiness = min(100.0, self.happiness + dp_)
+        if dc:
+            self.cleanliness = max(0.0, self.cleanliness + dc)
         self.brain.learn_from_eating(food_type)
         self.status = f"munching {food_type}"
         self.remember("food", food_type, f"Ate {food_type}",
-                      {"hunger": -45, "satisfaction": 25, "happiness": 12},
+                      {"hunger": dh, "satisfaction": ds, "happiness": dp_},
                       importance=2.0, related=["hunger", "satisfaction"])
         return self.status
 

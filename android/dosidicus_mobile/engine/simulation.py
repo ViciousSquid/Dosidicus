@@ -63,6 +63,7 @@ class Simulation:
         # is a transient guest that wanders the tank and then leaves; not saved.
         self.visitors = []
         self._visitor_id = 0
+        self.visitor_event = None   # set for one tick when a visitor does something
         # Egg hatching: a new game begins as an egg that plays its frames
         # (1/second) before the squid emerges.
         self.hatching = False
@@ -267,14 +268,15 @@ class Simulation:
         self.ink_clouds = [c for c in self.ink_clouds if now - c["t"] < c["ttl"]]
 
     # --------------------------------------------------------- visitors (P2P)
-    VISIT_SECONDS = 150.0    # how long a guest squid lingers before leaving
+    VISIT_SECONDS = 150.0    # how long a received guest lingers before leaving
+    PREVIEW_SECONDS = 45.0   # a local preview visitor leaves promptly
 
-    def add_visitor(self, snapshot, name="a friend"):
+    def add_visitor(self, snapshot, name="a friend", seconds=None):
         """Spawn a guest squid from a received snapshot (a squid or sim dict).
 
-        The visitor is pure kinematics — it wanders the tank and then swims out
-        again — so it costs nothing to run and never touches the resident
-        squid's brain. Returns the visitor dict.
+        The visitor is pure kinematics — it wanders, steals food, occasionally
+        puffs an ink cloud, then swims out again — so it costs nothing to run and
+        never touches the resident squid's brain. Returns the visitor dict.
         """
         sq = snapshot.get("squid", snapshot) if isinstance(snapshot, dict) else {}
         tint = sq.get("color_tint")
@@ -294,8 +296,10 @@ class Simulation:
             "vx": 60.0 if from_left else -60.0,
             "vy": random.uniform(-20, 20),
             "dir": "right" if from_left else "left",
-            "leave_at": now + self.VISIT_SECONDS,
+            "leave_at": now + (seconds if seconds is not None else self.VISIT_SECONDS),
             "leaving": False,
+            "stole": 0,
+            "ink_cd": 0.0,
         }
         self.visitors.append(v)
         self.squid.brain.register_novelty(2.0)   # a newcomer is exciting
@@ -312,30 +316,67 @@ class Simulation:
         for v in self.visitors:
             if not v["leaving"] and now >= v["leave_at"]:
                 v["leaving"] = True
-                # head for whichever side is nearer
-                v["vx"] = 90.0 if v["x"] > w * 0.5 else -90.0
+                v["vx"] = 100.0 if v["x"] > w * 0.5 else -100.0
+                # a visitor that grabbed food is "making off with it"
+                if v["stole"]:
+                    self.visitor_event = f"{v['name']} is leaving with your food!"
+
             if v["leaving"]:
                 v["x"] += v["vx"] * dt
                 v["y"] += v["vy"] * 0.3 * dt
                 if v["x"] < -60 or v["x"] > w + 60:
                     gone.append(v)
+                v["dir"] = "right" if v["vx"] >= 0 else "left"
+                continue
+
+            v["ink_cd"] = max(0.0, v["ink_cd"] - dt)
+            # Hunt the nearest food and steal it; otherwise wander.
+            target = min(self.food_items,
+                         key=lambda f: (f["x"] - v["x"]) ** 2 + (f["y"] - v["y"]) ** 2,
+                         default=None)
+            if target is not None:
+                dx, dy = target["x"] - v["x"], target["y"] - v["y"]
+                dist = math.hypot(dx, dy) or 1.0
+                k = min(1.0, 2.5 * dt)
+                v["vx"] += (dx / dist * 95 - v["vx"]) * k
+                v["vy"] += (dy / dist * 95 - v["vy"]) * k
+                if dist < 42:
+                    self.food_items.remove(target)
+                    v["stole"] += 1
+                    self.visitor_event = f"{v['name']} snatched your {target.get('type', 'food')}!"
+                    s = self.squid
+                    s.anxiety = min(100.0, s.anxiety + 6.0)
+                    s.remember("mental_state", "food_stolen",
+                               f"{v['name']} stole my food!", {"anxiety": 6},
+                               importance=1.5, related=["anxiety"])
+                    if random.random() < 0.2:      # sometimes it spooks the resident
+                        self.startle("visitor")
             else:
-                # gentle wander with a little momentum; bounce off the bounds
                 v["vx"] += random.uniform(-30, 30) * dt
                 v["vy"] += random.uniform(-30, 30) * dt
-                v["vx"] = max(-80, min(80, v["vx"]))
-                v["vy"] = max(-45, min(45, v["vy"]))
-                v["x"] += v["vx"] * dt
-                v["y"] += v["vy"] * dt
-                if v["x"] < 30:
-                    v["x"], v["vx"] = 30, abs(v["vx"])
-                elif v["x"] > w - 30:
-                    v["x"], v["vx"] = w - 30, -abs(v["vx"])
-                if v["y"] < ceil:
-                    v["y"], v["vy"] = ceil, abs(v["vy"])
-                elif v["y"] > floor:
-                    v["y"], v["vy"] = floor, -abs(v["vy"])
+
+            v["vx"] = max(-95, min(95, v["vx"]))
+            v["vy"] = max(-55, min(55, v["vy"]))
+            v["x"] += v["vx"] * dt
+            v["y"] += v["vy"] * dt
+            if v["x"] < 30:
+                v["x"], v["vx"] = 30, abs(v["vx"])
+            elif v["x"] > w - 30:
+                v["x"], v["vx"] = w - 30, -abs(v["vx"])
+            if v["y"] < ceil:
+                v["y"], v["vy"] = ceil, abs(v["vy"])
+            elif v["y"] > floor:
+                v["y"], v["vy"] = floor, -abs(v["vy"])
+
+            # Every so often a visitor puffs an ink cloud — mischief!
+            if v["ink_cd"] <= 0 and random.random() < 0.03 * dt:
+                self.ink_clouds.append({"x": v["x"], "y": v["y"], "t": now, "ttl": 3.0})
+                v["ink_cd"] = 12.0
+                self.visitor_event = f"{v['name']} puffed an ink cloud!"
+                self.squid.curiosity = min(100.0, self.squid.curiosity + 3.0)
+
             v["dir"] = "right" if v["vx"] >= 0 else "left"
+
         for v in gone:
             self.visitors.remove(v)
 
@@ -385,6 +426,7 @@ class Simulation:
         """Advance the whole simulation by ``dt`` seconds."""
         self.newborn_neuron = None
         self.sleep_consolidation = None
+        self.visitor_event = None
         self.squid._last_dt = dt
         squid = self.squid
 

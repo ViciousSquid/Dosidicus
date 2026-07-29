@@ -59,9 +59,9 @@ could be driven headless — the Kivy layer is just one consumer of it.
 
 ## What's in the app
 
-* **Raising loop** — **Feed** and **Clean** buttons (a cleaning sweep wipes food
-  and poop right-to-left). The squid decides for itself when to explore, play
-  and sleep.
+* **Raising loop** — **Feed** (choose **sushi** or **cheese**, as on the
+  desktop) and **Clean** (a sweep wipes food and poop right-to-left). The squid
+  decides for itself when to explore, play and sleep.
 * **Egg hatching** — a new game starts as an egg that animates through its
   frames, then hatches; a short tutorial is offered.
 * **Decorations** — place plants, rocks and more; **drag** to move, **pinch** to
@@ -145,8 +145,10 @@ brain weights/positions, memories, achievements).
 Two phones running Dosidicus can find each other over Bluetooth/Wi-Fi — no
 network, no server — from the **Nearby squids** menu. One hosts, the other
 finds; on connect each side sends a compact gzipped snapshot and the other
-spawns it as a **guest visitor** that swims around the tank for a couple of
-minutes, then leaves. A received squid can also be **imported** as a full copy.
+spawns it as a **guest visitor** that swims around the tank, **steals food** and
+occasionally **puffs an ink cloud** (which can spook the resident), then leaves
+after a couple of minutes. A received squid can also be **imported** as a full
+copy.
 
 This uses Google's **Nearby Connections** API, which is Java-only and exposes
 *abstract* callbacks that pyjnius can't subclass — so a small Java shim

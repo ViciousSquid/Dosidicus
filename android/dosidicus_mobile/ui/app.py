@@ -32,6 +32,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
+from kivy.uix.popup import Popup
 from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp, sp
@@ -43,7 +44,6 @@ from .stats import StatsPanel
 from .decorations import DecorationLayer, open_decoration_palette
 from .menu import open_menu
 from .tutorial import prompt_tutorial
-from .splash import Splash
 
 TANK_SIZE = (900, 500)
 AUTOSAVE_EVERY = 20.0  # seconds
@@ -138,14 +138,13 @@ class DosidicusApp(App):
             self._pending_tutorial = True
             self._was_hatching = True
 
-        # Startup splash (title + project URL) over the game, auto-dismissed.
+        # The Android presplash (assets/presplash.png) is the startup splash;
+        # we don't stack a second in-app splash on top of it. The container
+        # FloatLayout stays so overlays (e.g. game over) have somewhere to live.
         container = FloatLayout()
         container.add_widget(root)
         self._container = container
         self._game_over_overlay = None
-        self._splash = Splash()
-        container.add_widget(self._splash)
-        Clock.schedule_once(lambda dt: self._splash.dismiss(), 2.6)
         return container
 
     # ---------------------------------------------------------- persistence
@@ -258,8 +257,27 @@ class DosidicusApp(App):
         self.sim.drop_food(x, y, food_type="sushi")
 
     def _feed(self, *a):
-        self.sim.drop_food(food_type="sushi")
-        self._flash("[color=88ff88]Dropped food![/color]")
+        """Offer the two foods (sushi / cheese), like the desktop."""
+        box = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(12))
+        box.add_widget(Label(text="What's on the menu?", font_size=sp(16),
+                             size_hint_y=None, height=dp(28)))
+        row = BoxLayout(orientation="horizontal", spacing=dp(10))
+        p = Popup(title="Feed", content=box, size_hint=(0.8, 0.42), title_size=sp(17))
+        for label, ft, color in [("Sushi", "sushi", (0.15, 0.45, 0.6, 1)),
+                                  ("Cheese", "cheese", (0.72, 0.55, 0.16, 1))]:
+            b = Button(text=label, font_size=sp(18), bold=True, background_normal="",
+                       background_color=color)
+            b.bind(on_release=lambda _b, f=ft: (p.dismiss(), self._give_food(f)))
+            row.add_widget(b)
+        box.add_widget(row)
+        p.open()
+
+    def _give_food(self, food_type):
+        item = self.sim.drop_food(food_type=food_type)
+        if item is None:
+            self._flash("[color=ffcc66]Tank's full — let the squid eat first.[/color]")
+        else:
+            self._flash(f"[color=88ff88]Dropped {food_type}![/color]")
 
     def _clean(self, *a):
         self.sim.clean_tank()
@@ -323,6 +341,10 @@ class DosidicusApp(App):
             self._flash(
                 f"[color=b39ddb]Sleeping — consolidated {cons.get('strengthened', 0)} "
                 f"connections, {cons.get('promoted', 0)} memories[/color]", seconds=3.0)
+
+        # A visiting squid did something (stole food, made an ink cloud, left).
+        if self.sim.visitor_event:
+            self._flash(f"[color=b39ddb]{self.sim.visitor_event}[/color]", seconds=3.0)
 
         # Game over: the squid starved. Show the overlay once.
         if self.sim.game_over and self._game_over_overlay is None:

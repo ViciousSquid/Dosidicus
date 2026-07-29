@@ -20,9 +20,11 @@ requirements = python3,kivy==2.3.1,numpy,pillow,plyer,android
 orientation = portrait
 fullscreen = 0
 
-# App icon / splash reuse the original squid artwork.
+# App icon; the startup splash is a full title image (icon + tagline + URL) so
+# there's a single, branded splash rather than a bare icon then a second screen.
 icon.filename = %(source.dir)s/assets/icon.png
-presplash.filename = %(source.dir)s/assets/icon.png
+presplash.filename = %(source.dir)s/assets/presplash.png
+android.presplash_color = #0a0d17
 
 # WRITE_EXTERNAL_STORAGE: legacy (API 24-28) export to public Downloads (API 29+
 # uses MediaStore, no permission). The rest power local peer-to-peer visits via
