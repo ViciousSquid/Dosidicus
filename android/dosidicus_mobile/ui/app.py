@@ -24,6 +24,7 @@ between launches.
 """
 
 import os
+import random
 import time
 
 from kivy.app import App
@@ -32,7 +33,6 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
-from kivy.uix.popup import Popup
 from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp, sp
@@ -257,22 +257,8 @@ class DosidicusApp(App):
         self.sim.drop_food(x, y, food_type="sushi")
 
     def _feed(self, *a):
-        """Offer the two foods (sushi / cheese), like the desktop."""
-        box = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(12))
-        box.add_widget(Label(text="What's on the menu?", font_size=sp(16),
-                             size_hint_y=None, height=dp(28)))
-        row = BoxLayout(orientation="horizontal", spacing=dp(10))
-        p = Popup(title="Feed", content=box, size_hint=(0.8, 0.42), title_size=sp(17))
-        for label, ft, color in [("Sushi", "sushi", (0.15, 0.45, 0.6, 1)),
-                                  ("Cheese", "cheese", (0.72, 0.55, 0.16, 1))]:
-            b = Button(text=label, font_size=sp(18), bold=True, background_normal="",
-                       background_color=color)
-            b.bind(on_release=lambda _b, f=ft: (p.dismiss(), self._give_food(f)))
-            row.add_widget(b)
-        box.add_widget(row)
-        p.open()
-
-    def _give_food(self, food_type):
+        """Drop a random food type (sushi or cheese), like the desktop."""
+        food_type = random.choice(("sushi", "cheese"))
         item = self.sim.drop_food(food_type=food_type)
         if item is None:
             self._flash("[color=ffcc66]Tank's full — let the squid eat first.[/color]")

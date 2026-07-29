@@ -59,9 +59,9 @@ could be driven headless — the Kivy layer is just one consumer of it.
 
 ## What's in the app
 
-* **Raising loop** — **Feed** (choose **sushi** or **cheese**, as on the
-  desktop) and **Clean** (a sweep wipes food and poop right-to-left). The squid
-  decides for itself when to explore, play and sleep.
+* **Raising loop** — **Feed** (drops **sushi** or **cheese** at random, both
+  from the desktop) and **Clean** (a sweep wipes food and poop right-to-left).
+  The squid decides for itself when to explore, play and sleep.
 * **Egg hatching** — a new game starts as an egg that animates through its
   frames, then hatches; a short tutorial is offered.
 * **Decorations** — place plants, rocks and more; **drag** to move, **pinch** to
