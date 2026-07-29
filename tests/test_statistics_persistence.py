@@ -88,6 +88,27 @@ class StatisticsPersistenceTests(unittest.TestCase):
         self.assertEqual(restored.current_neurons, 8)
         self.assertEqual(restored.max_neurons_reached, 15)
 
+    def test_every_canonical_persistence_key_round_trips(self):
+        statistics = SquidStatistics(FakeSquid())
+        expected_attributes = {}
+        for index, attribute_name in enumerate(
+            statistics._PERSISTENCE_KEYS.values(),
+            start=1,
+        ):
+            value = index + 0.25
+            setattr(statistics, attribute_name, value)
+            expected_attributes[attribute_name] = value
+
+        restored = SquidStatistics(FakeSquid())
+        restored.load_statistics(statistics.to_dict())
+
+        for attribute_name, expected_value in expected_attributes.items():
+            with self.subTest(attribute_name=attribute_name):
+                self.assertEqual(
+                    getattr(restored, attribute_name),
+                    expected_value,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
