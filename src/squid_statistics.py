@@ -3,6 +3,7 @@ import math
 
 # Distance tracking constants
 DISTANCE_ROLLOVER_LIMIT = 999_999_999  # ~1 billion pixels before rollover
+DEFAULT_NEURON_COUNT = 8
 
 
 class SquidStatistics:
@@ -90,8 +91,8 @@ class SquidStatistics:
         self.startles_experienced = 0
         self.times_colour_changed = 0
         self.sickness_episodes = 0
-        self.max_neurons_reached = 7
-        self.current_neurons = 7
+        self.max_neurons_reached = DEFAULT_NEURON_COUNT
+        self.current_neurons = DEFAULT_NEURON_COUNT
         self._last_sickness_state = bool(getattr(squid, 'is_sick', False))
 
     def get_total_age_seconds(self):

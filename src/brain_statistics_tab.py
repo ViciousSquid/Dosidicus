@@ -2,6 +2,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .display_scaling import DisplayScaling
 from .localisation import Localisation
+from .squid_statistics import DEFAULT_NEURON_COUNT
 import time
 
 class StatisticsTab(BrainBaseTab):
@@ -26,7 +27,7 @@ class StatisticsTab(BrainBaseTab):
             'novelty_neurons_created': 0,
             'stress_neurons_created': 0,
             'reward_neurons_created': 0,
-            'current_neurons': 7,
+            'current_neurons': DEFAULT_NEURON_COUNT,
             'squid_age_minutes': 0,
             'last_position': None,
             'last_update_time': time.time()
@@ -244,7 +245,7 @@ class StatisticsTab(BrainBaseTab):
                 squid_stats = getattr(self.tamagotchi_logic.squid, 'statistics', None)
                 if squid_stats:
                     squid_stats.reset()
-                    self.tamagotchi_logic._observe_current_neuron_count()
+                    self.tamagotchi_logic.refresh_neuron_count()
                     self._sync_from_squid_statistics()
                     self.update_display()
 
@@ -276,7 +277,10 @@ class StatisticsTab(BrainBaseTab):
                     f.write(f"{loc.get('stat_sleep')}: {int(self.statistics['total_sleep_time'])}\n")
                     f.write(f"{loc.get('stat_sickness')}: {self.statistics['sickness_episodes']}\n")
                     f.write(f"{loc.get('stat_squid_age')}: {int(self.statistics['squid_age_minutes'])}\n")
-                    f.write(f"Max Neurons: {self.statistics.get('current_neurons', 7)}\n")
+                    f.write(
+                        "Max Neurons: "
+                        f"{self.statistics.get('current_neurons', DEFAULT_NEURON_COUNT)}\n"
+                    )
                     f.write("\n" + "=" * 30 + "\n")
                     f.write(f"{loc.get('export_end')}\n")
 
