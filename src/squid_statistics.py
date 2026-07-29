@@ -47,7 +47,6 @@ class SquidStatistics:
         'sushi_eaten': 'sushi_consumed',
         'poops_created': 'poops_created',
         'poops_thrown': 'total_poops_thrown',
-        'max_poops_cleaned': 'max_poops_cleaned',
         'startles_experienced': 'startles_experienced',
         'ink_clouds_created': 'ink_clouds_created',
         'times_colour_changed': 'times_colour_changed',
@@ -239,7 +238,7 @@ class SquidStatistics:
         """Reset the canonical statistics model."""
         self.__init__(self.squid)
 
-    def update(self, elapsed_seconds=1.0):
+    def update(self, elapsed_seconds):
         """Advance continuous statistics by an explicit elapsed duration."""
         elapsed_seconds = float(elapsed_seconds)
         if elapsed_seconds < 0 or not math.isfinite(elapsed_seconds):

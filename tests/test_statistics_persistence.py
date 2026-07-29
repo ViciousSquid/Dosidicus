@@ -75,6 +75,19 @@ class StatisticsPersistenceTests(unittest.TestCase):
                 self.assertEqual(restored.max_neurons_reached, 11)
                 self.assertEqual(restored.novelty_neurons_created, 2)
 
+    def test_load_preserves_a_lifetime_maximum_above_current_count(self):
+        restored = SquidStatistics(FakeSquid())
+
+        restored.load_statistics(
+            {
+                "current_neurons": 8,
+                "max_neurons_reached": 15,
+            }
+        )
+
+        self.assertEqual(restored.current_neurons, 8)
+        self.assertEqual(restored.max_neurons_reached, 15)
+
 
 if __name__ == "__main__":
     unittest.main()

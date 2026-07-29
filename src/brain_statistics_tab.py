@@ -244,6 +244,7 @@ class StatisticsTab(BrainBaseTab):
                 squid_stats = getattr(self.tamagotchi_logic.squid, 'statistics', None)
                 if squid_stats:
                     squid_stats.reset()
+                    self.tamagotchi_logic._observe_current_neuron_count()
                     self._sync_from_squid_statistics()
                     self.update_display()
 
