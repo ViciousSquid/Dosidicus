@@ -256,9 +256,14 @@ class DosidicusApp(App):
         else:
             age_str = f"{age // 3600}h {(age % 3600) // 60}m"
         neurons = len(s.brain.neuron_names)
+        status = self.sim.last_status
+        if status == "Aggression! FIGHTING!":
+            status_markup = f"[b][color=ff2222]{status}[/color][/b]"
+        else:
+            status_markup = f"[i]{status}[/i]"
         return (f"[b]{s.personality.value.capitalize()}[/b] squid   "
                 f"age [b]{age_str}[/b]   [color=aaddff]{neurons} neurons[/color]\n"
-                f"[i]{self.sim.last_status}[/i]")
+                f"{status_markup}")
 
     # ----------------------------------------------------------- care hooks
     def _drop_food(self, x=None, y=None):
@@ -368,7 +373,11 @@ class DosidicusApp(App):
 
         # A visiting squid did something (stole food, made an ink cloud, left).
         if self.sim.visitor_event:
-            self._flash(f"[color=b39ddb]{self.sim.visitor_event}[/color]", seconds=3.0)
+            ev = self.sim.visitor_event
+            if ev == "Aggression! FIGHTING!":
+                self._flash(f"[b][color=ff2222]{ev}[/color][/b]", seconds=3.0)
+            else:
+                self._flash(f"[color=b39ddb]{ev}[/color]", seconds=3.0)
 
         # Game over: the squid starved. Show the overlay once.
         if self.sim.game_over and self._game_over_overlay is None:

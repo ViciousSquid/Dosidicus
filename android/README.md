@@ -150,11 +150,13 @@ network, no server — from the **Nearby squids** menu. One hosts, the other
 finds; on connect each side sends a compact gzipped snapshot and the other
 spawns it as a **guest visitor** that roams the tank and makes mischief — it
 **steals food**, **grabs a rock and takes it home** when it leaves, and puffs
-**ink clouds**. It may also pick a **fight** with the resident: both squids turn
-red, swim together in a cloud of ink, moods sour (happiness/satisfaction down,
-anxiety up), and after a moment a winner is declared — tracked in the
-**Fights Won** and **Other Squids Encountered** statistics. A received squid can
-also be **imported** as a full copy.
+**ink clouds**. It may also pick a **fight** with the resident: every fight has an
+**instigator** (never a *timid* squid — and two timid squids never fight), both
+combatants turn red, swim together in a cloud of ink, moods sour
+(happiness/satisfaction down, anxiety up), and after a moment a winner is
+declared. Each squid keeps a fight history — **Fights Instigated / Won / Lost**
+and **Other Squids Encountered** — in its statistics. A received squid can also
+be **imported** as a full copy.
 
 This uses Google's **Nearby Connections** API, which is Java-only and exposes
 *abstract* callbacks that pyjnius can't subclass — so a small Java shim

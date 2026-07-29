@@ -481,12 +481,21 @@ class Simulation:
             if (self._fight_cooldown > 0 or squid.is_sleeping or squid.is_fleeing
                     or self.game_over):
                 return
+            res_timid = squid.personality == Personality.TIMID
             for v in self.visitors:
                 if v["leaving"] or v["fighting"]:
                     continue
+                vis_timid = Personality.from_value(
+                    v.get("personality", "adventurous")) == Personality.TIMID
+                # A fight always has a (non-timid) instigator; two timid squids
+                # never fight.
+                bold = [who for who, timid in
+                        (("resident", res_timid), ("visitor", vis_timid)) if not timid]
+                if not bold:
+                    continue
                 if (math.hypot(squid.x - v["x"], squid.y - v["y"]) < 130
                         and random.random() < 0.7 * dt):
-                    self._start_fight(v)
+                    self._start_fight(v, instigator=random.choice(bold))
                     break
             return
 
@@ -516,10 +525,11 @@ class Simulation:
         elif f["phase"] == "result" and now >= f["until"]:
             self._end_fight(v)
 
-    def _start_fight(self, v):
+    def _start_fight(self, v, instigator="visitor"):
         squid = self.squid
         now = squid.brain.sim_time
-        self.fight = {"visitor_id": v["id"], "phase": "fighting", "until": now + 3.5}
+        self.fight = {"visitor_id": v["id"], "phase": "fighting", "until": now + 3.5,
+                      "instigator": instigator}
         squid.fighting = True
         v["fighting"] = True
         squid.is_fleeing = squid.is_startled = False
@@ -527,13 +537,16 @@ class Simulation:
         squid.happiness = max(0.0, squid.happiness - 12.0)
         squid.satisfaction = max(0.0, squid.satisfaction - 10.0)
         squid.anxiety = min(100.0, squid.anxiety + 20.0)
+        if instigator == "resident":
+            self.stats.on_fight_instigated()
         # both squids puff an ink cloud
         for (ix, iy) in ((squid.x, squid.y), (v["x"], v["y"])):
             self.ink_clouds.append({"x": ix, "y": iy, "t": now, "ttl": 3.0})
         self.stats.on_ink_cloud()
-        squid.remember("mental_state", "fight", f"Fought {v['name']}!",
-                       {"anxiety": 20, "happiness": -12}, importance=2.5,
-                       related=["anxiety"])
+        who = "Your squid" if instigator == "resident" else v["name"]
+        squid.remember("mental_state", "fight",
+                       f"{who} started a fight!", {"anxiety": 20, "happiness": -12},
+                       importance=2.5, related=["anxiety"])
         self.visitor_event = "Aggression! FIGHTING!"
 
     def _resolve_fight(self, f, v):
@@ -550,6 +563,7 @@ class Simulation:
             squid.happiness = min(100.0, squid.happiness + 8.0)
             self.visitor_event = f"Your squid won the fight against {v['name']}!"
         else:
+            self.stats.on_fight_lost()
             squid.anxiety = min(100.0, squid.anxiety + 15.0)
             squid.happiness = max(0.0, squid.happiness - 8.0)
             self.visitor_event = f"{v['name']} won the fight!"

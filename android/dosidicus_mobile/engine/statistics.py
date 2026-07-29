@@ -19,7 +19,9 @@ DISPLAY = [
     ("startles_experienced", "Times Startled"),
     ("ink_clouds_created", "Ink Clouds Created"),
     ("other_squids_encountered", "Other Squids Encountered"),
+    ("fights_instigated", "Fights Instigated"),
     ("fights_won", "Fights Won"),
+    ("fights_lost", "Fights Lost"),
     ("times_colour_changed", "Times Colour Changed"),
     ("rocks_thrown", "Rocks Thrown"),
     ("plants_interacted", "Plant Interactions"),
@@ -77,8 +79,14 @@ class Statistics:
     def on_encounter(self):
         self.other_squids_encountered += 1
 
+    def on_fight_instigated(self):
+        self.fights_instigated += 1
+
     def on_fight_won(self):
         self.fights_won += 1
+
+    def on_fight_lost(self):
+        self.fights_lost += 1
 
     def on_sickness(self):
         self.sickness_episodes += 1
