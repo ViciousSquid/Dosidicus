@@ -37,6 +37,11 @@ from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp, sp
 
+try:
+    from plyer import accelerometer
+except Exception:      # plyer missing / unsupported (e.g. bare desktop)
+    accelerometer = None
+
 from ..engine import Simulation, Squid, Personality
 from .tankview import TankView
 from .brain_screen import BrainScreen
@@ -47,6 +52,8 @@ from .tutorial import prompt_tutorial
 
 TANK_SIZE = (900, 500)
 AUTOSAVE_EVERY = 20.0  # seconds
+SHAKE_THRESHOLD = 28.0  # summed accel delta (m/s^2) that counts as a "shake"
+SHAKE_COOLDOWN = 3.0    # min seconds between shake reactions
 
 
 class DosidicusApp(App):
@@ -128,6 +135,7 @@ class DosidicusApp(App):
         root.add_widget(bar)
 
         Clock.schedule_interval(self.tick, 1.0 / 30.0)
+        self._setup_shake()
 
         # First launch (no save): begin as an egg and offer the tutorial once
         # it hatches (handled in tick()).
@@ -280,6 +288,36 @@ class DosidicusApp(App):
         self.deco_layer.add(deco)
         self._flash("[color=88ff88]Added — drag to move, pinch to resize, "
                     "double-tap to remove.[/color]", seconds=3.5)
+
+    # -------------------------------------------------------------- shake
+    def _setup_shake(self):
+        """Enable the accelerometer (if present) and poll it for shakes."""
+        self._last_accel = None
+        self._shake_until = 0.0
+        if accelerometer is None:
+            return
+        try:
+            accelerometer.enable()
+        except Exception as e:
+            print(f"[Dosidicus] accelerometer unavailable: {e}")
+            return
+        Clock.schedule_interval(self._poll_shake, 0.1)
+
+    def _poll_shake(self, dt):
+        try:
+            val = accelerometer.acceleration
+        except Exception:
+            return
+        if not val or val[0] is None:
+            return
+        if self._last_accel is not None:
+            delta = sum(abs(a - b) for a, b in zip(val, self._last_accel))
+            if delta > SHAKE_THRESHOLD and time.time() >= self._shake_until:
+                self._shake_until = time.time() + SHAKE_COOLDOWN
+                self.sim.on_shake()
+                self._flash("[color=ff6666]Whoa! The shaking scared your squid![/color]",
+                            seconds=3.0)
+        self._last_accel = val
 
     def _on_achievement(self, ach):
         """Queue an unlock toast (shown one at a time by tick())."""

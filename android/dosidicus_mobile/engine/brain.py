@@ -43,7 +43,7 @@ class NeuralBrain:
             "novelty_threshold": 6.0,
             "stress_threshold": 5.0,
             "reward_threshold": 5.0,
-            "cooldown": 90.0,                  # seconds of simulated life between births
+            "cooldown": 30.0,                  # minimum REAL seconds between neuron births
             "decay_rate": 0.98,                # per-second counter decay (slow burn)
             "new_neuron_connection_strength": 0.5,
             "max_new_neurons": 8,
@@ -86,6 +86,9 @@ class NeuralBrain:
         self.sim_time = 0.0
         self._neurogenesis_boost_until = 0.0
         self.last_neurogenesis_time = 0.0
+        # Wall-clock time of the last birth, so births are capped to at most one
+        # per ``cooldown`` real seconds regardless of framerate / sim speed.
+        self._last_birth_wall = 0.0
 
         # STDP bookkeeping: when each neuron last "spiked" (crossed the
         # co-activation threshold on a rising edge) in simulation seconds.
@@ -424,7 +427,9 @@ class NeuralBrain:
         now = self.sim_time
         if now >= self._neurogenesis_boost_until:
             self.neurogenesis_active = False
-        if now - self.last_neurogenesis_time < self.config["cooldown"]:
+        # Hard cap: never grow a neuron more often than once per cooldown real
+        # seconds (a fresh brain waits one full cooldown before its first birth).
+        if time.time() - self._last_birth_wall < self.config["cooldown"]:
             return None
         if len(self.neurogenesis["new_neurons"]) >= self.config["max_new_neurons"]:
             return None
@@ -469,6 +474,7 @@ class NeuralBrain:
         self.neurogenesis_active = True
         self._neurogenesis_boost_until = self.sim_time + 10.0
         self.last_neurogenesis_time = self.sim_time
+        self._last_birth_wall = time.time()
         self.recent_events.append({
             "a": name, "b": anchor, "dw": strength,
             "weight": strength, "t": time.time(), "born": kind,

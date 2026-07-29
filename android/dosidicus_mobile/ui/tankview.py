@@ -221,9 +221,9 @@ class TankView(Widget):
                 Color(1, 1, 1, 0.72)
                 if vtex:
                     Rectangle(texture=vtex, pos=vpos, size=(vis_w, vis_h))
-                    vtint = v.get("tint")
+                    vtint = (1.0, 0.2, 0.2) if v.get("fighting") else v.get("tint")
                     if vtint:
-                        Color(vtint[0], vtint[1], vtint[2], 0.4)
+                        Color(vtint[0], vtint[1], vtint[2], 0.55 if v.get("fighting") else 0.4)
                         Rectangle(texture=vtex, pos=vpos, size=(vis_w, vis_h))
                 else:
                     Color(0.7, 0.8, 0.95, 0.7)
@@ -252,9 +252,12 @@ class TankView(Widget):
                 # masked to the squid's shape by re-drawing its own texture
                 # (like the desktop's SourceAtop tint). Texture detail shows
                 # through the ~47% alpha.
-                tint = getattr(squid, "color_tint", None)
+                if getattr(squid, "fighting", False):
+                    tint, alpha = (1.0, 0.2, 0.2), 0.55   # red while fighting
+                else:
+                    tint, alpha = getattr(squid, "color_tint", None), 0.47
                 if tint:
-                    Color(tint[0], tint[1], tint[2], 0.47)
+                    Color(tint[0], tint[1], tint[2], alpha)
                     Rectangle(texture=tex, pos=sq_pos, size=(squid_w, squid_h))
                     Color(1, 1, 1, 1)
             else:

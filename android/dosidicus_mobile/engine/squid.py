@@ -61,6 +61,7 @@ class Squid:
         # Startle / flee (a fright response, optionally releasing an ink cloud).
         self.is_startled = False
         self.is_fleeing = False
+        self.fighting = False        # transient: in a fight with a visitor (drawn red)
         self._startle_until = 0.0
         self._flee_dir = (1.0, 0.0)
 

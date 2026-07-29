@@ -18,6 +18,8 @@ DISPLAY = [
     ("max_poops_cleaned", "Max Poops in Tank"),
     ("startles_experienced", "Times Startled"),
     ("ink_clouds_created", "Ink Clouds Created"),
+    ("other_squids_encountered", "Other Squids Encountered"),
+    ("fights_won", "Fights Won"),
     ("times_colour_changed", "Times Colour Changed"),
     ("rocks_thrown", "Rocks Thrown"),
     ("plants_interacted", "Plant Interactions"),
@@ -71,6 +73,12 @@ class Statistics:
 
     def on_ink_cloud(self):
         self.ink_clouds_created += 1
+
+    def on_encounter(self):
+        self.other_squids_encountered += 1
+
+    def on_fight_won(self):
+        self.fights_won += 1
 
     def on_sickness(self):
         self.sickness_episodes += 1

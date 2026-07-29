@@ -168,6 +168,10 @@ class DecorationLayer(FloatLayout):
         ids = set(self.sim._rock_velocities.keys())
         if self.sim.squid.carried_rock_id is not None:
             ids.add(self.sim.squid.carried_rock_id)
+        # rocks currently being stolen by a visiting squid
+        for v in getattr(self.sim, "visitors", []):
+            if v.get("carried_rock") is not None:
+                ids.add(v["carried_rock"])
         for did in ids:
             sc = self._scatters.get(did)
             deco = next((d for d in self.sim.decorations if d["id"] == did), None)
