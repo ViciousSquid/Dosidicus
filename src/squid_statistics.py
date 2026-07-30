@@ -267,8 +267,16 @@ class SquidStatistics:
         )
 
     def reset(self):
-        """Reset the canonical statistics model."""
+        """Reset counters without discarding live or lifetime neuron state."""
+        current_neurons = self.current_neurons
+        max_neurons_reached = self.max_neurons_reached
         self.__init__(self.squid)
+        self.current_neurons = current_neurons
+        self.max_neurons_reached = max(
+            self.max_neurons_reached,
+            max_neurons_reached,
+            current_neurons,
+        )
 
     def update(self, elapsed_seconds):
         """Advance continuous statistics by an explicit elapsed duration."""
