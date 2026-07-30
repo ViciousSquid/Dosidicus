@@ -67,6 +67,17 @@ class SquidStatisticsTests(unittest.TestCase):
         self.assertEqual(self.statistics.max_neurons_reached, 12)
         self.assertEqual(self.statistics.reward_neurons_created, 1)
 
+    def test_reset_preserves_current_and_lifetime_neuron_counts(self):
+        self.statistics.observe_neuron_count(12)
+        self.statistics.observe_neuron_count(9)
+        self.statistics.cheese_consumed = 3
+
+        self.statistics.reset()
+
+        self.assertEqual(self.statistics.current_neurons, 9)
+        self.assertEqual(self.statistics.max_neurons_reached, 12)
+        self.assertEqual(self.statistics.cheese_consumed, 0)
+
     def test_other_lifetime_maxima_never_decrease(self):
         self.statistics.observe_poop_count(5)
         self.statistics.observe_poop_count(2)

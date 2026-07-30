@@ -88,6 +88,34 @@ class StatisticsPersistenceTests(unittest.TestCase):
         self.assertEqual(restored.current_neurons, 8)
         self.assertEqual(restored.max_neurons_reached, 15)
 
+    def test_reset_neuron_counts_survive_save_archive_round_trip(self):
+        statistics = SquidStatistics(FakeSquid())
+        statistics.observe_neuron_count(12)
+        statistics.observe_neuron_count(9)
+        statistics.reset()
+
+        with tempfile.TemporaryDirectory() as save_directory:
+            manager = SaveManager(save_directory)
+            with redirect_stdout(io.StringIO()):
+                archive_path = manager.save_game(
+                    {
+                        "game_state": {
+                            "squid": {
+                                "uuid": "00000000-0000-0000-0000-000000000026",
+                            }
+                        },
+                        "statistics": statistics.to_dict(),
+                    }
+                )
+            self.assertIsNotNone(archive_path)
+            loaded_archive = manager.load_game()
+
+        restored = SquidStatistics(FakeSquid())
+        restored.load_statistics(loaded_archive["statistics"])
+
+        self.assertEqual(restored.current_neurons, 9)
+        self.assertEqual(restored.max_neurons_reached, 12)
+
     def test_every_canonical_persistence_key_round_trips(self):
         statistics = SquidStatistics(FakeSquid())
         expected_attributes = {}
