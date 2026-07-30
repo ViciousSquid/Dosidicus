@@ -352,38 +352,65 @@ class TamagotchiLogic:
         
 
     def update_squid_age(self):
-        if hasattr(self.brain_window, 'statistics_tab'):
-            age_min = int((time.time() - self.squid_birth_time) / 60)
-            self.brain_window.statistics_tab.statistics['squid_age_minutes'] = age_min
-            self.brain_window.statistics_tab.update_display()
+        """Refresh the age projection from the persistent model clock."""
+        self._refresh_statistics_tab()
+
+    def _refresh_statistics_tab(self):
+        """Refresh the optional statistics projection without owning data."""
+        brain_window = getattr(self, 'brain_window', None)
+        statistics_tab = getattr(brain_window, 'statistics_tab', None)
+        if statistics_tab:
+            statistics_tab.update_statistics()
+
+    def record_statistic_event(self, event_name, amount=1):
+        """Record one discrete event on the model, then refresh the view."""
+        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
+        if not statistics or not statistics.increment(event_name, amount):
+            return False
+
+        self._refresh_statistics_tab()
+        return True
+
+    def track_distance(self, distance):
+        """Record movement on the model, then refresh the optional view."""
+        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
+        if not statistics:
+            return
+
+        statistics.add_distance(distance)
+        self._refresh_statistics_tab()
 
 
     def track_poop_thrown(self):
-        if hasattr(self.brain_window, 'statistics_tab'):
-            self.brain_window.statistics_tab.increment_stat('poops_thrown')
+        self.record_statistic_event('poops_thrown')
 
     def update_highest_anxiety(self, value):
-        if hasattr(self.brain_window, 'statistics_tab'):
-            tab = self.brain_window.statistics_tab
-            if value > tab.statistics['highest_anxiety']:
-                tab.statistics['highest_anxiety'] = value
-                tab.update_display()
+        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
+        if statistics:
+            statistics.highest_anxiety = max(
+                statistics.highest_anxiety,
+                value,
+            )
+            self._refresh_statistics_tab()
 
     def update_lowest_happiness(self, value):
-        if hasattr(self.brain_window, 'statistics_tab'):
-            tab = self.brain_window.statistics_tab
-            if value < tab.statistics['lowest_happiness']:
-                tab.statistics['lowest_happiness'] = value
-                tab.update_display()
+        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
+        if statistics:
+            statistics.lowest_happiness = min(
+                statistics.lowest_happiness,
+                value,
+            )
+            self._refresh_statistics_tab()
 
     def update_max_memories(self):
-        if hasattr(self.brain_window, 'statistics_tab') and hasattr(self.squid, 'memory_manager'):
-            tab = self.brain_window.statistics_tab
-            stm = len(self.squid.memory_manager.short_term_memory)
-            ltm = len(self.squid.memory_manager.long_term_memory)
-            tab.statistics['max_short_term_memories'] = max(tab.statistics['max_short_term_memories'], stm)
-            tab.statistics['max_long_term_memories'] = max(tab.statistics['max_long_term_memories'], ltm)
-            tab.update_display()
+        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
+        memory_manager = getattr(getattr(self, 'squid', None), 'memory_manager', None)
+        if statistics and memory_manager:
+            statistics.observe_memory_counts(
+                len(memory_manager.short_term_memory),
+                len(memory_manager.long_term_memory),
+            )
+            self._refresh_statistics_tab()
 
     
 
@@ -1281,13 +1308,7 @@ class TamagotchiLogic:
         fade_out_animation.start()
         self.statistics_window.award(-250)
 
-        # Record the event once on the canonical model.
-        if hasattr(self, 'squid') and hasattr(self.squid, 'statistics'):
-            self.squid.statistics.increment('ink_clouds_created')
-        
-        # Refresh the read-only statistics projection.
-        if hasattr(self.brain_window, 'statistics_tab'):
-            self.brain_window.statistics_tab.update_statistics()
+        self.record_statistic_event('ink_clouds_created')
         
         
         # Backup timer to force remove after 10 seconds in case animation fails
@@ -1324,45 +1345,38 @@ class TamagotchiLogic:
 
     def track_food_consumed(self, food_item):
         """Track when food is consumed"""
-        if hasattr(self.brain_window, 'statistics_tab'):
-            if getattr(food_item, 'is_sushi', False):
-                self.brain_window.statistics_tab.increment_stat('sushi_eaten')
-            else:
-                self.brain_window.statistics_tab.increment_stat('cheese_eaten')
+        event_name = (
+            'sushi_eaten'
+            if getattr(food_item, 'is_sushi', False)
+            else 'cheese_eaten'
+        )
+        self.record_statistic_event(event_name)
 
     def track_poop_created(self):
         """Track when poop is created"""
-        if hasattr(self.brain_window, 'statistics_tab'):
-            self.brain_window.statistics_tab.increment_stat('poops_created')
-            # Update max poops if needed
-            current_poops = len(self.poop_items)
-            squid_statistics = getattr(self.squid, 'statistics', None)
-            if squid_statistics:
-                squid_statistics.max_poops_cleaned = max(
-                    squid_statistics.max_poops_cleaned,
-                    current_poops,
-                )
-                self.brain_window.statistics_tab.update_statistics()
+        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
+        if not statistics:
+            return
+
+        statistics.increment('poops_created')
+        statistics.observe_poop_count(len(self.poop_items))
+        self._refresh_statistics_tab()
 
     def track_rock_thrown(self):
         """Track when rock is thrown"""
-        if hasattr(self.brain_window, 'statistics_tab'):
-            self.brain_window.statistics_tab.increment_stat('rocks_thrown')
+        self.record_statistic_event('rocks_thrown')
 
     def track_plant_interaction(self):
         """Track when squid interacts with plants"""
-        if hasattr(self.brain_window, 'statistics_tab'):
-            self.brain_window.statistics_tab.increment_stat('plants_interacted')
+        self.record_statistic_event('plants_interacted')
+
+    def track_colour_changed(self):
+        """Track a completed squid colour change."""
+        self.record_statistic_event('times_colour_changed')
 
     def track_startle(self):
         """Track when squid is startled"""
-        statistics = getattr(self.squid, 'statistics', None)
-        if statistics:
-            statistics.increment('startles_experienced')
-
-        statistics_tab = getattr(self.brain_window, 'statistics_tab', None)
-        if statistics_tab:
-            statistics_tab.update_statistics()
+        self.record_statistic_event('startles_experienced')
 
 
             ######################################### UPDATE_SIMULATION METHOD BELOW

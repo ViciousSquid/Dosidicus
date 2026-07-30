@@ -1208,9 +1208,6 @@ class Squid:
                     'anxiety_reduction': True
                 })
 
-        if hasattr(self.tamagotchi_logic, 'brain_window') and hasattr(self.tamagotchi_logic.brain_window, 'statistics_tab'):
-            self.tamagotchi_logic.brain_window.statistics_tab.increment_stat('plants_interacted')
-
         # --- Reward for RL ---
         if hasattr(self.tamagotchi_logic, 'recent_positive_outcome'):
             self.tamagotchi_logic.recent_positive_outcome = True
@@ -1531,8 +1528,8 @@ class Squid:
 
         # Track distance - 80 pixels per movement
         if self.squid_x != prev_x or self.squid_y != prev_y:
-            if hasattr(self.tamagotchi_logic, 'brain_window') and hasattr(self.tamagotchi_logic.brain_window, 'statistics_tab'):
-                self.tamagotchi_logic.brain_window.statistics_tab.track_distance(80)
+            if hasattr(self.tamagotchi_logic, 'track_distance'):
+                self.tamagotchi_logic.track_distance(80)
 
         # Update animation frame and image
         if self.squid_direction in ["left", "right", "up", "down"]:
@@ -2383,5 +2380,4 @@ class Squid:
             self.update_squid_image()  # Changed to use method instead of direct pixmap set
         
         return distance
-
 

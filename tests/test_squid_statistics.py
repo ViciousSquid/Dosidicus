@@ -67,6 +67,16 @@ class SquidStatisticsTests(unittest.TestCase):
         self.assertEqual(self.statistics.max_neurons_reached, 12)
         self.assertEqual(self.statistics.reward_neurons_created, 1)
 
+    def test_other_lifetime_maxima_never_decrease(self):
+        self.statistics.observe_poop_count(5)
+        self.statistics.observe_poop_count(2)
+        self.statistics.observe_memory_counts(3, 7)
+        self.statistics.observe_memory_counts(1, 4)
+
+        self.assertEqual(self.statistics.max_poops_cleaned, 5)
+        self.assertEqual(self.statistics.max_short_term_memories, 3)
+        self.assertEqual(self.statistics.max_long_term_memories, 7)
+
 
 if __name__ == "__main__":
     unittest.main()
