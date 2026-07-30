@@ -24,6 +24,7 @@ between launches.
 """
 
 import os
+import random
 import time
 
 from kivy.app import App
@@ -36,6 +37,11 @@ from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp, sp
 
+try:
+    from plyer import accelerometer
+except Exception:      # plyer missing / unsupported (e.g. bare desktop)
+    accelerometer = None
+
 from ..engine import Simulation, Squid, Personality
 from .tankview import TankView
 from .brain_screen import BrainScreen
@@ -43,10 +49,11 @@ from .stats import StatsPanel
 from .decorations import DecorationLayer, open_decoration_palette
 from .menu import open_menu
 from .tutorial import prompt_tutorial
-from .splash import Splash
 
 TANK_SIZE = (900, 500)
 AUTOSAVE_EVERY = 20.0  # seconds
+SHAKE_THRESHOLD = 28.0  # summed accel delta (m/s^2) that counts as a "shake"
+SHAKE_COOLDOWN = 3.0    # min seconds between shake reactions
 
 
 class DosidicusApp(App):
@@ -128,6 +135,7 @@ class DosidicusApp(App):
         root.add_widget(bar)
 
         Clock.schedule_interval(self.tick, 1.0 / 30.0)
+        self._setup_shake()
 
         # First launch (no save): begin as an egg and offer the tutorial once
         # it hatches (handled in tick()).
@@ -138,14 +146,13 @@ class DosidicusApp(App):
             self._pending_tutorial = True
             self._was_hatching = True
 
-        # Startup splash (title + project URL) over the game, auto-dismissed.
+        # The Android presplash (assets/presplash.png) is the startup splash;
+        # we don't stack a second in-app splash on top of it. The container
+        # FloatLayout stays so overlays (e.g. game over) have somewhere to live.
         container = FloatLayout()
         container.add_widget(root)
         self._container = container
         self._game_over_overlay = None
-        self._splash = Splash()
-        container.add_widget(self._splash)
-        Clock.schedule_once(lambda dt: self._splash.dismiss(), 2.6)
         return container
 
     # ---------------------------------------------------------- persistence
@@ -249,17 +256,27 @@ class DosidicusApp(App):
         else:
             age_str = f"{age // 3600}h {(age % 3600) // 60}m"
         neurons = len(s.brain.neuron_names)
+        status = self.sim.last_status
+        if status == "Aggression! FIGHTING!":
+            status_markup = f"[b][color=ff2222]{status}[/color][/b]"
+        else:
+            status_markup = f"[i]{status}[/i]"
         return (f"[b]{s.personality.value.capitalize()}[/b] squid   "
                 f"age [b]{age_str}[/b]   [color=aaddff]{neurons} neurons[/color]\n"
-                f"[i]{self.sim.last_status}[/i]")
+                f"{status_markup}")
 
     # ----------------------------------------------------------- care hooks
     def _drop_food(self, x=None, y=None):
         self.sim.drop_food(x, y, food_type="sushi")
 
     def _feed(self, *a):
-        self.sim.drop_food(food_type="sushi")
-        self._flash("[color=88ff88]Dropped food![/color]")
+        """Drop a random food type (sushi or cheese), like the desktop."""
+        food_type = random.choice(("sushi", "cheese"))
+        item = self.sim.drop_food(food_type=food_type)
+        if item is None:
+            self._flash("[color=ffcc66]Tank's full — let the squid eat first.[/color]")
+        else:
+            self._flash(f"[color=88ff88]Dropped {food_type}![/color]")
 
     def _clean(self, *a):
         self.sim.clean_tank()
@@ -276,6 +293,36 @@ class DosidicusApp(App):
         self.deco_layer.add(deco)
         self._flash("[color=88ff88]Added — drag to move, pinch to resize, "
                     "double-tap to remove.[/color]", seconds=3.5)
+
+    # -------------------------------------------------------------- shake
+    def _setup_shake(self):
+        """Enable the accelerometer (if present) and poll it for shakes."""
+        self._last_accel = None
+        self._shake_until = 0.0
+        if accelerometer is None:
+            return
+        try:
+            accelerometer.enable()
+        except Exception as e:
+            print(f"[Dosidicus] accelerometer unavailable: {e}")
+            return
+        Clock.schedule_interval(self._poll_shake, 0.1)
+
+    def _poll_shake(self, dt):
+        try:
+            val = accelerometer.acceleration
+        except Exception:
+            return
+        if not val or val[0] is None:
+            return
+        if self._last_accel is not None:
+            delta = sum(abs(a - b) for a, b in zip(val, self._last_accel))
+            if delta > SHAKE_THRESHOLD and time.time() >= self._shake_until:
+                self._shake_until = time.time() + SHAKE_COOLDOWN
+                self.sim.on_shake()
+                self._flash("[color=ff6666]Whoa! The shaking scared your squid![/color]",
+                            seconds=3.0)
+        self._last_accel = val
 
     def _on_achievement(self, ach):
         """Queue an unlock toast (shown one at a time by tick())."""
@@ -323,6 +370,14 @@ class DosidicusApp(App):
             self._flash(
                 f"[color=b39ddb]Sleeping — consolidated {cons.get('strengthened', 0)} "
                 f"connections, {cons.get('promoted', 0)} memories[/color]", seconds=3.0)
+
+        # A visiting squid did something (stole food, made an ink cloud, left).
+        if self.sim.visitor_event:
+            ev = self.sim.visitor_event
+            if ev == "Aggression! FIGHTING!":
+                self._flash(f"[b][color=ff2222]{ev}[/color][/b]", seconds=3.0)
+            else:
+                self._flash(f"[color=b39ddb]{ev}[/color]", seconds=3.0)
 
         # Game over: the squid starved. Show the overlay once.
         if self.sim.game_over and self._game_over_overlay is None:

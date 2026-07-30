@@ -172,13 +172,76 @@ the desktop, where the exact same engine and Kivy UI run:
    ```bash
    python main.py
    ```
-   The desktop window behaves like the phone — tap the tank to feed, use the
-   care buttons, toggle **Brain**.
+   The desktop window behaves like the phone — use the care buttons (**Feed**
+   offers sushi/cheese), toggle **Brain**, open the **☰** menu.
 4. **Only when packaging**, run `buildozer android debug` (locally or via the
    Actions workflow).
 
 Rule of thumb: engine logic → cover it with a test in `tests/`; UI/visual
 changes → eyeball them with `python main.py`; ship → let CI build the APK.
+
+---
+
+## Making a release (non-debug) APK for distribution
+
+A **debug** APK (`buildozer android debug`) is fine for testing on your own
+phone, but it's signed with a throwaway debug key and marked debuggable — not
+what you hand out. A **release** APK is optimised, non-debuggable, and signed
+with *your* key so devices trust updates. You need a one-time signing key, then
+either the release workflow (easiest) or a local release build.
+
+### 1. Create a signing key (once)
+
+```bash
+keytool -genkey -v -keystore dosidicus.keystore -alias dosidicus \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Keep `dosidicus.keystore` and its passwords **safe and backed up** — every
+future update must be signed with the *same* key or phones will refuse to
+install over the existing app.
+
+### 2a. Release build in the cloud (recommended)
+
+1. Add four repository secrets (GitHub → *Settings* → *Secrets and variables* →
+   *Actions*):
+   * `ANDROID_KEYSTORE_BASE64` — `base64 -w0 dosidicus.keystore`
+   * `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
+2. Actions tab → **Build Android Release APK** → **Run workflow**.
+3. Download the **`dosidicus-release-apk`** artifact — a signed, installable,
+   zipaligned release APK.
+
+If you skip the secrets the workflow still runs but produces an *unsigned*
+release APK (it must be signed before it can be installed).
+
+### 2b. Release build locally
+
+Point buildozer at your key via env vars, then build:
+
+```bash
+export P4A_RELEASE_KEYSTORE=$PWD/dosidicus.keystore
+export P4A_RELEASE_KEYSTORE_PASSWD='…'
+export P4A_RELEASE_KEYALIAS=dosidicus
+export P4A_RELEASE_KEYALIAS_PASSWD='…'
+buildozer android release          # signed APK -> android/bin/*-release.apk
+```
+
+Without those vars you get `bin/*-release-unsigned.apk`, which you can sign
+manually with the Android SDK tools:
+
+```bash
+$ANDROID_SDK/build-tools/<ver>/zipalign -v 4 app-release-unsigned.apk app-aligned.apk
+$ANDROID_SDK/build-tools/<ver>/apksigner sign --ks dosidicus.keystore \
+  --out dosidicus-release.apk app-aligned.apk
+```
+
+### Play Store (AAB) vs sideloading (APK)
+
+The workflow and the commands above produce an **APK**, which is what you want
+for direct install / sideloading and sharing the file. The Google **Play Store**
+instead wants an **Android App Bundle (`.aab`)** — set
+`android.release_artifact = aab` in `buildozer.spec` and run
+`buildozer android release` to produce one under `android/bin/`.
 
 ---
 
@@ -209,8 +272,10 @@ The codebase is split so features can be added without disturbing the core:
   * a **neuron inspector** (tap a neuron in the brain view to see its weights),
   * pinch-to-zoom / pan on the brain view for large grown networks,
   * a **new-squid / personality picker** screen.
-* **Bigger ports** from the desktop app: the Brain Designer, and the plugin
-  system (achievements, multiplayer) — these are intentionally out of the MVP.
+* **Already ported** beyond the first MVP: STDP, the dual memory system,
+  richer decisions, statistics, the **achievements** plugin, **sleep
+  consolidation**, and local **peer-to-peer** visits (Nearby Connections).
+  Still open: the **Brain Designer** and custom-brain loading.
 
 Suggested workflow for each improvement: branch → add/port engine logic with a
 test → wire it into a Kivy widget → verify with `python main.py` → let the

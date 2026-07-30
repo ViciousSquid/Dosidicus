@@ -63,6 +63,10 @@ class Simulation:
         # is a transient guest that wanders the tank and then leaves; not saved.
         self.visitors = []
         self._visitor_id = 0
+        self.visitor_event = None   # set for one tick when a visitor does something
+        # Territorial fight between the resident and a visitor (transient).
+        self.fight = None
+        self._fight_cooldown = 0.0
         # Egg hatching: a new game begins as an egg that plays its frames
         # (1/second) before the squid emerges.
         self.hatching = False
@@ -201,7 +205,9 @@ class Simulation:
 
         # Not carrying: if the squid wants to play and a settled rock is around,
         # go for it (ignore rocks still in flight so it doesn't re-grab its throw).
-        rocks = [r for r in self._rock_decorations() if r["id"] not in self._rock_velocities]
+        carried = self._visitor_carried_rocks()
+        rocks = [r for r in self._rock_decorations()
+                 if r["id"] not in self._rock_velocities and r["id"] not in carried]
         if not (squid.wants_to_play and rocks):
             return
         target = min(rocks, key=lambda r: squid._dist(r["x"], r["y"]))
@@ -255,7 +261,7 @@ class Simulation:
             return  # fleeing overrides normal movement
 
         # Ambient chance of a fright, more likely when anxious (desktop rule).
-        if self._startle_cooldown <= 0 and not squid.is_sleeping:
+        if self._startle_cooldown <= 0 and not squid.is_sleeping and self.fight is None:
             rate = 0.02                       # per second base chance
             if squid.anxiety > 70:
                 rate *= squid.anxiety / 50.0
@@ -266,15 +272,29 @@ class Simulation:
         now = self.squid.brain.sim_time
         self.ink_clouds = [c for c in self.ink_clouds if now - c["t"] < c["ttl"]]
 
-    # --------------------------------------------------------- visitors (P2P)
-    VISIT_SECONDS = 150.0    # how long a guest squid lingers before leaving
+    def on_shake(self):
+        """The player physically shook the device: the squid is badly rattled."""
+        squid = self.squid
+        squid.anxiety = min(100.0, squid.anxiety + 30.0)
+        squid.happiness = max(0.0, squid.happiness - 12.0)
+        squid.satisfaction = max(0.0, squid.satisfaction - 8.0)
+        squid.brain.register_stress(1.0)
+        squid.remember("mental_state", "shaken", "The whole world shook!",
+                       {"anxiety": 30, "happiness": -12}, importance=2.0,
+                       related=["anxiety"])
+        if self.fight is None and not self.game_over:
+            self.startle("shake")   # bolt + flee (also spikes anxiety further)
 
-    def add_visitor(self, snapshot, name="a friend"):
+    # --------------------------------------------------------- visitors (P2P)
+    VISIT_SECONDS = 150.0    # how long a received guest lingers before leaving
+    PREVIEW_SECONDS = 45.0   # a local preview visitor leaves promptly
+
+    def add_visitor(self, snapshot, name="a friend", seconds=None):
         """Spawn a guest squid from a received snapshot (a squid or sim dict).
 
-        The visitor is pure kinematics — it wanders the tank and then swims out
-        again — so it costs nothing to run and never touches the resident
-        squid's brain. Returns the visitor dict.
+        The visitor is pure kinematics — it wanders, steals food, occasionally
+        puffs an ink cloud, then swims out again — so it costs nothing to run and
+        never touches the resident squid's brain. Returns the visitor dict.
         """
         sq = snapshot.get("squid", snapshot) if isinstance(snapshot, dict) else {}
         tint = sq.get("color_tint")
@@ -294,12 +314,18 @@ class Simulation:
             "vx": 60.0 if from_left else -60.0,
             "vy": random.uniform(-20, 20),
             "dir": "right" if from_left else "left",
-            "leave_at": now + self.VISIT_SECONDS,
+            "leave_at": now + (seconds if seconds is not None else self.VISIT_SECONDS),
             "leaving": False,
+            "stole": 0,
+            "ink_cd": 0.0,
+            "wants_rock": random.random() < 0.6,   # half the guests are here to loot a rock
+            "carried_rock": None,
+            "fighting": False,
         }
         self.visitors.append(v)
         self.squid.brain.register_novelty(2.0)   # a newcomer is exciting
         self.squid.curiosity = min(100.0, self.squid.curiosity + 6.0)
+        self.stats.on_encounter()
         return v
 
     def _update_visitors(self, dt):
@@ -310,34 +336,246 @@ class Simulation:
         floor, ceil = h - 40, 40
         gone = []
         for v in self.visitors:
+            if v["fighting"]:
+                continue    # a fight (see _update_fight) owns this visitor's motion
+
             if not v["leaving"] and now >= v["leave_at"]:
                 v["leaving"] = True
-                # head for whichever side is nearer
-                v["vx"] = 90.0 if v["x"] > w * 0.5 else -90.0
+                v["vx"] = 100.0 if v["x"] > w * 0.5 else -100.0
+                if v["carried_rock"] is not None:
+                    self.visitor_event = f"{v['name']} is making off with a rock!"
+                elif v["stole"]:
+                    self.visitor_event = f"{v['name']} is leaving with your food!"
+
             if v["leaving"]:
                 v["x"] += v["vx"] * dt
                 v["y"] += v["vy"] * 0.3 * dt
+                self._carry_rock(v)
                 if v["x"] < -60 or v["x"] > w + 60:
+                    # off-screen: any rock it grabbed goes home with it
+                    if v["carried_rock"] is not None:
+                        self.remove_decoration(v["carried_rock"])
                     gone.append(v)
+                v["dir"] = "right" if v["vx"] >= 0 else "left"
+                continue
+
+            v["ink_cd"] = max(0.0, v["ink_cd"] - dt)
+
+            # Priority 1: loot a rock (and carry it), if this guest wants one.
+            rock = None
+            if v["carried_rock"] is None and v["wants_rock"]:
+                rock = min((r for r in self._rock_decorations()
+                            if r["id"] not in self._rock_velocities
+                            and r["id"] not in self._visitor_carried_rocks(exclude=v)),
+                           key=lambda r: (r["x"] - v["x"]) ** 2 + (r["y"] - v["y"]) ** 2,
+                           default=None)
+            if v["carried_rock"] is not None:
+                self._carry_rock(v)
+                self._wander(v, dt)                       # roam while holding it
+            elif rock is not None:
+                if self._steer(v, rock["x"], rock["y"], dt) < 44:
+                    v["carried_rock"] = rock["id"]
+                    self.visitor_event = f"{v['name']} grabbed one of your rocks!"
+                    self.squid.anxiety = min(100.0, self.squid.anxiety + 4.0)
             else:
-                # gentle wander with a little momentum; bounce off the bounds
-                v["vx"] += random.uniform(-30, 30) * dt
-                v["vy"] += random.uniform(-30, 30) * dt
-                v["vx"] = max(-80, min(80, v["vx"]))
-                v["vy"] = max(-45, min(45, v["vy"]))
-                v["x"] += v["vx"] * dt
-                v["y"] += v["vy"] * dt
-                if v["x"] < 30:
-                    v["x"], v["vx"] = 30, abs(v["vx"])
-                elif v["x"] > w - 30:
-                    v["x"], v["vx"] = w - 30, -abs(v["vx"])
-                if v["y"] < ceil:
-                    v["y"], v["vy"] = ceil, abs(v["vy"])
-                elif v["y"] > floor:
-                    v["y"], v["vy"] = floor, -abs(v["vy"])
+                # Priority 2: steal food; else wander.
+                target = min(self.food_items,
+                             key=lambda f: (f["x"] - v["x"]) ** 2 + (f["y"] - v["y"]) ** 2,
+                             default=None)
+                if target is not None:
+                    if self._steer(v, target["x"], target["y"], dt) < 42:
+                        self.food_items.remove(target)
+                        v["stole"] += 1
+                        self.visitor_event = f"{v['name']} snatched your {target.get('type', 'food')}!"
+                        s = self.squid
+                        s.anxiety = min(100.0, s.anxiety + 6.0)
+                        s.remember("mental_state", "food_stolen",
+                                   f"{v['name']} stole my food!", {"anxiety": 6},
+                                   importance=1.5, related=["anxiety"])
+                        if random.random() < 0.2:
+                            self.startle("visitor")
+                else:
+                    self._wander(v, dt)
+
+            self._clamp_visitor(v, w, h, ceil, floor)
+            self._carry_rock(v)     # keep a held rock glued to the visitor
+
+            if v["ink_cd"] <= 0 and random.random() < 0.03 * dt:
+                self.ink_clouds.append({"x": v["x"], "y": v["y"], "t": now, "ttl": 3.0})
+                v["ink_cd"] = 12.0
+                self.visitor_event = f"{v['name']} puffed an ink cloud!"
+                self.squid.curiosity = min(100.0, self.squid.curiosity + 3.0)
+
             v["dir"] = "right" if v["vx"] >= 0 else "left"
+
         for v in gone:
             self.visitors.remove(v)
+
+    # ---- visitor movement helpers -------------------------------------
+    def _steer(self, v, tx, ty, dt):
+        """Blend the visitor's velocity toward a target; return the distance."""
+        dx, dy = tx - v["x"], ty - v["y"]
+        dist = math.hypot(dx, dy) or 1.0
+        k = min(1.0, 2.5 * dt)
+        v["vx"] += (dx / dist * 95 - v["vx"]) * k
+        v["vy"] += (dy / dist * 95 - v["vy"]) * k
+        v["x"] += v["vx"] * dt
+        v["y"] += v["vy"] * dt
+        return dist
+
+    def _wander(self, v, dt):
+        v["vx"] += random.uniform(-30, 30) * dt
+        v["vy"] += random.uniform(-30, 30) * dt
+        v["x"] += v["vx"] * dt
+        v["y"] += v["vy"] * dt
+
+    def _clamp_visitor(self, v, w, h, ceil, floor):
+        v["vx"] = max(-95, min(95, v["vx"]))
+        v["vy"] = max(-55, min(55, v["vy"]))
+        if v["x"] < 30:
+            v["x"], v["vx"] = 30, abs(v["vx"])
+        elif v["x"] > w - 30:
+            v["x"], v["vx"] = w - 30, -abs(v["vx"])
+        if v["y"] < ceil:
+            v["y"], v["vy"] = ceil, abs(v["vy"])
+        elif v["y"] > floor:
+            v["y"], v["vy"] = floor, -abs(v["vy"])
+
+    def _carry_rock(self, v):
+        """Keep a visitor's stolen rock riding just above it."""
+        if v["carried_rock"] is None:
+            return
+        rock = self._deco_by_id(v["carried_rock"])
+        if rock is None:
+            v["carried_rock"] = None
+        else:
+            rock["x"], rock["y"] = v["x"], v["y"] - 24
+
+    def _visitor_carried_rocks(self, exclude=None):
+        return {v["carried_rock"] for v in self.visitors
+                if v is not exclude and v["carried_rock"] is not None}
+
+    def _visitor_by_id(self, vid):
+        return next((v for v in self.visitors if v["id"] == vid), None)
+
+    # ------------------------------------------------------------- fighting
+    # Rough combat "strength" bias by personality (bold/aggressive win more).
+    _FIGHT_BONUS = {
+        Personality.STUBBORN: 0.35, Personality.ENERGETIC: 0.25,
+        Personality.GREEDY: 0.2, Personality.ADVENTUROUS: 0.15,
+        Personality.LAZY: -0.15, Personality.TIMID: -0.3,
+    }
+
+    def _update_fight(self, dt):
+        """Territorial scrap between the resident and a nearby visitor.
+
+        Sequence: the two swim together, both turn red and puff ink, "Aggression!
+        FIGHTING!" shows, moods sour — then after a moment a winner is decided.
+        """
+        squid = self.squid
+        now = squid.brain.sim_time
+        if self._fight_cooldown > 0:
+            self._fight_cooldown -= dt
+
+        if self.fight is None:
+            if (self._fight_cooldown > 0 or squid.is_sleeping or squid.is_fleeing
+                    or self.game_over):
+                return
+            res_timid = squid.personality == Personality.TIMID
+            for v in self.visitors:
+                if v["leaving"] or v["fighting"]:
+                    continue
+                vis_timid = Personality.from_value(
+                    v.get("personality", "adventurous")) == Personality.TIMID
+                # A fight always has a (non-timid) instigator; two timid squids
+                # never fight.
+                bold = [who for who, timid in
+                        (("resident", res_timid), ("visitor", vis_timid)) if not timid]
+                if not bold:
+                    continue
+                if (math.hypot(squid.x - v["x"], squid.y - v["y"]) < 130
+                        and random.random() < 0.7 * dt):
+                    self._start_fight(v, instigator=random.choice(bold))
+                    break
+            return
+
+        f = self.fight
+        v = self._visitor_by_id(f["visitor_id"])
+        if v is None:                      # opponent vanished
+            self._end_fight(None)
+            return
+
+        # Grapple: jitter around the midpoint between the two combatants.
+        mx, my = (squid.x + v["x"]) / 2, (squid.y + v["y"]) / 2
+        squid.x += (mx - squid.x) * min(1.0, 3 * dt) + random.uniform(-9, 9)
+        squid.y += (my - squid.y) * min(1.0, 3 * dt) + random.uniform(-9, 9)
+        v["x"] += (mx - v["x"]) * min(1.0, 3 * dt) + random.uniform(-9, 9)
+        v["y"] += (my - v["y"]) * min(1.0, 3 * dt) + random.uniform(-9, 9)
+        w, h = self.tank_size
+        squid.x = max(30, min(w - 30, squid.x))
+        squid.y = max(40, min(h - 40, squid.y))
+        v["x"] = max(30, min(w - 30, v["x"]))
+        v["y"] = max(40, min(h - 40, v["y"]))
+
+        if f["phase"] == "fighting":
+            squid.anxiety = min(100.0, squid.anxiety + 6.0 * dt)
+            squid.happiness = max(0.0, squid.happiness - 3.0 * dt)
+            if now >= f["until"]:
+                self._resolve_fight(f, v)
+        elif f["phase"] == "result" and now >= f["until"]:
+            self._end_fight(v)
+
+    def _start_fight(self, v, instigator="visitor"):
+        squid = self.squid
+        now = squid.brain.sim_time
+        self.fight = {"visitor_id": v["id"], "phase": "fighting", "until": now + 3.5,
+                      "instigator": instigator}
+        squid.fighting = True
+        v["fighting"] = True
+        squid.is_fleeing = squid.is_startled = False
+        squid.status = "fighting!"
+        squid.happiness = max(0.0, squid.happiness - 12.0)
+        squid.satisfaction = max(0.0, squid.satisfaction - 10.0)
+        squid.anxiety = min(100.0, squid.anxiety + 20.0)
+        if instigator == "resident":
+            self.stats.on_fight_instigated()
+        # both squids puff an ink cloud
+        for (ix, iy) in ((squid.x, squid.y), (v["x"], v["y"])):
+            self.ink_clouds.append({"x": ix, "y": iy, "t": now, "ttl": 3.0})
+        self.stats.on_ink_cloud()
+        who = "Your squid" if instigator == "resident" else v["name"]
+        squid.remember("mental_state", "fight",
+                       f"{who} started a fight!", {"anxiety": 20, "happiness": -12},
+                       importance=2.5, related=["anxiety"])
+        self.visitor_event = "Aggression! FIGHTING!"
+
+    def _resolve_fight(self, f, v):
+        squid = self.squid
+        res = random.random() + self._FIGHT_BONUS.get(squid.personality, 0.0)
+        vis = random.random() + self._FIGHT_BONUS.get(
+            Personality.from_value(v.get("personality", "adventurous")), 0.0)
+        won = res >= vis
+        f["phase"] = "result"
+        f["until"] = squid.brain.sim_time + 2.0
+        if won:
+            self.stats.on_fight_won()
+            squid.satisfaction = min(100.0, squid.satisfaction + 15.0)
+            squid.happiness = min(100.0, squid.happiness + 8.0)
+            self.visitor_event = f"Your squid won the fight against {v['name']}!"
+        else:
+            self.stats.on_fight_lost()
+            squid.anxiety = min(100.0, squid.anxiety + 15.0)
+            squid.happiness = max(0.0, squid.happiness - 8.0)
+            self.visitor_event = f"{v['name']} won the fight!"
+
+    def _end_fight(self, v):
+        self.squid.fighting = False
+        if v is not None:
+            v["fighting"] = False
+            v["leaving"] = True        # the visitor heads home after the scrap
+            v["vx"] = 110.0 if v["x"] > self.tank_size[0] * 0.5 else -110.0
+        self.fight = None
+        self._fight_cooldown = 25.0
 
     def _decoration_effects(self, dt):
         """Being near decorations shapes mood: plants soothe, rocks intrigue."""
@@ -363,6 +601,13 @@ class Simulation:
             if f["y"] < floor:
                 f["y"] = min(floor, f["y"] + 120 * dt)
 
+    def _settle_poop(self, dt):
+        # Poop sinks to the sandy floor, just like uneaten food.
+        floor = self.tank_size[1] - 34
+        for p in self.poop_items:
+            if p["y"] < floor:
+                p["y"] = min(floor, p["y"] + 90 * dt)
+
     def _try_eat(self):
         eaten = []
         for f in self.food_items:
@@ -385,6 +630,7 @@ class Simulation:
         """Advance the whole simulation by ``dt`` seconds."""
         self.newborn_neuron = None
         self.sleep_consolidation = None
+        self.visitor_event = None
         self.squid._last_dt = dt
         squid = self.squid
 
@@ -459,7 +705,9 @@ class Simulation:
                 bias.update(m.get("related_neurons") or [])
             squid.brain.record_coactivation(dt, bias_neurons=bias)
         self._decision_timer += dt
-        if self._decision_timer >= self._decision_interval:
+        if self.fight is not None:
+            self.last_status = "Aggression! FIGHTING!"   # a fight overrides normal behaviour
+        elif self._decision_timer >= self._decision_interval:
             self._decision_timer = 0.0
             self.last_status = squid.decide(squid.brain.state, self.food_items)
         else:
@@ -492,10 +740,12 @@ class Simulation:
         self._update_startle(dt)
         self._update_ink(dt)
         self._update_visitors(dt)
+        self._update_fight(dt)
         self._update_rock_play(dt)
         self._update_sweep(dt)
         self._decoration_effects(dt)
         self._settle_food(dt)
+        self._settle_poop(dt)
         if self._try_eat():
             squid.is_eating = True
         else:

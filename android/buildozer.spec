@@ -20,9 +20,11 @@ requirements = python3,kivy==2.3.1,numpy,pillow,plyer,android
 orientation = portrait
 fullscreen = 0
 
-# App icon / splash reuse the original squid artwork.
+# App icon; the startup splash is a full title image (icon + tagline + URL) so
+# there's a single, branded splash rather than a bare icon then a second screen.
 icon.filename = %(source.dir)s/assets/icon.png
-presplash.filename = %(source.dir)s/assets/icon.png
+presplash.filename = %(source.dir)s/assets/presplash.png
+android.presplash_color = #0a0d17
 
 # WRITE_EXTERNAL_STORAGE: legacy (API 24-28) export to public Downloads (API 29+
 # uses MediaStore, no permission). The rest power local peer-to-peer visits via
@@ -38,7 +40,11 @@ android.add_src = java
 # API / NDK levels (defaults known to work with kivy 2.3.1 + p4a).
 android.api = 33
 android.minapi = 24
-android.archs = arm64-v8a, armeabi-v7a
+# arm64-v8a only: every Android phone from the last ~8 years is 64-bit, and
+# building a single arch roughly halves the (from-scratch) native compile so
+# the CI build finishes well inside the timeout. Add "armeabi-v7a" back here if
+# you need to support very old 32-bit devices (at ~2x build time).
+android.archs = arm64-v8a
 android.allow_backup = True
 
 # SDL2 bootstrap is what Kivy uses.

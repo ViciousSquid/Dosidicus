@@ -59,9 +59,9 @@ could be driven headless — the Kivy layer is just one consumer of it.
 
 ## What's in the app
 
-* **Raising loop** — **Feed** and **Clean** buttons (a cleaning sweep wipes food
-  and poop right-to-left). The squid decides for itself when to explore, play
-  and sleep.
+* **Raising loop** — **Feed** (drops **sushi** or **cheese** at random, both
+  from the desktop) and **Clean** (a sweep wipes food and poop right-to-left).
+  The squid decides for itself when to explore, play and sleep.
 * **Egg hatching** — a new game starts as an egg that animates through its
   frames, then hatches; a short tutorial is offered.
 * **Decorations** — place plants, rocks and more; **drag** to move, **pinch** to
@@ -70,7 +70,10 @@ could be driven headless — the Kivy layer is just one consumer of it.
   throw can sail out of the tank).
 * **Moods & life** — sickness, **startle + ink clouds**, mental-state icons
   (startled `!`, sick, curious `?`) and a sleeping **"Zzz"**. Neglect it too
-  long and it starves — **game over**. Food is capped at 5 in the tank.
+  long and it starves — **game over**. Food is capped at 5 in the tank, and
+  uneaten food and poop both sink to the sandy floor.
+* **Shake to spook** — physically shaking the phone rattles the squid: its
+  anxiety spikes and it bolts (uses the accelerometer).
 * **Sleep memory consolidation** — falling asleep replays the day's strongest
   co-activations to cement them and promotes meaningful memories to long-term.
 * **Change colour** — tint your squid from the About tab (persists, and travels
@@ -145,8 +148,15 @@ brain weights/positions, memories, achievements).
 Two phones running Dosidicus can find each other over Bluetooth/Wi-Fi — no
 network, no server — from the **Nearby squids** menu. One hosts, the other
 finds; on connect each side sends a compact gzipped snapshot and the other
-spawns it as a **guest visitor** that swims around the tank for a couple of
-minutes, then leaves. A received squid can also be **imported** as a full copy.
+spawns it as a **guest visitor** that roams the tank and makes mischief — it
+**steals food**, **grabs a rock and takes it home** when it leaves, and puffs
+**ink clouds**. It may also pick a **fight** with the resident: every fight has an
+**instigator** (never a *timid* squid — and two timid squids never fight), both
+combatants turn red, swim together in a cloud of ink, moods sour
+(happiness/satisfaction down, anxiety up), and after a moment a winner is
+declared. Each squid keeps a fight history — **Fights Instigated / Won / Lost**
+and **Other Squids Encountered** — in its statistics. A received squid can also
+be **imported** as a full copy.
 
 This uses Google's **Nearby Connections** API, which is Java-only and exposes
 *abstract* callbacks that pyjnius can't subclass — so a small Java shim
