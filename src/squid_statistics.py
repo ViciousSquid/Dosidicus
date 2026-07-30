@@ -160,7 +160,35 @@ class SquidStatistics:
 
         hours_str = f"{whole_hours}" if half_hour == 0 else f"{whole_hours}.5"
         return f"{hours_str} hr" + ("s" if whole_hours + half_hour != 1 else "")
-    
+
+    @staticmethod
+    def _coerce_non_negative_number(value, default):
+        """Return a finite non-negative number or the field's default."""
+        if value is None or isinstance(value, bool):
+            return default
+
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return default
+
+        if number < 0 or not math.isfinite(number):
+            return default
+
+        if isinstance(value, (int, float)):
+            return value
+        if isinstance(default, int) and number.is_integer():
+            return int(number)
+        return number
+
+    @classmethod
+    def _coerce_loaded_count(cls, value, default):
+        """Return a non-negative integer count or the field's default."""
+        number = cls._coerce_non_negative_number(value, default)
+        if isinstance(number, bool) or not float(number).is_integer():
+            return default
+        return int(number)
+
     def load_statistics(self, data):
         """Load canonical statistics from a desktop ``statistics.json`` dict."""
         # Loading replaces the current model. Without this reset, fields absent
@@ -169,22 +197,39 @@ class SquidStatistics:
         self.__init__(self.squid)
 
         if data:
-            self.total_age_seconds = data.get('total_age_seconds', 0)
+            self.total_age_seconds = self._coerce_non_negative_number(
+                data.get('total_age_seconds', self.total_age_seconds),
+                self.total_age_seconds,
+            )
 
             for persisted_key, attribute_name in self._PERSISTENCE_KEYS.items():
                 if persisted_key in data:
-                    setattr(self, attribute_name, data[persisted_key])
+                    default = getattr(self, attribute_name)
+                    setattr(
+                        self,
+                        attribute_name,
+                        self._coerce_non_negative_number(
+                            data[persisted_key],
+                            default,
+                        ),
+                    )
 
             current_neurons = max(
-                0, int(data.get('current_neurons', self.current_neurons))
+                0,
+                self._coerce_loaded_count(
+                    data.get('current_neurons', self.current_neurons),
+                    self.current_neurons,
+                ),
             )
-            saved_maximum = data.get('max_neurons_reached', current_neurons)
-            if saved_maximum is None:
-                saved_maximum = current_neurons
+            saved_maximum = self._coerce_loaded_count(
+                data.get('max_neurons_reached', current_neurons),
+                current_neurons,
+            )
 
             self.current_neurons = current_neurons
             self.max_neurons_reached = max(
-                current_neurons, max(0, int(saved_maximum))
+                current_neurons,
+                saved_maximum,
             )
 
         # Loading an already-sick squid resumes the same episode. It must not
@@ -270,6 +315,24 @@ class SquidStatistics:
             long_term_count,
         )
 
+    def observe_neurogenesis_peaks(self, novelty, stress, reward):
+        """Preserve lifetime maxima for the three live trigger values."""
+        for attribute_name, value in (
+            ('peak_novelty', novelty),
+            ('peak_stress', stress),
+            ('peak_reward', reward),
+        ):
+            current_peak = getattr(self, attribute_name)
+            observed_value = self._coerce_non_negative_number(
+                value,
+                current_peak,
+            )
+            setattr(
+                self,
+                attribute_name,
+                max(current_peak, observed_value),
+            )
+
     def reset(self):
         """Reset counters without discarding live or lifetime neuron state."""
         current_neurons = self.current_neurons
@@ -282,8 +345,8 @@ class SquidStatistics:
             current_neurons,
         )
 
-    def update(self, elapsed_seconds):
-        """Advance continuous statistics by an explicit elapsed duration."""
+    def update(self, elapsed_seconds=1.0):
+        """Advance continuous statistics, defaulting to the legacy one-second tick."""
         elapsed_seconds = float(elapsed_seconds)
         if elapsed_seconds < 0 or not math.isfinite(elapsed_seconds):
             raise ValueError("elapsed_seconds must be a finite non-negative number")

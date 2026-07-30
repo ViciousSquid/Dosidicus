@@ -37,6 +37,13 @@ class SquidStatisticsTests(unittest.TestCase):
 
         self.assertEqual(self.statistics.time_spent_asleep, 2.75)
 
+    def test_zero_argument_update_preserves_one_second_compatibility(self):
+        self.squid.is_sleeping = True
+
+        self.statistics.update()
+
+        self.assertEqual(self.statistics.time_spent_asleep, 1)
+
     def test_sickness_counts_only_false_to_true_transitions(self):
         self.statistics.record_sickness_state(False)
         self.statistics.record_sickness_state(True)

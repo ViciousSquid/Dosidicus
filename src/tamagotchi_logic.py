@@ -1816,7 +1816,7 @@ class TamagotchiLogic:
         if random.random() < curious_chance:
             self.make_squid_curious()
 
-    def track_neuron_creation(self, neuron_type, current_count):
+    def track_neuron_creation(self, neuron_type, current_count=None):
         """Record one completed neurogenesis event on the canonical model."""
         statistics = getattr(self.squid, 'statistics', None)
         if statistics:
@@ -1899,6 +1899,14 @@ class TamagotchiLogic:
             self.neurogenesis_triggers['positive_outcomes'] = max(
                 0,
                 self.neurogenesis_triggers['positive_outcomes'] - 0.2
+            )
+
+        statistics = getattr(self.squid, 'statistics', None)
+        if statistics:
+            statistics.observe_neurogenesis_peaks(
+                self.neurogenesis_triggers['novel_objects'],
+                self.neurogenesis_triggers['high_stress_cycles'] / 10.0,
+                self.neurogenesis_triggers['positive_outcomes'],
             )
         
         # Debug output if in debug mode

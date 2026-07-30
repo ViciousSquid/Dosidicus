@@ -75,6 +75,37 @@ class RecordingMentalStateManager:
 
 
 class StatisticsEventWiringTests(unittest.TestCase):
+    def test_live_neurogenesis_triggers_update_lifetime_peaks(self):
+        squid = FakeSquid()
+        squid.anxiety = 80
+        logic = object.__new__(TamagotchiLogic)
+        logic.squid = squid
+        logic.neurogenesis_triggers = {
+            "novel_objects": 1.5,
+            "high_stress_cycles": 20,
+            "positive_outcomes": 3,
+        }
+        logic.new_object_encountered = True
+        logic.recent_positive_outcome = True
+        logic.add_thought = Mock()
+        logic.debug_mode = False
+
+        with patch("src.tamagotchi_logic.random.random", return_value=1):
+            logic.track_neurogenesis_triggers()
+
+        self.assertEqual(squid.statistics.peak_novelty, 2.5)
+        self.assertEqual(squid.statistics.peak_stress, 2.1)
+        self.assertEqual(squid.statistics.peak_reward, 4)
+
+        squid.anxiety = 10
+        logic.new_object_encountered = False
+        logic.recent_positive_outcome = False
+        logic.track_neurogenesis_triggers()
+
+        self.assertEqual(squid.statistics.peak_novelty, 2.5)
+        self.assertEqual(squid.statistics.peak_stress, 2.1)
+        self.assertEqual(squid.statistics.peak_reward, 4)
+
     def test_stop_disconnects_the_old_neurogenesis_listener(self):
         signal = ConnectableSignal()
         old_logic = object.__new__(TamagotchiLogic)
@@ -121,28 +152,51 @@ class StatisticsEventWiringTests(unittest.TestCase):
 
         self.assertEqual(signal.events, ["novelty_threaded"])
 
-    def test_synchronous_fallback_does_not_delegate_an_already_created_birth(self):
+    def test_synchronous_fallback_real_check_creates_one_birth_without_delegating(
+        self,
+    ):
         signal = RecordingSignal()
         delegated_results = []
 
-        def create_synchronously(_state):
-            signal.emit("stress_synchronous")
-            return {"should_create": True}
-
         controller = SimpleNamespace(
             _pending_neurogenesis_check=False,
-            enhanced_neurogenesis=SimpleNamespace(),
-            state={},
+            neuronCreated=signal,
+            state={
+                "neurogenesis_active": True,
+                "anxiety": 95,
+                "recent_actions": [],
+            },
             _use_threaded_processing=False,
-            check_neurogenesis_triggers=create_synchronously,
             _on_neurogenesis_complete=delegated_results.append,
+            experience_buffer=SimpleNamespace(add_experience=Mock()),
+            pruning_enabled=False,
+        )
+        controller.enhanced_neurogenesis = NotifyingNeurogenesis(
+            controller,
+            "stress_synchronous",
+        )
+        controller.check_neurogenesis_triggers = lambda state: (
+            BrainWidget.check_neurogenesis_triggers(controller, state)
         )
 
-        BrainWidget._periodic_neurogenesis_check(controller)
+        with redirect_stdout(io.StringIO()):
+            BrainWidget._periodic_neurogenesis_check(controller)
 
         self.assertEqual(signal.events, ["stress_synchronous"])
         self.assertEqual(delegated_results, [])
         self.assertFalse(controller._pending_neurogenesis_check)
+
+    def test_one_argument_neuron_creation_preserves_compatibility(self):
+        squid = FakeSquid()
+        logic = object.__new__(TamagotchiLogic)
+        logic.squid = squid
+        logic.statistics_window = None
+        logic.brain_window = SimpleNamespace(statistics_tab=None)
+
+        logic.track_neuron_creation("novelty")
+
+        self.assertEqual(squid.statistics.novelty_neurons_created, 1)
+        self.assertEqual(squid.statistics.current_neurons, 9)
 
     def test_orphan_rescue_emits_one_completed_birth(self):
         signal = RecordingSignal()

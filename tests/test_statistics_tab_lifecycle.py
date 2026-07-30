@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtWidgets
 
 import src.brain_tool as brain_tool_module
 import src.brain_widget as brain_widget_module
-from src.squid_statistics import SquidStatistics
+from src.squid_statistics import DEFAULT_NEURON_COUNT, SquidStatistics
 from src.tamagotchi_logic import TamagotchiLogic
 
 
@@ -125,12 +125,17 @@ class StatisticsTabLifecycleTests(unittest.TestCase):
                     window.tabs.indexOf(window.statistics_tab),
                     0,
                 )
+                self.assertFalse(hasattr(window, "learning_tab"))
                 self.assertIsNone(window.statistics_tab.tamagotchi_logic)
 
                 logic = object.__new__(TamagotchiLogic)
                 logic.squid = FakeSquid()
                 logic.brain_window = window
                 logic.neuron_output_monitor = None
+                self.assertEqual(
+                    logic._live_neuron_count(),
+                    DEFAULT_NEURON_COUNT,
+                )
 
                 prebound_stats = logic.squid.statistics
                 self.assertTrue(prebound_stats.increment("cheese_eaten"))
