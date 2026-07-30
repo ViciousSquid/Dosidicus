@@ -784,6 +784,9 @@ class Squid:
 
         # Wake up the squid
         self.is_sleeping = False
+        if hasattr(self.tamagotchi_logic, 'track_startle'):
+            self.tamagotchi_logic.track_startle()
+
         # self.sleepiness = 0  # Waking up this way doesn't remove all tiredness
         self.happiness = max(0, self.happiness - 25)  # Increased happiness decrease
         self.anxiety = min(100, self.anxiety + 60)    # Increased anxiety spike
@@ -1457,9 +1460,11 @@ class Squid:
 
         if self.is_sleeping:
             #print("Squid is sleeping, limited movement")
+            previous_x, previous_y = self.squid_x, self.squid_y
             if self.squid_y < self.ui.window_height - 120 - self.squid_height:
                 self.squid_y += self.base_vertical_speed * self.animation_speed
                 self.squid_item.setPos(self.squid_x, self.squid_y)
+            self._track_position_delta(previous_x, previous_y)
             self.current_frame = (self.current_frame + 1) % 2
             self.update_squid_image()
             return
@@ -1526,10 +1531,7 @@ class Squid:
         self.squid_x = squid_x_new
         self.squid_y = squid_y_new
 
-        # Track distance - 80 pixels per movement
-        if self.squid_x != prev_x or self.squid_y != prev_y:
-            if hasattr(self.tamagotchi_logic, 'track_distance'):
-                self.tamagotchi_logic.track_distance(80)
+        self._track_position_delta(prev_x, prev_y)
 
         # Update animation frame and image
         if self.squid_direction in ["left", "right", "up", "down"]:
@@ -1555,6 +1557,21 @@ class Squid:
             self.squid_direction = "right" if dx > 0 else "left"
         else:
             self.squid_direction = "down" if dy > 0 else "up"
+
+    def _track_position_delta(self, previous_x, previous_y):
+        """Record the actual distance moved at a coordinate update boundary."""
+        distance = math.hypot(
+            self.squid_x - previous_x,
+            self.squid_y - previous_y,
+        )
+        track_distance = getattr(
+            getattr(self, 'tamagotchi_logic', None),
+            'track_distance',
+            None,
+        )
+        if distance > 0 and track_distance:
+            track_distance(distance)
+        return distance
 
     def move_towards_position(self, target_pos):
         dx = target_pos.x() - (self.squid_x + self.squid_width // 2)
@@ -1862,10 +1879,14 @@ class Squid:
         self.poop_timer.start(poop_delay)
 
     def create_poop(self):
-        self.tamagotchi_logic.spawn_poop(self.squid_x + self.squid_width // 2, self.squid_y + self.squid_height)
+        created = self.tamagotchi_logic.spawn_poop(
+            self.squid_x + self.squid_width // 2,
+            self.squid_y + self.squid_height,
+        )
         # Add tracking
-        if hasattr(self.tamagotchi_logic, 'track_poop_created'):
+        if created and hasattr(self.tamagotchi_logic, 'track_poop_created'):
             self.tamagotchi_logic.track_poop_created()
+        return created
 
     def show_eating_effect(self):
         if not self.is_debug_mode():
@@ -2355,6 +2376,8 @@ class Squid:
         distance = math.hypot(dx, dy)  # More efficient than math.sqrt
         
         if distance > 5:  # Small threshold to prevent micro-movements
+            previous_x, previous_y = self.squid_x, self.squid_y
+
             # Normalize and scale by speed (removed temporary 1.5x boost)
             norm = max(distance, 0.1)  # Avoid division by zero
             move_x = (dx/norm) * self.base_squid_speed * self.animation_speed
@@ -2376,6 +2399,7 @@ class Squid:
             
             # Update graphics
             self.squid_item.setPos(self.squid_x, self.squid_y)
+            self._track_position_delta(previous_x, previous_y)
             self.current_frame = (self.current_frame + 1) % 2
             self.update_squid_image()  # Changed to use method instead of direct pixmap set
         

@@ -22,6 +22,24 @@ class RecordingSignal:
         self.events.append(neuron_name)
 
 
+class ConnectableSignal:
+    def __init__(self):
+        self.slots = []
+
+    def connect(self, slot):
+        self.slots.append(slot)
+
+    def disconnect(self, slot):
+        try:
+            self.slots.remove(slot)
+        except ValueError as error:
+            raise TypeError("slot is not connected") from error
+
+    def emit(self, *args):
+        for slot in list(self.slots):
+            slot(*args)
+
+
 class NotifyingNeurogenesis:
     def __init__(self, brain_widget, neuron_name):
         self.brain_widget = brain_widget
@@ -57,6 +75,27 @@ class RecordingMentalStateManager:
 
 
 class StatisticsEventWiringTests(unittest.TestCase):
+    def test_stop_disconnects_the_old_neurogenesis_listener(self):
+        signal = ConnectableSignal()
+        old_logic = object.__new__(TamagotchiLogic)
+        new_logic = object.__new__(TamagotchiLogic)
+        old_handler = Mock()
+        new_handler = Mock()
+        old_logic._on_neurogenesis_icon_and_memory = old_handler
+        new_logic._on_neurogenesis_icon_and_memory = new_handler
+        old_logic.brain_window = SimpleNamespace(
+            brain_widget=SimpleNamespace(neuronCreated=signal),
+        )
+        signal.connect(old_handler)
+        signal.connect(new_handler)
+
+        old_logic.stop()
+        old_logic.stop()
+        signal.emit("novelty_after_restart")
+
+        old_handler.assert_not_called()
+        new_handler.assert_called_once_with("novelty_after_restart")
+
     def test_threaded_completion_does_not_duplicate_engine_notification(self):
         signal = RecordingSignal()
         controller = SimpleNamespace(
@@ -571,6 +610,217 @@ class StatisticsEventWiringTests(unittest.TestCase):
                 ("sick", True),
             ],
         )
+
+    def test_click_wake_records_one_accepted_startle(self):
+        squid = object.__new__(Squid)
+        squid.is_sleeping = True
+        squid.happiness = 90
+        squid.anxiety = 10
+        squid.status = "sleeping"
+        squid.statistics_window = SimpleNamespace(award=Mock())
+        squid.tamagotchi_logic = SimpleNamespace(
+            track_startle=Mock(),
+            show_message=Mock(),
+            create_ink_cloud=Mock(),
+        )
+        squid.show_startled_icon = Mock()
+
+        with (
+            patch("src.squid.random.random", return_value=1.0),
+            patch("src.squid.QtCore.QTimer"),
+        ):
+            squid.startle_awake()
+            squid.startle_awake()
+
+        self.assertFalse(squid.is_sleeping)
+        squid.tamagotchi_logic.track_startle.assert_called_once_with()
+
+    def test_poop_is_counted_only_after_a_successful_spawn(self):
+        for created in (False, True):
+            with self.subTest(created=created):
+                squid = object.__new__(Squid)
+                squid.squid_x = 100
+                squid.squid_y = 200
+                squid.squid_width = 20
+                squid.squid_height = 30
+                squid.tamagotchi_logic = SimpleNamespace(
+                    spawn_poop=Mock(return_value=created),
+                    track_poop_created=Mock(),
+                )
+
+                result = squid.create_poop()
+
+                self.assertIs(result, created)
+                if created:
+                    squid.tamagotchi_logic.track_poop_created.assert_called_once_with()
+                else:
+                    squid.tamagotchi_logic.track_poop_created.assert_not_called()
+
+    def test_spawn_poop_reports_capacity_rejection(self):
+        logic = object.__new__(TamagotchiLogic)
+        logic.poop_items = [object()]
+        logic.max_poop = 1
+        logic.squid = SimpleNamespace()
+
+        self.assertFalse(logic.spawn_poop(100, 200))
+
+    def test_spawn_poop_reports_success_after_scene_insertion(self):
+        logic = object.__new__(TamagotchiLogic)
+        logic.poop_items = []
+        logic.max_poop = 1
+        logic.squid = SimpleNamespace(
+            poop_images=[object()],
+            poop_width=20,
+            mark_scene_objects_dirty=Mock(),
+        )
+        logic.user_interface = SimpleNamespace(
+            scene=SimpleNamespace(addItem=Mock()),
+        )
+        logic.brain_hooks = SimpleNamespace(on_object_spawned=Mock())
+        poop_item = SimpleNamespace(setPos=Mock())
+
+        with patch(
+            "src.tamagotchi_logic.ResizablePixmapItem",
+            return_value=poop_item,
+        ):
+            created = logic.spawn_poop(100, 200)
+
+        self.assertTrue(created)
+        self.assertEqual(logic.poop_items, [poop_item])
+        poop_item.setPos.assert_called_once_with(90, 200)
+        logic.user_interface.scene.addItem.assert_called_once_with(poop_item)
+        logic.brain_hooks.on_object_spawned.assert_called_once_with("poop")
+        logic.squid.mark_scene_objects_dirty.assert_called_once_with()
+
+    def test_direct_approach_records_actual_distance(self):
+        squid = object.__new__(Squid)
+        squid.squid_x = 100
+        squid.squid_y = 100
+        squid.squid_width = 20
+        squid.squid_height = 20
+        squid.base_squid_speed = 90
+        squid.base_vertical_speed = 45
+        squid.animation_speed = 1
+        squid.current_frame = 0
+        squid.squid_item = SimpleNamespace(
+            sceneBoundingRect=lambda: SimpleNamespace(
+                center=lambda: SimpleNamespace(
+                    x=lambda: 100,
+                    y=lambda: 100,
+                ),
+            ),
+            setPos=Mock(),
+        )
+        squid.ui = SimpleNamespace(window_width=1000, window_height=800)
+        squid.update_squid_image = Mock()
+        squid.tamagotchi_logic = SimpleNamespace(track_distance=Mock())
+
+        remaining_distance = squid.move_toward_position((300, 100))
+
+        self.assertEqual(remaining_distance, 200)
+        self.assertEqual((squid.squid_x, squid.squid_y), (190, 100))
+        squid.tamagotchi_logic.track_distance.assert_called_once_with(90)
+
+    def test_diagonal_approach_records_euclidean_distance(self):
+        squid = object.__new__(Squid)
+        squid.squid_x = 100
+        squid.squid_y = 100
+        squid.squid_width = 20
+        squid.squid_height = 20
+        squid.base_squid_speed = 5
+        squid.base_vertical_speed = 5
+        squid.animation_speed = 1
+        squid.current_frame = 0
+        squid.squid_item = SimpleNamespace(
+            sceneBoundingRect=lambda: SimpleNamespace(
+                center=lambda: SimpleNamespace(
+                    x=lambda: 100,
+                    y=lambda: 100,
+                ),
+            ),
+            setPos=Mock(),
+        )
+        squid.ui = SimpleNamespace(window_width=1000, window_height=800)
+        squid.update_squid_image = Mock()
+        squid.tamagotchi_logic = SimpleNamespace(track_distance=Mock())
+
+        remaining_distance = squid.move_toward_position((106, 108))
+
+        self.assertEqual(remaining_distance, 10)
+        self.assertEqual((squid.squid_x, squid.squid_y), (103, 104))
+        squid.tamagotchi_logic.track_distance.assert_called_once_with(5)
+
+    def test_normal_and_clipped_movement_record_post_clamp_distance(self):
+        for direction, start, expected_position, expected_distance in (
+            ("down", (100, 100), (100, 145), 45),
+            ("right", (840, 100), (850, 100), 10),
+        ):
+            with self.subTest(direction=direction):
+                squid = object.__new__(Squid)
+                squid.squid_x, squid.squid_y = start
+                squid.squid_width = 100
+                squid.squid_height = 20
+                squid.base_squid_speed = 90
+                squid.base_vertical_speed = 45
+                squid.animation_speed = 1
+                squid.is_sleeping = False
+                squid.squid_direction = direction
+                squid.current_frame = 0
+                squid.pursuing_food = False
+                squid.last_view_cone_change = 0
+                squid.view_cone_change_interval = 100_000_000
+                squid.ui = SimpleNamespace(
+                    window_width=1000,
+                    window_height=800,
+                )
+                squid.tamagotchi_logic = SimpleNamespace(
+                    track_distance=Mock(),
+                )
+                squid.squid_item = SimpleNamespace(
+                    setPixmap=Mock(),
+                    setPos=Mock(),
+                )
+                squid.get_visible_food = Mock(return_value=[])
+                squid.move_randomly = Mock()
+                squid.change_direction = Mock()
+                squid.current_image = Mock(return_value=None)
+                squid.update_view_cone = Mock()
+                squid.update_sick_icon_position = Mock()
+
+                squid.move_squid()
+
+                self.assertEqual(
+                    (squid.squid_x, squid.squid_y),
+                    expected_position,
+                )
+                squid.tamagotchi_logic.track_distance.assert_called_once_with(
+                    expected_distance,
+                )
+
+    def test_sleeping_movement_records_actual_distance(self):
+        squid = object.__new__(Squid)
+        squid.squid_x = 100
+        squid.squid_y = 100
+        squid.squid_width = 100
+        squid.squid_height = 20
+        squid.base_vertical_speed = 45
+        squid.animation_speed = 1
+        squid.is_sleeping = True
+        squid.current_frame = 0
+        squid.ui = SimpleNamespace(
+            window_width=1000,
+            window_height=800,
+        )
+        squid.tamagotchi_logic = SimpleNamespace(
+            track_distance=Mock(),
+        )
+        squid.squid_item = SimpleNamespace(setPos=Mock())
+        squid.update_squid_image = Mock()
+
+        squid.move_squid()
+
+        self.assertEqual((squid.squid_x, squid.squid_y), (100, 145))
+        squid.tamagotchi_logic.track_distance.assert_called_once_with(45)
 
 
 if __name__ == "__main__":

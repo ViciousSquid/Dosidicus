@@ -163,9 +163,13 @@ class SquidStatistics:
     
     def load_statistics(self, data):
         """Load canonical statistics from a desktop ``statistics.json`` dict."""
+        # Loading replaces the current model. Without this reset, fields absent
+        # from an older or partial save leak in from the live session and create
+        # a hybrid of two different states.
+        self.__init__(self.squid)
+
         if data:
             self.total_age_seconds = data.get('total_age_seconds', 0)
-            self.start_time = time.time()
 
             for persisted_key, attribute_name in self._PERSISTENCE_KEYS.items():
                 if persisted_key in data:

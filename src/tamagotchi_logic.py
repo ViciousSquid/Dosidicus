@@ -1068,6 +1068,20 @@ class TamagotchiLogic:
 
     def stop(self):
         """Stop all timers and clean up resources"""
+        brain_widget = getattr(
+            getattr(self, 'brain_window', None),
+            'brain_widget',
+            None,
+        )
+        neuron_created = getattr(brain_widget, 'neuronCreated', None)
+        if neuron_created:
+            try:
+                neuron_created.disconnect(
+                    self._on_neurogenesis_icon_and_memory
+                )
+            except (TypeError, RuntimeError):
+                pass
+
         # Stop Vision Worker
         if hasattr(self, 'vision_worker') and self.vision_worker:
             self.vision_worker.stop()
@@ -2686,6 +2700,8 @@ class TamagotchiLogic:
             # Notify vision worker of scene change
             if hasattr(self.squid, 'mark_scene_objects_dirty'):
                 self.squid.mark_scene_objects_dirty()
+            return True
+        return False
 
     def animate_poops(self):
         if self.squid is not None:

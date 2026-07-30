@@ -204,7 +204,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         ]:
             if hasattr(self, tab_attr):
                 tab = getattr(self, tab_attr)
-                if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:
+                if hasattr(tab, 'set_tamagotchi_logic'):
                     tab.set_tamagotchi_logic(tamagotchi_logic)
 
     def _check_bridge_import(self):

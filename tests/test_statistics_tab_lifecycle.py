@@ -132,6 +132,25 @@ class StatisticsTabLifecycleTests(unittest.TestCase):
                 logic.brain_window = window
                 logic.neuron_output_monitor = None
 
+                prebound_stats = logic.squid.statistics
+                self.assertTrue(prebound_stats.increment("cheese_eaten"))
+                prebound_stats.add_distance(1000)
+                prebound_stats.sushi_consumed = 2
+                prebound_stats.poops_created = 3
+                prebound_stats.max_poops_cleaned = 4
+                prebound_stats.startles_experienced = 5
+                prebound_stats.ink_clouds_created = 6
+                prebound_stats.times_colour_changed = 7
+                prebound_stats.total_rocks_thrown = 8
+                prebound_stats.plants_interacted = 9
+                prebound_stats.time_spent_asleep = 125
+                prebound_stats.sickness_episodes = 10
+                prebound_stats.novelty_neurons_created = 11
+                prebound_stats.stress_neurons_created = 12
+                prebound_stats.reward_neurons_created = 13
+                prebound_stats.observe_neuron_count(14)
+                prebound_stats.total_age_seconds = 15 * 60
+
                 window.set_tamagotchi_logic(logic)
 
                 for tab_name in (
@@ -148,18 +167,135 @@ class StatisticsTabLifecycleTests(unittest.TestCase):
                         logic,
                     )
 
+                labels = window.statistics_tab.stat_labels
+                expected_initial_labels = {
+                    "squid_age_minutes": "15",
+                    "distance_swam": "1,000",
+                    "cheese_eaten": "1",
+                    "sushi_eaten": "2",
+                    "poops_created": "3",
+                    "max_poops_cleaned": "4",
+                    "startles_experienced": "5",
+                    "ink_clouds_created": "6",
+                    "times_colour_changed": "7",
+                    "rocks_thrown": "8",
+                    "plants_interacted": "9",
+                    "total_sleep_time": "125",
+                    "sickness_episodes": "10",
+                    "novelty_neurons_created": "11",
+                    "stress_neurons_created": "12",
+                    "reward_neurons_created": "13",
+                    "current_neurons": "14",
+                }
+                for label_name, expected_text in (
+                    expected_initial_labels.items()
+                ):
+                    with self.subTest(
+                        phase="initial bind",
+                        label_name=label_name,
+                    ):
+                        self.assertEqual(
+                            labels[label_name].text(),
+                            expected_text,
+                        )
+
+                prebound_stats.reset()
                 self.assertTrue(logic.record_statistic_event("cheese_eaten"))
                 logic.track_distance(4321)
-                logic.squid.statistics.observe_neuron_count(13)
+                logic.squid.statistics.observe_neuron_count(15)
                 logic._refresh_statistics_tab()
 
-                labels = window.statistics_tab.stat_labels
                 self.assertEqual(logic.squid.statistics.cheese_consumed, 1)
                 self.assertEqual(logic.squid.statistics.distance_swam, 4321.0)
-                self.assertEqual(logic.squid.statistics.max_neurons_reached, 13)
+                self.assertEqual(logic.squid.statistics.max_neurons_reached, 15)
                 self.assertEqual(labels["cheese_eaten"].text(), "1")
                 self.assertEqual(labels["distance_swam"].text(), "4,321")
-                self.assertEqual(labels["current_neurons"].text(), "13")
+                self.assertEqual(labels["current_neurons"].text(), "15")
+
+                window.set_tamagotchi_logic(None)
+                self.assertIsNone(window.tamagotchi_logic)
+                self.assertIsNone(window.brain_widget.tamagotchi_logic)
+                for tab_name in (
+                    "network_tab",
+                    "nn_viz_tab",
+                    "memory_tab",
+                    "decisions_tab",
+                    "personality_tab",
+                    "statistics_tab",
+                    "about_tab",
+                ):
+                    self.assertIsNone(
+                        getattr(window, tab_name).tamagotchi_logic
+                    )
+
+                replacement_logic = object.__new__(TamagotchiLogic)
+                replacement_logic.squid = FakeSquid()
+                replacement_logic.brain_window = window
+                replacement_logic.neuron_output_monitor = None
+                replacement_stats = replacement_logic.squid.statistics
+                replacement_stats.increment("cheese_eaten", 21)
+                replacement_stats.add_distance(2000)
+                replacement_stats.sushi_consumed = 22
+                replacement_stats.poops_created = 23
+                replacement_stats.max_poops_cleaned = 24
+                replacement_stats.startles_experienced = 25
+                replacement_stats.ink_clouds_created = 26
+                replacement_stats.times_colour_changed = 27
+                replacement_stats.total_rocks_thrown = 28
+                replacement_stats.plants_interacted = 29
+                replacement_stats.time_spent_asleep = 240
+                replacement_stats.sickness_episodes = 30
+                replacement_stats.novelty_neurons_created = 31
+                replacement_stats.stress_neurons_created = 32
+                replacement_stats.reward_neurons_created = 33
+                replacement_stats.observe_neuron_count(34)
+                replacement_stats.total_age_seconds = 35 * 60
+
+                window.set_tamagotchi_logic(replacement_logic)
+
+                for tab_name in (
+                    "network_tab",
+                    "nn_viz_tab",
+                    "memory_tab",
+                    "decisions_tab",
+                    "personality_tab",
+                    "statistics_tab",
+                    "about_tab",
+                ):
+                    self.assertIs(
+                        getattr(window, tab_name).tamagotchi_logic,
+                        replacement_logic,
+                    )
+                expected_replacement_labels = {
+                    "squid_age_minutes": "35",
+                    "distance_swam": "2,000",
+                    "cheese_eaten": "21",
+                    "sushi_eaten": "22",
+                    "poops_created": "23",
+                    "max_poops_cleaned": "24",
+                    "startles_experienced": "25",
+                    "ink_clouds_created": "26",
+                    "times_colour_changed": "27",
+                    "rocks_thrown": "28",
+                    "plants_interacted": "29",
+                    "total_sleep_time": "240",
+                    "sickness_episodes": "30",
+                    "novelty_neurons_created": "31",
+                    "stress_neurons_created": "32",
+                    "reward_neurons_created": "33",
+                    "current_neurons": "34",
+                }
+                for label_name, expected_text in (
+                    expected_replacement_labels.items()
+                ):
+                    with self.subTest(
+                        phase="replacement bind",
+                        label_name=label_name,
+                    ):
+                        self.assertEqual(
+                            labels[label_name].text(),
+                            expected_text,
+                        )
             finally:
                 if window is not None:
                     for timer in window.findChildren(QtCore.QTimer):
