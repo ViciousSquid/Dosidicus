@@ -1147,8 +1147,7 @@ class TamagotchiLogic:
             self.squid.current_speed = 180
             self.squid.direction = random.choice(['up', 'down', 'left', 'right'])
 
-            # A startle is one event whether or not it produces an ink cloud.
-            self._maybe_create_startle_ink_cloud(source)
+            # Record the accepted startle once on the model.
             self.track_startle()
 
             # --- resilience / anxiety / ink logic --------------------------
@@ -1293,19 +1292,6 @@ class TamagotchiLogic:
         
         # Backup timer to force remove after 10 seconds in case animation fails
         QtCore.QTimer.singleShot(10000, lambda: self.force_remove_ink_cloud(ink_cloud_item))
-
-    def _maybe_create_startle_ink_cloud(self, source):
-        """Create and finish one startle ink response when its roll succeeds."""
-        if source == "startled_awake" or random.random() >= 0.25:
-            return False
-
-        self.create_ink_cloud()
-        self.squid.status = "fleeing!"
-        self.squid.memory_manager.add_short_term_memory(
-            'behaviour', 'ink_cloud', 'Startled! Created an ink cloud'
-        )
-        QtCore.QTimer.singleShot(5000, self.squid.end_ink_flee)
-        return True
 
     def force_remove_ink_cloud(self, ink_cloud_item):
         """Force remove the ink cloud if it still exists after timeout"""

@@ -213,44 +213,65 @@ class StatisticsEventWiringTests(unittest.TestCase):
                 )
                 self.assertAlmostEqual(elapsed, 1.0, places=2)
 
-    def test_startle_ink_followup_runs_only_when_cloud_is_created(self):
-        memory_manager = SimpleNamespace(
-            add_short_term_memory=Mock(),
+    def test_one_startle_creates_at_most_one_ink_cloud(self):
+        cases = (
+            ("first startle", "environment", False, 0.0, 1),
+            ("later successful roll", "environment", True, 0.0, 1),
+            ("later failed roll", "environment", True, 0.99, 0),
+            ("awakened later successful roll", "startled_awake", True, 0.0, 1),
         )
-        squid = SimpleNamespace(
-            status="startled",
-            memory_manager=memory_manager,
-            end_ink_flee=Mock(),
-        )
-        logic = object.__new__(TamagotchiLogic)
-        logic.squid = squid
-        logic.create_ink_cloud = Mock()
 
-        with (
-            patch("src.tamagotchi_logic.random.random", return_value=0.5),
-            patch("src.tamagotchi_logic.QtCore.QTimer.singleShot") as single_shot,
-        ):
-            self.assertFalse(logic._maybe_create_startle_ink_cloud("environment"))
+        for name, source, already_startled, ink_roll, expected_clouds in cases:
+            with self.subTest(name=name):
+                squid = FakeSquid()
+                squid.status = "roaming"
+                squid.is_fleeing = False
+                squid.personality = None
+                squid.mental_state_manager = RecordingMentalStateManager()
+                squid.memory_manager = SimpleNamespace(
+                    add_short_term_memory=Mock(),
+                )
 
-        logic.create_ink_cloud.assert_not_called()
-        memory_manager.add_short_term_memory.assert_not_called()
-        single_shot.assert_not_called()
-        self.assertEqual(squid.status, "startled")
+                logic = object.__new__(TamagotchiLogic)
+                logic.mental_states_enabled = True
+                logic.initial_startle_allowed = True
+                logic.startle_cooldown_max = 10
+                logic.squid = squid
+                logic.statistics_window = SimpleNamespace(award=Mock())
+                logic.brain_window = SimpleNamespace(
+                    brain_widget=SimpleNamespace(
+                        get_stress_neuron_count=lambda: 0,
+                    ),
+                    statistics_tab=None,
+                )
+                logic.create_ink_cloud = Mock()
+                logic.show_message = Mock()
 
-        with (
-            patch("src.tamagotchi_logic.random.random", return_value=0.1),
-            patch("src.tamagotchi_logic.QtCore.QTimer.singleShot") as single_shot,
-        ):
-            self.assertTrue(logic._maybe_create_startle_ink_cloud("environment"))
+                if already_startled:
+                    logic._has_startled_before = True
 
-        logic.create_ink_cloud.assert_called_once_with()
-        memory_manager.add_short_term_memory.assert_called_once_with(
-            'behaviour',
-            'ink_cloud',
-            'Startled! Created an ink cloud',
-        )
-        single_shot.assert_called_once_with(5000, squid.end_ink_flee)
-        self.assertEqual(squid.status, "fleeing!")
+                with (
+                    patch(
+                        "src.tamagotchi_logic.random.random",
+                        return_value=ink_roll,
+                    ),
+                    patch(
+                        "src.tamagotchi_logic.random.choice",
+                        return_value="right",
+                    ),
+                    patch(
+                        "src.tamagotchi_logic.QtCore.QTimer.singleShot"
+                    ) as single_shot,
+                ):
+                    logic.startle_squid(source)
+
+                self.assertEqual(
+                    logic.create_ink_cloud.call_count,
+                    expected_clouds,
+                )
+                self.assertEqual(squid.statistics.startles_experienced, 1)
+                squid.memory_manager.add_short_term_memory.assert_called_once()
+                self.assertEqual(single_shot.call_count, 1)
 
     def test_startle_count_does_not_depend_on_statistics_tab(self):
         squid = FakeSquid()
