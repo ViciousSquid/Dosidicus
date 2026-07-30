@@ -193,7 +193,15 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 print(f"  ✓ Loaded {len(self.brain_widget.output_bindings)} output bindings into Monitor")
         
         # Update all tabs
-        for tab_attr in ['memory_tab', 'network_tab', 'learning_tab', 'decisions_tab', 'about_tab']:
+        for tab_attr in [
+            'memory_tab',
+            'network_tab',
+            'nn_viz_tab',
+            'decisions_tab',
+            'personality_tab',
+            'statistics_tab',
+            'about_tab',
+        ]:
             if hasattr(self, tab_attr):
                 tab = getattr(self, tab_attr)
                 if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:

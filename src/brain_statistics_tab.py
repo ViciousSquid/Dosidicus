@@ -55,11 +55,15 @@ class StatisticsTab(BrainBaseTab):
         super().hideEvent(event)
         self.is_visible = False
 
-    def set_logic(self, logic):
-        """Called by main window after TamagotchiLogic (and squid) exist."""
-        self.tamagotchi_logic = logic
+    def set_tamagotchi_logic(self, tamagotchi_logic):
+        """Attach late-created game logic and immediately refresh the view."""
+        super().set_tamagotchi_logic(tamagotchi_logic)
         self._sync_from_squid_statistics()
         self.update_display()
+
+    def set_logic(self, logic):
+        """Retain the legacy setter as an alias for external callers."""
+        self.set_tamagotchi_logic(logic)
 
     def _sync_from_squid_statistics(self):
         """Mirror the persistent squid statistics object into the tab state."""
