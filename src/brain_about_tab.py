@@ -256,9 +256,8 @@ class AboutTab(BrainBaseTab):
         if color.isValid():
             if self.tamagotchi_logic and self.tamagotchi_logic.squid:
                 self.tamagotchi_logic.squid.apply_tint(color)
-                if hasattr(self.tamagotchi_logic, 'brain_window') and \
-                hasattr(self.tamagotchi_logic.brain_window, 'statistics_tab'):
-                    self.tamagotchi_logic.brain_window.statistics_tab.increment_stat('times_colour_changed')
+                if hasattr(self.tamagotchi_logic, 'track_colour_changed'):
+                    self.tamagotchi_logic.track_colour_changed()
 
     def edit_name(self):
         """Allow user to edit squid name on double-click"""
