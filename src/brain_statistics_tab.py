@@ -89,26 +89,11 @@ class StatisticsTab(BrainBaseTab):
         self.statistics['current_neurons'] = getattr(squid_stats, 'max_neurons_reached', self.statistics['current_neurons'])
         self.statistics['squid_age_minutes'] = int(getattr(squid_stats, 'get_total_age_seconds', lambda: 0)() // 60)
 
-    def _increment_squid_stat(self, stat_name, amount=1):
-        """Increment the canonical squid statistics attribute for a tab stat key."""
-        if not self.tamagotchi_logic or not getattr(self.tamagotchi_logic, 'squid', None):
-            return False
-
-        squid_stats = getattr(self.tamagotchi_logic.squid, 'statistics', None)
-        if not squid_stats:
-            return False
-
-        return squid_stats.increment(stat_name, amount)
-
     def track_distance(self, distance):
-        """Forward a movement event to the canonical model."""
-        if self.tamagotchi_logic and getattr(self.tamagotchi_logic, 'squid', None):
-            squid_stats = getattr(self.tamagotchi_logic.squid, 'statistics', None)
-            if squid_stats:
-                squid_stats.add_distance(distance)
-                self._sync_from_squid_statistics()
-                if self.is_visible:
-                    self.update_display()
+        """Compatibility bridge; movement ownership remains in the logic/model."""
+        logic = self.tamagotchi_logic
+        if logic and hasattr(logic, 'track_distance'):
+            logic.track_distance(distance)
 
     def initialize_ui(self):
         """Build the statistics tab interface with DPI scaling"""
@@ -224,12 +209,10 @@ class StatisticsTab(BrainBaseTab):
                 label.setText(str(int(value)))
 
     def increment_stat(self, stat_name, amount=1):
-        """Forward a discrete event to the canonical model."""
-        if not self._increment_squid_stat(stat_name, amount):
-            return
-
-        self._sync_from_squid_statistics()
-        self.update_display()
+        """Compatibility bridge; event ownership remains in the logic/model."""
+        logic = self.tamagotchi_logic
+        if logic and hasattr(logic, 'record_statistic_event'):
+            logic.record_statistic_event(stat_name, amount)
 
     def reset_statistics(self):
         """Reset all statistics to zero"""

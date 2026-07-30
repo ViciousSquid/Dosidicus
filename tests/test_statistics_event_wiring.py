@@ -4,8 +4,12 @@ from contextlib import redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from src.brain_about_tab import AboutTab
 from src.brain_widget import BrainWidget
+from src.interactions import RockInteractionManager
+from src.interactions2 import PoopInteractionManager
 from src.neurogenesis import EnhancedNeurogenesis
+from src.squid import Squid
 from src.squid_statistics import SquidStatistics
 from src.tamagotchi_logic import TamagotchiLogic
 
@@ -282,6 +286,268 @@ class StatisticsEventWiringTests(unittest.TestCase):
         logic.track_startle()
 
         self.assertEqual(squid.statistics.startles_experienced, 1)
+
+    def test_discrete_events_do_not_depend_on_statistics_tab(self):
+        squid = FakeSquid()
+        logic = object.__new__(TamagotchiLogic)
+        logic.squid = squid
+        logic.brain_window = SimpleNamespace(statistics_tab=None)
+        logic.poop_items = [object(), object(), object()]
+
+        logic.track_food_consumed(SimpleNamespace(is_sushi=True))
+        logic.track_food_consumed(SimpleNamespace(is_sushi=False))
+        logic.track_poop_created()
+        logic.track_poop_thrown()
+        logic.track_rock_thrown()
+        logic.track_plant_interaction()
+        logic.track_colour_changed()
+        logic.track_distance(80)
+
+        self.assertEqual(squid.statistics.sushi_consumed, 1)
+        self.assertEqual(squid.statistics.cheese_consumed, 1)
+        self.assertEqual(squid.statistics.poops_created, 1)
+        self.assertEqual(squid.statistics.max_poops_cleaned, 3)
+        self.assertEqual(squid.statistics.total_poops_thrown, 1)
+        self.assertEqual(squid.statistics.total_rocks_thrown, 1)
+        self.assertEqual(squid.statistics.plants_interacted, 1)
+        self.assertEqual(squid.statistics.times_colour_changed, 1)
+        self.assertEqual(squid.statistics.distance_swam, 80)
+
+    def test_real_ink_cloud_path_is_safe_without_statistics_tab(self):
+        squid = FakeSquid()
+        squid.squid_x = 0
+        squid.squid_y = 0
+        squid.squid_width = 20
+        squid.squid_height = 20
+        squid.ui = SimpleNamespace(
+            scene=SimpleNamespace(addItem=Mock()),
+        )
+
+        logic = object.__new__(TamagotchiLogic)
+        logic.squid = squid
+        logic.brain_window = SimpleNamespace(statistics_tab=None)
+        logic.statistics_window = SimpleNamespace(award=Mock())
+
+        pixmap = Mock()
+        pixmap.width.return_value = 10
+        pixmap.height.return_value = 10
+        ink_cloud_item = Mock()
+        opacity_effect = Mock()
+        animation = Mock()
+
+        with (
+            patch(
+                "src.tamagotchi_logic.QtGui.QPixmap",
+                return_value=pixmap,
+            ),
+            patch(
+                "src.tamagotchi_logic.QtWidgets.QGraphicsPixmapItem",
+                return_value=ink_cloud_item,
+            ),
+            patch(
+                "src.tamagotchi_logic.QtWidgets.QGraphicsOpacityEffect",
+                return_value=opacity_effect,
+            ),
+            patch(
+                "src.tamagotchi_logic.QtCore.QPropertyAnimation",
+                return_value=animation,
+            ),
+            patch(
+                "src.tamagotchi_logic.QtCore.QTimer.singleShot"
+            ) as single_shot,
+        ):
+            logic.create_ink_cloud()
+
+        self.assertEqual(squid.statistics.ink_clouds_created, 1)
+        logic.statistics_window.award.assert_called_once_with(-250)
+        squid.ui.scene.addItem.assert_called_once_with(ink_cloud_item)
+        single_shot.assert_called_once()
+        self.assertEqual(single_shot.call_args.args[0], 10000)
+
+    def test_legacy_peak_memory_and_age_updates_are_model_owned(self):
+        squid = FakeSquid()
+        squid.memory_manager = SimpleNamespace(
+            short_term_memory=[1, 2, 3],
+            long_term_memory=[1, 2, 3, 4],
+        )
+        logic = object.__new__(TamagotchiLogic)
+        logic.squid = squid
+        logic.brain_window = SimpleNamespace(statistics_tab=None)
+
+        logic.update_squid_age()
+        logic.update_highest_anxiety(75)
+        logic.update_highest_anxiety(50)
+        logic.update_lowest_happiness(20)
+        logic.update_lowest_happiness(40)
+        logic.update_max_memories()
+
+        squid.memory_manager.short_term_memory.clear()
+        squid.memory_manager.long_term_memory.clear()
+        logic.update_max_memories()
+
+        persisted = squid.statistics.to_dict()
+        self.assertEqual(persisted["highest_anxiety"], 75)
+        self.assertEqual(persisted["lowest_happiness"], 20)
+        self.assertEqual(persisted["max_short_term_memories"], 3)
+        self.assertEqual(persisted["max_long_term_memories"], 4)
+
+    def test_rock_throw_delivers_one_model_event(self):
+        squid = FakeSquid()
+        rock_rect = SimpleNamespace(
+            width=lambda: 2,
+            height=lambda: 4,
+        )
+        rock = SimpleNamespace(
+            filename="rock.png",
+            setParentItem=Mock(),
+            boundingRect=lambda: rock_rect,
+            setPos=Mock(),
+            setVisible=Mock(),
+        )
+        squid.carried_rock = rock
+        squid.status = "roaming"
+        squid.happiness = 50
+        squid.satisfaction = 50
+        squid.anxiety = 50
+        squid.squid_item = SimpleNamespace(
+            sceneBoundingRect=lambda: SimpleNamespace(
+                center=lambda: SimpleNamespace(
+                    x=lambda: 10,
+                    y=lambda: 20,
+                )
+            )
+        )
+        squid.memory_manager = SimpleNamespace(
+            add_short_term_memory=Mock(),
+        )
+
+        statistics_tab = SimpleNamespace(
+            increment_stat=lambda name, amount=1: squid.statistics.increment(
+                name,
+                amount,
+            ),
+            update_statistics=Mock(),
+        )
+        logic = object.__new__(TamagotchiLogic)
+        logic.squid = squid
+        logic.brain_window = SimpleNamespace(statistics_tab=statistics_tab)
+        logic.statistics_window = SimpleNamespace(award=Mock())
+
+        manager = object.__new__(RockInteractionManager)
+        manager.squid = squid
+        manager.logic = logic
+        manager.rock_config = {
+            "happiness_boost": 5,
+            "satisfaction_boost": 3,
+            "anxiety_reduction": 2,
+        }
+        manager.throw_animation_timer = Mock()
+        manager.throw_animation_timer.isActive.return_value = False
+        manager.multiplayer_plugin = None
+
+        self.assertTrue(manager.throw_rock())
+        self.assertEqual(squid.statistics.total_rocks_thrown, 1)
+        statistics_tab.update_statistics.assert_called_once_with()
+
+    def test_poop_throw_delivers_one_model_event(self):
+        squid = FakeSquid()
+        poop_rect = SimpleNamespace(
+            width=lambda: 2,
+            height=lambda: 4,
+        )
+        poop = SimpleNamespace(
+            filename="poop.png",
+            setParentItem=Mock(),
+            boundingRect=lambda: poop_rect,
+            setPos=Mock(),
+            setVisible=Mock(),
+        )
+        squid.carried_poop = poop
+        squid.status = "roaming"
+        squid.happiness = 50
+        squid.satisfaction = 50
+        squid.anxiety = 50
+        squid.squid_item = SimpleNamespace(
+            sceneBoundingRect=lambda: SimpleNamespace(
+                center=lambda: SimpleNamespace(
+                    x=lambda: 10,
+                    y=lambda: 20,
+                )
+            )
+        )
+        squid.memory_manager = SimpleNamespace(
+            add_short_term_memory=Mock(),
+        )
+
+        statistics_tab = SimpleNamespace(update_statistics=Mock())
+        logic = object.__new__(TamagotchiLogic)
+        logic.squid = squid
+        logic.brain_window = SimpleNamespace(statistics_tab=statistics_tab)
+        logic.statistics_window = SimpleNamespace(award=Mock())
+
+        manager = object.__new__(PoopInteractionManager)
+        manager.squid = squid
+        manager.logic = logic
+        manager.poop_config = {}
+        manager.throw_animation_timer = Mock()
+        manager.throw_animation_timer.isActive.return_value = False
+        manager.multiplayer_plugin = None
+
+        self.assertTrue(manager.throw_poop())
+        self.assertEqual(squid.statistics.total_poops_thrown, 1)
+        statistics_tab.update_statistics.assert_called_once_with()
+
+    def test_plant_completion_delivers_one_model_event(self):
+        squid = FakeSquid()
+        squid.curiosity = 10
+        squid.memory_manager = SimpleNamespace(
+            add_short_term_memory=Mock(),
+            add_long_term_memory=Mock(),
+            plant_interaction_count={},
+        )
+        squid.push_animation = object()
+
+        statistics_tab = SimpleNamespace(
+            increment_stat=Mock(),
+            update_statistics=Mock(),
+        )
+        logic = object.__new__(TamagotchiLogic)
+        logic.squid = squid
+        logic.brain_window = SimpleNamespace(statistics_tab=statistics_tab)
+        logic.recent_positive_outcome = False
+        logic.show_message = Mock()
+        squid.tamagotchi_logic = logic
+
+        Squid._on_push_complete(
+            squid,
+            SimpleNamespace(category="plant", filename="fern.png"),
+        )
+        Squid._on_push_complete(
+            squid,
+            SimpleNamespace(category="rock", filename="rock.png"),
+        )
+
+        self.assertEqual(squid.statistics.plants_interacted, 1)
+        statistics_tab.increment_stat.assert_not_called()
+        statistics_tab.update_statistics.assert_called_once_with()
+
+    def test_colour_change_delivers_one_model_event_without_tab(self):
+        squid = FakeSquid()
+        squid.apply_tint = Mock()
+        logic = object.__new__(TamagotchiLogic)
+        logic.squid = squid
+        logic.brain_window = SimpleNamespace(statistics_tab=None)
+        controller = SimpleNamespace(tamagotchi_logic=logic)
+        colour = SimpleNamespace(isValid=lambda: True)
+
+        with patch(
+            "src.brain_about_tab.QtWidgets.QColorDialog.getColor",
+            return_value=colour,
+        ):
+            AboutTab.open_color_picker(controller)
+
+        squid.apply_tint.assert_called_once_with(colour)
+        self.assertEqual(squid.statistics.times_colour_changed, 1)
 
     def test_sickness_funnel_keeps_state_and_transition_count_aligned(self):
         squid = FakeSquid()

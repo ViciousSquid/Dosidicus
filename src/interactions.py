@@ -269,11 +269,7 @@ class RockInteractionManager:
             "is_positive": True
         }
 
-        # Update rocks thrown counter
-        if hasattr(self.squid, 'statistics'):
-            self.squid.statistics.total_rocks_thrown += 1
-
-        # Update statistics tab and achievements plugin
+        # Deliver the completed throw once to the canonical statistics model.
         if hasattr(self.logic, 'track_rock_thrown'):
             self.logic.track_rock_thrown()
         

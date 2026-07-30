@@ -20,6 +20,8 @@ class SquidStatistics:
         'sushi_eaten': 'sushi_consumed',
         'cheese_eaten': 'cheese_consumed',
         'total_memories_formed': 'total_memories_formed',
+        'max_short_term_memories': 'max_short_term_memories',
+        'max_long_term_memories': 'max_long_term_memories',
         'highest_anxiety': 'highest_anxiety',
         'lowest_happiness': 'lowest_happiness',
         'highest_satisfaction': 'highest_satisfaction',
@@ -68,6 +70,8 @@ class SquidStatistics:
         self.sushi_consumed = 0
         self.cheese_consumed = 0
         self.total_memories_formed = 0
+        self.max_short_term_memories = 0
+        self.max_long_term_memories = 0
         self.highest_anxiety = 0
         self.lowest_happiness = 100
         self.highest_satisfaction = 0
@@ -233,6 +237,33 @@ class SquidStatistics:
         self.current_neurons = current_count
         self.max_neurons_reached = max(
             self.max_neurons_reached, current_count
+        )
+
+    def observe_poop_count(self, current_count):
+        """Preserve the largest number of simultaneous poop items."""
+        current_count = int(current_count)
+        if current_count < 0:
+            raise ValueError("current poop count cannot be negative")
+
+        self.max_poops_cleaned = max(
+            self.max_poops_cleaned,
+            current_count,
+        )
+
+    def observe_memory_counts(self, short_term_count, long_term_count):
+        """Preserve lifetime maxima for both memory stores."""
+        short_term_count = int(short_term_count)
+        long_term_count = int(long_term_count)
+        if short_term_count < 0 or long_term_count < 0:
+            raise ValueError("memory counts cannot be negative")
+
+        self.max_short_term_memories = max(
+            self.max_short_term_memories,
+            short_term_count,
+        )
+        self.max_long_term_memories = max(
+            self.max_long_term_memories,
+            long_term_count,
         )
 
     def reset(self):
