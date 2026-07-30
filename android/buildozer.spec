@@ -47,6 +47,11 @@ android.minapi = 24
 android.archs = arm64-v8a
 android.allow_backup = True
 
+# Buildozer defaults release builds to an Android App Bundle (.aab), which
+# the release workflow doesn't look for (and isn't directly installable).
+# Force a plain, installable .apk instead.
+android.release_artifact = apk
+
 # SDL2 bootstrap is what Kivy uses.
 p4a.bootstrap = sdl2
 
