@@ -35,7 +35,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -115,7 +115,18 @@ jobs:
           P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -o pipefail
-          buildozer android release < <(yes) 2>&1 | tee build.log
+          for attempt in 1 2 3; do
+            echo "::group::buildozer attempt $attempt"
+            if buildozer android release < <(yes) 2>&1 | tee build.log; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "::warning::buildozer release attempt $attempt failed; retrying in 30s..."
+            sleep 30
+          done
+          echo "::error::buildozer failed after 3 attempts"
+          exit 1
 
       - name: Summarise output
         if: success()

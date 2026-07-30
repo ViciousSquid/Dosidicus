@@ -21,7 +21,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -78,10 +78,23 @@ jobs:
         # Feed "y" to the Android SDK license prompts via process substitution
         # (a plain `yes | buildozer` would let SIGPIPE mask buildozer's real
         # exit code under pipefail). pipefail ensures a build failure fails the
-        # step even though output is teed to build.log.
+        # step even though output is teed to build.log. We retry up to 3 times
+        # because p4a's recipe downloads occasionally hit transient upstream
+        # errors (e.g. HTTP 502); cached recipes make each retry fast.
         run: |
           set -o pipefail
-          buildozer android debug < <(yes) 2>&1 | tee build.log
+          for attempt in 1 2 3; do
+            echo "::group::buildozer attempt $attempt"
+            if buildozer android debug < <(yes) 2>&1 | tee build.log; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "::warning::buildozer debug attempt $attempt failed; retrying in 30s..."
+            sleep 30
+          done
+          echo "::error::buildozer failed after 3 attempts"
+          exit 1
 
       - name: Upload APK
         if: success()

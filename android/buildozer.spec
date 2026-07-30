@@ -40,7 +40,11 @@ android.add_src = java
 # API / NDK levels (defaults known to work with kivy 2.3.1 + p4a).
 android.api = 33
 android.minapi = 24
-android.archs = arm64-v8a, armeabi-v7a
+# arm64-v8a only: every Android phone from the last ~8 years is 64-bit, and
+# building a single arch roughly halves the (from-scratch) native compile so
+# the CI build finishes well inside the timeout. Add "armeabi-v7a" back here if
+# you need to support very old 32-bit devices (at ~2x build time).
+android.archs = arm64-v8a
 android.allow_backup = True
 
 # SDL2 bootstrap is what Kivy uses.
