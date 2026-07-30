@@ -254,7 +254,6 @@ class TamagotchiLogic:
         # Connect neurogenesis signal to show icon and store long-term memory
         if hasattr(self.brain_window, 'brain_widget'):
             self.brain_window.brain_widget.neuronCreated.connect(self._on_neurogenesis_icon_and_memory)
-            self.refresh_neuron_count()
 
     def handle_vision_update(self, result):
         """Cache the latest vision result and push to brain immediately."""
@@ -267,30 +266,6 @@ class TamagotchiLogic:
         Shows images/ng.png above the squid's head for 4 seconds
         and records a long-term memory of the event.
         """
-        brain_widget = getattr(self.brain_window, 'brain_widget', None)
-        neuron_type = None
-        current_count = None
-
-        if brain_widget:
-            current_count = self._live_neuron_count()
-            neurogenesis = getattr(brain_widget, 'enhanced_neurogenesis', None)
-            functional_neurons = getattr(neurogenesis, 'functional_neurons', {})
-            functional_neuron = functional_neurons.get(neuron_name)
-            neuron_type = getattr(functional_neuron, 'neuron_type', None)
-
-            if neuron_type is None:
-                details = getattr(brain_widget, 'neurogenesis_data', {}).get(
-                    'new_neurons_details', {}
-                ).get(neuron_name, {})
-                neuron_type = details.get('trigger_type')
-
-        self.track_neuron_creation(neuron_type, current_count)
-
-        # The creation signal is emitted before optional pruning. Re-observe
-        # the settled live count on the next event-loop turn without reducing
-        # the lifetime maximum recorded at birth.
-        QtCore.QTimer.singleShot(0, self.refresh_neuron_count)
-
         # Show the ng icon above the squid's head for 4 seconds
         if hasattr(self.squid, 'show_neurogenesis_icon'):
             self.squid.show_neurogenesis_icon()
@@ -352,65 +327,38 @@ class TamagotchiLogic:
         
 
     def update_squid_age(self):
-        """Refresh the age projection from the persistent model clock."""
-        self._refresh_statistics_tab()
-
-    def _refresh_statistics_tab(self):
-        """Refresh the optional statistics projection without owning data."""
-        brain_window = getattr(self, 'brain_window', None)
-        statistics_tab = getattr(brain_window, 'statistics_tab', None)
-        if statistics_tab:
-            statistics_tab.update_statistics()
-
-    def record_statistic_event(self, event_name, amount=1):
-        """Record one discrete event on the model, then refresh the view."""
-        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
-        if not statistics or not statistics.increment(event_name, amount):
-            return False
-
-        self._refresh_statistics_tab()
-        return True
-
-    def track_distance(self, distance):
-        """Record movement on the model, then refresh the optional view."""
-        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
-        if not statistics:
-            return
-
-        statistics.add_distance(distance)
-        self._refresh_statistics_tab()
+        if hasattr(self.brain_window, 'statistics_tab'):
+            age_min = int((time.time() - self.squid_birth_time) / 60)
+            self.brain_window.statistics_tab.statistics['squid_age_minutes'] = age_min
+            self.brain_window.statistics_tab.update_display()
 
 
     def track_poop_thrown(self):
-        self.record_statistic_event('poops_thrown')
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.increment_stat('poops_thrown')
 
     def update_highest_anxiety(self, value):
-        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
-        if statistics:
-            statistics.highest_anxiety = max(
-                statistics.highest_anxiety,
-                value,
-            )
-            self._refresh_statistics_tab()
+        if hasattr(self.brain_window, 'statistics_tab'):
+            tab = self.brain_window.statistics_tab
+            if value > tab.statistics['highest_anxiety']:
+                tab.statistics['highest_anxiety'] = value
+                tab.update_display()
 
     def update_lowest_happiness(self, value):
-        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
-        if statistics:
-            statistics.lowest_happiness = min(
-                statistics.lowest_happiness,
-                value,
-            )
-            self._refresh_statistics_tab()
+        if hasattr(self.brain_window, 'statistics_tab'):
+            tab = self.brain_window.statistics_tab
+            if value < tab.statistics['lowest_happiness']:
+                tab.statistics['lowest_happiness'] = value
+                tab.update_display()
 
     def update_max_memories(self):
-        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
-        memory_manager = getattr(getattr(self, 'squid', None), 'memory_manager', None)
-        if statistics and memory_manager:
-            statistics.observe_memory_counts(
-                len(memory_manager.short_term_memory),
-                len(memory_manager.long_term_memory),
-            )
-            self._refresh_statistics_tab()
+        if hasattr(self.brain_window, 'statistics_tab') and hasattr(self.squid, 'memory_manager'):
+            tab = self.brain_window.statistics_tab
+            stm = len(self.squid.memory_manager.short_term_memory)
+            ltm = len(self.squid.memory_manager.long_term_memory)
+            tab.statistics['max_short_term_memories'] = max(tab.statistics['max_short_term_memories'], stm)
+            tab.statistics['max_long_term_memories'] = max(tab.statistics['max_long_term_memories'], ltm)
+            tab.update_display()
 
     
 
@@ -1174,8 +1122,24 @@ class TamagotchiLogic:
             self.squid.current_speed = 180
             self.squid.direction = random.choice(['up', 'down', 'left', 'right'])
 
-            # Record the accepted startle once on the model.
-            self.track_startle()
+            # ------------------------------------------------------------------
+            # NEW: 15 % ink-cloud trigger (skip if woken from sleep)
+            # ------------------------------------------------------------------
+            if source != "startled_awake" and random.random() < 0.25:
+                self.create_ink_cloud()
+            
+            # Track startle in statistics (was only in else block)
+            if hasattr(self.brain_window, 'statistics_tab'):
+                self.brain_window.statistics_tab.increment_stat('startles_experienced')
+                
+                self.squid.status = "fleeing!"
+                self.squid.memory_manager.add_short_term_memory(
+                    'behaviour', 'ink_cloud', 'Startled! Created an ink cloud'
+                )
+                QtCore.QTimer.singleShot(5000, self.squid.end_ink_flee)
+
+            if hasattr(self.brain_window, 'statistics_tab'):
+                self.brain_window.statistics_tab.increment_stat('startles_experienced')
 
             # --- resilience / anxiety / ink logic --------------------------
             stress_neuron_count = 0
@@ -1308,7 +1272,15 @@ class TamagotchiLogic:
         fade_out_animation.start()
         self.statistics_window.award(-250)
 
-        self.record_statistic_event('ink_clouds_created')
+        # Update ink clouds counter in squid.statistics (for save/load persistence)
+        if hasattr(self, 'squid') and hasattr(self.squid, 'statistics'):
+            self.squid.statistics.ink_clouds_created = getattr(
+                self.squid.statistics, 'ink_clouds_created', 0
+            ) + 1
+        
+        # Update ink clouds in brain statistics tab (for UI display)
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.increment_stat('ink_clouds_created')
         
         
         # Backup timer to force remove after 10 seconds in case animation fails
@@ -1345,38 +1317,36 @@ class TamagotchiLogic:
 
     def track_food_consumed(self, food_item):
         """Track when food is consumed"""
-        event_name = (
-            'sushi_eaten'
-            if getattr(food_item, 'is_sushi', False)
-            else 'cheese_eaten'
-        )
-        self.record_statistic_event(event_name)
+        if hasattr(self.brain_window, 'statistics_tab'):
+            if getattr(food_item, 'is_sushi', False):
+                self.brain_window.statistics_tab.increment_stat('sushi_eaten')
+            else:
+                self.brain_window.statistics_tab.increment_stat('cheese_eaten')
 
     def track_poop_created(self):
         """Track when poop is created"""
-        statistics = getattr(getattr(self, 'squid', None), 'statistics', None)
-        if not statistics:
-            return
-
-        statistics.increment('poops_created')
-        statistics.observe_poop_count(len(self.poop_items))
-        self._refresh_statistics_tab()
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.increment_stat('poops_created')
+            # Update max poops if needed
+            current_poops = len(self.poop_items)
+            if current_poops > self.brain_window.statistics_tab.statistics['max_poops_cleaned']:
+                self.brain_window.statistics_tab.statistics['max_poops_cleaned'] = current_poops
+                self.brain_window.statistics_tab.update_display()
 
     def track_rock_thrown(self):
         """Track when rock is thrown"""
-        self.record_statistic_event('rocks_thrown')
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.increment_stat('rocks_thrown')
 
     def track_plant_interaction(self):
         """Track when squid interacts with plants"""
-        self.record_statistic_event('plants_interacted')
-
-    def track_colour_changed(self):
-        """Track a completed squid colour change."""
-        self.record_statistic_event('times_colour_changed')
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.increment_stat('plants_interacted')
 
     def track_startle(self):
         """Track when squid is startled"""
-        self.record_statistic_event('startles_experienced')
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.increment_stat('startles_experienced')
 
 
             ######################################### UPDATE_SIMULATION METHOD BELOW
@@ -1396,16 +1366,6 @@ class TamagotchiLogic:
         # 2. Paused?
         if self.simulation_speed == 0:
             return
-
-        # Record continuous model statistics once per simulation callback.
-        # Sleep duration is elapsed wall-clock time, matching the former
-        # time.time()-based statistic. The timer already fires more often at
-        # higher simulation speeds, so multiplying by simulation_speed would
-        # overcount the time the squid was actually asleep.
-        squid_statistics = getattr(self.squid, 'statistics', None)
-        if squid_statistics:
-            elapsed_seconds = self._statistics_elapsed_seconds()
-            squid_statistics.update(elapsed_seconds=elapsed_seconds)
         
         # Check for decorations message
         self._check_decorations_message()
@@ -1802,48 +1762,25 @@ class TamagotchiLogic:
         if random.random() < curious_chance:
             self.make_squid_curious()
 
-    def track_neuron_creation(self, neuron_type, current_count):
-        """Record one completed neurogenesis event on the canonical model."""
-        statistics = getattr(self.squid, 'statistics', None)
-        if statistics:
-            statistics.record_neuron_birth(
-                neuron_type,
-                current_count=current_count,
-            )
+    def track_neuron_creation(self, neuron_type):
+        if hasattr(self.brain_window, 'statistics_tab'):
+            if neuron_type == 'novelty':
+                self.brain_window.statistics_tab.increment_stat('novelty_neurons_created')
+            elif neuron_type == 'stress':
+                self.brain_window.statistics_tab.increment_stat('stress_neurons_created')
+            elif neuron_type == 'reward':
+                self.brain_window.statistics_tab.increment_stat('reward_neurons_created')
 
-        statistics_window = getattr(self, 'statistics_window', None)
-        if statistics_window:
-            statistics_window.add_score_for_neuron_creation()
+            current = self.brain_window.statistics_tab.statistics['current_neurons']
+            self.brain_window.statistics_tab.statistics['current_neurons'] = current + 1
+            self.brain_window.statistics_tab.update_display()
+            self.statistics_window.award(500)
 
-        statistics_tab = getattr(self.brain_window, 'statistics_tab', None)
-        if statistics_tab:
-            statistics_tab.update_statistics()
-
-    def _statistics_elapsed_seconds(self):
-        """Return wall-clock seconds represented by one simulation callback."""
-        return self.simulation_timer.interval() / 1000.0
-
-    def _live_neuron_count(self):
-        """Count positioned network neurons, excluding only matching keys."""
-        brain_widget = getattr(self.brain_window, 'brain_widget', None)
-        if not brain_widget:
-            return 0
-
-        positions = getattr(brain_widget, 'neuron_positions', {})
-        excluded = set(getattr(brain_widget, 'excluded_neurons', ()) or ())
-        return sum(name not in excluded for name in positions)
-
-    def refresh_neuron_count(self):
-        """Record the live count after any post-birth pruning has settled."""
-        brain_widget = getattr(self.brain_window, 'brain_widget', None)
-        statistics = getattr(self.squid, 'statistics', None)
-        if not brain_widget or not statistics:
-            return
-
-        statistics.observe_neuron_count(self._live_neuron_count())
-        statistics_tab = getattr(self.brain_window, 'statistics_tab', None)
-        if statistics_tab:
-            statistics_tab.update_statistics()
+    def track_neuron_counts(self, current_count, max_count):
+        """Track current and maximum neuron counts"""
+        if hasattr(self.brain_window, 'statistics_tab'):
+            self.brain_window.statistics_tab.update_current_neurons(current_count)
+            self.brain_window.statistics_tab.track_max_neurons(max_count)
 
     def track_neurogenesis_triggers(self):
         """Update counters for neurogenesis triggers"""
@@ -2078,22 +2015,6 @@ class TamagotchiLogic:
         self.rps_game = RPSGame(self)
         self.rps_game.start_game()
 
-    def _set_sickness_state(self, is_sick):
-        """Keep squid state, mental-state visuals, and transition stats aligned."""
-        if self.squid is None:
-            return
-
-        is_sick = bool(is_sick)
-        self.squid.is_sick = is_sick
-
-        mental_state_manager = getattr(self.squid, 'mental_state_manager', None)
-        if mental_state_manager:
-            mental_state_manager.set_state("sick", is_sick)
-
-        statistics = getattr(self.squid, 'statistics', None)
-        if statistics:
-            statistics.record_sickness_state(is_sick)
-
     def give_medicine(self):
         
         # Get plugin results
@@ -2110,7 +2031,8 @@ class TamagotchiLogic:
             self.squid.mental_state_manager.is_state_active('sick'))):
             
             print("Debug: Applying medicine effects")
-            self._set_sickness_state(False)
+            self.squid.is_sick = False
+            self.squid.mental_state_manager.set_state("sick", False)
             
             self.squid.happiness = max(0, self.squid.happiness - 30)
             self.squid.sleepiness = min(100, self.squid.sleepiness + 50)
@@ -2299,8 +2221,9 @@ class TamagotchiLogic:
                     (self.hunger_threshold_time >= 10 * self.simulation_speed and
                     self.hunger_threshold_time <= 50 * self.simulation_speed)):
                     if random.random() < 0.8:
-                        self._set_sickness_state(True)
-                # Sickness persists until medicine or an explicit game reset.
+                        self.squid.mental_state_manager.set_state("sick", True)
+                else:
+                    self.squid.mental_state_manager.set_state("sick", False)
 
                 # New logic for health decrease based on happiness and cleanliness
                 if self.squid.happiness < 20 and self.squid.cleanliness < 20:
@@ -2721,7 +2644,7 @@ class TamagotchiLogic:
         self.squid.cleanliness = 100
         self.squid.is_sleeping = False
         self.squid.health = 100
-        self._set_sickness_state(False)
+        self.squid.is_sick = False
 
         # Reset new neurons
         self.squid.satisfaction = 50
@@ -2822,11 +2745,6 @@ class TamagotchiLogic:
                 except ValueError:
                     pass
 
-            # Restore the canonical statistics model after squid state so an
-            # already-active sickness episode is resumed rather than recounted.
-            self.squid.statistics.load_statistics(data.get('statistics', {}))
-            self._set_sickness_state(getattr(self.squid, 'is_sick', False))
-
             # Load custom brain (Logic patched to load output bindings)
             custom_brain_data = data.get('custom_brain', {})
             custom_brain_loaded = False
@@ -2847,7 +2765,6 @@ class TamagotchiLogic:
             brain_state = data.get('brain_state', {})
             if brain_state and hasattr(self, 'brain_window'):
                 self.brain_window.set_brain_state(brain_state)
-                self.refresh_neuron_count()
                 
                 # Manually load bindings if not using custom brain
                 # This handles standard saves where bindings are stored in 'brain_state'
@@ -2919,8 +2836,50 @@ class TamagotchiLogic:
             'name': getattr(self.squid, 'name', 'Squid'),  # Save squid name if it exists
         }
 
-        # Statistics are owned by the model. The tab is a read-only projection.
-        statistics_data = self.squid.statistics.to_dict()
+        # Collect statistics as separate file
+        # Primary source: brain_window.statistics_tab (where gameplay updates go)
+        # Fallback: squid.statistics (legacy)
+        tab_stats = {}
+        if hasattr(self, 'brain_window') and hasattr(self.brain_window, 'statistics_tab'):
+            tab_stats = getattr(self.brain_window.statistics_tab, 'statistics', {})
+
+        squid_stats = self.squid.statistics
+
+        # Save using exact keys from StatisticsTab
+        statistics_data = {
+            # Age tracking
+            'total_age_seconds': squid_stats.get_total_age_seconds(),
+            'squid_age_minutes': tab_stats.get('squid_age_minutes', 0),
+
+            # Movement
+            'distance_swam': tab_stats.get('distance_swam', 0),
+
+            # Food consumption
+            'cheese_eaten': tab_stats.get('cheese_eaten', 0),
+            'sushi_eaten': tab_stats.get('sushi_eaten', 0),
+
+            # Poop tracking
+            'poops_created': tab_stats.get('poops_created', 0),
+            'max_poops_cleaned': tab_stats.get('max_poops_cleaned', 0),
+
+            # Interactions
+            'startles_experienced': tab_stats.get('startles_experienced', 0),
+            'ink_clouds_created': tab_stats.get('ink_clouds_created', 0),
+            'times_colour_changed': tab_stats.get('times_colour_changed', 0),
+            'rocks_thrown': tab_stats.get('rocks_thrown', 0),
+            'plants_interacted': tab_stats.get('plants_interacted', 0),
+
+            # Health/Sleep
+            'total_sleep_time': tab_stats.get('total_sleep_time', 0),
+            'sickness_episodes': tab_stats.get('sickness_episodes', 0),
+
+            # Neurogenesis
+            'novelty_neurons_created': tab_stats.get('novelty_neurons_created', 0),
+            'stress_neurons_created': tab_stats.get('stress_neurons_created', 0),
+            'reward_neurons_created': tab_stats.get('reward_neurons_created', 0),
+            'max_neurons_reached': tab_stats.get('max_neurons_reached', 0),
+            'current_neurons': tab_stats.get('current_neurons', 7),
+        }
 
         # Collect tamagotchi logic state
         tamagotchi_logic_data = {
@@ -3060,8 +3019,6 @@ class TamagotchiLogic:
             squid_data = game_state['squid']
             
             self.squid.load_state(squid_data)
-            self.squid.statistics.load_statistics(save_data.get('statistics', {}))
-            self._set_sickness_state(getattr(self.squid, 'is_sick', False))
             
             # Load custom brain
             custom_brain_data = save_data.get('custom_brain')
@@ -3072,12 +3029,43 @@ class TamagotchiLogic:
             # Load brain state
             brain_state = save_data.get('brain_state', {})
             self.brain_window.set_brain_state(brain_state)
-            self.refresh_neuron_count()
             
             # Load memories
             self.squid.memory_manager.short_term_memory = save_data.get('ShortTerm', [])
             self.squid.memory_manager.long_term_memory = save_data.get('LongTerm', [])
 
+            # Sync neurogenesis neuron counts with actual brain state
+            if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'enhanced_neurogenesis'):
+                eng = self.brain_window.brain_widget.enhanced_neurogenesis
+                if hasattr(eng, 'functional_neurons'):
+                    # Count neurons by specialization type
+                    novelty_count = 0
+                    stress_count = 0
+                    reward_count = 0
+                    
+                    for neuron in eng.functional_neurons.values():
+                        if hasattr(neuron, 'specialization'):
+                            if neuron.specialization == 'novelty':
+                                novelty_count += 1
+                            elif neuron.specialization == 'stress':
+                                stress_count += 1
+                            elif neuron.specialization == 'reward':
+                                reward_count += 1
+                    
+                    # Update statistics tab with ground truth values
+                    if hasattr(self.brain_window, 'statistics_tab') and hasattr(self.brain_window.statistics_tab, 'statistics'):
+                        self.brain_window.statistics_tab.statistics['novelty_neurons_created'] = novelty_count
+                        self.brain_window.statistics_tab.statistics['stress_neurons_created'] = stress_count
+                        self.brain_window.statistics_tab.statistics['reward_neurons_created'] = reward_count
+                        self.brain_window.statistics_tab.update_display()
+                        print(f"✓ Synced neuron counts: {novelty_count} novelty, {stress_count} stress, {reward_count} reward")
+                    
+                    # Also sync with squid's internal statistics for consistency
+                    if hasattr(self, 'squid') and hasattr(self.squid, 'statistics'):
+                        self.squid.statistics.novelty_neurons_created = novelty_count
+                        self.squid.statistics.stress_neurons_created = stress_count
+                        self.squid.statistics.reward_neurons_created = reward_count
+            
             # Load decorations
             decorations_data = game_state.get('decorations', [])
             self.user_interface.load_decorations_data(decorations_data)

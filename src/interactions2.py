@@ -234,9 +234,9 @@ class PoopInteractionManager:
             "is_positive": False
         }
 
-        # Deliver the completed throw once to the canonical statistics model.
-        if hasattr(self.logic, 'track_poop_thrown'):
-            self.logic.track_poop_thrown()
+        # Update poops thrown counter
+        if hasattr(self.squid, 'statistics'):
+            self.squid.statistics.total_poops_thrown += 1
         
         # Add with moderate importance
         self.squid.memory_manager.add_short_term_memory(

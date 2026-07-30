@@ -1173,7 +1173,10 @@ class BrainWidget(QtWidgets.QWidget):
             
             if neuron_name:
                 print(f"✨ Main thread: Created neuron {neuron_name}")
-
+                
+                # Emit signal to notify listeners (e.g., NetworkTab) of new neuron
+                self.neuronCreated.emit(neuron_name)
+                
                 # Handle pruning if needed
                 if self.pruning_enabled:
                     current_count = len(self.neuron_positions) - len(self.excluded_neurons)
@@ -1827,9 +1830,9 @@ class BrainWidget(QtWidgets.QWidget):
         else:
             # Fallback: synchronous check
             try:
-                # This path creates the neuron itself. The neurogenesis engine
-                # emits the same completed-birth event as the threaded path.
-                self.check_neurogenesis_triggers(state_with_context)
+                result = self.check_neurogenesis_triggers(state_with_context)
+                if result:
+                    self._on_neurogenesis_complete({'should_create': True, **result})
             except Exception as e:
                 print(f"⚠️ Error in neurogenesis check: {e}")
                 import traceback
