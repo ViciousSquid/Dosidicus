@@ -114,6 +114,16 @@ jobs:
           P4A_RELEASE_KEYALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          # When the signing secrets aren't configured, the P4A_RELEASE_* env
+          # vars above are still *set* by GitHub Actions, just to empty
+          # strings. python-for-android's generated build.gradle only checks
+          # these for non-null (not non-blank), so a present-but-empty
+          # P4A_RELEASE_KEYSTORE makes it try `file('')` and fail with
+          # "Cannot convert '' to File." Unset them here so buildozer falls
+          # back to producing an unsigned release APK instead.
+          if [ -z "$P4A_RELEASE_KEYSTORE" ]; then
+            unset P4A_RELEASE_KEYSTORE P4A_RELEASE_KEYSTORE_PASSWD P4A_RELEASE_KEYALIAS P4A_RELEASE_KEYALIAS_PASSWD
+          fi
           set -o pipefail
           for attempt in 1 2 3; do
             echo "::group::buildozer attempt $attempt"
