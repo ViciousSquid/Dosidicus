@@ -8,9 +8,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from src.save_manager import SaveManager
-from src.squid_statistics import SquidStatistics
+from src.squid_statistics import DEFAULT_NEURON_COUNT, SquidStatistics
 from src.tamagotchi_logic import TamagotchiLogic
-
 
 EXPECTED_PERSISTENCE_KEYS = {
     "distance_swam": "distance_swam",
@@ -42,6 +41,15 @@ EXPECTED_PERSISTENCE_KEYS = {
     "times_colour_changed": "times_colour_changed",
     "sickness_episodes": "sickness_episodes",
 }
+
+def malformed_numeric_statistics():
+    return {
+        "distance_swam": "not-a-number",
+        "total_sleep_time": None,
+        "sickness_episodes": "4",
+        "current_neurons": "9",
+        "max_neurons_reached": "invalid",
+    }
 
 
 class FakeSquid:
@@ -160,8 +168,11 @@ class StatisticsPersistenceTests(unittest.TestCase):
         self.assertEqual(statistics.sushi_consumed, 0)
         self.assertEqual(statistics.distance_swam, 0)
         self.assertEqual(statistics.sickness_episodes, 0)
-        self.assertEqual(statistics.current_neurons, 8)
-        self.assertEqual(statistics.max_neurons_reached, 8)
+        self.assertEqual(statistics.current_neurons, DEFAULT_NEURON_COUNT)
+        self.assertEqual(
+            statistics.max_neurons_reached,
+            DEFAULT_NEURON_COUNT,
+        )
 
     def test_empty_load_replaces_the_entire_live_session(self):
         statistics = SquidStatistics(FakeSquid())
@@ -177,8 +188,11 @@ class StatisticsPersistenceTests(unittest.TestCase):
         self.assertEqual(statistics.sushi_consumed, 0)
         self.assertEqual(statistics.distance_swam, 0)
         self.assertEqual(statistics.sickness_episodes, 0)
-        self.assertEqual(statistics.current_neurons, 8)
-        self.assertEqual(statistics.max_neurons_reached, 8)
+        self.assertEqual(statistics.current_neurons, DEFAULT_NEURON_COUNT)
+        self.assertEqual(
+            statistics.max_neurons_reached,
+            DEFAULT_NEURON_COUNT,
+        )
 
     def test_malformed_numeric_values_fall_back_without_poisoning_model(self):
         squid = FakeSquid()
@@ -240,20 +254,25 @@ class StatisticsPersistenceTests(unittest.TestCase):
                     }
                 )
 
-                self.assertEqual(statistics.current_neurons, 8)
-                self.assertEqual(statistics.max_neurons_reached, 8)
+                self.assertEqual(
+                    statistics.current_neurons,
+                    DEFAULT_NEURON_COUNT,
+                )
+                self.assertEqual(
+                    statistics.max_neurons_reached,
+                    DEFAULT_NEURON_COUNT,
+                )
 
-    def test_both_public_loaders_accept_malformed_numeric_statistics(self):
-        malformed_statistics = {
-            "distance_swam": "not-a-number",
-            "total_sleep_time": None,
-            "sickness_episodes": "4",
-            "current_neurons": "9",
-            "max_neurons_reached": "invalid",
-        }
+    def assert_malformed_statistics_loaded(self, statistics):
+        self.assertEqual(statistics.distance_swam, 0)
+        self.assertEqual(statistics.time_spent_asleep, 0)
+        self.assertEqual(statistics.sickness_episodes, 4)
+        self.assertEqual(statistics.current_neurons, 9)
+        self.assertEqual(statistics.max_neurons_reached, 9)
 
-        apply_squid = LoaderSquid()
-        apply_logic = make_loader_logic(apply_squid)
+    def test_apply_save_data_accepts_malformed_numeric_statistics(self):
+        squid = LoaderSquid()
+        logic = make_loader_logic(squid)
         save_data = {
             "game_state": {
                 "squid": {"is_sick": False},
@@ -265,7 +284,7 @@ class StatisticsPersistenceTests(unittest.TestCase):
                     "points": 4,
                 },
             },
-            "statistics": malformed_statistics,
+            "statistics": malformed_numeric_statistics(),
         }
 
         with (
@@ -275,16 +294,13 @@ class StatisticsPersistenceTests(unittest.TestCase):
                 return_value=True,
             ),
         ):
-            self.assertTrue(apply_logic._apply_save_data(save_data))
+            self.assertTrue(logic._apply_save_data(save_data))
 
-        self.assertEqual(apply_squid.statistics.distance_swam, 0)
-        self.assertEqual(apply_squid.statistics.time_spent_asleep, 0)
-        self.assertEqual(apply_squid.statistics.sickness_episodes, 4)
-        self.assertEqual(apply_squid.statistics.current_neurons, 9)
-        self.assertEqual(apply_squid.statistics.max_neurons_reached, 9)
+        self.assert_malformed_statistics_loaded(squid.statistics)
 
-        zip_squid = LoaderSquid()
-        zip_logic = make_loader_logic(zip_squid)
+    def test_zip_loader_accepts_malformed_numeric_statistics(self):
+        squid = LoaderSquid()
+        logic = make_loader_logic(squid)
         with tempfile.TemporaryDirectory() as save_directory:
             archive_path = f"{save_directory}/malformed-statistics.zip"
             with zipfile.ZipFile(archive_path, "w") as archive:
@@ -300,20 +316,16 @@ class StatisticsPersistenceTests(unittest.TestCase):
                 )
                 archive.writestr(
                     "statistics.json",
-                    json.dumps(malformed_statistics),
+                    json.dumps(malformed_numeric_statistics()),
                 )
 
-            zip_logic.save_manager = SimpleNamespace(
+            logic.save_manager = SimpleNamespace(
                 get_latest_save=lambda: archive_path,
             )
             with redirect_stdout(io.StringIO()):
-                self.assertTrue(zip_logic.load_game())
+                self.assertTrue(logic.load_game())
 
-        self.assertEqual(zip_squid.statistics.distance_swam, 0)
-        self.assertEqual(zip_squid.statistics.time_spent_asleep, 0)
-        self.assertEqual(zip_squid.statistics.sickness_episodes, 4)
-        self.assertEqual(zip_squid.statistics.current_neurons, 9)
-        self.assertEqual(zip_squid.statistics.max_neurons_reached, 9)
+        self.assert_malformed_statistics_loaded(squid.statistics)
 
     def test_zip_loader_preserves_model_for_nested_legacy_statistics(self):
         squid = LoaderSquid()

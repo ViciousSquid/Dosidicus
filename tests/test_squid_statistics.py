@@ -1,6 +1,12 @@
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
 
-from src.squid_statistics import DEFAULT_NEURON_COUNT, SquidStatistics
+from src.squid_statistics import (
+    DEFAULT_NEURON_COUNT,
+    DISTANCE_ROLLOVER_LIMIT,
+    SquidStatistics,
+)
 
 
 class FakeSquid:
@@ -94,6 +100,32 @@ class SquidStatisticsTests(unittest.TestCase):
         self.assertEqual(self.statistics.max_poops_cleaned, 5)
         self.assertEqual(self.statistics.max_short_term_memories, 3)
         self.assertEqual(self.statistics.max_long_term_memories, 7)
+
+    def test_update_distance_handles_multiple_rollovers_in_one_step(self):
+        show_message = Mock()
+        self.squid.tamagotchi_logic = SimpleNamespace(
+            show_message=show_message,
+        )
+        self.statistics.distance_swam = DISTANCE_ROLLOVER_LIMIT - 10
+
+        self.statistics.update_distance(
+            DISTANCE_ROLLOVER_LIMIT * 2 + 10,
+            0,
+        )
+
+        self.assertEqual(self.statistics.distance_swam, 0)
+        self.assertEqual(self.statistics.distance_swam_multiplier, 4)
+        show_message.assert_called_once_with(
+            "🌊 Distance counter rolled over! Now at 4x"
+        )
+
+    def test_unknown_event_is_logged_without_mutating_counters(self):
+        with self.assertLogs("src.squid_statistics", level="DEBUG") as logs:
+            accepted = self.statistics.increment("misspelled_event")
+
+        self.assertFalse(accepted)
+        self.assertIn("misspelled_event", logs.output[0])
+        self.assertEqual(self.statistics.cheese_consumed, 0)
 
 
 if __name__ == "__main__":

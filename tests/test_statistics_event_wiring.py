@@ -635,6 +635,24 @@ class StatisticsEventWiringTests(unittest.TestCase):
         self.assertEqual(squid.statistics.total_poops_thrown, 1)
         statistics_tab.update_statistics.assert_called_once_with()
 
+    def test_poop_interaction_ignores_missing_or_cleared_legacy_target(self):
+        squids = (
+            SimpleNamespace(),
+            SimpleNamespace(current_poop_target=None),
+        )
+
+        for squid in squids:
+            with self.subTest(has_target=hasattr(squid, "current_poop_target")):
+                logic = object.__new__(TamagotchiLogic)
+                logic.poop_interaction = object()
+                logic.squid = squid
+
+                logic.check_poop_interaction()
+
+                self.assertIsNone(
+                    getattr(squid, "current_poop_target", None),
+                )
+
     def test_plant_completion_delivers_one_model_event(self):
         squid = FakeSquid()
         squid.curiosity = 10

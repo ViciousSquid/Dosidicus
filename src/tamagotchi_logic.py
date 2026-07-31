@@ -3351,7 +3351,7 @@ class TamagotchiLogic:
         if not hasattr(self, 'poop_interaction'):
             self.setup_poop_interaction()
         
-        if not hasattr(self.squid, 'current_poop_target'):
+        if not getattr(self.squid, 'current_poop_target', None):
             return
         
         poop = self.squid.current_poop_target

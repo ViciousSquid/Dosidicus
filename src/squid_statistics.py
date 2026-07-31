@@ -1,5 +1,8 @@
-import time
+import logging
 import math
+import time
+
+logger = logging.getLogger(__name__)
 
 # Distance tracking constants
 DISTANCE_ROLLOVER_LIMIT = 999_999_999  # ~1 billion pixels before rollover
@@ -107,18 +110,18 @@ class SquidStatistics:
     def update_distance(self, dx, dy):
         '''Track distance traveled by squid with rollover protection'''
         distance = math.sqrt(dx*dx + dy*dy)
-        self.distance_swam += distance
-        
-        # Check for rollover and reset with multiplier
-        if self.distance_swam >= DISTANCE_ROLLOVER_LIMIT:
-            self.distance_swam = self.distance_swam - DISTANCE_ROLLOVER_LIMIT
-            self.distance_swam_multiplier += 1
-            
+        previous_multiplier = self.distance_swam_multiplier
+        self.add_distance(distance)
+
+        if (
+            self.distance_swam_multiplier != previous_multiplier
+            and hasattr(self.squid, 'tamagotchi_logic')
+        ):
             # Log the rollover event
-            if hasattr(self.squid, 'tamagotchi_logic'):
-                self.squid.tamagotchi_logic.show_message(
-                    f"🌊 Distance counter rolled over! Now at {self.distance_swam_multiplier}x"
-                )
+            self.squid.tamagotchi_logic.show_message(
+                "🌊 Distance counter rolled over! Now at "
+                f"{self.distance_swam_multiplier}x"
+            )
 
     def add_distance(self, distance):
         """Track an already calculated distance without making a view own it."""
@@ -255,6 +258,7 @@ class SquidStatistics:
         """Increment a legacy gameplay event on the canonical model."""
         attribute_name = self._EVENT_KEYS.get(event_name)
         if not attribute_name:
+            logger.debug("Unknown statistic event: %s", event_name)
             return False
 
         setattr(self, attribute_name, getattr(self, attribute_name) + amount)
