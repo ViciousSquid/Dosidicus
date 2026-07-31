@@ -1640,8 +1640,20 @@ class Squid:
 
         # Neurogenesis tracking
         if hasattr(self.tamagotchi_logic, 'neurogenesis_triggers'):
-            current = self.tamagotchi_logic.neurogenesis_triggers['positive_outcomes']
-            self.tamagotchi_logic.neurogenesis_triggers['positive_outcomes'] = min(current + reward_points, 5)
+            triggers = self.tamagotchi_logic.neurogenesis_triggers
+            current = triggers['positive_outcomes']
+            triggers['positive_outcomes'] = min(current + reward_points, 5)
+
+            # Food writes this trigger outside track_neurogenesis_triggers().
+            # Preserve its live maximum before the same simulation tick can
+            # decay the value.
+            statistics = getattr(self, 'statistics', None)
+            if statistics:
+                statistics.observe_neurogenesis_peaks(
+                    statistics.peak_novelty,
+                    statistics.peak_stress,
+                    triggers['positive_outcomes'],
+                )
 
         # Visual/behavioral effects
         self.tamagotchi_logic.remove_food(food_item)

@@ -106,6 +106,51 @@ class StatisticsEventWiringTests(unittest.TestCase):
         self.assertEqual(squid.statistics.peak_stress, 2.1)
         self.assertEqual(squid.statistics.peak_reward, 4)
 
+    def test_food_reward_peak_is_recorded_before_same_tick_decay(self):
+        logic = object.__new__(TamagotchiLogic)
+        logic.neurogenesis_triggers = {
+            "novel_objects": 0,
+            "high_stress_cycles": 0,
+            "positive_outcomes": 4,
+        }
+        logic.new_object_encountered = False
+        logic.recent_positive_outcome = False
+        logic.debug_mode = False
+        logic.add_thought = Mock()
+        logic.remove_food = Mock()
+        logic.track_food_consumed = Mock()
+
+        squid = object.__new__(Squid)
+        squid.hunger = 50
+        squid.happiness = 50
+        squid.satisfaction = 50
+        squid.anxiety = 10
+        squid.personality = None
+        squid.tamagotchi_logic = logic
+        squid.statistics_window = SimpleNamespace(award=Mock())
+        squid.memory_manager = SimpleNamespace(
+            add_short_term_memory=Mock(),
+        )
+        squid.statistics = SquidStatistics(squid)
+        squid.finish_eating = Mock()
+        squid.show_eating_effect = Mock()
+        squid.start_poop_timer = Mock()
+        logic.squid = squid
+
+        with patch("src.squid.QTimer.singleShot"):
+            squid.eat(SimpleNamespace(is_sushi=False))
+
+        self.assertEqual(logic.neurogenesis_triggers["positive_outcomes"], 5)
+        self.assertEqual(squid.statistics.peak_reward, 5)
+
+        logic.track_neurogenesis_triggers()
+
+        self.assertEqual(
+            logic.neurogenesis_triggers["positive_outcomes"],
+            4.8,
+        )
+        self.assertEqual(squid.statistics.peak_reward, 5)
+
     def test_stop_disconnects_the_old_neurogenesis_listener(self):
         signal = ConnectableSignal()
         old_logic = object.__new__(TamagotchiLogic)
