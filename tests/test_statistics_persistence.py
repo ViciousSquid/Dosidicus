@@ -315,6 +315,38 @@ class StatisticsPersistenceTests(unittest.TestCase):
         self.assertEqual(zip_squid.statistics.current_neurons, 9)
         self.assertEqual(zip_squid.statistics.max_neurons_reached, 9)
 
+    def test_zip_loader_preserves_model_for_nested_legacy_statistics(self):
+        squid = LoaderSquid()
+        original_statistics = squid.statistics
+        logic = make_loader_logic(squid)
+
+        with tempfile.TemporaryDirectory() as save_directory:
+            archive_path = f"{save_directory}/nested-statistics.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr(
+                    "game_state.json",
+                    json.dumps(
+                        {
+                            "squid": {
+                                "is_sick": False,
+                                "statistics": {"distance_swam": 7},
+                            },
+                            "decorations": [],
+                            "tamagotchi_logic": {"points": 0},
+                        }
+                    ),
+                )
+
+            logic.save_manager = SimpleNamespace(
+                get_latest_save=lambda: archive_path,
+            )
+            with redirect_stdout(io.StringIO()):
+                loaded = logic.load_game()
+
+        self.assertTrue(loaded)
+        self.assertIs(squid.statistics, original_statistics)
+        self.assertEqual(squid.statistics.distance_swam, 7)
+
     def test_apply_save_data_replaces_absent_live_statistics(self):
         squid = LoaderSquid()
         squid.statistics.sushi_consumed = 9

@@ -2835,7 +2835,9 @@ class TamagotchiLogic:
             squid_data = game_state.get('squid', {})
             if squid_data:
                 for attr, value in squid_data.items():
-                    if hasattr(self.squid, attr):
+                    # Statistics are a canonical model, not replaceable squid
+                    # state. Older saves may nest their persisted values here.
+                    if attr != 'statistics' and hasattr(self.squid, attr):
                         setattr(self.squid, attr, value)
 
             # Restore personality
@@ -2848,7 +2850,11 @@ class TamagotchiLogic:
 
             # Restore the canonical statistics model after squid state so an
             # already-active sickness episode is resumed rather than recounted.
-            self.squid.statistics.load_statistics(data.get('statistics', {}))
+            statistics_data = data.get(
+                'statistics',
+                squid_data.get('statistics', {}),
+            )
+            self.squid.statistics.load_statistics(statistics_data)
             self._set_sickness_state(getattr(self.squid, 'is_sick', False))
 
             # Load custom brain (Logic patched to load output bindings)
