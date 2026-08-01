@@ -546,7 +546,14 @@ class EnhancedNeurogenesis:
         self.brain_widget.neurogenesis_highlight = {'neuron': neuron_name, 'start_time': time.time(), 'duration': 8.0 if trigger_type == 'connector' else 4.0, 'pulse_phase': 0}
         self._log_neuron_creation(neuron_name, trigger_type, spec, trigger_value_for_log)
         self._record_neurogenesis_memory(neuron_name)
+        self._notify_neuron_created(neuron_name)
         return neuron_name
+
+    def _notify_neuron_created(self, neuron_name: str):
+        """Emit one completed-birth event from the creation source."""
+        signal = getattr(self.brain_widget, 'neuronCreated', None)
+        if signal is not None:
+            signal.emit(neuron_name)
 
     def _record_neurogenesis_memory(self, neuron_name: str):
         """Permanently records a new neuron growth event in long-term memory."""
@@ -664,6 +671,7 @@ class EnhancedNeurogenesis:
         self.brain_widget.neurogenesis_highlight = {'neuron': neuron_name, 'start_time': time.time(), 'duration': 8.0, 'pulse_phase': 0}
         self.brain_widget.log_neurogenesis_event(neuron_name, "created", details={'trigger_type': 'connector', 'trigger_value': 1.0, 'specialization': 'orphan_rescue', 'display_name': func_neuron.display_name})
         self._record_neurogenesis_memory(neuron_name)
+        self._notify_neuron_created(neuron_name)
         print(f"🔗 Connector neuron {neuron_name} created to rescue {orphan_name} (connected to closest: {targets[0] if targets else 'None'})")
     
     def _set_neuron_appearance(self, name: str, func_neuron: FunctionalNeuron):
