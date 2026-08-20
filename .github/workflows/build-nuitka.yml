@@ -92,9 +92,9 @@ jobs:
           # Fix PyQt5 plugin paths inside the generated bundle
           mkdir -p build/main.app/Contents/Resources
           cat > build/main.app/Contents/Resources/qt.conf << 'EOF'
-[Paths]
-Plugins = ../MacOS/PyQt5/Qt5/plugins
-EOF
+        [Paths]
+        Plugins = ../MacOS/PyQt5/Qt5/plugins
+        EOF
           
           # Move the clean app bundle base straight to the release folder
           cp -r build/main.app release/Dosidicus.app
