@@ -92,9 +92,9 @@ jobs:
           # Fix PyQt5 plugin paths inside the generated bundle
           mkdir -p build/main.app/Contents/Resources
           cat > build/main.app/Contents/Resources/qt.conf << 'EOF'
-        [Paths]
-        Plugins = ../MacOS/PyQt5/Qt5/plugins
-        EOF
+[Paths]
+Plugins = ../MacOS/PyQt5/Qt5/plugins
+EOF
           
           # Move the clean app bundle base straight to the release folder
           cp -r build/main.app release/Dosidicus.app
@@ -202,6 +202,20 @@ jobs:
           # Windows and Linux zip the entire contents of the release directory
           python -c "import shutil; shutil.make_archive('Dosidicus-${OS_NAME}', 'zip', 'release')"
         fi
+
+    - name: Sign release with SignPath (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Install-Module -Name SignPath -Force -Scope CurrentUser
+        Submit-SigningRequest `
+          -InputArtifactPath "Dosidicus-windows.zip" `
+          -ApiToken "${{ secrets.SIGNPATH_API_TOKEN }}" `
+          -OrganizationId "ff6b1712-6b37-48d9-b9a4-3eb0d95b1a81" `
+          -ProjectSlug "Dosidicus" `
+          -SigningPolicySlug "release-signing" `
+          -OutputArtifactPath "Dosidicus-windows.zip" `
+          -WaitForCompletion
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
