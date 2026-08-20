@@ -16,209 +16,208 @@ jobs:
         shell: bash
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-        cache: pip
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install nuitka pyqt5 numpy zstandard
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install nuitka pyqt5 numpy zstandard
 
-    - name: Install macOS icon dependency
-      if: runner.os == 'macOS'
-      run: pip install imageio
+      - name: Install macOS icon dependency
+        if: runner.os == 'macOS'
+        run: pip install imageio
 
-    - name: Disable Windows Defender during build
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        Set-MpPreference -DisableRealtimeMonitoring $true
-        Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+      - name: Disable Windows Defender during build
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
+          Add-MpPreference -ExclusionPath "${{ github.workspace }}"
 
-    - name: Build executable
-      run: |
-        # Configure platform-specific flags and modes dynamically
-        if [[ "${{ runner.os }}" == "Windows" ]]; then
-          PLATFORM_FLAGS="--mode=standalone --windows-icon-from-ico=images/icons/squidblack.ico --windows-console-mode=force"
-        elif [[ "${{ runner.os }}" == "Linux" ]]; then
-          PLATFORM_FLAGS="--mode=standalone --linux-icon=images/icons/squidblack.png"
-        else
-          # On macOS, the app bundle flag replaces the standalone mode flag entirely
-          PLATFORM_FLAGS="--macos-create-app-bundle --macos-app-name=Dosidicus --macos-app-icon=images/icons/squidblack.png --macos-disable-console"
-        fi
-
-        python -m nuitka \
-          $PLATFORM_FLAGS \
-          --assume-yes-for-downloads \
-          --enable-plugin=pyqt5 \
-          --disable-plugin=options-nanny \
-          --output-dir=build \
-          --output-filename=Dosidicus \
-          --include-package=src \
-          --include-package=plugins \
-          --include-module=uuid \
-          --include-module=src.brain_designer \
-          --include-module=src.brain_designer_launcher \
-          --include-module=src.brain_state_bridge \
-          --include-module=src.designer_canvas \
-          --include-module=src.designer_canvas_utils \
-          --include-module=src.designer_constants \
-          --include-module=src.designer_core \
-          --include-module=src.designer_dialogs \
-          --include-module=src.designer_logging \
-          --include-module=src.designer_network_generator \
-          --include-module=src.designer_outputs_panel \
-          --include-module=src.designer_panels \
-          --include-module=src.designer_sensor_discovery \
-          --include-module=src.designer_templates \
-          --include-module=src.designer_window \
-          main.py
-
-    - name: Show build output
-      run: find build -maxdepth 2 | sort
-
-    - name: Create release directory
-      run: mkdir release
-
-    - name: Insert compiled executable & configure bundle
-      run: |
-        if [[ "${{ runner.os }}" == "macOS" ]]; then
-          # Fix PyQt5 plugin paths inside the generated bundle
-          mkdir -p build/main.app/Contents/Resources
-          cat > build/main.app/Contents/Resources/qt.conf << 'EOF'
-        [Paths]
-        Plugins = ../MacOS/PyQt5/Qt5/plugins
-        EOF
-          
-          # Move the clean app bundle base straight to the release folder
-          cp -r build/main.app release/Dosidicus.app
-        else
-          # Windows and Linux use the standard standalone flat directory
-          cp -r build/main.dist/. release/
-        fi
-
-    - name: Copy repository structure (Assets & Data)
-      run: |
-        # Determine the target directory based on OS
-        if [[ "${{ runner.os }}" == "macOS" ]]; then
-          TARGET_DIR="release/Dosidicus.app/Contents/MacOS"
-        else
-          TARGET_DIR="release"
-        fi
-
-        # Copy runtime dependencies into the correct target directory
-        for item in *; do
-          case "$item" in
-            release|dist|build|__pycache__|*.spec|main.py) ;;
-            *) cp -r "$item" "$TARGET_DIR/" 2>/dev/null || true ;;
-          esac
-        done
-
-    - name: Ad-hoc sign for macOS
-      if: runner.os == 'macOS'
-      run: |
-        codesign --deep --force --sign - "release/Dosidicus.app"
-
-    # ─── Smoke tests ────────────────────────────────────────────────────────────
-    - name: Smoke test (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        QT_QPA_PLATFORM=offscreen ./release/Dosidicus > smoke.log 2>&1 &
-        PID=$!
-        echo "Started PID $PID"
-
-        for i in $(seq 1 30); do
-          sleep 1
-          if grep -q "Applied language from config" smoke.log 2>/dev/null; then
-            echo "✅ Startup confirmed at ${i}s"
-            cat smoke.log
-            kill $PID 2>/dev/null || true
-            exit 0
+      - name: Build executable
+        run: |
+          # Configure platform-specific flags and modes dynamically
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            PLATFORM_FLAGS="--mode=standalone --windows-icon-from-ico=images/icons/squidblack.ico --windows-console-mode=force"
+          elif [[ "${{ runner.os }}" == "Linux" ]]; then
+            PLATFORM_FLAGS="--mode=standalone --linux-icon=images/icons/squidblack.png"
+          else
+            # On macOS, the app bundle flag replaces the standalone mode flag entirely
+            PLATFORM_FLAGS="--macos-create-app-bundle --macos-app-name=Dosidicus --macos-app-icon=images/icons/squidblack.png --macos-disable-console"
           fi
-          if ! kill -0 $PID 2>/dev/null; then
-            echo "❌ Process exited before printing startup line"
-            cat smoke.log
-            exit 1
+
+          python -m nuitka \
+            $PLATFORM_FLAGS \
+            --assume-yes-for-downloads \
+            --enable-plugin=pyqt5 \
+            --disable-plugin=options-nanny \
+            --output-dir=build \
+            --output-filename=Dosidicus \
+            --include-package=src \
+            --include-package=plugins \
+            --include-module=uuid \
+            --include-module=src.brain_designer \
+            --include-module=src.brain_designer_launcher \
+            --include-module=src.brain_state_bridge \
+            --include-module=src.designer_canvas \
+            --include-module=src.designer_canvas_utils \
+            --include-module=src.designer_constants \
+            --include-module=src.designer_core \
+            --include-module=src.designer_dialogs \
+            --include-module=src.designer_logging \
+            --include-module=src.designer_network_generator \
+            --include-module=src.designer_outputs_panel \
+            --include-module=src.designer_panels \
+            --include-module=src.designer_sensor_discovery \
+            --include-module=src.designer_templates \
+            --include-module=src.designer_window \
+            main.py
+
+      - name: Show build output
+        run: find build -maxdepth 2 | sort
+
+      - name: Create release directory
+        run: mkdir release
+
+      - name: Insert compiled executable & configure bundle
+        run: |
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            # Fix PyQt5 plugin paths inside the generated bundle
+            mkdir -p build/main.app/Contents/Resources
+            cat > build/main.app/Contents/Resources/qt.conf << 'EOF'
+          [Paths]
+          Plugins = ../MacOS/PyQt5/Qt5/plugins
+          EOF
+            
+            # Move the clean app bundle base straight to the release folder
+            cp -r build/main.app release/Dosidicus.app
+          else
+            # Windows and Linux use the standard standalone flat directory
+            cp -r build/main.dist/. release/
           fi
-        done
-        echo "❌ Startup line not seen after 30s"
-        cat smoke.log
-        kill $PID 2>/dev/null || true
-        exit 1
 
-    - name: Smoke test (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        if [ -d "release/Dosidicus.app" ]; then
-          BIN="release/Dosidicus.app/Contents/MacOS/Dosidicus"
-        else
-          BIN="release/Dosidicus"
-        fi
-
-        "$BIN" > smoke.log 2>&1 &
-        PID=$!
-        echo "Started PID $PID"
-
-        for i in $(seq 1 30); do
-          sleep 1
-          if grep -q "Applied language from config" smoke.log 2>/dev/null; then
-            echo "✅ Startup confirmed at ${i}s"
-            cat smoke.log
-            kill $PID 2>/dev/null || true
-            exit 0
+      - name: Copy repository structure (Assets & Data)
+        run: |
+          # Determine the target directory based on OS
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            TARGET_DIR="release/Dosidicus.app/Contents/MacOS"
+          else
+            TARGET_DIR="release"
           fi
-          if ! kill -0 $PID 2>/dev/null; then
-            echo "❌ Process exited before printing startup line"
-            cat smoke.log
-            exit 1
+
+          # Copy runtime dependencies into the correct target directory
+          for item in *; do
+            case "$item" in
+              release|dist|build|__pycache__|*.spec|main.py) ;;
+              *) cp -r "$item" "$TARGET_DIR/" 2>/dev/null || true ;;
+            esac
+          done
+
+      - name: Ad-hoc sign for macOS
+        if: runner.os == 'macOS'
+        run: |
+          codesign --deep --force --sign - "release/Dosidicus.app"
+
+      - name: Smoke test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          QT_QPA_PLATFORM=offscreen ./release/Dosidicus > smoke.log 2>&1 &
+          PID=$!
+          echo "Started PID $PID"
+
+          for i in $(seq 1 30); do
+            sleep 1
+            if grep -q "Applied language from config" smoke.log 2>/dev/null; then
+              echo "✅ Startup confirmed at ${i}s"
+              cat smoke.log
+              kill $PID 2>/dev/null || true
+              exit 0
+            fi
+            if ! kill -0 $PID 2>/dev/null; then
+              echo "❌ Process exited before printing startup line"
+              cat smoke.log
+              exit 1
+            fi
+          done
+          echo "❌ Startup line not seen after 30s"
+          cat smoke.log
+          kill $PID 2>/dev/null || true
+          exit 1
+
+      - name: Smoke test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          if [ -d "release/Dosidicus.app" ]; then
+            BIN="release/Dosidicus.app/Contents/MacOS/Dosidicus"
+          else
+            BIN="release/Dosidicus"
           fi
-        done
 
-        echo "❌ Startup line not seen after 30s"
-        cat smoke.log
-        kill $PID 2>/dev/null || true
-        exit 1
-    # ────────────────────────────────────────────────────────────────────────────
+          "$BIN" > smoke.log 2>&1 &
+          PID=$!
+          echo "Started PID $PID"
 
-    - name: Mark Linux binary executable
-      if: runner.os == 'Linux'
-      run: chmod +x release/Dosidicus
+          for i in $(seq 1 30); do
+            sleep 1
+            if grep -q "Applied language from config" smoke.log 2>/dev/null; then
+              echo "✅ Startup confirmed at ${i}s"
+              cat smoke.log
+              kill $PID 2>/dev/null || true
+              exit 0
+            fi
+            if ! kill -0 $PID 2>/dev/null; then
+              echo "❌ Process exited before printing startup line"
+              cat smoke.log
+              exit 1
+            fi
+          done
 
-    - name: Create zip
-      run: |
-        OS_NAME=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
-        if [[ "${{ runner.os }}" == "macOS" ]]; then
-          # On macOS, zip ONLY the .app bundle itself from within the release folder
-          cd release
-          zip -r -y "../Dosidicus-${OS_NAME}.zip" Dosidicus.app
-          cd ..
-        else
-          # Windows and Linux zip the entire contents of the release directory
-          python -c "import shutil; shutil.make_archive('Dosidicus-${OS_NAME}', 'zip', 'release')"
-        fi
+          echo "❌ Startup line not seen after 30s"
+          cat smoke.log
+          kill $PID 2>/dev/null || true
+          exit 1
 
-    - name: Sign release with SignPath (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        Install-Module -Name SignPath -Force -Scope CurrentUser
-        Submit-SigningRequest `
-          -InputArtifactPath "Dosidicus-windows.zip" `
-          -ApiToken "${{ secrets.SIGNPATH_API_TOKEN }}" `
-          -OrganizationId "ff6b1712-6b37-48d9-b9a4-3eb0d95b1a81" `
-          -ProjectSlug "Dosidicus" `
-          -SigningPolicySlug "release-signing" `
-          -OutputArtifactPath "Dosidicus-windows.zip" `
-          -WaitForCompletion
+      - name: Mark Linux binary executable
+        if: runner.os == 'Linux'
+        run: chmod +x release/Dosidicus
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: nuitka-${{ runner.os }}
-        path: Dosidicus-*.zip
+      - name: Create zip
+        run: |
+          OS_NAME=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            # On macOS, zip ONLY the .app bundle itself from within the release folder
+            cd release
+            zip -r -y "../Dosidicus-${OS_NAME}.zip" Dosidicus.app
+            cd ..
+          else
+            # Windows and Linux zip the entire contents of the release directory
+            python -c "import shutil; shutil.make_archive('Dosidicus-${OS_NAME}', 'zip', 'release')"
+          fi
+
+      - name: Sign release with SignPath (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Install-Module -Name SignPath -Force -Scope CurrentUser
+          Submit-SigningRequest `
+            -InputArtifactPath "Dosidicus-windows.zip" `
+            -ApiToken "${{ secrets.SIGNPATH_API_TOKEN }}" `
+            -OrganizationId "ff6b1712-6b37-48d9-b9a4-3eb0d95b1a81" `
+            -ProjectSlug "Dosidicus" `
+            -SigningPolicySlug "release-signing" `
+            -OutputArtifactPath "Dosidicus-windows.zip" `
+            -Force `
+            -WaitForCompletion
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuitka-${{ runner.os }}
+          path: Dosidicus-*.zip
