@@ -76,7 +76,7 @@ Want the full conceptual philosophy behind Dosidicus? Read the [Cognitive Sandbo
 
 ---
 
-## [Share Your Squid](https://github.com/ViciousSquid/Squid-Exchange)
+## [Share Your Squid](https://github.com/ViciousSquid/Dosidicus/tree/SQUID-EXCHANGE)
 
 No two squids are wired the same.
 
@@ -86,7 +86,7 @@ No two squids are wired the same.
 
 Your squid's brain is a cognitive history - shaped by you.
 
-So [share it](https://github.com/ViciousSquid/Squid-Exchange).
+So [share it](https://github.com/ViciousSquid/Dosidicus/tree/SQUID-EXCHANGE).
 
 - Export save files and let others explore your squid's neural structure.
 - Post screenshots of strange activation patterns and unexpected growth.
