@@ -1,7 +1,5 @@
 # Squid Exchange
 
-<img src="https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.5.0_LatestVersion/images/SQUID.gif" width="200">
-
 ### The canonical public archive of Dosidicus specimens.
 
 
@@ -11,6 +9,8 @@ Every specimen in this repository is a complete exported [Dosidicus](https://git
 Some are curious. Some are anxious. Some are explorers. Others have stories still waiting to unfold.
 
 Browse the archive, adopt a squid, and continue its journey.<br><br>
+
+<img src="https://raw.githubusercontent.com/ViciousSquid/Dosidicus/2.6.5.0_LatestVersion/images/SQUID.gif" width="200">
 
 
 ## What is Squid Exchange?
