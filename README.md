@@ -1,6 +1,6 @@
 # 🦑  Squid Exchange
 
-### The public archive of digital minds.
+### The canonical public archive of Dosidicus specimens.
 
 
 
