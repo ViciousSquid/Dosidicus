@@ -10,7 +10,7 @@ _"What if a Tamagotchi had a neural network and could learn stuff?"_ - [Gigazine
 </p>
 
 # _Dosidicus electronicus_
-### Learn neuroscience by [**raising a neural network as a pet**](https://github.com/ViciousSquid/Dosidicus/wiki/Raising-a-Neural-Network-as-a-Pet)
+### Learn neuroscience by [**raising a neural network as a pet**](https://github.com/ViciousSquid/Dosidicus/wiki/Care-Guide)
 _A transparent cognitive sandbox disguised as a digital pet squid with a neural network you can **see thinking**_
 
 
