@@ -1,1 +1,0 @@
-# STDP Plugin Package

@@ -1,9 +1,0 @@
-# Only these plugins load (and auto-enable) at startup.
-# Add one plugin per line. Lines starting with # are ignored.
-# NOTE: each name is the plugin's PLUGIN_NAME lowercased, NOT the folder name.
-#   folder plugins/stdp         -> PLUGIN_NAME "STDP"         -> whitelist "stdp"
-#   folder plugins/sleep_replay -> PLUGIN_NAME "Sleep Replay" -> whitelist "sleep replay"
-# (multiplayer is intentionally omitted; it is also blacklisted from auto-start.)
-achievements
-stdp
-sleep replay

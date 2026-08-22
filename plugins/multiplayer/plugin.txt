@@ -1,6 +1,0 @@
-NAME=Multiplayer
-VERSION=1.10
-AUTHOR=ViciousSquid
-DESCRIPTION=Enables network sync for squids and objects (Experimental)
-
-REQUIRES=network_interface
