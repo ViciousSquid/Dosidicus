@@ -1,6 +1,5 @@
 
 _"What if a Tamagotchi had a neural network and could learn stuff?"_ - [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/) , [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/)
-> #### The #1 weird project on GitHub — and the #2 simulation game.
 
 <p align="left">
   <img src="https://img.shields.io/badge/AI-Neural_Network-9C27B0?style=flat&logo=mindmeister&logoColor=white" height="20" alt="AI">
@@ -8,6 +7,8 @@ _"What if a Tamagotchi had a neural network and could learn stuff?"_ - [Gigazine
   <img src="https://img.shields.io/badge/Translations-7-228B22?style=flat&logo=google-translate&logoColor=white&labelColor=333333" height="20" alt="Translations">
     <a href="https://buymeacoffee.com/vicioussquid"><img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" height="20" alt="Buy Me A Coffee"></a>
 </p>
+
+> #### The #1 weird project on GitHub — and the #2 simulation game.
 
 # _Dosidicus electronicus_
 ### Learn neuroscience by **raising a neural network as a pet**
