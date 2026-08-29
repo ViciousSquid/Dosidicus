@@ -23,7 +23,7 @@ Every adoption creates a new chapter in that squid's story.
 
 #### Export your specimen from Dosidicus and submit it to the archive so others can adopt it and continue its journey.
 
-See the [Contribution Guide](https://github.com/ViciousSquid/Squid-Exchange/blob/main/CONTRIBUTING.md) for details.<br><br>
+See the [Contribution Guide](https://github.com/ViciousSquid/Dosidicus/blob/SQUID-EXCHANGE/CONTRIBUTING.md) for details.<br><br>
 
 ## Specimens
 
