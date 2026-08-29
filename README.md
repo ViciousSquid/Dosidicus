@@ -29,10 +29,10 @@ See the [Contribution Guide](https://github.com/ViciousSquid/Dosidicus/blob/SQUI
 
 <!-- BEGIN CATALOGUE -->
 
-| Specimen | Description | Archive |
-| :--- | :--- | :---: |
-| **[Gaspard](squids/Gaspard)** | One of the first public Dosidicus specimens. | ✅ |
-| **[Miroslav](squids/Miroslav)** | Highly responsive, quick to learn (high plasticity) | ✅ |
+| Specimen | Generation | Neurons | Grown | Connections | Description | Archive |
+| :--- | ---: | ---: | ---: | ---: | :--- | :---: |
+| **[Gaspard](squids/Gaspard)** | 1 | 8 | +1 | 16 | One of the first public Dosidicus specimens. | [ZIP](squids/Gaspard/b0dbff59_b209_465f_bc95_4a65c9567628.zip) |
+| **[Miroslav](squids/Miroslav)** | 1 | 12 | +5 | 111 | Highly responsive, quick to learn (high plasticity). | [ZIP](squids/Miroslav/b071f720_593e_471f_8412_8ee84172a1b0.zip) |
 
 <!-- END CATALOGUE -->
 
