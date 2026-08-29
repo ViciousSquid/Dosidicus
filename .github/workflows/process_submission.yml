@@ -2,7 +2,7 @@ name: Squid Exchange Submission
 
 on:
   issues:
-    types: [opened]
+    types: [opened, labeled]
 
 jobs:
   process-submission:
