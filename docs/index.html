@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Squid Exchange</title>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 700px;
+      margin: 60px auto;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    .field {
+      margin: 25px 0;
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px;
+      font-size: 16px;
+    }
+
+    #dropzone {
+      border: 2px dashed #888;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    #dropzone.dragover {
+      border-color: #000;
+    }
+
+    #file {
+      display: none;
+    }
+
+    #filename {
+      margin-top: 12px;
+    }
+
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #status {
+      margin-top: 20px;
+      white-space: pre-wrap;
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <h1>Squid Exchange</h1>
+
+  <p>Submit your evolved Dosidicus squid.</p>
+
+  <div class="field">
+    <label for="name">Squid name</label>
+
+```
+<input
+  type="text"
+  id="name"
+  placeholder="Horatio"
+  required
+>
+```
+
+  </div>
+
+  <div class="field">
+    <label>Squid save</label>
+
+```
+<div id="dropzone">
+  Click here to choose your ZIP
+  <br>
+  or drag and drop it here
+
+  <input
+    type="file"
+    id="file"
+    accept=".zip,application/zip"
+  >
+
+  <div id="filename"></div>
+</div>
+```
+
+  </div>
+
+  <button id="submit">
+    Submit Squid
+  </button>
+
+  <div id="status"></div>
+
+  <script>
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("file");
+    const filename = document.getElementById("filename");
+    const submitButton = document.getElementById("submit");
+    const status = document.getElementById("status");
+
+    let selectedFile = null;
+
+    dropzone.addEventListener("click", () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length > 0) {
+        selectedFile = fileInput.files[0];
+        filename.textContent = selectedFile.name;
+      }
+    });
+
+    dropzone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+
+    dropzone.addEventListener("dragleave", () => {
+      dropzone.classList.remove("dragover");
+    });
+
+    dropzone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      dropzone.classList.remove("dragover");
+
+      if (event.dataTransfer.files.length > 0) {
+        selectedFile = event.dataTransfer.files[0];
+        filename.textContent = selectedFile.name;
+      }
+    });
+
+    submitButton.addEventListener("click", async () => {
+
+      const name = document.getElementById("name").value.trim();
+
+      if (!name) {
+        status.textContent = "Please enter a squid name.";
+        return;
+      }
+
+      if (!selectedFile) {
+        status.textContent = "Please select a ZIP save.";
+        return;
+      }
+
+      if (!selectedFile.name.toLowerCase().endsWith(".zip")) {
+        status.textContent = "The save must be a ZIP file.";
+        return;
+      }
+
+      status.textContent = "Preparing submission...";
+
+      /*
+       * The actual GitHub upload will be connected here
+       * in the next step.
+       */
+
+      status.textContent =
+        "Squid selected successfully.\n\n" +
+        "Name: " + name + "\n" +
+        "File: " + selectedFile.name;
+    });
+  </script>
+
+</body>
+</html>
