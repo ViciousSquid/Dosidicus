@@ -15,27 +15,13 @@ jobs:
 
     steps:
 
-      # --------------------------------------------------
-      # Checkout repository
-      # --------------------------------------------------
-
       - name: Checkout repository
         uses: actions/checkout@v4
-
-
-      # --------------------------------------------------
-      # Set up Python
-      # --------------------------------------------------
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-
-      # --------------------------------------------------
-      # Extract submission information
-      # --------------------------------------------------
 
       - name: Extract submission information
         env:
@@ -62,14 +48,6 @@ jobs:
           echo "FILE_URL=$FILE_URL" >> "$GITHUB_ENV"
           echo "NICKNAME=$NICKNAME" >> "$GITHUB_ENV"
 
-          echo "Nickname: $NICKNAME"
-          echo "File URL: $FILE_URL"
-
-
-      # --------------------------------------------------
-      # Download squid
-      # --------------------------------------------------
-
       - name: Download squid
         run: |
           curl -L "$FILE_URL" -o temp_squid.zip
@@ -78,11 +56,6 @@ jobs:
             echo "Downloaded file is not a ZIP archive."
             exit 1
           fi
-
-
-      # --------------------------------------------------
-      # Validate Dosidicus save
-      # --------------------------------------------------
 
       - name: Validate Dosidicus save
         run: |
@@ -100,37 +73,26 @@ jobs:
               "uuid.txt",
           }
 
-          archive = "temp_squid.zip"
-
           try:
-              with zipfile.ZipFile(archive, "r") as z:
-                  names = set(z.namelist())
-
-                  missing = required - names
+              with zipfile.ZipFile("temp_squid.zip", "r") as z:
+                  missing = required - set(z.namelist())
 
                   if missing:
-                      print("Missing required Dosidicus files:")
-
+                      print("Missing required files:")
                       for name in sorted(missing):
                           print(f"  - {name}")
-
                       sys.exit(1)
 
                   if z.testzip() is not None:
-                      print("ZIP contains a corrupt file.")
+                      print("ZIP contains corrupt data.")
                       sys.exit(1)
 
           except zipfile.BadZipFile:
               print("Invalid ZIP archive.")
               sys.exit(1)
 
-          print("Dosidicus save validated successfully.")
+          print("Dosidicus save validated.")
           PY
-
-
-      # --------------------------------------------------
-      # Extract neural statistics
-      # --------------------------------------------------
 
       - name: Extract neural statistics
         run: |
@@ -138,11 +100,6 @@ jobs:
             > neural_statistics.json
 
           cat neural_statistics.json
-
-
-      # --------------------------------------------------
-      # Extract UUID
-      # --------------------------------------------------
 
       - name: Extract UUID
         run: |
@@ -155,35 +112,91 @@ jobs:
 
           echo "UUID=$UUID" >> "$GITHUB_ENV"
 
-          echo "UUID: $UUID"
-
-
-      # --------------------------------------------------
-      # Store in gallery
-      # --------------------------------------------------
-
-      - name: Store squid
+      - name: Create specimen
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
-          mkdir -p gallery
+          SPECIMEN_DIR="squids/$NICKNAME"
 
-          FINAL_NAME="${NICKNAME}_${UUID}.zip"
+          if [ -e "$SPECIMEN_DIR" ]; then
+            echo "A specimen named '$NICKNAME' already exists."
+            exit 1
+          fi
 
-          mv temp_squid.zip "gallery/${FINAL_NAME}"
+          mkdir -p "$SPECIMEN_DIR"
 
+          cp templates/README.md \
+            "$SPECIMEN_DIR/README.md"
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          specimen_dir = Path(
+              "squids"
+          ) / os.environ["NICKNAME"]
+
+          statistics = json.loads(
+              Path("neural_statistics.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          metadata = {
+              "name": os.environ["NICKNAME"],
+              "specimen_id": (
+                  "dosidicus-"
+                  + os.environ["UUID"]
+              ),
+              "description": "",
+              "raised_by": (
+                  "@"
+                  + os.environ.get(
+                      "GITHUB_ACTOR",
+                      "unknown"
+                  )
+              ),
+              "parent_id": None,
+              "generation": 1,
+              "neuron_count": statistics.get(
+                  "neuron_count"
+              ),
+              "neurons_generated": statistics.get(
+                  "neurons_generated"
+              ),
+              "connection_count": statistics.get(
+                  "connection_count"
+              )
+          }
+
+          (specimen_dir / "metadata.json").write_text(
+              json.dumps(
+                  metadata,
+                  indent=4
+              ) + "\n",
+              encoding="utf-8"
+          )
+          PY
+
+          mv temp_squid.zip \
+            "$SPECIMEN_DIR/${NICKNAME}_${UUID}.zip"
+
+      - name: Update catalogue
+        run: |
+          python scripts/build_catalogue.py
+
+      - name: Commit Exchange specimen
+        run: |
           git config user.name "SquidBot"
           git config user.email "bot@github.com"
 
-          git add gallery/
+          git add squids/ README.md
 
           git commit \
-            -m "New Squid verified: ${NICKNAME} (${UUID})"
+            -m "Add Squid Exchange specimen: ${NICKNAME}"
 
           git push
-
-
-      # --------------------------------------------------
-      # Report success
-      # --------------------------------------------------
 
       - name: Report success
         env:
@@ -193,7 +206,7 @@ jobs:
           STATS=$(cat neural_statistics.json)
 
           gh issue comment "$ISSUE_NUMBER" --body \
-            "## 🦑 Squid Verified!
+            "## 🦑 Squid accepted
 
           **Name:** $NICKNAME
 
@@ -205,6 +218,6 @@ jobs:
           $STATS
           \`\`\`
 
-          The squid has been validated and added to the gallery."
+          The specimen has been added to the Squid Exchange."
 
           gh issue close "$ISSUE_NUMBER"
