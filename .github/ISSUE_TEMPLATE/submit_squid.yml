@@ -1,27 +1,38 @@
 name: 🦑 Submit a Squid Save
-description: Share your evolved squid! (Must be a .zip containing uuid.txt)
+description: |
+IMPORTANT: Enter your SQUID'S NAME in the "Add a title" field above.
+The issue title will be used as the squid's name in the Squid Exchange.
 labels: ["squid-submission"]
 
 body:
-  - type: input
-    id: name
-    attributes:
-      label: Squid Nickname
-      placeholder: Squid
-    validations:
-      required: true
 
-  - type: input
-    id: save_url
-    attributes:
-      label: Save File URL
-      description: |
-        Do NOT drag the ZIP into this field.
+* type: markdown
+  attributes:
+  value: |
+  ## 🦑 Submit Your Squid
 
-        Before submitting this form, open the issue's comment box below.
-        Drag your Dosidicus .zip into the comment box. GitHub will upload
-        the file and display a link. Copy that link and paste it into this
-        field.
-      placeholder: Paste the GitHub attachment URL here
-    validations:
-      required: true
+  ```
+  **IMPORTANT: The issue title must be your squid's name.**
+
+  For example:
+
+  `Horatio`
+
+  Do not enter "Squid Submission" or another generic title.
+
+  ### Save File
+
+  Upload your Dosidicus `.zip` in the issue's **comment box**.
+  GitHub will upload the file and create a link.
+
+  Copy that link and paste it into the field below.
+  ```
+
+* type: input
+  id: save_url
+  attributes:
+  label: Save File URL
+  description: Paste the GitHub attachment URL for your Dosidicus ZIP here.
+  placeholder: https://github.com/user-attachments/files/...
+  validations:
+  required: true
