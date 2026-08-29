@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 
+
 SQUIDS_DIR = Path("squids")
 README_PATH = Path("README.md")
 
@@ -14,7 +15,10 @@ def get_specimens():
     if not SQUIDS_DIR.exists():
         return specimens
 
-    for folder in sorted(SQUIDS_DIR.iterdir(), key=lambda p: p.name.lower()):
+    for folder in sorted(
+        SQUIDS_DIR.iterdir(),
+        key=lambda p: p.name.lower()
+    ):
         if not folder.is_dir():
             continue
 
@@ -24,16 +28,60 @@ def get_specimens():
 
         if metadata_file.exists():
             try:
-                metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
-            except Exception as e:
-                print(f"Warning: Could not read {metadata_file}: {e}")
+                metadata = json.loads(
+                    metadata_file.read_text(encoding="utf-8")
+                )
 
-        specimens.append({
-            "name": metadata.get("name", folder.name),
-            "description": metadata.get("description", ""),
-            "path": folder.as_posix(),
-            "has_zip": any(folder.glob("*.zip"))
-        })
+            except Exception as exc:
+                print(
+                    f"Warning: Could not read "
+                    f"{metadata_file}: {exc}"
+                )
+
+        specimens.append(
+            {
+                "name": metadata.get(
+                    "name",
+                    folder.name
+                ),
+
+                "specimen_id": metadata.get(
+                    "specimen_id",
+                    "—"
+                ),
+
+                "description": metadata.get(
+                    "description",
+                    ""
+                ),
+
+                "raised_by": metadata.get(
+                    "raised_by",
+                    "—"
+                ),
+
+                "generation": metadata.get(
+                    "generation",
+                    "—"
+                ),
+
+                "neuron_count": metadata.get(
+                    "neuron_count",
+                    "—"
+                ),
+
+                "neurons_generated": metadata.get(
+                    "neurons_generated",
+                    "—"
+                ),
+
+                "path": folder.as_posix(),
+
+                "has_zip": any(
+                    folder.glob("*.zip")
+                )
+            }
+        )
 
     return specimens
 
@@ -42,28 +90,50 @@ def generate_catalogue(specimens):
     lines = []
 
     if not specimens:
-        lines.append("_No specimens currently available in the catalogue._")
-    else:
-        lines.append("| Specimen | Description | Archive |")
-        lines.append("| :--- | :--- | :---: |")
+        lines.append(
+            "_No specimens currently available in the catalogue._"
+        )
 
-        for spec in specimens:
-            archive = "✅" if spec["has_zip"] else "—"
+        return "\n".join(lines)
 
-            lines.append(
-                f"| **[{spec['name']}]({spec['path']})** | "
-                f"{spec['description']} | "
-                f"{archive} |"
-            )
+    lines.append(
+        "| Specimen | Generation | Neurons | Grown | Description | Archive |"
+    )
+
+    lines.append(
+        "| :--- | ---: | ---: | ---: | :--- | :---: |"
+    )
+
+    for spec in specimens:
+
+        archive = "✅" if spec["has_zip"] else "—"
+
+        grown = spec["neurons_generated"]
+
+        if isinstance(grown, int):
+            grown = f"+{grown}"
+
+        lines.append(
+            f"| **[{spec['name']}]({spec['path']})** "
+            f"| {spec['generation']} "
+            f"| {spec['neuron_count']} "
+            f"| {grown} "
+            f"| {spec['description']} "
+            f"| {archive} |"
+        )
 
     return "\n".join(lines)
 
 
 def update_readme(catalogue):
     if not README_PATH.exists():
-        raise FileNotFoundError(f"{README_PATH} not found.")
+        raise FileNotFoundError(
+            f"{README_PATH} not found."
+        )
 
-    readme = README_PATH.read_text(encoding="utf-8")
+    readme = README_PATH.read_text(
+        encoding="utf-8"
+    )
 
     start = readme.find(BEGIN_MARKER)
     end = readme.find(END_MARKER)
@@ -85,17 +155,25 @@ def update_readme(catalogue):
         + readme[end:]
     )
 
-    README_PATH.write_text(new_readme, encoding="utf-8")
+    README_PATH.write_text(
+        new_readme,
+        encoding="utf-8"
+    )
 
 
 def main():
     specimens = get_specimens()
 
-    catalogue = generate_catalogue(specimens)
+    catalogue = generate_catalogue(
+        specimens
+    )
 
     update_readme(catalogue)
 
-    print(f"Updated README.md with {len(specimens)} specimen(s).")
+    print(
+        f"Updated README.md with "
+        f"{len(specimens)} specimen(s)."
+    )
 
 
 if __name__ == "__main__":
