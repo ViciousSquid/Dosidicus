@@ -1,4 +1,8 @@
 {
     "name": "Gaspard",
-    "description": "One of the first public Dosidicus specimens."
+    "specimen_id": "dosidicus-000001",
+    "description": "One of the first public Dosidicus specimens.",
+    "raised_by": "@ViciousSquid",
+    "parent_id": null,
+    "generation": 1
 }
