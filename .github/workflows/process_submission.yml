@@ -79,8 +79,10 @@ jobs:
 
                   if missing:
                       print("Missing required files:")
+
                       for name in sorted(missing):
                           print(f"  - {name}")
+
                       sys.exit(1)
 
                   if z.testzip() is not None:
@@ -113,8 +115,6 @@ jobs:
           echo "UUID=$UUID" >> "$GITHUB_ENV"
 
       - name: Create specimen
-        env:
-          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           SPECIMEN_DIR="squids/$NICKNAME"
 
@@ -125,17 +125,15 @@ jobs:
 
           mkdir -p "$SPECIMEN_DIR"
 
-          cp templates/README.md \
-            "$SPECIMEN_DIR/README.md"
-
           python - <<'PY'
           import json
           import os
           from pathlib import Path
 
-          specimen_dir = Path(
-              "squids"
-          ) / os.environ["NICKNAME"]
+          specimen_dir = (
+              Path("squids")
+              / os.environ["NICKNAME"]
+          )
 
           statistics = json.loads(
               Path("neural_statistics.json").read_text(
@@ -143,38 +141,95 @@ jobs:
               )
           )
 
+          name = os.environ["NICKNAME"]
+          specimen_id = (
+              "dosidicus-"
+              + os.environ["UUID"]
+          )
+
+          raised_by = (
+              "@"
+              + os.environ.get(
+                  "GITHUB_ACTOR",
+                  "unknown"
+              )
+          )
+
+          neuron_count = statistics.get(
+              "neuron_count",
+              0
+          )
+
+          neurons_generated = statistics.get(
+              "neurons_generated",
+              0
+          )
+
+          connection_count = statistics.get(
+              "connection_count",
+              0
+          )
+
           metadata = {
-              "name": os.environ["NICKNAME"],
-              "specimen_id": (
-                  "dosidicus-"
-                  + os.environ["UUID"]
-              ),
+              "name": name,
+              "specimen_id": specimen_id,
               "description": "",
-              "raised_by": (
-                  "@"
-                  + os.environ.get(
-                      "GITHUB_ACTOR",
-                      "unknown"
-                  )
-              ),
+              "raised_by": raised_by,
               "parent_id": None,
               "generation": 1,
-              "neuron_count": statistics.get(
-                  "neuron_count"
-              ),
-              "neurons_generated": statistics.get(
-                  "neurons_generated"
-              ),
-              "connection_count": statistics.get(
-                  "connection_count"
-              )
+              "neuron_count": neuron_count,
+              "neurons_generated": neurons_generated,
+              "connection_count": connection_count
           }
 
-          (specimen_dir / "metadata.json").write_text(
+          (
+              specimen_dir
+              / "metadata.json"
+          ).write_text(
               json.dumps(
                   metadata,
                   indent=4
               ) + "\n",
+              encoding="utf-8"
+          )
+
+          template = Path(
+              "templates/README.md"
+          ).read_text(
+              encoding="utf-8"
+          )
+
+          replacements = {
+              "{{NAME}}": name,
+              "{{SPECIMEN_ID}}": specimen_id,
+              "{{RAISED_BY}}": raised_by,
+              "{{DESCRIPTION}}": (
+                  "Dosidicus specimen submitted "
+                  "to the Squid Exchange."
+              ),
+              "{{GENERATION}}": "1",
+              "{{NEURON_COUNT}}": str(
+                  neuron_count
+              ),
+              "{{NEURONS_GENERATED}}": str(
+                  neurons_generated
+              ),
+              "{{CONNECTION_COUNT}}": str(
+                  connection_count
+              )
+          }
+
+          for placeholder, value in replacements.items():
+              template = template.replace(
+                  placeholder,
+                  value
+              )
+
+          (
+              specimen_dir
+              / "README.md"
+          ).write_text(
+              template,
               encoding="utf-8"
           )
           PY
