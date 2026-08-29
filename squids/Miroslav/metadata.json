@@ -1,4 +1,8 @@
 {
     "name": "Miroslav",
-    "description": "Highly responsive, quick to learn (high plasticity)"
+    "specimen_id": "dosidicus-000002",
+    "description": "Highly responsive, quick to learn (high plasticity).",
+    "raised_by": "@ViciousSquid",
+    "parent_id": null,
+    "generation": 1
 }
