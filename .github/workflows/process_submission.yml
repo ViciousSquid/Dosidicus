@@ -120,6 +120,7 @@ jobs:
                   print(
                       f"Parent verified: {parent_id}"
                   )
+
                   print(
                       f"Generation: {generation + 1}"
                   )
@@ -135,7 +136,6 @@ jobs:
       - name: Download squid
         run: |
           curl -L "$FILE_URL" -o squid.zip
-
           file squid.zip
 
       - name: Validate save
@@ -177,9 +177,15 @@ jobs:
           import json
           import zipfile
 
-          with zipfile.ZipFile("squid.zip", "r") as archive:
+          with zipfile.ZipFile(
+              "squid.zip",
+              "r"
+          ) as archive:
 
-              with archive.open("brain_state.json") as file:
+              with archive.open(
+                  "brain_state.json"
+              ) as file:
+
                   brain = json.load(file)
 
           neuron_positions = brain.get(
@@ -197,9 +203,11 @@ jobs:
               {}
           )
 
-          functional_neurons = enhanced_neurogenesis.get(
-              "functional_neurons",
-              {}
+          functional_neurons = (
+              enhanced_neurogenesis.get(
+                  "functional_neurons",
+                  {}
+              )
           )
 
           statistics = {
@@ -279,31 +287,39 @@ jobs:
           name = os.environ["NICKNAME"]
           uuid = os.environ["UUID"]
 
-          specimen_id = f"dosidicus-{uuid}"
+          specimen_id = (
+              f"dosidicus-{uuid}"
+          )
 
           description = os.environ.get(
               "DESCRIPTION",
               ""
           ).strip()
 
+          raised_by = (
+              "@"
+              + os.environ.get(
+                  "GITHUB_ACTOR",
+                  "unknown"
+              )
+          )
+
+          parent_id = (
+              os.environ["PARENT_ID"]
+              or None
+          )
+
+          generation = int(
+              os.environ["GENERATION"]
+          )
+
           metadata = {
               "name": name,
               "specimen_id": specimen_id,
               "description": description,
-              "raised_by": (
-                  "@"
-                  + os.environ.get(
-                      "GITHUB_ACTOR",
-                      "unknown"
-                  )
-              ),
-              "parent_id": (
-                  os.environ["PARENT_ID"]
-                  or None
-              ),
-              "generation": int(
-                  os.environ["GENERATION"]
-              ),
+              "raised_by": raised_by,
+              "parent_id": parent_id,
+              "generation": generation,
               "neuron_count": statistics[
                   "neuron_count"
               ],
@@ -349,49 +365,36 @@ jobs:
               encoding="utf-8"
           )
 
-          template = Path(
-              "templates/README.md"
-          ).read_text(
-              encoding="utf-8"
-          )
+          readme = f"""# {name}
 
-          replacements = {
-              "{{NAME}}": name,
-              "{{SPECIMEN_ID}}": specimen_id,
-              "{{RAISED_BY}}": metadata[
-                  "raised_by"
-              ],
-              "{{DESCRIPTION}}": (
-                  description
-                  or
-                  "Dosidicus specimen submitted "
-                  "to the Squid Exchange."
-              ),
-              "{{GENERATION}}": str(
-                  metadata["generation"]
-              ),
-              "{{NEURON_COUNT}}": str(
-                  metadata["neuron_count"]
-              ),
-              "{{NEURONS_GENERATED}}": str(
-                  metadata["neurons_generated"]
-              ),
-              "{{CONNECTION_COUNT}}": str(
-                  metadata["connection_count"]
-              )
-          }
+          ## Squid Exchange Specimen
 
-          for key, value in replacements.items():
-              template = template.replace(
-                  key,
-                  value
-              )
+          **Specimen ID:** `{specimen_id}`
+
+          **Raised by:** {raised_by}
+
+          **Generation:** {generation}
+
+          **Parent:** {parent_id or "None"}
+
+          ## Neural Statistics
+
+          - **Neurons:** {statistics["neuron_count"]}
+          - **Neurons generated:** {statistics["neurons_generated"]}
+          - **Connections:** {statistics["connection_count"]}
+
+          ## Description
+
+          {description or "No description provided."}
+
+          This specimen was automatically verified and added to the Dosidicus Squid Exchange.
+          """
 
           (
               directory
               / "README.md"
           ).write_text(
-              template,
+              readme,
               encoding="utf-8"
           )
           PY
