@@ -1,49 +1,210 @@
-name: Squid Gallery Bot
+name: Squid Exchange Submission
+
 on:
   issues:
     types: [opened]
 
 jobs:
-  add-to-gallery:
+  process-submission:
     if: contains(github.event.issue.labels.*.name, 'squid-submission')
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
       issues: write
+
     steps:
-      - name: Checkout Code
+
+      # --------------------------------------------------
+      # Checkout repository
+      # --------------------------------------------------
+
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Process Squid Save
+
+      # --------------------------------------------------
+      # Set up Python
+      # --------------------------------------------------
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+
+      # --------------------------------------------------
+      # Extract submission information
+      # --------------------------------------------------
+
+      - name: Extract submission information
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          FILE_URL=$(echo "$ISSUE_BODY" | grep -o 'https://github.com/[^)]*' | head -n 1)
+
+          NICKNAME=$(echo "$ISSUE_BODY" \
+            | grep -A 1 "Squid Nickname" \
+            | tail -n 1 \
+            | xargs \
+            | tr -d ' ')
+
+          if [ -z "$FILE_URL" ]; then
+            echo "No GitHub file URL found."
+            exit 1
+          fi
+
+          if [ -z "$NICKNAME" ]; then
+            echo "No squid nickname found."
+            exit 1
+          fi
+
+          echo "FILE_URL=$FILE_URL" >> "$GITHUB_ENV"
+          echo "NICKNAME=$NICKNAME" >> "$GITHUB_ENV"
+
+          echo "Nickname: $NICKNAME"
+          echo "File URL: $FILE_URL"
+
+
+      # --------------------------------------------------
+      # Download squid
+      # --------------------------------------------------
+
+      - name: Download squid
+        run: |
+          curl -L "$FILE_URL" -o temp_squid.zip
+
+          if ! file temp_squid.zip | grep -qi "zip"; then
+            echo "Downloaded file is not a ZIP archive."
+            exit 1
+          fi
+
+
+      # --------------------------------------------------
+      # Validate Dosidicus save
+      # --------------------------------------------------
+
+      - name: Validate Dosidicus save
+        run: |
+          python - <<'PY'
+          import zipfile
+          import sys
+
+          required = {
+              "game_state.json",
+              "brain_state.json",
+              "ShortTerm.json",
+              "LongTerm.json",
+              "plugin_data.json",
+              "statistics.json",
+              "uuid.txt",
+          }
+
+          archive = "temp_squid.zip"
+
+          try:
+              with zipfile.ZipFile(archive, "r") as z:
+                  names = set(z.namelist())
+
+                  missing = required - names
+
+                  if missing:
+                      print("Missing required Dosidicus files:")
+
+                      for name in sorted(missing):
+                          print(f"  - {name}")
+
+                      sys.exit(1)
+
+                  if z.testzip() is not None:
+                      print("ZIP contains a corrupt file.")
+                      sys.exit(1)
+
+          except zipfile.BadZipFile:
+              print("Invalid ZIP archive.")
+              sys.exit(1)
+
+          print("Dosidicus save validated successfully.")
+          PY
+
+
+      # --------------------------------------------------
+      # Extract neural statistics
+      # --------------------------------------------------
+
+      - name: Extract neural statistics
+        run: |
+          python scripts/extract_metadata.py temp_squid.zip \
+            > neural_statistics.json
+
+          cat neural_statistics.json
+
+
+      # --------------------------------------------------
+      # Extract UUID
+      # --------------------------------------------------
+
+      - name: Extract UUID
+        run: |
+          UUID=$(unzip -p temp_squid.zip uuid.txt | head -n 1 | xargs)
+
+          if [ -z "$UUID" ]; then
+            echo "UUID is empty."
+            exit 1
+          fi
+
+          echo "UUID=$UUID" >> "$GITHUB_ENV"
+
+          echo "UUID: $UUID"
+
+
+      # --------------------------------------------------
+      # Store in gallery
+      # --------------------------------------------------
+
+      - name: Store squid
+        run: |
+          mkdir -p gallery
+
+          FINAL_NAME="${NICKNAME}_${UUID}.zip"
+
+          mv temp_squid.zip "gallery/${FINAL_NAME}"
+
+          git config user.name "SquidBot"
+          git config user.email "bot@github.com"
+
+          git add gallery/
+
+          git commit \
+            -m "New Squid verified: ${NICKNAME} (${UUID})"
+
+          git push
+
+
+      # --------------------------------------------------
+      # Report success
+      # --------------------------------------------------
+
+      - name: Report success
+        env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          # 1. Extract URL and Nickname
-          FILE_URL=$(echo "$ISSUE_BODY" | grep -o 'https://github.com/[^)]*' | head -n 1)
-          NICKNAME=$(echo "$ISSUE_BODY" | grep -A 1 "Squid Nickname" | tail -n 1 | xargs | tr -d ' ')
-          
-          mkdir -p gallery
-          curl -L $FILE_URL -o "temp_squid.zip"
+          STATS=$(cat neural_statistics.json)
 
-          # 2. Verify ZIP and extract UUID
-          if unzip -l temp_squid.zip | grep -q "uuid.txt"; then
-            UUID=$(unzip -p temp_squid.zip uuid.txt | head -n 1 | xargs)
-            FINAL_NAME="${NICKNAME}_${UUID}.zip"
-            
-            mv temp_squid.zip "gallery/${FINAL_NAME}"
-            
-            # 3. Commit to repo
-            git config user.name "SquidBot"
-            git config user.email "bot@github.com"
-            git add gallery/
-            git commit -m "New Squid verified: ${NICKNAME} (${UUID})"
-            git push
-            
-            gh issue comment $ISSUE_NUMBER --body "✅ **Squid Verified!** $NICKNAME has been added to the gallery. UUID: \`$UUID\`"
-            gh issue close $ISSUE_NUMBER
-          else
-            gh issue comment $ISSUE_NUMBER --body "❌ **Validation Failed:** This ZIP does not contain a \`uuid.txt\`. Please check your save file and try again."
-            exit 1
-          fi
+          gh issue comment "$ISSUE_NUMBER" --body \
+            "## 🦑 Squid Verified!
+
+          **Name:** $NICKNAME
+
+          **UUID:** \`$UUID\`
+
+          **Neural statistics:**
+
+          \`\`\`json
+          $STATS
+          \`\`\`
+
+          The squid has been validated and added to the gallery."
+
+          gh issue close "$ISSUE_NUMBER"
