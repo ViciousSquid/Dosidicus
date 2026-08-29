@@ -1,0 +1,2476 @@
+{
+    "weights_list": [
+        [
+            "can_see_food",
+            "hunger",
+            0.2
+        ],
+        [
+            "can_see_food",
+            "happiness",
+            0.5
+        ],
+        [
+            "hunger",
+            "happiness",
+            -0.20513370607953085
+        ],
+        [
+            "hunger",
+            "anxiety",
+            -0.21108314085829472
+        ],
+        [
+            "happiness",
+            "satisfaction",
+            -0.2241668384052917
+        ],
+        [
+            "happiness",
+            "anxiety",
+            0.7830798736531988
+        ],
+        [
+            "happiness",
+            "curiosity",
+            0.8755917539018387
+        ],
+        [
+            "cleanliness",
+            "sleepiness",
+            -0.8115680053204168
+        ],
+        [
+            "cleanliness",
+            "satisfaction",
+            -0.27355887959811614
+        ],
+        [
+            "sleepiness",
+            "curiosity",
+            0.5206499799221692
+        ],
+        [
+            "satisfaction",
+            "anxiety",
+            0.8314999281606211
+        ],
+        [
+            "anxiety",
+            "curiosity",
+            0.5957552878910519
+        ],
+        [
+            "satisfaction",
+            "curiosity",
+            1.0
+        ],
+        [
+            "cleanliness",
+            "curiosity",
+            0.3582747166034454
+        ],
+        [
+            "sleepiness",
+            "satisfaction",
+            0.6788103263914526
+        ],
+        [
+            "stress_anxiety_regulation",
+            "can_see_food",
+            -0.8
+        ],
+        [
+            "stress_anxiety_regulation",
+            "satisfaction",
+            0.3
+        ],
+        [
+            "stress_anxiety_regulation",
+            "anxiety",
+            -1.0
+        ],
+        [
+            "stress_anxiety_regulation",
+            "curiosity",
+            0.6912000000000063
+        ],
+        [
+            "stress_anxiety_regulation",
+            "happiness",
+            0.4
+        ],
+        [
+            "can_see_food",
+            "stress_anxiety_regulation",
+            -0.8
+        ],
+        [
+            "satisfaction",
+            "stress_anxiety_regulation",
+            0.3
+        ],
+        [
+            "anxiety",
+            "stress_anxiety_regulation",
+            -1.0
+        ],
+        [
+            "curiosity",
+            "stress_anxiety_regulation",
+            0.7118280000000063
+        ],
+        [
+            "happiness",
+            "stress_anxiety_regulation",
+            0.4
+        ],
+        [
+            "hunger",
+            "satisfaction",
+            0.38039758928366096
+        ],
+        [
+            "hunger",
+            "curiosity",
+            0.6401137301036868
+        ],
+        [
+            "stress_anxiety_regulation_2",
+            "can_see_food",
+            -0.8
+        ],
+        [
+            "stress_anxiety_regulation_2",
+            "sleepiness",
+            0.532480000000001
+        ],
+        [
+            "stress_anxiety_regulation_2",
+            "satisfaction",
+            0.3
+        ],
+        [
+            "stress_anxiety_regulation_2",
+            "anxiety",
+            -1.0
+        ],
+        [
+            "stress_anxiety_regulation_2",
+            "curiosity",
+            0.6448000000000089
+        ],
+        [
+            "stress_anxiety_regulation_2",
+            "happiness",
+            0.4
+        ],
+        [
+            "can_see_food",
+            "stress_anxiety_regulation_2",
+            -0.8
+        ],
+        [
+            "sleepiness",
+            "stress_anxiety_regulation_2",
+            0.532480000000001
+        ],
+        [
+            "satisfaction",
+            "stress_anxiety_regulation_2",
+            0.3
+        ],
+        [
+            "anxiety",
+            "stress_anxiety_regulation_2",
+            -1.0
+        ],
+        [
+            "curiosity",
+            "stress_anxiety_regulation_2",
+            0.6894550800000089
+        ],
+        [
+            "happiness",
+            "stress_anxiety_regulation_2",
+            0.4
+        ],
+        [
+            "hunger",
+            "sleepiness",
+            0.4124145032285035
+        ],
+        [
+            "sleepiness",
+            "anxiety",
+            0.18155614339760903
+        ],
+        [
+            "stress_hunger_stress_response",
+            "can_see_food",
+            -0.8
+        ],
+        [
+            "stress_hunger_stress_response",
+            "hunger",
+            0.7
+        ],
+        [
+            "stress_hunger_stress_response",
+            "sleepiness",
+            0.741760000000009
+        ],
+        [
+            "stress_hunger_stress_response",
+            "satisfaction",
+            0.5004266666667209
+        ],
+        [
+            "stress_hunger_stress_response",
+            "anxiety",
+            -0.8
+        ],
+        [
+            "stress_hunger_stress_response",
+            "curiosity",
+            0.4
+        ],
+        [
+            "can_see_food",
+            "stress_hunger_stress_response",
+            -0.8
+        ],
+        [
+            "hunger",
+            "stress_hunger_stress_response",
+            0.7211399999999996
+        ],
+        [
+            "sleepiness",
+            "stress_hunger_stress_response",
+            0.741760000000009
+        ],
+        [
+            "satisfaction",
+            "stress_hunger_stress_response",
+            0.5004266666667209
+        ],
+        [
+            "anxiety",
+            "stress_hunger_stress_response",
+            -0.8
+        ],
+        [
+            "curiosity",
+            "stress_hunger_stress_response",
+            0.4
+        ],
+        [
+            "stress_hunger_stress_response_2",
+            "can_see_food",
+            -0.8
+        ],
+        [
+            "stress_hunger_stress_response_2",
+            "hunger",
+            0.7
+        ],
+        [
+            "stress_hunger_stress_response_2",
+            "anxiety",
+            -0.8
+        ],
+        [
+            "stress_hunger_stress_response_2",
+            "curiosity",
+            0.4
+        ],
+        [
+            "can_see_food",
+            "stress_hunger_stress_response_2",
+            -0.8
+        ],
+        [
+            "hunger",
+            "stress_hunger_stress_response_2",
+            0.7
+        ],
+        [
+            "anxiety",
+            "stress_hunger_stress_response_2",
+            -0.8
+        ],
+        [
+            "curiosity",
+            "stress_hunger_stress_response_2",
+            0.42567000000000005
+        ],
+        [
+            "hunger",
+            "stress_anxiety_regulation",
+            0.02813999999999966
+        ]
+    ],
+    "neuron_positions": {
+        "can_see_food": [
+            50,
+            200
+        ],
+        "hunger": [
+            127,
+            81
+        ],
+        "happiness": [
+            361,
+            81
+        ],
+        "cleanliness": [
+            627,
+            81
+        ],
+        "sleepiness": [
+            840,
+            81
+        ],
+        "satisfaction": [
+            271,
+            380
+        ],
+        "anxiety": [
+            491,
+            389
+        ],
+        "curiosity": [
+            701,
+            386
+        ],
+        "stress_anxiety_regulation": [
+            340.95437452995805,
+            361.5176736024068
+        ],
+        "stress_anxiety_regulation_2": [
+            481.32959143715,
+            278.5201235695951
+        ],
+        "stress_hunger_stress_response": [
+            352.9208831646727,
+            165.55518426321933
+        ],
+        "stress_hunger_stress_response_2": [
+            331.07407407407413,
+            280.70370370370375
+        ]
+    },
+    "neuron_states": {
+        "can_see_food": 0.0,
+        "is_sick": 1.0,
+        "is_eating": 0.0,
+        "is_sleeping": 0.0,
+        "pursuing_food": 0.0,
+        "direction": "down",
+        "position": [
+            321,
+            264
+        ],
+        "is_startled": 0.0,
+        "is_fleeing": 0.0,
+        "neurogenesis_active": true,
+        "personality": "lazy",
+        "status": "roaming",
+        "recent_actions": [],
+        "food_count": 0.0,
+        "poop_count": 0.0,
+        "novelty_exposure": 0.0,
+        "sustained_stress": 5.05,
+        "recent_rewards": 0.0,
+        "stress_anxiety_regulation": 50.0,
+        "stress_anxiety_regulation_2": 50.0,
+        "stress_hunger_stress_response": 50.0,
+        "stress_hunger_stress_response_2": 50.0
+    },
+    "neurogenesis_data": {
+        "new_neurons": [],
+        "last_neuron_time": 1785781048.3083382,
+        "new_neurons_details": {}
+    },
+    "state_colors": {
+        "stress_anxiety_regulation": [
+            255,
+            150,
+            150
+        ],
+        "stress_anxiety_regulation_2": [
+            255,
+            150,
+            150
+        ],
+        "stress_hunger_stress_response": [
+            255,
+            150,
+            150
+        ],
+        "stress_hunger_stress_response_2": [
+            255,
+            150,
+            150
+        ]
+    },
+    "enhanced_neurogenesis": {
+        "functional_neurons": {
+            "stress_anxiety_regulation": {
+                "name": "stress_anxiety_regulation",
+                "neuron_type": "stress",
+                "specialization": "anxiety_regulation",
+                "activation_count": 0,
+                "last_activated": 0,
+                "utility_score": 0.0,
+                "strength_multiplier": 1.0,
+                "creation_context": {
+                    "trigger_type": "stress",
+                    "timestamp": 1785781382.3254225,
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 58.20000000000047,
+                        "happiness": 66.80000000000189,
+                        "cleanliness": 66.80000000000189,
+                        "sleepiness": 69.83999999999955,
+                        "satisfaction": 100.0,
+                        "anxiety": 74.51866666666587,
+                        "curiosity": 93.20000000000039,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 0.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "positive"
+                }
+            },
+            "stress_anxiety_regulation_2": {
+                "name": "stress_anxiety_regulation_2",
+                "neuron_type": "stress",
+                "specialization": "anxiety_regulation",
+                "activation_count": 0,
+                "last_activated": 0,
+                "utility_score": 0.0,
+                "strength_multiplier": 1.0,
+                "creation_context": {
+                    "trigger_type": "stress",
+                    "timestamp": 1785781494.3777065,
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 69.40000000000025,
+                        "happiness": 55.60000000000193,
+                        "cleanliness": 55.60000000000193,
+                        "sleepiness": 83.28000000000006,
+                        "satisfaction": 99.225333333334,
+                        "anxiety": 90.35999999999864,
+                        "curiosity": 90.30000000000055,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 0.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative"
+                }
+            },
+            "stress_hunger_stress_response": {
+                "name": "stress_hunger_stress_response",
+                "neuron_type": "stress",
+                "specialization": "hunger_stress_response",
+                "activation_count": 0,
+                "last_activated": 0,
+                "utility_score": 0.0,
+                "strength_multiplier": 1.0,
+                "creation_context": {
+                    "trigger_type": "stress",
+                    "timestamp": 1785781604.4137716,
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 80.29999999999963,
+                        "happiness": 44.70000000000177,
+                        "cleanliness": 44.70000000000177,
+                        "sleepiness": 96.36000000000055,
+                        "satisfaction": 81.27666666667005,
+                        "anxiety": 90.70399999999795,
+                        "curiosity": 90.90000000000052,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 0.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative"
+                }
+            },
+            "stress_hunger_stress_response_2": {
+                "name": "stress_hunger_stress_response_2",
+                "neuron_type": "stress",
+                "specialization": "hunger_stress_response",
+                "activation_count": 0,
+                "last_activated": 0,
+                "utility_score": 0.0,
+                "strength_multiplier": 1.0,
+                "creation_context": {
+                    "trigger_type": "stress",
+                    "timestamp": 1785781876.3933961,
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 91.49999999999899,
+                        "happiness": 34.70750000000166,
+                        "cleanliness": 33.50000000000161,
+                        "sleepiness": 34.586666666666424,
+                        "satisfaction": 39.53905000000576,
+                        "anxiety": 89.29666666666373,
+                        "curiosity": 91.1000000000005,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative"
+                }
+            }
+        },
+        "experience_buffer": {
+            "pattern_counts": {
+                "reward_positive_happiness_high": 5,
+                "novelty_positive_happiness_high": 29,
+                "novelty_positive_curiosity_high": 24,
+                "novelty_positive_satisfaction_high": 340,
+                "stress_positive_satisfaction_high": 6,
+                "novelty_negative_satisfaction_high": 1,
+                "stress_negative_satisfaction_high": 65,
+                "novelty_neutral_satisfaction_high": 17,
+                "stress_neutral_satisfaction_high": 8,
+                "novelty_neutral_curiosity_high": 98,
+                "stress_neutral_curiosity_high": 75,
+                "novelty_negative_curiosity_high": 31,
+                "stress_negative_curiosity_high": 77,
+                "stress_negative_sleepiness_high": 39,
+                "novelty_neutral_sleepiness_high": 25,
+                "stress_neutral_sleepiness_high": 13,
+                "novelty_neutral_sleepiness_high_sleep": 1,
+                "novelty_neutral_curiosity_high_sleep": 159,
+                "stress_negative_hunger_high": 9,
+                "novelty_neutral_hunger_high": 41,
+                "stress_neutral_hunger_high": 20,
+                "stress_negative_satisfaction_low": 24
+            },
+            "parent_pattern_counts": {
+                "reward_positive_food_count_low_poop_count_low": 5,
+                "novelty_positive_food_count_low_poop_count_low": 47,
+                "novelty_positive_curiosity_high_food_count_low": 6,
+                "novelty_positive_satisfaction_high_curiosity_high": 92,
+                "novelty_positive_satisfaction_high_food_count_low": 248,
+                "stress_positive_can_see_food_low_satisfaction_high": 6,
+                "novelty_negative_satisfaction_high_food_count_low": 1,
+                "stress_negative_satisfaction_high_food_count_low": 15,
+                "stress_negative_can_see_food_low_satisfaction_high": 8,
+                "stress_negative_food_count_low_poop_count_low": 107,
+                "stress_negative_can_see_food_low_food_count_low": 65,
+                "novelty_neutral_food_count_low_poop_count_low": 338,
+                "stress_neutral_can_see_food_low_food_count_low": 114,
+                "novelty_neutral_curiosity_high_food_count_low": 3,
+                "stress_neutral_can_see_food_low_curiosity_high": 2,
+                "novelty_negative_food_count_low_poop_count_low": 31,
+                "stress_negative_satisfaction_low_food_count_low": 13,
+                "stress_negative_can_see_food_low_satisfaction_low": 6
+            },
+            "core_pattern_counts": {
+                "reward_positive_happiness_high": 5,
+                "novelty_positive_happiness_high": 29,
+                "novelty_positive_curiosity_high": 24,
+                "novelty_positive_satisfaction_high": 340,
+                "stress_positive_satisfaction_high": 6,
+                "novelty_negative_satisfaction_high": 1,
+                "stress_negative_satisfaction_high": 89,
+                "novelty_neutral_satisfaction_high": 17,
+                "stress_neutral_satisfaction_high": 8,
+                "novelty_neutral_curiosity_high": 257,
+                "stress_neutral_curiosity_high": 75,
+                "novelty_negative_curiosity_high": 31,
+                "stress_negative_curiosity_high": 77,
+                "stress_negative_sleepiness_high": 39,
+                "novelty_neutral_sleepiness_high": 26,
+                "stress_neutral_sleepiness_high": 13,
+                "stress_negative_hunger_high": 9,
+                "novelty_neutral_hunger_high": 41,
+                "stress_neutral_hunger_high": 20
+            },
+            "buffer_size": 50,
+            "recent_experiences": [
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 96.4999999999987,
+                        "happiness": 29.707500000001588,
+                        "cleanliness": 28.500000000001542,
+                        "sleepiness": 40.5866666666663,
+                        "satisfaction": 12.558216666673886,
+                        "anxiety": 71.4799999999966,
+                        "curiosity": 99.20000000000005,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781926.3782609
+                },
+                {
+                    "trigger_type": "novelty",
+                    "active_neurons": {
+                        "hunger": 96.5999999999987,
+                        "happiness": 29.607500000001586,
+                        "cleanliness": 28.40000000000154,
+                        "sleepiness": 40.706666666666294,
+                        "satisfaction": 11.967600000007248,
+                        "anxiety": 72.04066666666326,
+                        "curiosity": 99.10000000000005,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781926.644959
+                },
+                {
+                    "trigger_type": "novelty",
+                    "active_neurons": {
+                        "hunger": 96.6999999999987,
+                        "happiness": 29.507500000001585,
+                        "cleanliness": 28.30000000000154,
+                        "sleepiness": 40.82666666666629,
+                        "satisfaction": 11.37498333334061,
+                        "anxiety": 72.60199999999658,
+                        "curiosity": 99.00000000000006,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781927.581943
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 96.6999999999987,
+                        "happiness": 29.507500000001585,
+                        "cleanliness": 28.30000000000154,
+                        "sleepiness": 40.82666666666629,
+                        "satisfaction": 11.37498333334061,
+                        "anxiety": 72.60199999999658,
+                        "curiosity": 99.00000000000006,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781928.3839502
+                },
+                {
+                    "trigger_type": "novelty",
+                    "active_neurons": {
+                        "hunger": 96.79999999999869,
+                        "happiness": 29.407500000001583,
+                        "cleanliness": 28.200000000001538,
+                        "sleepiness": 40.94666666666629,
+                        "satisfaction": 10.780366666673974,
+                        "anxiety": 73.16399999999658,
+                        "curiosity": 98.90000000000006,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781928.5709522
+                },
+                {
+                    "trigger_type": "novelty",
+                    "active_neurons": {
+                        "hunger": 96.89999999999868,
+                        "happiness": 29.307500000001582,
+                        "cleanliness": 28.100000000001536,
+                        "sleepiness": 41.066666666666286,
+                        "satisfaction": 10.183750000007336,
+                        "anxiety": 73.72666666666323,
+                        "curiosity": 98.80000000000007,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781929.5712774
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 96.89999999999868,
+                        "happiness": 29.307500000001582,
+                        "cleanliness": 28.100000000001536,
+                        "sleepiness": 41.066666666666286,
+                        "satisfaction": 10.183750000007336,
+                        "anxiety": 73.72666666666323,
+                        "curiosity": 98.80000000000007,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781930.3914208
+                },
+                {
+                    "trigger_type": "novelty",
+                    "active_neurons": {
+                        "hunger": 96.99999999999868,
+                        "happiness": 29.20750000000158,
+                        "cleanliness": 28.000000000001535,
+                        "sleepiness": 41.186666666666284,
+                        "satisfaction": 9.5851333333407,
+                        "anxiety": 74.28999999999655,
+                        "curiosity": 98.70000000000007,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781930.5800822
+                },
+                {
+                    "trigger_type": "novelty",
+                    "active_neurons": {
+                        "hunger": 97.09999999999867,
+                        "happiness": 29.10750000000158,
+                        "cleanliness": 27.900000000001533,
+                        "sleepiness": 41.30666666666628,
+                        "satisfaction": 8.984516666674063,
+                        "anxiety": 74.85399999999655,
+                        "curiosity": 98.60000000000008,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781931.5940595
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 97.09999999999867,
+                        "happiness": 29.10750000000158,
+                        "cleanliness": 27.900000000001533,
+                        "sleepiness": 41.30666666666628,
+                        "satisfaction": 8.984516666674063,
+                        "anxiety": 74.85399999999655,
+                        "curiosity": 98.60000000000008,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781932.392462
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 97.19999999999867,
+                        "happiness": 29.007500000001578,
+                        "cleanliness": 27.800000000001532,
+                        "sleepiness": 41.42666666666628,
+                        "satisfaction": 8.381900000007425,
+                        "anxiety": 75.4186666666632,
+                        "curiosity": 98.50000000000009,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781932.5805175
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 97.29999999999866,
+                        "happiness": 28.907500000001576,
+                        "cleanliness": 27.70000000000153,
+                        "sleepiness": 41.546666666666276,
+                        "satisfaction": 7.7772833333407885,
+                        "anxiety": 75.98399999999653,
+                        "curiosity": 98.40000000000009,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781933.5730171
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 97.29999999999866,
+                        "happiness": 28.907500000001576,
+                        "cleanliness": 27.70000000000153,
+                        "sleepiness": 41.546666666666276,
+                        "satisfaction": 7.7772833333407885,
+                        "anxiety": 75.98399999999653,
+                        "curiosity": 98.40000000000009,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781934.3825643
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 97.39999999999866,
+                        "happiness": 28.807500000001575,
+                        "cleanliness": 27.60000000000153,
+                        "sleepiness": 41.66666666666627,
+                        "satisfaction": 7.170666666674151,
+                        "anxiety": 76.54999999999652,
+                        "curiosity": 98.3000000000001,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781934.5897744
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 97.49999999999865,
+                        "happiness": 28.707500000001573,
+                        "cleanliness": 27.500000000001528,
+                        "sleepiness": 41.78666666666627,
+                        "satisfaction": 6.562050000007514,
+                        "anxiety": 77.11666666666318,
+                        "curiosity": 98.2000000000001,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781935.5971184
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 97.49999999999865,
+                        "happiness": 28.707500000001573,
+                        "cleanliness": 27.500000000001528,
+                        "sleepiness": 41.78666666666627,
+                        "satisfaction": 6.562050000007514,
+                        "anxiety": 77.11666666666318,
+                        "curiosity": 98.2000000000001,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781936.3860643
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 97.59999999999864,
+                        "happiness": 28.607500000001572,
+                        "cleanliness": 27.400000000001526,
+                        "sleepiness": 41.90666666666627,
+                        "satisfaction": 5.951433333340877,
+                        "anxiety": 77.6839999999965,
+                        "curiosity": 98.10000000000011,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781936.582924
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 97.69999999999864,
+                        "happiness": 28.50750000000157,
+                        "cleanliness": 27.300000000001525,
+                        "sleepiness": 42.026666666666266,
+                        "satisfaction": 5.338816666674241,
+                        "anxiety": 78.25199999999649,
+                        "curiosity": 98.00000000000011,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781937.5886824
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 97.69999999999864,
+                        "happiness": 28.50750000000157,
+                        "cleanliness": 27.300000000001525,
+                        "sleepiness": 42.026666666666266,
+                        "satisfaction": 5.338816666674241,
+                        "anxiety": 78.25199999999649,
+                        "curiosity": 98.00000000000011,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781938.3853662
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 97.79999999999863,
+                        "happiness": 28.40750000000157,
+                        "cleanliness": 27.200000000001523,
+                        "sleepiness": 42.14666666666626,
+                        "satisfaction": 4.724200000007603,
+                        "anxiety": 78.82066666666314,
+                        "curiosity": 97.90000000000012,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781938.584948
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 97.89999999999863,
+                        "happiness": 28.307500000001568,
+                        "cleanliness": 27.100000000001522,
+                        "sleepiness": 42.26666666666626,
+                        "satisfaction": 4.107583333340966,
+                        "anxiety": 79.38999999999646,
+                        "curiosity": 97.80000000000013,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781939.5879738
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 97.89999999999863,
+                        "happiness": 28.307500000001568,
+                        "cleanliness": 27.100000000001522,
+                        "sleepiness": 42.26666666666626,
+                        "satisfaction": 4.107583333340966,
+                        "anxiety": 79.38999999999646,
+                        "curiosity": 97.80000000000013,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781940.387647
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 97.99999999999862,
+                        "happiness": 28.207500000001566,
+                        "cleanliness": 27.00000000000152,
+                        "sleepiness": 42.38666666666626,
+                        "satisfaction": 3.4889666666743295,
+                        "anxiety": 79.95999999999646,
+                        "curiosity": 97.70000000000013,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781940.5487523
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 98.09999999999862,
+                        "happiness": 28.107500000001565,
+                        "cleanliness": 26.90000000000152,
+                        "sleepiness": 42.506666666666256,
+                        "satisfaction": 2.868350000007693,
+                        "anxiety": 80.53066666666311,
+                        "curiosity": 97.60000000000014,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781941.5402327
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 98.09999999999862,
+                        "happiness": 28.107500000001565,
+                        "cleanliness": 26.90000000000152,
+                        "sleepiness": 42.506666666666256,
+                        "satisfaction": 2.868350000007693,
+                        "anxiety": 80.53066666666311,
+                        "curiosity": 97.60000000000014,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781942.3918748
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 98.19999999999861,
+                        "happiness": 28.007500000001563,
+                        "cleanliness": 26.800000000001518,
+                        "sleepiness": 42.62666666666625,
+                        "satisfaction": 2.245733333341056,
+                        "anxiety": 81.10199999999644,
+                        "curiosity": 97.50000000000014,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781942.5780933
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 98.2999999999986,
+                        "happiness": 27.907500000001562,
+                        "cleanliness": 26.700000000001516,
+                        "sleepiness": 42.74666666666625,
+                        "satisfaction": 1.6211166666744192,
+                        "anxiety": 81.67399999999643,
+                        "curiosity": 97.40000000000015,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781943.5833192
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 98.2999999999986,
+                        "happiness": 27.907500000001562,
+                        "cleanliness": 26.700000000001516,
+                        "sleepiness": 42.74666666666625,
+                        "satisfaction": 1.6211166666744192,
+                        "anxiety": 81.67399999999643,
+                        "curiosity": 97.40000000000015,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781944.3929589
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 98.3999999999986,
+                        "happiness": 27.80750000000156,
+                        "cleanliness": 26.600000000001515,
+                        "sleepiness": 42.86666666666625,
+                        "satisfaction": 0.9945000000077824,
+                        "anxiety": 82.24666666666309,
+                        "curiosity": 97.30000000000015,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781944.5906162
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 98.4999999999986,
+                        "happiness": 27.70750000000156,
+                        "cleanliness": 26.500000000001513,
+                        "sleepiness": 42.986666666666245,
+                        "satisfaction": 0.36588333334114553,
+                        "anxiety": 82.81999999999641,
+                        "curiosity": 97.20000000000016,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781945.5927174
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 98.4999999999986,
+                        "happiness": 27.70750000000156,
+                        "cleanliness": 26.500000000001513,
+                        "sleepiness": 42.986666666666245,
+                        "satisfaction": 0.36588333334114553,
+                        "anxiety": 82.81999999999641,
+                        "curiosity": 97.20000000000016,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781946.3939483
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 98.59999999999859,
+                        "happiness": 27.607500000001558,
+                        "cleanliness": 26.400000000001512,
+                        "sleepiness": 43.10666666666624,
+                        "satisfaction": 0.0,
+                        "anxiety": 83.3939999999964,
+                        "curiosity": 97.10000000000016,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781946.6002347
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 98.69999999999858,
+                        "happiness": 27.507500000001556,
+                        "cleanliness": 26.30000000000151,
+                        "sleepiness": 43.22666666666624,
+                        "satisfaction": 0.0,
+                        "anxiety": 83.96866666666305,
+                        "curiosity": 97.00000000000017,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781947.600048
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 98.69999999999858,
+                        "happiness": 27.507500000001556,
+                        "cleanliness": 26.30000000000151,
+                        "sleepiness": 43.22666666666624,
+                        "satisfaction": 0.0,
+                        "anxiety": 83.96866666666305,
+                        "curiosity": 97.00000000000017,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781948.3947837
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 98.79999999999858,
+                        "happiness": 27.407500000001555,
+                        "cleanliness": 26.20000000000151,
+                        "sleepiness": 43.34666666666624,
+                        "satisfaction": 0.0,
+                        "anxiety": 84.54399999999637,
+                        "curiosity": 96.90000000000018,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781948.6106732
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 98.89999999999857,
+                        "happiness": 27.307500000001554,
+                        "cleanliness": 26.100000000001508,
+                        "sleepiness": 43.466666666666235,
+                        "satisfaction": 0.0,
+                        "anxiety": 85.11999999999637,
+                        "curiosity": 96.80000000000018,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781949.6026528
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 98.89999999999857,
+                        "happiness": 27.307500000001554,
+                        "cleanliness": 26.100000000001508,
+                        "sleepiness": 43.466666666666235,
+                        "satisfaction": 0.0,
+                        "anxiety": 85.11999999999637,
+                        "curiosity": 96.80000000000018,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781950.3993511
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 98.99999999999856,
+                        "happiness": 27.207500000001552,
+                        "cleanliness": 26.000000000001506,
+                        "sleepiness": 43.58666666666623,
+                        "satisfaction": 0.0,
+                        "anxiety": 85.69666666666302,
+                        "curiosity": 96.70000000000019,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781950.602624
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 99.09999999999856,
+                        "happiness": 27.10750000000155,
+                        "cleanliness": 25.900000000001505,
+                        "sleepiness": 43.70666666666623,
+                        "satisfaction": 0.0,
+                        "anxiety": 86.27399999999635,
+                        "curiosity": 96.6000000000002,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781951.6054847
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 99.09999999999856,
+                        "happiness": 27.10750000000155,
+                        "cleanliness": 25.900000000001505,
+                        "sleepiness": 43.70666666666623,
+                        "satisfaction": 0.0,
+                        "anxiety": 86.27399999999635,
+                        "curiosity": 96.6000000000002,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781952.4017618
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 99.19999999999855,
+                        "happiness": 27.00750000000155,
+                        "cleanliness": 25.800000000001504,
+                        "sleepiness": 43.82666666666623,
+                        "satisfaction": 0.0,
+                        "anxiety": 86.85199999999634,
+                        "curiosity": 96.5000000000002,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781952.5506892
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 99.29999999999855,
+                        "happiness": 26.907500000001548,
+                        "cleanliness": 25.700000000001502,
+                        "sleepiness": 43.946666666666225,
+                        "satisfaction": 0.0,
+                        "anxiety": 87.430666666663,
+                        "curiosity": 96.4000000000002,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781953.5602121
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 99.29999999999855,
+                        "happiness": 26.907500000001548,
+                        "cleanliness": 25.700000000001502,
+                        "sleepiness": 43.946666666666225,
+                        "satisfaction": 0.0,
+                        "anxiety": 87.430666666663,
+                        "curiosity": 96.4000000000002,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781954.4011893
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 99.39999999999854,
+                        "happiness": 26.807500000001546,
+                        "cleanliness": 25.6000000000015,
+                        "sleepiness": 44.06666666666622,
+                        "satisfaction": 0.0,
+                        "anxiety": 88.00999999999632,
+                        "curiosity": 96.30000000000021,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781954.6011338
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 99.49999999999854,
+                        "happiness": 26.707500000001545,
+                        "cleanliness": 25.5000000000015,
+                        "sleepiness": 44.18666666666622,
+                        "satisfaction": 0.0,
+                        "anxiety": 88.58999999999631,
+                        "curiosity": 96.20000000000022,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781955.5544965
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 99.49999999999854,
+                        "happiness": 26.707500000001545,
+                        "cleanliness": 25.5000000000015,
+                        "sleepiness": 44.18666666666622,
+                        "satisfaction": 0.0,
+                        "anxiety": 88.58999999999631,
+                        "curiosity": 96.20000000000022,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781956.400758
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 99.59999999999853,
+                        "happiness": 26.607500000001544,
+                        "cleanliness": 25.400000000001498,
+                        "sleepiness": 44.30666666666622,
+                        "satisfaction": 0.0,
+                        "anxiety": 89.17066666666297,
+                        "curiosity": 96.10000000000022,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781956.597842
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 99.69999999999852,
+                        "happiness": 26.507500000001542,
+                        "cleanliness": 25.300000000001496,
+                        "sleepiness": 44.426666666666215,
+                        "satisfaction": 0.0,
+                        "anxiety": 89.75199999999629,
+                        "curiosity": 96.00000000000023,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781957.6108708
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "can_see_food": 0.0,
+                        "hunger": 99.69999999999852,
+                        "happiness": 26.507500000001542,
+                        "cleanliness": 25.300000000001496,
+                        "sleepiness": 44.426666666666215,
+                        "satisfaction": 0.0,
+                        "anxiety": 89.75199999999629,
+                        "curiosity": 96.00000000000023,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "stress_anxiety_regulation": 50.0,
+                        "stress_anxiety_regulation_2": 50.0,
+                        "stress_hunger_stress_response": 50.0,
+                        "stress_hunger_stress_response_2": 50.0
+                    },
+                    "recent_actions": [],
+                    "environmental_state": {
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "is_sick": 1.0,
+                        "is_eating": 0.0,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781958.400445
+                },
+                {
+                    "trigger_type": "stress",
+                    "active_neurons": {
+                        "hunger": 99.79999999999852,
+                        "happiness": 26.40750000000154,
+                        "cleanliness": 25.200000000001495,
+                        "sleepiness": 44.54666666666621,
+                        "satisfaction": 0.0,
+                        "anxiety": 90.33399999999628,
+                        "curiosity": 95.90000000000023,
+                        "recent_actions": 50.0,
+                        "food_count": 0.0,
+                        "poop_count": 0.0,
+                        "can_see_food": 0.0
+                    },
+                    "recent_actions": [
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming",
+                        "roaming"
+                    ],
+                    "environmental_state": {
+                        "food_count": 0,
+                        "poop_count": 0,
+                        "is_sick": true,
+                        "is_eating": false,
+                        "has_rock": false,
+                        "new_object_encountered": false,
+                        "recent_positive_outcome": false
+                    },
+                    "outcome": "negative",
+                    "timestamp": 1785781958.5947335
+                }
+            ]
+        },
+        "novelty_neuron_count": 0,
+        "neurons_created_this_session": 4,
+        "last_creation_by_type": {
+            "novelty": 0,
+            "stress": 1785781876.3940785,
+            "reward": 0
+        },
+        "awarded_neurons": []
+    },
+    "functional_neurons": {
+        "stress_anxiety_regulation": {
+            "name": "stress_anxiety_regulation",
+            "neuron_type": "stress",
+            "specialization": "anxiety_regulation",
+            "activation_count": 0,
+            "last_activated": 0,
+            "utility_score": 0.0,
+            "strength_multiplier": 1.0,
+            "creation_context": {
+                "trigger_type": "stress",
+                "timestamp": 1785781382.3254225,
+                "active_neurons": {
+                    "can_see_food": 0.0,
+                    "hunger": 58.20000000000047,
+                    "happiness": 66.80000000000189,
+                    "cleanliness": 66.80000000000189,
+                    "sleepiness": 69.83999999999955,
+                    "satisfaction": 100.0,
+                    "anxiety": 74.51866666666587,
+                    "curiosity": 93.20000000000039,
+                    "recent_actions": 50.0,
+                    "food_count": 0.0,
+                    "poop_count": 0.0
+                },
+                "recent_actions": [],
+                "environmental_state": {
+                    "food_count": 0.0,
+                    "poop_count": 0.0,
+                    "is_sick": 0.0,
+                    "is_eating": 0.0,
+                    "has_rock": false,
+                    "new_object_encountered": false,
+                    "recent_positive_outcome": false
+                },
+                "outcome": "positive"
+            }
+        },
+        "stress_anxiety_regulation_2": {
+            "name": "stress_anxiety_regulation_2",
+            "neuron_type": "stress",
+            "specialization": "anxiety_regulation",
+            "activation_count": 0,
+            "last_activated": 0,
+            "utility_score": 0.0,
+            "strength_multiplier": 1.0,
+            "creation_context": {
+                "trigger_type": "stress",
+                "timestamp": 1785781494.3777065,
+                "active_neurons": {
+                    "can_see_food": 0.0,
+                    "hunger": 69.40000000000025,
+                    "happiness": 55.60000000000193,
+                    "cleanliness": 55.60000000000193,
+                    "sleepiness": 83.28000000000006,
+                    "satisfaction": 99.225333333334,
+                    "anxiety": 90.35999999999864,
+                    "curiosity": 90.30000000000055,
+                    "recent_actions": 50.0,
+                    "food_count": 0.0,
+                    "poop_count": 0.0,
+                    "stress_anxiety_regulation": 50.0
+                },
+                "recent_actions": [],
+                "environmental_state": {
+                    "food_count": 0.0,
+                    "poop_count": 0.0,
+                    "is_sick": 0.0,
+                    "is_eating": 0.0,
+                    "has_rock": false,
+                    "new_object_encountered": false,
+                    "recent_positive_outcome": false
+                },
+                "outcome": "negative"
+            }
+        },
+        "stress_hunger_stress_response": {
+            "name": "stress_hunger_stress_response",
+            "neuron_type": "stress",
+            "specialization": "hunger_stress_response",
+            "activation_count": 0,
+            "last_activated": 0,
+            "utility_score": 0.0,
+            "strength_multiplier": 1.0,
+            "creation_context": {
+                "trigger_type": "stress",
+                "timestamp": 1785781604.4137716,
+                "active_neurons": {
+                    "can_see_food": 0.0,
+                    "hunger": 80.29999999999963,
+                    "happiness": 44.70000000000177,
+                    "cleanliness": 44.70000000000177,
+                    "sleepiness": 96.36000000000055,
+                    "satisfaction": 81.27666666667005,
+                    "anxiety": 90.70399999999795,
+                    "curiosity": 90.90000000000052,
+                    "recent_actions": 50.0,
+                    "food_count": 0.0,
+                    "poop_count": 0.0,
+                    "stress_anxiety_regulation": 50.0,
+                    "stress_anxiety_regulation_2": 50.0
+                },
+                "recent_actions": [],
+                "environmental_state": {
+                    "food_count": 0.0,
+                    "poop_count": 0.0,
+                    "is_sick": 0.0,
+                    "is_eating": 0.0,
+                    "has_rock": false,
+                    "new_object_encountered": false,
+                    "recent_positive_outcome": false
+                },
+                "outcome": "negative"
+            }
+        },
+        "stress_hunger_stress_response_2": {
+            "name": "stress_hunger_stress_response_2",
+            "neuron_type": "stress",
+            "specialization": "hunger_stress_response",
+            "activation_count": 0,
+            "last_activated": 0,
+            "utility_score": 0.0,
+            "strength_multiplier": 1.0,
+            "creation_context": {
+                "trigger_type": "stress",
+                "timestamp": 1785781876.3933961,
+                "active_neurons": {
+                    "can_see_food": 0.0,
+                    "hunger": 91.49999999999899,
+                    "happiness": 34.70750000000166,
+                    "cleanliness": 33.50000000000161,
+                    "sleepiness": 34.586666666666424,
+                    "satisfaction": 39.53905000000576,
+                    "anxiety": 89.29666666666373,
+                    "curiosity": 91.1000000000005,
+                    "recent_actions": 50.0,
+                    "food_count": 0.0,
+                    "poop_count": 0.0,
+                    "stress_anxiety_regulation": 50.0,
+                    "stress_anxiety_regulation_2": 50.0,
+                    "stress_hunger_stress_response": 50.0
+                },
+                "recent_actions": [],
+                "environmental_state": {
+                    "food_count": 0.0,
+                    "poop_count": 0.0,
+                    "is_sick": 1.0,
+                    "is_eating": 0.0,
+                    "has_rock": false,
+                    "new_object_encountered": false,
+                    "recent_positive_outcome": false
+                },
+                "outcome": "negative"
+            }
+        }
+    }
+}
