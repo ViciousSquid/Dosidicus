@@ -1,26 +1,23 @@
-name: 🦑 Submit a Squid Save
-description: IMPORTANT - Enter your squid's name in the "Add a title" field. The issue title becomes the squid's name.
+name: Submit a Squid Save
+description: IMPORTANT - Enter your squid's name in the Add a title field. The issue title becomes the squid's name.
 labels:
 
 * squid-submission
-
-body:
+  body:
 
 * type: markdown
   attributes:
   value: |
-  ## 🦑 Submit Your Squid
+  IMPORTANT: The issue title must be your squid's name.
 
   ```
-  **IMPORTANT: The issue title must be your squid's name.**
-
-  For example, enter `Horatio` in the **Add a title** field.
+  For example, enter Horatio in the Add a title field.
 
   The issue title will become the squid's name in the Squid Exchange.
 
-  ### Save File
+  SAVE FILE
 
-  Upload your Dosidicus `.zip` in the issue's **comment box**.
+  Upload your Dosidicus ZIP in the issue's comment box.
 
   GitHub will upload the file and create a link.
 
