@@ -1,0 +1,99 @@
+name: Validate Squid Exchange
+
+on:
+  push:
+    branches:
+      - SQUID-EXCHANGE
+
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check Exchange structure
+        run: |
+          set -e
+
+          test -d squids
+          test -d scripts
+          test -d templates
+
+          test -f scripts/extract_metadata.py
+          test -f scripts/build_catalogue.py
+          test -f templates/README.md
+
+          echo "Exchange structure OK."
+
+      - name: Validate Python files
+        run: |
+          python -m py_compile \
+            scripts/extract_metadata.py \
+            scripts/build_catalogue.py
+
+          echo "Python syntax OK."
+
+      - name: Validate JSON metadata
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          for path in Path("squids").glob("*/metadata.json"):
+              print(f"Checking {path}")
+
+              with path.open(
+                  encoding="utf-8"
+              ) as file:
+                  data = json.load(file)
+
+              required = {
+                  "name",
+                  "specimen_id",
+                  "description",
+                  "raised_by",
+                  "parent_id",
+                  "generation",
+                  "neuron_count",
+                  "neurons_generated",
+                  "connection_count",
+              }
+
+              missing = required - data.keys()
+
+              if missing:
+                  raise SystemExit(
+                      f"{path} is missing: "
+                      + ", ".join(sorted(missing))
+                  )
+
+          print("JSON metadata OK.")
+          PY
+
+      - name: Validate README template
+        run: |
+          grep -q "{{NAME}}" templates/README.md
+          grep -q "{{SPECIMEN_ID}}" templates/README.md
+          grep -q "{{RAISED_BY}}" templates/README.md
+          grep -q "{{NEURON_COUNT}}" templates/README.md
+          grep -q "{{NEURONS_GENERATED}}" templates/README.md
+          grep -q "{{CONNECTION_COUNT}}" templates/README.md
+
+          echo "README template OK."
+
+      - name: Validate catalogue generator
+        run: |
+          python -m py_compile \
+            scripts/build_catalogue.py
+
+          echo "Catalogue generator OK."
