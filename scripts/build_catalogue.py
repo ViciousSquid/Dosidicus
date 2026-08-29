@@ -63,6 +63,21 @@ def get_brain_statistics(zip_path):
     }
 
 
+def escape_table_text(value):
+    """
+    Prevent user-provided text from breaking the
+    Markdown catalogue table.
+    """
+
+    if value is None:
+        return ""
+
+    return str(value).replace("|", "\\|").replace(
+        "\n",
+        " "
+    ).strip()
+
+
 def get_specimens():
     specimens = []
 
@@ -73,6 +88,7 @@ def get_specimens():
         SQUIDS_DIR.iterdir(),
         key=lambda p: p.name.lower()
     ):
+
         if not folder.is_dir():
             continue
 
@@ -81,6 +97,7 @@ def get_specimens():
         metadata_file = folder / "metadata.json"
 
         if metadata_file.exists():
+
             try:
                 metadata = json.loads(
                     metadata_file.read_text(
@@ -89,23 +106,30 @@ def get_specimens():
                 )
 
             except Exception as exc:
+
                 print(
                     f"Warning: Could not read "
                     f"{metadata_file}: {exc}"
                 )
 
-        zip_files = list(
+        zip_files = sorted(
             folder.glob("*.zip")
         )
 
         if zip_files:
+
+            zip_path = zip_files[0]
+
             brain_statistics = get_brain_statistics(
-                zip_files[0]
+                zip_path
             )
 
             has_zip = True
 
+            archive_path = zip_path.as_posix()
+
         else:
+
             brain_statistics = {
                 "neuron_count": "—",
                 "neurons_generated": "—",
@@ -113,6 +137,7 @@ def get_specimens():
             }
 
             has_zip = False
+            archive_path = ""
 
         specimens.append(
             {
@@ -155,6 +180,8 @@ def get_specimens():
 
                 "path": folder.as_posix(),
 
+                "archive_path": archive_path,
+
                 "has_zip": has_zip
             }
         )
@@ -166,6 +193,7 @@ def generate_catalogue(specimens):
     lines = []
 
     if not specimens:
+
         lines.append(
             "_No specimens currently available "
             "in the catalogue._"
@@ -185,21 +213,35 @@ def generate_catalogue(specimens):
 
     for spec in specimens:
 
-        archive = "✅" if spec["has_zip"] else "—"
+        archive = "—"
+
+        if spec["has_zip"]:
+
+            archive = (
+                f"[ZIP]({spec['archive_path']})"
+            )
 
         grown = spec["neurons_generated"]
 
         if isinstance(grown, int):
             grown = f"+{grown}"
 
+        name = escape_table_text(
+            spec["name"]
+        )
+
+        description = escape_table_text(
+            spec["description"]
+        )
+
         lines.append(
-            f"| **[{spec['name']}]"
+            f"| **[{name}]"
             f"({spec['path']})** "
             f"| {spec['generation']} "
             f"| {spec['neuron_count']} "
             f"| {grown} "
             f"| {spec['connection_count']} "
-            f"| {spec['description']} "
+            f"| {description} "
             f"| {archive} |"
         )
 
@@ -207,7 +249,9 @@ def generate_catalogue(specimens):
 
 
 def update_readme(catalogue):
+
     if not README_PATH.exists():
+
         raise FileNotFoundError(
             f"{README_PATH} not found."
         )
@@ -225,6 +269,7 @@ def update_readme(catalogue):
     )
 
     if start == -1 or end == -1:
+
         raise RuntimeError(
             "README.md is missing the catalogue markers:\n"
             "<!-- BEGIN CATALOGUE -->\n"
@@ -248,6 +293,7 @@ def update_readme(catalogue):
 
 
 def main():
+
     specimens = get_specimens()
 
     catalogue = generate_catalogue(
