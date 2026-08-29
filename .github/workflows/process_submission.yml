@@ -2,7 +2,7 @@ name: Squid Exchange Submission
 
 on:
   issues:
-    types: [opened]
+    types: [opened, labeled]
 
 jobs:
   process-submission:
@@ -15,30 +15,15 @@ jobs:
       issues: write
 
     steps:
-
-      # --------------------------------------------------
-      # Checkout repository
-      # --------------------------------------------------
-
       - name: Checkout repository
         uses: actions/checkout@v4
-
-
-      # --------------------------------------------------
-      # Set up Python
-      # --------------------------------------------------
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-
-      # --------------------------------------------------
-      # Extract submission information
-      # --------------------------------------------------
-
-      - name: Extract submission information
+      - name: Read submission
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
@@ -46,16 +31,11 @@ jobs:
           import os
           import re
 
-          body = os.environ.get("ISSUE_BODY", "")
+          body = os.environ["ISSUE_BODY"]
 
-          def extract_field(label):
-              pattern = (
-                  rf"### {re.escape(label)}\s*"
-                  rf"\n+(.+?)(?=\n### |\Z)"
-              )
-
+          def field(name):
               match = re.search(
-                  pattern,
+                  rf"### {re.escape(name)}\s*\n+(.+?)(?=\n### |\Z)",
                   body,
                   re.DOTALL
               )
@@ -63,42 +43,57 @@ jobs:
               if not match:
                   return ""
 
-              return match.group(1).strip()
+              value = match.group(1).strip()
 
-          name = extract_field(
-              "Squid Nickname"
-          )
+              if value == "_No response_":
+                  return ""
 
-          save_url = extract_field(
-              "Save File (.zip)"
-          )
+              return value
 
-          description = extract_field(
-              "About this squid"
-          )
+          nickname = field("Squid Nickname")
+          save_url = field("Save File (.zip)")
+          parent_id = field("Parent Specimen ID")
+          description = field("About this squid")
 
-          if not name:
+          if not nickname:
               raise SystemExit(
-                  "Squid nickname was not supplied."
+                  "Squid nickname is required."
               )
 
           if not save_url:
               raise SystemExit(
-                  "Save file URL was not supplied."
+                  "Save file URL is required."
               )
+
+          # GitHub converts uploaded files into Markdown links:
+          #
+          # [filename.zip](https://github.com/user-attachments/files/...)
+          #
+          # Extract the actual URL from that Markdown.
+
+          url_match = re.search(
+              r"\]\((https://github\.com/user-attachments/files/[^)]+)\)",
+              save_url
+          )
+
+          if url_match:
+              save_url = url_match.group(1)
 
           with open(
               os.environ["GITHUB_ENV"],
-              "a",
-              encoding="utf-8"
+              "a"
           ) as env:
 
               env.write(
-                  f"NICKNAME={name}\n"
+                  f"NICKNAME={nickname}\n"
               )
 
               env.write(
                   f"FILE_URL={save_url}\n"
+              )
+
+              env.write(
+                  f"PARENT_ID={parent_id}\n"
               )
 
               env.write(
@@ -114,7 +109,7 @@ jobs:
               )
 
           print(
-              f"Nickname: {name}"
+              f"Nickname: {nickname}"
           )
 
           print(
@@ -122,34 +117,87 @@ jobs:
           )
 
           print(
-              f"Description: {description}"
+              f"Parent: {parent_id}"
           )
+
+      - name: Determine generation
+        run: |
+          if [ -z "$PARENT_ID" ]; then
+            echo "GENERATION=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          parent_id = os.environ["PARENT_ID"]
+
+          for path in Path("squids").glob("*/metadata.json"):
+
+              try:
+                  data = json.loads(
+                      path.read_text(
+                          encoding="utf-8"
+                      )
+                  )
+
+              except Exception:
+                  continue
+
+              if data.get(
+                  "specimen_id"
+              ) == parent_id:
+
+                  generation = data.get(
+                      "generation",
+                      1
+                  )
+
+                  if not isinstance(
+                      generation,
+                      int
+                  ):
+                      raise SystemExit(
+                          "Parent generation is invalid."
+                      )
+
+                  with open(
+                      os.environ["GITHUB_ENV"],
+                      "a"
+                  ) as env:
+
+                      env.write(
+                          f"GENERATION={generation + 1}\n"
+                      )
+
+                  print(
+                      f"Parent verified: {parent_id}"
+                  )
+
+                  print(
+                      f"Generation: {generation + 1}"
+                  )
+
+                  break
+
+          else:
+              raise SystemExit(
+                  f"Parent specimen not found: {parent_id}"
+              )
           PY
-
-
-      # --------------------------------------------------
-      # Download squid
-      # --------------------------------------------------
 
       - name: Download squid
         run: |
-          curl -L "$FILE_URL" -o temp_squid.zip
+          curl -L "$FILE_URL" -o squid.zip
 
-          if ! file temp_squid.zip | grep -qi "zip"; then
-            echo "Downloaded file is not a ZIP archive."
-            exit 1
-          fi
+          file squid.zip
 
-
-      # --------------------------------------------------
-      # Validate Dosidicus save
-      # --------------------------------------------------
-
-      - name: Validate Dosidicus save
+      - name: Validate save
         run: |
           python - <<'PY'
           import zipfile
-          import sys
 
           required = {
               "game_state.json",
@@ -161,71 +209,43 @@ jobs:
               "uuid.txt",
           }
 
-          try:
-              with zipfile.ZipFile(
-                  "temp_squid.zip",
-                  "r"
-              ) as z:
+          with zipfile.ZipFile(
+              "squid.zip"
+          ) as archive:
 
-                  missing = (
-                      required
-                      - set(z.namelist())
-                  )
-
-                  if missing:
-                      print(
-                          "Missing required files:"
-                      )
-
-                      for name in sorted(
-                          missing
-                      ):
-                          print(
-                              f"  - {name}"
-                          )
-
-                      sys.exit(1)
-
-                  if z.testzip() is not None:
-                      print(
-                          "ZIP contains corrupt data."
-                      )
-
-                      sys.exit(1)
-
-          except zipfile.BadZipFile:
-              print(
-                  "Invalid ZIP archive."
+              missing = (
+                  required
+                  - set(archive.namelist())
               )
 
-              sys.exit(1)
+              if missing:
+                  raise SystemExit(
+                      "Missing required files: "
+                      + ", ".join(
+                          sorted(missing)
+                      )
+                  )
+
+              if archive.testzip() is not None:
+                  raise SystemExit(
+                      "ZIP contains corrupt data."
+                  )
 
           print(
-              "Dosidicus save validated."
+              "Save is valid."
           )
           PY
 
-
-      # --------------------------------------------------
-      # Extract neural statistics
-      # --------------------------------------------------
-
       - name: Extract neural statistics
         run: |
-          python scripts/extract_metadata.py \
-            temp_squid.zip \
+          python scripts/extract_metadata.py squid.zip \
             > neural_statistics.json
 
           cat neural_statistics.json
 
-
-      # --------------------------------------------------
-      # Extract UUID
-      # --------------------------------------------------
-
-      - name: Extract UUID
+      - name: Read UUID
         run: |
-          UUID=$(unzip -p temp_squid.zip uuid.txt | head -n 1 | xargs)
+          UUID=$(unzip -p squid.zip uuid.txt | head -n 1 | xargs)
 
           if [ -z "$UUID" ]; then
             echo "UUID is empty."
@@ -234,28 +254,26 @@ jobs:
 
           echo "UUID=$UUID" >> "$GITHUB_ENV"
 
-
-      # --------------------------------------------------
-      # Create specimen
-      # --------------------------------------------------
-
       - name: Create specimen
         run: |
-          SPECIMEN_DIR="squids/$NICKNAME"
+          DIRECTORY="squids/$NICKNAME"
 
-          if [ -e "$SPECIMEN_DIR" ]; then
-            echo "A specimen named '$NICKNAME' already exists."
+          if [ -e "$DIRECTORY" ]; then
+            echo "A squid with this name already exists."
             exit 1
           fi
 
-          mkdir -p "$SPECIMEN_DIR"
+          mkdir -p "$DIRECTORY"
+
+          cp squid.zip \
+            "$DIRECTORY/${NICKNAME}_${UUID}.zip"
 
           python - <<'PY'
           import json
           import os
           from pathlib import Path
 
-          specimen_dir = (
+          directory = (
               Path("squids")
               / os.environ["NICKNAME"]
           )
@@ -269,18 +287,10 @@ jobs:
           )
 
           name = os.environ["NICKNAME"]
+          uuid = os.environ["UUID"]
 
           specimen_id = (
-              "dosidicus-"
-              + os.environ["UUID"]
-          )
-
-          raised_by = (
-              "@"
-              + os.environ.get(
-                  "GITHUB_ACTOR",
-                  "unknown"
-              )
+              f"dosidicus-{uuid}"
           )
 
           description = os.environ.get(
@@ -288,36 +298,63 @@ jobs:
               ""
           ).strip()
 
-          neuron_count = statistics.get(
-              "neuron_count"
-          )
-
-          neurons_generated = statistics.get(
-              "neurons_generated"
-          )
-
-          connection_count = statistics.get(
-              "connection_count"
-          )
-
           metadata = {
               "name": name,
               "specimen_id": specimen_id,
               "description": description,
-              "raised_by": raised_by,
-              "parent_id": None,
-              "generation": 1,
-              "neuron_count": neuron_count,
-              "neurons_generated": neurons_generated,
-              "connection_count": connection_count
+              "raised_by": (
+                  "@"
+                  + os.environ.get(
+                      "GITHUB_ACTOR",
+                      "unknown"
+                  )
+              ),
+              "parent_id": (
+                  os.environ["PARENT_ID"]
+                  or None
+              ),
+              "generation": int(
+                  os.environ["GENERATION"]
+              ),
+              "neuron_count": statistics.get(
+                  "neuron_count"
+              ),
+              "neurons_generated": statistics.get(
+                  "neurons_generated"
+              ),
+              "connection_count": statistics.get(
+                  "connection_count"
+              )
           }
 
           (
-              specimen_dir
+              directory
               / "metadata.json"
           ).write_text(
               json.dumps(
                   metadata,
+                  indent=4
+              )
+              + "\n",
+              encoding="utf-8"
+          )
+
+          manifest = {
+              "format": "dosidicus-squid-exchange",
+              "version": 1,
+              "specimen_id": specimen_id,
+              "archive": (
+                  f"{name}_{uuid}.zip"
+              ),
+              "verified": True
+          }
+
+          (
+              directory
+              / "manifest.json"
+          ).write_text(
+              json.dumps(
+                  manifest,
                   indent=4
               )
               + "\n",
@@ -333,33 +370,39 @@ jobs:
           replacements = {
               "{{NAME}}": name,
               "{{SPECIMEN_ID}}": specimen_id,
-              "{{RAISED_BY}}": raised_by,
-              "{{DESCRIPTION}}": description or (
+              "{{RAISED_BY}}": metadata[
+                  "raised_by"
+              ],
+              "{{DESCRIPTION}}": (
+                  description
+                  or
                   "Dosidicus specimen submitted "
                   "to the Squid Exchange."
               ),
-              "{{GENERATION}}": "1",
+              "{{GENERATION}}": str(
+                  metadata["generation"]
+              ),
               "{{NEURON_COUNT}}": str(
-                  neuron_count
+                  metadata["neuron_count"]
               ),
               "{{NEURONS_GENERATED}}": str(
-                  neurons_generated
+                  metadata["neurons_generated"]
               ),
               "{{CONNECTION_COUNT}}": str(
-                  connection_count
+                  metadata["connection_count"]
               )
           }
 
-          for placeholder, value in (
+          for key, value in (
               replacements.items()
           ):
               template = template.replace(
-                  placeholder,
+                  key,
                   value
               )
 
           (
-              specimen_dir
+              directory
               / "README.md"
           ).write_text(
               template,
@@ -367,62 +410,34 @@ jobs:
           )
           PY
 
-          mv temp_squid.zip \
-            "$SPECIMEN_DIR/${NICKNAME}_${UUID}.zip"
-
-
-      # --------------------------------------------------
-      # Update catalogue
-      # --------------------------------------------------
-
-      - name: Update catalogue
-        run: |
-          python scripts/build_catalogue.py
-
-
-      # --------------------------------------------------
-      # Commit Exchange specimen
-      # --------------------------------------------------
-
-      - name: Commit Exchange specimen
+      - name: Commit specimen
         run: |
           git config user.name "SquidBot"
           git config user.email "bot@github.com"
 
-          git add squids/ README.md
+          git add squids/
 
           git commit \
-            -m "Add Squid Exchange specimen: ${NICKNAME}"
+            -m "Add Squid Exchange specimen: $NICKNAME"
 
           git push
 
-
-      # --------------------------------------------------
-      # Report success
-      # --------------------------------------------------
-
-      - name: Report success
+      - name: Close submission
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          STATS=$(cat neural_statistics.json)
-
           gh issue comment "$ISSUE_NUMBER" --body \
-            "## 🦑 Squid accepted
+            "🦑 **Squid accepted!**
 
           **Name:** $NICKNAME
 
-          **UUID:** \`$UUID\`
+          **Specimen ID:** \`dosidicus-$UUID\`
 
-          **Description:** $DESCRIPTION
+          **Generation:** $GENERATION
 
-          **Neural statistics:**
+          **Parent:** ${PARENT_ID:-None}
 
-          \`\`\`json
-          $STATS
-          \`\`\`
-
-          The specimen has been added to the Squid Exchange."
+          The squid has been added to the Squid Exchange."
 
           gh issue close "$ISSUE_NUMBER"
