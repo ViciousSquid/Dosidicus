@@ -16,8 +16,10 @@ permissions:
   issues: write
 
 steps:
-  - name: Checkout repository
+  - name: Checkout Squid Exchange
     uses: actions/checkout@v4
+    with:
+      ref: SQUID-EXCHANGE
 
   - name: Set up Python
     uses: actions/setup-python@v5
@@ -37,35 +39,21 @@ steps:
       body = os.environ["ISSUE_BODY"]
 
       if not nickname:
-          raise SystemExit(
-              "Issue title must contain the squid name."
-          )
+          raise SystemExit("Issue title must contain the squid name.")
 
-      def field(name):
-          match = re.search(
-              rf"### {re.escape(name)}\s*\n+(.+?)(?=\n### |\Z)",
-              body,
-              re.DOTALL
-          )
+      match = re.search(
+          r"### Save File URL\s*\n+(.+?)(?=\n### |\Z)",
+          body,
+          re.DOTALL
+      )
 
-          if not match:
-              return ""
+      if not match:
+          raise SystemExit("Save File URL is missing.")
 
-          value = match.group(1).strip()
+      save_url = match.group(1).strip()
 
-          if value == "_No response_":
-              return ""
-
-          return value
-
-      save_url = field("Save File URL")
-      parent_id = field("Parent Specimen ID")
-      description = field("About this squid")
-
-      if not save_url:
-          raise SystemExit(
-              "Save file URL is required."
-          )
+      if save_url == "_No response_":
+          raise SystemExit("Save File URL is empty.")
 
       url_match = re.search(
           r"\]\((https://github\.com/user-attachments/files/[^)]+)\)",
@@ -79,107 +67,11 @@ steps:
           os.environ["GITHUB_ENV"],
           "a"
       ) as env:
+          env.write(f"NICKNAME={nickname}\n")
+          env.write(f"FILE_URL={save_url}\n")
 
-          env.write(
-              f"NICKNAME={nickname}\n"
-          )
-
-          env.write(
-              f"FILE_URL={save_url}\n"
-          )
-
-          env.write(
-              f"PARENT_ID={parent_id}\n"
-          )
-
-          env.write(
-              "DESCRIPTION<<EOF\n"
-          )
-
-          env.write(description)
-
-          env.write(
-              "\nEOF\n"
-          )
-
-      print(
-          f"Nickname: {nickname}"
-      )
-
-      print(
-          f"Save URL: {save_url}"
-      )
-
-      print(
-          f"Parent: {parent_id}"
-      )
-      PY
-
-  - name: Determine generation
-    run: |
-      if [ -z "$PARENT_ID" ]; then
-        echo "GENERATION=1" >> "$GITHUB_ENV"
-        exit 0
-      fi
-
-      python - <<'PY'
-      import json
-      import os
-      from pathlib import Path
-
-      parent_id = os.environ["PARENT_ID"]
-
-      for path in Path("squids").glob("*/metadata.json"):
-          try:
-              data = json.loads(
-                  path.read_text(
-                      encoding="utf-8"
-                  )
-              )
-
-          except Exception:
-              continue
-
-          if data.get(
-              "specimen_id"
-          ) == parent_id:
-
-              generation = data.get(
-                  "generation",
-                  1
-              )
-
-              if not isinstance(
-                  generation,
-                  int
-              ):
-                  raise SystemExit(
-                      "Parent generation is invalid."
-                  )
-
-              with open(
-                  os.environ["GITHUB_ENV"],
-                  "a"
-              ) as env:
-
-                  env.write(
-                      f"GENERATION={generation + 1}\n"
-                  )
-
-              print(
-                  f"Parent verified: {parent_id}"
-              )
-
-              print(
-                  f"Generation: {generation + 1}"
-              )
-
-              break
-
-      else:
-          raise SystemExit(
-              f"Parent specimen not found: {parent_id}"
-          )
+      print(f"Squid name: {nickname}")
+      print(f"Save URL: {save_url}")
       PY
 
   - name: Download squid
@@ -201,35 +93,21 @@ steps:
           "uuid.txt",
       }
 
-      with zipfile.ZipFile(
-          "squid.zip"
-      ) as archive:
+      with zipfile.ZipFile("squid.zip") as archive:
+          names = set(archive.namelist())
 
-          names = set(
-              archive.namelist()
-          )
-
-          missing = (
-              required
-              - names
-          )
+          missing = required - names
 
           if missing:
               raise SystemExit(
                   "Missing required files: "
-                  + ", ".join(
-                      sorted(missing)
-                  )
+                  + ", ".join(sorted(missing))
               )
 
           if archive.testzip() is not None:
-              raise SystemExit(
-                  "ZIP contains corrupt data."
-              )
+              raise SystemExit("ZIP contains corrupt data.")
 
-      print(
-          "Dosidicus save is valid."
-      )
+      print("Dosidicus save is valid.")
       PY
 
   - name: Extract neural statistics
@@ -238,15 +116,8 @@ steps:
       import json
       import zipfile
 
-      with zipfile.ZipFile(
-          "squid.zip",
-          "r"
-      ) as archive:
-
-          with archive.open(
-              "brain_state.json"
-          ) as file:
-
+      with zipfile.ZipFile("squid.zip") as archive:
+          with archive.open("brain_state.json") as file:
               brain = json.load(file)
 
       neuron_positions = brain.get(
@@ -264,30 +135,21 @@ steps:
           {}
       )
 
-      functional_neurons = (
-          enhanced_neurogenesis.get(
-              "functional_neurons",
-              {}
-          )
+      functional_neurons = enhanced_neurogenesis.get(
+          "functional_neurons",
+          {}
       )
 
       statistics = {
-          "neuron_count": len(
-              neuron_positions
-          ),
-          "neurons_generated": len(
-              functional_neurons
-          ),
-          "connection_count": len(
-              weights
-          )
+          "neuron_count": len(neuron_positions),
+          "neurons_generated": len(functional_neurons),
+          "connection_count": len(weights),
       }
 
       with open(
           "neural_statistics.json",
           "w"
       ) as file:
-
           json.dump(
               statistics,
               file,
@@ -324,8 +186,7 @@ steps:
 
       mkdir -p "$DIRECTORY"
 
-      cp squid.zip \
-        "$DIRECTORY/${NICKNAME}_${UUID}.zip"
+      cp squid.zip "$DIRECTORY/${NICKNAME}_${UUID}.zip"
 
       python - <<'PY'
       import json
@@ -338,9 +199,7 @@ steps:
       )
 
       statistics = json.loads(
-          Path(
-              "neural_statistics.json"
-          ).read_text(
+          Path("neural_statistics.json").read_text(
               encoding="utf-8"
           )
       )
@@ -348,59 +207,32 @@ steps:
       name = os.environ["NICKNAME"]
       uuid = os.environ["UUID"]
 
-      specimen_id = (
-          f"dosidicus-{uuid}"
-      )
-
-      description = os.environ.get(
-          "DESCRIPTION",
-          ""
-      ).strip()
-
-      raised_by = (
-          "@"
-          + os.environ.get(
-              "GITHUB_ACTOR",
-              "unknown"
-          )
-      )
-
-      parent_id = (
-          os.environ["PARENT_ID"]
-          or None
-      )
-
-      generation = int(
-          os.environ["GENERATION"]
-      )
+      specimen_id = f"dosidicus-{uuid}"
 
       metadata = {
           "name": name,
           "specimen_id": specimen_id,
-          "description": description,
-          "raised_by": raised_by,
-          "parent_id": parent_id,
-          "generation": generation,
-          "neuron_count": statistics[
-              "neuron_count"
-          ],
-          "neurons_generated": statistics[
-              "neurons_generated"
-          ],
-          "connection_count": statistics[
-              "connection_count"
-          ]
+          "description": "",
+          "raised_by": (
+              "@"
+              + os.environ.get(
+                  "GITHUB_ACTOR",
+                  "unknown"
+              )
+          ),
+          "generation": 1,
+          "neuron_count": statistics["neuron_count"],
+          "neurons_generated": statistics["neurons_generated"],
+          "connection_count": statistics["connection_count"],
       }
 
       (
-          directory
-          / "metadata.json"
+          directory / "metadata.json"
       ).write_text(
           json.dumps(
               metadata,
               indent=4
-          )
-          + "\n",
+          ) + "\n",
           encoding="utf-8"
       )
 
@@ -408,21 +240,17 @@ steps:
           "format": "dosidicus-squid-exchange",
           "version": 1,
           "specimen_id": specimen_id,
-          "archive": (
-              f"{name}_{uuid}.zip"
-          ),
-          "verified": True
+          "archive": f"{name}_{uuid}.zip",
+          "verified": True,
       }
 
       (
-          directory
-          / "manifest.json"
+          directory / "manifest.json"
       ).write_text(
           json.dumps(
               manifest,
               indent=4
-          )
-          + "\n",
+          ) + "\n",
           encoding="utf-8"
       )
 
@@ -432,11 +260,9 @@ steps:
 
       **Specimen ID:** `{specimen_id}`
 
-      **Raised by:** {raised_by}
+      **Raised by:** {metadata["raised_by"]}
 
-      **Generation:** {generation}
-
-      **Parent:** {parent_id or "None"}
+      **Generation:** 1
 
       ## Neural Statistics
 
@@ -444,16 +270,11 @@ steps:
       - **Neurons generated:** {statistics["neurons_generated"]}
       - **Connections:** {statistics["connection_count"]}
 
-      ## Description
-
-      {description or "No description provided."}
-
       This specimen was automatically verified and added to the Dosidicus Squid Exchange.
       """
 
       (
-          directory
-          / "README.md"
+          directory / "README.md"
       ).write_text(
           readme,
           encoding="utf-8"
@@ -474,7 +295,7 @@ steps:
       git commit \
         -m "Add Squid Exchange specimen: $NICKNAME"
 
-      git push
+      git push origin SQUID-EXCHANGE
 
   - name: Close submission
     env:
@@ -482,39 +303,13 @@ steps:
       ISSUE_NUMBER: ${{ github.event.issue.number }}
     run: |
       gh issue comment "$ISSUE_NUMBER" --body \
-        "🦑 **Squid accepted!**
+        "Squid accepted!
 
-      **Name:** $NICKNAME
+      Name: $NICKNAME
 
-      **Specimen ID:** \`dosidicus-$UUID\`
-
-      **Generation:** $GENERATION
-
-      **Parent:** ${PARENT_ID:-None}
+      Specimen ID: dosidicus-$UUID
 
       The squid has been added to the Squid Exchange."
 
       gh issue close "$ISSUE_NUMBER"
 ```
-
-````
-
-### One thing to note
-
-Your **Issue title is now the authoritative squid name**. So if someone submits:
-
-> **Add a title:** `Horatio`
-
-the workflow creates:
-
-```text
-squids/Horatio/
-````
-
-and the catalogue gets:
-
-> **Horatio**
-
-No second nickname field, and no possibility of the two names disagreeing.
-
-After uploading these **two files**, we can use #45 for the final test.
