@@ -1,0 +1,54 @@
+name: Build Squid Exchange Catalogue
+
+on:
+  push:
+    branches:
+      - SQUID-EXCHANGE
+    paths:
+      - "squids/**"
+      - "scripts/build_catalogue.py"
+
+  workflow_dispatch:
+
+jobs:
+  catalogue:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build catalogue
+        run: |
+          python scripts/build_catalogue.py
+
+      - name: Check for catalogue changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit catalogue
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "SquidBot"
+          git config user.email "bot@github.com"
+
+          git add README.md
+
+          git commit \
+            -m "Update Squid Exchange catalogue"
+
+          git push
