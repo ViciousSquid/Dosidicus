@@ -65,12 +65,6 @@ jobs:
                   "Save file URL is required."
               )
 
-          # GitHub converts uploaded files into Markdown links:
-          #
-          # [filename.zip](https://github.com/user-attachments/files/...)
-          #
-          # Extract the actual URL from that Markdown.
-
           url_match = re.search(
               r"\]\((https://github\.com/user-attachments/files/[^)]+)\)",
               save_url
@@ -100,9 +94,7 @@ jobs:
                   "DESCRIPTION<<EOF\n"
               )
 
-              env.write(
-                  description
-              )
+              env.write(description)
 
               env.write(
                   "\nEOF\n"
@@ -119,6 +111,7 @@ jobs:
           print(
               f"Parent: {parent_id}"
           )
+          PY
 
       - name: Determine generation
         run: |
@@ -204,7 +197,6 @@ jobs:
               "brain_state.json",
               "ShortTerm.json",
               "LongTerm.json",
-              "plugin_data.json",
               "statistics.json",
               "uuid.txt",
           }
@@ -213,9 +205,13 @@ jobs:
               "squid.zip"
           ) as archive:
 
+              names = set(
+                  archive.namelist()
+              )
+
               missing = (
                   required
-                  - set(archive.namelist())
+                  - names
               )
 
               if missing:
@@ -232,7 +228,7 @@ jobs:
                   )
 
           print(
-              "Save is valid."
+              "Dosidicus save is valid."
           )
           PY
 
