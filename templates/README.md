@@ -16,6 +16,10 @@ Describe your squid.
 
 - ...
 
-## Notes
+## Memorable experiences
+
+- ...
+
+## Notes for future caretakers
 
 Anything you'd like future caretakers to know.
