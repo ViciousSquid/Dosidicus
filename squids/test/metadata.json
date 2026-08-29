@@ -1,0 +1,11 @@
+{
+    "name": "test",
+    "specimen_id": "dosidicus-SquidSignature 24368ba3-2e04-4118-8f96-fb7cc9467ccf",
+    "description": "",
+    "raised_by": "@ViciousSquid",
+    "parent_id": null,
+    "generation": 1,
+    "neuron_count": 13,
+    "neurons_generated": 6,
+    "connection_count": 78
+}
