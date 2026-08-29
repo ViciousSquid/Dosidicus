@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import zipfile
 
 
 SQUIDS_DIR = Path("squids")
@@ -7,6 +8,59 @@ README_PATH = Path("README.md")
 
 BEGIN_MARKER = "<!-- BEGIN CATALOGUE -->"
 END_MARKER = "<!-- END CATALOGUE -->"
+
+
+def get_brain_statistics(zip_path):
+    """
+    Read brain_state.json from a Dosidicus save ZIP
+    and extract basic neural statistics.
+    """
+
+    try:
+        with zipfile.ZipFile(zip_path, "r") as archive:
+
+            if "brain_state.json" not in archive.namelist():
+                return {
+                    "neuron_count": "—",
+                    "neurons_generated": "—",
+                    "connection_count": "—"
+                }
+
+            with archive.open("brain_state.json") as file:
+                brain = json.load(file)
+
+    except Exception:
+        return {
+            "neuron_count": "—",
+            "neurons_generated": "—",
+            "connection_count": "—"
+        }
+
+    neuron_positions = brain.get(
+        "neuron_positions",
+        {}
+    )
+
+    weights = brain.get(
+        "weights_list",
+        []
+    )
+
+    enhanced_neurogenesis = brain.get(
+        "enhanced_neurogenesis",
+        {}
+    )
+
+    functional_neurons = enhanced_neurogenesis.get(
+        "functional_neurons",
+        {}
+    )
+
+    return {
+        "neuron_count": len(neuron_positions),
+        "neurons_generated": len(functional_neurons),
+        "connection_count": len(weights)
+    }
 
 
 def get_specimens():
@@ -29,7 +83,9 @@ def get_specimens():
         if metadata_file.exists():
             try:
                 metadata = json.loads(
-                    metadata_file.read_text(encoding="utf-8")
+                    metadata_file.read_text(
+                        encoding="utf-8"
+                    )
                 )
 
             except Exception as exc:
@@ -37,6 +93,26 @@ def get_specimens():
                     f"Warning: Could not read "
                     f"{metadata_file}: {exc}"
                 )
+
+        zip_files = list(
+            folder.glob("*.zip")
+        )
+
+        if zip_files:
+            brain_statistics = get_brain_statistics(
+                zip_files[0]
+            )
+
+            has_zip = True
+
+        else:
+            brain_statistics = {
+                "neuron_count": "—",
+                "neurons_generated": "—",
+                "connection_count": "—"
+            }
+
+            has_zip = False
 
         specimens.append(
             {
@@ -65,21 +141,21 @@ def get_specimens():
                     "—"
                 ),
 
-                "neuron_count": metadata.get(
-                    "neuron_count",
-                    "—"
-                ),
+                "neuron_count": brain_statistics[
+                    "neuron_count"
+                ],
 
-                "neurons_generated": metadata.get(
-                    "neurons_generated",
-                    "—"
-                ),
+                "neurons_generated": brain_statistics[
+                    "neurons_generated"
+                ],
+
+                "connection_count": brain_statistics[
+                    "connection_count"
+                ],
 
                 "path": folder.as_posix(),
 
-                "has_zip": any(
-                    folder.glob("*.zip")
-                )
+                "has_zip": has_zip
             }
         )
 
@@ -91,17 +167,20 @@ def generate_catalogue(specimens):
 
     if not specimens:
         lines.append(
-            "_No specimens currently available in the catalogue._"
+            "_No specimens currently available "
+            "in the catalogue._"
         )
 
         return "\n".join(lines)
 
     lines.append(
-        "| Specimen | Generation | Neurons | Grown | Description | Archive |"
+        "| Specimen | Generation | Neurons | "
+        "Grown | Connections | Description | Archive |"
     )
 
     lines.append(
-        "| :--- | ---: | ---: | ---: | :--- | :---: |"
+        "| :--- | ---: | ---: | ---: | "
+        "---: | :--- | :---: |"
     )
 
     for spec in specimens:
@@ -114,10 +193,12 @@ def generate_catalogue(specimens):
             grown = f"+{grown}"
 
         lines.append(
-            f"| **[{spec['name']}]({spec['path']})** "
+            f"| **[{spec['name']}]"
+            f"({spec['path']})** "
             f"| {spec['generation']} "
             f"| {spec['neuron_count']} "
             f"| {grown} "
+            f"| {spec['connection_count']} "
             f"| {spec['description']} "
             f"| {archive} |"
         )
@@ -135,8 +216,13 @@ def update_readme(catalogue):
         encoding="utf-8"
     )
 
-    start = readme.find(BEGIN_MARKER)
-    end = readme.find(END_MARKER)
+    start = readme.find(
+        BEGIN_MARKER
+    )
+
+    end = readme.find(
+        END_MARKER
+    )
 
     if start == -1 or end == -1:
         raise RuntimeError(
@@ -168,7 +254,9 @@ def main():
         specimens
     )
 
-    update_readme(catalogue)
+    update_readme(
+        catalogue
+    )
 
     print(
         f"Updated README.md with "
