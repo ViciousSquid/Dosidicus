@@ -56,14 +56,10 @@ jobs:
           description = field("About this squid")
 
           if not nickname:
-              raise SystemExit(
-                  "Squid nickname is required."
-              )
+              raise SystemExit("Squid nickname is required.")
 
           if not save_url:
-              raise SystemExit(
-                  "Save file URL is required."
-              )
+              raise SystemExit("Save file URL is required.")
 
           url_match = re.search(
               r"\]\((https://github\.com/user-attachments/files/[^)]+)\)",
@@ -73,44 +69,17 @@ jobs:
           if url_match:
               save_url = url_match.group(1)
 
-          with open(
-              os.environ["GITHUB_ENV"],
-              "a"
-          ) as env:
-
-              env.write(
-                  f"NICKNAME={nickname}\n"
-              )
-
-              env.write(
-                  f"FILE_URL={save_url}\n"
-              )
-
-              env.write(
-                  f"PARENT_ID={parent_id}\n"
-              )
-
-              env.write(
-                  "DESCRIPTION<<EOF\n"
-              )
-
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write(f"NICKNAME={nickname}\n")
+              env.write(f"FILE_URL={save_url}\n")
+              env.write(f"PARENT_ID={parent_id}\n")
+              env.write("DESCRIPTION<<EOF\n")
               env.write(description)
+              env.write("\nEOF\n")
 
-              env.write(
-                  "\nEOF\n"
-              )
-
-          print(
-              f"Nickname: {nickname}"
-          )
-
-          print(
-              f"Save URL: {save_url}"
-          )
-
-          print(
-              f"Parent: {parent_id}"
-          )
+          print(f"Nickname: {nickname}")
+          print(f"Save URL: {save_url}")
+          print(f"Parent: {parent_id}")
           PY
 
       - name: Determine generation
@@ -128,39 +97,22 @@ jobs:
           parent_id = os.environ["PARENT_ID"]
 
           for path in Path("squids").glob("*/metadata.json"):
-
               try:
                   data = json.loads(
-                      path.read_text(
-                          encoding="utf-8"
-                      )
+                      path.read_text(encoding="utf-8")
                   )
-
               except Exception:
                   continue
 
-              if data.get(
-                  "specimen_id"
-              ) == parent_id:
+              if data.get("specimen_id") == parent_id:
+                  generation = data.get("generation", 1)
 
-                  generation = data.get(
-                      "generation",
-                      1
-                  )
-
-                  if not isinstance(
-                      generation,
-                      int
-                  ):
+                  if not isinstance(generation, int):
                       raise SystemExit(
                           "Parent generation is invalid."
                       )
 
-                  with open(
-                      os.environ["GITHUB_ENV"],
-                      "a"
-                  ) as env:
-
+                  with open(os.environ["GITHUB_ENV"], "a") as env:
                       env.write(
                           f"GENERATION={generation + 1}\n"
                       )
@@ -168,7 +120,6 @@ jobs:
                   print(
                       f"Parent verified: {parent_id}"
                   )
-
                   print(
                       f"Generation: {generation + 1}"
                   )
@@ -201,25 +152,15 @@ jobs:
               "uuid.txt",
           }
 
-          with zipfile.ZipFile(
-              "squid.zip"
-          ) as archive:
+          with zipfile.ZipFile("squid.zip") as archive:
+              names = set(archive.namelist())
 
-              names = set(
-                  archive.namelist()
-              )
-
-              missing = (
-                  required
-                  - names
-              )
+              missing = required - names
 
               if missing:
                   raise SystemExit(
                       "Missing required files: "
-                      + ", ".join(
-                          sorted(missing)
-                      )
+                      + ", ".join(sorted(missing))
                   )
 
               if archive.testzip() is not None:
@@ -227,17 +168,70 @@ jobs:
                       "ZIP contains corrupt data."
                   )
 
-          print(
-              "Dosidicus save is valid."
-          )
+          print("Dosidicus save is valid.")
           PY
 
       - name: Extract neural statistics
         run: |
-          python scripts/extract_metadata.py squid.zip \
-            > neural_statistics.json
+          python - <<'PY'
+          import json
+          import zipfile
 
-          cat neural_statistics.json
+          with zipfile.ZipFile("squid.zip", "r") as archive:
+
+              with archive.open("brain_state.json") as file:
+                  brain = json.load(file)
+
+          neuron_positions = brain.get(
+              "neuron_positions",
+              {}
+          )
+
+          weights = brain.get(
+              "weights_list",
+              []
+          )
+
+          enhanced_neurogenesis = brain.get(
+              "enhanced_neurogenesis",
+              {}
+          )
+
+          functional_neurons = enhanced_neurogenesis.get(
+              "functional_neurons",
+              {}
+          )
+
+          statistics = {
+              "neuron_count": len(
+                  neuron_positions
+              ),
+              "neurons_generated": len(
+                  functional_neurons
+              ),
+              "connection_count": len(
+                  weights
+              )
+          }
+
+          with open(
+              "neural_statistics.json",
+              "w"
+          ) as file:
+
+              json.dump(
+                  statistics,
+                  file,
+                  indent=4
+              )
+
+          print(
+              json.dumps(
+                  statistics,
+                  indent=2
+              )
+          )
+          PY
 
       - name: Read UUID
         run: |
@@ -285,9 +279,7 @@ jobs:
           name = os.environ["NICKNAME"]
           uuid = os.environ["UUID"]
 
-          specimen_id = (
-              f"dosidicus-{uuid}"
-          )
+          specimen_id = f"dosidicus-{uuid}"
 
           description = os.environ.get(
               "DESCRIPTION",
@@ -312,15 +304,15 @@ jobs:
               "generation": int(
                   os.environ["GENERATION"]
               ),
-              "neuron_count": statistics.get(
+              "neuron_count": statistics[
                   "neuron_count"
-              ),
-              "neurons_generated": statistics.get(
+              ],
+              "neurons_generated": statistics[
                   "neurons_generated"
-              ),
-              "connection_count": statistics.get(
+              ],
+              "connection_count": statistics[
                   "connection_count"
-              )
+              ]
           }
 
           (
@@ -389,9 +381,7 @@ jobs:
               )
           }
 
-          for key, value in (
-              replacements.items()
-          ):
+          for key, value in replacements.items():
               template = template.replace(
                   key,
                   value
