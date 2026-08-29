@@ -1,8 +1,8 @@
 name: 🦑 Submit a Squid Save
-description: |
-IMPORTANT: Enter your SQUID'S NAME in the "Add a title" field above.
-The issue title will be used as the squid's name in the Squid Exchange.
-labels: ["squid-submission"]
+description: IMPORTANT - Enter your squid's name in the "Add a title" field. The issue title becomes the squid's name.
+labels:
+
+* squid-submission
 
 body:
 
@@ -14,15 +14,14 @@ body:
   ```
   **IMPORTANT: The issue title must be your squid's name.**
 
-  For example:
+  For example, enter `Horatio` in the **Add a title** field.
 
-  `Horatio`
-
-  Do not enter "Squid Submission" or another generic title.
+  The issue title will become the squid's name in the Squid Exchange.
 
   ### Save File
 
   Upload your Dosidicus `.zip` in the issue's **comment box**.
+
   GitHub will upload the file and create a link.
 
   Copy that link and paste it into the field below.
