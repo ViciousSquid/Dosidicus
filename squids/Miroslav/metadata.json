@@ -4,5 +4,8 @@
     "description": "Highly responsive, quick to learn (high plasticity).",
     "raised_by": "@ViciousSquid",
     "parent_id": null,
-    "generation": 1
+    "generation": 1,
+    "neuron_count": null,
+    "neurons_generated": null,
+    "connection_count": null
 }
