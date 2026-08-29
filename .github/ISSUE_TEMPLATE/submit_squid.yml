@@ -1,5 +1,5 @@
 name: 🦑 Submit a Squid Save
-description: Share your evolved squid! (Must be a .zip containing uuid.txt)
+description: Share your evolved squid!
 labels: ["squid-submission"]
 
 body:
@@ -12,12 +12,12 @@ body:
     validations:
       required: true
 
-  - type: input
+  - type: textarea
     id: save_url
     attributes:
       label: Save File (.zip)
-      description: Drag and drop your Dosidicus ZIP here, then copy the link.
-      placeholder: https://github.com/...
+      description: Drag your Dosidicus ZIP into this box. GitHub will upload it and insert the attachment link.
+      placeholder: Drag your .zip file here
     validations:
       required: true
 
@@ -35,8 +35,6 @@ body:
     attributes:
       label: About this squid
       description: Tell us something about this squid's personality, behaviour, or history.
-      placeholder: |
-        Curious and unusually persistent.
-        Developed a tendency to explore unfamiliar environments.
+      placeholder: Curious and unusually persistent.
     validations:
       required: false
