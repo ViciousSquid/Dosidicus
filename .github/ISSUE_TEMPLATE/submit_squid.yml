@@ -16,9 +16,12 @@ body:
     attributes:
       label: Save File URL
       description: |
-        First, upload your Dosidicus .zip in the issue's comment box by
-        dragging the file into the comment area. GitHub will upload it
-        and create a link. Copy that link and paste it here.
-      placeholder: https://github.com/user-attachments/files/...
+        Do NOT drag the ZIP into this field.
+
+        Before submitting this form, open the issue's comment box below.
+        Drag your Dosidicus .zip into the comment box. GitHub will upload
+        the file and display a link. Copy that link and paste it into this
+        field.
+      placeholder: Paste the GitHub attachment URL here
     validations:
       required: true
