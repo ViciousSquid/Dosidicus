@@ -239,12 +239,18 @@ class DesignerNeuronControlTests(NeuralPipelineTestCase):
         self.bind("urge_quiet", "neuron_output_flee", threshold=90.0,
                   mode=OutputTriggerMode.THRESHOLD_RISING)
 
+        # Assert on the BINDING, not on squid.is_fleeing: now that the
+        # DecisionEngine drives the squid it can also decide to flee (anxiety
+        # pinned at 100 makes that likely), so the flag has two legitimate
+        # writers and no longer isolates the binding.
+        LOGIC.neuron_output_monitor.total_fires = 0
         for _ in range(8):
             SQUID.anxiety = 100.0
             tick()
 
         self.assertLess(BRAIN.state["urge_quiet"], 90.0)
-        self.assertFalse(SQUID.is_fleeing)
+        self.assertEqual(LOGIC.neuron_output_monitor.total_fires, 0,
+                         "a sub-threshold neuron fired its binding")
 
     def test_inhibited_neuron_controls_a_different_actuator(self):
         """A second full path, to show the mechanism is general."""
@@ -561,6 +567,154 @@ class DesignerRoundTripTests(NeuralPipelineTestCase):
 
         self.assertGreater(BRAIN.state["rt_live"], 70.0)
         self.assertGreater(SQUID.curiosity, 10.0)
+
+
+# ---------------------------------------------------------------------------
+# 7a. Behaviour arbitration: urge > innate food reflex > decision > wander
+# ---------------------------------------------------------------------------
+class BehaviourArbitrationTests(NeuralPipelineTestCase):
+    """The squid is driven by the DecisionEngine, output bindings override it,
+    and seeing food in the view cone is an innate reflex that needs no brain."""
+
+    def setUp(self):
+        super().setUp()
+        import math
+        self._prev_window = (SQUID.ui.window_width, SQUID.ui.window_height)
+        SQUID.ui.window_width, SQUID.ui.window_height = 1280, 900
+        self.addCleanup(lambda: setattr(SQUID.ui, "window_width", self._prev_window[0]))
+        self.addCleanup(lambda: setattr(SQUID.ui, "window_height", self._prev_window[1]))
+        SQUID.neural_drive = None
+        SQUID.squid_x, SQUID.squid_y = 300.0, 300.0
+        SQUID.squid_item.setPos(SQUID.squid_x, SQUID.squid_y)
+
+    def _place_food(self, dx=300.0, dy=0.0):
+        import math
+        point = (SQUID.squid_x + SQUID.squid_width / 2 + dx,
+                 SQUID.squid_y + SQUID.squid_height / 2 + dy)
+        SQUID.get_visible_food = lambda: [point]
+        self.addCleanup(lambda: SQUID.__dict__.pop("get_visible_food", None))
+
+        def distance():
+            return math.hypot(point[0] - (SQUID.squid_x + SQUID.squid_width / 2),
+                              point[1] - (SQUID.squid_y + SQUID.squid_height / 2))
+        return point, distance
+
+    # -- tier 3 -------------------------------------------------------------
+    def test_decision_engine_drives_the_squid(self):
+        result = LOGIC.run_decision_engine()
+        self.assertIsInstance(result, str)
+        drive = SQUID.get_neural_drive()
+        self.assertIsNotNone(drive, "the engine made a decision but installed no drive")
+        self.assertEqual(drive["priority"], SQUID.DRIVE_DECISION)
+
+    def test_engine_decision_reaches_squid_status(self):
+        SQUID.is_eating = False
+        result = LOGIC.run_decision_engine()
+        self.assertEqual(SQUID.status, result)
+
+    def test_engine_is_skipped_while_a_drive_is_running(self):
+        """Gives a decision time to play out instead of dithering every tick."""
+        LOGIC.run_decision_engine()
+        self.assertIsNotNone(SQUID.get_neural_drive())
+        self.assertIsNone(LOGIC.run_decision_engine())
+
+    # -- tier 1 -------------------------------------------------------------
+    def test_urge_overrides_a_decision(self):
+        LOGIC.run_decision_engine()
+        self.assertEqual(SQUID.get_neural_drive()["priority"], SQUID.DRIVE_DECISION)
+
+        LOGIC.plugin_manager.trigger_hook(
+            "neuron_output_flee", neuron_name="p", activation=95.0,
+            threshold=50.0, squid=SQUID, tamagotchi_logic=LOGIC)
+
+        drive = SQUID.get_neural_drive()
+        self.assertEqual(drive["action"], "flee")
+        self.assertEqual(drive["priority"], SQUID.DRIVE_URGE)
+        self.assertTrue(SQUID.has_urge())
+
+    def test_a_decision_cannot_displace_a_running_urge(self):
+        SQUID.set_neural_drive("flee", duration=5.0, priority=SQUID.DRIVE_URGE)
+        SQUID.set_neural_drive("wander", duration=5.0, priority=SQUID.DRIVE_DECISION)
+        drive = SQUID.get_neural_drive()
+        self.assertEqual(drive["action"], "flee")
+        self.assertEqual(drive["priority"], SQUID.DRIVE_URGE)
+
+    def test_engine_does_not_run_while_an_urge_holds(self):
+        SQUID.set_neural_drive("flee", duration=5.0, priority=SQUID.DRIVE_URGE)
+        self.assertIsNone(LOGIC.run_decision_engine())
+
+    # -- tier 2 -------------------------------------------------------------
+    def test_innate_food_reflex_needs_no_brain(self):
+        """No bindings, no decision - just a view cone and food."""
+        SQUID.neural_drive = None
+        LOGIC.neuron_output_monitor.bindings = []
+        _, distance = self._place_food()
+        start = distance()
+        for _ in range(8):
+            SQUID.move_squid()
+        self.assertLess(distance(), start - 20)
+        self.assertTrue(SQUID.pursuing_food)
+
+    def test_food_reflex_interrupts_deliberation(self):
+        LOGIC.run_decision_engine()
+        self.assertEqual(SQUID.get_neural_drive()["priority"], SQUID.DRIVE_DECISION)
+        _, distance = self._place_food()
+        start = distance()
+        for _ in range(8):
+            SQUID.move_squid()
+        self.assertLess(distance(), start - 20,
+                        "a deliberate drive suppressed the innate food reflex")
+
+    def test_urge_overrides_even_the_food_reflex(self):
+        point, distance = self._place_food()
+        away = (SQUID.squid_x - 250, SQUID.squid_y)
+        SQUID.set_neural_drive("seek_plant", duration=8.0, target=away,
+                               priority=SQUID.DRIVE_URGE)
+        start = distance()
+        for _ in range(8):
+            SQUID.move_squid()
+        self.assertGreater(distance(), start,
+                           "an irresistible urge lost to the food reflex")
+
+    # -- tuning -------------------------------------------------------------
+    def test_a_neutral_squid_does_not_choose_sleep(self):
+        """The sleeping weight used to beat everything at sleepiness 50."""
+        SQUID.is_sleeping = False
+        SQUID.hunger, SQUID.sleepiness, SQUID.anxiety = 40.0, 50.0, 20.0
+        SQUID.curiosity, SQUID.satisfaction = 60.0, 55.0
+        BRAIN.update_state({"hunger": 40.0, "sleepiness": 50.0, "anxiety": 20.0,
+                            "curiosity": 60.0, "satisfaction": 55.0,
+                            "can_see_food": 0.0})
+        SQUID.make_decision()
+        weights = SQUID._decision_engine.get_decision_data()["base_weights"]
+        self.assertEqual(weights["sleeping"], 0.0)
+        self.assertGreater(max(weights["exploring"], weights["playing"]), 0.0)
+        SQUID.is_sleeping = False
+
+    def test_a_drowsy_squid_does_choose_sleep(self):
+        SQUID.is_sleeping = False
+        SQUID.hunger, SQUID.sleepiness, SQUID.anxiety = 40.0, 90.0, 20.0
+        SQUID.curiosity, SQUID.satisfaction = 60.0, 55.0
+        BRAIN.update_state({"hunger": 40.0, "sleepiness": 90.0, "anxiety": 20.0,
+                            "curiosity": 60.0, "satisfaction": 55.0,
+                            "can_see_food": 0.0})
+        SQUID.make_decision()
+        weights = SQUID._decision_engine.get_decision_data()["base_weights"]
+        self.assertEqual(max(weights, key=weights.get), "sleeping")
+        SQUID.is_sleeping = False
+
+    # -- previously-missing actuators ---------------------------------------
+    def test_flee_from_center_exists_and_installs_a_drive(self):
+        SQUID.neural_drive = None
+        SQUID.flee_from_center()
+        drive = SQUID.get_neural_drive()
+        self.assertIsNotNone(drive)
+        self.assertEqual(drive["action"], "flee")
+        self.assertTrue(SQUID.is_fleeing)
+
+    def test_squid_delegates_throw_poop(self):
+        self.assertTrue(hasattr(SQUID, "throw_poop"))
+        self.assertFalse(SQUID.throw_poop("left"))  # nothing carried
 
 
 # ---------------------------------------------------------------------------

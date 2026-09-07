@@ -576,7 +576,7 @@ class NeuronOutputMonitor:
         squid.current_speed = squid.base_speed * 2
         squid.status = "fleeing"
         if hasattr(squid, 'set_neural_drive'):
-            squid.set_neural_drive('flee', duration=4.0)
+            squid.set_neural_drive('flee', duration=4.0, priority=squid.DRIVE_URGE)
         # MentalStateManager exposes set_state(name, bool); activate_state()
         # never existed and raised AttributeError here on every firing.
         msm = getattr(squid, 'mental_state_manager', None)
@@ -595,7 +595,9 @@ class NeuronOutputMonitor:
         squid.target_food = closest
         squid.status = "seeking food"
         if hasattr(squid, 'set_neural_drive'):
-            squid.set_neural_drive('seek_food', duration=4.0, target=(closest[0], closest[1]))
+            squid.set_neural_drive('seek_food', duration=4.0,
+                                   target=(closest[0], closest[1]),
+                                   priority=squid.DRIVE_URGE)
 
     def _handle_seek_plant(self, neuron_name, activation, squid, tamagotchi_logic=None, **kwargs):
         """Drive the squid toward the nearest plant decoration."""
@@ -615,7 +617,8 @@ class NeuronOutputMonitor:
             return
         squid.status = "seeking_plant"
         if hasattr(squid, 'set_neural_drive'):
-            squid.set_neural_drive('seek_plant', duration=5.0, target=nearest_plant)
+            squid.set_neural_drive('seek_plant', duration=5.0, target=nearest_plant,
+                                   priority=squid.DRIVE_URGE)
         else:
             squid.move_toward_position(nearest_plant.sceneBoundingRect().center())
 
@@ -700,7 +703,7 @@ class NeuronOutputMonitor:
             return
         squid.status = "roaming"
         if hasattr(squid, 'set_neural_drive'):
-            squid.set_neural_drive('wander', duration=3.0)
+            squid.set_neural_drive('wander', duration=3.0, priority=squid.DRIVE_URGE)
         elif hasattr(squid, 'move_randomly'):
             squid.move_randomly()
 
@@ -714,7 +717,8 @@ class NeuronOutputMonitor:
         squid.status = "approaching_rock"
         squid.current_rock_target = nearest
         if hasattr(squid, 'set_neural_drive'):
-            squid.set_neural_drive('approach_rock', duration=6.0, target=nearest)
+            squid.set_neural_drive('approach_rock', duration=6.0, target=nearest,
+                                   priority=squid.DRIVE_URGE)
 
     def _handle_throw_rock(self, neuron_name, activation, squid, **kwargs):
         if squid and getattr(squid, 'carrying_rock', False):
@@ -761,7 +765,8 @@ class NeuronOutputMonitor:
         elif hasattr(squid, 'set_neural_drive'):
             c = nearest.sceneBoundingRect().center()
             squid.pursuing_food = True
-            squid.set_neural_drive('seek_food', duration=4.0, target=(c.x(), c.y()))
+            squid.set_neural_drive('seek_food', duration=4.0, target=(c.x(), c.y()),
+                                   priority=squid.DRIVE_URGE)
 
     # ---- helpers -----------------------------------------------------------
     @staticmethod

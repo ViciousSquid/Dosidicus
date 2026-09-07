@@ -1511,6 +1511,7 @@ class TamagotchiLogic:
 
             # Normal behavior only when NOT sleeping
             if not getattr(self.squid, 'is_sleeping', False):
+                self.run_decision_engine()
                 self.squid.move_squid()
                 self.check_for_decoration_attraction()
 
@@ -1621,6 +1622,42 @@ class TamagotchiLogic:
         if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _sim_elapsed = (time.perf_counter() - _sim_start) * 1000
             perf_tracker.record("simulation_tick", _sim_elapsed)
+
+    def run_decision_engine(self):
+        """Let the DecisionEngine choose the squid's next deliberate behaviour.
+
+        Called once per tick, immediately before move_squid so the drive it
+        installs is acted on in the same tick rather than being overwritten.
+
+        It is skipped while any drive is still running, which does two things:
+        an output binding's urge is genuinely irresistible (the engine cannot
+        argue with it), and an ordinary decision gets to run to completion
+        instead of the squid re-deciding every tick and dithering on the spot.
+        """
+        squid = getattr(self, 'squid', None)
+        if squid is None or getattr(squid, 'is_sleeping', False):
+            return None
+        if not hasattr(squid, 'make_decision'):
+            return None
+        if squid.get_neural_drive() is not None:
+            return None
+
+        try:
+            decision = squid.make_decision()
+            # Surface the engine's choice on the model. make_decision returns a
+            # descriptive string ("boldly exploring", "seeking comfort in
+            # plant") but never assigned it, so the status bar, the memory log
+            # and _normalize_action_name never saw what the squid decided.
+            if decision and not getattr(squid, 'is_eating', False):
+                squid.status = decision
+            return decision
+        except Exception as e:
+            # Never let a decision failure stop the simulation, but never
+            # swallow it either - a silent engine is how it stayed broken.
+            print(f"[DecisionEngine] decision failed: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
     def _get_cached_decorations(self):
         """Get decorations with caching to avoid scanning scene every tick."""

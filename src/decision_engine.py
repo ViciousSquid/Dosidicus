@@ -174,7 +174,12 @@ class DecisionEngine:
         )
 
         # Sleeping (non-exhausted)
-        weights["sleeping"] = sleepiness * urgency["sleeping"] * 0.6
+        # Ramp sleep in only once the squid is genuinely drowsy. Flat scaling
+        # made "sleeping" (86.7 at sleepiness 50) beat every other action for a
+        # perfectly neutral squid, so a wired-in engine would have put it to
+        # sleep permanently. The rest of the game treats sleep as a >=95 event.
+        drowsiness = max(0.0, (sleepiness - 60.0) / 40.0)
+        weights["sleeping"] = sleepiness * urgency["sleeping"] * 0.6 * drowsiness
 
         # Fleeing from threat
         if threat > 75 or external > 85:
@@ -249,12 +254,18 @@ class DecisionEngine:
         """Execute decision based purely on neural signals — no redundant scanning"""
         s = self.squid
 
+        # Movement decisions are expressed as DRIVE_DECISION drives rather than
+        # by writing squid_direction directly. move_squid() is the only thing
+        # that moves the squid, so routing through the drive keeps one movement
+        # channel and lets an output-binding urge outrank a decision.
         if decision == "eating" and brain_state.get('can_see_food', 0) > 70:
             # Find closest food using existing logic method
             food = s.tamagotchi_logic.food_items
             if food:
                 closest = min(food, key=lambda f: s.distance_to(f.pos().x(), f.pos().y()))
-                s.move_towards(closest.pos().x(), closest.pos().y())
+                s.set_neural_drive('seek_food', duration=4.0,
+                                   target=(closest.pos().x(), closest.pos().y()),
+                                   priority=s.DRIVE_DECISION)
                 dist = s.distance_to(closest.pos().x(), closest.pos().y())
                 if dist < 60:
                     return "eating"
@@ -270,8 +281,8 @@ class DecisionEngine:
             if plants:
                 closest = min(plants, key=lambda p: s.distance_to(p.sceneBoundingRect().center().x(),
                                                                  p.sceneBoundingRect().center().y()))
-                s.move_towards(closest.sceneBoundingRect().center().x(),
-                               closest.sceneBoundingRect().center().y())
+                s.set_neural_drive('seek_plant', duration=5.0, target=closest,
+                                   priority=s.DRIVE_DECISION)
                 return "seeking comfort in plant"
 
         elif decision in ("playing", "throwing"):
@@ -288,8 +299,8 @@ class DecisionEngine:
                 if targets:
                     closest = min(targets, key=lambda t: s.distance_to(t.sceneBoundingRect().center().x(),
                                                                      t.sceneBoundingRect().center().y()))
-                    s.move_towards(closest.sceneBoundingRect().center().x(),
-                                   closest.sceneBoundingRect().center().y())
+                    s.set_neural_drive('approach_rock', duration=6.0, target=closest,
+                                       priority=s.DRIVE_DECISION)
                     return "seeking toy"
 
         elif decision == "sleeping":
@@ -315,7 +326,6 @@ class DecisionEngine:
             s.move_erratically()
         elif "loung" in style or "drift" in style:
             s.move_slowly()
-        else:
-            s.move_randomly()
+        s.set_neural_drive('wander', duration=3.0, priority=s.DRIVE_DECISION)
 
         return style

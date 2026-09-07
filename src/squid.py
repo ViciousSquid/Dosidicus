@@ -1461,7 +1461,24 @@ class Squid:
 
     # =========================================================================
     # NEURAL DRIVE - the brain's control channel into movement
+    #
+    # Three tiers arbitrate for the squid's heading each tick:
+    #
+    #   1. DRIVE_URGE     set by neuron output bindings. An irresistible
+    #                     biological urge: it overrides everything, including
+    #                     the squid's own reflexes.
+    #   2. innate reflex  food in the view cone. Hard-wired, always available,
+    #                     and it interrupts deliberation - the squid does not
+    #                     need a brain to notice food.
+    #   3. DRIVE_DECISION set by DecisionEngine. Ordinary deliberate behaviour,
+    #                     and what drives the squid most of the time.
+    #
+    # ...then random wandering if nothing above applies.
     # =========================================================================
+    DRIVE_URGE = 'urge'
+    DRIVE_DECISION = 'decision'
+    _DRIVE_RANK = {DRIVE_DECISION: 1, DRIVE_URGE: 2}
+
     def speed_multiplier(self) -> float:
         """current_speed expressed as a factor of base_speed, sanity-bounded.
 
@@ -1480,19 +1497,67 @@ class Squid:
         except (TypeError, ValueError):
             return 1.0
 
-    def set_neural_drive(self, action: str, duration: float = 3.0, target=None):
-        """Give the squid a short-lived movement intent from the neural network.
+    def set_neural_drive(self, action: str, duration: float = 3.0, target=None,
+                         priority: str = None):
+        """Give the squid a short-lived movement intent.
 
-        Called by neuron output handlers. Expires on its own so a one-shot
-        neuron firing produces a burst of behaviour rather than a permanent
-        state the squid can never leave.
+        priority is DRIVE_URGE (output bindings) or DRIVE_DECISION
+        (DecisionEngine). A decision can never displace an urge that is still
+        running - that is what makes an urge irresistible. Drives expire on
+        their own so a one-shot firing produces a burst of behaviour rather
+        than a state the squid can never leave.
+
+        Returns the active drive, which is the existing one if this call was
+        outranked.
         """
+        priority = priority or self.DRIVE_DECISION
+        current = self.get_neural_drive()
+        if current is not None:
+            here = self._DRIVE_RANK.get(priority, 1)
+            there = self._DRIVE_RANK.get(current.get('priority'), 1)
+            if here < there:
+                return current  # outranked by an urge still in force
+
         self.neural_drive = {
             'action': action,
             'expires': time.time() + max(0.1, float(duration)),
             'target': target,
+            'priority': priority,
         }
         return self.neural_drive
+
+    def has_urge(self) -> bool:
+        """True while an output binding's urge is overriding everything else."""
+        drive = self.get_neural_drive()
+        return bool(drive) and drive.get('priority') == self.DRIVE_URGE
+
+    def flee_from_center(self):
+        """Bolt away from the middle of the tank.
+
+        DecisionEngine calls this; it was never defined, so the whole fleeing
+        branch raised AttributeError the moment anything selected it.
+        """
+        cx = self.ui.window_width / 2.0
+        cy = self.ui.window_height / 2.0
+        sx = self.squid_x + self.squid_width / 2.0
+        sy = self.squid_y + self.squid_height / 2.0
+        away = (sx + (sx - cx) * 4.0, sy + (sy - cy) * 4.0)
+
+        self.is_fleeing = True
+        self.current_speed = self.base_speed * 2
+        return self.set_neural_drive('flee', duration=4.0, target=away,
+                                     priority=self.DRIVE_DECISION)
+
+    def throw_poop(self, direction="right"):
+        """Delegate to PoopInteractionManager, mirroring throw_rock.
+
+        DecisionEngine calls s.throw_poop(); the method lives on the manager,
+        not on Squid, so that branch raised AttributeError too.
+        """
+        manager = getattr(self.tamagotchi_logic, 'poop_interaction', None)
+        if manager is None or not hasattr(manager, 'throw_poop'):
+            return False
+        return manager.throw_poop(direction)
 
     def get_neural_drive(self):
         """The active drive, or None once it has expired."""
@@ -1601,20 +1666,28 @@ class Squid:
 
         current_time = QtCore.QTime.currentTime().msecsSinceStartOfDay()
 
-        # --- Neural drive has priority over the built-in reflexes ---
+        # ---- Heading arbitration: urge > innate food reflex > decision ----
         drive = self.get_neural_drive()
-        if drive is not None and self._steer_by_neural_drive(drive):
-            visible_food = None
-        else:
-            visible_food = self.get_visible_food()
+        steered = False
+
+        # 1. An urge from an output binding is irresistible.
+        if drive is not None and drive.get('priority') == self.DRIVE_URGE:
+            steered = self._steer_by_neural_drive(drive)
+
+        visible_food = None if steered else self.get_visible_food()
 
         if visible_food:
+            # 2. Innate reflex: the squid sees food in its view cone and goes
+            #    for it. Hard-wired - it needs no brain and it interrupts
+            #    whatever the DecisionEngine was deliberating about.
             closest_food = min(visible_food, key=lambda f: self.distance_to(f[0], f[1]))
             self.pursuing_food = True
             self.target_food = closest_food
             self.move_towards(closest_food[0], closest_food[1])
-        elif drive is not None:
-            pass  # the drive already chose a heading this tick
+        elif steered:
+            pass  # the urge already chose a heading this tick
+        elif drive is not None and self._steer_by_neural_drive(drive):
+            pass  # 3. deliberate behaviour from the DecisionEngine
         elif self.pursuing_food:
             self.pursuing_food = False
             self.target_food = None
