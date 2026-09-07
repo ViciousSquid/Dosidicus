@@ -628,11 +628,16 @@ class STDPPlugin:
 
     @staticmethod
     def _get_neuron_value(raw) -> float:
-        """Normalise neuron values (mirrors BrainWorker._get_neuron_value)."""
-        if isinstance(raw, (int, float)):
-            return float(raw)
+        """Normalise neuron values (mirrors BrainWorker._get_neuron_value).
+
+        bool must be tested BEFORE int: bool subclasses int, so True was
+        returning 1.0 instead of 100.0 and STDP scored every boolean neuron
+        about a hundred times too low.
+        """
         if isinstance(raw, bool):
             return 100.0 if raw else 0.0
+        if isinstance(raw, (int, float)):
+            return float(raw)
         return 50.0
 
     # -----------------------------------------------------------------------

@@ -590,7 +590,12 @@ class BrainDesignerWindow(QMainWindow):
             # 3. Push via bridge
             if export_design_to_game(data):
                 self.status_bar.showMessage("Design pushed to running game", 3000)
-                self.tamagotchi_logic.show_message("Custom Brain was pushed from Designer")
+                # self.tamagotchi_logic is never assigned on DesignerWindow, so
+                # this raised AttributeError AFTER a successful push and the
+                # user was shown "Failed to push design" for a push that worked.
+                logic = getattr(self, 'tamagotchi_logic', None)
+                if logic is not None and hasattr(logic, 'show_message'):
+                    logic.show_message("Custom Brain was pushed from Designer")
             else:
                 QMessageBox.warning(self, "Export Failed", "Could not write bridge file.")
                 

@@ -95,6 +95,13 @@ class Squid:
         self.view_cone_item = None
         self.base_speed = 90  # Normal movement speed
         self.current_speed = self.base_speed
+
+        # Neural drive: the brain's channel into movement. Output bindings set
+        # this via set_neural_drive(); move_squid() consults it before falling
+        # back to its own food/random logic. Without it, movement outputs like
+        # seek_food and approach_rock wrote fields that move_squid overwrote on
+        # the very next tick, so they could never affect behaviour.
+        self.neural_drive = None
         self.is_fleeing = False
         self.view_cone_visible = False
         self.poop_timer = None
@@ -1439,6 +1446,115 @@ class Squid:
             self._vision_worker.wait(1000)
             self._vision_worker = None
 
+    # =========================================================================
+    # NEURAL DRIVE - the brain's control channel into movement
+    # =========================================================================
+    def speed_multiplier(self) -> float:
+        """current_speed expressed as a factor of base_speed, sanity-bounded.
+
+        A squid with no speed override moves at 1.0x, so the attributes are
+        read defensively rather than assumed to exist.
+        """
+        base = getattr(self, 'base_speed', None)
+        current = getattr(self, 'current_speed', None)
+        if base is None or current is None:
+            return 1.0
+        try:
+            base = float(base)
+            if base == 0:
+                return 1.0
+            return max(0.25, min(3.0, float(current) / base))
+        except (TypeError, ValueError):
+            return 1.0
+
+    def set_neural_drive(self, action: str, duration: float = 3.0, target=None):
+        """Give the squid a short-lived movement intent from the neural network.
+
+        Called by neuron output handlers. Expires on its own so a one-shot
+        neuron firing produces a burst of behaviour rather than a permanent
+        state the squid can never leave.
+        """
+        self.neural_drive = {
+            'action': action,
+            'expires': time.time() + max(0.1, float(duration)),
+            'target': target,
+        }
+        return self.neural_drive
+
+    def get_neural_drive(self):
+        """The active drive, or None once it has expired."""
+        drive = getattr(self, 'neural_drive', None)
+        if not drive:
+            return None
+        if time.time() >= drive.get('expires', 0):
+            self.neural_drive = None
+            return None
+        return drive
+
+    def clear_neural_drive(self):
+        self.neural_drive = None
+
+    def _steer_by_neural_drive(self, drive) -> bool:
+        """Point the squid according to `drive`.
+
+        Returns True when the drive has taken control of this tick's heading,
+        in which case move_squid skips its own food/random selection. The
+        existing position, boundary and animation code then runs unchanged.
+        """
+        action = drive.get('action')
+        target = drive.get('target')
+
+        if action == 'wander':
+            self.move_randomly()
+            return True
+
+        if action == 'flee':
+            self.is_fleeing = True
+            self.current_speed = self.base_speed * 2
+            if random.random() < 0.35:
+                self.change_direction()
+            return True
+
+        target_point = self._resolve_drive_target(action, target)
+        if target_point is None:
+            return False
+
+        tx, ty = target_point
+        cx = self.squid_x + self.squid_width / 2.0
+        cy = self.squid_y + self.squid_height / 2.0
+        dx, dy = tx - cx, ty - cy
+
+        if abs(dx) < 5 and abs(dy) < 5:
+            return True  # arrived; hold position this tick
+
+        if abs(dx) >= abs(dy):
+            self.squid_direction = "right" if dx > 0 else "left"
+        else:
+            self.squid_direction = "down" if dy > 0 else "up"
+        return True
+
+    def _resolve_drive_target(self, action, target):
+        """Turn a drive target into an (x, y) scene point, or None."""
+        if target is not None:
+            try:
+                if hasattr(target, 'sceneBoundingRect'):
+                    c = target.sceneBoundingRect().center()
+                    return (c.x(), c.y())
+                if isinstance(target, QtCore.QPointF):
+                    return (target.x(), target.y())
+                if isinstance(target, (tuple, list)) and len(target) >= 2:
+                    return (float(target[0]), float(target[1]))
+            except Exception:
+                return None
+
+        if action == 'seek_food':
+            visible = self.get_visible_food()
+            if visible:
+                closest = min(visible, key=lambda f: self.distance_to(f[0], f[1]))
+                self.pursuing_food = True
+                return (closest[0], closest[1])
+        return None
+
     def move_squid(self):
         """
         Move the squid with comprehensive debug logging and multiplayer boundary check
@@ -1472,13 +1588,20 @@ class Squid:
 
         current_time = QtCore.QTime.currentTime().msecsSinceStartOfDay()
 
-        visible_food = self.get_visible_food()
+        # --- Neural drive has priority over the built-in reflexes ---
+        drive = self.get_neural_drive()
+        if drive is not None and self._steer_by_neural_drive(drive):
+            visible_food = None
+        else:
+            visible_food = self.get_visible_food()
 
         if visible_food:
             closest_food = min(visible_food, key=lambda f: self.distance_to(f[0], f[1]))
             self.pursuing_food = True
             self.target_food = closest_food
             self.move_towards(closest_food[0], closest_food[1])
+        elif drive is not None:
+            pass  # the drive already chose a heading this tick
         elif self.pursuing_food:
             self.pursuing_food = False
             self.target_food = None
@@ -1496,14 +1619,20 @@ class Squid:
         squid_x_new = self.squid_x
         squid_y_new = self.squid_y
 
+        # current_speed used to be written in five places and read in none;
+        # movement always used base_squid_speed, so "flee at double speed" and
+        # the startle speed boost were both invisible. It is now a real factor.
+        h_speed = self.base_squid_speed * self.speed_multiplier()
+        v_speed = self.base_vertical_speed * self.speed_multiplier()
+
         if self.squid_direction == "left":
-            squid_x_new -= self.base_squid_speed * self.animation_speed
+            squid_x_new -= h_speed * self.animation_speed
         elif self.squid_direction == "right":
-            squid_x_new += self.base_squid_speed * self.animation_speed
+            squid_x_new += h_speed * self.animation_speed
         elif self.squid_direction == "up":
-            squid_y_new -= self.base_vertical_speed * self.animation_speed
+            squid_y_new -= v_speed * self.animation_speed
         elif self.squid_direction == "down":
-            squid_y_new += self.base_vertical_speed * self.animation_speed
+            squid_y_new += v_speed * self.animation_speed
 
         # Boundary handling for single-player and multiplayer modes
         if not multiplayer_enabled:

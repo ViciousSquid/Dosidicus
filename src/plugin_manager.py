@@ -76,6 +76,13 @@ class PluginManager:
         self.plugins: Dict[str, Dict] = {}        # Stores loaded plugins' metadata and instances
         self.hooks: Dict[str, List[Dict]] = {}    # Registered hooks and their subscribers
         self.enabled_plugins: set[str] = set()    # Names of enabled plugins (use lowercase)
+
+        # Subscribers that are part of the engine, not user-installable plugins.
+        # They must never be silenced by enabled_plugins.clear(), which
+        # TamagotchiLogic and load_all_plugins both call during startup.
+        # NeuronOutputMonitor lived in enabled_plugins before this, so every
+        # neuron output binding was silently disabled after boot.
+        self.core_subscribers: set[str] = {'neuronoutputmonitor'}
         self.auto_load_blacklist: set[str] = {"multiplayer"}  ### FIX: Stop Multiplayer plugin freaking out at startup  ** ESSENTIAL **
                                                                 ## This is super important. All plugins start austomatically unless
                                                                 ## specifically blacklisted here... DO NOT LET MULTIPLAYER AUTO START.
@@ -309,8 +316,9 @@ class PluginManager:
         results = []
         for subscriber in self.hooks[hook_name]:
             plugin_name = subscriber["plugin"]
-            # Only trigger hooks for enabled plugins
-            if plugin_name.lower() not in self.enabled_plugins:
+            # Core engine subscribers always run; plugins run only when enabled.
+            key = plugin_name.lower()
+            if key not in self.core_subscribers and key not in self.enabled_plugins:
                 continue
                 
             try:

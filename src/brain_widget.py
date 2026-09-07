@@ -21,7 +21,11 @@ from .brain_worker import BrainWorker
 from .compute_backend import get_backend
 from .neurogenesis import EnhancedNeurogenesis, ExperienceBuffer
 from .brain_tooltips import EnhancedBrainTooltips
-from .brain_constants import CORE_NEURONS, INPUT_SENSORS, is_core_neuron
+from .brain_constants import (
+    CORE_NEURONS, INPUT_SENSORS, is_core_neuron,
+    BINARY_NEURONS, PURE_INPUT_NEURONS, NON_PROPAGATED_NEURONS,
+    is_network_driven, normalise_activation,
+)
 from .personality import Personality
 from .learning import LearningConfig
 from .laboratory import NeuronLaboratory
@@ -291,7 +295,7 @@ class BrainWidget(QtWidgets.QWidget):
         }
 
         # Connection and weight initialization
-        self.connections = self.initialize_connections() #
+        # self.connections is a derived property over self.weights (see below).
         self.initialize_weights()  # Populate weights
         
         self.show_links = True #
@@ -405,10 +409,17 @@ class BrainWidget(QtWidgets.QWidget):
                 pass
     
     def closeEvent(self, event):
-        """Handle widget close - clean up brain bridge."""
+        """Handle widget close - stop workers and clear the designer bridge.
+
+        A second closeEvent used to be defined further down this class (a paste
+        of SquidBrainWindow.closeEvent) which shadowed this one, so the bridge
+        lock file was never removed and a standalone Designer kept believing a
+        game was running for 60s after exit.
+        """
+        self.stop_worker()
         self.cleanup_brain_bridge()
         self._cleanup_render_worker()
-        super().closeEvent(event) if hasattr(super(), 'closeEvent') else None
+        super().closeEvent(event)
         event.accept()
 
 
@@ -608,19 +619,52 @@ class BrainWidget(QtWidgets.QWidget):
         print(f"🎨 Animation palette built for style: {style.display_name}")
 
     def is_binary_neuron(self, neuron_name: str) -> bool:
-        """Return True if neuron represents a binary (on/off) state."""
-        binary_neurons = {
-            'can_see_food',
-            'is_eating',
-            'is_sleeping',
-            'is_sick',
-            'pursuing_food',
-            'is_fleeing',
-            'is_startled',
-            'external_stimulus',   # usually high/low, treat as binary-ish
-            'plant_proximity',     # 2.6.0.2 consider this could be analog
-        }
-        return neuron_name in binary_neurons
+        """Return True if neuron represents a binary (on/off) state.
+
+        Delegates to brain_constants.BINARY_NEURONS - the single definition.
+        """
+        return neuron_name in BINARY_NEURONS
+
+    # =========================================================================
+    # DERIVED VIEWS - these used to be independently-maintained copies that
+    # drifted out of sync with their source (weights / the output monitor).
+    # =========================================================================
+    @property
+    def connections(self):
+        """The edge list. Derived from self.weights, which is the source of truth."""
+        return list(self.weights.keys())
+
+    @connections.setter
+    def connections(self, value):
+        # Legacy call sites assign a rebuilt list; the value is ignored because
+        # weights already carries it. Kept so those call sites remain valid.
+        return
+
+    @property
+    def output_bindings(self):
+        """Read-through view of the live NeuronOutputMonitor's bindings.
+
+        Previously this was a second copy of the binding list, so after a load
+        the Network-tab overlay showed bindings the monitor no longer had.
+        """
+        monitor = self._get_output_monitor()
+        if monitor is not None:
+            return monitor.export_bindings()
+        return list(getattr(self, '_detached_output_bindings', []))
+
+    @output_bindings.setter
+    def output_bindings(self, value):
+        monitor = self._get_output_monitor()
+        if monitor is not None:
+            monitor.load_bindings_from_brain({'output_bindings': value or []})
+        else:
+            # No game attached (standalone designer / tests): hold them here
+            # until a monitor appears.
+            self._detached_output_bindings = list(value or [])
+
+    def _get_output_monitor(self):
+        logic = getattr(self, 'tamagotchi_logic', None)
+        return getattr(logic, 'neuron_output_monitor', None) if logic else None
     
     def get_animation_style(self) -> str:
         """Get the current animation style name."""
@@ -2113,11 +2157,7 @@ class BrainWidget(QtWidgets.QWidget):
                             if fn.neuron_type == 'connector'}
         
         # PURE_INPUTS (Sensors) - Do not include in Hebbian learning
-        PURE_INPUTS = {
-            "can_see_food", "is_eating", "is_sleeping", "is_sick", 
-            "pursuing_food", "is_fleeing", "is_startled", "external_stimulus", 
-            "plant_proximity"
-        }
+        PURE_INPUTS = PURE_INPUT_NEURONS
 
         # Combine excluded neurons, connector neurons, and pure inputs
         learning_excluded = set(self.excluded_neurons) | connector_neurons | PURE_INPUTS
@@ -2239,38 +2279,6 @@ class BrainWidget(QtWidgets.QWidget):
                 max(event.size().height(), min_height)
             )
 
-    def closeEvent(self, event):
-        """Handle window close event - save state and clean up resources"""
-        # Stop the worker thread first
-        self.stop_worker()
-        
-        if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
-            # Save current brain state
-            try:
-                brain_state = self.save_brain_state()
-                with open('last_brain_state.json', 'w') as f:
-                    json.dump(brain_state, f)
-            except Exception as e:
-                print(f"Error saving brain state: {e}")
-
-            # Clean up timers
-            if hasattr(self, 'hebbian_timer'):
-                self.hebbian_timer.stop()
-            if hasattr(self, 'countdown_timer'):
-                self.countdown_timer.stop()
-            if hasattr(self, 'memory_update_timer'):
-                self.memory_update_timer.stop()
-
-        # Close any child windows
-        if hasattr(self, '_inspector') and self._inspector: 
-            self._inspector.close()
-            
-        if hasattr(self, '_laboratory') and self._laboratory:
-            self._laboratory.close()
-        
-        # Accept the close event 
-        event.accept()
-
     def save_brain_state(self):
         return {
             'weights': self.weights,
@@ -2379,7 +2387,7 @@ class BrainWidget(QtWidgets.QWidget):
     def sync_connections_from_weights(self):
         """Sync self.connections list from self.weights (single source of truth).
         Call this after any modification to self.weights."""
-        self.connections = list(self.weights.keys())
+        pass  # connections is now derived from weights; nothing to sync.
 
     def initialize_weights(self):
         """Initialize weights with sparse random connections (40% density)."""
@@ -2486,41 +2494,20 @@ class BrainWidget(QtWidgets.QWidget):
 
     def update_state(self, new_state=None):
         """
-        Update neuron activations. 
-        If new_state is provided, it is the SOURCE OF TRUTH (Sensor data).
-        If None, it is a PHYSICS TICK (Internal decay/noise).
+        Update neuron activations.
+
+        With `new_state`: the caller is the world (sensors + squid stats) and is
+        the source of truth for the keys it supplies.
+        Without: run one forward-propagation tick over the network-driven
+        neurons. This is the project's single propagation entry point.
         """
-        import time
-        import random
-
-        # LIST OF PROTECTED INPUTS
-        PURE_INPUTS = {
-            "can_see_food", "is_eating", "is_sleeping", "is_sick", 
-            "pursuing_food", "is_fleeing", "is_startled", "external_stimulus", 
-            "plant_proximity"
-        }
-
-        # --- CASE A: External Update (Source of Truth) ---
         if new_state is not None:
             for k, v in (new_state.items() if isinstance(new_state, dict) else []):
-                val_to_set = v
-                # Enforce binary rules for specific neurons
-                if k in self.neuron_positions and self.is_binary_neuron(k):
-                    if isinstance(v, bool):
-                        val_to_set = 100.0 if v else 0.0
-                    elif isinstance(v, (int, float)):
-                        val_to_set = 100.0 if float(v) > 50.0 else 0.0
-                else:
-                    val_to_set = float(v) if isinstance(v, (int, float, bool)) else v
+                # normalise_activation is the one place bools/binaries are
+                # coerced, so a value no longer depends on whether the neuron
+                # happens to be present in neuron_positions.
+                self.state[k] = normalise_activation(k, v)
 
-                # 1. Update Display State
-                self.state[k] = val_to_set
-
-                # 2. Update Internal Simulation State
-                if k in self.neurons:
-                    self.neurons[k]['activation'] = float(val_to_set)
-
-            # [Update cache so worker knows the new truth immediately]
             if hasattr(self, 'brain_worker') and self.brain_worker:
                 self._update_worker_cache()
 
@@ -2528,115 +2515,99 @@ class BrainWidget(QtWidgets.QWidget):
             self.update()
             return
 
-        # --- CASE B: Internal Physics Tick (Decay/Noise) ---
-        # We must NOT apply decay to PURE_INPUTS
-        
-        updated = {}
+        self.propagate_activations()
 
-        # 1. Calculate Decay & Noise
-        for neuron, props in self.neurons.items():
-            # [FIX] SKIP PURE INPUTS. Do not calculate decay for them.
-            if neuron in PURE_INPUTS:
-                continue
+    # =========================================================================
+    # FORWARD PROPAGATION - the single authoritative implementation
+    # =========================================================================
+    def propagate_activations(self, smoothing: float = None):
+        """
+        Compute one timestep of activation for every network-driven neuron.
 
-            value = props.get('activation', 0.0)
-            decay = props.get('decay', 1.0)
-            noise = props.get('noise', 0.0)
-            value *= decay
-            value += random.uniform(-noise, noise)
-            updated[neuron] = value
+        Contract
+        --------
+        * Reads   : self.state (activations), self.weights (synapses)
+        * Writes  : self.state, for network-driven neurons only
+        * Never   : touches a PURE_INPUT (sensor) or CORE_STAT neuron - those
+                    are owned by the world and the squid model respectively.
 
-        # 2. Apply Connections - USE self.weights as source of truth
+        The transfer function is the project's existing convention, taken from
+        FunctionalNeuron.calculate_activation so neurogenesis neurons and
+        Designer neurons behave identically:
+
+            target = 50 + sum((activation[src] - 50) * weight) * strength
+            new    = old + (target - old) * smoothing        clamped to 0..100
+
+        50 is the neutral baseline, so a silent input contributes nothing and a
+        negative weight is genuinely inhibitory.
+
+        Returns the dict of neurons it changed (useful for tests and logging).
+        """
+        if smoothing is None:
+            smoothing = getattr(self, 'propagation_smoothing', 0.5)
+
+        # Which neurons may we compute? Anything in the network that is not
+        # owned by the world. neuron_positions is the network's membership list.
+        targets = [n for n in self.neuron_positions
+                   if is_network_driven(n) and n not in self.excluded_neurons]
+        if not targets:
+            return {}
+
+        target_set = set(targets)
+
+        # 1. Sum weighted input for each target from the CURRENT state.
+        #    Reading a single consistent snapshot keeps the update synchronous
+        #    (all neurons step together) rather than order-dependent.
+        net_input = {n: 0.0 for n in targets}
         for (src, dst), weight in self.weights.items():
-            # Get source value (Use current state if it's an input)
-            if src in PURE_INPUTS and src not in updated:
-                src_val = self.neurons.get(src, {}).get('activation', 0.0)
-            elif src in updated:
-                src_val = updated[src]
+            if dst not in target_set:
+                continue
+            raw = self.state.get(src)
+            if raw is None:
+                continue
+            if isinstance(raw, bool):
+                src_val = 100.0 if raw else 0.0
+            elif isinstance(raw, (int, float)):
+                src_val = float(raw)
             else:
                 continue
+            net_input[dst] += (src_val - 50.0) * float(weight)
 
-            # [FIX] NEVER modify a PURE_INPUT via connections
-            if dst in PURE_INPUTS:
-                continue
-            
-            if dst not in updated:
-                continue
+        # 2. Apply the transfer function and per-neuron strength multiplier.
+        functional = getattr(getattr(self, 'enhanced_neurogenesis', None),
+                             'functional_neurons', {}) or {}
 
-            updated[dst] += src_val * weight
+        changed = {}
+        for name in targets:
+            strength = 1.0
+            fn = functional.get(name)
+            if fn is not None:
+                strength = float(getattr(fn, 'strength_multiplier', 1.0) or 1.0)
 
-        # 3. Save Back
-        for neuron, val in updated.items():
-            clamped = max(min(val, 100), -100)
-            if neuron in self.neurons:
-                self.neurons[neuron]['activation'] = clamped
-            else:
-                self.state[neuron] = clamped
+            target_val = 50.0 + net_input[name] * strength
 
-        if updated:
+            props = self.neurons.get(name) if isinstance(self.neurons, dict) else None
+            if props:
+                noise = float(props.get('noise', 0.0) or 0.0)
+                if noise:
+                    target_val += random.uniform(-noise, noise)
+
+            old_raw = self.state.get(name, 50.0)
+            old = float(old_raw) if isinstance(old_raw, (int, float)) and not isinstance(old_raw, bool) else 50.0
+
+            new_val = old + (target_val - old) * smoothing
+            new_val = max(0.0, min(100.0, new_val))
+
+            if abs(new_val - old) > 1e-9:
+                changed[name] = new_val
+            self.state[name] = new_val
+
+        if changed:
             self.mark_render_dirty()
+            if hasattr(self, 'brain_worker') and self.brain_worker:
+                self._update_worker_cache()
 
-    def _perform_state_update_sync(self):
-        """Synchronous fallback when worker is unavailable"""
-        import random
-        
-        updated = {}
-        # [FIX] Define protected neurons here as well
-        PURE_INPUTS = {
-            "can_see_food", "is_eating", "is_sleeping", "is_sick", 
-            "pursuing_food", "is_fleeing", "is_startled", "external_stimulus", 
-            "plant_proximity"
-        }
-        
-        # First pass: decay and noise
-        for neuron, props in self.neurons.items():
-            if neuron in self.excluded_neurons:
-                continue
-            
-            # [FIX] Skip decay for inputs
-            if neuron in PURE_INPUTS:
-                continue
-
-            value = props.get('activation', 0)
-            decay = props.get('decay', 1.0)
-            noise = props.get('noise', 0.0)
-            value *= decay
-            value += random.uniform(-noise, noise)
-            updated[neuron] = value
-        
-        # Second pass: connection effects - USE self.weights as source of truth
-        for (src, dst), weight in self.weights.items():
-            # Skip if neurons don't exist in updated state
-            if src not in self.state and src not in updated:
-                continue
-            if dst not in updated:
-                continue
-            
-            # [FIX] Prevent inputs from being modified by connections
-            if dst in PURE_INPUTS:
-                continue
-            
-            # Get source value
-            if src in updated:
-                src_val = updated[src]
-            elif src in self.state:
-                src_val = self.state[src]
-                if isinstance(src_val, bool):
-                    src_val = 100.0 if src_val else 0.0
-            else:
-                continue
-
-            # Apply the connection effect exactly once.
-            if isinstance(src_val, (int, float)):
-                updated[dst] += src_val * weight
-
-        # Final pass: clamping
-        for neuron, val in updated.items():
-            updated[neuron] = max(min(val, 100), -100)
-
-        self.state.update(updated)
-        self.update()
-
+        return changed
 
     def _fast_apply_external_state(self, new_state):
         """Quickly apply externally provided state (plugin updates, etc.)"""
@@ -3465,14 +3436,6 @@ class BrainWidget(QtWidgets.QWidget):
     # ------------------------------------------------------------------
     # Binary neuron detection
     # ------------------------------------------------------------------
-    def is_binary_neuron(self, name: str) -> bool:
-        """Neurons that are strictly on/off (not continuous stats)."""
-        return name in {
-            'can_see_food', 'is_eating', 'is_sleeping', 'is_sick',
-            'pursuing_food', 'is_fleeing', 'is_startled',
-            'external_stimulus', 'plant_proximity'
-        }
-
     # ------------------------------------------------------------------
 
     def paintEvent(self, event):
@@ -4864,11 +4827,6 @@ class NetworkRenderingMixin:
         import re
         from .localisation import Localisation
         loc = Localisation.instance()
-
-        BINARY_NEURONS = {
-            "can_see_food", "is_eating", "is_sleeping",
-            "is_sick", "is_fleeing", "pursuing_food", "is_startled"
-        }
 
         if visible_neurons is None:
             visible_neurons = set(neuron_positions.keys())

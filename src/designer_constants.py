@@ -56,10 +56,23 @@ INPUT_SENSORS = {
     "is_startled": (250, 150),
 }
 
-BINARY_NEURONS = {
-    'can_see_food', 'is_eating', 'is_sleeping', 'is_sick',
-    'pursuing_food', 'is_fleeing', 'is_startled', 'external_stimulus'
-}
+# ---------------------------------------------------------------------------
+# CANONICAL NEURON CLASSIFICATION
+#
+# Re-exported from brain_constants, which is the single definition for the
+# whole project. Previously five modules each carried their own divergent copy
+# of BINARY_NEURONS and they disagreed about plant_proximity and
+# external_stimulus.
+# ---------------------------------------------------------------------------
+from .brain_constants import (           # noqa: F401  (re-export)
+    BINARY_NEURONS,
+    ANALOGUE_SENSORS,
+    PURE_INPUT_NEURONS,
+    CORE_STAT_NEURONS,
+    NON_PROPAGATED_NEURONS,
+    is_network_driven,
+    normalise_activation,
+)
 
 def is_core_neuron(name): return name in CORE_NEURONS
 def is_required_neuron(name): return name in REQUIRED_NEURONS

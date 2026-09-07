@@ -743,7 +743,12 @@ class EnhancedNeurogenesis:
         return func_neuron
     
     def ensure_all_neurons_functional(self, force_sync=False):
-        core_neurons = ['hunger', 'happiness', 'cleanliness', 'sleepiness', 'satisfaction', 'anxiety', 'curiosity']
+        # Only network-driven neurons may become FunctionalNeurons. The old
+        # list named the 7 core stats but not the sensors, so after a save/load
+        # can_see_food was promoted into functional_neurons and would have had
+        # its live sensor reading overwritten by a computed value.
+        from .brain_constants import NON_PROPAGATED_NEURONS, CORE_STAT_NEURONS
+        core_neurons = NON_PROPAGATED_NEURONS
         excluded = getattr(self.brain_widget, 'excluded_neurons', [])
         for name in list(self.brain_widget.neuron_positions.keys()):
             if name in core_neurons or name in excluded: continue
@@ -753,7 +758,8 @@ class EnhancedNeurogenesis:
         restored_visible = 0
         for name, fn in self.functional_neurons.items():
             if name in core_neurons or name in excluded: continue
-            if name not in self.brain_widget.neuron_positions:
+            was_missing = name not in self.brain_widget.neuron_positions
+            if was_missing:
                 position = self._calculate_functional_position(fn)
                 self.brain_widget.neuron_positions[name] = position
                 restored_positions += 1
@@ -764,10 +770,20 @@ class EnhancedNeurogenesis:
                 if name not in self.brain_widget.visible_neurons: restored_visible += 1
                 self.brain_widget.visible_neurons.add(name)
             self._set_neuron_appearance(name, fn)
+            # Only wire a neuron that had to be RESTORED. This block used to run
+            # for every functional neuron on every load, so each save/load cycle
+            # silently added synapses to a network the user had designed - and
+            # some of them pointed INTO sensors, which can never be driven by
+            # the network at all.
+            if not was_missing:
+                continue
             all_neurons = list(self.brain_widget.neuron_positions.keys())
             connections = fn.get_functional_connections(all_neurons)
             for target, weight in connections.items():
-                if (name, target) not in self.brain_widget.weights: self.brain_widget.weights[(name, target)] = weight
+                if target in core_neurons and target not in CORE_STAT_NEURONS:
+                    continue  # never create an edge into a sensor
+                if (name, target) not in self.brain_widget.weights:
+                    self.brain_widget.weights[(name, target)] = weight
         self._rebuild_new_neurons_details()
         new_neurons_list = self.brain_widget.neurogenesis_data.setdefault('new_neurons', [])
         restored_to_list = 0

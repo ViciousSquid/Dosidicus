@@ -670,17 +670,46 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             for name, info in data['neurons'].items():
                 if 'position' in info:
                     new_positions[name] = tuple(info['position'])
-                
+
                 # Initialize new neurons if missing
                 if name not in self.brain_widget.state:
-                    self.brain_widget.state[name] = 0.0
+                    self.brain_widget.state[name] = 50.0
                     # Apply color if present
                     if 'color' in info:
                         self.brain_widget.state_colors[name] = tuple(info['color'])
                     elif name not in self.brain_widget.state_colors:
                         self.brain_widget.state_colors[name] = (200, 200, 200)
-            
+
             self.brain_widget.neuron_positions = new_positions
+
+            # Everything derived from the neuron set has to follow, or the
+            # widget ends up with weights for neurons it will not draw and
+            # state entries for neurons the design deleted.
+            removed = [n for n in list(self.brain_widget.state.keys())
+                       if n not in new_positions
+                       and n not in self.brain_widget.excluded_neurons
+                       and n not in ('direction', 'position', 'neurogenesis_active')]
+            for name in removed:
+                self.brain_widget.state.pop(name, None)
+
+            if hasattr(self.brain_widget, 'visible_neurons'):
+                # A neuron the Designer just created was never added here, and
+                # visible_neurons is the gate the renderer uses - so it existed
+                # in the network but was invisible on screen.
+                self.brain_widget.visible_neurons = set(new_positions.keys())
+
+            if isinstance(getattr(self.brain_widget, 'neurons', None), dict):
+                for name in list(self.brain_widget.neurons):
+                    if name not in new_positions:
+                        self.brain_widget.neurons.pop(name, None)
+
+            self.brain_widget.weights = {
+                (src, dst): w for (src, dst), w in self.brain_widget.weights.items()
+                if src in new_positions and dst in new_positions
+            }
+
+            if hasattr(self.brain_widget, '_update_worker_cache'):
+                self.brain_widget._update_worker_cache()
 
         # 3. Update Bindings
         if 'output_bindings' in data and hasattr(self.tamagotchi_logic, 'neuron_output_monitor'):
@@ -805,6 +834,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             except Exception as e:
                 print(f"Warning: Could not serialize EnhancedNeurogenesis: {e}")
 
+        # Output bindings were absent from this payload, so every neuron ->
+        # behaviour binding the player made was dropped on save and then wiped
+        # on load. brain_widget.output_bindings reads through to the live
+        # NeuronOutputMonitor, which is the single source of truth.
+        output_bindings = list(getattr(self.brain_widget, 'output_bindings', []) or [])
+
         return {
             'weights_list': weights_list,
             'neuron_positions': {str(k): v for k, v in self.brain_widget.neuron_positions.items()},
@@ -812,6 +847,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             'neurogenesis_data': self.brain_widget.neurogenesis_data,
             'state_colors': getattr(self.brain_widget, 'state_colors', {}),
             'enhanced_neurogenesis': enhanced_neurogenesis_data,  # Full neurogenesis state
+            'output_bindings': output_bindings,
             # Legacy key for backward compatibility (subset of enhanced_neurogenesis)
             'functional_neurons': enhanced_neurogenesis_data.get('functional_neurons', {})
         }
@@ -848,9 +884,15 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.brain_widget.neuron_positions = state.get('neuron_positions', self.brain_widget.original_neuron_positions.copy())
 
         # Load non-core neuron states (booleans, direction, position, new neuron values)
-        # Core stat values will be synced from squid via sync_state_from_squid()
         loaded_states = state.get('neuron_states', {})
         self.brain_widget.state = loaded_states.copy()
+
+        # Core stats are deliberately not saved (the squid owns them), so pull
+        # them back in now. Nothing called sync_state_from_squid() before, which
+        # left the brain with no core values at all until the first tick.
+        squid = getattr(self.tamagotchi_logic, 'squid', None) if self.tamagotchi_logic else None
+        if squid is not None:
+            self.sync_state_from_squid(squid)
 
         # Load neurogenesis_data (basic tracking for brain_widget display)
         self.brain_widget.neurogenesis_data = state.get('neurogenesis_data', {
@@ -1132,10 +1174,21 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 if name not in self.brain_widget.communication_events:
                     self.brain_widget.communication_events[name] = 0
             
-            # 9. Ensure connections exist
+            # 9. Ensure connections exist - ONLY for a neuron whose synapses
+            #    were genuinely lost. Running this unconditionally meant every
+            #    load bolted extra synapses onto the saved network (including
+            #    edges pointing into sensors, which nothing can drive), so a
+            #    brain drifted a little further from its design on each restart.
+            from .brain_constants import NON_PROPAGATED_NEURONS, CORE_STAT_NEURONS
+            has_synapses = any(src == name or dst == name
+                               for (src, dst) in self.brain_widget.weights)
+            if has_synapses:
+                continue
             all_neurons = list(self.brain_widget.neuron_positions.keys())
             connections = fn.get_functional_connections(all_neurons)
             for target, weight in connections.items():
+                if target in NON_PROPAGATED_NEURONS and target not in CORE_STAT_NEURONS:
+                    continue  # never wire into a sensor
                 if (name, target) not in self.brain_widget.weights:
                     self.brain_widget.weights[(name, target)] = weight
         
@@ -2166,10 +2219,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
     
     def export_decision_engine_json(self):
         """Ask the DecisionEngine to serialise itself."""
-        if not hasattr(self.tamagotchi_logic, 'squid') or \
-           not hasattr(self.tamagotchi_logic.squid, 'decision_engine'):
+        squid = getattr(self.tamagotchi_logic, 'squid', None)
+        engine = getattr(squid, '_decision_engine', None) if squid else None
+        if engine is None:
             return {}
-        engine = self.tamagotchi_logic.squid.decision_engine
         # Minimal example – extend as needed
         return {
             "epsilon": getattr(engine, 'epsilon', 0.1),

@@ -600,8 +600,14 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
                 if pair not in self.learning_history:
                     weight = getattr(self.brain_widget, 'weights', {}).get(pair, 0)
 
-                    # Determine weight change
-                    prev_weight = self.brain_widget.weights.get(pair, 0)
+                    # Compare against the value seen last refresh. Both sides of
+                    # this test used to read the SAME dict, so weight_change was
+                    # permanently None and the arrow could never render.
+                    if not hasattr(self, '_last_seen_weights'):
+                        self._last_seen_weights = {}
+                    prev_weight = self._last_seen_weights.get(pair, weight)
+                    self._last_seen_weights[pair] = weight
+
                     weight_change = None
                     if weight > prev_weight:
                         weight_change = "increase"

@@ -4,6 +4,7 @@
 
 import random
 import math
+import time
 from .personality import Personality
 
 

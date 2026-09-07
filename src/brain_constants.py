@@ -87,8 +87,57 @@ BINARY_NEURONS = {
     'pursuing_food',
     'is_fleeing',
     'is_startled',
-    'external_stimulus',  # Usually high/low, treat as binary-ish
 }
+
+# =============================================================================
+# ANALOGUE SENSORS - Continuous 0-100 readings that must NOT be binarised.
+# external_stimulus baselines around 5-15 and plant_proximity is a distance
+# gradient; quantising either at the 50 mark discarded the whole signal.
+# =============================================================================
+ANALOGUE_SENSORS = {
+    'external_stimulus',
+    'plant_proximity',
+    'threat_level',
+}
+
+# =============================================================================
+# NEURON ROLE SETS - the authoritative classification for the whole project.
+#
+# PURE_INPUT_NEURONS  driven by the world through BrainNeuronHooks
+# CORE_STAT_NEURONS   mirrored from the squid model each tick
+# NON_PROPAGATED      the union: forward propagation must never write these
+#
+# Every other neuron (Designer customs, neurogenesis neurons, connectors) is
+# network-driven and gets its activation from BrainWidget.propagate_activations.
+# =============================================================================
+PURE_INPUT_NEURONS = BINARY_NEURONS | ANALOGUE_SENSORS
+
+CORE_STAT_NEURONS = set(CORE_NEURONS.keys())
+
+NON_PROPAGATED_NEURONS = PURE_INPUT_NEURONS | CORE_STAT_NEURONS
+
+
+def is_network_driven(name: str) -> bool:
+    """True if this neuron's activation is computed by forward propagation."""
+    return name not in NON_PROPAGATED_NEURONS
+
+
+def normalise_activation(name: str, value):
+    """
+    Coerce any stored neuron value into the project's 0-100 activation scale.
+
+    Booleans always become 0.0/100.0 - previously a bool landed as 0.0/1.0
+    whenever the neuron was absent from neuron_positions, so a Designer
+    threshold expressed in percent could never be crossed.
+    """
+    if isinstance(value, bool):
+        return 100.0 if value else 0.0
+    if isinstance(value, (int, float)):
+        v = float(value)
+        if name in BINARY_NEURONS:
+            return 100.0 if v > 50.0 else 0.0
+        return max(0.0, min(100.0, v))
+    return value
 
 # =============================================================================
 # EXCLUDED NEURONS - Status neurons that exist but aren't visualized normally

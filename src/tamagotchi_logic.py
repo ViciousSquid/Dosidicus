@@ -522,11 +522,14 @@ class TamagotchiLogic:
             base_confidence = min(0.9, base_confidence)
             decision_data['confidence'] = base_confidence + random.uniform(-0.1, 0.1)
             
-            # Get brain network state if available
-            if hasattr(self, 'squid_brain_window') and self.squid_brain_window:
-                brain_state = self.squid_brain_window.brain_widget.state
-            else:
-                brain_state = {}
+            # Get brain network state. This used to read self.squid_brain_window,
+            # an attribute that lives on Ui and never on TamagotchiLogic, so the
+            # dict was always empty and every weight below fell through to its
+            # hard-coded default of 50.
+            brain_state = {}
+            if getattr(self, 'brain_window', None) is not None:
+                brain_state = getattr(self.brain_window, 'brain_widget', None)
+                brain_state = dict(brain_state.state) if brain_state is not None else {}
             
             # Calculate decision weights (replicating the logic from DecisionEngine)
             weights = {
@@ -579,9 +582,12 @@ class TamagotchiLogic:
         Feed a scalar reward into the DecisionEngine's Q-learning update.
         Call this immediately after the action finishes.
         """
-        if hasattr(self, 'squid') and hasattr(self.squid, 'decision_engine'):
-            de = self.squid.decision_engine
-            if de.last_state is not None and de.last_action is not None:
+        de = getattr(self.squid, '_decision_engine', None) if hasattr(self, 'squid') else None
+        # DecisionEngine v4 carries no Q-table; this only runs if a future
+        # engine provides one. It used to read `decision_engine` (no underscore),
+        # an attribute that never exists, so it was unreachable either way.
+        if de is not None and hasattr(de, 'ql') and hasattr(de, 'get_state_index'):
+            if getattr(de, 'last_state', None) is not None and getattr(de, 'last_action', None) is not None:
                 # Build next state from current squid state
                 next_state = de.get_state_index({
                     "hunger": self.squid.hunger,
@@ -1186,7 +1192,9 @@ class TamagotchiLogic:
             self.squid.is_fleeing = True
             self.statistics_window.award(-50)
             self.squid.current_speed = 180
-            self.squid.direction = random.choice(['up', 'down', 'left', 'right'])
+            # squid_direction is what move_squid reads; assigning .direction
+            # merely created a new attribute nothing consulted.
+            self.squid.squid_direction = random.choice(['up', 'down', 'left', 'right'])
 
             # Record the accepted startle once on the model.
             self.track_startle()
@@ -1225,7 +1233,7 @@ class TamagotchiLogic:
 
             memory_value = (
                 f"Startled! Status changed from {previous_status} to {self.squid.status}, "
-                f"Speed {self.squid.current_speed}px, Direction {self.squid.direction}"
+                f"Speed {self.squid.current_speed}px, Direction {self.squid.squid_direction}"
             )
             self.squid.memory_manager.add_short_term_memory(
                 'behavior', 'startle_response', memory_value
@@ -1576,10 +1584,27 @@ class TamagotchiLogic:
                 }
                 neuro.check_and_capture_experience(brain_state, environment)
             
+            # ============================================================
+            # THE COGNITIVE LOOP, in order:
+            #   1. sensors + squid stats were written into brain state above
+            #   2. propagate activation along the synapses
+            #   3. let neurogenesis apply its stress/anxiety feedback
+            #   4. evaluate output bindings -> squid behaviour
+            # ============================================================
+            bw = getattr(self.brain_window, 'brain_widget', None)
+            if bw is not None:
+                if hasattr(bw, 'propagate_activations'):
+                    bw.propagate_activations()
+                neuro = getattr(bw, 'enhanced_neurogenesis', None)
+                if neuro is not None and hasattr(neuro, 'update_neuron_activations'):
+                    neuro.update_neuron_activations(bw.state)
+
             if not getattr(self.squid, 'is_sleeping', False):
                 if hasattr(self, 'neuron_output_monitor'):
                     self.neuron_output_monitor.process_outputs()
-            
+                # Drives set by movement outputs need their consumer ticked.
+                self.update_rock_interaction()
+
             self.new_object_encountered = False
             self.recent_positive_outcome = False
             
@@ -1748,11 +1773,11 @@ class TamagotchiLogic:
 
         # Final push to brain visualizer
         self.brain_window.update_brain(brain_state)
-        
-        # === PROCESS NEURON OUTPUTS (ACTUATORS) ===
-        # Also process here in case update_squid_brain runs on different timer
-        if hasattr(self, 'neuron_output_monitor') and self.neuron_output_monitor:
-            self.neuron_output_monitor.process_outputs()
+
+        # Output bindings are evaluated exactly once per tick, from
+        # update_simulation(). Doing it here as well made every "while above"
+        # binding fire twice per second and decayed temporal sensors at a rate
+        # that depended on whether the brain window happened to be open.
 
 
     def _normalize_action_name(self, status: str) -> str:

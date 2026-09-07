@@ -217,11 +217,7 @@ class BrainWorker(QThread):
             return
 
         # PURE_INPUTS (Sensors) - Do not include in Hebbian learning
-        PURE_INPUTS = {
-            "can_see_food", "is_eating", "is_sleeping", "is_sick", 
-            "pursuing_food", "is_fleeing", "is_startled", "external_stimulus", 
-            "plant_proximity"
-        }
+        from .brain_constants import PURE_INPUT_NEURONS as PURE_INPUTS
 
         # Filter available neurons
         # Exclude system neurons, connector neurons AND pure inputs
@@ -333,66 +329,19 @@ class BrainWorker(QThread):
         })
 
     def _process_state_update(self, data):
-        """
-        Process state decay and noise logic.
+        """Worker-side health check.
+
+        This used to carry a third, divergent copy of forward propagation
+        (decay 0.95, 0.1 timestep factor). It was unreachable - the only task
+        ever queued is {'health_check': True} - and propagation now lives in
+        exactly one place, BrainWidget.propagate_activations(), which runs on
+        the main thread where the state it reads is authoritative.
         """
         if data.get('health_check'):
             self.state_update_result.emit({'health_check': True})
             return
 
-        with QMutexLocker(self._cache_mutex):
-            current_state = self.cache['state']
-            weights = self.cache['weights']
-            excluded = self.cache['excluded_neurons']
-
-        updated_state = {}
-        
-        # PURE_INPUTS (Sensors) - Do not decay these
-        PURE_INPUTS = {
-            "can_see_food", "is_eating", "is_sleeping", "is_sick", 
-            "pursuing_food", "is_fleeing", "is_startled", "external_stimulus", 
-            "plant_proximity"
-        }
-
-        # 1. Decay and Noise
-        for neuron, val in current_state.items():
-            if neuron in excluded or neuron in PURE_INPUTS:
-                continue
-            
-            # Simple decay towards baseline
-            if isinstance(val, (int, float)):
-                # Decay factor
-                decay = 0.95 
-                noise = random.uniform(-0.5, 0.5)
-                
-                new_val = val * decay + noise
-                updated_state[neuron] = new_val
-
-        # 2. Connection effects (Simplified delta calculation)
-        connection_deltas = {}
-        
-        for (src, dst), w in weights.items():
-            if src in current_state and dst in current_state:
-                if dst in PURE_INPUTS: continue
-                
-                src_val = current_state[src]
-                if isinstance(src_val, (int, float)):
-                    effect = src_val * w * 0.1 # Small timestep factor
-                    connection_deltas[dst] = connection_deltas.get(dst, 0) + effect
-                    
-        # Apply deltas
-        for neuron, delta in connection_deltas.items():
-            if neuron in updated_state:
-                updated_state[neuron] += delta
-            elif neuron in current_state and neuron not in PURE_INPUTS:
-                updated_state[neuron] = current_state[neuron] + delta
-
-        # Clamp
-        final_state = {}
-        for k, v in updated_state.items():
-            final_state[k] = max(-100, min(100, v))
-
-        self.state_update_result.emit({'processed_state': final_state})
+        self.state_update_result.emit({'health_check': True})
 
     def _get_neuron_value(self, val):
         # bool must be checked before int/float: bool is a subclass of int, so
