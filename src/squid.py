@@ -170,6 +170,19 @@ class Squid:
     def carrying_rock(self, value):
         self.is_carrying_rock = value
     
+    @property
+    def carrying_poop(self):
+        """Mirrors carrying_rock. PoopInteractionManager sets is_carrying_poop
+        and reads carrying_poop, but the property was never defined - so its
+        hasattr() guards always failed and check_poop_hold_time()/drop_poop()
+        could never run. DecisionEngine also reads it directly.
+        """
+        return getattr(self, 'is_carrying_poop', False)
+
+    @carrying_poop.setter
+    def carrying_poop(self, value):
+        self.is_carrying_poop = value
+
     @property 
     def current_rock(self):
         return getattr(self, 'carried_rock', None)

@@ -564,6 +564,45 @@ class DesignerRoundTripTests(NeuralPipelineTestCase):
 
 
 # ---------------------------------------------------------------------------
+# 7b. DecisionEngine - callable, but deliberately not wired (see report)
+# ---------------------------------------------------------------------------
+class DecisionEngineTests(NeuralPipelineTestCase):
+    """The engine carried three crash bugs, each masked by the one before it.
+
+    It is still not called by the running simulation - the neural pipeline is
+    the authoritative brain -> squid path - but it must at least be callable,
+    because the Decisions tab reads its trace when present.
+    """
+
+    def test_make_decision_runs_without_raising(self):
+        SQUID.hunger, SQUID.curiosity, SQUID.anxiety, SQUID.sleepiness = 90.0, 20.0, 30.0, 20.0
+        try:
+            result = SQUID.make_decision()
+        except Exception as exc:  # pragma: no cover - this is the assertion
+            self.fail(f"make_decision raised {type(exc).__name__}: {exc}")
+        self.assertIsInstance(result, str)
+
+    def test_make_decision_survives_a_zero_weight(self):
+        """personality_modifiers divided each weight by itself and blew up on 0."""
+        SQUID.hunger, SQUID.curiosity, SQUID.anxiety = 0.0, 0.0, 0.0
+        SQUID.sleepiness, SQUID.satisfaction = 0.0, 0.0
+        SQUID.make_decision()
+        mods = SQUID._decision_engine.get_decision_data()["personality_modifiers"]
+        self.assertTrue(mods)
+        for action, factor in mods.items():
+            with self.subTest(action=action):
+                self.assertIsInstance(factor, float)
+
+    def test_squid_exposes_carrying_poop(self):
+        """PoopInteractionManager and DecisionEngine both read this property."""
+        self.assertFalse(SQUID.carrying_poop)
+        SQUID.carrying_poop = True
+        self.addCleanup(setattr, SQUID, "carrying_poop", False)
+        self.assertTrue(SQUID.carrying_poop)
+        self.assertTrue(SQUID.is_carrying_poop)
+
+
+# ---------------------------------------------------------------------------
 # 7. Sensor ranges
 # ---------------------------------------------------------------------------
 class SensorRangeTests(NeuralPipelineTestCase):

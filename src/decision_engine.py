@@ -209,7 +209,15 @@ class DecisionEngine:
         if brain_state.get("anxiety", 50) > 60:
             weights["approaching_plant"] *= 1.8 + (brain_state.get("anxiety", 0) - 60) / 80
 
-        decision_data['personality_modifiers'] = {k: v/weights.get(k,1) for k,v in weights.items() if k in weights}
+        # The combined memory + personality factor for each action, i.e. how far
+        # the modifiers moved it from its base weight. This used to read
+        # `v / weights.get(k, 1)` - dividing each weight by itself, so it was
+        # always 1.0 and raised ZeroDivisionError whenever a weight was 0.
+        base_weights = decision_data['base_weights']
+        decision_data['personality_modifiers'] = {
+            k: (v / base_weights[k]) if base_weights.get(k) else 1.0
+            for k, v in weights.items()
+        }
 
         # Add randomness
         for k in weights:
