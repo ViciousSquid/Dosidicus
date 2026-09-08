@@ -223,7 +223,9 @@ class ConfigManager:
             'button_font_size': '16',
             'button_width': '140',
             'button_height': '50',
-            'button_spacing': '20'
+            'button_spacing': '20',
+            'brain_tool_width': '800',
+            'brain_tool_height': '900'
         }
 
         # Designer Settings
@@ -609,7 +611,10 @@ class ConfigManager:
             'button_font_size': self.config.getint('Display', 'button_font_size', fallback=16),
             'button_width': self.config.getint('Display', 'button_width', fallback=140),
             'button_height': self.config.getint('Display', 'button_height', fallback=50),
-            'button_spacing': self.config.getint('Display', 'button_spacing', fallback=20)
+            'button_spacing': self.config.getint('Display', 'button_spacing', fallback=20),
+            # Size the Brain Tool window opens at. It remains freely resizable.
+            'brain_tool_width': self.config.getint('Display', 'brain_tool_width', fallback=800),
+            'brain_tool_height': self.config.getint('Display', 'brain_tool_height', fallback=900)
         }
     
     def is_designer_position_valid(self, x, y, existing_positions, center_x=0, center_y=0):

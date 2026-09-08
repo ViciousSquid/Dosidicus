@@ -896,12 +896,19 @@ class CausalLedger:
         """
         items: List[KnowledgeItem] = []
         weights = getattr(self.brain, 'weights', {}) or {}
-        topic_l = (topic or "").strip().lower()
+        # Normalise the query the same way the names are normalised. Only the
+        # haystack used to have its underscores replaced, so asking about a
+        # neuron by the exact name shown everywhere else in the tool -
+        # "filth_avoidance" - matched nothing at all, while "filth avoidance"
+        # worked. Copying a name out of the UI and pasting it into the search
+        # box is the most obvious thing a reader can do with it.
+        topic_l = (topic or "").strip().lower().replace('_', ' ')
 
         def matches(*names: str) -> bool:
             if not topic_l:
                 return True
-            return any(topic_l in str(n).lower().replace('_', ' ') for n in names if n)
+            return any(topic_l in str(n).lower().replace('_', ' ')
+                       for n in names if n)
 
         # --- associations: the synapses themselves --------------------------
         for edge, weight in weights.items():

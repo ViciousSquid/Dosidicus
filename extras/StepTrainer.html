@@ -197,7 +197,7 @@
             </div>
             <hr>
             <div id="outputBindingsInfo" style="font-size:0.8rem; color:#94a3b8;">No output bindings</div>
-            <div class="note">💡 Neurogenesis: counters increase when core emotions exceed thresholds. New neurons are placed randomly across the canvas, avoiding overlap.</div>
+            <div class="note">💡 <strong>Note:</strong> these counters are a simplified illustration, not what the game does. The engine stopped growing neurons from emotion thresholds in v4.0: it grows one when the network has a <em>persistent capability deficit</em> it cannot fix by learning — something it cannot represent, regulate or express. To experiment with the real thing, use <code>headless/headless_trainer.py</code>, which runs the same engine the squid does. Propagation here <em>is</em> the engine's rule.</div>
         </div>
 
         <!-- Right: Analytics Dashboard -->
@@ -239,6 +239,31 @@
     const MAX_HISTORY = 150;
     let trackedNeurons = ['hunger','happiness','anxiety','curiosity','satisfaction','cleanliness','sleepiness'];
     const DECAY = 0.96, CONTRIB_SCALE = 0.12;
+    // The engine's transfer function (src/propagation.py). Kept here so the
+    // sandbox computes what the squid computes.
+    const SMOOTHING = 0.5, BASELINE = 50;
+    // Neurons whose quiet state is 0 rather than the midpoint: the sense
+    // organs, and the action neurons - except locomotion, which idles at the
+    // midpoint so a squid with nothing to do still swims.
+    const ACTION_NEURONS = ['act_move','act_eat','act_flee','act_ink',
+                            'act_play','act_shelter','act_rest','act_collapse'];
+    function baselineOf(name) {
+        if (name === 'act_move') return BASELINE;
+        if (ACTION_NEURONS.includes(name)) return 0;
+        if (inputNeuronNames.includes(name)) return 0;
+        if (neurons[name] && neurons[name].is_binary) return 0;
+        return BASELINE;
+    }
+    function signalOf(name, value) {
+        if (typeof value === 'boolean') value = value ? 100 : 0;
+        const rest = baselineOf(name);
+        if (rest === 0) {
+            // Rests at 0, full signal at 100, halved so a saturated sensor
+            // pushes exactly as hard as a saturated drive.
+            return Math.max(0, Math.min(100, value)) * 0.5;
+        }
+        return value - rest;
+    }
     let canvas, ctx, canvasWidth = 800, canvasHeight = 500;
     let lineChart = null;
     const MIN_DIST = 70, X_MIN = 70, X_MAX = 950, Y_MIN = 70, Y_MAX = 690;
@@ -337,27 +362,29 @@
         if (created) updateUI();
     }
 
+    // The game's rule, exactly (src/propagation.py):
+    //     target = rest(neuron) + sum(signal(src) * weight)
+    //     new    = old + (target - old) * SMOOTHING     clamped to 0..100
+    //
+    // This used to add `srcVal * weight` - the RAW activation, not how far the
+    // neuron is from its own resting level - on top of a decay toward 50. That
+    // meant a drive sitting at its resting 50 still pushed everything it was
+    // connected to by 50 * weight, every step, forever, so a network at rest
+    // was not at rest and the sandbox disagreed with the squid it is meant to
+    // illustrate.
     function propagate() {
         let newState = {...state};
-        for (let target of neuronList) {
-            if (inputNeuronNames.includes(target)) continue;
-            let cur = state[target];
-            let decayed = cur * DECAY + (1 - DECAY) * 50;
-            newState[target] = decayed;
-        }
         for (let target of neuronList) {
             if (inputNeuronNames.includes(target)) continue;
             let sum = 0;
             for (let src of neuronList) {
                 let w = weights[`${src}|${target}`];
-                if (w !== undefined) {
-                    let srcVal = state[src];
-                    if (typeof srcVal === 'boolean') srcVal = srcVal ? 100 : 0;
-                    sum += srcVal * w;
-                }
+                if (w !== undefined) sum += signalOf(src, state[src]) * w;
             }
-            let delta = sum * CONTRIB_SCALE;
-            let newVal = newState[target] + delta;
+            let cur = state[target];
+            if (typeof cur === 'boolean') cur = cur ? 100 : 0;
+            let aim = baselineOf(target) + sum;
+            let newVal = cur + (aim - cur) * SMOOTHING;
             newVal = Math.min(100, Math.max(0, newVal));
             if (neurons[target] && neurons[target].is_binary) newVal = newVal > 50 ? 100 : 0;
             newState[target] = newVal;

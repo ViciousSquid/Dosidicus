@@ -424,6 +424,17 @@ class TamagotchiLogic:
 
     def set_squid(self, squid):
         self.squid = squid
+        # The brain is built before the squid exists, so this is the first
+        # moment its personality is known - and personality is innate, so it
+        # belongs in the newborn's synapses rather than in a rule applied to
+        # its decisions later. See BrainWidget.apply_personality_bias.
+        bw = getattr(getattr(self, 'brain_window', None), 'brain_widget', None)
+        personality = getattr(squid, 'personality', None)
+        if bw is not None and personality is not None:
+            try:
+                bw.apply_personality_bias(personality)
+            except Exception as e:
+                print(f"[Personality] could not tilt innate reflexes: {e}")
 
     def set_brain_window(self, brain_window):
         self.brain_window = brain_window

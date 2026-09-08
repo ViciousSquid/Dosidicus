@@ -5,8 +5,36 @@ import time
 logger = logging.getLogger(__name__)
 
 # Distance tracking constants
-DISTANCE_ROLLOVER_LIMIT = 999_999_999  # ~1 billion pixels before rollover
-DEFAULT_NEURON_COUNT = 8
+#
+# Nothing rolls over any more. Distance is a Python int, which has no upper
+# bound, so the counter cannot reach a ceiling however long a squid lives.
+# The constant survives only to read saves written while it did roll over:
+# those carry a multiplier, and loading folds it back into one total.
+DISTANCE_ROLLOVER_LIMIT = 999_999_999  # legacy saves only - see load_statistics
+
+
+def _default_neuron_count():
+    """How many neurons a squid is counted as having at birth.
+
+    Derived from brain_constants.newborn_neurons() rather than hard-coded,
+    because "what a newborn has" is defined there and has changed: a squid now
+    hatches with the sensors its innate reflexes read and the action neurons
+    that are the motor end of its behaviour, not only the original eight. A
+    literal here went stale the moment that happened, and every statistic
+    counting neurons grown since birth was wrong by the difference.
+
+    Counted the same way TamagotchiLogic._live_neuron_count() counts, so the
+    starting figure and the running figure mean the same thing.
+    """
+    try:
+        from .brain_constants import newborn_neurons, EXCLUDED_NEURONS
+    except ImportError:  # pragma: no cover - headless/partial installs
+        return 8
+    excluded = set(EXCLUDED_NEURONS)
+    return sum(1 for name in newborn_neurons() if name not in excluded)
+
+
+DEFAULT_NEURON_COUNT = _default_neuron_count()
 
 
 class SquidStatistics:
@@ -79,6 +107,12 @@ class SquidStatistics:
         self.lowest_happiness = 100
         self.highest_satisfaction = 0
         self.distance_swam = 0
+        # Sub-pixel carry, so accumulating thousands of fractional steps does
+        # not quietly throw away most of the distance. Deliberately not saved:
+        # it is worth less than a pixel.
+        self._distance_remainder = 0.0
+        # Kept at 1 and still written to saves so older readers of the file
+        # (and the SaveViewer) do not trip over a missing key.
         self.distance_swam_multiplier = 1
         self.other_squids_encountered = 0
         self.total_rocks_thrown = 0
@@ -108,38 +142,37 @@ class SquidStatistics:
         return self.total_age_seconds + current_session_age
     
     def update_distance(self, dx, dy):
-        '''Track distance traveled by squid with rollover protection'''
-        distance = math.sqrt(dx*dx + dy*dy)
-        previous_multiplier = self.distance_swam_multiplier
-        self.add_distance(distance)
-
-        if (
-            self.distance_swam_multiplier != previous_multiplier
-            and hasattr(self.squid, 'tamagotchi_logic')
-        ):
-            # Log the rollover event
-            self.squid.tamagotchi_logic.show_message(
-                "🌊 Distance counter rolled over! Now at "
-                f"{self.distance_swam_multiplier}x"
-            )
+        '''Track distance traveled by squid'''
+        self.add_distance(math.sqrt(dx * dx + dy * dy))
 
     def add_distance(self, distance):
-        """Track an already calculated distance without making a view own it."""
+        """Track an already calculated distance without making a view own it.
+
+        The total is kept as a whole number of pixels, with the sub-pixel
+        remainder carried between calls so nothing is lost. Two reasons:
+
+        * It cannot run out. A Python int has no maximum, so however far a
+          squid swims the counter keeps counting - there is no ceiling for it
+          to stop at, and no rollover to a multiplier that made a long-lived
+          squid's distance read as a small number with a prefix.
+        * It stays small in a save. Distance arrives as an irrational-ish
+          hypotenuse on nearly every tick, so a float total serialised to
+          around seventeen significant digits ("50000.12345678901") for a
+          figure nobody reads below the pixel. One integer says the same
+          thing in a fraction of the bytes.
+        """
         distance = float(distance)
         if distance < 0 or not math.isfinite(distance):
             raise ValueError("distance must be a finite non-negative number")
 
-        self.distance_swam += distance
-        if self.distance_swam >= DISTANCE_ROLLOVER_LIMIT:
-            rollovers, self.distance_swam = divmod(
-                self.distance_swam, DISTANCE_ROLLOVER_LIMIT
-            )
-            self.distance_swam_multiplier += int(rollovers)
-    
+        self._distance_remainder += distance
+        whole = int(self._distance_remainder)
+        if whole:
+            self.distance_swam = int(self.distance_swam) + whole
+            self._distance_remainder -= whole
+
     def get_distance_display(self):
-        '''Get formatted distance string with multiplier if needed'''
-        if self.distance_swam_multiplier > 1:
-            return f"{self.distance_swam_multiplier}x {int(self.distance_swam):,}"
+        '''Get formatted distance string'''
         return f"{int(self.distance_swam):,}"
 
     def get_squid_age(self):
@@ -217,6 +250,23 @@ class SquidStatistics:
                         ),
                     )
 
+            # Fold a legacy rollover multiplier back into one honest total.
+            # Distance used to wrap at DISTANCE_ROLLOVER_LIMIT and count the
+            # wraps separately, so a well-travelled squid's distance was stored
+            # as a small remainder plus a multiplier and READ as that small
+            # number. It is a single unbounded integer now.
+            multiplier = self._coerce_non_negative_number(
+                data.get('distance_swam_multiplier', 1), 1)
+            loaded_distance = float(self.distance_swam)
+            whole = int(loaded_distance)
+            self.distance_swam = whole + (
+                int(multiplier - 1) * DISTANCE_ROLLOVER_LIMIT
+                if multiplier > 1 else 0)
+            self.distance_swam_multiplier = 1
+            # Carry the sub-pixel part of a float written by an older save
+            # rather than dropping it on the floor.
+            self._distance_remainder = loaded_distance - whole
+
             current_neurons = max(
                 0,
                 self._coerce_loaded_count(
@@ -251,6 +301,11 @@ class SquidStatistics:
             'squid_age_minutes': int(total_age_seconds // 60),
             'max_neurons_reached': self.max_neurons_reached,
             'current_neurons': self.current_neurons,
+            # Whole pixels. A float here serialised to seventeen significant
+            # digits of a figure nobody reads below the pixel, on a value that
+            # changes every tick.
+            'distance_swam': int(self.distance_swam),
+            'distance_swam_multiplier': 1,
         })
         return data
 

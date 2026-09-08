@@ -403,7 +403,15 @@ class PipelineWidget(QtWidgets.QWidget):
         self._title = _pretty(action)
         base = float(base or 0.0)
         final = float(final or 0.0)
-        memory_mult = float(memory_mult if memory_mult else 1.0)
+        # Tolerate a non-scalar: older traces carried a per-action multiplier
+        # here, and a trace that reports something richer must not crash the
+        # tab that renders it.
+        if isinstance(memory_mult, dict):
+            memory_mult = 1.0
+        try:
+            memory_mult = float(memory_mult if memory_mult else 1.0)
+        except (TypeError, ValueError):
+            memory_mult = 1.0
 
         stages = [("value", "Base drive", base)]
         if abs(memory_mult - 1.0) > 0.02:

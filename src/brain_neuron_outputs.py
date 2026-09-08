@@ -9,6 +9,7 @@ OUTPUT (Actuators): Neuron Fires → Threshold Check → Hooks → Game Behavior
 """
 
 import time
+import random
 from typing import Dict, List, Callable, Any, Optional
 from dataclasses import dataclass, field
 from enum import Enum
@@ -47,6 +48,13 @@ class NeuronOutputBinding:
     trigger_mode: OutputTriggerMode = OutputTriggerMode.THRESHOLD_RISING
     cooldown: float = 1.0  # Seconds between firings
     enabled: bool = True
+
+    # Chance the behaviour actually happens once the neuron has crossed its
+    # threshold. 1.0 is a reflex that always fires; the ink cloud is 0.35,
+    # which is what makes a startled squid SOMETIMES ink instead of always.
+    # Keeping the chance on the binding makes it a visible, tunable property
+    # of the reflex rather than a random.random() buried in a behaviour rule.
+    probability: float = 1.0
     
     # Optional parameters passed to the hook
     hook_params: Dict[str, Any] = field(default_factory=dict)
@@ -64,6 +72,7 @@ class NeuronOutputBinding:
             'trigger_mode': self.trigger_mode.value,
             'cooldown': self.cooldown,
             'enabled': self.enabled,
+            'probability': self.probability,
             'hook_params': self.hook_params,
         }
     
@@ -78,6 +87,7 @@ class NeuronOutputBinding:
             trigger_mode=trigger_mode,
             cooldown=data.get('cooldown', 1.0),
             enabled=data.get('enabled', True),
+            probability=float(data.get('probability', 1.0)),
             hook_params=data.get('hook_params', {}),
         )
     
@@ -354,6 +364,39 @@ class NeuronOutputMonitor:
         
         # Register default hook handlers
         self._register_default_handlers()
+
+        # Every squid is born with its actions connected to its body.
+        self.install_innate_bindings()
+
+    def install_innate_bindings(self):
+        """Connect each action neuron to the actuator that carries it out.
+
+        This is the squid's BODY, not its knowledge: it can always physically
+        ink, or swim at a rock. What decides whether it ever does is whether
+        anything in the network drives the neuron hard enough to cross the
+        threshold - and for everything except moving, eating and fleeing,
+        nothing does until the squid learns it. See INNATE_ACTION_WIRING.
+
+        Bindings the player or a custom brain already defined for a neuron are
+        left alone, so this can never overwrite a deliberate choice.
+        """
+        from .brain_constants import innate_bindings
+
+        installed = 0
+        for neuron, hook, threshold, cooldown, probability in innate_bindings():
+            if any(b.neuron_name == neuron for b in self.bindings):
+                continue
+            self.bindings.append(NeuronOutputBinding(
+                neuron_name=neuron,
+                output_hook=hook,
+                threshold=float(threshold),
+                trigger_mode=OutputTriggerMode.THRESHOLD_RISING,
+                cooldown=float(cooldown),
+                probability=float(probability),
+            ))
+            installed += 1
+        if installed:
+            self._log(f"Innate reflexes wired to the body: {installed} bindings.")
     
     def _ensure_log_window(self):
         """Create the log window if it doesn't exist and Qt is available."""
@@ -487,6 +530,12 @@ class NeuronOutputMonitor:
                 self.add_binding(binding)
             except Exception as e:
                 self._log(f"Error loading binding: {e}")
+
+        # Re-attach any innate reflex the loaded payload did not carry. A save
+        # written before action neurons existed has none of them, and a squid
+        # restored from it would have a brain that wants to flee and no body
+        # able to do it.
+        self.install_innate_bindings()
     
     def export_bindings(self) -> List[dict]:
         """Export all bindings as serializable dicts."""
@@ -543,6 +592,16 @@ class NeuronOutputMonitor:
     def _fire_binding(self, binding: NeuronOutputBinding, activation: float, current_time: float):
         """Fire a binding's output hook."""
         binding.last_fire_time = current_time
+
+        # A reflex with a probability below 1.0 only happens some of the time.
+        # The cooldown is still consumed on a failed roll, so "a chance of
+        # inking when startled" does not become "keep rolling every tick until
+        # it inks", which is the same as always inking, just later.
+        if binding.probability < 1.0 and random.random() > binding.probability:
+            if getattr(self.logic, 'debug_mode', False):
+                self._log(f"declined: {binding.neuron_name} → {binding.output_hook} "
+                          f"(p={binding.probability:.2f})")
+            return
         
         # Update statistics
         self.total_fires += 1
@@ -670,7 +729,19 @@ class NeuronOutputMonitor:
             msm.set_state('startled', False)
 
     def _handle_sleep(self, neuron_name, activation, squid, **kwargs):
-        if squid and not getattr(squid, 'is_sleeping', False):
+        """Go to sleep the way the rest of the game does.
+
+        Setting the two attributes by hand skipped everything else
+        go_to_sleep() does - the sink animation, the anxiety relief, the
+        on_sleep hook, the short-term memory clear - so a squid put to sleep
+        by its own brain went to sleep differently from one put to sleep by
+        anything else.
+        """
+        if not squid or getattr(squid, 'is_sleeping', False):
+            return
+        if hasattr(squid, 'go_to_sleep'):
+            squid.go_to_sleep()
+        else:
             squid.is_sleeping = True
             squid.status = "sleeping"
 

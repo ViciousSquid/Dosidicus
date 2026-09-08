@@ -121,9 +121,12 @@ class StatisticsPersistenceTests(unittest.TestCase):
         statistics.update(elapsed_seconds=12.5)
         statistics.record_sickness_state(True)
         statistics.record_sickness_state(True)
-        statistics.record_neuron_birth("novelty", current_count=8)
-        statistics.record_neuron_birth("reward", current_count=9)
-        statistics.observe_neuron_count(8)
+        # Grow two, then lose one: the point is that the lifetime maximum
+        # survives the round trip while the live count comes back down.
+        start = DEFAULT_NEURON_COUNT
+        statistics.record_neuron_birth("novelty", current_count=start + 1)
+        statistics.record_neuron_birth("reward", current_count=start + 2)
+        statistics.observe_neuron_count(start + 1)
 
         with tempfile.TemporaryDirectory() as save_directory:
             manager = SaveManager(save_directory)
@@ -149,8 +152,8 @@ class StatisticsPersistenceTests(unittest.TestCase):
         self.assertEqual(restored.sickness_episodes, 1)
         self.assertEqual(restored.novelty_neurons_created, 1)
         self.assertEqual(restored.reward_neurons_created, 1)
-        self.assertEqual(restored.current_neurons, 8)
-        self.assertEqual(restored.max_neurons_reached, 9)
+        self.assertEqual(restored.current_neurons, DEFAULT_NEURON_COUNT + 1)
+        self.assertEqual(restored.max_neurons_reached, DEFAULT_NEURON_COUNT + 2)
 
         restored.record_sickness_state(True)
         self.assertEqual(restored.sickness_episodes, 1)
@@ -213,7 +216,9 @@ class StatisticsPersistenceTests(unittest.TestCase):
         )
 
         self.assertEqual(statistics.total_age_seconds, 12.5)
-        self.assertEqual(statistics.distance_swam, 42.25)
+        # Whole pixels: the 0.25 is carried, not lost - the add_distance(0.75)
+        # below takes it to 43.
+        self.assertEqual(statistics.distance_swam, 42)
         self.assertEqual(statistics.time_spent_asleep, 0)
         self.assertEqual(statistics.sickness_episodes, 0)
         self.assertEqual(statistics.highest_anxiety, 0)
@@ -546,8 +551,9 @@ class StatisticsPersistenceTests(unittest.TestCase):
 
     def test_reset_neuron_counts_survive_save_archive_round_trip(self):
         statistics = SquidStatistics(FakeSquid())
-        statistics.observe_neuron_count(12)
-        statistics.observe_neuron_count(9)
+        start = DEFAULT_NEURON_COUNT
+        statistics.observe_neuron_count(start + 4)
+        statistics.observe_neuron_count(start + 1)
         statistics.reset()
 
         with tempfile.TemporaryDirectory() as save_directory:
@@ -569,8 +575,8 @@ class StatisticsPersistenceTests(unittest.TestCase):
         restored = SquidStatistics(FakeSquid())
         restored.load_statistics(loaded_archive["statistics"])
 
-        self.assertEqual(restored.current_neurons, 9)
-        self.assertEqual(restored.max_neurons_reached, 12)
+        self.assertEqual(restored.current_neurons, DEFAULT_NEURON_COUNT + 1)
+        self.assertEqual(restored.max_neurons_reached, DEFAULT_NEURON_COUNT + 4)
 
     def test_every_canonical_persistence_key_round_trips(self):
         statistics = SquidStatistics(FakeSquid())
@@ -582,6 +588,13 @@ class StatisticsPersistenceTests(unittest.TestCase):
             value = index + 0.25
             setattr(statistics, attribute_name, value)
             expected_attributes[attribute_name] = value
+
+        # Distance is deliberately not a free-form float: it is stored as
+        # whole pixels (with the fraction carried in memory) and its legacy
+        # rollover multiplier is always written as 1.
+        expected_attributes['distance_swam'] = int(
+            expected_attributes['distance_swam'])
+        expected_attributes['distance_swam_multiplier'] = 1
 
         restored = SquidStatistics(FakeSquid())
         restored.load_statistics(statistics.to_dict())

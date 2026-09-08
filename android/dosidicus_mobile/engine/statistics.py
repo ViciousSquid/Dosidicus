@@ -46,7 +46,14 @@ class Statistics:
     def tick(self, dt, squid, brain, moved):
         self.squid_age_seconds = squid.age_seconds
         self.squid_age_minutes = int(squid.age_seconds // 60)
-        self.distance_swam += moved
+        # Whole pixels, sub-pixel remainder carried - the same treatment the
+        # desktop model gives it, so this file stays small in a save and the
+        # counter has no ceiling to reach.
+        self._distance_remainder = getattr(self, "_distance_remainder", 0.0) + moved
+        whole = int(self._distance_remainder)
+        if whole:
+            self.distance_swam = int(self.distance_swam) + whole
+            self._distance_remainder -= whole
         if squid.is_sleeping:
             self.total_sleep_time += dt
         n = len(brain.neuron_names)

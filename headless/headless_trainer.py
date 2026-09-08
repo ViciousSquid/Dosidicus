@@ -47,6 +47,11 @@ from src.brain_constants import (  # noqa: E402
     PURE_INPUT_NEURONS as PURE_INPUTS,
     INPUT_SENSORS as _INPUT_SENSOR_POSITIONS,
     INNATE_CONNECTIONS,
+    INNATE_ACTION_WIRING,
+    action_competition_wiring,
+    ACTION_NEURONS,
+    newborn_neurons,
+    action_resting_level,
     is_network_driven,
 )
 from src.propagation import ExternallyDriven, propagate  # noqa: E402
@@ -99,6 +104,17 @@ class TrainingConfig:
     food_spawn_chance: float = 0.02
     poop_spawn_chance: float = 0.01
     startle_chance: float = 0.005
+
+    # Reproducibility. With a seed set, a run is deterministic: the same seed,
+    # brain and tick count produce the same trained brain, byte for byte. That
+    # is what makes a result here something another person can check rather
+    # than something they have to take your word for.
+    seed: Optional[int] = None
+
+    # Hatch with no synapses and only the eight required neurons, instead of
+    # the full newborn brain with its innate reflexes. A blank brain is the
+    # control condition: anything it ends up knowing, it learned here.
+    blank: bool = False
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'TrainingConfig':
@@ -483,34 +499,53 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
                 if getattr(fn, 'neuron_type', '') == 'connector'}
         
     def _initialize_default_state(self):
-        """Initialize with default neuron structure"""
-        default_positions = {
-            "can_see_food": (50, 200),
-            "hunger": (127, 81),
-            "happiness": (361, 81),
-            "cleanliness": (627, 81),
-            "sleepiness": (840, 81),
-            "satisfaction": (271, 380),
-            "anxiety": (491, 389),
-            "curiosity": (701, 386),
-        }
-        
-        for name, pos in default_positions.items():
+        """Initialize with default neuron structure.
+
+        Hatched from brain_constants.newborn_neurons(), the same definition the
+        game uses, so "a brain trained without the GUI starts from the same
+        place the squid does" stays true. This used to carry its own copy of
+        the eight default positions, which silently stopped matching the game
+        the moment a squid started hatching with action neurons - and a brain
+        trained here would then have had no way to express a behaviour at all.
+        """
+        if self.config.blank:
+            self._initialize_blank_state()
+            return
+
+        for name, pos in newborn_neurons().items():
             self.positions[name] = pos
             if name in CORE_NEURONS:
                 self.state[name] = 50.0
+            elif name in ACTION_NEURONS:
+                self.state[name] = action_resting_level(name)
             elif name in INPUT_SENSORS:
                 self.state[name] = 0.0
             else:
                 self.state[name] = 50.0
-                
+
         # The instincts of the species, from the one table that holds them.
-        for src, dst, weight in INNATE_CONNECTIONS:
+        innate = (tuple(INNATE_CONNECTIONS) + tuple(INNATE_ACTION_WIRING)
+                  + action_competition_wiring())
+        for src, dst, weight in innate:
             if src in self.positions and dst in self.positions:
                 self.apply_weight_change(
                     (src, dst), value=float(weight), mechanism='innate',
                     detail={'note': "this squid was born with it"}, create=True)
             
+    def _initialize_blank_state(self):
+        """The eight required neurons, no synapses, no instincts.
+
+        The control condition for an experiment: a brain that has been given
+        nothing, so that anything it is found to know at the end of a run was
+        learned during that run. Contrast _initialize_default_state(), which
+        hatches the newborn a real squid gets - reflexes included.
+        """
+        from src.brain_constants import REQUIRED_NEURONS
+
+        for name, pos in REQUIRED_NEURONS.items():
+            self.positions[name] = pos
+            self.state[name] = 0.0 if name in INPUT_SENSORS else 50.0
+
     def load_brain(self, brain_data: Dict) -> bool:
         """Load a brain from dictionary (JSON structure)"""
         try:
@@ -580,6 +615,10 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
                     elif isinstance(conn, (list, tuple)) and len(conn) >= 2:
                         self.weights[(conn[0], conn[1])] = float(conn[2]) if len(conn) > 2 else 0.5
                         
+            # Load the brain's account of itself, so a loaded brain can still
+            # be asked why it is the way it is.
+            self._load_provenance(brain_data)
+
             # Load shapes
             self.neuron_shapes = brain_data.get('neuron_shapes', {})
             
@@ -659,7 +698,48 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
                 'novelty_neurons': self.novelty_neuron_count,
                 'reward_neurons':  self.reward_neuron_count,
             },
+            # The brain's account of ITSELF, under the same keys the game's
+            # save uses. Without these a brain trained here arrives with an
+            # evolved network and no idea why any of it is the way it is: you
+            # could read its weights but not ask it what it learned, from what
+            # experience, or what it still cannot do. For a trainer whose whole
+            # point is producing brains other people examine, that is the more
+            # important half of the file.
+            **self._export_provenance(),
         }
+
+    _PROVENANCE_PARTS = (
+        ('provenance', 'ledger'),
+        ('causal_learning', 'causal_learning'),
+        ('capability', 'capability'),
+        ('plasticity', 'plasticity'),
+        ('consolidation', 'consolidation'),
+    )
+
+    def _export_provenance(self) -> Dict:
+        """Serialise every part of the brain that can explain itself."""
+        out = {}
+        for key, attribute in self._PROVENANCE_PARTS:
+            owner = getattr(self, attribute, None)
+            if owner is None or not hasattr(owner, 'to_dict'):
+                continue
+            try:
+                out[key] = owner.to_dict()
+            except Exception as exc:
+                print(f"⚠️  Could not export {key}: {type(exc).__name__}: {exc}")
+        return out
+
+    def _load_provenance(self, brain_data: Dict) -> None:
+        """Restore the brain's account of itself from a file."""
+        for key, attribute in self._PROVENANCE_PARTS:
+            payload = brain_data.get(key)
+            owner = getattr(self, attribute, None)
+            if not payload or owner is None or not hasattr(owner, 'from_dict'):
+                continue
+            try:
+                owner.from_dict(payload)
+            except Exception as exc:
+                print(f"⚠️  Could not restore {key}: {type(exc).__name__}: {exc}")
         
     def save_brain(self, filepath: str) -> bool:
         """Save brain to JSON file"""
@@ -887,7 +967,12 @@ class HeadlessSimulation:
     
     def __init__(self, config: TrainingConfig = None):
         self.config = config or TrainingConfig()
-        self.brain = HeadlessBrain(config)
+        # Seed BEFORE anything random happens - HeadlessSquid picks its
+        # personality in its constructor - so a seeded run is reproducible from
+        # the very first draw.
+        if self.config.seed is not None:
+            random.seed(self.config.seed)
+        self.brain = HeadlessBrain(self.config)
         self.squid = HeadlessSquid()
         
         # Simulation state
@@ -1145,6 +1230,15 @@ Examples:
     )
     
     parser.add_argument('--brain', '-b', type=str, help='Path to brain JSON file to load')
+    parser.add_argument('--seed', type=int,
+                        help='Random seed. With one set the run is reproducible: '
+                             'the same seed, brain and tick count give the same '
+                             'trained brain every time.')
+    parser.add_argument('--blank', action='store_true',
+                        help='Start from a blank 8-neuron brain (the eight '
+                             'required neurons, no synapses, no innate reflexes) '
+                             'instead of the newborn brain a real squid gets. '
+                             'The control condition for an experiment.')
     parser.add_argument('--output', '-o', type=str, help='Path to save trained brain')
     parser.add_argument('--ticks', '-t', type=int, default=10000, help='Number of ticks to train (default: 10000)')
     parser.add_argument('--scenario', '-s', type=str, help='Training scenario to use')
@@ -1180,6 +1274,10 @@ Examples:
         config.neurogenesis_enabled = args.neurogenesis
     if args.max_neurons:
         config.max_neurons = args.max_neurons
+    if args.seed is not None:
+        config.seed = args.seed
+    if args.blank:
+        config.blank = True
         
     # Create simulation
     sim = HeadlessSimulation(config)

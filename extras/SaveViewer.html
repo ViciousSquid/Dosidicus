@@ -620,13 +620,20 @@
         container.appendChild(createCollapsible('🧬 Neurogenesis Deep Dive', neuroContainer));
 
         const statsDiv = document.createElement('div');
+        // These are the keys SquidStatistics actually writes (see
+        // src/squid_statistics.py _PERSISTENCE_KEYS and to_dict). The previous
+        // list had drifted badly: twelve of the keys it asked for - among them
+        // "distance_swum", which the save spells distance_swAm - did not exist
+        // in any save file, so those rows never appeared, while twenty-one keys
+        // that DO exist were shown only in the unsorted catch-all at the bottom.
         const groups = {
-            "📊 General": ['total_age_seconds', 'total_playtime_seconds', 'distance_swum'],
-            "🍣 Food & Consumption": ['cheese_eaten', 'sushi_eaten', 'poops_created', 'food_thrown'],
-            "🤝 Interactions": ['startles_experienced', 'ink_clouds_created', 'rocks_thrown', 'rocks_carried', 'decorations_interacted'],
-            "🧠 Neural": ['current_neurons', 'max_neurons_reached', 'novelty_neurons_created', 'hebbian_updates', 'neurons_pruned'],
-            "💤 Sleep & Health": ['total_sleep_seconds', 'average_sleep_quality', 'health_restored', 'sickness_episodes'],
-            "🌍 Exploration": ['distance_swum', 'time_moving', 'unique_locations_visited']
+            "📊 General": ['total_age_seconds', 'squid_age_minutes', 'distance_swam'],
+            "🍣 Food & Consumption": ['cheese_eaten', 'sushi_eaten', 'poops_created', 'poops_thrown', 'max_poops_cleaned'],
+            "🤝 Interactions": ['startles_experienced', 'ink_clouds_created', 'rocks_thrown', 'plants_interacted', 'times_colour_changed', 'total_env_interactions', 'other_squids_encountered'],
+            "🧠 Neural": ['current_neurons', 'max_neurons_reached', 'novelty_neurons_created', 'stress_neurons_created', 'reward_neurons_created'],
+            "🧬 Peaks": ['peak_novelty', 'peak_stress', 'peak_reward', 'highest_anxiety', 'highest_satisfaction', 'lowest_happiness'],
+            "🧾 Memory": ['total_memories_formed', 'max_short_term_memories', 'max_long_term_memories'],
+            "💤 Sleep & Health": ['total_sleep_time', 'sickness_episodes']
         };
         for (const [groupName, keyList] of Object.entries(groups)) {
             const title = document.createElement('div');
@@ -637,17 +644,31 @@
                 if (stats[k] !== undefined) {
                     let val = stats[k];
                     const pretty = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    if (k.includes('distance')) val = (val / 100).toFixed(1) + ' m';
-                    else if (k.includes('seconds')) val = formatAge(val);
+                    // Distance is a count of pixels, and is labelled as such
+                    // everywhere else in the project. Dividing it by 100 and
+                    // calling the result metres invented a unit the game does
+                    // not use and the save does not record.
+                    if (k === 'distance_swam') val = Number(val).toLocaleString() + ' px';
+                    else if (k.includes('seconds') || k === 'total_sleep_time') val = formatAge(val);
                     statsDiv.appendChild(createKVRow(pretty, val));
                 }
             });
         }
+        // Anything the save carries that is not grouped above still gets
+        // shown, under a heading that says so - a viewer that silently drops
+        // statistics it has not heard of is how the list above went stale.
         const usedKeys = Object.values(groups).flat();
-        Object.keys(stats).filter(k => !usedKeys.includes(k)).forEach(k => {
-            const pretty = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-            statsDiv.appendChild(createKVRow(pretty, stats[k]));
-        });
+        const ungrouped = Object.keys(stats).filter(k => !usedKeys.includes(k));
+        if (ungrouped.length) {
+            const title = document.createElement('div');
+            title.className = 'stat-group-title';
+            title.textContent = '❓ Other (not recognised by this viewer)';
+            statsDiv.appendChild(title);
+            ungrouped.forEach(k => {
+                const pretty = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                statsDiv.appendChild(createKVRow(pretty, stats[k]));
+            });
+        }
         container.appendChild(createCollapsible('📊 Full Statistics', statsDiv));
 
         return container;

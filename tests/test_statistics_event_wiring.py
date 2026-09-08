@@ -12,6 +12,7 @@ from src.neurogenesis import EnhancedNeurogenesis
 from src.neural_provenance import CausalLedger, RecordedSynapses
 from src.squid import Squid
 from src.squid_statistics import SquidStatistics
+from src.squid_statistics import DEFAULT_NEURON_COUNT
 from src.tamagotchi_logic import TamagotchiLogic
 
 
@@ -267,7 +268,9 @@ class StatisticsEventWiringTests(unittest.TestCase):
         logic.track_neuron_creation("novelty")
 
         self.assertEqual(squid.statistics.novelty_neurons_created, 1)
-        self.assertEqual(squid.statistics.current_neurons, 9)
+        # One more than the squid started with, whatever that is.
+        self.assertEqual(squid.statistics.current_neurons,
+                         DEFAULT_NEURON_COUNT + 1)
 
     def test_orphan_rescue_emits_one_completed_birth(self):
         signal = RecordingSignal()
@@ -338,8 +341,13 @@ class StatisticsEventWiringTests(unittest.TestCase):
             logic._on_neurogenesis_icon_and_memory(neuron_name)
 
         self.assertEqual(squid.statistics.reward_neurons_created, 1)
+        # 9 is what the stand-in brain in this test reports, not the real
+        # newborn count: the count is read from the brain, not assumed.
         self.assertEqual(squid.statistics.current_neurons, 9)
-        self.assertEqual(squid.statistics.max_neurons_reached, 9)
+        # The lifetime maximum never decreases, so a stand-in brain reporting
+        # fewer neurons than the squid was born with leaves it where it was.
+        self.assertEqual(squid.statistics.max_neurons_reached,
+                         max(DEFAULT_NEURON_COUNT, 9))
         logic.statistics_window.add_score_for_neuron_creation.assert_called_once_with()
         single_shot.assert_called_once_with(
             0,

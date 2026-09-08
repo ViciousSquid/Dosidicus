@@ -16,6 +16,7 @@ Covered:
   7. Sensor ranges                 - every sensor stays inside its stated range
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -500,7 +501,11 @@ class PersistenceTests(NeuralPipelineTestCase):
         LOGIC.save_game(is_autosave=False)
         LOGIC.load_game()
 
-        bindings = LOGIC.neuron_output_monitor.bindings
+        # Every squid now carries the innate reflex bindings (act_eat ->
+        # seek food, act_flee -> flee, ...), so this is about the binding the
+        # PLAYER made surviving alongside them.
+        bindings = [b for b in LOGIC.neuron_output_monitor.bindings
+                    if not b.neuron_name.startswith("act_")]
         self.assertEqual(len(bindings), 1)
         restored = bindings[0]
         self.assertEqual(restored.neuron_name, "persist_bind")
@@ -515,7 +520,9 @@ class PersistenceTests(NeuralPipelineTestCase):
         self.bind("persist_key", "neuron_output_flee")
         state = WINDOW.brain_window.get_brain_state()
         self.assertIn("output_bindings", state)
-        self.assertEqual(len(state["output_bindings"]), 1)
+        player_made = [b for b in state["output_bindings"]
+                       if not b["neuron_name"].startswith("act_")]
+        self.assertEqual(len(player_made), 1)
 
     def test_core_stats_are_restored_from_the_squid_on_load(self):
         LOGIC.save_game(is_autosave=False)
@@ -714,7 +721,9 @@ class DesignerRoundTripTests(NeuralPipelineTestCase):
         self.assertEqual(BRAIN.weights.get(("anxiety", "rt_neuron")), 0.8)
         self.assertEqual(set(BRAIN.connections), set(BRAIN.weights.keys()))
         self.assertEqual(
-            [(b.neuron_name, b.output_hook) for b in LOGIC.neuron_output_monitor.bindings],
+            [(b.neuron_name, b.output_hook)
+             for b in LOGIC.neuron_output_monitor.bindings
+             if not b.neuron_name.startswith("act_")],
             [("rt_neuron", "neuron_output_boost_curiosity")])
 
     def test_round_tripped_neuron_then_controls_the_squid(self):
@@ -749,6 +758,27 @@ class BehaviourArbitrationTests(NeuralPipelineTestCase):
         SQUID.neural_drive = None
         SQUID.squid_x, SQUID.squid_y = 300.0, 300.0
         SQUID.squid_item.setPos(SQUID.squid_x, SQUID.squid_y)
+
+        # These tests are about ARBITRATION - that a decision installs a drive,
+        # that an urge outranks it - so the squid has to want to do something
+        # in the first place. Since behaviour is read off the network now, a
+        # squid whose locomotion neuron happens to sit under its threshold
+        # (this BRAIN is shared, and other tests teach it things) legitimately
+        # decides to do nothing, and there is no drive to arbitrate over.
+        # Holding locomotion up puts the squid in the state these tests assume.
+        from src.brain_constants import ACTION_NEURONS
+        self._prev_actions = {name: BRAIN.state.get(name)
+                              for name in ACTION_NEURONS}
+        for name in ACTION_NEURONS:
+            BRAIN.state[name] = 100.0 if name == 'act_move' else 0.0
+        self.addCleanup(self._restore_actions)
+
+    def _restore_actions(self):
+        for name, value in self._prev_actions.items():
+            if value is None:
+                BRAIN.state.pop(name, None)
+            else:
+                BRAIN.state[name] = value
 
     def _place_food(self, dx=300.0, dy=0.0):
         import math
@@ -854,17 +884,64 @@ class BehaviourArbitrationTests(NeuralPipelineTestCase):
         self.assertGreater(max(weights["exploring"], weights["playing"]), 0.0)
         SQUID.is_sleeping = False
 
-    def test_a_drowsy_squid_does_choose_sleep(self):
+    def test_a_newborn_has_not_learned_to_rest(self):
+        """Resting is not innate: a drowsy newborn keeps going until it drops.
+
+        This used to assert the opposite, because the engine computed
+        weights["sleeping"] from a formula every squid was born with. Choosing
+        to rest before exhaustion is now something a squid has to learn - see
+        LEARNED_ACTIONS - so a squid with nothing driving act_rest does not
+        choose sleep however drowsy it is.
+        """
         SQUID.is_sleeping = False
         SQUID.hunger, SQUID.sleepiness, SQUID.anxiety = 40.0, 90.0, 20.0
         SQUID.curiosity, SQUID.satisfaction = 60.0, 55.0
         BRAIN.update_state({"hunger": 40.0, "sleepiness": 90.0, "anxiety": 20.0,
                             "curiosity": 60.0, "satisfaction": 55.0,
                             "can_see_food": 0.0})
-        SQUID.make_decision()
-        weights = SQUID._decision_engine.get_decision_data()["base_weights"]
-        self.assertEqual(max(weights, key=weights.get), "sleeping")
+        from src.brain_constants import LEARNED_ACTIONS, INNATE_ACTION_WIRING
+        self.assertIn("act_rest", LEARNED_ACTIONS)
+        self.assertEqual(
+            [row for row in INNATE_ACTION_WIRING if row[1] == "act_rest"], [],
+            "resting must not be wired at birth")
+
+        # This BRAIN is shared across the suite and other tests have grown
+        # neurons into it, so clear anything driving act_rest to get back to
+        # what a newborn actually has.
+        for key in [k for k in BRAIN.weights if k[1] == "act_rest"]:
+            BRAIN.weights.pop(key, None)
+        BRAIN.state["act_rest"] = 0.0
+        for _ in range(6):
+            BRAIN.state["sleepiness"] = 90.0
+            BRAIN.propagate_activations(smoothing=0.5)
+        self.assertLess(float(BRAIN.state["act_rest"]), 1.0,
+                        "nothing should be driving an unlearned action")
+
+        decision = SQUID.make_decision()
+        self.assertNotIn("sleep", decision.lower())
         SQUID.is_sleeping = False
+
+    def test_a_squid_that_has_learned_to_rest_does_choose_sleep(self):
+        """Once experience wires act_rest, drowsiness produces sleep."""
+        SQUID.is_sleeping = False
+        SQUID.sleepiness = 90.0
+        BRAIN.update_state({"sleepiness": 90.0, "hunger": 40.0, "anxiety": 20.0,
+                            "curiosity": 60.0, "can_see_food": 0.0})
+        # What learning would build: "when I am sleepy, rest".
+        BRAIN.weights[("sleepiness", "act_rest")] = 1.0
+        self.addCleanup(BRAIN.weights.pop, ("sleepiness", "act_rest"), None)
+        for _ in range(8):
+            BRAIN.state["sleepiness"] = 90.0
+            BRAIN.propagate_activations(smoothing=0.5)
+
+        weights = self._decision_weights()
+        self.assertGreater(weights["sleeping"], 0.0,
+                           "a learned synapse must show up as a wish to rest")
+        SQUID.is_sleeping = False
+
+    def _decision_weights(self):
+        SQUID.make_decision()
+        return SQUID._decision_engine.get_decision_data()["base_weights"]
 
     # -- previously-missing actuators ---------------------------------------
     def test_flee_from_center_exists_and_installs_a_drive(self):
@@ -922,16 +999,23 @@ class DecisionEngineTests(NeuralPipelineTestCase):
             self.fail(f"make_decision raised {type(exc).__name__}: {exc}")
         self.assertIsInstance(result, str)
 
-    def test_make_decision_survives_a_zero_weight(self):
-        """personality_modifiers divided each weight by itself and blew up on 0."""
+    def test_make_decision_survives_an_entirely_flat_brain(self):
+        """Every drive at zero must still produce a decision, not an exception.
+
+        (This began as a regression test for a personality-modifier table that
+        divided each weight by itself and raised ZeroDivisionError on a zero.
+        That table is gone - personality is innate weight now - but a squid
+        with nothing going on must still decide something.)
+        """
         SQUID.hunger, SQUID.curiosity, SQUID.anxiety = 0.0, 0.0, 0.0
         SQUID.sleepiness, SQUID.satisfaction = 0.0, 0.0
-        SQUID.make_decision()
-        mods = SQUID._decision_engine.get_decision_data()["personality_modifiers"]
-        self.assertTrue(mods)
-        for action, factor in mods.items():
+        result = SQUID.make_decision()
+        self.assertIsInstance(result, str)
+        self.assertTrue(result)
+        data = SQUID._decision_engine.get_decision_data()
+        for action, weight in data["base_weights"].items():
             with self.subTest(action=action):
-                self.assertIsInstance(factor, float)
+                self.assertIsInstance(weight, float)
 
     def test_squid_exposes_carrying_poop(self):
         """PoopInteractionManager and DecisionEngine both read this property."""
@@ -996,3 +1080,425 @@ class SensorRangeTests(NeuralPipelineTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+
+def newborn_weights():
+    """Exactly the synapses a squid hatches with.
+
+    Built from the innate tables rather than read off the shared BRAIN, which
+    other tests in this file have taught things - so these tests are about the
+    structure a squid is BORN with, not about whatever the module-level brain
+    happens to have learned by the time they run.
+    """
+    from src.brain_constants import (INNATE_CONNECTIONS, INNATE_ACTION_WIRING,
+                                     action_competition_wiring)
+    rows = (tuple(INNATE_CONNECTIONS) + tuple(INNATE_ACTION_WIRING)
+            + action_competition_wiring())
+    return {(source, target): float(weight) for source, target, weight in rows}
+
+
+def settle_newborn(sensors, ticks=25, weights=None):
+    """Run a newborn network to rest under a fixed set of sensor readings."""
+    from src.brain_constants import (ACTION_NEURONS, newborn_neurons,
+                                     action_resting_level, CORE_STAT_NEURONS)
+    from src.propagation import propagate, BASELINE
+
+    weights = newborn_weights() if weights is None else weights
+    state = {}
+    for name in newborn_neurons():
+        if name in ACTION_NEURONS:
+            state[name] = action_resting_level(name)
+        elif name in CORE_STAT_NEURONS:
+            state[name] = BASELINE
+        else:
+            state[name] = 0.0
+    targets = list(ACTION_NEURONS)
+    for _ in range(ticks):
+        state.update(sensors)
+        propagate(state, weights, targets, smoothing=0.5)
+    return {name: float(state[name]) for name in ACTION_NEURONS}
+
+
+# ===========================================================================
+# Innate behaviour: what a squid is born knowing, and what it has to learn
+# ===========================================================================
+class InnateBehaviourTests(unittest.TestCase):
+    """Behaviour comes off the network, and only three reflexes are innate."""
+
+    def setUp(self):
+        from src.brain_constants import ACTION_NEURONS, action_resting_level
+        self._actions = ACTION_NEURONS
+        self._rest = action_resting_level
+        self._saved = {n: BRAIN.state.get(n) for n in ACTION_NEURONS}
+
+    def tearDown(self):
+        for name, value in self._saved.items():
+            if value is None:
+                BRAIN.state.pop(name, None)
+            else:
+                BRAIN.state[name] = value
+
+    def _settle(self, sensors, ticks=25):
+        return settle_newborn(sensors, ticks)
+
+    def test_the_squid_is_born_able_to_move_eat_and_flee_and_nothing_else(self):
+        from src.brain_constants import (INNATE_ACTION_WIRING, LEARNED_ACTIONS,
+                                         ACTION_NEURONS)
+        driven = {target for _src, target, _w in INNATE_ACTION_WIRING}
+        self.assertEqual(
+            driven,
+            {"act_move", "act_eat", "act_flee", "act_ink", "act_collapse"},
+            "innate: locomotion, the food prior, the startle reflexes and the "
+            "homeostatic collapse - and nothing else")
+        self.assertEqual(set(LEARNED_ACTIONS),
+                         set(ACTION_NEURONS) - driven,
+                         "everything else must be learned")
+
+    def test_seeing_food_is_enough_to_swim_towards_it(self):
+        """The reflex the squid is born with: food in sight, go to it."""
+        from src.brain_constants import ACTION_THRESHOLDS
+        acts = self._settle({"can_see_food": 100.0, "hunger": 50.0,
+                             "is_startled": 0.0, "threat_level": 5.0,
+                             "is_sleeping": 0.0})
+        self.assertGreaterEqual(acts["act_eat"], ACTION_THRESHOLDS["act_eat"],
+                                "a newborn that can see food does not go to it")
+
+    def test_a_full_squid_ignores_food_it_can_see(self):
+        from src.brain_constants import ACTION_THRESHOLDS
+        acts = self._settle({"can_see_food": 100.0, "hunger": 0.0,
+                             "is_startled": 0.0, "threat_level": 5.0,
+                             "is_sleeping": 0.0})
+        self.assertLess(acts["act_eat"], ACTION_THRESHOLDS["act_eat"],
+                        "hunger is supposed to modulate the reflex")
+
+    def test_being_startled_drives_both_flight_and_the_ink_reflex(self):
+        from src.brain_constants import ACTION_THRESHOLDS
+        acts = self._settle({"can_see_food": 0.0, "hunger": 40.0,
+                             "is_startled": 100.0, "threat_level": 80.0,
+                             "is_sleeping": 0.0})
+        self.assertGreaterEqual(acts["act_flee"], ACTION_THRESHOLDS["act_flee"])
+        self.assertGreaterEqual(acts["act_ink"], ACTION_THRESHOLDS["act_ink"],
+                                "the ink reflex must be reachable at all")
+
+    def test_the_ink_cloud_is_a_chance_not_a_certainty(self):
+        from src.brain_constants import innate_bindings
+        ink = [row for row in innate_bindings() if row[0] == "act_ink"]
+        self.assertEqual(len(ink), 1)
+        probability = ink[0][4]
+        self.assertGreater(probability, 0.0)
+        self.assertLess(probability, 1.0,
+                        "a startled squid must only SOMETIMES ink")
+
+    def test_a_reflex_binding_honours_its_probability(self):
+        from src.brain_neuron_outputs import NeuronOutputBinding, OutputTriggerMode
+
+        fired = []
+
+        class PM:
+            hooks = {}
+            core_subscribers = set()
+            def register_hook(self, name): self.hooks.setdefault(name, [])
+            def subscribe_to_hook(self, *a): return True
+            def trigger_hook(self, name, **kw): fired.append(name)
+
+        class Stub:
+            plugin_manager = PM()
+            squid = None
+            debug_mode = False
+
+        monitor = LOGIC.neuron_output_monitor
+        real_pm, monitor.logic = monitor.logic, Stub()
+        real_bindings = monitor.bindings
+        monitor.bindings = [NeuronOutputBinding(
+            neuron_name="probe", output_hook="neuron_output_ink_cloud",
+            threshold=50.0, trigger_mode=OutputTriggerMode.THRESHOLD_RISING,
+            cooldown=0.0, probability=0.35)]
+        try:
+            clock = 0.0
+            for _ in range(2000):
+                monitor._evaluate({"probe": 0.0}, current_time=clock); clock += 1
+                monitor._evaluate({"probe": 90.0}, current_time=clock); clock += 1
+        finally:
+            monitor.bindings = real_bindings
+            monitor.logic = real_pm
+
+        rate = len(fired) / 2000.0
+        self.assertGreater(rate, 0.28, f"fired far too rarely ({rate:.0%})")
+        self.assertLess(rate, 0.42, f"fired far too often ({rate:.0%})")
+
+    def test_an_unlearned_action_never_reaches_its_threshold_on_its_own(self):
+        from src.brain_constants import LEARNED_ACTIONS, ACTION_THRESHOLDS
+        acts = self._settle({"can_see_food": 100.0, "hunger": 90.0,
+                             "is_startled": 100.0, "threat_level": 90.0,
+                             "anxiety": 95.0, "sleepiness": 95.0,
+                             "is_sleeping": 0.0})
+        for name in LEARNED_ACTIONS:
+            with self.subTest(action=name):
+                self.assertLess(acts[name], ACTION_THRESHOLDS[name],
+                                "an action nothing drives must stay silent, "
+                                "however extreme the squid's situation")
+
+    def test_an_unlearned_action_is_not_treated_as_a_broken_neuron(self):
+        """The brain must not 'rescue' a capability the squid has to earn."""
+        from src.brain_constants import LEARNED_ACTIONS
+        for name in LEARNED_ACTIONS:
+            for key in [k for k in BRAIN.weights if k[1] == name or k[0] == name]:
+                BRAIN.weights.pop(key, None)
+        orphans = BRAIN.find_orphan_neurons()
+        for name in LEARNED_ACTIONS:
+            with self.subTest(action=name):
+                self.assertNotIn(name, orphans)
+
+    def test_a_learned_synapse_changes_what_the_squid_does(self):
+        """The whole point: learning reaches behaviour, because it IS behaviour."""
+        from src.brain_constants import ACTION_THRESHOLDS
+        situation = {"can_see_food": 0.0, "hunger": 40.0, "is_startled": 0.0,
+                     "threat_level": 5.0, "anxiety": 90.0, "is_sleeping": 0.0,
+                     "curiosity": 50.0}
+        before = settle_newborn(situation)
+        self.assertLess(before["act_shelter"], ACTION_THRESHOLDS["act_shelter"],
+                        "sheltering is supposed to be unavailable at birth")
+
+        # What experience would build: "when I am anxious, find a plant."
+        learned = newborn_weights()
+        learned[("anxiety", "act_shelter")] = 1.0
+        after = settle_newborn(situation, weights=learned)
+        self.assertGreater(after["act_shelter"], before["act_shelter"],
+                           "wiring a synapse did not change the behaviour")
+        self.assertGreaterEqual(after["act_shelter"],
+                                ACTION_THRESHOLDS["act_shelter"],
+                                "a learned pathway did not make the behaviour "
+                                "available")
+
+    def test_personality_is_stored_as_innate_weight_not_a_decision_rule(self):
+        from src.brain_constants import INNATE_PERSONALITY_BIAS
+        from src.personality import Personality
+        for personality in Personality:
+            with self.subTest(personality=personality.value):
+                self.assertIn(personality.value, INNATE_PERSONALITY_BIAS)
+        engine_source = open("src/decision_engine.py").read()
+        self.assertNotIn("Personality.TIMID", engine_source,
+                         "the engine is branching on personality again")
+
+
+# ===========================================================================
+# Debug-menu exports
+# ===========================================================================
+class MemoryExportTests(unittest.TestCase):
+    """Exporting memories must export the memories."""
+
+    def _export(self, squid, mode, directory):
+        from src.ui import Ui
+
+        messages = []
+
+        class Stub:
+            tamagotchi_logic = type("L", (), {"squid": squid})()
+            show_message = lambda self, m: messages.append(m)
+            _exports_timestamp = Ui._exports_timestamp
+            export_memory = Ui.export_memory
+
+            def _get_exports_dir(self):
+                os.makedirs(directory, exist_ok=True)
+                return directory
+
+        Stub().export_memory(mode)
+        return messages
+
+    def test_exported_memories_are_the_squids_actual_memories(self):
+        """This wrote {"stm": null, "ltm": null}: it looked for the memories on
+        the squid, but they live on its MemoryManager."""
+        from src.memory_manager import MemoryManager
+
+        manager = MemoryManager()
+        manager.short_term_memory = [
+            {"category": "food", "key": "ate_sushi", "value": "tasty",
+             "timestamp": 1.0, "importance": 2}]
+        manager.long_term_memory = [
+            {"category": "behaviour", "key": "ink_cloud", "value": "Ink Cloud!"}]
+        squid = type("S", (), {"memory_manager": manager})()
+
+        with tempfile.TemporaryDirectory() as directory:
+            self._export(squid, "all", directory)
+            written = [f for f in os.listdir(directory) if f.startswith("memory_all_")]
+            self.assertEqual(len(written), 1, "no combined export was written")
+            with open(os.path.join(directory, written[0])) as handle:
+                payload = json.load(handle)
+
+        self.assertIsNotNone(payload["stm"], "short-term memory exported as null")
+        self.assertIsNotNone(payload["ltm"], "long-term memory exported as null")
+        self.assertEqual(payload["stm"][0]["key"], "ate_sushi")
+        self.assertEqual(payload["ltm"][0]["key"], "ink_cloud")
+
+    def test_the_separate_stm_and_ltm_files_are_written_too(self):
+        from src.memory_manager import MemoryManager
+
+        manager = MemoryManager()
+        manager.short_term_memory = [{"category": "food", "key": "a",
+                                      "value": 1, "timestamp": 1.0}]
+        manager.long_term_memory = [{"category": "x", "key": "b", "value": 2}]
+        squid = type("S", (), {"memory_manager": manager})()
+
+        with tempfile.TemporaryDirectory() as directory:
+            self._export(squid, "stm", directory)
+            self._export(squid, "ltm", directory)
+            names = os.listdir(directory)
+
+        self.assertTrue(any(n.startswith("memory_stm_") for n in names))
+        self.assertTrue(any(n.startswith("memory_ltm_") for n in names))
+
+    def test_an_empty_memory_store_still_exports_a_file(self):
+        """'This squid remembers nothing' is an answer, not a failure."""
+        from src.memory_manager import MemoryManager
+
+        manager = MemoryManager()
+        manager.short_term_memory = []
+        manager.long_term_memory = []
+        squid = type("S", (), {"memory_manager": manager})()
+
+        with tempfile.TemporaryDirectory() as directory:
+            self._export(squid, "all", directory)
+            written = [f for f in os.listdir(directory) if f.startswith("memory_all_")]
+            self.assertEqual(len(written), 1)
+            with open(os.path.join(directory, written[0])) as handle:
+                payload = json.load(handle)
+        self.assertEqual(payload, {"stm": [], "ltm": []})
+
+    def test_a_squid_with_no_memory_store_says_so_instead_of_claiming_success(self):
+        squid = type("S", (), {})()
+        with tempfile.TemporaryDirectory() as directory:
+            messages = self._export(squid, "all", directory)
+            self.assertEqual(os.listdir(directory), [])
+        self.assertTrue(any("No memories" in m for m in messages),
+                        f"reported success with nothing exported: {messages}")
+
+
+class ActionCompetitionTests(unittest.TestCase):
+    """Behaviour is neural activity competing, not a comparison made outside."""
+
+    def setUp(self):
+        from src.brain_constants import ACTION_NEURONS, action_resting_level
+        self._actions = ACTION_NEURONS
+        self._rest = action_resting_level
+        self._saved = {n: BRAIN.state.get(n) for n in ACTION_NEURONS}
+
+    def tearDown(self):
+        for name, value in self._saved.items():
+            if value is None:
+                BRAIN.state.pop(name, None)
+            else:
+                BRAIN.state[name] = value
+
+    def _settle(self, sensors, ticks=25):
+        return settle_newborn(sensors, ticks)
+
+    def test_action_neurons_actually_inhibit_one_another(self):
+        from src.brain_constants import action_competition_wiring
+        wiring = action_competition_wiring()
+        self.assertTrue(wiring, "there is no competition between actions")
+        for source, target, weight in wiring:
+            with self.subTest(synapse=(source, target)):
+                self.assertLess(weight, 0.0, "competition must be inhibitory")
+
+    def test_a_strong_urge_suppresses_a_weaker_rival(self):
+        """The measurable form of competition."""
+        calm = {"can_see_food": 100.0, "hunger": 60.0, "is_startled": 0.0,
+                "threat_level": 5.0, "anxiety": 20.0, "is_sleeping": 0.0}
+        alone = self._settle(calm)["act_eat"]
+        contested = self._settle({**calm, "is_startled": 100.0,
+                                  "threat_level": 90.0})["act_eat"]
+        self.assertLess(contested, alone,
+                        "a frightened squid's appetite was not suppressed by "
+                        "its own flight response")
+
+    def test_danger_beats_appetite(self):
+        from src.brain_constants import ACTION_THRESHOLDS
+        acts = self._settle({"can_see_food": 100.0, "hunger": 95.0,
+                             "is_startled": 100.0, "threat_level": 90.0,
+                             "anxiety": 60.0, "is_sleeping": 0.0})
+        self.assertGreater(acts["act_flee"] - ACTION_THRESHOLDS["act_flee"],
+                           acts["act_eat"] - ACTION_THRESHOLDS["act_eat"],
+                           "a startled squid preferred dinner to escaping")
+
+    def test_any_real_urge_suppresses_idle_swimming(self):
+        """Locomotion is inhibited by the others and inhibits none of them -
+        which is what makes swimming the thing a squid does when nothing else
+        is worth doing, without anything declaring it a fallback."""
+        idle = self._settle({"can_see_food": 0.0, "hunger": 30.0,
+                             "is_startled": 0.0, "threat_level": 5.0,
+                             "anxiety": 20.0, "is_sleeping": 0.0})
+        busy = self._settle({"can_see_food": 100.0, "hunger": 90.0,
+                             "is_startled": 0.0, "threat_level": 5.0,
+                             "anxiety": 20.0, "is_sleeping": 0.0})
+        self.assertLess(busy["act_move"], idle["act_move"])
+
+    def test_the_competition_settles_instead_of_oscillating(self):
+        """Mutual inhibition is feedback; feedback can ring."""
+        sensors = {"can_see_food": 100.0, "hunger": 90.0, "is_startled": 100.0,
+                   "threat_level": 90.0, "anxiety": 80.0, "is_sleeping": 0.0}
+        for name in self._actions:
+            BRAIN.state[name] = self._rest(name)
+        history = []
+        for _ in range(40):
+            BRAIN.state.update(sensors)
+            BRAIN.propagate_activations(smoothing=0.5)
+            history.append({n: float(BRAIN.state[n]) for n in self._actions})
+        tail = history[-10:]
+        for name in self._actions:
+            swing = max(t[name] for t in tail) - min(t[name] for t in tail)
+            with self.subTest(neuron=name):
+                self.assertLess(swing, 1.0,
+                                f"{name} is still oscillating after 40 ticks")
+
+
+class InnatePathwayShapeTests(unittest.TestCase):
+    """The innate structure is pathways, not rules."""
+
+    def test_the_engine_contains_no_stimulus_to_action_rules(self):
+        """make_decision must not branch on physiology.
+
+        Read off the function's own body rather than the whole file, so the
+        class docstring - which explains the rules this replaced, and so
+        quotes them - cannot trip it.
+        """
+        import inspect
+        from src.decision_engine import DecisionEngine
+
+        body = inspect.getsource(DecisionEngine.make_decision)
+        code = "".join(line for line in body.splitlines(keepends=True)
+                       if not line.lstrip().startswith("#"))
+        for forbidden in ("sleepiness", "is_sleeping", "go_to_sleep"):
+            with self.subTest(rule=forbidden):
+                self.assertNotIn(forbidden, code,
+                                 "a physiology rule has come back into the "
+                                 "decision engine; it belongs in the network")
+
+    def test_sleep_is_gated_by_inhibition_rather_than_by_a_branch(self):
+        from src.brain_constants import INNATE_ACTION_WIRING
+        gating = [row for row in INNATE_ACTION_WIRING if row[0] == "is_sleeping"]
+        self.assertTrue(gating, "nothing in the network notices being asleep")
+        for _source, _target, weight in gating:
+            self.assertLess(weight, 0.0)
+
+    def test_exhaustion_is_a_homeostatic_pathway_not_a_threshold_check(self):
+        from src.brain_constants import INNATE_ACTION_WIRING
+        drive = [row for row in INNATE_ACTION_WIRING
+                 if row[0] == "sleepiness" and row[1] == "act_collapse"]
+        self.assertEqual(len(drive), 1,
+                         "collapsing from exhaustion is not wired as a drive")
+        self.assertGreater(drive[0][2], 0.0)
+
+    def test_choosing_to_rest_is_still_something_to_be_learned(self):
+        from src.brain_constants import LEARNED_ACTIONS, INNATE_ACTION_WIRING
+        self.assertIn("act_rest", LEARNED_ACTIONS)
+        self.assertEqual([r for r in INNATE_ACTION_WIRING if r[1] == "act_rest"],
+                         [])
+
+    def test_every_innate_synapse_is_an_ordinary_recorded_synapse(self):
+        """An instinct has to be something plasticity can reach."""
+        from src.brain_constants import INNATE_ACTION_WIRING
+        for source, target, _weight in INNATE_ACTION_WIRING:
+            with self.subTest(synapse=(source, target)):
+                self.assertIn((source, target), BRAIN.weights)

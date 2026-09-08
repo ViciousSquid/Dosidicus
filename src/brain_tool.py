@@ -79,10 +79,26 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         screen = QtWidgets.QApplication.primaryScreen()
         screen_geometry = screen.availableGeometry() # Use availableGeometry for usable screen space
 
-        # Define initial window dimensions directly, without DisplayScaling
-        # This will use absolute pixel values for the window size
-        final_width = 900 # Direct pixel width
-        final_height = 900 # Direct pixel height
+        # Opening size, in absolute pixels (no DisplayScaling). Override either
+        # of these in config.ini under [Display] rather than editing the source.
+        display_cfg = {}
+        try:
+            display_cfg = self.config_manager.get_display_settings() or {}
+        except Exception:
+            display_cfg = {}
+        final_width = int(display_cfg.get('brain_tool_width', 800))
+        final_height = int(display_cfg.get('brain_tool_height', 900))
+
+        # The size set here is the size the window OPENS at, and nothing else is
+        # allowed to override it. Qt will not honour resize() below a window's
+        # minimum size, and a QMainWindow's implicit minimum is whatever its
+        # deepest child demands - so a single long, unwrapped status label was
+        # enough to snap this window open ~350px wider than the value above and
+        # make editing that value look like it did nothing. Declaring the
+        # minimum explicitly puts the opening width back under our control.
+        # It is a MINIMUM, not a fixed size: the window stays freely resizable,
+        # and the user can drag it larger or smaller afterwards.
+        self.setMinimumSize(DisplayScaling.scale(480), DisplayScaling.scale(360))
 
         # Ensure the final window dimensions do not exceed the actual screen available geometry
         final_width = min(final_width, screen_geometry.width())

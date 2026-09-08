@@ -736,7 +736,7 @@ class EnhancedNeurogenesis:
             return None
 
         # 2. GLOBAL NEURON LIMIT
-        current_total = len(self.brain_widget.neuron_positions) - len(self.brain_widget.excluded_neurons)
+        current_total = self._live_neuron_count()
         max_neurons = self.config.neurogenesis.get('max_neurons', 32)
         if current_total >= max_neurons and not is_emergency:
             print(f"   Max neurons reached ({current_total}/{max_neurons})")
@@ -1109,6 +1109,20 @@ class EnhancedNeurogenesis:
         if callable(callback):
             callback()
     
+    def _live_neuron_count(self) -> int:
+        """How many neurons the network actually has.
+
+        Counts the excluded neurons that are PRESENT, not the length of the
+        excluded list. Those are different numbers: the list names five status
+        neurons that a given brain may or may not contain, so subtracting its
+        length flat let a brain that contained none of them run five neurons
+        past its own ceiling - which is exactly what a blank 8-neuron brain
+        trained headlessly did.
+        """
+        positions = getattr(self.brain_widget, 'neuron_positions', {}) or {}
+        excluded = set(getattr(self.brain_widget, 'excluded_neurons', ()) or ())
+        return sum(1 for name in positions if name not in excluded)
+
     def _get_unique_neuron_name(self, base_name: str) -> str:
         if base_name not in self.brain_widget.neuron_positions: return base_name
         counter = 2
@@ -1146,28 +1160,102 @@ class EnhancedNeurogenesis:
             return 'general_novelty_processing'
         return 'undefined'
     
+    def _layout_bounds(self) -> Tuple[float, float, float, float]:
+        """The region a grown neuron is allowed to occupy.
+
+        Anchored on the DEFAULT neuron layout, not on the logical canvas, so
+        the whole network stays inside the area the Brain Tool shows at the
+        size it opens at - no resizing needed to see a neuron the squid grew.
+        """
+        from .brain_constants import layout_bounds
+        return layout_bounds(getattr(self.brain_widget,
+                                     'original_neuron_positions', None))
+
+    def _spacing_target(self, occupied_count: int) -> float:
+        """How far apart neurons should ideally sit, given how full the box is.
+
+        Fixed spacing cannot work for a box that has to hold anywhere from 9 to
+        128 neurons, so this shares the available area out between them and
+        shrinks as the brain grows.
+        """
+        min_x, min_y, max_x, max_y = self._layout_bounds()
+        area = max(1.0, (max_x - min_x) * (max_y - min_y))
+        ideal = math.sqrt(area / max(1, occupied_count + 1)) * 0.60
+        return max(34.0, min(110.0, ideal))
+
+    def _spread_position(self, anchor: Tuple[float, float],
+                         exclude: Tuple[str, ...] = ()) -> Tuple[float, float]:
+        """Pick a free spot near `anchor`, inside the layout bounds.
+
+        New neurons used to be dropped at the weighted centre of everything
+        they wire to, plus up to 80px of jitter. Since a new neuron typically
+        wires to several core stats spread around the edge of the layout, that
+        centre was almost always the middle of the box - so every neuron the
+        squid ever grew landed in the same clump, on top of the ones before it.
+
+        Instead, sample candidates on rings around the anchor and keep the one
+        that sits furthest from its neighbours. The reward for being far from
+        neighbours is capped at twice the target spacing, so once a candidate
+        is comfortably clear the tie is broken by staying close to the anchor -
+        the neuron ends up near what it connects to, without landing on top of
+        it, and never outside the visible box.
+        """
+        min_x, min_y, max_x, max_y = self._layout_bounds()
+        occupied = [pos for name, pos in self.brain_widget.neuron_positions.items()
+                    if name not in exclude and isinstance(pos, (tuple, list))
+                    and len(pos) >= 2]
+        anchor_x = max(min_x, min(max_x, float(anchor[0])))
+        anchor_y = max(min_y, min(max_y, float(anchor[1])))
+
+        spacing = self._spacing_target(len(occupied))
+        comfortable = spacing * 2.0
+        # Reach far enough to cross the box when it is crowded, but no further.
+        max_reach = max(spacing, min(max_x - min_x, max_y - min_y) * 0.75)
+
+        best_pos = (anchor_x, anchor_y)
+        best_score = float('-inf')
+        for attempt in range(180):
+            # Widen the search as attempts go on: stay local while there is
+            # room nearby, drift outward only when there is not.
+            reach = spacing + (max_reach - spacing) * (attempt / 180.0)
+            angle = random.uniform(0.0, 2.0 * math.pi)
+            radius = random.uniform(spacing * 0.5, max(spacing, reach))
+            x = max(min_x, min(max_x, anchor_x + math.cos(angle) * radius))
+            y = max(min_y, min(max_y, anchor_y + math.sin(angle) * radius))
+
+            if occupied:
+                nearest = min(math.hypot(x - px, y - py) for px, py in occupied)
+            else:
+                nearest = comfortable
+            score = min(nearest, comfortable) - 0.15 * math.hypot(x - anchor_x,
+                                                                  y - anchor_y)
+            if score > best_score:
+                best_score, best_pos = score, (x, y)
+                # Clear of every neighbour and still near the anchor: good enough.
+                if nearest >= comfortable and radius <= spacing * 1.5:
+                    break
+        return best_pos
+
     def _calculate_functional_position(self, func_neuron: FunctionalNeuron) -> Tuple[float, float]:
         all_neurons = list(self.brain_widget.neuron_positions.keys())
         connections = func_neuron.get_functional_connections(all_neurons)
-        if not connections: return (random.randint(100, 900), random.randint(100, 600))
-        total_weight = 0
-        center_x, center_y = 0, 0
-        for target, weight in connections.items():
-            if target in self.brain_widget.neuron_positions:
-                pos = self.brain_widget.neuron_positions[target]
-                abs_weight = abs(weight)
-                center_x += pos[0] * abs_weight
-                center_y += pos[1] * abs_weight
-                total_weight += abs_weight
+        min_x, min_y, max_x, max_y = self._layout_bounds()
+        anchor = ((min_x + max_x) / 2.0, (min_y + max_y) / 2.0)
+
+        total_weight = 0.0
+        center_x, center_y = 0.0, 0.0
+        for target, weight in (connections or {}).items():
+            pos = self.brain_widget.neuron_positions.get(target)
+            if not pos:
+                continue
+            abs_weight = abs(weight)
+            center_x += pos[0] * abs_weight
+            center_y += pos[1] * abs_weight
+            total_weight += abs_weight
         if total_weight > 0:
-            center_x /= total_weight
-            center_y /= total_weight
-            offset_x = random.randint(-80, 80)
-            offset_y = random.randint(-80, 80)
-            x = max(50, min(974, center_x + offset_x))
-            y = max(50, min(668, center_y + offset_y))
-            return (x, y)
-        return (random.randint(100, 900), random.randint(100, 600))
+            anchor = (center_x / total_weight, center_y / total_weight)
+
+        return self._spread_position(anchor, exclude=(func_neuron.name,))
 
     @staticmethod
     def _orient_new_edge(a: str, b: str):
@@ -1193,11 +1281,16 @@ class EnhancedNeurogenesis:
         func_neuron = FunctionalNeuron(neuron_name, connector_type, ctx)
         func_neuron.specialization = 'network_bridge'
         self.functional_neurons[neuron_name] = func_neuron
-        orphan_pos = self.brain_widget.neuron_positions.get(orphan_name, (500, 300))
-        center_x, center_y = 512, 384
-        new_x = (orphan_pos[0] + center_x) / 2 + random.randint(-50, 50)
-        new_y = (orphan_pos[1] + center_y) / 2 + random.randint(-50, 50)
-        self.brain_widget.neuron_positions[neuron_name] = (new_x, new_y)
+        # A rescue connector belongs NEXT TO the orphan it is rescuing. It used
+        # to be placed halfway to the middle of the canvas, which both dragged
+        # it away from the neuron it exists to serve and piled every rescue
+        # connector into the same central clump.
+        default_anchor = self._layout_bounds()
+        default_anchor = ((default_anchor[0] + default_anchor[2]) / 2.0,
+                          (default_anchor[1] + default_anchor[3]) / 2.0)
+        orphan_pos = self.brain_widget.neuron_positions.get(orphan_name, default_anchor)
+        self.brain_widget.neuron_positions[neuron_name] = self._spread_position(
+            orphan_pos, exclude=(neuron_name,))
         self.brain_widget.state[neuron_name] = 50.0
         binary_neurons = {"can_see_food", "is_eating", "is_sleeping", "is_sick", "is_fleeing", "pursuing_food", "is_startled", "external_stimulus", "plant_proximity"}
         candidates = [n for n in self.brain_widget.neuron_positions.keys() if n != orphan_name and n != neuron_name and n not in self.brain_widget.excluded_neurons and n not in binary_neurons]
@@ -1570,8 +1663,7 @@ class EnhancedNeurogenesis:
             return "the brain has only just started"
 
         max_neurons = self.config.neurogenesis.get('max_neurons', 32)
-        current_count = len(self.brain_widget.neuron_positions) - len(
-            getattr(self.brain_widget, 'excluded_neurons', []))
+        current_count = self._live_neuron_count()
         if current_count >= max_neurons and deficit.severity < 1.0:
             return f"the brain is already at its {max_neurons}-neuron ceiling"
 
