@@ -103,6 +103,17 @@ class TrainingConfig:
     food_spawn_chance: float = 0.02
     poop_spawn_chance: float = 0.01
     startle_chance: float = 0.005
+
+    # Reproducibility. With a seed set, a run is deterministic: the same seed,
+    # brain and tick count produce the same trained brain, byte for byte. That
+    # is what makes a result here something another person can check rather
+    # than something they have to take your word for.
+    seed: Optional[int] = None
+
+    # Hatch with no synapses and only the eight required neurons, instead of
+    # the full newborn brain with its innate reflexes. A blank brain is the
+    # control condition: anything it ends up knowing, it learned here.
+    blank: bool = False
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'TrainingConfig':
@@ -496,6 +507,10 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
         the moment a squid started hatching with action neurons - and a brain
         trained here would then have had no way to express a behaviour at all.
         """
+        if self.config.blank:
+            self._initialize_blank_state()
+            return
+
         for name, pos in newborn_neurons().items():
             self.positions[name] = pos
             if name in CORE_NEURONS:
@@ -514,6 +529,20 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
                     (src, dst), value=float(weight), mechanism='innate',
                     detail={'note': "this squid was born with it"}, create=True)
             
+    def _initialize_blank_state(self):
+        """The eight required neurons, no synapses, no instincts.
+
+        The control condition for an experiment: a brain that has been given
+        nothing, so that anything it is found to know at the end of a run was
+        learned during that run. Contrast _initialize_default_state(), which
+        hatches the newborn a real squid gets - reflexes included.
+        """
+        from src.brain_constants import REQUIRED_NEURONS
+
+        for name, pos in REQUIRED_NEURONS.items():
+            self.positions[name] = pos
+            self.state[name] = 0.0 if name in INPUT_SENSORS else 50.0
+
     def load_brain(self, brain_data: Dict) -> bool:
         """Load a brain from dictionary (JSON structure)"""
         try:
@@ -890,7 +919,12 @@ class HeadlessSimulation:
     
     def __init__(self, config: TrainingConfig = None):
         self.config = config or TrainingConfig()
-        self.brain = HeadlessBrain(config)
+        # Seed BEFORE anything random happens - HeadlessSquid picks its
+        # personality in its constructor - so a seeded run is reproducible from
+        # the very first draw.
+        if self.config.seed is not None:
+            random.seed(self.config.seed)
+        self.brain = HeadlessBrain(self.config)
         self.squid = HeadlessSquid()
         
         # Simulation state
@@ -1148,6 +1182,15 @@ Examples:
     )
     
     parser.add_argument('--brain', '-b', type=str, help='Path to brain JSON file to load')
+    parser.add_argument('--seed', type=int,
+                        help='Random seed. With one set the run is reproducible: '
+                             'the same seed, brain and tick count give the same '
+                             'trained brain every time.')
+    parser.add_argument('--blank', action='store_true',
+                        help='Start from a blank 8-neuron brain (the eight '
+                             'required neurons, no synapses, no innate reflexes) '
+                             'instead of the newborn brain a real squid gets. '
+                             'The control condition for an experiment.')
     parser.add_argument('--output', '-o', type=str, help='Path to save trained brain')
     parser.add_argument('--ticks', '-t', type=int, default=10000, help='Number of ticks to train (default: 10000)')
     parser.add_argument('--scenario', '-s', type=str, help='Training scenario to use')
@@ -1183,6 +1226,10 @@ Examples:
         config.neurogenesis_enabled = args.neurogenesis
     if args.max_neurons:
         config.max_neurons = args.max_neurons
+    if args.seed is not None:
+        config.seed = args.seed
+    if args.blank:
+        config.blank = True
         
     # Create simulation
     sim = HeadlessSimulation(config)

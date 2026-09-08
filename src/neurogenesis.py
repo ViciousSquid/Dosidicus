@@ -736,7 +736,7 @@ class EnhancedNeurogenesis:
             return None
 
         # 2. GLOBAL NEURON LIMIT
-        current_total = len(self.brain_widget.neuron_positions) - len(self.brain_widget.excluded_neurons)
+        current_total = self._live_neuron_count()
         max_neurons = self.config.neurogenesis.get('max_neurons', 32)
         if current_total >= max_neurons and not is_emergency:
             print(f"   Max neurons reached ({current_total}/{max_neurons})")
@@ -1109,6 +1109,20 @@ class EnhancedNeurogenesis:
         if callable(callback):
             callback()
     
+    def _live_neuron_count(self) -> int:
+        """How many neurons the network actually has.
+
+        Counts the excluded neurons that are PRESENT, not the length of the
+        excluded list. Those are different numbers: the list names five status
+        neurons that a given brain may or may not contain, so subtracting its
+        length flat let a brain that contained none of them run five neurons
+        past its own ceiling - which is exactly what a blank 8-neuron brain
+        trained headlessly did.
+        """
+        positions = getattr(self.brain_widget, 'neuron_positions', {}) or {}
+        excluded = set(getattr(self.brain_widget, 'excluded_neurons', ()) or ())
+        return sum(1 for name in positions if name not in excluded)
+
     def _get_unique_neuron_name(self, base_name: str) -> str:
         if base_name not in self.brain_widget.neuron_positions: return base_name
         counter = 2
@@ -1649,8 +1663,7 @@ class EnhancedNeurogenesis:
             return "the brain has only just started"
 
         max_neurons = self.config.neurogenesis.get('max_neurons', 32)
-        current_count = len(self.brain_widget.neuron_positions) - len(
-            getattr(self.brain_widget, 'excluded_neurons', []))
+        current_count = self._live_neuron_count()
         if current_count >= max_neurons and deficit.severity < 1.0:
             return f"the brain is already at its {max_neurons}-neuron ceiling"
 
