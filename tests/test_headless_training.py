@@ -73,11 +73,20 @@ def newborn_brain(**overrides):
     return HeadlessBrain(TrainingConfig(**overrides))
 
 
+#: Sections of an exported brain that record WHEN things happened as well as
+#: what happened. They are the point of the file for anyone studying it, but
+#: they carry wall-clock stamps, so two runs of the same experiment are not
+#: byte-identical there even when the brains they describe are.
+TIME_STAMPED_SECTIONS = ("metadata", "provenance", "causal_learning",
+                         "capability", "plasticity", "consolidation")
+
+
 def export_without_timestamp(brain):
-    """A brain's content, with the wall-clock stamp removed so two runs of
-    the same experiment can be compared for equality."""
+    """A brain's structure, with everything time-stamped removed, so two runs
+    of the same experiment can be compared for equality."""
     data = brain.export_brain()
-    data.pop("metadata", None)
+    for section in TIME_STAMPED_SECTIONS:
+        data.pop(section, None)
     return json.loads(json.dumps(data, sort_keys=True))
 
 
@@ -434,3 +443,158 @@ class TrainerGameParityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+# ===========================================================================
+# 8. Asking a brain file why
+# ===========================================================================
+class KnowledgeExtractionTests(unittest.TestCase):
+    """A trained brain has to be able to account for itself.
+
+    The point of the provenance machinery is that you can pick up a brain,
+    ask it what it knows and why, and get an answer in plain English backed by
+    the experience that produced it. These tests do exactly that: train a
+    squid, write it to a file, read the file back, and interrogate it.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.sim = HeadlessSimulation(TrainingConfig(seed=2024, blank=True))
+        cls.sim.run(ticks=1200, progress_interval=0)
+        cls.directory = tempfile.TemporaryDirectory()
+        cls.path = os.path.join(cls.directory.name, "studied.json")
+        cls.sim.brain.save_brain(cls.path)
+
+        cls.reloaded = HeadlessBrain(TrainingConfig(blank=True))
+        cls.reloaded.load_brain_file(cls.path)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.directory.cleanup()
+
+    # -- the file carries the account ---------------------------------
+    def test_a_saved_brain_carries_its_own_provenance(self):
+        """Otherwise a trained brain arrives with weights and no idea why."""
+        with open(self.path) as handle:
+            data = json.load(handle)
+        for key in ("provenance", "causal_learning", "capability"):
+            with self.subTest(section=key):
+                self.assertIn(key, data,
+                              f"a brain file with no {key} cannot be asked why")
+                self.assertTrue(data[key])
+
+    def test_the_reloaded_brain_knows_what_the_live_one_knew(self):
+        live = {item.statement
+                for item in self.sim.brain.ledger.knowledge(limit=500)}
+        restored = {item.statement
+                    for item in self.reloaded.ledger.knowledge(limit=500)}
+        self.assertTrue(live, "the trained brain learned nothing to report")
+        missing = live - restored
+        self.assertEqual(missing, set(),
+                         "the squid forgot things by being written to a file")
+
+    # -- what it knows ------------------------------------------------
+    def test_the_brain_states_what_it_knows_in_plain_english(self):
+        items = self.reloaded.ledger.knowledge(limit=20)
+        self.assertTrue(items)
+        for item in items[:10]:
+            with self.subTest(statement=item.statement):
+                self.assertTrue(item.statement.strip())
+                self.assertTrue(item.statement.rstrip().endswith(('.', '!', '?')),
+                                "a knowledge statement is not a sentence")
+                self.assertGreaterEqual(item.confidence, 0.0)
+                self.assertLessEqual(item.confidence, 1.0)
+
+    def test_knowledge_can_be_asked_about_one_topic(self):
+        """The Knowledge tab's 'what does the squid know about ___' box."""
+        everything = self.reloaded.ledger.knowledge(limit=500)
+        self.assertTrue(everything)
+
+        # Ask about a neuron the brain certainly has an opinion about.
+        subject = None
+        for item in everything:
+            if item.edge and item.edge[0] in self.reloaded.positions:
+                subject = item.edge[0]
+                break
+        self.assertIsNotNone(subject, "no association to ask about")
+
+        focused = self.reloaded.ledger.knowledge(subject, limit=500)
+        self.assertTrue(focused, f"asking about {subject!r} returned nothing")
+        self.assertLessEqual(len(focused), len(everything),
+                             "asking about one topic returned MORE than "
+                             "asking about everything")
+        # Asking about one thing narrows the account rather than changing it.
+        everything_said = {item.statement for item in everything}
+        for item in focused:
+            with self.subTest(statement=item.statement):
+                self.assertIn(item.statement, everything_said)
+
+    def test_asking_about_something_it_never_met_returns_nothing(self):
+        """An honest 'I do not know' rather than a plausible-looking answer."""
+        self.assertEqual(
+            self.reloaded.ledger.knowledge("xylophone", limit=50), [])
+
+    # -- why this weight ----------------------------------------------
+    def test_every_learned_synapse_can_explain_itself(self):
+        explained = 0
+        for edge, weight in list(self.reloaded.weights.items())[:25]:
+            explanation = self.reloaded.explain_weight(edge)
+            with self.subTest(edge=edge):
+                self.assertIsInstance(explanation, str)
+                self.assertTrue(explanation.strip(),
+                                f"{edge} cannot say anything about itself")
+            explained += 1
+        self.assertGreater(explained, 0)
+
+    def test_an_innate_synapse_says_it_was_born_with_it(self):
+        from src.brain_constants import INNATE_ACTION_WIRING
+
+        newborn = newborn_brain()
+        edge = (INNATE_ACTION_WIRING[0][0], INNATE_ACTION_WIRING[0][1])
+        explanation = newborn.explain_weight(edge).lower()
+        self.assertIn("born", explanation,
+                      "an instinct does not say that it is one")
+
+    # -- why this neuron ----------------------------------------------
+    def test_every_grown_neuron_can_say_why_it_exists(self):
+        grown = sorted(self.reloaded.custom_neurons)
+        self.assertTrue(grown, "1200 ticks of experience grew no structure")
+        for name in grown[:8]:
+            explanation = self.reloaded.explain_neuron(name)
+            with self.subTest(neuron=name):
+                self.assertIsInstance(explanation, str)
+                self.assertTrue(explanation.strip(),
+                                f"{name} cannot say why it exists")
+                self.assertIn("because", explanation.lower(),
+                              "a neuron's origin is stated without a reason")
+
+    # -- what it cannot do yet ----------------------------------------
+    def test_the_brain_reports_what_it_still_cannot_do(self):
+        monitor = self.reloaded.capability
+        self.assertIsNotNone(monitor)
+        description = monitor.describe()
+        self.assertIsInstance(description, str)
+        self.assertTrue(description.strip(),
+                        "the capability monitor came back from the file mute")
+
+    # -- the whole export, as the Knowledge tab writes it --------------
+    def test_the_knowledge_export_is_a_readable_account(self):
+        """The same text the Knowledge tab's 'Export...' button writes."""
+        items = self.reloaded.ledger.knowledge(limit=500)
+        monitor = self.reloaded.capability
+
+        lines = ["What this squid knows", "=" * 60, ""]
+        for item in items:
+            lines.append(item.describe())
+            lines.append("")
+        lines += ["", "What it cannot do yet", "=" * 60, ""]
+        if monitor is not None:
+            lines.append(monitor.describe())
+        report = "\n".join(lines)
+
+        self.assertIn("What this squid knows", report)
+        self.assertIn("What it cannot do yet", report)
+        self.assertGreater(len(report), 200,
+                           "the account of a trained brain is nearly empty")
+        # Every claim carries its confidence, so a reader can weigh it.
+        self.assertIn("Confidence:", report)

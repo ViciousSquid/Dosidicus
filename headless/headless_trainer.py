@@ -615,6 +615,10 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
                     elif isinstance(conn, (list, tuple)) and len(conn) >= 2:
                         self.weights[(conn[0], conn[1])] = float(conn[2]) if len(conn) > 2 else 0.5
                         
+            # Load the brain's account of itself, so a loaded brain can still
+            # be asked why it is the way it is.
+            self._load_provenance(brain_data)
+
             # Load shapes
             self.neuron_shapes = brain_data.get('neuron_shapes', {})
             
@@ -694,7 +698,48 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
                 'novelty_neurons': self.novelty_neuron_count,
                 'reward_neurons':  self.reward_neuron_count,
             },
+            # The brain's account of ITSELF, under the same keys the game's
+            # save uses. Without these a brain trained here arrives with an
+            # evolved network and no idea why any of it is the way it is: you
+            # could read its weights but not ask it what it learned, from what
+            # experience, or what it still cannot do. For a trainer whose whole
+            # point is producing brains other people examine, that is the more
+            # important half of the file.
+            **self._export_provenance(),
         }
+
+    _PROVENANCE_PARTS = (
+        ('provenance', 'ledger'),
+        ('causal_learning', 'causal_learning'),
+        ('capability', 'capability'),
+        ('plasticity', 'plasticity'),
+        ('consolidation', 'consolidation'),
+    )
+
+    def _export_provenance(self) -> Dict:
+        """Serialise every part of the brain that can explain itself."""
+        out = {}
+        for key, attribute in self._PROVENANCE_PARTS:
+            owner = getattr(self, attribute, None)
+            if owner is None or not hasattr(owner, 'to_dict'):
+                continue
+            try:
+                out[key] = owner.to_dict()
+            except Exception as exc:
+                print(f"⚠️  Could not export {key}: {type(exc).__name__}: {exc}")
+        return out
+
+    def _load_provenance(self, brain_data: Dict) -> None:
+        """Restore the brain's account of itself from a file."""
+        for key, attribute in self._PROVENANCE_PARTS:
+            payload = brain_data.get(key)
+            owner = getattr(self, attribute, None)
+            if not payload or owner is None or not hasattr(owner, 'from_dict'):
+                continue
+            try:
+                owner.from_dict(payload)
+            except Exception as exc:
+                print(f"⚠️  Could not restore {key}: {type(exc).__name__}: {exc}")
         
     def save_brain(self, filepath: str) -> bool:
         """Save brain to JSON file"""

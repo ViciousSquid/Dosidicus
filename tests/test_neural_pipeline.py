@@ -759,6 +759,27 @@ class BehaviourArbitrationTests(NeuralPipelineTestCase):
         SQUID.squid_x, SQUID.squid_y = 300.0, 300.0
         SQUID.squid_item.setPos(SQUID.squid_x, SQUID.squid_y)
 
+        # These tests are about ARBITRATION - that a decision installs a drive,
+        # that an urge outranks it - so the squid has to want to do something
+        # in the first place. Since behaviour is read off the network now, a
+        # squid whose locomotion neuron happens to sit under its threshold
+        # (this BRAIN is shared, and other tests teach it things) legitimately
+        # decides to do nothing, and there is no drive to arbitrate over.
+        # Holding locomotion up puts the squid in the state these tests assume.
+        from src.brain_constants import ACTION_NEURONS
+        self._prev_actions = {name: BRAIN.state.get(name)
+                              for name in ACTION_NEURONS}
+        for name in ACTION_NEURONS:
+            BRAIN.state[name] = 100.0 if name == 'act_move' else 0.0
+        self.addCleanup(self._restore_actions)
+
+    def _restore_actions(self):
+        for name, value in self._prev_actions.items():
+            if value is None:
+                BRAIN.state.pop(name, None)
+            else:
+                BRAIN.state[name] = value
+
     def _place_food(self, dx=300.0, dy=0.0):
         import math
         point = (SQUID.squid_x + SQUID.squid_width / 2 + dx,
