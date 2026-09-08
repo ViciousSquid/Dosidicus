@@ -504,14 +504,40 @@ class Ui:
                 return
 
             def _get(obj, *names):
+                if obj is None:
+                    return None
                 for n in names:
                     v = getattr(obj, n, None)
                     if v is not None:
                         return v
                 return None
 
-            stm = _get(squid, 'short_term_memory', 'stm', 'short_term', 'recent_memories')
-            ltm = _get(squid, 'long_term_memory',  'ltm', 'long_term',  'memories')
+            # Memories live on the MemoryManager, not on the squid. This looked
+            # only at the squid, found nothing under any of the names it tried,
+            # and exported {"stm": null, "ltm": null} - while still reporting
+            # success, so there was nothing to say the export had not worked.
+            memory_manager = getattr(squid, 'memory_manager', None)
+            stm = _get(memory_manager, 'short_term_memory')
+            ltm = _get(memory_manager, 'long_term_memory')
+            if stm is None:
+                stm = _get(squid, 'short_term_memory', 'stm', 'short_term',
+                           'recent_memories')
+            if ltm is None:
+                ltm = _get(squid, 'long_term_memory', 'ltm', 'long_term',
+                           'memories')
+
+            if stm is None and ltm is None:
+                self.show_message("No memories found to export.")
+                print("[Export] No memory store on the squid or its "
+                      "memory_manager - nothing exported.")
+                return
+
+            # An empty store is a real answer ("this squid remembers nothing")
+            # and should produce a file. Only a missing one is a failure.
+            if stm is None:
+                stm = []
+            if ltm is None:
+                ltm = []
 
             exports_dir = self._get_exports_dir()
             ts = self._exports_timestamp()
@@ -522,26 +548,32 @@ class Ui:
                 except Exception:
                     return str(obj)
 
-            if mode in ("stm", "all") and stm is not None:
+            written = []
+            if mode in ("stm", "all"):
                 path = os.path.join(exports_dir, f"memory_stm_{ts}.json")
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump(_serialise(stm), f, indent=2)
-                print(f"[Export] STM saved → {path}")
+                written.append(path)
+                print(f"[Export] STM saved ({len(stm)} memories) → {path}")
 
-            if mode in ("ltm", "all") and ltm is not None:
+            if mode in ("ltm", "all"):
                 path = os.path.join(exports_dir, f"memory_ltm_{ts}.json")
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump(_serialise(ltm), f, indent=2)
-                print(f"[Export] LTM saved → {path}")
+                written.append(path)
+                print(f"[Export] LTM saved ({len(ltm)} memories) → {path}")
 
             if mode == "all":
                 path = os.path.join(exports_dir, f"memory_all_{ts}.json")
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump({"stm": _serialise(stm), "ltm": _serialise(ltm)}, f, indent=2)
+                written.append(path)
                 print(f"[Export] All memory saved → {path}")
 
             label = {"stm": "STM", "ltm": "LTM", "all": "All Memory"}[mode]
-            self.show_message(f"{label} exported to /exports")
+            counts = {"stm": len(stm), "ltm": len(ltm),
+                      "all": len(stm) + len(ltm)}[mode]
+            self.show_message(f"{label} exported to /exports ({counts} memories)")
 
         except Exception as e:
             print(f"[Export] Memory export error: {e}")

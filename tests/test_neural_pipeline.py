@@ -16,6 +16,7 @@ Covered:
   7. Sensor ranges                 - every sensor stays inside its stated range
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -1221,3 +1222,95 @@ class InnateBehaviourTests(unittest.TestCase):
         engine_source = open("src/decision_engine.py").read()
         self.assertNotIn("Personality.TIMID", engine_source,
                          "the engine is branching on personality again")
+
+
+# ===========================================================================
+# Debug-menu exports
+# ===========================================================================
+class MemoryExportTests(unittest.TestCase):
+    """Exporting memories must export the memories."""
+
+    def _export(self, squid, mode, directory):
+        from src.ui import Ui
+
+        messages = []
+
+        class Stub:
+            tamagotchi_logic = type("L", (), {"squid": squid})()
+            show_message = lambda self, m: messages.append(m)
+            _exports_timestamp = Ui._exports_timestamp
+            export_memory = Ui.export_memory
+
+            def _get_exports_dir(self):
+                os.makedirs(directory, exist_ok=True)
+                return directory
+
+        Stub().export_memory(mode)
+        return messages
+
+    def test_exported_memories_are_the_squids_actual_memories(self):
+        """This wrote {"stm": null, "ltm": null}: it looked for the memories on
+        the squid, but they live on its MemoryManager."""
+        from src.memory_manager import MemoryManager
+
+        manager = MemoryManager()
+        manager.short_term_memory = [
+            {"category": "food", "key": "ate_sushi", "value": "tasty",
+             "timestamp": 1.0, "importance": 2}]
+        manager.long_term_memory = [
+            {"category": "behaviour", "key": "ink_cloud", "value": "Ink Cloud!"}]
+        squid = type("S", (), {"memory_manager": manager})()
+
+        with tempfile.TemporaryDirectory() as directory:
+            self._export(squid, "all", directory)
+            written = [f for f in os.listdir(directory) if f.startswith("memory_all_")]
+            self.assertEqual(len(written), 1, "no combined export was written")
+            with open(os.path.join(directory, written[0])) as handle:
+                payload = json.load(handle)
+
+        self.assertIsNotNone(payload["stm"], "short-term memory exported as null")
+        self.assertIsNotNone(payload["ltm"], "long-term memory exported as null")
+        self.assertEqual(payload["stm"][0]["key"], "ate_sushi")
+        self.assertEqual(payload["ltm"][0]["key"], "ink_cloud")
+
+    def test_the_separate_stm_and_ltm_files_are_written_too(self):
+        from src.memory_manager import MemoryManager
+
+        manager = MemoryManager()
+        manager.short_term_memory = [{"category": "food", "key": "a",
+                                      "value": 1, "timestamp": 1.0}]
+        manager.long_term_memory = [{"category": "x", "key": "b", "value": 2}]
+        squid = type("S", (), {"memory_manager": manager})()
+
+        with tempfile.TemporaryDirectory() as directory:
+            self._export(squid, "stm", directory)
+            self._export(squid, "ltm", directory)
+            names = os.listdir(directory)
+
+        self.assertTrue(any(n.startswith("memory_stm_") for n in names))
+        self.assertTrue(any(n.startswith("memory_ltm_") for n in names))
+
+    def test_an_empty_memory_store_still_exports_a_file(self):
+        """'This squid remembers nothing' is an answer, not a failure."""
+        from src.memory_manager import MemoryManager
+
+        manager = MemoryManager()
+        manager.short_term_memory = []
+        manager.long_term_memory = []
+        squid = type("S", (), {"memory_manager": manager})()
+
+        with tempfile.TemporaryDirectory() as directory:
+            self._export(squid, "all", directory)
+            written = [f for f in os.listdir(directory) if f.startswith("memory_all_")]
+            self.assertEqual(len(written), 1)
+            with open(os.path.join(directory, written[0])) as handle:
+                payload = json.load(handle)
+        self.assertEqual(payload, {"stm": [], "ltm": []})
+
+    def test_a_squid_with_no_memory_store_says_so_instead_of_claiming_success(self):
+        squid = type("S", (), {})()
+        with tempfile.TemporaryDirectory() as directory:
+            messages = self._export(squid, "all", directory)
+            self.assertEqual(os.listdir(directory), [])
+        self.assertTrue(any("No memories" in m for m in messages),
+                        f"reported success with nothing exported: {messages}")
