@@ -233,18 +233,23 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             'neurogenesis_active': True
         }
 
-        # Neuron position configuration
-        self.original_neuron_positions = { #
-            "can_see_food": (50, 200),
-            "hunger": (127, 81), #
-            "happiness": (361, 81), #
-            "cleanliness": (627, 81), #
-            "sleepiness": (840, 81), #
-            "satisfaction": (271, 380), #
-            "anxiety": (491, 389), #
-            "curiosity": (701, 386) #
-        }
-        self.neuron_positions = self.original_neuron_positions.copy() 
+        # Neuron position configuration. brain_constants.newborn_neurons() is
+        # the single definition of what a squid hatches with: the eight
+        # required neurons, the sensors its innate reflexes read, and the
+        # action neurons that are the motor end of every behaviour.
+        from .brain_constants import newborn_neurons, ACTION_NEURONS
+        self.original_neuron_positions = newborn_neurons()
+        self.neuron_positions = self.original_neuron_positions.copy()
+
+        # Action neurons are network-driven like any other: propagation writes
+        # them, and the decision engine reads them to see what the squid wants
+        # to do. They start at rest, not at the 50 baseline a core stat uses -
+        # a newborn should want nothing until something drives it.
+        from .brain_constants import action_resting_level
+        for action_name in ACTION_NEURONS:
+            self.state.setdefault(action_name, action_resting_level(action_name))
+        for sensor_name in self.original_neuron_positions:
+            self.state.setdefault(sensor_name, 0.0)
 
         # Randomize positions if configured ---
         neuron_props = self.config.neurogenesis.get('neuron_properties', {})
@@ -856,15 +861,29 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self._comm_glow_last_spawn[conn_key] = current_time
 
     def find_orphan_neurons(self):
-        """Find neurons with no connections in the weights dictionary"""
+        """Find neurons with no connections in the weights dictionary.
+
+        An UNLEARNED ACTION is not an orphan. act_play, act_shelter and
+        act_rest are deliberately born with nothing driving them - that is what
+        "the squid has to learn this" is made of - so reporting them as
+        orphans made the brain grow a rescue connector for each one within the
+        first few seconds of life, wiring up by accident exactly the actions
+        the squid was supposed to have to earn. A disconnected action neuron is
+        a capability the squid does not have yet, not a defect in its wiring.
+        """
+        from .brain_constants import LEARNED_ACTIONS
+
         orphans = []
-        
+
         # Define neurons that should be checked even if they are in excluded_neurons
         explicitly_allowed = {'can_see_food', 'plant_proximity', 'is_fleeing'}
-        
+        never_orphans = set(LEARNED_ACTIONS)
+
         for neuron in self.neuron_positions.keys():
             # Skip if the neuron is excluded, unless it's in our allowed list
             if neuron in self.excluded_neurons and neuron not in explicitly_allowed:
+                continue
+            if neuron in never_orphans:
                 continue
             
             # Check for any connection (incoming or outgoing)
@@ -2433,8 +2452,10 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         rolls of the dice also left a drive with no connections at all, and the
         brain then grew a connector to rescue a defect it was born with.
         """
-        from .brain_constants import INNATE_CONNECTIONS
-        for source, target, weight in INNATE_CONNECTIONS:
+        from .brain_constants import (INNATE_CONNECTIONS, INNATE_ACTION_WIRING,
+                                       LEARNED_ACTIONS)
+        innate = tuple(INNATE_CONNECTIONS) + tuple(INNATE_ACTION_WIRING)
+        for source, target, weight in innate:
             if source not in self.neuron_positions or target not in self.neuron_positions:
                 continue
             self.apply_weight_change(
@@ -2442,6 +2463,47 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 detail={'note': "this squid was born with it"},
                 create=True, animate=False)
         self.sync_connections_from_weights()
+        if LEARNED_ACTIONS:
+            print(f"🥚 Born knowing how to move, eat and flee. "
+                  f"Must learn: {', '.join(a[4:] for a in LEARNED_ACTIONS)}")
+
+    def apply_personality_bias(self, personality):
+        """Tilt this squid's innate reflexes toward its personality.
+
+        Personality used to be a multiplier table the decision engine applied
+        to finished behaviour weights, which put it outside the network
+        entirely: nothing the squid experienced could ever change it, and it
+        appeared nowhere in the brain the player was looking at. Here it is a
+        one-off adjustment to the innate synapses themselves, recorded like any
+        other weight change, so a timid squid is visibly one with a stronger
+        startle reflex - and ordinary learning can wear that down.
+
+        Applied once per squid; calling it again is a no-op.
+        """
+        from .brain_constants import INNATE_PERSONALITY_BIAS
+
+        if getattr(self, '_personality_bias_applied', False):
+            return
+        value = getattr(personality, 'value', personality)
+        if not isinstance(value, str):
+            return
+        bias = INNATE_PERSONALITY_BIAS.get(value.lower())
+        if not bias:
+            return
+
+        self._personality_bias_applied = True
+        for source, target, multiplier in bias:
+            key = (source, target)
+            if key not in self.weights:
+                continue
+            new_value = max(-1.0, min(1.0, float(self.weights[key]) * float(multiplier)))
+            self.apply_weight_change(
+                key, value=new_value, mechanism='innate',
+                detail={'note': f"born {value} - {'stronger' if multiplier > 1 else 'weaker'} "
+                                f"than the species baseline"},
+                create=False, animate=False)
+        self.sync_connections_from_weights()
+        print(f"🧬 Innate reflexes tilted for a {value} squid")
 
     def get_neuron_count(self):
         """Returns the actual count of neurons in the network positions."""
@@ -2588,19 +2650,16 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         # one consistent tick.
         self.drive_external_neurons(smoothing)
 
-        # Gather learning evidence FIRST. A default 8-neuron brain has no
-        # network-driven neurons at all, so doing this after the early return
-        # meant the squid could never learn until the user added a neuron in
-        # the Designer - the exact opposite of "it learns from its
-        # environment".
-        self.observe_for_learning()
-
         # Which neurons may we compute? Anything in the network that is not
         # owned by the world. neuron_positions is the network's membership list.
         targets = [n for n in self.neuron_positions
                    if is_network_driven(n) and n not in self.excluded_neurons
                    and n not in self.externally_driven]
         if not targets:
+            # Still gather evidence. A brain with nothing to compute must go on
+            # learning: this used to sit after an early return, so a squid whose
+            # network was all sensors and drives could never learn at all.
+            self.observe_for_learning()
             return {}
 
         functional = getattr(getattr(self, 'enhanced_neurogenesis', None),
@@ -2617,6 +2676,15 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         changed = propagate(self.state, self.weights, targets,
                             strengths=strengths, noise=noise, smoothing=smoothing)
+
+        # Evidence is gathered AFTER the forward pass, so every mechanism sees
+        # this tick's sensors alongside the activations those sensors actually
+        # produced. Observing first paired each tick's world with the PREVIOUS
+        # tick's network, which inverted the very thing the capability monitor
+        # measures: a detector wired +0.9 from can_see_food was recorded at its
+        # no-food value on exactly the ticks food was visible, and the monitor
+        # concluded it was a detector for the ABSENCE of food.
+        self.observe_for_learning()
 
         if changed:
             self.mark_render_dirty()

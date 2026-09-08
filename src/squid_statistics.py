@@ -6,7 +6,30 @@ logger = logging.getLogger(__name__)
 
 # Distance tracking constants
 DISTANCE_ROLLOVER_LIMIT = 999_999_999  # ~1 billion pixels before rollover
-DEFAULT_NEURON_COUNT = 8
+
+
+def _default_neuron_count():
+    """How many neurons a squid is counted as having at birth.
+
+    Derived from brain_constants.newborn_neurons() rather than hard-coded,
+    because "what a newborn has" is defined there and has changed: a squid now
+    hatches with the sensors its innate reflexes read and the action neurons
+    that are the motor end of its behaviour, not only the original eight. A
+    literal here went stale the moment that happened, and every statistic
+    counting neurons grown since birth was wrong by the difference.
+
+    Counted the same way TamagotchiLogic._live_neuron_count() counts, so the
+    starting figure and the running figure mean the same thing.
+    """
+    try:
+        from .brain_constants import newborn_neurons, EXCLUDED_NEURONS
+    except ImportError:  # pragma: no cover - headless/partial installs
+        return 8
+    excluded = set(EXCLUDED_NEURONS)
+    return sum(1 for name in newborn_neurons() if name not in excluded)
+
+
+DEFAULT_NEURON_COUNT = _default_neuron_count()
 
 
 class SquidStatistics:

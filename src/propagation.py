@@ -57,9 +57,26 @@ DEFAULT_SMOOTHING = 0.5
 # Neurons whose quiet state is zero rather than the midpoint: the sense organs.
 # Imported lazily-ish at module level because brain_constants has no imports of
 # its own and cannot cycle.
-from .brain_constants import BINARY_NEURONS, PURE_INPUT_NEURONS  # noqa: E402
+from .brain_constants import (BINARY_NEURONS, PURE_INPUT_NEURONS,  # noqa: E402
+                              ACTION_NEURONS, action_resting_level)
 
-_RESTS_AT_ZERO = set(PURE_INPUT_NEURONS) | set(BINARY_NEURONS)
+# Action neurons rest at zero for the same reason sensors do. "I do not want to
+# do anything" is a neuron with nothing to report, and it has to be worth
+# nothing - if an action neuron settled at the 50 midpoint like a drive does,
+# then an action the squid has never learned would sit permanently at 50 and
+# compete with the ones it has, and a newborn would be born wanting to do
+# everything equally. Resting at zero is what makes "the squid has not learned
+# this yet" a state the network can actually be in.
+_RESTS_AT_ZERO = set(PURE_INPUT_NEURONS) | set(BINARY_NEURONS) | set(ACTION_NEURONS)
+
+
+def baseline_of(name: str) -> float:
+    """The activation this neuron settles to when nothing is driving it."""
+    if name in ACTION_NEURONS:
+        # Action neurons mostly rest at zero, but locomotion rests at the
+        # midpoint - see ACTION_RESTING_LEVELS.
+        return action_resting_level(name)
+    return 0.0 if name in _RESTS_AT_ZERO else BASELINE
 
 
 def signal_of(name: str, value: float) -> float:
@@ -72,12 +89,17 @@ def signal_of(name: str, value: float) -> float:
     measurement in the capability monitor, the Laboratory's projection - goes
     through it.
     """
-    if name in _RESTS_AT_ZERO:
+    rest = baseline_of(name)
+    if rest == 0.0:
         # Rests at 0, full signal at 100. Halved so a saturated sensor pushes
         # exactly as hard as a saturated drive, which is what every weight in
         # the project was tuned against.
         return max(0.0, min(100.0, float(value))) * 0.5
-    return float(value) - BASELINE
+    # Deviation from this neuron's own resting level. Reading it off
+    # baseline_of() rather than off BASELINE keeps one definition of "at rest"
+    # for a neuron that is both a target of the forward pass and a source for
+    # something downstream.
+    return float(value) - rest
 
 
 def activation_of(raw) -> Optional[float]:
@@ -124,15 +146,15 @@ def propagate(state: Dict[str, object],
     changed: Dict[str, float] = {}
     for name in targets:
         strength = float(strengths.get(name, 1.0) or 1.0)
-        target_val = BASELINE + net_input[name] * strength
+        target_val = baseline_of(name) + net_input[name] * strength
 
         jitter = float(noise.get(name, 0.0) or 0.0)
         if jitter:
             target_val += random.uniform(-jitter, jitter)
 
-        old = activation_of(state.get(name, BASELINE))
+        old = activation_of(state.get(name, baseline_of(name)))
         if old is None:
-            old = BASELINE
+            old = baseline_of(name)
 
         new_val = old + (target_val - old) * smoothing
         new_val = max(0.0, min(100.0, new_val))

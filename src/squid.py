@@ -742,9 +742,15 @@ class Squid:
         being moved, so the other two stayed floating wherever the squid
         happened to be standing when they appeared and never caught up.
         """
-        self.update_sick_icon_position()
-        self.update_startled_icon_position()
-        self.update_neurogenesis_icon_position()
+        # getattr guards: the icon attributes are set in __init__, but this runs
+        # from move_squid, which tests and headless runs drive against a squid
+        # built without the graphics attributes.
+        if getattr(self, 'sick_icon_item', None) is not None:
+            self.update_sick_icon_position()
+        if getattr(self, 'startled_icon', None) is not None:
+            self.update_startled_icon_position()
+        if getattr(self, 'ng_icon', None) is not None:
+            self.update_neurogenesis_icon_position()
 
     def load_poop_images(self):
         self.poop_images = [

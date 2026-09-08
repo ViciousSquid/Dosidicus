@@ -24,7 +24,12 @@ class SquidStatisticsTests(unittest.TestCase):
         self.statistics = SquidStatistics(self.squid)
 
     def test_default_neuron_count_matches_the_standard_brain(self):
-        self.assertEqual(DEFAULT_NEURON_COUNT, 8)
+        # Checked against what a newborn brain actually contains rather than a
+        # literal, which went stale the moment a squid started hatching with
+        # the sensors and action neurons its innate reflexes need.
+        from src.brain_constants import newborn_neurons, EXCLUDED_NEURONS
+        expected = len(set(newborn_neurons()) - set(EXCLUDED_NEURONS))
+        self.assertEqual(DEFAULT_NEURON_COUNT, expected)
         self.assertEqual(self.statistics.current_neurons, DEFAULT_NEURON_COUNT)
         self.assertEqual(
             self.statistics.max_neurons_reached,
@@ -61,34 +66,40 @@ class SquidStatisticsTests(unittest.TestCase):
         self.assertEqual(self.statistics.sickness_episodes, 2)
 
     def test_neuron_birth_updates_type_and_lifetime_maximum_once(self):
-        self.statistics.record_neuron_birth("novelty", current_count=8)
-        self.statistics.record_neuron_birth("stress", current_count=9)
-        self.statistics.record_neuron_birth("connector", current_count=10)
+        # Counts are expressed relative to what the squid starts with, so this
+        # keeps testing "three neurons were grown" rather than three literals
+        # that only meant that when a newborn had eight neurons.
+        start = DEFAULT_NEURON_COUNT
+        self.statistics.record_neuron_birth("novelty", current_count=start + 1)
+        self.statistics.record_neuron_birth("stress", current_count=start + 2)
+        self.statistics.record_neuron_birth("connector", current_count=start + 3)
 
         self.assertEqual(self.statistics.novelty_neurons_created, 1)
         self.assertEqual(self.statistics.stress_neurons_created, 1)
         self.assertEqual(self.statistics.reward_neurons_created, 0)
-        self.assertEqual(self.statistics.current_neurons, 10)
-        self.assertEqual(self.statistics.max_neurons_reached, 10)
+        self.assertEqual(self.statistics.current_neurons, start + 3)
+        self.assertEqual(self.statistics.max_neurons_reached, start + 3)
 
     def test_lifetime_maximum_never_decreases_with_current_count(self):
-        self.statistics.observe_neuron_count(12)
-        self.statistics.observe_neuron_count(8)
-        self.statistics.record_neuron_birth("reward", current_count=9)
+        start = DEFAULT_NEURON_COUNT
+        self.statistics.observe_neuron_count(start + 4)
+        self.statistics.observe_neuron_count(start)
+        self.statistics.record_neuron_birth("reward", current_count=start + 1)
 
-        self.assertEqual(self.statistics.current_neurons, 9)
-        self.assertEqual(self.statistics.max_neurons_reached, 12)
+        self.assertEqual(self.statistics.current_neurons, start + 1)
+        self.assertEqual(self.statistics.max_neurons_reached, start + 4)
         self.assertEqual(self.statistics.reward_neurons_created, 1)
 
     def test_reset_preserves_current_and_lifetime_neuron_counts(self):
-        self.statistics.observe_neuron_count(12)
-        self.statistics.observe_neuron_count(9)
+        start = DEFAULT_NEURON_COUNT
+        self.statistics.observe_neuron_count(start + 4)
+        self.statistics.observe_neuron_count(start + 1)
         self.statistics.cheese_consumed = 3
 
         self.statistics.reset()
 
-        self.assertEqual(self.statistics.current_neurons, 9)
-        self.assertEqual(self.statistics.max_neurons_reached, 12)
+        self.assertEqual(self.statistics.current_neurons, start + 1)
+        self.assertEqual(self.statistics.max_neurons_reached, start + 4)
         self.assertEqual(self.statistics.cheese_consumed, 0)
 
     def test_other_lifetime_maxima_never_decrease(self):

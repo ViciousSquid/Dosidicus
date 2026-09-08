@@ -47,6 +47,10 @@ from src.brain_constants import (  # noqa: E402
     PURE_INPUT_NEURONS as PURE_INPUTS,
     INPUT_SENSORS as _INPUT_SENSOR_POSITIONS,
     INNATE_CONNECTIONS,
+    INNATE_ACTION_WIRING,
+    ACTION_NEURONS,
+    newborn_neurons,
+    action_resting_level,
     is_network_driven,
 )
 from src.propagation import ExternallyDriven, propagate  # noqa: E402
@@ -483,29 +487,28 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
                 if getattr(fn, 'neuron_type', '') == 'connector'}
         
     def _initialize_default_state(self):
-        """Initialize with default neuron structure"""
-        default_positions = {
-            "can_see_food": (50, 200),
-            "hunger": (127, 81),
-            "happiness": (361, 81),
-            "cleanliness": (627, 81),
-            "sleepiness": (840, 81),
-            "satisfaction": (271, 380),
-            "anxiety": (491, 389),
-            "curiosity": (701, 386),
-        }
-        
-        for name, pos in default_positions.items():
+        """Initialize with default neuron structure.
+
+        Hatched from brain_constants.newborn_neurons(), the same definition the
+        game uses, so "a brain trained without the GUI starts from the same
+        place the squid does" stays true. This used to carry its own copy of
+        the eight default positions, which silently stopped matching the game
+        the moment a squid started hatching with action neurons - and a brain
+        trained here would then have had no way to express a behaviour at all.
+        """
+        for name, pos in newborn_neurons().items():
             self.positions[name] = pos
             if name in CORE_NEURONS:
                 self.state[name] = 50.0
+            elif name in ACTION_NEURONS:
+                self.state[name] = action_resting_level(name)
             elif name in INPUT_SENSORS:
                 self.state[name] = 0.0
             else:
                 self.state[name] = 50.0
-                
+
         # The instincts of the species, from the one table that holds them.
-        for src, dst, weight in INNATE_CONNECTIONS:
+        for src, dst, weight in tuple(INNATE_CONNECTIONS) + tuple(INNATE_ACTION_WIRING):
             if src in self.positions and dst in self.positions:
                 self.apply_weight_change(
                     (src, dst), value=float(weight), mechanism='innate',

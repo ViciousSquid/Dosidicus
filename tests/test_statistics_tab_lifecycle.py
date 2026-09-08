@@ -158,7 +158,8 @@ class StatisticsTabLifecycleTests(unittest.TestCase):
                 prebound_stats.novelty_neurons_created = 11
                 prebound_stats.stress_neurons_created = 12
                 prebound_stats.reward_neurons_created = 13
-                prebound_stats.observe_neuron_count(14)
+                prebound = DEFAULT_NEURON_COUNT + 4
+                prebound_stats.observe_neuron_count(prebound)
                 prebound_stats.total_age_seconds = 15 * 60
 
                 window.set_tamagotchi_logic(logic)
@@ -195,7 +196,7 @@ class StatisticsTabLifecycleTests(unittest.TestCase):
                     "novelty_neurons_created": "11",
                     "stress_neurons_created": "12",
                     "reward_neurons_created": "13",
-                    "current_neurons": "14",
+                    "current_neurons": str(prebound),
                 }
                 for label_name, expected_text in (
                     expected_initial_labels.items()
@@ -212,15 +213,16 @@ class StatisticsTabLifecycleTests(unittest.TestCase):
                 prebound_stats.reset()
                 self.assertTrue(logic.record_statistic_event("cheese_eaten"))
                 logic.track_distance(4321)
-                logic.squid.statistics.observe_neuron_count(15)
+                grown = DEFAULT_NEURON_COUNT + 5
+                logic.squid.statistics.observe_neuron_count(grown)
                 logic._refresh_statistics_tab()
 
                 self.assertEqual(logic.squid.statistics.cheese_consumed, 1)
                 self.assertEqual(logic.squid.statistics.distance_swam, 4321.0)
-                self.assertEqual(logic.squid.statistics.max_neurons_reached, 15)
+                self.assertEqual(logic.squid.statistics.max_neurons_reached, grown)
                 self.assertEqual(labels["cheese_eaten"].text(), "1")
                 self.assertEqual(labels["distance_swam"].text(), "4,321")
-                self.assertEqual(labels["current_neurons"].text(), "15")
+                self.assertEqual(labels["current_neurons"].text(), str(grown))
 
                 window.set_tamagotchi_logic(None)
                 self.assertIsNone(window.tamagotchi_logic)
