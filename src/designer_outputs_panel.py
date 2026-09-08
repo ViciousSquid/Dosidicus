@@ -33,6 +33,29 @@ except ImportError:
     )
 
 
+def incoming_counts(design):
+    """How many synapses feed each neuron in `design`."""
+    counts = {}
+    for conn in getattr(design, 'connections', []):
+        target = getattr(conn, 'target', None)
+        if target:
+            counts[target] = counts.get(target, 0) + 1
+    return counts
+
+
+def is_never_driven(name, neuron, counts):
+    """True if this neuron's activation can never change.
+
+    Core stats and sensors are written by the world every tick. Everything else
+    gets its value from forward propagation, which needs at least one incoming
+    synapse - without one the neuron sits at its initial value forever and a
+    threshold binding on it is a dead configuration.
+    """
+    if neuron.is_core or neuron.is_sensor:
+        return False
+    return counts.get(name, 0) == 0
+
+
 class OutputBindingDialog(QDialog):
     """Dialog for creating or editing a neuron output binding."""
     
@@ -167,6 +190,7 @@ class OutputBindingDialog(QDialog):
     def _populate_neurons(self):
         """Populate neuron combo with available neurons."""
         self.neuron_combo.clear()
+        counts = incoming_counts(self.design)
         
         # Get all non-core neurons (outputs typically come from processing neurons)
         for name, neuron in sorted(self.design.neurons.items()):
@@ -184,7 +208,10 @@ class OutputBindingDialog(QDialog):
                     display = f"🔥 {name}"
                 elif name.startswith('reward_'):
                     display = f"💎 {name}"
-                    
+
+                if is_never_driven(name, neuron, counts):
+                    display = f"⚠ {display}  (no inputs - activation never changes)"
+
                 self.neuron_combo.addItem(display, name)
         
         # Also add core neurons (they might want anxiety to trigger flee, etc.)
@@ -530,7 +557,15 @@ class NeuronOutputsPanel(QWidget):
         Returns list of warning messages.
         """
         warnings = []
+        counts = incoming_counts(self.design)
         for binding in self.bindings:
             if binding.neuron_name not in self.design.neurons:
                 warnings.append(f"Binding references missing neuron: {binding.neuron_name}")
+                continue
+            neuron = self.design.neurons[binding.neuron_name]
+            if is_never_driven(binding.neuron_name, neuron, counts):
+                warnings.append(
+                    f"'{binding.neuron_name}' has no incoming connections, so its "
+                    f"activation can never change and this binding will not fire."
+                )
         return warnings

@@ -164,7 +164,9 @@ def update_brain_state_from_widget(brain_widget) -> bool:
             visible_neurons=getattr(brain_widget, 'visible_neurons', None),
             excluded_neurons=getattr(brain_widget, 'excluded_neurons', []),
             layers=getattr(brain_widget, 'layers', []),
-            output_bindings=[]
+            # Was hard-coded to [], so a Designer that imported the live brain
+            # always saw zero bindings and pushing back wiped them.
+            output_bindings=list(getattr(brain_widget, 'output_bindings', []) or [])
         )
     except Exception as e:
         print(f"[BrainBridge] Error updating from widget: {e}")
@@ -255,13 +257,17 @@ def convert_to_brain_design(live_state: Dict) -> Optional['BrainDesign']:
     """
     # Import here to avoid circular imports
     try:
-        from designer_core import BrainDesign, DesignerNeuron, DesignerConnection
-        from designer_constants import (
+        # These were absolute imports, which always raise ImportError inside
+        # the src package - so this function returned None every single time and
+        # the standalone Designer silently generated a random network instead of
+        # importing the running brain.
+        from .designer_core import BrainDesign, DesignerNeuron, DesignerConnection
+        from .designer_constants import (
             NeuronType, is_core_neuron, is_input_sensor, is_binary_neuron,
             DEFAULT_COLORS
         )
-    except ImportError:
-        print("[BrainBridge] Could not import designer modules")
+    except ImportError as exc:
+        print(f"[BrainBridge] Could not import designer modules: {exc}")
         return None
     
     try:
@@ -340,7 +346,7 @@ def convert_to_brain_design(live_state: Dict) -> Optional['BrainDesign']:
         
         # Load layers if present
         for layer_data in live_state.get('layers', []):
-            from designer_core import DesignerLayer
+            from .designer_core import DesignerLayer
             design.layers.append(DesignerLayer.from_dict(layer_data))
         
         # Load output bindings if present

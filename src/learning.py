@@ -591,12 +591,17 @@ class LearningConfig:
     def __init__(self):
         # Initialize default values
         self.hebbian = {
-            'base_learning_rate': 0.1,
+            # Defaults chosen by simulating a meaningful pair (covariance
+            # 0.16) against the noise floor over 30 simulated minutes. The old
+            # values separated signal from noise by +0.020 - i.e. not at all.
+            'base_learning_rate': 0.08,
             'threshold': 0.7,
-            'weight_decay': 0.01,
+            'weight_decay': 0.02,
             'max_weight': 1.0,
             'min_weight': -1.0,
-            'learning_interval': 30000,
+            'learning_interval': 20000,
+            'max_hebbian_pairs': 4,
+            'stdp_weight': 0.4,
             'goal_weights': {
                 'organize_decorations': 0.5,
                 'interact_with_rocks': 0.7,
@@ -624,6 +629,37 @@ class LearningConfig:
             from .config_manager import ConfigManager
             config_manager = ConfigManager()
             
+            # --- Hebbian section ---
+            # This was never read: config.ini's [Hebbian] block had no effect at
+            # all, so a base_learning_rate of 0.20 in the file ran as 0.1. The
+            # file expresses the interval in SECONDS while the timers want
+            # milliseconds, so convert rather than silently starting a 30ms
+            # learning timer.
+            raw = config_manager.config
+            if raw.has_section('Hebbian'):
+                def _num(key, cast, current):
+                    try:
+                        return cast(raw.get('Hebbian', key))
+                    except Exception:
+                        return current
+
+                interval_s = _num('learning_interval', float, None)
+                if interval_s:
+                    self.hebbian['learning_interval'] = int(
+                        interval_s * 1000 if interval_s < 1000 else interval_s)
+                self.hebbian['base_learning_rate'] = _num(
+                    'base_learning_rate', float, self.hebbian['base_learning_rate'])
+                self.hebbian['weight_decay'] = _num(
+                    'weight_decay', float, self.hebbian['weight_decay'])
+                self.hebbian['min_weight'] = _num(
+                    'min_weight', float, self.hebbian['min_weight'])
+                self.hebbian['max_weight'] = _num(
+                    'max_weight', float, self.hebbian['max_weight'])
+                self.hebbian['max_hebbian_pairs'] = _num(
+                    'max_hebbian_pairs', int, self.hebbian.get('max_hebbian_pairs', 4))
+                self.hebbian['stdp_weight'] = _num(
+                    'stdp_weight', float, self.hebbian.get('stdp_weight', 0.4))
+
             # Get neurogenesis configuration
             neuro_config = config_manager.get_neurogenesis_config()
             

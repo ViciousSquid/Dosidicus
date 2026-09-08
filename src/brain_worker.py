@@ -162,9 +162,15 @@ class BrainWorker(QThread):
 
         neuro_config = getattr(config, 'neurogenesis', {})
         
+        # The stress path used to short-circuit on `anxiety > 75`, which any
+        # startle satisfies instantly - so sustained_stress (which needs ~20
+        # stressed ticks to reach 2.0) never mattered and stress neurons were
+        # by far the easiest type to grow. Sustained stress is now the primary
+        # signal and acute anxiety only counts when it is genuinely extreme.
         triggers = {
-            'novelty': state.get('novelty_exposure', 0) > neuro_config.get('novelty_threshold', 3.0),
-            'stress': state.get('sustained_stress', 0) > neuro_config.get('stress_threshold', 1.2) or state.get('anxiety', 0) > 75,
+            'novelty': state.get('novelty_exposure', 0) > neuro_config.get('novelty_threshold', 2.0),
+            'stress': (state.get('sustained_stress', 0) > neuro_config.get('stress_threshold', 1.2)
+                       or state.get('anxiety', 0) > 90),
             'reward': state.get('recent_rewards', 0) > neuro_config.get('reward_threshold', 3.5)
         }
         
@@ -195,204 +201,31 @@ class BrainWorker(QThread):
             self.neurogenesis_result.emit({'should_create': False})
 
     def _perform_hebbian_learning(self):
-        """Perform Hebbian learning calculations using cached state."""
-        # Retrieve snapshot of cache
-        with QMutexLocker(self._cache_mutex):
-            state = self.cache['state']
-            weights = self.cache['weights']
-            neuron_list = list(self.cache['positions'].keys())
-            excluded = self.cache['excluded_neurons']
-            connector_neurons = self.cache['connector_neurons']
-            config = self.cache['config']
-            base_learning_rate = self.cache['learning_rate']
-            new_neurons = self.cache['new_neurons']
+        """Retired.
 
-        # DEBUG: Check if we have the basics
-        if not config:
-            print("⚠️ BrainWorker: Hebbian skipped - No 'config' in cache yet.")
-            return
-        
-        if not neuron_list:
-            print("⚠️ BrainWorker: Hebbian skipped - No neurons in cache 'positions'.")
-            return
-
-        # PURE_INPUTS (Sensors) - Do not include in Hebbian learning
-        PURE_INPUTS = {
-            "can_see_food", "is_eating", "is_sleeping", "is_sick", 
-            "pursuing_food", "is_fleeing", "is_startled", "external_stimulus", 
-            "plant_proximity"
-        }
-
-        # Filter available neurons
-        # Exclude system neurons, connector neurons AND pure inputs
-        learning_candidates = [
-            n for n in neuron_list 
-            if n not in excluded and n not in connector_neurons and n not in PURE_INPUTS
-        ]
-        
-        # DEBUG: Check if we have enough candidates
-        if len(learning_candidates) < 2:
-            print(f"⚠️ BrainWorker: Hebbian skipped - Not enough candidates ({len(learning_candidates)}).")
-            # print(f"   Excluded: {len(excluded)}, Connectors: {len(connector_neurons)}, Total: {len(neuron_list)}")
-            self.hebbian_result.emit({'updated_pairs': []})
-            return
-
-        # Calculate scores
-        scored_pairs = []
-        for i, n1 in enumerate(learning_candidates):
-            for n2 in learning_candidates[i + 1:]:
-                # Base Score: Sum of activations
-                v1 = self._get_neuron_value(state.get(n1, 50))
-                v2 = self._get_neuron_value(state.get(n2, 50))
-                score = v1 + v2
-
-                # 1. Add Random Noise to break deterministic loops
-                score += random.uniform(0, 40)
-
-                # 2. Cooldown Penalty: Check if pair was used in last cycle
-                # Sort tuple to ensure (A,B) is treated same as (B,A)
-                pair_key = tuple(sorted((n1, n2)))
-                if pair_key in self._last_hebbian_pairs:
-                    score -= 500  # Massive penalty ensures rotation
-
-                scored_pairs.append((score, n1, n2, v1, v2))
-
-        if not scored_pairs:
-            print("⚠️ BrainWorker: Hebbian skipped - No valid pairs formed.")
-            return
-
-        # Select top pairs
-        top_k = 2  # Default
-        if hasattr(config, 'neurogenesis'):
-            top_k = config.neurogenesis.get('max_hebbian_pairs', 2)
-            
-        top_pairs = nlargest(top_k, scored_pairs)
-        
-        # Update history for next run
-        self._last_hebbian_pairs = [tuple(sorted((n1, n2))) for _, n1, n2, _, _ in top_pairs]
-        
-        weight_updates = {}
-        updated_pairs_list = []
-        
-        hebbian_config = getattr(config, 'hebbian', {})
-        decay_rate = hebbian_config.get('weight_decay', 0.01)
-        
-        for _, n1, n2, v1, v2 in top_pairs:
-            pair = (n1, n2)
-            reverse_pair = (n2, n1)
-            
-            # Find existing weight key
-            use_pair = None
-            if pair in weights:
-                use_pair = pair
-            elif reverse_pair in weights:
-                use_pair = reverse_pair
-            
-            if not use_pair:
-                # CREATE NEW CONNECTION if it doesn't exist
-                # This allows Hebbian learning to form new pathways between neurons
-                # that are frequently co-active, not just strengthen existing ones
-                use_pair = pair
-                old_w = 0.0  # New connections start at zero
-                # Mark this as a new connection that needs to be created
-                weight_updates[use_pair] = {
-                    'old_weight': old_w,
-                    'new_weight': 0.0,  # Will be updated below
-                    'is_new_connection': True  # Signal to brain_widget to create this
-                }
-            else:
-                old_w = weights[use_pair]
-            
-            # Boost learning rate for new neurons
-            lr = base_learning_rate
-            if n1 in new_neurons or n2 in new_neurons:
-                lr *= 2.0
-                
-            # Hebbian rule: delta = lr * act1 * act2
-            delta = lr * (v1 / 100.0) * (v2 / 100.0)
-            
-            new_w = old_w + delta - (old_w * decay_rate)
-            new_w = max(-1.0, min(1.0, new_w))
-            
-            # Check if this was a new connection we're creating
-            is_new = use_pair in weight_updates and weight_updates[use_pair].get('is_new_connection', False)
-            
-            weight_updates[use_pair] = {
-                'old_weight': old_w,
-                'new_weight': new_w,
-                'is_new_connection': is_new
-            }
-            updated_pairs_list.append(use_pair)
-
-        if updated_pairs_list:
-            print(f"🧠 Hebbian: updated {len(updated_pairs_list)} pair(s)")
-
-        self.hebbian_result.emit({
-            'updated_pairs': updated_pairs_list,
-            'weight_updates': weight_updates
-        })
+        Plasticity lives in src/plasticity.py and is committed on the main
+        thread by BrainWidget.perform_hebbian_learning(). This copy sampled the
+        network once per cycle and could not see brief events; the STDP plugin
+        used to monkey-patch it to work around that. Kept as a no-op so any
+        external caller (or an old patch) fails safe instead of silently
+        applying a second, divergent learning rule.
+        """
+        self.hebbian_result.emit({'updated_pairs': [], 'weight_updates': {}})
 
     def _process_state_update(self, data):
-        """
-        Process state decay and noise logic.
+        """Worker-side health check.
+
+        This used to carry a third, divergent copy of forward propagation
+        (decay 0.95, 0.1 timestep factor). It was unreachable - the only task
+        ever queued is {'health_check': True} - and propagation now lives in
+        exactly one place, BrainWidget.propagate_activations(), which runs on
+        the main thread where the state it reads is authoritative.
         """
         if data.get('health_check'):
             self.state_update_result.emit({'health_check': True})
             return
 
-        with QMutexLocker(self._cache_mutex):
-            current_state = self.cache['state']
-            weights = self.cache['weights']
-            excluded = self.cache['excluded_neurons']
-
-        updated_state = {}
-        
-        # PURE_INPUTS (Sensors) - Do not decay these
-        PURE_INPUTS = {
-            "can_see_food", "is_eating", "is_sleeping", "is_sick", 
-            "pursuing_food", "is_fleeing", "is_startled", "external_stimulus", 
-            "plant_proximity"
-        }
-
-        # 1. Decay and Noise
-        for neuron, val in current_state.items():
-            if neuron in excluded or neuron in PURE_INPUTS:
-                continue
-            
-            # Simple decay towards baseline
-            if isinstance(val, (int, float)):
-                # Decay factor
-                decay = 0.95 
-                noise = random.uniform(-0.5, 0.5)
-                
-                new_val = val * decay + noise
-                updated_state[neuron] = new_val
-
-        # 2. Connection effects (Simplified delta calculation)
-        connection_deltas = {}
-        
-        for (src, dst), w in weights.items():
-            if src in current_state and dst in current_state:
-                if dst in PURE_INPUTS: continue
-                
-                src_val = current_state[src]
-                if isinstance(src_val, (int, float)):
-                    effect = src_val * w * 0.1 # Small timestep factor
-                    connection_deltas[dst] = connection_deltas.get(dst, 0) + effect
-                    
-        # Apply deltas
-        for neuron, delta in connection_deltas.items():
-            if neuron in updated_state:
-                updated_state[neuron] += delta
-            elif neuron in current_state and neuron not in PURE_INPUTS:
-                updated_state[neuron] = current_state[neuron] + delta
-
-        # Clamp
-        final_state = {}
-        for k, v in updated_state.items():
-            final_state[k] = max(-100, min(100, v))
-
-        self.state_update_result.emit({'processed_state': final_state})
+        self.state_update_result.emit({'health_check': True})
 
     def _get_neuron_value(self, val):
         # bool must be checked before int/float: bool is a subclass of int, so

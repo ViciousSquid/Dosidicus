@@ -33,12 +33,19 @@ def get_plugin_manager() -> Optional[Any]:
         PluginManager instance or None if not available
     """
     try:
-        from plugin_manager import PluginManager
-        pm = PluginManager()
-        if hasattr(pm, '_initialized') and pm._initialized:
-            return pm
+        # This was an absolute import, which always fails inside the src
+        # package - so the Sensors tab could never list a plugin-registered
+        # sensor even though BrainNeuronHooks supports them at runtime.
+        from .plugin_manager import PluginManager
     except ImportError:
-        pass
+        try:
+            from plugin_manager import PluginManager  # standalone designer
+        except ImportError:
+            return None
+    try:
+        pm = PluginManager._instance
+        if pm is not None and getattr(pm, '_initialized', False):
+            return pm
     except Exception:
         pass
     return None

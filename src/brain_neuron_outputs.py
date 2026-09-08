@@ -82,14 +82,17 @@ class NeuronOutputBinding:
         )
     
     def should_fire(self, current_activation: float, current_time: float) -> bool:
-        """Check if this binding should fire given current activation."""
+        """Check if this binding should fire given current activation.
+
+        NOTE: the cooldown is checked *after* the edge test, and the caller only
+        advances last_activation once the edge has been evaluated. Checking the
+        cooldown first (as this did) meant a rising-edge crossing that landed
+        inside the cooldown window was swallowed instead of deferred, and the
+        binding then never fired at all until the signal fell and rose again.
+        """
         if not self.enabled:
             return False
-        
-        # Check cooldown
-        if current_time - self.last_fire_time < self.cooldown:
-            return False
-        
+
         should_fire = False
         
         if self.trigger_mode == OutputTriggerMode.THRESHOLD_RISING:
@@ -117,8 +120,29 @@ class NeuronOutputBinding:
         elif self.trigger_mode == OutputTriggerMode.ON_CHANGE:
             # Fire on significant change (>10% difference)
             should_fire = abs(current_activation - self.last_activation) > 10.0
-        
-        return should_fire
+
+        if not should_fire:
+            return False
+
+        # Edge established - now respect the cooldown. An edge suppressed here
+        # is retried on the next evaluation because the caller holds
+        # last_activation back until the binding is actually allowed to fire.
+        if current_time - self.last_fire_time < self.cooldown:
+            return False
+
+        return True
+
+    def is_edge_pending(self, current_activation: float) -> bool:
+        """True when an edge exists but the cooldown is suppressing it."""
+        if not self.enabled:
+            return False
+        if self.trigger_mode == OutputTriggerMode.THRESHOLD_RISING:
+            return self.last_activation < self.threshold <= current_activation
+        if self.trigger_mode == OutputTriggerMode.THRESHOLD_FALLING:
+            return current_activation < self.threshold <= self.last_activation
+        if self.trigger_mode == OutputTriggerMode.ON_CHANGE:
+            return abs(current_activation - self.last_activation) > 10.0
+        return False
 
 
 # =============================================================================
@@ -296,11 +320,15 @@ STANDARD_OUTPUT_HOOKS = {
         'has_params': True,
     },
     
-    # Custom/plugin hooks
+    # Custom/plugin hooks. NOTE: no built-in handler by design - this hook only
+    # does anything when a plugin subscribes to it. It is therefore hidden from
+    # the Brain Designer unless a subscriber exists, so the user cannot build a
+    # binding that is guaranteed to be inert.
     'neuron_output_custom': {
         'description': 'Custom behavior (plugin-defined)',
         'category': 'custom',
         'default_threshold': 50.0,
+        'requires_plugin': True,
     },
 }
 
@@ -345,73 +373,77 @@ class NeuronOutputMonitor:
             print(f"{ANSI_ORANGE}[NeuronOutputMonitor]{ANSI_RESET} {message}")
 
     def _register_default_handlers(self):
-        """Register all standard output hooks and subscribe to available handlers."""
+        """Register the standard output hooks and subscribe our handlers once."""
         if not hasattr(self.logic, 'plugin_manager'):
-            self._log("⚠️ Cannot register handlers: plugin_manager not available")
+            self._log("Cannot register handlers: plugin_manager not available")
             return
-        
+
         pm = self.logic.plugin_manager
-        
-        # Whitelist this monitor as an enabled 'plugin'
-        if hasattr(pm, 'enabled_plugins'):
-            pm.enabled_plugins.add('neuronoutputmonitor')
-            
-        self._log(f"📡 Plugin manager found, registering {len(STANDARD_OUTPUT_HOOKS)} hooks...")
-        
-        # Register hooks
+
+        # The monitor is part of the engine, not a plugin. PluginManager keeps
+        # it in core_subscribers so enabled_plugins.clear() cannot silence it.
+        # (It used to add itself to enabled_plugins, which TamagotchiLogic and
+        # load_all_plugins then cleared - disabling every binding at startup.)
+        if hasattr(pm, 'core_subscribers'):
+            pm.core_subscribers.add('neuronoutputmonitor')
+
         for hook_name in STANDARD_OUTPUT_HOOKS.keys():
             pm.register_hook(hook_name)
-            
-        # Subscribe handlers
+
         import inspect
-        subscribed_count = 0
+        subscribed = 0
         for method_name, method in inspect.getmembers(self, predicate=inspect.ismethod):
-            if method_name.startswith('_handle_'):
-                base_name = method_name[8:]  # Remove '_handle_' prefix
-                hook_name = f"neuron_output_{base_name}"
-                
-                if hook_name in STANDARD_OUTPUT_HOOKS:
-                    success = pm.subscribe_to_hook(hook_name, 'NeuronOutputMonitor', method)
-                    if success:
-                        subscribed_count += 1
-        
-        self._log(f"📊 Ready. Total subscriptions: {subscribed_count}")
-        
-        # Redundant safety pass
-        for method_name, method in inspect.getmembers(self, predicate=inspect.ismethod):
-            if method_name.startswith('_handle_'):
-                base_name = method_name[8:]
-                hook_name = f"neuron_output_{base_name}"
-                if hook_name in STANDARD_OUTPUT_HOOKS:
-                    pm.subscribe_to_hook(hook_name, 'NeuronOutputMonitor', method)
-    
+            if not method_name.startswith('_handle_'):
+                continue
+            hook_name = f"neuron_output_{method_name[8:]}"
+            if hook_name not in STANDARD_OUTPUT_HOOKS:
+                continue
+            # Subscribe exactly once. A "redundant safety pass" used to repeat
+            # this loop, so every handler ran twice and every stat-modifying
+            # output applied double its documented magnitude.
+            already = any(h.get('plugin') == 'NeuronOutputMonitor'
+                          for h in pm.hooks.get(hook_name, []))
+            if already:
+                continue
+            if pm.subscribe_to_hook(hook_name, 'NeuronOutputMonitor', method):
+                subscribed += 1
+
+        self._log(f"Ready. {subscribed} output handlers subscribed.")
+
     # =========================================================================
     # BINDING MANAGEMENT
     # =========================================================================
 
     def monitor(self, neuron_activations: Dict[str, float], current_time: Optional[float] = None):
-        """Main method called every frame with all current neuron activations."""
-        if not self.enabled:
+        """Evaluate all bindings against an explicit activation snapshot."""
+        self._evaluate(neuron_activations, current_time)
+
+    def _evaluate(self, activations: Dict[str, float], current_time: Optional[float] = None):
+        """The single binding-evaluation loop used by every entry point."""
+        if not self.enabled or not self.bindings:
             return
-            
-        # Self-Healing Whitelist
-        if hasattr(self.logic, 'plugin_manager'):
-            pm = self.logic.plugin_manager
-            if hasattr(pm, 'enabled_plugins') and 'neuronoutputmonitor' not in pm.enabled_plugins:
-                pm.enabled_plugins.add('neuronoutputmonitor')
-        
+
         current_time = current_time or time.time()
-        
+
         for binding in self.bindings:
-            activation = neuron_activations.get(binding.neuron_name, 0.0)
-            
-            # Check for firing BEFORE updating last_activation
+            raw = activations.get(binding.neuron_name)
+            if raw is None:
+                continue
+            try:
+                activation = float(raw)
+            except (TypeError, ValueError):
+                activation = 100.0 if raw else 0.0
+
             if binding.should_fire(activation, current_time):
                 self._fire_binding(binding, activation, current_time)
-            
-            # Update last activation for edge detection
-            binding.last_activation = activation
-    
+                binding.last_activation = activation
+            elif binding.is_edge_pending(activation):
+                # Hold last_activation back so the edge survives the cooldown
+                # and fires on a later evaluation instead of being lost.
+                continue
+            else:
+                binding.last_activation = activation
+
     def add_binding(self, binding: NeuronOutputBinding) -> bool:
         """Add a new output binding."""
         self.bindings.append(binding)
@@ -436,10 +468,19 @@ class NeuronOutputMonitor:
         self.bindings.clear()
     
     def load_bindings_from_brain(self, brain_data: dict):
-        """Load output bindings from brain configuration data."""
+        """Load output bindings from brain configuration data.
+
+        If the payload carries no 'output_bindings' key at all the current
+        bindings are left alone. This used to clear unconditionally, so loading
+        a save (whose brain_state never contained the key) silently destroyed
+        every binding the player had made.
+        """
+        if 'output_bindings' not in (brain_data or {}):
+            return
+
         self.clear_bindings()
-        
-        output_bindings = brain_data.get('output_bindings', [])
+
+        output_bindings = brain_data.get('output_bindings') or []
         for binding_data in output_bindings:
             try:
                 binding = NeuronOutputBinding.from_dict(binding_data)
@@ -457,55 +498,48 @@ class NeuronOutputMonitor:
     
     def process_outputs(self):
         """
-        Process all output bindings.
-        Call this each simulation tick after the neural network has been updated.
+        Evaluate every binding against the live brain state.
+        Called once per simulation tick, after propagation.
         """
         if not self.enabled or not self.bindings:
             return
-        
-        if not hasattr(self.logic, 'brain_window') or not self.logic.brain_window:
+
+        brain_window = getattr(self.logic, 'brain_window', None)
+        brain_widget = getattr(brain_window, 'brain_widget', None) if brain_window else None
+        if brain_widget is None:
             return
-        
-        brain_widget = self.logic.brain_window.brain_widget
-        current_time = time.time()
-        
+
+        activations = {}
         for binding in self.bindings:
-            # Get current activation for this neuron
-            activation = self._get_neuron_activation(brain_widget, binding.neuron_name)
-            
-            # If we can't find the activation, we can't trigger
-            if activation is None:
+            if binding.neuron_name in activations:
                 continue
-            
-            # Check if should fire
-            if binding.should_fire(activation, current_time):
-                self._fire_binding(binding, activation, current_time)
-            
-            # Update last activation for next check
-            binding.last_activation = activation
-    
+            val = self._get_neuron_activation(brain_widget, binding.neuron_name)
+            if val is not None:
+                activations[binding.neuron_name] = val
+
+        self._evaluate(activations)
+
     def _get_neuron_activation(self, brain_widget, neuron_name: str) -> Optional[float]:
-        """
-        Get the current activation value of a neuron.
-        Checks multiple sources to ensure compatibility with different brain versions.
-        """
-        # 1. Check 'neuron_activations' (often used for sensor overrides/inputs)
-        if hasattr(brain_widget, 'neuron_activations') and brain_widget.neuron_activations:
-            val = brain_widget.neuron_activations.get(neuron_name)
-            if val is not None:
-                return float(val)
+        """Current activation of a neuron, or None if it has no value.
 
-        # 2. Check 'state' (main storage for neuron values in Dosidicus/Custom brains)
-        if hasattr(brain_widget, 'state') and brain_widget.state:
-            val = brain_widget.state.get(neuron_name)
-            if val is not None:
-                return float(val)
+        brain_widget.state is the project's single activation store. (A former
+        first branch read brain_widget.neuron_activations, an attribute that
+        does not exist on BrainWidget, and a former third branch read a
+        'state' key that get_neurogenesis_config() never provides.)
+        """
+        state = getattr(brain_widget, 'state', None)
+        if not state:
+            return None
+        val = state.get(neuron_name)
+        if val is None:
+            return None
+        if isinstance(val, bool):
+            return 100.0 if val else 0.0
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
 
-        # (A former 3rd fallback read get_neurogenesis_config().get('state', {}),
-        # but that getter never provides a 'state' key, so it always yielded
-        # None. Removed – the two sources above are authoritative.)
-        return None
-    
     def _fire_binding(self, binding: NeuronOutputBinding, activation: float, current_time: float):
         """Fire a binding's output hook."""
         binding.last_fire_time = current_time
@@ -535,160 +569,266 @@ class NeuronOutputMonitor:
     # =========================================================================
     
     def _handle_flee(self, neuron_name, activation, squid, **kwargs):
-        if squid and not getattr(squid, 'is_fleeing', False):
-            squid.is_fleeing = True
-            squid.current_speed = squid.base_speed * 2
-            if hasattr(squid, 'mental_state_manager'):
-                squid.mental_state_manager.activate_state('fleeing')
-    
-    def _handle_seek_food(self, neuron_name, activation, squid, tamagotchi_logic, **kwargs):
-        if squid and tamagotchi_logic:
-            visible_food = squid.get_visible_food() if hasattr(squid, 'get_visible_food') else []
-            if visible_food:
-                squid.pursuing_food = True
-                squid.target_food = visible_food[0]
-    
-    def _handle_seek_plant(self, neuron_name, activation, squid, tamagotchi_logic, **kwargs):
-        if not squid or not tamagotchi_logic: return
-        
-        nearest_plant = None
-        min_dist = float('inf')
-        
+        """Panic response: flee state + double speed + evasive heading."""
+        if not squid:
+            return
+        squid.is_fleeing = True
+        squid.current_speed = squid.base_speed * 2
+        squid.status = "fleeing"
+        if hasattr(squid, 'set_neural_drive'):
+            squid.set_neural_drive('flee', duration=4.0, priority=squid.DRIVE_URGE)
+        # MentalStateManager exposes set_state(name, bool); activate_state()
+        # never existed and raised AttributeError here on every firing.
+        msm = getattr(squid, 'mental_state_manager', None)
+        if msm:
+            msm.set_state('startled', True)
+
+    def _handle_seek_food(self, neuron_name, activation, squid, tamagotchi_logic=None, **kwargs):
+        """Drive the squid toward visible food for a few seconds."""
+        if not squid:
+            return
+        visible_food = squid.get_visible_food() if hasattr(squid, 'get_visible_food') else []
+        if not visible_food:
+            return
+        closest = min(visible_food, key=lambda f: squid.distance_to(f[0], f[1]))
+        squid.pursuing_food = True
+        squid.target_food = closest
+        squid.status = "seeking food"
+        if hasattr(squid, 'set_neural_drive'):
+            squid.set_neural_drive('seek_food', duration=4.0,
+                                   target=(closest[0], closest[1]),
+                                   priority=squid.DRIVE_URGE)
+
+    def _handle_seek_plant(self, neuron_name, activation, squid, tamagotchi_logic=None, **kwargs):
+        """Drive the squid toward the nearest plant decoration."""
+        if not squid or not tamagotchi_logic:
+            return
+
+        nearest_plant, min_dist = None, float('inf')
         for item in tamagotchi_logic.user_interface.scene.items():
-            if hasattr(item, 'category') and item.category == 'plant':
-                plant_pos = item.sceneBoundingRect().center()
-                dist = ((plant_pos.x() - squid.squid_x)**2 + (plant_pos.y() - squid.squid_y)**2)**0.5
-                if dist < min_dist:
-                    min_dist = dist
-                    nearest_plant = item
-        
-        if nearest_plant:
-            squid.status = "seeking_plant"
-            target_pos = nearest_plant.sceneBoundingRect().center()
-            squid.move_toward_position(target_pos)
-    
-    def _handle_ink_cloud(self, neuron_name, activation, squid, **kwargs):
-        if squid and hasattr(squid, 'release_ink'):
-            squid.release_ink()
-        elif squid and hasattr(squid, 'mental_state_manager'):
-            squid.mental_state_manager.activate_state('inking')
+            if getattr(item, 'category', None) != 'plant':
+                continue
+            c = item.sceneBoundingRect().center()
+            d = ((c.x() - squid.squid_x) ** 2 + (c.y() - squid.squid_y) ** 2) ** 0.5
+            if d < min_dist:
+                min_dist, nearest_plant = d, item
+
+        if nearest_plant is None:
+            return
+        squid.status = "seeking_plant"
+        if hasattr(squid, 'set_neural_drive'):
+            squid.set_neural_drive('seek_plant', duration=5.0, target=nearest_plant,
+                                   priority=squid.DRIVE_URGE)
+        else:
+            squid.move_toward_position(nearest_plant.sceneBoundingRect().center())
+
+    def _handle_ink_cloud(self, neuron_name, activation, squid, tamagotchi_logic=None, **kwargs):
+        """Release a real ink cloud into the scene."""
+        logic = tamagotchi_logic or self.logic
+        # squid.release_ink() does not exist anywhere in the project; the real
+        # actuator is TamagotchiLogic.create_ink_cloud(), used by startle_awake.
+        if logic and hasattr(logic, 'create_ink_cloud'):
+            logic.create_ink_cloud()
+            if squid:
+                squid.status = "inking"
 
     def _handle_change_color(self, neuron_name, activation, squid, **kwargs):
-        """
-        Handle color change when neuron fires.
-        Checks for specific 'red', 'green', 'blue' parameters in kwargs.
-        """
-        if squid and hasattr(squid, 'apply_tint'):
-            from PyQt5.QtGui import QColor
-            import random
+        """Tint the squid, using explicit r/g/b params when the binding has them."""
+        if not squid or not hasattr(squid, 'apply_tint'):
+            return
+        from PyQt5.QtGui import QColor
+        import random as _random
+        try:
+            r, g, b = int(kwargs.get('red', -1)), int(kwargs.get('green', -1)), int(kwargs.get('blue', -1))
+            if r >= 0 and g >= 0 and b >= 0:
+                squid.apply_tint(QColor(r, g, b))
+                return
+        except (ValueError, TypeError):
+            pass
+        squid.apply_tint(QColor(*_random.choice([
+            (255, 100, 100), (100, 255, 100), (100, 100, 255),
+            (255, 255, 100), (255, 100, 255), (100, 255, 255)])))
 
-            try:
-                r = int(kwargs.get('red', -1))
-                g = int(kwargs.get('green', -1))
-                b = int(kwargs.get('blue', -1))
-                
-                if r >= 0 and g >= 0 and b >= 0:
-                    color = QColor(r, g, b)
-                    squid.apply_tint(color)
-                    self._log(f"Tint: {r},{g},{b}")
-                    return
-            except (ValueError, TypeError):
-                pass
-            
-            # Fallback only if params missing or invalid
-            colors = [
-                (255, 100, 100), (100, 255, 100), (100, 100, 255),
-                (255, 255, 100), (255, 100, 255), (100, 255, 255)
-            ]
-            rgb = random.choice(colors)
-            squid.apply_tint(QColor(*rgb))
-            self._log(f"RandTint: {rgb}")
-    
     def _handle_startle(self, neuron_name, activation, squid, **kwargs):
-        if squid and hasattr(squid, 'mental_state_manager'):
-            squid.mental_state_manager.activate_state('startled')
-    
+        if not squid:
+            return
+        squid.status = "startled"
+        msm = getattr(squid, 'mental_state_manager', None)
+        if msm:
+            msm.set_state('startled', True)
+
     def _handle_calm(self, neuron_name, activation, squid, **kwargs):
-        if squid:
-            squid.anxiety = max(0, squid.anxiety - 10)
-            squid.is_fleeing = False
-            if hasattr(squid, 'mental_state_manager'):
-                squid.mental_state_manager.deactivate_state('startled')
-                squid.mental_state_manager.deactivate_state('fleeing')
-    
+        if not squid:
+            return
+        squid.anxiety = max(0, squid.anxiety - 10)
+        squid.is_fleeing = False
+        squid.current_speed = squid.base_speed
+        if hasattr(squid, 'clear_neural_drive'):
+            squid.clear_neural_drive()
+        msm = getattr(squid, 'mental_state_manager', None)
+        if msm:
+            msm.set_state('startled', False)
+
     def _handle_sleep(self, neuron_name, activation, squid, **kwargs):
         if squid and not getattr(squid, 'is_sleeping', False):
             squid.is_sleeping = True
             squid.status = "sleeping"
-    
+
     def _handle_wake(self, neuron_name, activation, squid, **kwargs):
         if squid and getattr(squid, 'is_sleeping', False):
             squid.is_sleeping = False
             squid.status = "roaming"
-    
+
     def _handle_boost_happiness(self, neuron_name, activation, squid, **kwargs):
         if squid:
-            boost = (activation / 100.0) * 5
-            squid.happiness = min(100, squid.happiness + boost)
-    
-    def _handle_reduce_anxiety(self, neuron_name, activation, squid, **kwargs):
-        if squid:
-            reduction = ((100 - activation) / 100.0) * 5
-            squid.anxiety = max(0, squid.anxiety - reduction)
-    
-    def _handle_wander(self, neuron_name, activation, squid, **kwargs):
-        if squid and hasattr(squid, 'wander'):
-            squid.wander()
-        elif squid:
-            squid.status = "roaming"
-    
-    def _handle_approach_rock(self, neuron_name, activation, squid, tamagotchi_logic, **kwargs):
-        if not squid or not tamagotchi_logic: return
-        
-        decorations = tamagotchi_logic.get_nearby_decorations(squid.squid_x, squid.squid_y, 300)
-        rocks = [d for d in decorations if hasattr(d, 'category') and d.category == 'rock']
-        
-        if rocks:
-            nearest = min(rocks, key=lambda r: 
-                ((r.sceneBoundingRect().center().x() - squid.squid_x)**2 + 
-                 (r.sceneBoundingRect().center().y() - squid.squid_y)**2))
-            squid.status = "approaching_rock"
-            squid.current_rock_target = nearest
-    
-    def _handle_throw_rock(self, neuron_name, activation, squid, **kwargs):
-        if squid and getattr(squid, 'carrying_rock', False):
-            import random
-            direction = random.choice(['left', 'right'])
-            squid.throw_rock(direction)
-    
-    def _handle_pick_up_rock(self, neuron_name, activation, squid, tamagotchi_logic, **kwargs):
-        if not squid or getattr(squid, 'carrying_rock', False): return
-        
-        if tamagotchi_logic:
-            decorations = tamagotchi_logic.get_nearby_decorations(squid.squid_x, squid.squid_y, 50)
-            rocks = [d for d in decorations if hasattr(d, 'category') and d.category == 'rock']
-            if rocks:
-                squid.pick_up_rock(rocks[0])
-    
-    def _handle_eat(self, neuron_name, activation, squid, **kwargs):
-        if squid and hasattr(squid, 'target_food') and squid.target_food:
-            squid.is_eating = True
-    
+            squid.happiness = min(100, squid.happiness + (activation / 100.0) * 5)
+
     def _handle_boost_curiosity(self, neuron_name, activation, squid, **kwargs):
         if squid:
-            boost = (activation / 100.0) * 5
-            squid.curiosity = min(100, squid.curiosity + boost)
+            squid.curiosity = min(100, squid.curiosity + (activation / 100.0) * 5)
+
+    def _handle_reduce_anxiety(self, neuron_name, activation, squid, **kwargs):
+        """Stronger firing means MORE relief.
+
+        The old formula was ((100 - activation) / 100) * 5, so a neuron firing
+        at full strength reduced anxiety by exactly zero - the inverse of the
+        hook's own description, and the opposite of its two sibling handlers.
+        """
+        if squid:
+            squid.anxiety = max(0, squid.anxiety - (activation / 100.0) * 5)
+
+    def _handle_wander(self, neuron_name, activation, squid, **kwargs):
+        """Explore. squid.wander() does not exist; move_randomly() does."""
+        if not squid:
+            return
+        squid.status = "roaming"
+        if hasattr(squid, 'set_neural_drive'):
+            squid.set_neural_drive('wander', duration=3.0, priority=squid.DRIVE_URGE)
+        elif hasattr(squid, 'move_randomly'):
+            squid.move_randomly()
+
+    def _handle_approach_rock(self, neuron_name, activation, squid, tamagotchi_logic=None, **kwargs):
+        if not squid or not tamagotchi_logic:
+            return
+        rocks = self._nearby_rocks(squid, tamagotchi_logic, 300)
+        if not rocks:
+            return
+        nearest = min(rocks, key=lambda r: self._dist_to_squid(r, squid))
+        squid.status = "approaching_rock"
+        squid.current_rock_target = nearest
+        if hasattr(squid, 'set_neural_drive'):
+            squid.set_neural_drive('approach_rock', duration=6.0, target=nearest,
+                                   priority=squid.DRIVE_URGE)
+
+    def _handle_throw_rock(self, neuron_name, activation, squid, **kwargs):
+        if squid and getattr(squid, 'carrying_rock', False):
+            import random as _random
+            squid.throw_rock(_random.choice(['left', 'right']))
+
+    def _handle_pick_up_rock(self, neuron_name, activation, squid, tamagotchi_logic=None, **kwargs):
+        if not squid or getattr(squid, 'carrying_rock', False):
+            return
+        logic = tamagotchi_logic or self.logic
+        if not logic:
+            return
+        # Measured from the squid's CENTRE. The old code passed squid_x/squid_y
+        # (the top-left corner) with a 50px radius against decoration centres,
+        # which for a ~120px-wide squid was effectively unreachable.
+        rocks = self._nearby_rocks(squid, logic, 120)
+        if rocks:
+            nearest = min(rocks, key=lambda r: self._dist_to_squid(r, squid))
+            squid.pick_up_rock(nearest)
+
+    def _handle_eat(self, neuron_name, activation, squid, tamagotchi_logic=None, **kwargs):
+        """Actually consume nearby food.
+
+        This used to set squid.is_eating = True, which is an OUTPUT flag of the
+        real eating routine, not an input to it: no food was consumed and
+        hunger never moved.
+        """
+        logic = tamagotchi_logic or self.logic
+        if not squid or not logic:
+            return
+        food_items = list(getattr(logic, 'food_items', []) or [])
+        if not food_items:
+            return
+        cx = squid.squid_x + squid.squid_width / 2.0
+        cy = squid.squid_y + squid.squid_height / 2.0
+
+        def _d(item):
+            c = item.sceneBoundingRect().center()
+            return ((c.x() - cx) ** 2 + (c.y() - cy) ** 2) ** 0.5
+
+        nearest = min(food_items, key=_d)
+        if _d(nearest) <= 120 and hasattr(squid, 'eat'):
+            squid.eat(nearest)
+        elif hasattr(squid, 'set_neural_drive'):
+            c = nearest.sceneBoundingRect().center()
+            squid.pursuing_food = True
+            squid.set_neural_drive('seek_food', duration=4.0, target=(c.x(), c.y()),
+                                   priority=squid.DRIVE_URGE)
+
+    # ---- helpers -----------------------------------------------------------
+    @staticmethod
+    def _dist_to_squid(item, squid) -> float:
+        c = item.sceneBoundingRect().center()
+        cx = squid.squid_x + squid.squid_width / 2.0
+        cy = squid.squid_y + squid.squid_height / 2.0
+        return ((c.x() - cx) ** 2 + (c.y() - cy) ** 2) ** 0.5
+
+    @staticmethod
+    def _nearby_rocks(squid, logic, radius):
+        if not hasattr(logic, 'get_nearby_decorations'):
+            return []
+        cx = squid.squid_x + squid.squid_width / 2.0
+        cy = squid.squid_y + squid.squid_height / 2.0
+        decorations = logic.get_nearby_decorations(cx, cy, radius)
+        return [d for d in decorations if getattr(d, 'category', None) == 'rock']
+
+def hook_has_handler(hook_name: str, plugin_manager=None) -> bool:
+    """True if firing this hook would actually reach a handler.
+
+    Hooks flagged requires_plugin have no built-in handler, so they are only
+    live when a plugin has subscribed.
+    """
+    info = STANDARD_OUTPUT_HOOKS.get(hook_name, {})
+    if not info.get('requires_plugin'):
+        return True
+
+    if plugin_manager is None:
+        plugin_manager = _find_plugin_manager()
+    if plugin_manager is None:
+        return False
+    return bool(getattr(plugin_manager, 'hooks', {}).get(hook_name))
 
 
-def get_available_output_hooks() -> Dict[str, dict]:
-    return dict(STANDARD_OUTPUT_HOOKS)
+def _find_plugin_manager():
+    """Best-effort lookup of the live PluginManager singleton."""
+    try:
+        from .plugin_manager import PluginManager
+    except ImportError:
+        try:
+            from plugin_manager import PluginManager  # standalone designer
+        except ImportError:
+            return None
+    pm = PluginManager._instance
+    return pm if pm is not None and getattr(pm, '_initialized', False) else None
 
 
-def get_output_hooks_by_category() -> Dict[str, Dict[str, dict]]:
-    by_category = {}
-    for hook_name, info in STANDARD_OUTPUT_HOOKS.items():
-        cat = info.get('category', 'other')
-        if cat not in by_category:
-            by_category[cat] = {}
-        by_category[cat][hook_name] = info
+def get_available_output_hooks(plugin_manager=None, include_unhandled: bool = False) -> Dict[str, dict]:
+    """Output hooks the user may bind to.
+
+    By default only hooks that can actually do something are returned.
+    """
+    return {
+        name: info for name, info in STANDARD_OUTPUT_HOOKS.items()
+        if include_unhandled or hook_has_handler(name, plugin_manager)
+    }
+
+
+def get_output_hooks_by_category(plugin_manager=None,
+                                 include_unhandled: bool = False) -> Dict[str, Dict[str, dict]]:
+    by_category: Dict[str, Dict[str, dict]] = {}
+    for hook_name, info in get_available_output_hooks(plugin_manager, include_unhandled).items():
+        by_category.setdefault(info.get('category', 'other'), {})[hook_name] = info
     return by_category

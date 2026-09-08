@@ -66,7 +66,7 @@ except ImportError:  # pragma: no cover - fallback when scaling helper absent
 
 # Core engine (package-relative, with flat fallback)
 try:
-    from .replay_core import ReplayConfig, SleepReplayEngine
+    from src.sleep_consolidation import ReplayConfig, SleepReplayEngine
 except ImportError:  # pragma: no cover
     from replay_core import ReplayConfig, SleepReplayEngine
 
