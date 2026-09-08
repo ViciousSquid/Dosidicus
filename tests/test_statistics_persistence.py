@@ -216,7 +216,9 @@ class StatisticsPersistenceTests(unittest.TestCase):
         )
 
         self.assertEqual(statistics.total_age_seconds, 12.5)
-        self.assertEqual(statistics.distance_swam, 42.25)
+        # Whole pixels: the 0.25 is carried, not lost - the add_distance(0.75)
+        # below takes it to 43.
+        self.assertEqual(statistics.distance_swam, 42)
         self.assertEqual(statistics.time_spent_asleep, 0)
         self.assertEqual(statistics.sickness_episodes, 0)
         self.assertEqual(statistics.highest_anxiety, 0)
@@ -586,6 +588,13 @@ class StatisticsPersistenceTests(unittest.TestCase):
             value = index + 0.25
             setattr(statistics, attribute_name, value)
             expected_attributes[attribute_name] = value
+
+        # Distance is deliberately not a free-form float: it is stored as
+        # whole pixels (with the fraction carried in memory) and its legacy
+        # rollover multiplier is always written as 1.
+        expected_attributes['distance_swam'] = int(
+            expected_attributes['distance_swam'])
+        expected_attributes['distance_swam_multiplier'] = 1
 
         restored = SquidStatistics(FakeSquid())
         restored.load_statistics(statistics.to_dict())

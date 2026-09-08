@@ -112,23 +112,46 @@ class SquidStatisticsTests(unittest.TestCase):
         self.assertEqual(self.statistics.max_short_term_memories, 3)
         self.assertEqual(self.statistics.max_long_term_memories, 7)
 
-    def test_update_distance_handles_multiple_rollovers_in_one_step(self):
+    def test_the_distance_counter_has_no_ceiling(self):
+        """It used to wrap at ~1 billion pixels and count the wraps separately,
+        so a well-travelled squid's distance read as a small remainder with a
+        multiplier in front of it. It is one unbounded integer now."""
         show_message = Mock()
         self.squid.tamagotchi_logic = SimpleNamespace(
             show_message=show_message,
         )
         self.statistics.distance_swam = DISTANCE_ROLLOVER_LIMIT - 10
 
-        self.statistics.update_distance(
-            DISTANCE_ROLLOVER_LIMIT * 2 + 10,
-            0,
-        )
+        self.statistics.update_distance(DISTANCE_ROLLOVER_LIMIT * 2 + 10, 0)
 
-        self.assertEqual(self.statistics.distance_swam, 0)
-        self.assertEqual(self.statistics.distance_swam_multiplier, 4)
-        show_message.assert_called_once_with(
-            "🌊 Distance counter rolled over! Now at 4x"
-        )
+        self.assertEqual(self.statistics.distance_swam,
+                         DISTANCE_ROLLOVER_LIMIT * 3)
+        self.assertEqual(self.statistics.distance_swam_multiplier, 1)
+        self.assertEqual(self.statistics.get_distance_display(),
+                         f"{DISTANCE_ROLLOVER_LIMIT * 3:,}")
+        show_message.assert_not_called()
+
+    def test_distance_is_stored_as_whole_pixels(self):
+        """A float total serialised to ~17 significant digits every save."""
+        self.statistics.add_distance(1234.56789012345)
+        saved = self.statistics.to_dict()["distance_swam"]
+        self.assertIsInstance(saved, int)
+        self.assertEqual(saved, 1234)
+
+    def test_sub_pixel_movement_is_carried_not_discarded(self):
+        """Rounding each step would lose almost all of a slow squid's travel."""
+        for _ in range(1000):
+            self.statistics.add_distance(0.4)
+        self.assertEqual(self.statistics.distance_swam, 400)
+
+    def test_a_legacy_rolled_over_save_is_folded_into_one_total(self):
+        self.statistics.load_statistics({
+            "distance_swam": 500,
+            "distance_swam_multiplier": 4,
+        })
+        self.assertEqual(self.statistics.distance_swam,
+                         500 + 3 * DISTANCE_ROLLOVER_LIMIT)
+        self.assertEqual(self.statistics.distance_swam_multiplier, 1)
 
     def test_unknown_event_is_logged_without_mutating_counters(self):
         with self.assertLogs("src.squid_statistics", level="DEBUG") as logs:
