@@ -48,8 +48,14 @@ class NotifyingNeurogenesis:
     def capture_experience_context(self, **_kwargs):
         return object()
 
-    def should_create_neuron(self, _context):
+    def should_create_neuron(self, _context=None, **_kwargs):
         return True
+
+    def find_deficit(self, _brain_state=None):
+        # Any non-None value: this double stands in for the engine's decision,
+        # and the widget only needs a deficit to carry into the birth record.
+        return SimpleNamespace(suggested_type="stress", key="regulation:anxiety:down",
+                               summary="test deficit", severity=1.0)
 
     def create_functional_neuron(self, _context, **_kwargs):
         EnhancedNeurogenesis._notify_neuron_created(self, self.neuron_name)

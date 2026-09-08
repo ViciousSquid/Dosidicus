@@ -194,7 +194,12 @@ class PlasticityEngine:
 
         if self.stdp is not None and self.config.stdp_enabled:
             try:
-                self.stdp.record_state(values, timestamp)
+                spiked = self.stdp.record_state(values, timestamp)
+                # Lay eligibility traces now, while the spikes are fresh. A
+                # consequence that arrives seconds later reaches back along
+                # these; laying them on the commit cycle instead put them out
+                # of reach of every outcome the squid ever had.
+                self.stdp.lay_eligibility_traces(spiked, timestamp)
             except Exception:
                 pass  # spike tracking must never break the simulation tick
 
@@ -292,12 +297,25 @@ class PlasticityEngine:
 
             hebb_delta = lr * mean_cov
 
+            # compute_symmetric_stdp returns (delta, direction). Coercing the
+            # tuple to a float raised, the exception was swallowed, and the
+            # spike-timing term was silently zero for every pair on every
+            # cycle - so STDP was documented, implemented, wired in, and
+            # contributed nothing. Unpack it properly, and keep the direction
+            # so the Learning tab can show LTP/LTD.
             stdp_delta = 0.0
+            stdp_direction = 'none'
             if self.stdp is not None and cfg.stdp_enabled and cfg.stdp_weight > 0:
                 try:
-                    stdp_delta = float(self.stdp.compute_symmetric_stdp(edge[0], edge[1]) or 0.0)
+                    result = self.stdp.compute_symmetric_stdp(edge[0], edge[1])
+                    if isinstance(result, tuple):
+                        stdp_delta, stdp_direction = float(result[0]), str(result[1])
+                    elif result:
+                        stdp_delta = float(result)
                 except Exception:
                     stdp_delta = 0.0
+                    stdp_direction = 'none'
+
 
             # Blend ONLY where STDP actually has an opinion. Spike timing is
             # silent for most pairs on most cycles, and blending its zero in
@@ -320,6 +338,10 @@ class PlasticityEngine:
                 'mean_covariance': mean_cov,
                 'hebbian_delta': hebb_delta,
                 'stdp_delta': stdp_delta,
+                'stdp_direction': stdp_direction,
+                'is_ltp': stdp_delta > 0,
+                'is_ltd': stdp_delta < 0,
+                'stdp_weight': cfg.stdp_weight if stdp_delta else 0.0,
                 'samples': self._opportunities.get(pair, 0),
             }
             updated_pairs.append(edge)

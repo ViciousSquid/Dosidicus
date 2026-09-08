@@ -243,11 +243,12 @@ class ConfigManager:
         return self.config.getint('Neurogenesis', 'max_hebbian_pairs', fallback=2)
 
     def get_showmanship_enabled(self):
-        """Return whether showmanship (dramatic neuron creation) is enabled.
-        
-        When enabled, the ShowmanNeurogenesis wrapper will create neurons
-        during dramatic moments even if normal thresholds aren't met.
-        When disabled, only the base EnhancedNeurogenesis logic applies.
+        """Return whether showmanship is enabled.
+
+        Purely presentational. When enabled, a grown neuron gets an evocative
+        name drawn from its specialisation ("anxiety_reduction") instead of the
+        systematic one ("stress_anxiety_regulation"). It changes nothing about
+        when or why a neuron is created.
         """
         return self.config.getboolean('Neurogenesis', 'showmanship', fallback=True)
 

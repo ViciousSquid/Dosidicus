@@ -419,6 +419,59 @@ class PersistenceTests(NeuralPipelineTestCase):
         self.assertEqual(BRAIN.weights[("anxiety", "persist_neuron")], 0.77)
         self.assertTrue(before_functional <= set(BRAIN.enhanced_neurogenesis.functional_neurons))
 
+    def test_cognitive_history_survives_a_round_trip(self):
+        """A save file is a cognitive history, or it is just a snapshot.
+
+        The weights alone tell you what the squid became; the provenance tells
+        you why, and that is the thing the project is actually about.
+        """
+        self.add_neuron("provenance_neuron", position=(222, 333))
+        BRAIN.apply_weight_change(("anxiety", "provenance_neuron"), value=0.42,
+                                  mechanism='hebbian',
+                                  detail={'correlation': 0.55, 'samples': 123})
+        BRAIN.ledger.record_neuron_birth(
+            "provenance_neuron", 'representation',
+            "nothing in the network told this situation apart",
+            remedy="fire when it happens", neuron_type='novelty',
+            specialization='general_novelty_processing',
+            display_name='Novelty: General Novelty Processing')
+
+        before = BRAIN.ledger.summary()
+        before_reason = BRAIN.explain_weight(("anxiety", "provenance_neuron"))
+
+        LOGIC.save_game(is_autosave=False)
+        LOGIC.load_game()
+
+        after = BRAIN.ledger.summary()
+        self.assertEqual(after['weight_changes'], before['weight_changes'])
+        self.assertIn("provenance_neuron", BRAIN.ledger.origins)
+        self.assertIn("123 observations",
+                      BRAIN.explain_weight(("anxiety", "provenance_neuron")))
+        self.assertIn("kept happening together", before_reason)
+
+    def test_a_grown_neuron_can_always_say_why_it_exists(self):
+        neuro = BRAIN.enhanced_neurogenesis
+        name = neuro.create_neuron("novelty", brain_state=dict(BRAIN.state),
+                                   environment={})
+        if name is None:
+            self.skipTest("novelty neuron capped by neurogenesis limits")
+        self.addCleanup(self._drop_neuron, name)
+
+        answer = BRAIN.explain_neuron(name)
+        self.assertTrue(answer)
+        self.assertNotIn("There is no neuron", answer)
+        self.assertIn("grown", answer.lower())
+
+    def test_every_weight_change_lands_in_the_ledger(self):
+        """Nothing may move a synapse without saying why."""
+        self.add_neuron("audited_neuron")
+        before = BRAIN.ledger.summary()['weight_changes']
+        BRAIN.apply_weight_change(("anxiety", "audited_neuron"), value=0.3,
+                                  mechanism='designer')
+        BRAIN.strengthen_connection("anxiety", "audited_neuron", 0.1)
+        BRAIN.remove_weight(("anxiety", "audited_neuron"), reason="test cleanup")
+        self.assertEqual(BRAIN.ledger.summary()['weight_changes'], before + 3)
+
     def test_output_bindings_survive_a_round_trip(self):
         from src.brain_neuron_outputs import OutputTriggerMode
 

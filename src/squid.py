@@ -1861,6 +1861,17 @@ class Squid:
         # Start a timer to reset the status after 1 second
         QTimer.singleShot(1000, self.finish_eating)
 
+        # Innate reflex: eating is an unconditioned positive. The squid does
+        # not have to accumulate statistics to discover that food helps - a
+        # real animal is born knowing. Personality colours how hard it lands,
+        # and the change is recorded in the ledger like any other.
+        reflex = getattr(self, 'hebbian_learning', None)
+        if reflex is not None:
+            try:
+                reflex.learn_from_eating()
+            except Exception as e:
+                print(f"[Reflex] learn_from_eating failed: {type(e).__name__}: {e}")
+
         # Memory system
         formatted_effects = ', '.join(f"{attr.capitalize()} {'+' if val >= 0 else ''}{val:.2f}" 
                             for attr, val in effects.items())

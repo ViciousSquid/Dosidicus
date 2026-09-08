@@ -142,8 +142,18 @@ class ConsolidationManager:
 
         old = float(bw.weights[edge])
         direction = 1.0 if old >= 0 else -1.0
-        new = old + direction * abs(delta)
-        bw.weights[edge] = max(-1.0, min(1.0, new))
+        score = float(getattr(item, 'salience', 0.0) or 0.0)
+        apply_change = getattr(bw, 'apply_weight_change', None)
+        note = ("replayed during sleep because these two were among the day's "
+                "strongest co-activations")
+        if apply_change is not None:
+            apply_change(edge, delta=direction * abs(delta),
+                         mechanism='consolidation',
+                         detail={'note': note, 'salience': round(score, 4),
+                                 'night': self.nights_completed + 1},
+                         create=False, animate=True)
+        else:
+            bw.weights[edge] = max(-1.0, min(1.0, old + direction * abs(delta)))
 
     def _finish_night(self) -> Dict:
         bw = self.brain_widget
@@ -155,12 +165,40 @@ class ConsolidationManager:
 
         try:
             plan = self.engine.plan_prune(bw.weights, is_immune)
+            remove = getattr(bw, 'remove_weight', None)
             for edge in plan or []:
-                if edge in bw.weights:
+                if edge not in bw.weights:
+                    continue
+                reason = ("pruned during sleep - it stayed weak and was never "
+                          "replayed, so it never came to mean anything")
+                if remove is not None:
+                    remove(edge, mechanism='prune', reason=reason)
+                else:
                     del bw.weights[edge]
-                    pruned.append(edge)
+                pruned.append(edge)
         except Exception as e:
             print(f"[Consolidation] prune skipped: {type(e).__name__}: {e}")
+
+        # Synaptic homeostasis: what survives pruning is still scaled back, so
+        # a night of sleep lowers the whole network's gain and only what was
+        # replayed comes out ahead.
+        downscaled = 0
+        try:
+            for edge, new_w in (self.engine.plan_downscale(bw.weights, is_immune) or {}).items():
+                if edge not in bw.weights:
+                    continue
+                apply_change = getattr(bw, 'apply_weight_change', None)
+                if apply_change is not None:
+                    if apply_change(edge, value=new_w, mechanism='consolidation',
+                                    detail={'note': "scaled back during sleep "
+                                                    "(synaptic homeostasis)"},
+                                    create=False, animate=False):
+                        downscaled += 1
+                else:
+                    bw.weights[edge] = new_w
+                    downscaled += 1
+        except Exception as e:
+            print(f"[Consolidation] downscale skipped: {type(e).__name__}: {e}")
 
         try:
             self.engine.finish_day(self._replayed, len(pruned), self._cycles)
@@ -173,6 +211,7 @@ class ConsolidationManager:
             'pruned': len(pruned),
             'cycles': self._cycles,
             'pruned_pairs': pruned,
+            'downscaled': downscaled,
             'night': self.nights_completed,
             'finished_at': time.time(),
         }
@@ -196,6 +235,42 @@ class ConsolidationManager:
         data = getattr(bw, 'neurogenesis_data', {}) or {}
         protected.update(data.get('new_neurons', []) or [])
         return protected
+
+    # ------------------------------------------------------------------
+    # Manual control (used by the Sleep Replay control panel)
+    # ------------------------------------------------------------------
+    def force_consolidation(self, max_cycles: int = 200) -> Optional[Dict]:
+        """Run a full consolidation pass now, even while the squid is awake.
+
+        Same engine, same weights, same provenance as a real night - it just
+        does not wait for the squid to fall asleep.
+        """
+        if self._session is not None:
+            return None
+        session = self._begin_night()
+        if session is None:
+            return None
+        self._session = session
+        summary = None
+        for _ in range(max_cycles):
+            summary = self._step_night()
+            if summary is not None:
+                break
+        if self._session is not None:
+            summary = self._finish_night()
+            self._session = None
+        return summary
+
+    def clear_buffer(self) -> None:
+        """Forget the day's accumulated co-activation without consolidating it."""
+        try:
+            self.engine.tracker.clear()
+        except Exception:
+            pass
+
+    @property
+    def is_replaying(self) -> bool:
+        return self._session is not None
 
     # ------------------------------------------------------------------
     def get_stats(self) -> Dict:

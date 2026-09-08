@@ -125,9 +125,6 @@ class BrainWidget(QtWidgets.QWidget):
         self._link_fade_speeds = {}        # (src,dst) → fade speed per link
         self._link_start_times = {}        # (src,dst) → when this link should start
 
-        from .neurogenesis_show import ShowmanNeurogenesis
-        real_engine                 = EnhancedNeurogenesis(self, config)
-        self.enhanced_neurogenesis  = ShowmanNeurogenesis(real_engine)
         self.excluded_neurons = ['is_sick', 'is_eating', 'pursuing_food', 'direction', 'is_sleeping']
         
         # Build animation palette from selected style
@@ -152,7 +149,24 @@ class BrainWidget(QtWidgets.QWidget):
         self.weight_change_events = {} #
         self.activity_duration = 0.5 #
 
-        # ADDED IN 2.4.5.0: Replace simple neurogenesis_data with enhanced system
+        # Provenance first: everything below writes to it, so it has to exist
+        # before anything can change a weight or grow a neuron. This is the
+        # brain's own record of why it is the way it is, and it is what the
+        # inspection tools read - they never reconstruct it.
+        from .neural_provenance import CausalLedger
+        self.ledger = CausalLedger(self)
+
+        # What this network currently cannot do. Diagnosis for neurogenesis
+        # and, through the Knowledge tab, an explanation for the player.
+        from .capability import CapabilityMonitor
+        self.capability = CapabilityMonitor(self)
+
+        # Action -> consequence -> outcome -> learning, with temporal credit
+        # assignment over the STDP eligibility traces.
+        from .causal_learning import ActionOutcomeLedger
+        self.causal_learning = ActionOutcomeLedger(self)
+
+        # Structural plasticity. One engine, capability-driven.
         self.enhanced_neurogenesis = EnhancedNeurogenesis(self, self.config)
         self.experience_buffer = self.enhanced_neurogenesis.experience_buffer
 
@@ -1271,41 +1285,49 @@ class BrainWidget(QtWidgets.QWidget):
         
         new_connections_created = []  # Track newly formed connections
         
-        # Apply the weight updates (main thread only)
+        # Apply the weight updates (main thread only). Every one goes through
+        # apply_weight_change, so the correlation, the sample count and the
+        # spike-timing contribution that produced it end up in the ledger and
+        # the Learning tab reads the real reason instead of guessing from a
+        # before/after diff of its own cached copy.
         for i, (pair_str, update_data) in enumerate(weight_updates.items()):
             # Convert string key back to tuple if needed
             if isinstance(pair_str, str):
                 pair = tuple(pair_str.split(','))
             else:
-                pair = pair_str
-            
-            # Check if this is a new connection being created by Hebbian learning
+                pair = tuple(pair_str)
+
             is_new_connection = update_data.get('is_new_connection', False)
-            
-            if is_new_connection and pair not in self.weights:
-                # Create the new connection - Hebbian learning forming new pathways!
-                self.weights[pair] = 0.0  # Initialize with zero weight
-                new_connections_created.append(pair)
-                
-            if pair in self.weights:
-                old_weight = update_data['old_weight']
-                new_weight = update_data['new_weight']
-                self.weights[pair] = new_weight
-                
-                # [NEW] Generate unique vibrant color using HSL (Hue, Saturation, Lightness)
-                # Offset hue by index to ensure pairs get different colors
-                hue = (random.random() + (i * 0.618033988749895)) % 1.0  # Golden ratio spacing
+            old_weight = update_data['old_weight']
+            new_weight = update_data['new_weight']
+
+            mechanism = 'stdp' if abs(update_data.get('stdp_delta', 0.0) or 0.0) > \
+                abs(update_data.get('hebbian_delta', 0.0) or 0.0) else 'hebbian'
+
+            changed = self.apply_weight_change(
+                pair, value=new_weight, mechanism=mechanism,
+                detail={'correlation': update_data.get('mean_covariance'),
+                        'samples': update_data.get('samples'),
+                        'hebbian_delta': update_data.get('hebbian_delta'),
+                        'stdp_delta': update_data.get('stdp_delta'),
+                        'stdp_direction': update_data.get('stdp_direction'),
+                        'window_samples': result.get('window_samples')},
+                create=True, animate=False)
+
+            if changed:
+                if is_new_connection:
+                    new_connections_created.append(pair)
+
+                # Unique vibrant colour per pair so a batch is readable.
+                hue = (random.random() + (i * 0.618033988749895)) % 1.0
                 unique_color = QColor.fromHslF(hue, 0.95, 0.6).toRgb()
                 color_tuple = (unique_color.red(), unique_color.green(), unique_color.blue())
-                
-                # [NEW] Randomize speed (duration) between 0.8s (fast) and 2.0s (slow)
                 unique_duration = random.uniform(0.8, 2.0)
-                
-                # Add animation for visual feedback with custom parameters
+
                 n1, n2 = pair
                 self.add_weight_animation(
-                    n1, n2, old_weight, new_weight, 
-                    custom_color=color_tuple, 
+                    n1, n2, old_weight, new_weight,
+                    custom_color=color_tuple,
                     custom_duration=unique_duration
                 )
                 
@@ -1880,25 +1902,28 @@ class BrainWidget(QtWidgets.QWidget):
                     import traceback
                     traceback.print_exc()
         
-        # Build state with context and check neurogenesis triggers
+        # Re-diagnose what the network cannot do, then act on it. Both run on
+        # the main thread, where the state they read is authoritative: the
+        # worker only ever had a stale copy, and its own divergent set of
+        # thresholds, which is why there used to be two answers to "should this
+        # brain grow?".
+        monitor = getattr(self, 'capability', None)
+        if monitor is not None:
+            try:
+                monitor.evaluate()
+            except Exception as e:
+                print(f"⚠️ Capability evaluation failed: {e}")
+
         state_with_context = self.state.copy()
         self._pending_neurogenesis_check = True
-        
-        # Queue to worker thread if available
-        if self._use_threaded_processing and hasattr(self, 'brain_worker') and self.brain_worker.isRunning():
-            self.brain_worker.queue_neurogenesis_check(state_with_context)
-        else:
-            # Fallback: synchronous check
-            try:
-                # This path creates the neuron itself. The neurogenesis engine
-                # emits the same completed-birth event as the threaded path.
-                self.check_neurogenesis_triggers(state_with_context)
-            except Exception as e:
-                print(f"⚠️ Error in neurogenesis check: {e}")
-                import traceback
-                traceback.print_exc()
-            finally:
-                self._pending_neurogenesis_check = False
+        try:
+            self.check_neurogenesis_triggers(state_with_context)
+        except Exception as e:
+            print(f"⚠️ Error in neurogenesis check: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            self._pending_neurogenesis_check = False
 
     def toggle_pruning(self, enabled):
         """Enable or disable the pruning mechanisms for neurogenesis"""
@@ -1980,82 +2005,141 @@ class BrainWidget(QtWidgets.QWidget):
 
 
     def update_connection(self, neuron1, neuron2, value1, value2):
-        """Update connection weight and trigger animations, with connector limits."""
-        import time
-        
-        current_time = time.time()
-        pair = (neuron1, neuron2)
-        reverse_pair = (neuron2, neuron1)
+        """Retired: a third Hebbian rule that nothing called.
 
-        # Check if connection exists
-        exists = pair in self.weights or reverse_pair in self.weights
-        use_pair = pair if pair in self.weights else reverse_pair
+        It used delta = lr * a1 * a2, which can never be negative, so no amount
+        of experience could produce an inhibitory synapse through it - and an
+        avoidance behaviour IS an inhibitory synapse. The project's plasticity
+        rule lives in src/plasticity.py and is committed by
+        perform_hebbian_learning().
 
-        # --- CONNECTOR LIMIT CHECK ---
-        # If this is a NEW connection, check if either party is a maxed-out connector
-        if not exists:
-            # Check Neuron 1
-            if self.is_connector_neuron(neuron1):
-                if self.get_neuron_degree(neuron1) >= 3:
-                    # print(f"🚫 Blocked new connection to connector {neuron1} (Max 3 reached)")
-                    return
-            
-            # Check Neuron 2
-            if self.is_connector_neuron(neuron2):
-                if self.get_neuron_degree(neuron2) >= 3:
-                    # print(f"🚫 Blocked new connection to connector {neuron2} (Max 3 reached)")
-                    return
+        Kept as a delegation so an external caller gets the real rule instead
+        of a divergent one, and so the change is recorded like any other.
+        """
+        product = (self._as_activation(value1) / 100.0) * (self._as_activation(value2) / 100.0)
+        self.apply_weight_change(
+            (neuron1, neuron2), delta=self.learning_rate * product,
+            mechanism='hebbian',
+            detail={'note': 'direct co-activation update',
+                    'correlation': round(product, 4), 'samples': 1},
+            create=True, directed=False)
 
-        # Initialize if new
-        if not exists:
-            if neuron1 in self.neuron_positions and neuron2 in self.neuron_positions:
-                self.weights[pair] = 0.0
-                use_pair = pair
-                print(f"      🆕 Created new connection: {neuron1} ↔ {neuron2}")
-            else:
-                return
+    @staticmethod
+    def _as_activation(value) -> float:
+        if isinstance(value, bool):
+            return 100.0 if value else 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        return 0.0
 
-        prev_weight = self.weights[use_pair]
+    # =========================================================================
+    # THE SINGLE SYNAPTIC WRITE PATH
+    #
+    # Every mechanism that changes a weight - plasticity, STDP, causal reward,
+    # sleep consolidation, neurogenesis, the Designer, pruning - goes through
+    # here. That is what makes "why did this weight change from 0.31 to 0.47?"
+    # answerable: nothing can move a synapse without saying why.
+    # =========================================================================
+    def apply_weight_change(self, edge, delta: float = None, value: float = None,
+                            mechanism: str = 'manual', detail: dict = None,
+                            episode_id: str = None, create: bool = True,
+                            animate: bool = True, directed: bool = True) -> bool:
+        """Change one synapse and record the reason.
 
-        # Learning Rate Calculation
-        base_lr = self.learning_rate
-        newness_boost = 2.0
-        effective_lr = base_lr
+        Pass `delta` to nudge the existing weight or `value` to set it outright.
+        Returns True if the weight actually moved.
 
-        is_n1_new = self.is_new_neuron(neuron1)
-        is_n2_new = self.is_new_neuron(neuron2)
+        `directed` says whether the caller means this exact synapse. It must,
+        for anything structural: a regulator neuron is wired
+        drive -> regulator excitatory AND regulator -> drive inhibitory, and
+        collapsing those onto one undirected edge silently destroys the second
+        one - the whole point of the neuron. Callers that hold an unordered
+        pair (an innate reflex, a direct co-activation update) pass
+        directed=False and get the existing synapse in whichever direction it
+        already runs.
+        """
+        if not (isinstance(edge, tuple) and len(edge) == 2):
+            return False
+        src, dst = edge
+        if src == dst:
+            return False
 
-        if is_n1_new or is_n2_new:
-            effective_lr = base_lr * newness_boost
+        existing = edge in self.weights
+        if not existing and not directed:
+            reverse = (dst, src)
+            if reverse in self.weights:
+                edge = reverse
+                src, dst = edge
+                existing = True
 
-        # Calculate weight change (basic Hebbian)
-        weight_change = effective_lr * (value1 / 100.0) * (value2 / 100.0)
-        
-        # Add weight decay
-        decay_rate = self.config.hebbian.get('weight_decay', 0.01) * 0.1
-        new_weight = prev_weight + weight_change - (prev_weight * decay_rate)
-        
-        # Clamp weight to [-1, 1] range
-        new_weight = min(max(new_weight, -1.0), 1.0)
-        self.weights[use_pair] = new_weight
+        if not existing and not create:
+            return False
 
-        # Add animation using helper method
-        self.add_weight_animation(neuron1, neuron2, prev_weight, new_weight)
+        old = float(self.weights.get(edge, 0.0))
+        if value is not None:
+            new = float(value)
+        elif delta is not None:
+            new = old + float(delta)
+        else:
+            return False
 
-        # Record weight change time
-        if abs(new_weight - prev_weight) > 0.001:
-            self.weight_change_events[neuron1] = current_time
-            self.weight_change_events[neuron2] = current_time
-            
-            if (neuron1, neuron2) not in self.recently_updated_neuron_pairs and \
-            (neuron2, neuron1) not in self.recently_updated_neuron_pairs:
-                self.recently_updated_neuron_pairs.append((neuron1, neuron2))
-            
-            self.mark_render_dirty()
-            self.update()
+        new = max(-1.0, min(1.0, new))
+        if existing and abs(new - old) < 1e-9:
+            return False
 
-        self.communication_events[neuron1] = current_time
-        self.communication_events[neuron2] = current_time
+        self.weights[edge] = new
+
+        ledger = getattr(self, 'ledger', None)
+        if ledger is not None:
+            ledger.record_weight_change(edge, old, new, mechanism,
+                                        detail=detail, episode_id=episode_id)
+
+        now = time.time()
+        self.weight_change_events[src] = now
+        self.weight_change_events[dst] = now
+        self.communication_events[src] = now
+        self.communication_events[dst] = now
+        if (src, dst) not in self.recently_updated_neuron_pairs and \
+                (dst, src) not in self.recently_updated_neuron_pairs:
+            self.recently_updated_neuron_pairs.append((src, dst))
+        if animate:
+            self.add_weight_animation(src, dst, old, new)
+        self.mark_render_dirty()
+        return True
+
+    def remove_weight(self, edge, mechanism: str = 'prune', reason: str = "") -> bool:
+        """Delete one synapse, recording why it went."""
+        if edge not in self.weights:
+            return False
+        old = float(self.weights.pop(edge))
+        ledger = getattr(self, 'ledger', None)
+        if ledger is not None:
+            ledger.record_weight_change(edge, old, 0.0, mechanism,
+                                        detail={'note': reason or 'removed',
+                                                'removed': True})
+        self.mark_render_dirty()
+        return True
+
+    def explain_weight(self, edge, from_value=None, to_value=None) -> str:
+        """Why is this synapse the value it is? Reads the brain's own record."""
+        ledger = getattr(self, 'ledger', None)
+        if ledger is None:
+            return "This brain keeps no provenance."
+        return ledger.explain_weight(tuple(edge), from_value, to_value)
+
+    def explain_neuron(self, name: str) -> str:
+        """Why does this neuron exist? Reads the brain's own record."""
+        ledger = getattr(self, 'ledger', None)
+        if ledger is None:
+            return "This brain keeps no provenance."
+        return ledger.explain_neuron(name)
+
+    def what_do_you_know(self, topic: str = None, limit: int = 60):
+        """Everything the squid has learned, in plain English."""
+        ledger = getattr(self, 'ledger', None)
+        if ledger is None:
+            return []
+        return ledger.knowledge(topic, limit=limit)
 
     def is_connector_neuron(self, neuron_name: str) -> bool:
         """
@@ -2114,8 +2198,9 @@ class BrainWidget(QtWidgets.QWidget):
                 to_delete.append(pair)
 
         for pair in to_delete:
-            if pair in self.weights:
-                del self.weights[pair]
+            self.remove_weight(
+                pair, mechanism='prune',
+                reason=f"weight stayed below {threshold} and neither end was new")
 
         if len(to_delete) > 0:
             print(f"\x1b[33mPruned {len(to_delete)} weak connections.\x1b[0m")
@@ -2194,6 +2279,7 @@ class BrainWidget(QtWidgets.QWidget):
         from .brain_constants import CORE_STAT_NEURONS
 
         deltas = {}
+        contributions = []
         for (src, dst), weight in self.weights.items():
             if dst not in CORE_STAT_NEURONS:
                 continue
@@ -2204,17 +2290,47 @@ class BrainWidget(QtWidgets.QWidget):
                 value = float(raw)
             else:
                 continue
-            deltas[dst] = deltas.get(dst, 0.0) + ((value - 50.0) / 100.0) * float(weight)
+            push = ((value - 50.0) / 100.0) * float(weight)
+            deltas[dst] = deltas.get(dst, 0.0) + push
+            if abs(push) > 1e-4:
+                contributions.append(((src, dst), push * gain, dst))
+
+        # Record what each synapse actually did to the squid. This is the
+        # channel through which learning becomes behaviour, so it is also the
+        # honest answer to "how did this knowledge affect what it does?".
+        ledger = getattr(self, 'ledger', None)
+        if ledger is not None:
+            for edge, amount, target in contributions:
+                ledger.record_influence(edge, amount, 'modulation', target)
 
         return {k: v * gain for k, v in deltas.items()}
 
     def observe_for_learning(self):
-        """Feed one tick of evidence to the plasticity engine.
+        """Feed one tick of evidence to every learning mechanism.
 
         Called from propagate_activations, i.e. once per simulation tick, so a
-        one-second event still contributes to the next commit instead of being
-        invisible to a 30-second snapshot.
+        one-second event still contributes instead of being invisible to a
+        30-second snapshot. All three consumers see the same tick of the same
+        authoritative state:
+
+          * plasticity  - what fired together, and in what order
+          * capability  - what the network is failing to represent or regulate
+          * causal      - whether an action's consequence window has closed
         """
+        monitor = getattr(self, 'capability', None)
+        if monitor is not None:
+            try:
+                monitor.observe(self.state)
+            except Exception:
+                pass
+
+        causal = getattr(self, 'causal_learning', None)
+        if causal is not None:
+            try:
+                causal.on_tick(self.state)
+            except Exception:
+                pass
+
         engine = getattr(self, 'plasticity', None)
         if engine is None:
             return 0
@@ -2512,6 +2628,11 @@ class BrainWidget(QtWidgets.QWidget):
         """
         Compute one timestep of activation for every network-driven neuron.
 
+        The rule itself lives in src/propagation.py, which is the project's
+        single implementation of it - the headless trainer steps a network with
+        exactly the same function, so a brain trained there behaves identically
+        when the squid runs it.
+
         Contract
         --------
         * Reads   : self.state (activations), self.weights (synapses)
@@ -2519,23 +2640,13 @@ class BrainWidget(QtWidgets.QWidget):
         * Never   : touches a PURE_INPUT (sensor) or CORE_STAT neuron - those
                     are owned by the world and the squid model respectively.
 
-        The transfer function is the project's existing convention, taken from
-        FunctionalNeuron.calculate_activation so neurogenesis neurons and
-        Designer neurons behave identically:
-
-            target = 50 + sum((activation[src] - 50) * weight) * strength
-            new    = old + (target - old) * smoothing        clamped to 0..100
-
-        50 is the neutral baseline, so a silent input contributes nothing and a
-        negative weight is genuinely inhibitory.
-
         Returns the dict of neurons it changed (useful for tests and logging).
         """
+        from .propagation import propagate
+
         if smoothing is None:
             smoothing = getattr(self, 'propagation_smoothing', 0.5)
 
-        # Which neurons may we compute? Anything in the network that is not
-        # owned by the world. neuron_positions is the network's membership list.
         # Gather learning evidence FIRST. A default 8-neuron brain has no
         # network-driven neurons at all, so doing this after the early return
         # meant the squid could never learn until the user added a neuron in
@@ -2543,59 +2654,27 @@ class BrainWidget(QtWidgets.QWidget):
         # environment".
         self.observe_for_learning()
 
+        # Which neurons may we compute? Anything in the network that is not
+        # owned by the world. neuron_positions is the network's membership list.
         targets = [n for n in self.neuron_positions
                    if is_network_driven(n) and n not in self.excluded_neurons]
         if not targets:
             return {}
 
-        target_set = set(targets)
-
-        # 1. Sum weighted input for each target from the CURRENT state.
-        #    Reading a single consistent snapshot keeps the update synchronous
-        #    (all neurons step together) rather than order-dependent.
-        net_input = {n: 0.0 for n in targets}
-        for (src, dst), weight in self.weights.items():
-            if dst not in target_set:
-                continue
-            raw = self.state.get(src)
-            if raw is None:
-                continue
-            if isinstance(raw, bool):
-                src_val = 100.0 if raw else 0.0
-            elif isinstance(raw, (int, float)):
-                src_val = float(raw)
-            else:
-                continue
-            net_input[dst] += (src_val - 50.0) * float(weight)
-
-        # 2. Apply the transfer function and per-neuron strength multiplier.
         functional = getattr(getattr(self, 'enhanced_neurogenesis', None),
                              'functional_neurons', {}) or {}
+        strengths = {name: getattr(fn, 'strength_multiplier', 1.0)
+                     for name, fn in functional.items()}
 
-        changed = {}
-        for name in targets:
-            strength = 1.0
-            fn = functional.get(name)
-            if fn is not None:
-                strength = float(getattr(fn, 'strength_multiplier', 1.0) or 1.0)
+        noise = {}
+        if isinstance(self.neurons, dict):
+            for name in targets:
+                props = self.neurons.get(name)
+                if isinstance(props, dict) and props.get('noise'):
+                    noise[name] = props['noise']
 
-            target_val = 50.0 + net_input[name] * strength
-
-            props = self.neurons.get(name) if isinstance(self.neurons, dict) else None
-            if props:
-                noise = float(props.get('noise', 0.0) or 0.0)
-                if noise:
-                    target_val += random.uniform(-noise, noise)
-
-            old_raw = self.state.get(name, 50.0)
-            old = float(old_raw) if isinstance(old_raw, (int, float)) and not isinstance(old_raw, bool) else 50.0
-
-            new_val = old + (target_val - old) * smoothing
-            new_val = max(0.0, min(100.0, new_val))
-
-            if abs(new_val - old) > 1e-9:
-                changed[name] = new_val
-            self.state[name] = new_val
+        changed = propagate(self.state, self.weights, targets,
+                            strengths=strengths, noise=noise, smoothing=smoothing)
 
         if changed:
             self.mark_render_dirty()
@@ -2616,88 +2695,133 @@ class BrainWidget(QtWidgets.QWidget):
         # >>> ADDED: Mark render dirty <<<
         self.mark_render_dirty()
 
-    def provide_outcome_feedback(self, outcome_value: float):
-        """
-        Provide feedback to recently activated neurons.
+    def provide_outcome_feedback(self, outcome_value: float, reason: str = ""):
+        """Tell the brain how that turned out.
+
         outcome_value: 1.0 = very positive, 0.0 = neutral, -1.0 = very negative
+
+        Two things follow. Grown neurons that were recently active have their
+        utility score updated, which is what keeps pruning honest. And the
+        value is delivered as a reward signal along the spike-timing
+        eligibility traces, so the synapses that were causally active in the
+        seconds before the outcome are the ones that change.
         """
-        if not hasattr(self, 'enhanced_neurogenesis'):
-            return
-        
         current_time = time.time()
-        
-        # Update utility scores for recently active neurons
-        for name, func_neuron in self.enhanced_neurogenesis.functional_neurons.items():
-            # Was this neuron recently active?
-            # Check if func_neuron has the last_activated attribute (for FunctionalNeuron objects)
-            if hasattr(func_neuron, 'last_activated') and current_time - func_neuron.last_activated < 30:  # 30 seconds
-                if hasattr(func_neuron, 'update_utility_score'):
-                    func_neuron.update_utility_score(outcome_value)
+
+        engine = getattr(self, 'enhanced_neurogenesis', None)
+        if engine is not None:
+            for name, func_neuron in engine.functional_neurons.items():
+                # Was this neuron recently active?
+                if hasattr(func_neuron, 'last_activated') and current_time - func_neuron.last_activated < 30:
+                    if hasattr(func_neuron, 'update_utility_score'):
+                        func_neuron.update_utility_score(outcome_value)
+
+        self.deliver_reward(outcome_value, reason)
+
+    def deliver_reward(self, signal: float, reason: str = "") -> int:
+        """Broadcast an outcome back along the STDP eligibility traces.
+
+        The third factor in a three-factor learning rule. Spike timing says
+        which synapses were causally ordered; the trace says how recently; this
+        says whether it was worth repeating. Returns the number of synapses
+        that changed.
+
+        This used to live in the STDP plugin, which monkey-patched the worker
+        and wrote brain_widget.weights directly, so a caretaker's reward only
+        reached the brain when a plugin happened to be enabled - and left no
+        record when it did.
+        """
+        engine = getattr(self, 'plasticity', None)
+        stdp = getattr(engine, 'stdp', None) if engine is not None else None
+        if stdp is None or not signal:
+            return 0
+        try:
+            deltas = stdp.apply_reward_modulation(float(signal))
+        except Exception:
+            return 0
+
+        applied = 0
+        note = reason or ("something good happened" if signal > 0
+                          else "something bad happened")
+        for edge, delta in (deltas or {}).items():
+            if not delta:
+                continue
+            delta = max(-0.08, min(0.08, float(delta)))
+            if self.apply_weight_change(
+                    edge, delta=delta, mechanism='causal_reward',
+                    detail={'reward_signal': round(float(signal), 3),
+                            'note': f"{note}, and this synapse was firing in the "
+                                    f"right order just before it"},
+                    create=False, directed=False):
+                applied += 1
+        if applied:
+            print(f"⚡ Reward {signal:+.2f} ({note}) reached {applied} synapse(s)")
+        return applied
 
 
     
     
     def check_neurogenesis_triggers(self, state):
-        """Enhanced neurogenesis check with proper trigger priority"""
+        """Consider growing new structure.
+
+        Kept under its historical name because it is the project's structural
+        growth entry point, but the question it asks has changed completely.
+        It no longer looks for an event that crossed a threshold; it asks the
+        capability monitor what this network persistently cannot represent,
+        regulate or express, and grows a neuron only when the answer is
+        something ordinary learning has already failed to fix.
+        """
         if not state.get('neurogenesis_active', True):
             return False
-        
-        # Build experience context
+
+        engine = getattr(self, 'enhanced_neurogenesis', None)
+        if engine is None:
+            return False
+
+        deficit = None
+        if hasattr(engine, 'find_deficit'):
+            deficit = engine.find_deficit(state)
+            if deficit is None:
+                return False
+
+        # The experience context is the birth record's snapshot of the squid's
+        # life at the moment it grew - it is *context*, not the reason.
         recent_actions = state.get('recent_actions', [])
         environment = {
             'food_count': state.get('food_count', 0),
             'poop_count': state.get('poop_count', 0),
-            'has_rock': state.get('carrying_rock', False)
+            'has_rock': state.get('carrying_rock', False),
+            'is_eating': state.get('is_eating', False),
+            'new_object_encountered': state.get('new_object_encountered', False),
+            'recent_positive_outcome': state.get('recent_positive_outcome', False),
         }
-        
-        # ===== FIX: PROPER TRIGGER PRIORITY WITH EMERGENCY OVERRIDE =====
-        trigger_type = None
-        
-        # 🚨 HIGHEST PRIORITY: Emergency stress (overrides everything)
-        if state.get('anxiety', 50) >= 95:
-            trigger_type = 'stress'
-            print(f"🚨 EMERGENCY: Critical anxiety level ({state.get('anxiety', 50):.1f})!")
-        
-        # HIGH PRIORITY: Stress (anxiety or sustained stress)
-        elif state.get('anxiety', 50) > 75 or state.get('sustained_stress', 0) > 1:
-            trigger_type = 'stress'
-        
-        # MEDIUM PRIORITY: Novelty (curiosity or new objects)
-        elif state.get('curiosity', 50) > 70 or state.get('novelty_exposure', 0) > 2:
-            trigger_type = 'novelty'
-        
-        # LOW PRIORITY: Reward (satisfaction or positive outcomes)
-        elif state.get('satisfaction', 50) > 70 or state.get('recent_rewards', 0) > 2:
-            trigger_type = 'reward'
-        # ================================================================
-        
-        if trigger_type:
-            # Capture full experience context
-            context = self.enhanced_neurogenesis.capture_experience_context(
-                trigger_type=trigger_type,
-                brain_state=self.state,
-                recent_actions=recent_actions,
-                environment=environment
-            )
-            
-            # Add to experience buffer
-            self.experience_buffer.add_experience(context)
-            
-            # Check if we should create a neuron
-            if self.enhanced_neurogenesis.should_create_neuron(context):
-                neuron_name = self.enhanced_neurogenesis.create_functional_neuron(context)
-                
-                if neuron_name and self.pruning_enabled:
-                    # Check if we need to prune
-                    current_count = len(self.neuron_positions) - len(self.excluded_neurons)
-                    max_neurons = self.neurogenesis_config.get('max_neurons', 32)
-                    
-                    if current_count > max_neurons * 0.85:
-                        self.enhanced_neurogenesis.intelligent_pruning()
-                
-                return neuron_name is not None
-        
-        return False
+        context = engine.capture_experience_context(
+            trigger_type=(deficit.suggested_type if deficit is not None else 'novelty'),
+            brain_state=self.state,
+            recent_actions=recent_actions,
+            environment=environment)
+
+        buffer = getattr(self, 'experience_buffer', None)
+        if buffer is not None and hasattr(buffer, 'add_experience'):
+            try:
+                buffer.add_experience(context)
+            except Exception:
+                pass
+
+        # Pass the diagnosis through rather than letting the engine re-run it:
+        # a second reading of a state that has moved on could disagree with the
+        # first, and then the birth record would name a different deficit from
+        # the one that actually justified the growth.
+        if not engine.should_create_neuron(context, deficit=deficit):
+            return False
+
+        neuron_name = engine.create_functional_neuron(context, deficit=deficit)
+        if neuron_name and self.pruning_enabled:
+            current_count = len(self.neuron_positions) - len(self.excluded_neurons)
+            max_neurons = self.neurogenesis_config.get('max_neurons', 32)
+            if current_count > max_neurons * 0.85:
+                engine.intelligent_pruning()
+        return neuron_name is not None
 
     def get_neurogenesis_threshold(self, trigger_type):
         """Safely get threshold for a trigger type with fallback defaults"""
@@ -2881,13 +3005,18 @@ class BrainWidget(QtWidgets.QWidget):
     def unfreeze_weights(self):
         self.frozen_weights = None
 
-    def strengthen_connection(self, neuron1, neuron2, amount):
-        """Strengthen a connection, respecting connector limits for new links."""
+    def strengthen_connection(self, neuron1, neuron2, amount, mechanism='reflex',
+                              reason=""):
+        """Strengthen a connection, respecting connector limits for new links.
+
+        Used by the innate reflexes (eating, cleaning, being startled) that
+        wire experience directly rather than waiting for a learning cycle. It
+        goes through the same recorded write path as everything else.
+        """
         pair = (neuron1, neuron2)
         reverse_pair = (neuron2, neuron1)
-        
+
         exists = pair in self.weights or reverse_pair in self.weights
-        use_pair = pair if pair in self.weights else reverse_pair
 
         # --- CONNECTOR LIMIT CHECK ---
         if not exists:
@@ -2895,14 +3024,11 @@ class BrainWidget(QtWidgets.QWidget):
                 return
             if self.is_connector_neuron(neuron2) and self.get_neuron_degree(neuron2) >= 3:
                 return
-            # If we pass checks, create the connection
-            self.weights[pair] = 0.0
-            use_pair = pair
 
-        self.weights[use_pair] += amount
-        self.weights[use_pair] = max(-1, min(1, self.weights[use_pair]))
-        
-        self.mark_render_dirty()
+        self.apply_weight_change(
+            pair, delta=amount, mechanism=mechanism,
+            detail={'note': reason or 'an innate response to what just happened'},
+            create=True, directed=False)
         self.update()
 
     def capture_training_data(self, state):

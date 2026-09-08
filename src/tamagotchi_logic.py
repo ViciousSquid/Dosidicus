@@ -46,6 +46,14 @@ class TamagotchiLogic:
         self.brain_window = brain_window
         self.brain_hooks = BrainNeuronHooks(self)
 
+        # Innate reflexes. Not a second learning rule - every change it makes
+        # goes through the brain's one recorded write path (see learning.py).
+        # It was previously never instantiated, so get_recent_learning() could
+        # only ever report "No learning data available".
+        self.hebbian_learning = HebbianLearning(squid, brain_window)
+        if squid is not None:
+            squid.hebbian_learning = self.hebbian_learning
+
         # Initialize Vision Worker
         self.vision_worker = VisionWorker()
         self.vision_worker.visibility_update.connect(self.handle_vision_update)
@@ -1168,6 +1176,13 @@ class TamagotchiLogic:
             if not hasattr(self.squid, 'current_speed'):
                 self.squid.current_speed = self.squid.base_speed
 
+            # Being startled is an aversive outcome: whatever was firing in the
+            # right order just beforehand gets weakened, which is how a squid
+            # comes to avoid the thing that startled it.
+            bw = getattr(self.brain_window, 'brain_widget', None)
+            if bw is not None and hasattr(bw, 'provide_outcome_feedback'):
+                bw.provide_outcome_feedback(-0.3, f"it was startled by {source}")
+
             # --- existing startled state / status block ------------------------------
             self.squid.mental_state_manager.set_state("startled", True)
             self.startle_cooldown = self.startle_cooldown_max
@@ -1573,6 +1588,19 @@ class TamagotchiLogic:
                 action_to_track = self._normalize_action_name(current_status)
                 neuro.track_action(action_to_track)
                 neuro.track_state_change(brain_state)
+
+                # Open a causal episode for what the squid has decided to do.
+                # The consequence of the action is measured over the next few
+                # seconds and compared against how the drives drift when it is
+                # NOT doing that - which is what makes the conclusion causal
+                # rather than merely correlational.
+                causal = getattr(self.brain_window.brain_widget, 'causal_learning', None)
+                if causal is not None:
+                    try:
+                        causal.on_action(action_to_track,
+                                         self.brain_window.brain_widget.state)
+                    except Exception as e:
+                        print(f"[CausalLearning] could not open episode: {e}")
                 
                 environment = {
                     'food_count': len(self.food_items),
@@ -1692,6 +1720,16 @@ class TamagotchiLogic:
             # and _normalize_action_name never saw what the squid decided.
             if decision and not getattr(squid, 'is_eating', False):
                 squid.status = decision
+
+            # Note what it chose, so the ledger can say how a learned synapse
+            # actually showed up in behaviour rather than only asserting that
+            # it must have.
+            bw = getattr(self.brain_window, 'brain_widget', None)
+            ledger = getattr(bw, 'ledger', None)
+            if ledger is not None and decision:
+                engine = getattr(squid, '_decision_engine', None)
+                data = engine.get_decision_data() if engine is not None else {}
+                ledger.record_decision(decision, (data or {}).get('adjusted_weights'))
             return decision
         except Exception as e:
             # Never let a decision failure stop the simulation, but never
@@ -2109,6 +2147,13 @@ class TamagotchiLogic:
             importance=4
         )
         
+        # Innate reflex: curiosity is intrinsically rewarding.
+        if getattr(self, 'hebbian_learning', None) is not None:
+            try:
+                self.hebbian_learning.learn_from_curiosity()
+            except Exception as e:
+                print(f"[Reflex] learn_from_curiosity failed: {type(e).__name__}: {e}")
+
         # Schedule the end of the curious state
         QtCore.QTimer.singleShot(5000, self.end_curious)  # End curious after 5 seconds
 
@@ -2216,6 +2261,13 @@ class TamagotchiLogic:
         if mental_state_manager:
             mental_state_manager.set_state("sick", is_sick)
 
+        # Innate reflex: falling ill teaches the squid about filth immediately.
+        if is_sick and getattr(self, 'hebbian_learning', None) is not None:
+            try:
+                self.hebbian_learning.learn_from_sickness()
+            except Exception as e:
+                print(f"[Reflex] learn_from_sickness failed: {type(e).__name__}: {e}")
+
         statistics = getattr(self.squid, 'statistics', None)
         if statistics:
             statistics.record_sickness_state(is_sick)
@@ -2223,6 +2275,10 @@ class TamagotchiLogic:
     def give_medicine(self):
         
         # Get plugin results
+        bw = getattr(self.brain_window, 'brain_widget', None)
+        if bw is not None and hasattr(bw, 'provide_outcome_feedback'):
+            bw.provide_outcome_feedback(0.4, "it was given medicine")
+
         results = self.plugin_manager.trigger_hook("on_medicine", 
                                                 tamagotchi_logic=self, 
                                                 squid=self.squid)
@@ -2676,6 +2732,18 @@ class TamagotchiLogic:
                 importance=3
             )
         
+            bw = getattr(self.brain_window, 'brain_widget', None)
+            if bw is not None and hasattr(bw, 'provide_outcome_feedback'):
+                bw.provide_outcome_feedback(0.3, "the tank was cleaned")
+
+            # Innate reflex: a clean tank is an unconditioned good.
+            if getattr(self, 'hebbian_learning', None) is not None:
+                try:
+                    self.hebbian_learning.learn_from_organization()
+                except Exception as e:
+                    print(f"[Reflex] learn_from_organization failed: "
+                          f"{type(e).__name__}: {e}")
+
         # Clear all DIRTY text immediately when cleaned
         self.user_interface.clear_dirty_text()
         

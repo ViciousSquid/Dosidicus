@@ -1,1 +1,108 @@
-The neural network in Dosidicus does not use traditional backpropagation for training. Instead, it employs a form of <strong>Hebbian learning</strong>, a biologically-inspired principle summarized as "neurons that fire together, wire together." This method allows the network to learn associations and patterns organically based on the squid's concurrent states, without requiring a separate training phase. The entire process is managed within the <code>perform_hebbian_learning</code> and <code>update\_connection</code> methods. </p> <h4>1. The Learning Cycle</h4> <p> Learning is not continuous but occurs in discrete cycles to ensure stability and reduce computational load. </p> <ul> <li> <strong>Timed Trigger:</strong> The learning cycle is initiated by a timer. The interval for this timer is configurable in <code>config.ini</code> under the <code>\[Hebbian\]</code> section's <code>learning_interval</code> parameter (default every 30000 milliseconds). </li> <li> <strong>Pre-Pruning:</strong> Before each learning cycle begins, a pruning function is called to remove extremely weak and old connections from the network. This helps maintain network efficiency by clearing out irrelevant pathways before new learning occurs. </li> </ul> <h4>2. The Core Learning Process</h4> <p> The <code>perform_hebbian_learning</code> method executes a precise sequence of steps to update the network's weights. </p> <ol> <li> <strong>Identify Active Neurons:</strong> The system first scans all neurons in the brain. Any neuron whose activation value is above the <code>active_threshold</code> defined in the configuration is considered "active" for this learning cycle. System-level neurons (e.g., <code>is_eating</code>, <code>direction</code>) are excluded from this process. </li> <li> <strong>Random Pair Sampling:</strong> If fewer than two neurons are active, the learning cycle is aborted. If there are enough active neurons, the system does <em>not</em> update all possible pairs. Instead, it randomly samples a small number of pairs (e.g., two) from the pool of active neurons. This stochastic approach introduces variability and prevents the network from over-stabilizing into rigid patterns. </li> <li> <strong>Update Connection Weight:</strong> For each selected pair, the <code>update_connection</code> method is called. This is where the core weight calculation happens: <ul> <li> <strong>Base Hebbian Rule:</strong> The fundamental change in weight is calculated by multiplying the two neurons' normalized activation values by a learning rate. This reinforces the connection between them. </li> <li> <strong>Dynamic Learning Rate:</strong> The learning rate is not static. If one of the neurons in the pair was recently created via neurogenesis, the learning rate is temporarily boosted (e.g., by a factor of 2.0). This allows new, specialized neurons to integrate into the network more quickly and form meaningful connections. </li> <li> <strong>Weight Decay:</strong> To prevent runaway weight growth and to help the network "forget" insignificant associations, a small decay factor is applied during the update. This factor, configured via <code>weight_decay</code> in <code>config.ini</code>, slightly reduces the magnitude of the connection's weight during each update. </li> <li> <strong>Clamping:</strong> The final calculated weight is always clamped to a range of \[-1.0, 1.0\] to keep it normalized and prevent extreme values from destabilizing the network. </li> </ul> </li> </ol> <h4>3. Visual Feedback</h4> <p> The learning process is tied directly to the application's user interface to provide clear, real-time feedback. </p> <ul> <li> <strong>Activity Log:</strong> In the "Learning" tab of the Brain Tool, a log entry is created for each learning event, explicitly stating which neuron pair had its connection strengthened or weakened and by how much. </li> <li> <strong>Network Animation:</strong> In the "Network" tab, the connection line between the learning pair will briefly glow or pulse. The color of the pulse indicates whether the weight increased (positive reinforcement) or decreased (negative reinforcement), providing an immediate visual cue of the learning event. </li> </ul>
+# Synaptic plasticity
+
+Dosidicus does not use backpropagation. It learns with a biologically-inspired
+correlation rule, blended with spike-timing, modulated by outcome — a
+three-factor rule. There is exactly one implementation of it,
+[`src/plasticity.py`](../../src/plasticity.py), committed by
+`BrainWidget.perform_hebbian_learning()`. The headless trainer calls the same
+engine.
+
+---
+
+## 1. Evidence is accumulated every tick
+
+`PlasticityEngine.observe()` runs once per simulation tick from
+`propagate_activations()`. It accumulates running sums for a true covariance
+over the window, and feeds the same tick to the spike tracker.
+
+This matters because the squid learns on two timescales that a snapshot cannot
+bridge: drives take 30–60 s to move ten points, while event neurons
+(`can_see_food`, `is_eating`, `is_startled`) flip in a single tick and are on
+for roughly 2 % of the time. A sampler that looked at the network once every
+30 s caught **none** of the ticks where `can_see_food` was on, so the neurons
+carrying what actually happened to the squid were structurally excluded from
+learning.
+
+The commit interval (`[Hebbian] learning_interval`, default 20 s) is therefore
+a pacing choice, not a correctness one.
+
+## 2. The rule
+
+For each committed pair:
+
+```
+Δw  =  lr · r(a₁, a₂)                     (Hebbian term)
+Δw  =  (1−β)·Δw_hebb + β·Δw_stdp·lr       (when spike timing has an opinion)
+w'  =  clamp(w + Δw − w·decay,  −1, +1)
+```
+
+* **`r` is the Pearson correlation** between the two neurons over the window,
+  against each neuron's own mean rather than a fixed midpoint. Pairs that vary
+  together strengthen; pairs that vary oppositely go **negative**; unrelated
+  pairs decay to zero instead of saturating. A neuron held at a constant has no
+  variance and therefore teaches nothing, which is correct — you cannot learn
+  from an invariant.
+* **Weights are signed.** An avoidance behaviour ("why is yours afraid of
+  poop?") *is* an inhibitory synapse. The old rule used `lr · a₁ · a₂`, which
+  is never negative, so no amount of experience could produce one.
+* **With `base_learning_rate == weight_decay`** a synapse converges to exactly
+  the correlation between its endpoints, which makes every weight in the
+  network readable as a statement about the squid's experience.
+* **New neurons learn faster** while they bed in
+  (`new_neuron_lr_multiplier`, default 2.0).
+
+Spike timing is blended **only where it has an opinion**. STDP is silent for
+most pairs on most cycles, and averaging its zero in regardless would drag every
+estimate toward the middle and break the convergence property above.
+
+## 3. Direction
+
+A sensor may be a learning **source** but never a **target**: the world
+overwrites it every tick, so a synapse pointing into one is inert.
+`PlasticityEngine.orient()` gives a new synapse a direction that can actually
+do something — a network-driven neuron via propagation, or a core drive via
+modulation — and skips the pair entirely if neither end qualifies.
+
+An existing edge always keeps its direction.
+
+## 4. Coverage
+
+Pairs are ranked by the strength of the evidence, not by a snapshot, and the
+engine commits `max(min_pairs_per_cycle, half the candidate pool)` of them per
+cycle, capped at 64. A recently-committed pair is deprioritised but not exiled.
+At the old fixed two pairs per cycle, a synapse in a 20-neuron brain updated
+once every 47 minutes — the more the brain grew, the less each synapse learned.
+
+## 5. Where else weights change
+
+Plasticity is not the only mechanism, but it is the only *correlational* one.
+The complete set, all of which write through `BrainWidget.apply_weight_change()`
+and all of which are distinguishable in the ledger:
+
+| Mechanism | What it means |
+|-----------|---------------|
+| `hebbian` | they kept happening together |
+| `stdp` | one reliably fired just before the other |
+| `causal_reward` | an action it took led to a result worth repeating |
+| `consolidation` | it was replayed during sleep |
+| `neurogenesis` | a new neuron was wired in |
+| `reflex` | an innate reflex fired (eating, illness, cleaning, curiosity) |
+| `designer` | you wired it by hand |
+| `prune` | it never amounted to anything and was removed |
+
+## 6. Configuration
+
+`[Hebbian]` in `config.ini` is read by `LearningConfig` and converted by
+`PlasticityConfig.from_learning_config()`. Every key in that section takes
+effect.
+
+## 7. Seeing it
+
+The **Learning** tab shows each committed change as a card carrying the
+mechanism, the measured correlation, the sample count and the LTP/LTD badge
+when spike timing contributed — all read from the provenance ledger, which is
+the record the mechanism itself wrote. It does not diff its own cached copy of
+the weights, which is what it used to do and why it could never say *why*
+anything changed.
+
+The **Knowledge** tab turns the same record into plain English.

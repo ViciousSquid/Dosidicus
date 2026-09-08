@@ -24,6 +24,7 @@ from .brain_memory_tab import MemoryTab
 from .brain_decisions_tab import DecisionsTab
 from .brain_personality_tab import PersonalityTab
 from .brain_statistics_tab import StatisticsTab
+from .brain_knowledge_tab import KnowledgeTab
 from .task_manager import TaskManagerWindow
 from .localisation import Localisation, set_language
 
@@ -769,6 +770,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.nn_viz_tab = NeuralNetworkVisualizerTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.nn_viz_tab, loc.get("tab_learning", "Learning"))
 
+        # Knowledge reads the brain's own provenance ledger - the same record
+        # the organism writes as it learns. It is deliberately NOT a second
+        # interpretation of the network.
+        self.knowledge_tab = KnowledgeTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
+        self.tabs.addTab(self.knowledge_tab, loc.get("tab_knowledge", "Knowledge"))
+
         self.memory_tab = MemoryTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
         self.tabs.addTab(self.memory_tab, loc.get("memory", "Memory"))
 
@@ -786,7 +793,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.about_tab, loc.get("tab_about", "About"))
 
         # Make sure all tabs have correct tamagotchi_logic reference
-        for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'decisions_tab', 'personality_tab', 'statistics_tab', 'about_tab']:
+        for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'knowledge_tab', 'decisions_tab', 'personality_tab', 'statistics_tab', 'about_tab']:
             if hasattr(self, tab_name):
                 tab = getattr(self, tab_name)
                 if hasattr(tab, 'set_tamagotchi_logic') and self.tamagotchi_logic:
@@ -840,6 +847,20 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # NeuronOutputMonitor, which is the single source of truth.
         output_bindings = list(getattr(self.brain_widget, 'output_bindings', []) or [])
 
+        # A squid's cognitive history is the point of the project, so it is
+        # saved with the squid: why every synapse is the value it is, why every
+        # grown neuron exists, what the squid has worked out about its own
+        # actions, and what its network still cannot do.
+        def _dump(attr):
+            owner = getattr(self.brain_widget, attr, None)
+            if owner is None or not hasattr(owner, 'to_dict'):
+                return {}
+            try:
+                return owner.to_dict()
+            except Exception as e:
+                print(f"Warning: could not serialize {attr}: {e}")
+                return {}
+
         return {
             'weights_list': weights_list,
             'neuron_positions': {str(k): v for k, v in self.brain_widget.neuron_positions.items()},
@@ -848,6 +869,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             'state_colors': getattr(self.brain_widget, 'state_colors', {}),
             'enhanced_neurogenesis': enhanced_neurogenesis_data,  # Full neurogenesis state
             'output_bindings': output_bindings,
+            'provenance': _dump('ledger'),
+            'causal_learning': _dump('causal_learning'),
+            'capability': _dump('capability'),
+            'plasticity': _dump('plasticity'),
+            'consolidation': _dump('consolidation'),
             # Legacy key for backward compatibility (subset of enhanced_neurogenesis)
             'functional_neurons': enhanced_neurogenesis_data.get('functional_neurons', {})
         }
@@ -941,6 +967,28 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # =====================================================================
         self._force_rebuild_neurogenesis_neurons(state)
 
+        # Restore the cognitive history. Without this a loaded squid would have
+        # an evolved brain and no idea why - "every save file becomes a
+        # permanent cognitive history" only holds if the history is in the file.
+        for key, attr in (('provenance', 'ledger'),
+                          ('causal_learning', 'causal_learning'),
+                          ('capability', 'capability'),
+                          ('plasticity', 'plasticity'),
+                          ('consolidation', 'consolidation')):
+            payload = state.get(key)
+            owner = getattr(self.brain_widget, attr, None)
+            if not payload or owner is None or not hasattr(owner, 'from_dict'):
+                continue
+            try:
+                owner.from_dict(payload)
+            except Exception as e:
+                print(f"⚠️  Could not restore {key}: {type(e).__name__}: {e}")
+
+        # A brain grown before provenance existed, or one whose ledger did not
+        # survive, still deserves an answer to "why does this neuron exist?".
+        # Rebuild what can honestly be rebuilt from the neurons' own records.
+        self._backfill_neuron_origins()
+
         # --- Critical Step: Ensure brain_widget consistency after loading ---
         all_neurons = list(self.brain_widget.neuron_positions.keys())
         new_neurons_list = self.brain_widget.neurogenesis_data.get('new_neurons', [])
@@ -983,6 +1031,38 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         if self.brain_widget.show_links:
             self.brain_widget._enable_links_after_reveal()
         self.brain_widget.update()
+
+    def _backfill_neuron_origins(self):
+        """Give grown neurons a birth record when the ledger has none.
+
+        Only ever fills gaps - an existing record is never overwritten, because
+        the original reason is the true one and a reconstruction is not.
+        """
+        ledger = getattr(self.brain_widget, 'ledger', None)
+        engine = getattr(self.brain_widget, 'enhanced_neurogenesis', None)
+        if ledger is None or engine is None:
+            return
+        for name, fn in getattr(engine, 'functional_neurons', {}).items():
+            if name in ledger.origins:
+                continue
+            deficit = getattr(fn, 'origin_deficit', None) or {}
+            ledger.record_neuron_birth(
+                name=name,
+                deficit_kind=deficit.get('kind', 'representation'),
+                deficit_summary=deficit.get(
+                    'summary',
+                    f"grown before this squid kept provenance; it is a "
+                    f"{fn.neuron_type} neuron specialising in "
+                    f"{fn.specialization.replace('_', ' ')}"),
+                evidence=deficit.get('evidence', {}),
+                remedy=deficit.get('remedy', ''),
+                wiring=[(name, target, float(weight), 'restored')
+                        for (src, target), weight in self.brain_widget.weights.items()
+                        if src == name][:8],
+                neuron_type=fn.neuron_type,
+                specialization=fn.specialization,
+                display_name=fn.display_name,
+                timestamp=fn.creation_context.timestamp)
 
     def _load_legacy_functional_neurons(self, state):
         """Fallback loader for old save format with only functional_neurons key."""
@@ -2100,7 +2180,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.brain_widget.update_state(state)
 
         # Forward updates to each tab that has an update method
-        tabs_to_update = ['network_tab', 'nn_viz_tab', 'memory_tab', 'decisions_tab', 'personality_tab', 'about_tab'] # Adjusted list
+        tabs_to_update = ['network_tab', 'nn_viz_tab', 'knowledge_tab', 'memory_tab', 'decisions_tab', 'personality_tab', 'about_tab']
         for tab_name in tabs_to_update:
             if hasattr(self, tab_name):
                 tab = getattr(self, tab_name)

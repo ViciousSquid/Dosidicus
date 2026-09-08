@@ -28,7 +28,36 @@ import math
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Set
-from PyQt5.QtCore import QMutex, QMutexLocker
+# STDP is a core neural mechanism, so it must be usable everywhere the brain
+# is - including the headless trainer, which deliberately has no Qt. Qt's mutex
+# is used when Qt is present (the game runs the learner from a worker thread);
+# a plain threading lock is an exact substitute otherwise.
+try:
+    from PyQt5.QtCore import QMutex, QMutexLocker
+except ImportError:  # pragma: no cover - headless / no Qt
+    import threading
+
+    class QMutex:
+        def __init__(self):
+            self._lock = threading.RLock()
+
+        def lock(self):
+            self._lock.acquire()
+
+        def unlock(self):
+            self._lock.release()
+
+    class QMutexLocker:
+        def __init__(self, mutex):
+            self._mutex = mutex
+
+        def __enter__(self):
+            self._mutex.lock()
+            return self
+
+        def __exit__(self, *exc):
+            self._mutex.unlock()
+            return False
 
 
 @dataclass
@@ -68,8 +97,13 @@ class STDPConfig:
     stdp_weight: float = 0.4            # How much STDP contributes vs rate-based (0-1)
     
     # Eligibility traces (for delayed reward learning)
-    eligibility_decay: float = 0.95     # How fast eligibility traces decay
-    eligibility_window: float = 2.0     # How long eligibility persists (seconds)
+    # Eligibility must outlive the action that laid it down: a squid eats and
+    # the satisfaction arrives seconds later. A 2-second window with a 0.95
+    # per-100ms decay left nothing for a delayed consequence to reach, so the
+    # three-factor rule could never fire. These are matched to
+    # CausalConfig.outcome_window.
+    eligibility_decay: float = 0.98     # per 100ms
+    eligibility_window: float = 8.0     # How long eligibility persists (seconds)
     
     # Connection-specific learning rate modulation
     new_connection_boost: float = 2.0   # Boost for newly formed connections
@@ -313,6 +347,61 @@ class STDPLearner:
     def record_state(self, state: Dict[str, float], timestamp: Optional[float] = None):
         """Record full brain state for spike detection."""
         return self.spike_tracker.record_batch(state, timestamp)
+
+    def lay_eligibility_traces(self, spiked: List[Tuple[str, 'SpikeEvent']],
+                               timestamp: Optional[float] = None) -> int:
+        """Mark the causally-ordered pairs a delayed reward may still reach.
+
+        Traces must be laid WHEN THE SPIKES HAPPEN. They used to be laid on the
+        plasticity commit cycle (every 20s) while the eligibility window was a
+        few seconds, so a trace and an outcome could essentially never coincide
+        and the three-factor rule never fired at all.
+
+        Returns the number of traces touched.
+        """
+        if not spiked:
+            return 0
+        timestamp = timestamp or time.time()
+        window = self.config.time_window
+
+        recent = []
+        with QMutexLocker(self.spike_tracker._mutex):
+            for name, history in self.spike_tracker._spike_history.items():
+                for event in reversed(history):
+                    if timestamp - event.timestamp <= window:
+                        recent.append(name)
+                    break
+
+        laid = 0
+        for name, _event in spiked:
+            for partner in recent:
+                if partner == name:
+                    continue
+                # Both orderings: whichever is causal gets a positive trace and
+                # the reverse gets a negative one, exactly as STDP says.
+                for pre, post in ((partner, name), (name, partner)):
+                    delta = self.compute_stdp_delta(pre, post)
+                    if delta:
+                        self.update_eligibility_trace(pre, post, delta, timestamp)
+                        laid += 1
+        return laid
+
+    def eligibility_snapshot(self, limit: int = 20) -> List[Tuple[Tuple[str, str], float]]:
+        """Current live traces, strongest first - for the STDP inspector."""
+        now = time.time()
+        rows = []
+        with QMutexLocker(self._mutex):
+            items = list(self._eligibility_traces.items())
+        for (pre, post), (trace, last_time) in items:
+            elapsed = now - last_time
+            if elapsed > self.config.eligibility_window:
+                continue
+            decayed = trace * (self.config.eligibility_decay ** (elapsed / 0.1))
+            if abs(decayed) < 1e-4:
+                continue
+            rows.append(((pre, post), decayed))
+        rows.sort(key=lambda r: -abs(r[1]))
+        return rows[:limit]
     
     def compute_stdp_delta(self, pre_neuron: str, post_neuron: str,
                            connection_age: float = 1.0,

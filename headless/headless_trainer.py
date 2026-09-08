@@ -28,27 +28,36 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Any
 from heapq import nlargest
 
-
 # ============================================================================
-# CONSTANTS (from brain_worker.py and brain_constants.py)
+# THE REAL ENGINE
+#
+# The trainer used to carry its own copies of everything: its own neuron
+# categories, its own propagation (src_val * weight * 0.1, no neutral baseline,
+# clamped to -100..100), its own Hebbian rule (a non-negative product, so it
+# could never learn an aversion) and its own neurogenesis thresholds. A brain
+# trained here therefore did not behave the same way when the squid ran it,
+# which makes headless training worse than useless.
+#
+# It now imports the same modules the game does. None of them need Qt.
 # ============================================================================
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-PURE_INPUTS = {
-    "can_see_food", "is_eating", "is_sleeping", "is_sick",
-    "pursuing_food", "is_fleeing", "is_startled", "external_stimulus",
-    "plant_proximity"
-}
+from src.brain_constants import (  # noqa: E402
+    CORE_STAT_NEURONS as CORE_NEURONS,
+    PURE_INPUT_NEURONS as PURE_INPUTS,
+    INPUT_SENSORS as _INPUT_SENSOR_POSITIONS,
+    is_network_driven,
+)
+from src.propagation import propagate  # noqa: E402
+from src.plasticity import PlasticityEngine, PlasticityConfig  # noqa: E402
+from src.capability import CapabilityMonitor  # noqa: E402
+from src.causal_learning import ActionOutcomeLedger  # noqa: E402
+from src.neural_provenance import CausalLedger  # noqa: E402
+from src.consolidation import ConsolidationManager  # noqa: E402
+from src.neurogenesis import EnhancedNeurogenesis  # noqa: E402
+from src.learning import LearningConfig  # noqa: E402
 
-CORE_NEURONS = {
-    "hunger", "happiness", "cleanliness", "sleepiness",
-    "satisfaction", "anxiety", "curiosity"
-}
-
-INPUT_SENSORS = {
-    "can_see_food", "is_eating", "is_sleeping", "is_sick",
-    "pursuing_food", "is_fleeing", "is_startled", "external_stimulus",
-    "plant_proximity"
-}
+INPUT_SENSORS = set(_INPUT_SENSOR_POSITIONS) | {"can_see_food"}
 
 
 class Personality(Enum):
@@ -339,39 +348,168 @@ class HeadlessBrain:
     
     def __init__(self, config: TrainingConfig = None):
         self.config = config or TrainingConfig()
-        
+
         # Neural state
         self.state: Dict[str, float] = {}
         self.weights: Dict[Tuple[str, str], float] = {}
         self.positions: Dict[str, Tuple[float, float]] = {}
         self.neuron_shapes: Dict[str, str] = {}
-        
+        self.state_colors: Dict[str, tuple] = {}
+
         # Custom neurons tracking
         self.custom_neurons: Set[str] = set()
         self.new_neurons: Set[str] = set()
         self.connector_neurons: Set[str] = set()
-        
+        self.visible_neurons: Set[str] = set()
+
         # Learning tracking
         self.last_hebbian_pairs: List[Tuple[str, str]] = []
         self.weight_history: List[Dict] = []
-        
+
         # Neurogenesis tracking
         self.neurogenesis_data = {
             'new_neurons': [],
             'last_neuron_time': 0,
             'neurons_created': 0,
             'functional_neurons': {},
+            'new_neurons_details': {},
         }
+        self.neurogenesis_highlight = {'neuron': None, 'start_time': 0, 'duration': 0}
+        self.communication_events: Dict[str, float] = {}
+        self.weight_animations: List[Dict] = []
+        self.excluded_neurons: List[str] = ['is_sick', 'is_eating', 'pursuing_food',
+                                            'direction', 'is_sleeping']
         self.last_neurogenesis_tick = 0
-        self.stress_neuron_count = 0
-        self.novelty_neuron_count = 0
-        self.reward_neuron_count = 0
-        
+        # One tick is one second of the squid's life. The trainer runs
+        # thousands of them per real second, so every pacing rule expressed in
+        # seconds reads this instead of the wall clock - otherwise a whole
+        # training run finishes inside one growth cooldown and the brain can
+        # never develop.
+        self.sim_seconds = 0.0
+        self.pruning_enabled = True
+        self.tamagotchi_logic = None
+        self.learning_rate = self.config.learning_rate
+
         # Output bindings (for behaviors)
         self.output_bindings: List[Dict] = []
-        
+
+        # ---- the engine, exactly as the game runs it ----------------------
+        learning_config = LearningConfig()
+        learning_config.hebbian['base_learning_rate'] = self.config.learning_rate
+        learning_config.hebbian['weight_decay'] = self.config.weight_decay
+        learning_config.neurogenesis['max_neurons'] = self.config.max_neurons
+        learning_config.neurogenesis['cooldown'] = self.config.neurogenesis_cooldown
+        self.learning_config = learning_config
+
+        self.ledger = CausalLedger(self)
+        self.capability = CapabilityMonitor(self)
+        self.causal_learning = ActionOutcomeLedger(self)
+        self.plasticity = PlasticityEngine(
+            PlasticityConfig.from_learning_config(learning_config))
+        self.consolidation = ConsolidationManager(self)
+        self.enhanced_neurogenesis = EnhancedNeurogenesis(self, learning_config)
+        self.enhanced_neurogenesis.clock = lambda: self.sim_seconds
+        # Persistence is counted in evaluations (one per tick here), so only
+        # the wall-clock age gate needs standing down in simulated time.
+        self.capability.config.min_age = 0.0
+        self.experience_buffer = self.enhanced_neurogenesis.experience_buffer
+
         # Initialize default state
         self._initialize_default_state()
+
+    # ------------------------------------------------------------------
+    # The surface the shared engine reads. A BrainWidget provides these
+    # through Qt; here they are plain data and no-ops, which is the whole
+    # point of keeping the engine Qt-free.
+    # ------------------------------------------------------------------
+    @property
+    def neuron_positions(self) -> Dict[str, Tuple[float, float]]:
+        """The engine's name for `positions`. One dict, two names."""
+        return self.positions
+
+    @neuron_positions.setter
+    def neuron_positions(self, value):
+        self.positions = value
+
+    def update(self):
+        pass
+
+    def mark_render_dirty(self):
+        pass
+
+    def sync_connections_from_weights(self):
+        pass
+
+    def log_neurogenesis_event(self, neuron_name, event_type, reason=None, details=None):
+        self.weight_history.append({'event': event_type, 'neuron': neuron_name,
+                                    'details': details or {}, 'tick': time.time()})
+
+    def is_connector_neuron(self, name: str) -> bool:
+        return name in self.connector_neurons or self.neuron_shapes.get(name) == 'hexagon'
+
+    def is_new_neuron(self, name: str, newness_duration_sec: float = 300) -> bool:
+        return name in self.new_neurons
+
+    def get_neuron_degree(self, name: str) -> int:
+        return sum(1 for edge in self.weights if name in edge)
+
+    def find_orphan_neurons(self) -> List[str]:
+        connected = {n for edge in self.weights for n in edge}
+        return [n for n in self.positions
+                if n not in connected and n not in self.excluded_neurons]
+
+    def add_weight_animation(self, *args, **kwargs):
+        pass
+
+    def apply_weight_change(self, edge, delta=None, value=None, mechanism='manual',
+                            detail=None, episode_id=None, create=True,
+                            animate=True, directed=True) -> bool:
+        """The single recorded write path, same contract as BrainWidget's."""
+        if not (isinstance(edge, tuple) and len(edge) == 2) or edge[0] == edge[1]:
+            return False
+        existing = edge in self.weights
+        if not existing and not directed and (edge[1], edge[0]) in self.weights:
+            edge = (edge[1], edge[0])
+            existing = True
+        if not existing and not create:
+            return False
+
+        old = float(self.weights.get(edge, 0.0))
+        if value is not None:
+            new = float(value)
+        elif delta is not None:
+            new = old + float(delta)
+        else:
+            return False
+        new = max(-1.0, min(1.0, new))
+        if existing and abs(new - old) < 1e-9:
+            return False
+
+        self.weights[edge] = new
+        self.ledger.record_weight_change(edge, old, new, mechanism, detail, episode_id)
+        return True
+
+    def remove_weight(self, edge, mechanism='prune', reason="") -> bool:
+        if edge not in self.weights:
+            return False
+        old = float(self.weights.pop(edge))
+        self.ledger.record_weight_change(edge, old, 0.0, mechanism,
+                                         {'note': reason or 'removed', 'removed': True})
+        return True
+
+    def explain_weight(self, edge, from_value=None, to_value=None) -> str:
+        return self.ledger.explain_weight(tuple(edge), from_value, to_value)
+
+    def explain_neuron(self, name: str) -> str:
+        return self.ledger.explain_neuron(name)
+
+    def what_do_you_know(self, topic=None, limit=60):
+        return self.ledger.knowledge(topic, limit=limit)
+
+    def _connector_neuron_names(self) -> Set[str]:
+        return {name for name, fn in
+                self.enhanced_neurogenesis.functional_neurons.items()
+                if getattr(fn, 'neuron_type', '') == 'connector'}
         
     def _initialize_default_state(self):
         """Initialize with default neuron structure"""
@@ -570,188 +708,159 @@ class HeadlessBrain:
                     self.state[key] = float(value)
                     
     def propagate(self):
-        """Propagate activations through connections"""
-        updates = {}
-        
-        for (src, dst), weight in self.weights.items():
-            if src in self.state and dst in self.state:
-                if dst in PURE_INPUTS:
-                    continue
-                    
-                src_val = self.state[src]
-                effect = src_val * weight * 0.1
-                updates[dst] = updates.get(dst, 0) + effect
-                
-        # Apply updates with decay
-        for neuron, delta in updates.items():
-            if neuron in self.state and neuron not in PURE_INPUTS:
-                old_val = self.state[neuron]
-                new_val = old_val * self.config.decay_rate + delta
-                new_val += random.uniform(-self.config.noise_range, self.config.noise_range)
-                self.state[neuron] = max(-100, min(100, new_val))
-                
+        """One timestep, through the project's single transfer function."""
+        # Learning evidence first, exactly as BrainWidget does it, so a brief
+        # event contributes to the next commit instead of being invisible.
+        self.observe_for_learning()
+
+        targets = [n for n in self.positions
+                   if is_network_driven(n) and n not in self.excluded_neurons]
+        if not targets:
+            return {}
+
+        strengths = {name: getattr(fn, 'strength_multiplier', 1.0)
+                     for name, fn in
+                     self.enhanced_neurogenesis.functional_neurons.items()}
+        return propagate(self.state, self.weights, targets, strengths=strengths)
+
+    def observe_for_learning(self) -> int:
+        """Feed one tick of evidence to every learning mechanism."""
+        try:
+            self.capability.observe(self.state)
+        except Exception:
+            pass
+        try:
+            self.causal_learning.on_tick(self.state)
+        except Exception:
+            pass
+        candidates = self.plasticity.eligible_neurons(
+            self.positions.keys(), self.excluded_neurons,
+            self._connector_neuron_names())
+        return self.plasticity.observe(self.state, candidates)
+
     def perform_hebbian_learning(self) -> List[Tuple[str, str]]:
-        """Perform Hebbian learning update"""
-        # Get learning candidates
-        excluded = set(PURE_INPUTS) | self.connector_neurons
-        candidates = [n for n in self.positions.keys() if n not in excluded]
-        
-        if len(candidates) < 2:
-            return []
-            
-        # Score pairs
-        scored_pairs = []
-        for i, n1 in enumerate(candidates):
-            for n2 in candidates[i+1:]:
-                v1 = self._get_neuron_value(self.state.get(n1, 50))
-                v2 = self._get_neuron_value(self.state.get(n2, 50))
-                score = v1 + v2 + random.uniform(0, 40)
-                
-                # Penalize recent pairs
-                pair_key = tuple(sorted((n1, n2)))
-                if pair_key in self.last_hebbian_pairs:
-                    score -= 500
-                    
-                # Boost custom neurons
-                if n1 in self.custom_neurons or n2 in self.custom_neurons:
-                    score += 15
-                    
-                scored_pairs.append((score, n1, n2, v1, v2))
-                
-        # Select top pairs
-        top_pairs = nlargest(self.config.max_hebbian_pairs, scored_pairs)
-        self.last_hebbian_pairs = [tuple(sorted((n1, n2))) for _, n1, n2, _, _ in top_pairs]
-        
-        updated_pairs = []
-        for _, n1, n2, v1, v2 in top_pairs:
-            pair = (n1, n2)
-            reverse_pair = (n2, n1)
-            
-            # Find existing connection
-            if pair in self.weights:
-                use_pair = pair
-            elif reverse_pair in self.weights:
-                use_pair = reverse_pair
-            else:
-                use_pair = pair
-                self.weights[use_pair] = 0.0
-                
-            old_w = self.weights[use_pair]
-            
-            # Calculate learning rate with boosts
-            lr = self.config.learning_rate
-            if n1 in self.new_neurons or n2 in self.new_neurons:
-                lr *= 2.0
-            if n1 in self.custom_neurons or n2 in self.custom_neurons:
-                lr *= 1.5
-                
-            # Hebbian update
-            delta = lr * (v1 / 100.0) * (v2 / 100.0)
-            new_w = old_w + delta - (old_w * self.config.weight_decay)
-            new_w = max(-1.0, min(1.0, new_w))
-            
-            self.weights[use_pair] = new_w
-            updated_pairs.append(use_pair)
-            
-            # Track history
-            self.weight_history.append({
-                'pair': use_pair,
-                'old': old_w,
-                'new': new_w,
-                'tick': time.time()
-            })
-            
-        return updated_pairs
-        
+        """Commit one plasticity cycle, using the game's own rule.
+
+        The old body scored pairs by v1 + v2 + random noise and applied
+        delta = lr * (v1/100) * (v2/100), which is never negative - so a brain
+        trained here could not develop a single inhibitory synapse, and an
+        avoidance behaviour IS an inhibitory synapse.
+        """
+        result = self.plasticity.commit(
+            weights=self.weights,
+            neuron_names=list(self.positions.keys()),
+            excluded=self.excluded_neurons,
+            connectors=self._connector_neuron_names(),
+            new_neurons=self.new_neurons)
+
+        updated = []
+        for edge, update in (result.get('weight_updates') or {}).items():
+            mechanism = 'stdp' if abs(update.get('stdp_delta', 0.0) or 0.0) > \
+                abs(update.get('hebbian_delta', 0.0) or 0.0) else 'hebbian'
+            if self.apply_weight_change(
+                    edge, value=update['new_weight'], mechanism=mechanism,
+                    detail={'correlation': update.get('mean_covariance'),
+                            'samples': update.get('samples'),
+                            'hebbian_delta': update.get('hebbian_delta'),
+                            'stdp_delta': update.get('stdp_delta'),
+                            'stdp_direction': update.get('stdp_direction')},
+                    create=True):
+                updated.append(edge)
+                self.weight_history.append({
+                    'pair': edge, 'old': update['old_weight'],
+                    'new': update['new_weight'], 'tick': time.time()})
+
+        self.last_hebbian_pairs = [tuple(sorted(e)) for e in updated]
+        return updated
+
+    def consolidate(self, is_sleeping: bool):
+        """Sleep replay and synaptic homeostasis, same engine as the game."""
+        try:
+            return self.consolidation.on_tick(is_sleeping, self.state)
+        except Exception:
+            return None
+
     def check_neurogenesis(self, squid_state: Dict, tick: int) -> Optional[str]:
-        """Check if neurogenesis should occur"""
+        """Grow structure when the network persistently cannot cope.
+
+        The old body asked "is anxiety over 70? is curiosity over 75?" - a
+        fourth copy of the event thresholds the game has since abandoned. It
+        now asks the same question the game does, through the same monitor and
+        the same engine: what can this network not represent, regulate or
+        express?
+        """
         if not self.config.neurogenesis_enabled:
             return None
-            
+
+        # Simulated time advances one second per tick, so the engine's
+        # cooldowns are honoured in the units the trainer's config states.
+        self.sim_seconds = float(tick)
         if tick - self.last_neurogenesis_tick < self.config.neurogenesis_cooldown:
             return None
-            
-        if len(self.positions) >= self.config.max_neurons:
+
+        try:
+            self.capability.evaluate()
+        except Exception as exc:
+            print(f"[Capability] evaluation failed: {type(exc).__name__}: {exc}")
             return None
-            
-        # Check triggers
-        anxiety = squid_state.get('anxiety', 50)
-        curiosity = squid_state.get('curiosity', 50)
-        happiness = squid_state.get('happiness', 50)
-        satisfaction = squid_state.get('satisfaction', 50)
-        
-        trigger_type = None
-        
-        # Stress trigger
-        if anxiety > 70 or (anxiety > 50 and squid_state.get('is_fleeing', False)):
-            if self.stress_neuron_count < 5:  # Cap stress neurons
-                trigger_type = 'stress'
-                
-        # Novelty trigger
-        elif curiosity > 75:
-            trigger_type = 'novelty'
-            
-        # Reward trigger
-        elif happiness > 80 and satisfaction > 70:
-            trigger_type = 'reward'
-            
-        if trigger_type:
-            neuron_name = self._create_neuron(trigger_type, squid_state)
+
+        engine = self.enhanced_neurogenesis
+        deficit = engine.find_deficit(self.state)
+        if deficit is None:
+            return None
+
+        context = engine.capture_experience_context(
+            trigger_type=deficit.suggested_type,
+            brain_state=self.state,
+            recent_actions=[squid_state.get('status', 'roaming')],
+            environment={'headless': True})
+        if not engine.should_create_neuron(context):
+            return None
+
+        name = engine.create_functional_neuron(context)
+        if name:
             self.last_neurogenesis_tick = tick
-            return neuron_name
-            
-        return None
-        
-    def _create_neuron(self, neuron_type: str, context: Dict) -> str:
-        """Create a new neuron"""
-        # Generate unique name
-        count = self.neurogenesis_data.get('neurons_created', 0) + 1
-        self.neurogenesis_data['neurons_created'] = count
-        
-        neuron_name = f"{neuron_type}_{count}"
-        
-        # Find position (spread from existing neurons)
-        existing_positions = list(self.positions.values())
-        if existing_positions:
-            avg_x = sum(p[0] for p in existing_positions) / len(existing_positions)
-            avg_y = sum(p[1] for p in existing_positions) / len(existing_positions)
-            
-            # Add some randomness
-            new_x = avg_x + random.uniform(-100, 100)
-            new_y = avg_y + random.uniform(-100, 100)
-        else:
-            new_x = random.uniform(100, 800)
-            new_y = random.uniform(100, 400)
-            
-        self.positions[neuron_name] = (new_x, new_y)
-        self.state[neuron_name] = 50.0
-        self.custom_neurons.add(neuron_name)
-        self.new_neurons.add(neuron_name)
-        
-        # Set shape based on type
-        shape_map = {'stress': 'hexagon', 'novelty': 'triangle', 'reward': 'circle'}
-        self.neuron_shapes[neuron_name] = shape_map.get(neuron_type, 'circle')
-        
-        # Create connections based on type
-        if neuron_type == 'stress':
-            self.stress_neuron_count += 1
-            self.weights[(neuron_name, 'anxiety')] = -0.3
-            self.weights[('anxiety', neuron_name)] = 0.4
-            
-        elif neuron_type == 'novelty':
-            self.novelty_neuron_count += 1
-            self.weights[(neuron_name, 'curiosity')] = 0.3
-            self.weights[('curiosity', neuron_name)] = 0.3
-            
-        elif neuron_type == 'reward':
-            self.reward_neuron_count += 1
-            self.weights[(neuron_name, 'satisfaction')] = 0.35
-            self.weights[(neuron_name, 'happiness')] = 0.25
-            
-        self.neurogenesis_data['new_neurons'].append(neuron_name)
-        
-        return neuron_name
-        
+            self.custom_neurons.add(name)
+            self.new_neurons.add(name)
+            self.neurogenesis_data['neurons_created'] = \
+                self.neurogenesis_data.get('neurons_created', 0) + 1
+            if name not in self.neurogenesis_data['new_neurons']:
+                self.neurogenesis_data['new_neurons'].append(name)
+        return name
+
+    # Counts are derived from the engine so they can never drift out of step
+    # with the neurons that actually exist.
+    def _count_type(self, neuron_type: str) -> int:
+        return sum(1 for fn in self.enhanced_neurogenesis.functional_neurons.values()
+                   if getattr(fn, 'neuron_type', '') == neuron_type)
+
+    @property
+    def stress_neuron_count(self) -> int:
+        return self._count_type('stress')
+
+    @property
+    def novelty_neuron_count(self) -> int:
+        return self._count_type('novelty')
+
+    @property
+    def reward_neuron_count(self) -> int:
+        return self._count_type('reward')
+
+    def _create_neuron(self, neuron_type: str, context: Dict) -> Optional[str]:
+        """Delegate to the one creation path.
+
+        The old body invented its own names, shapes and a fixed three-synapse
+        wiring pattern per type, none of which matched what the game builds -
+        so a neuron grown during training was a different kind of object from
+        one grown in play.
+        """
+        name = self.enhanced_neurogenesis.create_neuron(
+            neuron_type, brain_state=dict(self.state), environment=context or {})
+        if name:
+            self.custom_neurons.add(name)
+            self.new_neurons.add(name)
+        return name
+
     def _get_neuron_value(self, val) -> float:
         """Convert value to float for calculations"""
         if isinstance(val, bool):

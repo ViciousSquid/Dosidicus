@@ -151,54 +151,21 @@ class BrainWorker(QThread):
         print("🧵 BrainWorker thread stopped")
 
     def _perform_neurogenesis_check(self, data):
-        """Check if neurogenesis conditions are met based on cached config."""
-        state = data.get('state', {})
-        
-        with QMutexLocker(self._cache_mutex):
-            config = self.cache['config']
-        
-        if not config:
-            return
+        """Retired.
 
-        neuro_config = getattr(config, 'neurogenesis', {})
-        
-        # The stress path used to short-circuit on `anxiety > 75`, which any
-        # startle satisfies instantly - so sustained_stress (which needs ~20
-        # stressed ticks to reach 2.0) never mattered and stress neurons were
-        # by far the easiest type to grow. Sustained stress is now the primary
-        # signal and acute anxiety only counts when it is genuinely extreme.
-        triggers = {
-            'novelty': state.get('novelty_exposure', 0) > neuro_config.get('novelty_threshold', 2.0),
-            'stress': (state.get('sustained_stress', 0) > neuro_config.get('stress_threshold', 1.2)
-                       or state.get('anxiety', 0) > 90),
-            'reward': state.get('recent_rewards', 0) > neuro_config.get('reward_threshold', 3.5)
-        }
-        
-        # Priority logic
-        trigger_type = None
-        trigger_val = 0
-        
-        if triggers['stress']:
-            trigger_type = 'stress'
-            trigger_val = state.get('sustained_stress', 0)
-        elif triggers['novelty']:
-            trigger_type = 'novelty'
-            trigger_val = state.get('novelty_exposure', 0)
-        elif triggers['reward']:
-            trigger_type = 'reward'
-            trigger_val = state.get('recent_rewards', 0)
-            
-        if trigger_type:
-            # Emit result back to main thread to finalize creation
-            self.neurogenesis_result.emit({
-                'should_create': True,
-                'neuron_type': trigger_type,
-                'trigger_value': trigger_val,
-                'state_context': state,
-                'is_emergency': (trigger_type == 'stress' and state.get('anxiety', 0) > 90)
-            })
-        else:
-            self.neurogenesis_result.emit({'should_create': False})
+        This carried a second, divergent set of neurogenesis thresholds
+        (novelty_exposure > 2, sustained_stress > 1.2, anxiety > 90) running
+        against a stale copy of the brain state, while the widget carried a
+        third set of its own. Whether a squid grew a neuron depended on which
+        of them happened to fire first.
+
+        Structural growth is now one question asked in one place:
+        capability.CapabilityMonitor diagnoses what the live network cannot
+        represent, regulate or express, and BrainWidget acts on it on the main
+        thread where the state is authoritative. Kept as a no-op so any
+        external caller fails safe instead of resurrecting a parallel rule.
+        """
+        self.neurogenesis_result.emit({'should_create': False})
 
     def _perform_hebbian_learning(self):
         """Retired.

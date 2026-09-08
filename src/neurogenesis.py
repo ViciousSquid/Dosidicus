@@ -1,25 +1,102 @@
 """
-Neurogenesis ver3.3_stress_cap
+Neurogenesis ver4.0 - capability-driven structural plasticity.
 
-- STRICT 5-neuron cap for 'stress' type.
-- Emergency triggers STRENGTHEN existing neurons if cap is reached.
-- Anxiety reduction logic based on multipliers.
+The old model was "something happened, therefore grow". Anxiety crossed 75 and
+a stress neuron appeared; curiosity crossed 70 and a novelty neuron appeared.
+Growth was a reflex to an event, and the network it grew into had no say in
+whether the structure was needed.
+
+The model now is: the existing network cannot usefully represent, respond to
+or express something, and that failure has persisted, so it develops structure
+capable of doing so. The diagnosis lives in capability.py; this module is the
+growth itself:
+
+  * take an actionable Deficit from the CapabilityMonitor,
+  * grow one neuron wired specifically to remedy it,
+  * write the reason into the provenance ledger so it can always be answered,
+  * and stand down (strengthening what already exists) when the network has
+    enough structure of that kind already.
+
+Everything that was here before is still here - functional specialisation,
+per-type caps, the stress-neuron anxiety cap, reciprocal wiring, positional
+placement, appearance, pruning, achievements, save/load. What changed is the
+question that starts it.
 """
 
 import time
 import math
 import random
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Set, Any
-from PyQt5.QtCore import QTimer
 
-# Import localisation with robust fallback
+from .capability import Deficit, regulation_specialisation
+
+# Localisation. The package-relative import is the one that works when the
+# game runs; the flat fallback covers running this module standalone. The old
+# fallback dropped **kwargs, so every localised string with a placeholder came
+# out literally - which is why grown neurons were displayed to the player as
+# "{type}: {spec}{suffix}".
 try:
-    from localisation import loc
-except ImportError:
-    def loc(key, default=None, **kwargs):
-        return default if default is not None else key.replace('_', ' ').title()
+    from .localisation import loc
+except ImportError:  # pragma: no cover - standalone use
+    try:
+        from localisation import loc
+    except ImportError:
+        def loc(key, default=None, **kwargs):
+            text = default if default is not None else key.replace('_', ' ').title()
+            if kwargs:
+                try:
+                    return text.format(**kwargs)
+                except (KeyError, ValueError, IndexError):
+                    return text
+            return text
+
+
+# Evocative names for grown neurons. Purely presentational: config.ini
+# [Neurogenesis] showmanship decides whether a neuron is called
+# "anxiety_reduction" or "stress_anxiety_regulation". The name is chosen once,
+# at birth, by the engine - there is no second system that renames a neuron
+# afterwards and has to migrate every dictionary that referenced it.
+#
+# Keyed by SPECIALISATION, because that is what the neuron actually does. A
+# pool keyed by type produced neurons called "food_reward" whose job was stress
+# coping, which is worse than no flavour at all.
+# A grown neuron may be deepened rather than duplicated when its type cap is
+# reached, but only so far: past this the neuron's output saturates every
+# target it touches on any input at all.
+MAX_STRENGTH_MULTIPLIER = 4.0
+
+EVOCATIVE_NAMES: Dict[str, List[str]] = {
+    # reward family
+    'feeding_satisfaction':        ["food_reward", "feeding_payoff"],
+    'cleanliness_reward':          ["cleanliness_reward", "fresh_water_joy"],
+    'rest_reward':                 ["rest_reward", "restfulness"],
+    'general_reward':              ["contentment_signal", "satisfaction_burst"],
+    # stress family
+    'anxiety_regulation':          ["anxiety_reduction", "calm_restore"],
+    'hunger_stress_response':      ["hunger_alarm", "foraging_urgency"],
+    'filth_avoidance':             ["filth_avoidance", "squalor_alarm"],
+    'general_stress_coping':       ["comfort_seeking", "fear_dampener"],
+    # novelty family
+    'object_investigation':        ["encountered_novel_object", "wonder_trigger"],
+    'exploration_memory':          ["exploration_reward", "place_memory"],
+    'general_novelty_processing':  ["new_experience", "discovery_satisfaction"],
+    'role_separation':             ["role_separation", "second_opinion"],
+    # learned expectation
+    'learned_expectation':         ["learned_expectation", "anticipation"],
+    # connectivity
+    'network_bridge':              ["relay_bridge", "crossroads"],
+    'connectivity_bridge':         ["relay_bridge", "waypoint"],
+}
+
+# Fallback when a specialisation has no pool of its own.
+EVOCATIVE_NAMES_BY_TYPE: Dict[str, List[str]] = {
+    'novelty':   ["investigation_drive", "curiosity_spark"],
+    'stress':    ["safety_signal", "tension_release"],
+    'reward':    ["play_reward", "achievement_signal"],
+    'connector': ["junction", "waypoint"],
+}
 
 
 @dataclass
@@ -158,7 +235,8 @@ class ExperienceBuffer:
         return buf
 
 class FunctionalNeuron:
-    def __init__(self, name: str, neuron_type: str, creation_context: ExperienceContext):
+    def __init__(self, name: str, neuron_type: str, creation_context: ExperienceContext,
+                 origin_deficit: Optional[Dict[str, Any]] = None):
         self.name = name
         self.neuron_type = neuron_type
         self.creation_context = creation_context
@@ -167,6 +245,10 @@ class FunctionalNeuron:
         self.last_activated = 0
         self.utility_score = 0.0
         self.strength_multiplier = 1.0
+        # The capability deficit this neuron was grown to remedy. This is the
+        # authoritative answer to "why does this neuron exist?" and travels
+        # with the neuron through save/load.
+        self.origin_deficit: Dict[str, Any] = dict(origin_deficit or {})
 
     @property
     def display_name(self) -> str:
@@ -202,6 +284,7 @@ class FunctionalNeuron:
         neuron.last_activated = data['last_activated']
         neuron.utility_score = data['utility_score']
         neuron.strength_multiplier = data['strength_multiplier']
+        neuron.origin_deficit = dict(data.get('origin_deficit') or {})
         return neuron
 
     def to_dict(self):
@@ -213,6 +296,7 @@ class FunctionalNeuron:
             'last_activated': self.last_activated,
             'utility_score': self.utility_score,
             'strength_multiplier': self.strength_multiplier,
+            'origin_deficit': dict(self.origin_deficit),
             'creation_context': {
                 'trigger_type': self.creation_context.trigger_type,
                 'timestamp': self.creation_context.timestamp,
@@ -296,6 +380,13 @@ class FunctionalNeuron:
         return connections
     
     def calculate_activation(self, brain_state: Dict[str, float], weights: Dict[Tuple[str, str], float]) -> float:
+        """The transfer function, for inspection tools and tests.
+
+        This is NOT the simulation's propagation step - BrainWidget.
+        propagate_activations() is, and it implements exactly this formula for
+        every neuron in the network. Kept here so a tool can ask "what would
+        this neuron do given that state?" without stepping the brain.
+        """
         activation = 50.0
         for (source, target), weight in weights.items():
             if target == self.name and source in brain_state:
@@ -325,10 +416,25 @@ class EnhancedNeurogenesis:
         self.neurons_created_this_session = 0
         self.last_creation_by_type = {'novelty': 0, 'stress': 0, 'reward': 0}
         self._first_real_tick = None
+        self._last_growth_at = 0.0
         self.recent_actions = deque(maxlen=10)
         self.last_states = deque(maxlen=5)
         self._on_neuron_created_callback = None
         self._on_neuron_leveled_callback = None
+
+        # The deficit the next creation is meant to remedy. Set by
+        # should_create_neuron(), consumed by create_functional_neuron(), so
+        # there is exactly one place a growth decision is made and exactly one
+        # place it is carried out.
+        self.pending_deficit: Optional[Deficit] = None
+        self.growth_log: deque = deque(maxlen=40)
+        self.stood_down: deque = deque(maxlen=20)
+
+        # Growth pacing reads the clock through here. In the game that is wall
+        # clock; the headless trainer runs thousands of simulated seconds per
+        # real second, so it substitutes simulated time and the cooldowns mean
+        # what they say instead of blocking every growth in the run.
+        self.clock = time.time
 
     def _get_stress_neuron_count(self) -> int:
         """Count current stress neurons."""
@@ -446,26 +552,41 @@ class EnhancedNeurogenesis:
             if brain_state is None: brain_state = dict(self.brain_widget.state)
             if environment is None: environment = {}
             context = self._build_context(neuron_type, brain_state, environment)
-        return self._create_neuron_internal(context, trigger_value, is_emergency)
+        return self._create_neuron_internal(context, trigger_value, is_emergency,
+                                            deficit=self.pending_deficit)
     
-    def _make_reciprocal_connections(self, new_neuron: str):
+    def _make_reciprocal_connections(self, new_neuron: str,
+                                     deficit: Optional[Deficit] = None
+                                     ) -> List[Tuple[str, str, float, str]]:
+        """Give the new neuron a way to be driven by what it drives.
+
+        A neuron with only outgoing synapses can never be activated by the
+        network, so it can never express anything it was grown for.
+        """
         from .brain_constants import is_learning_target
         bw = self.brain_widget
-        created = []                       
-        MIN_RECIPROCAL = 0.2               
-        outgoing = [(tgt, w) for (src, tgt), w in bw.weights.items() if src == new_neuron and abs(w) >= MIN_RECIPROCAL]
+        created = []
+        wiring: List[Tuple[str, str, float, str]] = []
+        MIN_RECIPROCAL = 0.2
+        outgoing = [(tgt, w) for (src, tgt), w in bw.weights.items()
+                    if src == new_neuron and abs(w) >= MIN_RECIPROCAL]
         for target, w in outgoing:
             if (target, new_neuron) in bw.weights: continue
             # The reverse edge must be readable. A synapse pointing into a
             # sensor is inert - the world overwrites that neuron every tick.
             if not is_learning_target(new_neuron):
                 continue
-            bw.weights[(target, new_neuron)] = w
-            created.append(f"{target}→{new_neuron}:{w:+.2f}")
+            if self._wire(target, new_neuron, w, 'reciprocal', deficit):
+                created.append(f"{target}→{new_neuron}:{w:+.2f}")
+                wiring.append((target, new_neuron, float(w), 'reciprocal'))
         if created: print(f"   🔗 {loc('log_reciprocal_links', default='Reciprocal links added')}: {', '.join(created)}")
+        return wiring
     
-    def create_functional_neuron(self, ctx: ExperienceContext, is_emergency: bool = False) -> Optional[str]:
-        return self._create_neuron_internal(ctx, is_emergency=is_emergency)
+    def create_functional_neuron(self, ctx: ExperienceContext, is_emergency: bool = False,
+                                 deficit: Optional[Deficit] = None) -> Optional[str]:
+        """Grow one neuron to remedy a deficit. The single creation entry point."""
+        return self._create_neuron_internal(ctx, is_emergency=is_emergency,
+                                            deficit=deficit or self.pending_deficit)
     
     def _build_context(self, trigger_type: str, brain_state: Dict[str, float], environment: Dict[str, Any]) -> ExperienceContext:
         clean_neurons = {k: float(v) if isinstance(v, (int, float)) else 50.0 for k, v in brain_state.items() if not k.startswith('is_') and k not in ['novelty_exposure', 'sustained_stress', 'recent_rewards', 'neurogenesis_active', 'personality', 'pursuing_food', 'position', 'direction', 'status']}
@@ -476,45 +597,73 @@ class EnhancedNeurogenesis:
         else: outcome = 'neutral'
         return ExperienceContext(trigger_type=trigger_type, active_neurons=clean_neurons, recent_actions=list(self.recent_actions)[-5:], environmental_state=environment, outcome=outcome, timestamp=time.time())
     
-    def _create_neuron_internal(self, ctx: ExperienceContext, trigger_value_for_log: Optional[float] = None, is_emergency: bool = False) -> Optional[str]:
-        trigger_type = ctx.trigger_type
-        
-        # 0. CHECK EMERGENCY CONTEXT
-        if not is_emergency and trigger_type == 'stress':
-            if ctx.active_neurons.get('anxiety', 50) >= 90:
+    def _create_neuron_internal(self, ctx: ExperienceContext,
+                                trigger_value_for_log: Optional[float] = None,
+                                is_emergency: bool = False,
+                                deficit: Optional[Deficit] = None) -> Optional[str]:
+        """Grow one neuron. The only place in the project that creates one.
+
+        `deficit` is the functional deficiency the neuron is being grown to
+        remedy; it decides the type, the specialisation and - crucially - the
+        wiring, so the new structure is capable of the thing the network could
+        not do. Without one (a direct call from the Designer or a test) the
+        experience context still supplies a sensible default.
+        """
+        deficit = deficit or self.pending_deficit
+        trigger_type = (deficit.suggested_type if deficit is not None
+                        else ctx.trigger_type)
+        # The engine only knows four structural families; anything else is a
+        # novelty-class representation neuron.
+        if trigger_type not in ('stress', 'novelty', 'reward', 'connector'):
+            trigger_type = 'novelty'
+
+        # 0. EMERGENCY: a maximum-severity deficit is an emergency by
+        #    definition - the squid is in trouble the network cannot get it out
+        #    of. Acute anxiety remains an emergency for backward compatibility.
+        if not is_emergency:
+            if deficit is not None and deficit.severity >= 1.0:
+                is_emergency = True
+            elif trigger_type == 'stress' and ctx.active_neurons.get('anxiety', 50) >= 90:
                 is_emergency = True
                 print(f"🚨 {loc('log_emergency_context', default='Emergency context detected (Anxiety > 90)')}")
 
         # 1. HARD TYPE CAP & STRENGTHENING LOGIC
-        # FORCE CAP OF 5 FOR STRESS NEURONS
+        # A cap that has been reached is itself an answer: the brain already
+        # has structure of this kind, so deepen it rather than duplicating it.
         default_caps = {'stress': 5, 'novelty': 6, 'reward': 6, 'connector': 10}
         max_for_this_type = self.config.neurogenesis.get('max_per_type', default_caps).get(trigger_type, 5)
-        
+
         # Ensure stress is strictly 5
         if trigger_type == 'stress': max_for_this_type = 5
 
         current_type_count = len([name for name, fn in self.functional_neurons.items() if fn.neuron_type == trigger_type])
 
+        spec = (deficit.specialization if deficit is not None
+                else self._preview_specialization(ctx))
+
         # IF CAP REACHED: STRENGTHEN EXISTING (Even in Emergency)
         if current_type_count >= max_for_this_type:
             msg = loc('log_type_cap_reached', default="Type cap reached for {type} ({count}/{max}), strengthening existing", type=trigger_type, count=current_type_count, max=max_for_this_type)
             print(f"   {msg}")
-            
+
             # If emergency, we perform a strengthening action as the coping mechanism
             if is_emergency:
                 print(f"   💪 Emergency: Boosting stress tolerance via existing neurons.")
-                # [FIXED] Apply SCALED relief to BOTH brain_widget AND squid
                 if 'anxiety' in self.brain_widget.state:
                     self._apply_anxiety_relief(15.0, "Emergency strengthen", is_emergency=True)
-                
-            self._strengthen_existing_neuron(trigger_type, self._preview_specialization(ctx))
+
+            self._strengthen_existing_neuron(trigger_type, spec)
+            # Deepening existing structure is a growth action and is paced like
+            # one. Without this the engine strengthened on every single
+            # evaluation once a type cap was reached.
+            self._last_growth_at = self.clock()
+            self.stood_down.append((time.time(),
+                                    deficit.key if deficit else trigger_type,
+                                    f"already has {current_type_count} {trigger_type} "
+                                    f"neurons; strengthened one instead"))
             return None
 
-        # 2. SPECIALIZATION
-        spec = self._preview_specialization(ctx)
-        base_name = f"{trigger_type}_{spec}"
-
-        # 3. GLOBAL NEURON LIMIT
+        # 2. GLOBAL NEURON LIMIT
         current_total = len(self.brain_widget.neuron_positions) - len(self.brain_widget.excluded_neurons)
         max_neurons = self.config.neurogenesis.get('max_neurons', 32)
         if current_total >= max_neurons and not is_emergency:
@@ -523,36 +672,247 @@ class EnhancedNeurogenesis:
         elif is_emergency and current_total >= max_neurons:
              print(f"⚠️ {loc('log_global_cap_bypass', default='Emergency override: Bypassing global neuron limit!')}")
 
+        # 3. NAME. Showmanship (config.ini [Neurogenesis] showmanship) gives the
+        #    neuron an evocative name instead of type_specialisation. It is a
+        #    presentation choice made once, here, rather than a wrapper that
+        #    renames the neuron after the fact and has to migrate a dozen
+        #    dictionaries to do it.
+        base_name = self._choose_name(trigger_type, spec)
         neuron_name = self._get_unique_neuron_name(base_name)
-        func_neuron = FunctionalNeuron(neuron_name, trigger_type, ctx)
+
+        func_neuron = FunctionalNeuron(neuron_name, trigger_type, ctx,
+                                       origin_deficit=deficit.to_dict() if deficit else {})
+        func_neuron.specialization = spec
         self.functional_neurons[neuron_name] = func_neuron
         if trigger_type == 'novelty': self.novelty_neuron_count += 1
         self.last_creation_by_type[trigger_type] = time.time()
+        self._last_growth_at = self.clock()
         self.neurons_created_this_session += 1
-        
+
         position = self._calculate_functional_position(func_neuron)
         self.brain_widget.neuron_positions[neuron_name] = position
         self._set_neuron_appearance(neuron_name, func_neuron)
         self.brain_widget.state[neuron_name] = 50.0
-        
-        # [FIXED] Immediate Anxiety Relief upon creation - SCALED based on existing neurons!
+
+        # Immediate anxiety relief on growing a coping neuron, scaled by how
+        # many the squid already has. This is the structure taking effect, not
+        # a reward for the event that produced it.
         if trigger_type == 'stress' and 'anxiety' in self.brain_widget.state:
-            base_drop = 15.0  # Base drop amount (will be scaled by helper)
-            new_anxiety = self._apply_anxiety_relief(base_drop, f"Stress Neuron '{neuron_name}' created", is_emergency=is_emergency)
+            new_anxiety = self._apply_anxiety_relief(
+                15.0, f"Stress Neuron '{neuron_name}' created", is_emergency=is_emergency)
             print(f"   📉 Stress Neuron Created: Anxiety now at {new_anxiety:.1f} (cap: {self._get_anxiety_cap():.0f})")
 
+        # 4. WIRING. Specialisation wiring first (what a neuron of this kind
+        #    always does), then the remedy wiring the deficit specifically
+        #    calls for, which overrides it.
+        #    The two plans are merged BEFORE anything is written, so each
+        #    synapse is created once with its final value. Writing the
+        #    specialisation weight and then overwriting it with the remedy
+        #    weight put three meaningless intermediate values in the neuron's
+        #    permanent record.
+        plan: Dict[Tuple[str, str], Tuple[float, str]] = {}
         connections = func_neuron.get_functional_connections(list(self.brain_widget.neuron_positions.keys()))
         for target, weight in connections.items():
             if abs(weight) < 0.05: continue
-            self.brain_widget.weights[(neuron_name, target)] = weight
-        self._make_reciprocal_connections(neuron_name)
-        
+            plan[(neuron_name, target)] = (float(weight), 'specialisation')
+        for src, dst, weight, purpose in self._remedy_wiring(neuron_name, deficit, func_neuron):
+            plan[(src, dst)] = (float(weight), purpose)
+
+        wiring: List[Tuple[str, str, float, str]] = []
+        for (src, dst), (weight, purpose) in plan.items():
+            if self._wire(src, dst, weight, purpose, deficit):
+                wiring.append((src, dst, weight, purpose))
+        wiring.extend(self._make_reciprocal_connections(neuron_name, deficit))
+
         if hasattr(self.brain_widget, 'visible_neurons'): self.brain_widget.visible_neurons.add(neuron_name)
-        self.brain_widget.neurogenesis_highlight = {'neuron': neuron_name, 'start_time': time.time(), 'duration': 8.0 if trigger_type == 'connector' else 4.0, 'pulse_phase': 0}
+        self.brain_widget.neurogenesis_highlight = {
+            'neuron': neuron_name, 'start_time': time.time(),
+            'duration': 8.0 if trigger_type == 'connector' else 4.0,
+            'pulse_phase': 0,
+            'is_emergency': is_emergency,
+            'color_burst': self._burst_colour(trigger_type)}
+
+        self._record_origin(neuron_name, func_neuron, deficit, wiring)
         self._log_neuron_creation(neuron_name, trigger_type, spec, trigger_value_for_log)
         self._record_neurogenesis_memory(neuron_name)
+
+        # The deficit has been answered; stop counting it against the network
+        # so growth does not chase the same gap twice.
+        monitor = self.capability
+        if monitor is not None and deficit is not None:
+            monitor.clear(deficit.key, f"grew {neuron_name}")
+        self.pending_deficit = None
+        self.growth_log.append({
+            'neuron': neuron_name, 'at': time.time(),
+            'deficit': deficit.kind if deficit else 'unclassified',
+            'because': deficit.summary if deficit else 'created directly',
+        })
+
         self._notify_neuron_created(neuron_name)
         return neuron_name
+
+    # ------------------------------------------------------------------
+    # Wiring helpers
+    # ------------------------------------------------------------------
+    def _wire(self, src: str, dst: str, weight: float, purpose: str,
+              deficit: Optional[Deficit]) -> bool:
+        """Create one synapse, through the brain so it lands in the ledger."""
+        from .brain_constants import is_learning_target
+        bw = self.brain_widget
+        if src == dst:
+            return False
+        positions = getattr(bw, 'neuron_positions', {})
+        if src not in positions or dst not in positions:
+            return False
+        if not is_learning_target(dst):
+            return False      # a synapse into a sensor can never do anything
+
+        note = (f"wired at birth to {purpose}"
+                + (f" — {deficit.remedy}" if deficit and purpose == 'remedy' else ""))
+        apply_change = getattr(bw, 'apply_weight_change', None)
+        if apply_change is None:
+            bw.weights[(src, dst)] = float(weight)
+            return True
+        return bool(apply_change(
+            (src, dst), value=float(weight), mechanism='neurogenesis',
+            detail={'purpose': purpose, 'note': note,
+                    'deficit': deficit.key if deficit else ''},
+            create=True))
+
+    def _remedy_wiring(self, neuron_name: str, deficit: Optional[Deficit],
+                       func_neuron: 'FunctionalNeuron'
+                       ) -> List[Tuple[str, str, float, str]]:
+        """The connections that make the new neuron capable of the missing thing.
+
+        This is what separates capability-driven growth from decorative growth:
+        the neuron is not merely born near the action, it is born wired to do
+        the specific job the network could not do.
+        """
+        if deficit is None:
+            return []
+        plan: List[Tuple[str, str, float, str]] = []
+        state = getattr(self.brain_widget, 'state', {}) or {}
+
+        if deficit.kind == 'regulation':
+            stat = deficit.target
+            direction = deficit.evidence.get('direction', 'down')
+            corrective = -0.9 if direction == 'down' else 0.9
+            # Driven by the drive it regulates (and whatever predicts it), so
+            # it comes on exactly when the problem is present...
+            plan.append((stat, neuron_name, 0.8, 'remedy'))
+            for source in deficit.sources:
+                if source != stat and source in state:
+                    plan.append((source, neuron_name, 0.5, 'remedy'))
+            # ...and pushes back on it when it does.
+            plan.append((neuron_name, stat, corrective, 'remedy'))
+
+        elif deficit.kind == 'representation':
+            # Take the sensors that define the situation as its inputs, signed
+            # by how they present, so this neuron and nothing else fires for it.
+            for source in deficit.sources:
+                if source not in state:
+                    continue
+                value = state.get(source)
+                if isinstance(value, bool):
+                    value = 100.0 if value else 0.0
+                if not isinstance(value, (int, float)):
+                    continue
+                weight = max(-0.9, min(0.9, (float(value) - 50.0) / 50.0 * 0.8))
+                if abs(weight) < 0.2:
+                    weight = 0.6
+                plan.append((source, neuron_name, weight, 'remedy'))
+
+        elif deficit.kind == 'expression':
+            cue = deficit.evidence.get('cue')
+            stat = deficit.target
+            wanted = float(deficit.evidence.get('wanted_sign', 1.0))
+            if cue:
+                plan.append((cue, neuron_name, 0.8, 'remedy'))
+            if stat:
+                plan.append((neuron_name, stat, 0.7 * wanted, 'remedy'))
+
+        elif deficit.kind == 'differentiation':
+            # Take the conflicting driver off the overloaded neuron and give it
+            # its own representation, then let the new one feed the target.
+            offload = deficit.sources[0] if deficit.sources else None
+            target = deficit.target
+            if offload:
+                plan.append((offload, neuron_name, 0.8, 'remedy'))
+                old = self.brain_widget.weights.get((offload, target))
+                if old is not None:
+                    plan.append((neuron_name, target, float(old), 'remedy'))
+                    self._retire_edge((offload, target),
+                                      f"handed over to {neuron_name}")
+
+        elif deficit.kind == 'connectivity':
+            orphan = deficit.target
+            if orphan:
+                plan.append((neuron_name, orphan, 0.7, 'remedy'))
+                plan.append((orphan, neuron_name, 0.7, 'remedy'))
+        return plan
+
+    def _retire_edge(self, edge: Tuple[str, str], reason: str) -> None:
+        bw = self.brain_widget
+        if edge not in getattr(bw, 'weights', {}):
+            return
+        remove = getattr(bw, 'remove_weight', None)
+        if remove is not None:
+            remove(edge, mechanism='neurogenesis', reason=reason)
+        else:
+            del bw.weights[edge]
+
+    def _choose_name(self, trigger_type: str, spec: str) -> str:
+        """type_specialisation, or an evocative name when showmanship is on.
+
+        The evocative name must still describe what the neuron does, so it is
+        drawn from the specialisation's pool first.
+        """
+        if not self._showmanship_enabled():
+            return f"{trigger_type}_{spec}"
+        pool = list(EVOCATIVE_NAMES.get(spec) or []) + \
+            list(EVOCATIVE_NAMES_BY_TYPE.get(trigger_type) or [])
+        taken = set(self.functional_neurons) | set(
+            getattr(self.brain_widget, 'neuron_positions', {}))
+        for candidate in pool:
+            if candidate not in taken:
+                return candidate
+        return f"{trigger_type}_{spec}"
+
+    def _showmanship_enabled(self) -> bool:
+        cfg = getattr(self.config, 'neurogenesis', None)
+        if isinstance(cfg, dict):
+            return bool(cfg.get('showmanship', True))
+        return True
+
+    @staticmethod
+    def _burst_colour(trigger_type: str) -> tuple:
+        base = {'novelty': (255, 215, 0), 'stress': (255, 100, 100),
+                'reward': (100, 255, 100), 'connector': (150, 150, 255)
+                }.get(trigger_type, (200, 200, 255))
+        return tuple(max(0, min(255, c + random.randint(-20, 20))) for c in base)
+
+    def _record_origin(self, neuron_name: str, func_neuron: 'FunctionalNeuron',
+                       deficit: Optional[Deficit],
+                       wiring: List[Tuple[str, str, float, str]]) -> None:
+        """Write the birth record. This is the answer to 'why does it exist?'."""
+        ledger = getattr(self.brain_widget, 'ledger', None)
+        if ledger is None:
+            return
+        episode_ids = []
+        causal = getattr(self.brain_widget, 'causal_learning', None)
+        if causal is not None:
+            episode_ids = [e.episode_id for e in list(getattr(causal, 'history', []))[-2:]]
+        ledger.record_neuron_birth(
+            name=neuron_name,
+            deficit_kind=deficit.kind if deficit else 'representation',
+            deficit_summary=(deficit.summary if deficit else
+                             "grown directly, without a recorded deficit"),
+            evidence=dict(deficit.evidence) if deficit else {},
+            remedy=(deficit.remedy if deficit else ""),
+            wiring=wiring, episode_ids=episode_ids,
+            neuron_type=func_neuron.neuron_type,
+            specialization=func_neuron.specialization,
+            display_name=func_neuron.display_name)
 
     def _notify_neuron_created(self, neuron_name: str):
         """Emit one completed-birth event from the creation source."""
@@ -578,7 +938,9 @@ class EnhancedNeurogenesis:
             print(f"⚠️ Could not record neurogenesis memory: {e}")
 
     def _on_neuron_created(self, neuron_name: str, neuron_type: str):
-        self._trigger_link_toggle_effect()
+        callback = getattr(self.brain_widget, '_trigger_link_toggle_effect', None)
+        if callable(callback):
+            callback()
     
     def _get_unique_neuron_name(self, base_name: str) -> str:
         if base_name not in self.brain_widget.neuron_positions: return base_name
@@ -680,12 +1042,31 @@ class EnhancedNeurogenesis:
             candidates.sort(key=get_dist_sq)
             targets.append(candidates.pop(0))
             if candidates: targets.append(random.choice(candidates))
+        deficit = Deficit(
+            kind='connectivity', key=f"connectivity:{orphan_name}",
+            summary=(f"{orphan_name.replace('_', ' ')} had no working connections, so "
+                     f"nothing it computed could reach the rest of the brain"),
+            target=orphan_name, sources=[orphan_name],
+            remedy=f"give {orphan_name.replace('_', ' ')} a route back into the network",
+            severity=0.9, evidence={'orphan': orphan_name},
+            suggested_type='connector', specialization='network_bridge')
+        func_neuron.origin_deficit = deficit.to_dict()
+
+        wiring = []
         weight = random.uniform(0.5, 0.9)
-        self.brain_widget.weights[self._orient_new_edge(neuron_name, orphan_name)] = weight
+        edge = self._orient_new_edge(neuron_name, orphan_name)
+        if self._wire(edge[0], edge[1], weight, 'remedy', deficit):
+            wiring.append((edge[0], edge[1], float(weight), 'remedy'))
         for target in targets:
             w = random.uniform(-0.5, 0.8)
             if abs(w) < 0.2: w = 0.3
-            self.brain_widget.weights[self._orient_new_edge(neuron_name, target)] = w
+            edge = self._orient_new_edge(neuron_name, target)
+            if self._wire(edge[0], edge[1], w, 'remedy', deficit):
+                wiring.append((edge[0], edge[1], float(w), 'remedy'))
+        self._record_origin(neuron_name, func_neuron, deficit, wiring)
+        monitor = self.capability
+        if monitor is not None:
+            monitor.clear(deficit.key, f"grew {neuron_name}")
         self._set_neuron_appearance(neuron_name, func_neuron)
         if hasattr(self.brain_widget, 'visible_neurons'): self.brain_widget.visible_neurons.add(neuron_name)
         self.brain_widget.neurogenesis_highlight = {'neuron': neuron_name, 'start_time': time.time(), 'duration': 8.0, 'pulse_phase': 0}
@@ -731,9 +1112,20 @@ class EnhancedNeurogenesis:
         
         existing.sort(key=lambda x: x[1].utility_score, reverse=True)
         best_name, best_neuron = existing[0]
-        
-        best_neuron.strength_multiplier += 0.5
-        best_neuron.utility_score += 0.1
+
+        # Strengthening is bounded. It used to add 0.5 every time the cap was
+        # reached with no ceiling, which produced multipliers in the hundreds -
+        # a neuron whose output saturated the whole network on any input, and
+        # a squid whose brain was one screaming neuron.
+        ceiling = float(self.config.neurogenesis.get('max_strength_multiplier',
+                                                     MAX_STRENGTH_MULTIPLIER))
+        before = best_neuron.strength_multiplier
+        best_neuron.strength_multiplier = min(ceiling, before + 0.5)
+        best_neuron.utility_score = min(1.0, best_neuron.utility_score + 0.1)
+        if best_neuron.strength_multiplier <= before:
+            print(f"   {best_neuron.display_name} is already as strong as it can get "
+                  f"({ceiling:.1f}x)")
+            return
         self.brain_widget.communication_events[best_name] = time.time()
         self.brain_widget.update()
         
@@ -820,13 +1212,9 @@ class EnhancedNeurogenesis:
         self._on_neuron_leveled_callback = on_leveled
 
     def get_global_cooldown_remaining(self) -> float:
-        if not self.functional_neurons: return 0.0
-        current_time = time.time()
-        last_creation = max(n.creation_context.timestamp for n in self.functional_neurons.values())
-        global_cooldown = self.config.neurogenesis.get('cooldown', 60)
-        time_since_last = current_time - last_creation
-        remaining = global_cooldown - time_since_last
-        return max(0.0, remaining)
+        if not self._last_growth_at: return 0.0
+        global_cooldown = float(self.config.neurogenesis.get('cooldown', 60))
+        return max(0.0, global_cooldown - (self.clock() - self._last_growth_at))
 
     def track_action(self, action: str):
         self.recent_actions.append(action)
@@ -853,11 +1241,11 @@ class EnhancedNeurogenesis:
         return None
 
     def capture_experience_context(self, trigger_type: str, brain_state: dict, recent_actions: list, environment: dict) -> ExperienceContext:
-        if self._first_real_tick is None: self._first_real_tick = time.time()
+        if self._first_real_tick is None: self._first_real_tick = self.clock()
         if not isinstance(recent_actions, list): recent_actions = []
         ctx = self._build_context(trigger_type, brain_state, environment)
         ctx.recent_actions = recent_actions[-5:] if recent_actions else []
-        elapsed = time.time() - self._first_real_tick
+        elapsed = self.clock() - self._first_real_tick
         if elapsed < 1.5: return ctx
         is_sleeping = brain_state.get('is_sleeping', False)
         anxiety = brain_state.get('anxiety', 50)
@@ -866,29 +1254,179 @@ class EnhancedNeurogenesis:
         self.experience_buffer.add_experience(ctx)
         return ctx
     
-    def should_create_neuron(self, ctx: ExperienceContext) -> bool:
-        current_time = time.time()
-        if ctx.trigger_type == 'stress' and ctx.active_neurons.get('anxiety', 50) >= 95:
-            print(f"🚨 {loc('log_emergency_forcing_neuron', default='EMERGENCY: Critical anxiety - forcing stress neuron!')}")
-            return True
-        if self._first_real_tick is None: return False
-        elapsed = current_time - self._first_real_tick
-        if elapsed < 5.0: return False
-        pattern = ctx.get_pattern_signature()
-        if len(pattern.split('_')) < 4: return False
-        if self.experience_buffer.pattern_counts.get(pattern, 0) > 20: return False
-        current_count = len(self.brain_widget.neuron_positions)
-        max_neurons = self.config.neurogenesis.get('max_neurons', 32)
-        if current_count >= max_neurons: return False
-        global_cooldown = self.config.neurogenesis.get('cooldown', 60)
-        default_time = self._first_real_tick or time.time()
-        last_creation = max((n.creation_context.timestamp for n in self.functional_neurons.values()), default=default_time)
-        if current_time - last_creation < global_cooldown: return False
-        pattern_level, count, _ = self.experience_buffer.get_pattern_recurrence(ctx)
-        thresholds = {'specific': 2, 'parent': 3, 'core': 5}
-        if count < thresholds.get(pattern_level, 2): return False
+    # ==================================================================
+    # THE GROWTH DECISION
+    #
+    # A neuron appears because the network has a persistent functional
+    # deficiency it cannot handle with the structure it has - never because a
+    # particular event occurred. The diagnosis is CapabilityMonitor's; this is
+    # the part that decides whether it is worth spending structure on, and it
+    # is the only place in the project that makes that call.
+    # ==================================================================
+    @property
+    def capability(self):
+        return getattr(self.brain_widget, 'capability', None)
+
+    def find_deficit(self, brain_state: Optional[Dict[str, float]] = None
+                     ) -> Optional[Deficit]:
+        """The most severe thing this brain currently cannot do.
+
+        Prefers the monitor's evidence-backed diagnosis. Falls back to an
+        acute reading of the live state so a squid in genuine, immediate
+        trouble is not left waiting for a statistical window to fill.
+        """
+        monitor = self.capability
+        if monitor is not None:
+            actionable = monitor.actionable()
+            if actionable:
+                return actionable[0]
+        return self._acute_deficit(brain_state)
+
+    def _acute_deficit(self, brain_state: Optional[Dict[str, float]] = None
+                       ) -> Optional[Deficit]:
+        """A drive pinned at an extreme with nothing in the network correcting it.
+
+        This is still a capability claim, not an event trigger: it fires on the
+        *absence of corrective structure* while a drive is stuck, and it does
+        not fire at all if the network already has synapses pulling the drive
+        back.
+        """
+        from .capability import COMFORT_BANDS, MIN_CORRECTIVE_PUSH, SATURATION
+
+        state = brain_state if brain_state is not None else getattr(
+            self.brain_widget, 'state', {})
+        weights = getattr(self.brain_widget, 'weights', {}) or {}
+
+        worst: Optional[Deficit] = None
+        for stat, (low, high) in COMFORT_BANDS.items():
+            value = state.get(stat)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            value = float(value)
+            if high < 100.0 and value >= min(95.0, high + 25.0):
+                too_high = True
+            elif low > 0.0 and value <= max(5.0, low - 25.0):
+                too_high = False
+            else:
+                continue
+
+            needed = -1.0 if too_high else 1.0
+            corrective = 0.0
+            saturated = 0
+            for (src, dst), weight in weights.items():
+                if dst != stat:
+                    continue
+                src_value = state.get(src)
+                if isinstance(src_value, bool):
+                    src_value = 100.0 if src_value else 0.0
+                if not isinstance(src_value, (int, float)):
+                    continue
+                push = ((float(src_value) - 50.0) / 100.0) * float(weight)
+                if push * needed > 0:
+                    corrective += abs(push)
+                    if abs(float(weight)) >= SATURATION:
+                        saturated += 1
+            if corrective >= MIN_CORRECTIVE_PUSH and saturated == 0:
+                continue
+
+            direction = 'down' if too_high else 'up'
+            if corrective < 0.05:
+                gap = "nothing in the network is pulling it back"
+            elif saturated:
+                gap = (f"the {saturated} synapse(s) pulling it back are already at "
+                       f"full strength and it is still stuck")
+            else:
+                gap = (f"the network is only supplying {corrective:.2f} of "
+                       f"corrective push, and it needs at least "
+                       f"{MIN_CORRECTIVE_PUSH:.2f}")
+            deficit = Deficit(
+                kind='regulation', key=f"regulation:{stat}:{direction}:acute",
+                summary=(f"{stat} is pinned at {value:.0f} and {gap}"),
+                target=stat,
+                sources=[stat],
+                remedy=f"pull {stat} {direction} while it is stuck at this extreme",
+                severity=1.0,
+                evidence={'stat': stat, 'value': round(value, 1), 'acute': True,
+                          'corrective_push': round(corrective, 3),
+                          'saturated_synapses': saturated, 'direction': direction},
+                suggested_type=('stress' if (too_high and stat in ('anxiety', 'hunger', 'sleepiness'))
+                                or (not too_high and stat == 'cleanliness') else 'reward'),
+                specialization=regulation_specialisation(stat, too_high))
+            deficit.first_seen = deficit.last_seen = time.time()
+            deficit.observations = 1
+            deficit.initial_severity = 1.0
+            if worst is None:
+                worst = deficit
+        return worst
+
+    def should_create_neuron(self, ctx: Optional[ExperienceContext] = None,
+                             deficit: Optional[Deficit] = None) -> bool:
+        """Is there a deficit worth spending a neuron on, and may we spend one?
+
+        `ctx` is kept for the existing callers (and for the birth record) but no
+        longer decides anything: pattern recurrence describes experience, and
+        experience is not by itself a reason to grow.
+        """
+        deficit = deficit or self.find_deficit(
+            ctx.active_neurons if ctx is not None else None)
+        if deficit is None:
+            self.pending_deficit = None
+            return False
+
+        reason = self._growth_blocked(deficit)
+        if reason:
+            self.stood_down.append((time.time(), deficit.key, reason))
+            self.pending_deficit = None
+            return False
+
+        self.pending_deficit = deficit
         return True
-    
+
+    def _growth_blocked(self, deficit: Deficit) -> Optional[str]:
+        """Reasons a real deficit still does not get new structure."""
+        now = self.clock()
+
+        if self._first_real_tick is None:
+            return "the brain has not started living yet"
+        if now - self._first_real_tick < 5.0:
+            return "the brain has only just started"
+
+        max_neurons = self.config.neurogenesis.get('max_neurons', 32)
+        current_count = len(self.brain_widget.neuron_positions) - len(
+            getattr(self.brain_widget, 'excluded_neurons', []))
+        if current_count >= max_neurons and deficit.severity < 1.0:
+            return f"the brain is already at its {max_neurons}-neuron ceiling"
+
+        cooldown = float(self.config.neurogenesis.get('cooldown', 60))
+        remaining = self.get_global_cooldown_remaining()
+        if remaining > 0:
+            # A maximum-severity deficit is a genuine emergency and may grow
+            # sooner - but not instantly. Without a floor, a squid whose drives
+            # are all pinned grows a burst of neurons in a few seconds, which is
+            # the event-driven behaviour this rewrite exists to remove.
+            if deficit.severity >= 1.0:
+                elapsed = cooldown - remaining
+                emergency_floor = max(10.0, cooldown * 0.25)
+                if elapsed < emergency_floor:
+                    return (f"an emergency, but only {elapsed:.0f}s since the last "
+                            f"neuron (needs {emergency_floor:.0f}s)")
+            else:
+                return f"only {remaining:.0f}s into the {cooldown:.0f}s growth cooldown"
+        return None
+
+    def growth_report(self) -> Dict[str, Any]:
+        """What the engine is currently thinking about growing, and why not."""
+        monitor = self.capability
+        return {
+            'pending': self.pending_deficit.to_dict() if self.pending_deficit else None,
+            'deficits': monitor.report() if monitor is not None else {},
+            'cooldown_remaining': round(self.get_global_cooldown_remaining(), 1),
+            'stood_down': [{'at': at, 'deficit': key, 'because': why}
+                           for at, key, why in list(self.stood_down)[-6:]],
+            'grown': list(self.growth_log),
+        }
+
+
     def update_neuron_activations(self, brain_state: Dict[str, float]) -> None:
             # 1. Normalize inputs
             for key in list(brain_state.keys()):
@@ -896,11 +1434,22 @@ class EnhancedNeurogenesis:
                     try: brain_state[key] = float(brain_state[key])
                     except (ValueError, TypeError): brain_state[key] = 50.0
 
-            # 2. Standard Neural Activation
+            # 2. Activation is NOT recomputed here.
+            #    BrainWidget.propagate_activations() is the project's single
+            #    forward-propagation implementation and has already run this
+            #    tick. This used to recompute every functional neuron with a
+            #    second, subtly different transfer function and overwrite the
+            #    propagated value, so a neurogenesis neuron and a Designer
+            #    neuron behaved differently for no reason anyone could see.
+            #    All that remains here is bookkeeping and the regulatory
+            #    feedback below, which propagation deliberately does not do.
+            now_ts = time.time()
             for name, func_neuron in self.functional_neurons.items():
-                if name in self.brain_widget.state:
-                    activation = func_neuron.calculate_activation(brain_state, self.brain_widget.weights)
-                    self.brain_widget.state[name] = activation
+                value = self.brain_widget.state.get(name)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    if abs(float(value) - 50.0) > 15.0:
+                        func_neuron.activation_count += 1
+                        func_neuron.last_activated = now_ts
 
             # 3. === SCALED STRESS REDUCTION MECHANIC ===
             # Each stress neuron contributes to anxiety suppression, with scaling based on count
@@ -1050,6 +1599,13 @@ class EnhancedNeurogenesis:
             fn = self.functional_neurons[neuron_to_prune]
             if fn.neuron_type == 'novelty': self.novelty_neuron_count -= 1
             del self.functional_neurons[neuron_to_prune]
+        ledger = getattr(self.brain_widget, 'ledger', None)
+        if ledger is not None:
+            ledger.record_neuron_pruned(
+                neuron_to_prune,
+                reason=(f"lowest utility of {len(candidates)} candidates "
+                        f"(score {candidates[0][1]:.2f}) while the brain was at "
+                        f"its size limit"))
         print(f"🗑️ {loc('log_pruned', default='Pruned')}: {neuron_to_prune}")
         return neuron_to_prune
     
@@ -1084,98 +1640,14 @@ class EnhancedNeurogenesis:
         self.last_creation_by_type = {'novelty': 0, 'stress': 0, 'reward': 0}
         self._awarded_neurons.clear()
         self._first_real_tick = None
+        self._last_growth_at = 0.0
         print("🔄 Neurogenesis state reset")
 
-class NeurogenesisTriggerSystem:
-    def __init__(self, tamagotchi_logic):
-        self.logic = tamagotchi_logic
-        self.recent_actions = deque(maxlen=10)
-        self.last_states = deque(maxlen=5)
-        
-    def track_action(self, action: str):
-        self.recent_actions.append(action)
-    
-    def track_state_change(self, state: Dict[str, float]):
-        self.last_states.append(state.copy())
-    
-    def check_for_significant_experience(self) -> Optional[Tuple[str, ExperienceContext]]:
-        if len(self.last_states) < 2: return None
-        current = self.last_states[-1]
-        previous = self.last_states[-2]
-        state_change = 0
-        for key in ['hunger', 'happiness', 'satisfaction', 'anxiety', 'curiosity']:
-            if key in current and key in previous:
-                state_change += abs(current.get(key, 50) - previous.get(key, 50))
-        if state_change < 5 and not getattr(self.logic, 'new_object_encountered', False): return None
-        if self._detect_novelty_experience(current, previous):
-            context = self._build_context('novelty', current)
-            return ('novelty', context)
-        if self._detect_stress_experience(current, previous):
-            context = self._build_context('stress', current)
-            return ('stress', context)
-        if self._detect_reward_experience(current, previous):
-            context = self._build_context('reward', current)
-            return ('reward', context)
-        return None
-    
-    def _detect_novelty_experience(self, current, previous) -> bool:
-        if current.get('is_sleeping', False): return False
-        current_curiosity = current.get('curiosity', 50)
-        previous_curiosity = previous.get('curiosity', 50)
-        curiosity_delta = current_curiosity - previous_curiosity
-        if current_curiosity >= 99 or current_curiosity <= 1: return False
-        new_object = getattr(self.logic, 'new_object_encountered', False)
-        meaningful_spike = curiosity_delta > 15 and current_curiosity > 40
-        return meaningful_spike or new_object
-    
-    def _detect_stress_experience(self, current, previous) -> bool:
-        if current.get('is_sleeping', False) and current.get('anxiety', 50) < 40: return False
-        current_anxiety = current.get('anxiety', 50)
-        previous_anxiety = previous.get('anxiety', 50)
-        current_hunger = current.get('hunger', 50)
-        if current_anxiety <= 5: return False
-        anxiety_high = current_anxiety > 65 and previous_anxiety > 60
-        anxiety_spike = (current_anxiety - previous_anxiety) > 15 and current_anxiety > 50
-        hunger_crisis = current_hunger > 85 and (current_hunger - previous.get('hunger', 50)) >= 0
-        return anxiety_high or anxiety_spike or hunger_crisis
-    
-    def _detect_reward_experience(self, current, previous) -> bool:
-        if current.get('is_sleeping', False):
-            happiness = current.get('happiness', 50)
-            satisfaction = current.get('satisfaction', 50)
-            if happiness >= 90 and satisfaction >= 90: return False
-        current_happiness = current.get('happiness', 50)
-        previous_happiness = previous.get('happiness', 50)
-        current_satisfaction = current.get('satisfaction', 50)
-        previous_satisfaction = previous.get('satisfaction', 50)
-        happiness_delta = current_happiness - previous_happiness
-        satisfaction_delta = current_satisfaction - previous_satisfaction
-        if (current_happiness >= 99 and previous_happiness >= 99) or \
-           (current_satisfaction >= 99 and previous_satisfaction >= 99): return False
-        if current_happiness >= 95 and happiness_delta < 3: return False
-        if current_satisfaction >= 95 and satisfaction_delta < 3: return False
-        positive_outcome = getattr(self.logic, 'recent_positive_outcome', False)
-        significant_happiness = happiness_delta > 15 and current_happiness > 40
-        significant_satisfaction = satisfaction_delta > 15 and current_satisfaction > 40
-        return significant_happiness or significant_satisfaction or positive_outcome
-    
-    def _build_context(self, trigger_type: str, current_state: Dict) -> ExperienceContext:
-        filtered_neurons = {k: v for k, v in current_state.items() 
-                        if not k.startswith('is_') and k not in [
-                            'novelty_exposure', 'sustained_stress', 'recent_rewards', 
-                            'neurogenesis_active', 'personality', 'pursuing_food', 'direction',  
-                            'is_startled', 'is_fleeing', 'is_sick']}
-        return ExperienceContext(
-            trigger_type=trigger_type,
-            active_neurons=filtered_neurons,
-            recent_actions=list(self.recent_actions),
-            environmental_state={
-                'food_count': len(self.logic.food_items),
-                'poop_count': len(self.logic.poop_items),
-                'is_sick': self.logic.squid.is_sick,
-                'is_eating': current_state.get('is_eating', False),
-                'has_rock': hasattr(self.logic, 'rock_items') and len(self.logic.rock_items) > 0
-            },
-            outcome='neutral',
-            timestamp=time.time()
-        )
+# NeurogenesisTriggerSystem was removed in v4.0.
+#
+# It was a second, parallel detector of "significant experience" (novelty
+# spikes, stress surges, reward rebounds) that nothing instantiated - the
+# engine, the worker and the widget each had their own copy of the same
+# thresholds. Its job is now done properly by capability.CapabilityMonitor,
+# which asks what the network cannot do rather than what just happened, and
+# there is exactly one of it.

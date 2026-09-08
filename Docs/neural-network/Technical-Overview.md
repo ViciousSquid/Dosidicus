@@ -1,18 +1,128 @@
-<h3>Neural Network Technical Overview</h3> 
+# Neural network technical overview
 
 <img width="598" height="296" alt="image" src="https://github.com/user-attachments/assets/da9c7b03-9953-4892-9417-17d429d9a2fe" />
 
-<p> The system's neural network is a unique, single-layer, fully-connected network architecture that dynamically grows through a process of neurogenesis.
+The network is a single-plane, sparsely-connected graph that grows through
+capability-driven neurogenesis. There is no backpropagation and no training
+phase; the squid learns while it lives.
 
-Traditional backpropagation is not used for learning, instead relying on a pure Hebbian model (../neural-network/Hebbian-Learning.md)
+Every neural mechanism has exactly one implementation, and every change any of
+them makes is recorded with its reason.
 
-...
+| Mechanism | Lives in | Driven from |
+|-----------|----------|-------------|
+| Forward propagation | `src/propagation.py` | `BrainWidget.propagate_activations()`, once per tick |
+| Synaptic plasticity (Hebbian + STDP) | `src/plasticity.py` | `BrainWidget.perform_hebbian_learning()`, on the commit cycle |
+| Spike timing | `src/stdp.py` | `PlasticityEngine.observe()`, every tick |
+| Action → consequence learning | `src/causal_learning.py` | `ActionOutcomeLedger.on_tick()`, every tick |
+| Sleep consolidation | `src/consolidation.py`, `src/sleep_consolidation.py` | `ConsolidationManager.on_tick()`, every tick |
+| Capability diagnosis | `src/capability.py` | `CapabilityMonitor.evaluate()`, on the neurogenesis timer |
+| Structural growth | `src/neurogenesis.py` | `BrainWidget.check_neurogenesis_triggers()` |
+| Provenance | `src/neural_provenance.py` | every one of the above |
 
-<h4>1. Core Architecture</h4> <ul><li>The network starts as a single-layer perceptron with 7 core, named neurons. These neurons represent the fundamental emotional and physical states of the squid:
+The headless trainer imports the same modules, so a brain trained without the
+GUI behaves identically inside it.
 
-* Circular (Basic Needs): hunger, happiness, cleanliness, sleepiness
-* Square (Complex States): satisfaction, anxiety, curiosity
+---
 
-Each neuron's activation value ranges from 0-100.
+## 1. Architecture
 
- Unlike a typical deep learning model, this network is not structured into distinct input, hidden, and output layers. Instead, all neurons exist on a single plane and are fully interconnected. Each connection between two neurons has a weight, initialized with a random value between -1 and 1, which represents the strength and nature (excitatory or inhibitory) of their relationship.</li> </ul> <h4>2. Learning Mechanism: Hebbian Learning</h4> <p> The network updates its connection weights using a Hebbian learning rule, which follows the principle "neurons that fire together, wire together." </p> <ul> <li><strong>Learning Cycle:</strong> The learning process is not continuous but occurs in discrete cycles, triggered by a timer (by default, every 30 seconds).</li> <li><strong>Activation:</strong> During a learning cycle, any neuron whose activation value exceeds a predefined threshold (e.g., &gt; 50) is considered "active.".</li> <li><strong>Weight Update:</strong> The system randomly selects a few pairs of currently active neurons. The weight between these pairs is then adjusted according to the Hebbian rule: the change in weight is proportional to the product of the two neurons' activation values multiplied by a learning rate. This strengthens the connection between neurons that are concurrently active.</li> <li><strong>Weight Decay:</strong> To ensure network stability and prevent weights from growing indefinitely, a small weight decay is applied over time, gradually weakening all connections.</li> </ul> <h4>3. Dynamic Architecture: Neurogenesis</h4> <p> The network's most advanced feature is its ability to create new neurons, a process called neurogenesis. This allows the brain's architecture to grow and adapt based on the squid's experiences. </p> <ul> <li> <strong>Triggers:</strong> Neurogenesis is initiated by one of three counters exceeding a set threshold: <ol> <li><strong>Novelty:</strong> Increases when the squid encounters new objects or experiences.</li> <li><strong>Stress:</strong> Increases during stressful events.</li> <li><strong>Reward:</strong> Increases when the squid experiences a positive outcome.</li> </ol> </li> <li> <strong>Creation Process:</strong> When a counter surpasses its threshold and a cooldown period has passed, a new neuron is created. <ul> <li>The neuron is named based on its trigger (e.g., <code>novel\_0</code>, <code>stress\_0</code>).</li> <li>It is positioned visually on the network graph near other currently active neurons.</li> <li>Crucially, it is immediately connected to the existing network with a set of default weights. For example, a new 'reward' neuron automatically forms a strong positive connection to 'satisfaction' and 'happiness'.</li> </ul> </li> <li><strong>Dynamic Thresholds:</strong> The thresholds required to trigger neurogenesis are not static. They scale upwards as the network grows in size, preventing runaway neuron creation and promoting stability in a mature network.</li> </ul> <h4>4. Network Stability and Pruning</h4> <p> To manage the complexity of a dynamically growing network, the system employs pruning mechanisms to remove inefficient or irrelevant components. This feature is critical for long-term network health and is enabled by default. </p> <ul> <li><strong>Connection Pruning:</strong> The system can periodically remove connections whose absolute weight falls below a very low threshold, cleaning up insignificant links.</li> <li><strong>Neuron Pruning:</strong> When the network approaches its configured maximum neuron limit, it can trigger the pruning of entire neurons. This process targets newly created (non-core) neurons that have failed to form strong connections or remain largely inactive.</li> </ul>
+The network starts with 7 core drive neurons plus the mandatory `can_see_food`
+sensor:
+
+* **Basic needs**: `hunger`, `happiness`, `cleanliness`, `sleepiness`
+* **Complex states**: `satisfaction`, `anxiety`, `curiosity`
+
+Activations run 0–100 with **50 as the neutral baseline**, so a silent input
+contributes nothing and a negative weight is genuinely inhibitory. Weights run
+−1 … +1.
+
+Three roles decide what may write a neuron (`src/brain_constants.py`):
+
+| Role | Written by | May a synapse point at it? |
+|------|-----------|----------------------------|
+| **Pure input** (sensors) | the world, via `BrainNeuronHooks` | No — the world overwrites it every tick, so the synapse would be inert |
+| **Core drive** | the squid model | Yes — via modulation (see §4) |
+| **Network-driven** (grown, Designer, connector) | forward propagation | Yes |
+
+## 2. Forward propagation
+
+One timestep, for every network-driven neuron, from a single consistent
+snapshot so all neurons step together:
+
+```
+target = 50 + Σ (activation[src] − 50) · weight · strength
+new    = old + (target − old) · smoothing        clamped to 0 … 100
+```
+
+`strength` is the per-neuron multiplier a grown neuron accumulates when
+neurogenesis deepens it instead of duplicating it (capped at 4.0).
+
+## 3. Learning
+
+See [Hebbian Learning](Hebbian-Learning.md) for the rule and
+[STDP](STDP.md) for the spike-timing term. In summary:
+
+* co-activation is accumulated **every tick** and committed on a cycle, so a
+  one-second event is not invisible;
+* the Hebbian term is a **signed correlation**, so aversions are learnable;
+* spike timing is blended in where it has an opinion;
+* an action's outcome is broadcast back along the **eligibility traces** laid
+  down when the spikes happened — the third factor, and the squid's route from
+  correlation to causation;
+* sleep replays the day's strongest co-activations and prunes what never
+  amounted to anything.
+
+## 4. From synapse to behaviour
+
+Propagation deliberately never overwrites a core drive — the squid model owns
+those, and two writers would fight. But a brain that cannot touch its own
+physiology cannot express what it learned, and a default eight-neuron brain
+contains nothing *but* sensors and drives.
+
+So learned synapses pointing at a drive act as a **modulation**:
+`compute_neural_modulation()` sums `(source − 50)/100 · weight` per drive and
+returns a small per-tick delta. A squid whose experience taught it
+`can_see_food → anxiety` becomes anxious at the sight of food; one that learned
+`can_see_food → happiness` brightens instead. Same stimulus, opposite response,
+because they lived different lives.
+
+Each synapse's contribution is recorded, which is how the Knowledge tab can say
+how a learned association has actually affected behaviour rather than asserting
+that it must have.
+
+## 5. Structural growth
+
+See [Neurogenesis](Neurogenesis.md). A neuron is grown when the network has a
+**persistent functional deficiency** — something it cannot represent, regulate
+or express — that ordinary learning has already failed to fix. Never because an
+event occurred.
+
+## 6. Stability and pruning
+
+* **Connection pruning** removes synapses whose absolute weight stays below a
+  threshold, with connectors and young neurons immune.
+* **Sleep pruning and down-scaling** apply synaptic homeostasis: everything is
+  scaled back overnight and only what was replayed comes out ahead.
+* **Neuron pruning** removes the lowest-utility grown neuron when the network
+  nears its ceiling, scoring on utility, recency, uniqueness of specialisation
+  and total synaptic weight.
+
+Every removal is recorded with its reason.
+
+## 7. Transparency
+
+Transparency is an architectural requirement, not a debugging feature. Every
+weight change and every neuron birth goes through one recorded write path, and
+the inspection tools read that record rather than reconstructing an
+approximation of it:
+
+```python
+brain_widget.explain_weight(("can_see_food", "satisfaction"))
+brain_widget.explain_neuron("anxiety_reduction")
+brain_widget.what_do_you_know("food")
+```
+
+The same data drives **Brain Tool → Knowledge**, the **Learning** tab and the
+**Neuron Laboratory**, and it is saved with the squid — so a save file really is
+a cognitive history.

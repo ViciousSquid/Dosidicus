@@ -1,3 +1,25 @@
+"""
+learning.py - innate reflexes, and the configuration every learning rule reads.
+
+HebbianLearning is NOT a learning rule. The project has exactly one of those,
+in src/plasticity.py, and it is committed by BrainWidget.perform_hebbian_learning().
+This class used to carry a second one - its own weight formula, its own log,
+its own neurogenesis triggers, and a habit of writing both directions of every
+synapse - which nothing instantiated, so it was a divergent implementation
+waiting to be switched on.
+
+What survives is the part that was genuinely its own: the squid's *innate
+reflexes*. Eating, falling ill, being cleaned and meeting something new produce
+an immediate, unconditioned change in the brain, the way a real animal does not
+need thirty seconds of statistics to learn that food is good. Personality
+colours how strongly each reflex lands.
+
+Every change it makes goes through BrainWidget.strengthen_connection(), lands
+in the provenance ledger tagged 'reflex', and is subject to the same clamps and
+connector limits as everything else. There is one rule, one write path and one
+record.
+"""
+
 import random
 from PyQt5 import QtCore
 import csv
@@ -23,8 +45,23 @@ class HebbianLearning:
             'move_to_plants': 0.4
         }
 
-        self.excluded_neurons = ['is_sick', 'is_eating', 'is_sleeping', 'pursuing_food', 'direction']
+        # Only 'direction' is genuinely unusable - it holds a compass string,
+        # not an activation. The state sensors used to be listed here too,
+        # which silently disabled learn_from_sickness() entirely: every one of
+        # its connections starts at is_sick. A sensor is a legitimate learning
+        # SOURCE; the core write path already refuses to point a synapse INTO
+        # one, which is the thing that actually needed preventing.
+        self.excluded_neurons = ['direction', 'position', 'status', 'personality']
 
+        self.debug_mode = False
+
+        # An unconditioned reflex should BIAS the network, not overwrite it.
+        # At full strength a single feeding pushed a synapse by 0.2, so a few
+        # meals pinned it at the clamp and the correlational rule - the one
+        # that actually reflects the squid's experience - had nothing left to
+        # say. A quarter of the learning rate lets reflexes give the squid a
+        # head start that experience can still argue with.
+        self.reflex_gain = 0.25
         self.learning_rate = self.config.hebbian['base_learning_rate']
         self.threshold = self.config.hebbian['threshold']
         self.goal_weights = self.config.hebbian['goal_weights']
@@ -66,7 +103,19 @@ class HebbianLearning:
         }
 
     def get_learning_data(self):
-        return self.learning_data
+        """Recent weight changes as (timestamp, n1, n2, delta, mechanism).
+
+        Sourced from the brain's provenance ledger, which is the authoritative
+        record of every change made by every mechanism - not just the reflexes
+        this class fires. Falls back to the local list if a brain has no ledger.
+        """
+        brain_widget = getattr(self.brain_window, 'brain_widget', None)
+        ledger = getattr(brain_widget, 'ledger', None)
+        if ledger is None:
+            return self.learning_data
+        return [(event.timestamp, event.edge[0], event.edge[1],
+                 event.delta, event.mechanism)
+                for event in ledger.recent_events(limit=50)]
     
     def export_learning_data(self, file_name):
         with open(file_name, 'w', newline='') as file:
@@ -267,64 +316,85 @@ class HebbianLearning:
             self.strengthen_connection('anxiety', 'is_sick', self.learning_rate * 0.5)
 
     def strengthen_connection(self, neuron1, neuron2, base_learning_rate):
-        """Enhanced version that considers neurogenesis state and goal weights"""
-        # Skip if either neuron is in the excluded list
+        """Apply one innate reflex to the network.
+
+        Delegates the actual write to BrainWidget.strengthen_connection so the
+        clamps, the connector limits and the provenance record are the same
+        ones every other mechanism goes through. This used to keep its own
+        formula and write BOTH directions of the synapse, which quietly made
+        every reflex-formed association symmetric in a directed network.
+        """
         if neuron1 in self.excluded_neurons or neuron2 in self.excluded_neurons:
             return
-        
-        # Determine personality (with a default)
+
+        brain_widget = getattr(self.brain_window, 'brain_widget', None)
+        if brain_widget is None:
+            return
+
         personality = self.squid_personality or Personality.ADVENTUROUS
-        
-        # Apply personality modifiers
-        learning_rate = self.apply_personality_learning_modifiers(neuron1, neuron2, base_learning_rate)
-        
-        if getattr(self.squid, neuron1) > self.threshold and getattr(self.squid, neuron2) > self.threshold:
-            # Check if this is a goal-oriented connection
-            is_goal = (neuron1, neuron2) in self.goal_weights or (neuron2, neuron1) in self.goal_weights
-            
-            # Calculate weight change
-            if is_goal:
-                base_change = learning_rate * self.config.combined['goal_reinforcement_factor']
-            else:
-                base_change = learning_rate
-            
-            if self.neurogenesis_active:
-                base_change *= self.config.combined['neurogenesis_learning_boost']
-            
-            # Apply weight change
-            pair = (neuron1, neuron2)
-            reverse_pair = (neuron2, neuron1)
-            
-            prev_weight = self.brain_window.brain_widget.weights.get(pair, 0)
-            new_weight = prev_weight + base_change
-            
-            # Apply weight bounds
-            new_weight = max(self.config.hebbian['min_weight'], 
-                            min(self.config.hebbian['max_weight'], new_weight))
-            
-            self.brain_window.brain_widget.weights[pair] = new_weight
-            self.brain_window.brain_widget.weights[reverse_pair] = new_weight
-            
-            # Prepare learning event details
-            learning_event = {
-                'neuron1': neuron1,
-                'neuron2': neuron2,
-                'learning_rate': learning_rate,
-                'weight_change': new_weight - prev_weight,
-                'previous_weight': prev_weight,
-                'new_weight': new_weight,
-                'personality': personality.value,
-                'is_goal_oriented': is_goal,
-                'neurogenesis_active': self.neurogenesis_active,
-                'explanation': self.generate_learning_explanation(neuron1, neuron2, learning_rate)
-            }
-            
-            # Log the learning event
-            self.log_learning_event(learning_event)
-            
-            # Periodically capture network state
-            if len(self.learning_event_log) % 10 == 0:
-                self.capture_network_state()
+        learning_rate = self.apply_personality_learning_modifiers(
+            neuron1, neuron2, base_learning_rate)
+
+        # The reflex only fires when both endpoints are actually engaged.
+        if not (self._engagement(neuron1) > self.threshold
+                and self._engagement(neuron2) > self.threshold):
+            return
+
+        is_goal = ((neuron1, neuron2) in self.goal_weights
+                   or (neuron2, neuron1) in self.goal_weights)
+        change = learning_rate * self.reflex_gain
+        if is_goal:
+            change *= self.config.combined['goal_reinforcement_factor']
+        if self.neurogenesis_active:
+            change *= self.config.combined['neurogenesis_learning_boost']
+
+        pair = (neuron1, neuron2)
+        reverse = (neuron2, neuron1)
+        weights = brain_widget.weights
+        edge = pair if pair in weights else (reverse if reverse in weights else pair)
+        prev_weight = float(weights.get(edge, 0.0))
+
+        explanation = self.generate_learning_explanation(neuron1, neuron2, learning_rate)
+        brain_widget.strengthen_connection(
+            neuron1, neuron2, change, mechanism='reflex', reason=explanation)
+
+        new_weight = float(brain_widget.weights.get(edge, prev_weight))
+
+        learning_event = {
+            'neuron1': neuron1,
+            'neuron2': neuron2,
+            'learning_rate': learning_rate,
+            'weight_change': new_weight - prev_weight,
+            'previous_weight': prev_weight,
+            'new_weight': new_weight,
+            'personality': personality.value,
+            'is_goal_oriented': is_goal,
+            'neurogenesis_active': self.neurogenesis_active,
+            'explanation': explanation,
+        }
+        self.log_learning_event(learning_event)
+
+        if len(self.learning_event_log) % 10 == 0:
+            self.capture_network_state()
+
+    def _engagement(self, neuron: str) -> float:
+        """How engaged this endpoint is, on the squid's own 0-100 scale.
+
+        Reads the squid model for a drive and the live brain state for anything
+        else, so a reflex involving a sensor (can_see_food, is_eating) is
+        evaluated against what the squid actually perceived rather than raising
+        AttributeError, which is what used to happen.
+        """
+        value = getattr(self.squid, neuron, None)
+        if value is None:
+            brain_widget = getattr(self.brain_window, 'brain_widget', None)
+            state = getattr(brain_widget, 'state', {}) if brain_widget else {}
+            value = state.get(neuron)
+        if isinstance(value, bool):
+            return 100.0 if value else 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        return 0.0
 
     def apply_personality_learning_modifiers(self, neuron1, neuron2, learning_rate):
         """
@@ -525,6 +595,11 @@ class HebbianLearning:
             self.goal_weights[goal] = min(1.0, self.config.hebbian['goal_weights'][goal] * novelty_factor)
 
     def update_weights(self):
+        """Fire whichever goal-oriented reflex the squid's current behaviour calls for.
+
+        The correlational rule is not run from here - it is committed on its
+        own cycle by BrainWidget.perform_hebbian_learning().
+        """
         # Apply goal-oriented reinforcement
         if self.squid.status == "organizing decorations":
             self.learn_from_organization()
@@ -534,56 +609,40 @@ class HebbianLearning:
             self.learn_from_decoration_interaction('plant')
 
     def check_neurogenesis_conditions(self, brain_state):
-        """Check if conditions for neurogenesis are met"""
-        current_time = time.time()
-        
-        # Check cooldown first
-        if current_time - self.last_neurogenesis_time < self.config.neurogenesis['cooldown']:
+        """Delegate: is there a functional deficit worth growing structure for?
+
+        This used to hold a fourth copy of the old event thresholds
+        (novelty_exposure / sustained_stress / recent_rewards). Growth is now
+        one question, asked by capability.CapabilityMonitor about what the live
+        network cannot do, and answered in one place.
+        """
+        brain_widget = getattr(self.brain_window, 'brain_widget', None)
+        engine = getattr(brain_widget, 'enhanced_neurogenesis', None)
+        if engine is None or not hasattr(engine, 'find_deficit'):
             return False
-            
-        # Check triggers
-        triggers = {
-            'novelty': brain_state.get('novelty_exposure', 0) > self.config.neurogenesis['novelty_threshold'],
-            'stress': brain_state.get('sustained_stress', 0) > self.config.neurogenesis['stress_threshold'],
-            'reward': brain_state.get('recent_rewards', 0) > self.config.neurogenesis['reward_threshold']
-        }
-        
-        return any(triggers.values())
+        return engine.find_deficit(brain_state) is not None
 
     def create_new_neuron(self, neuron_type, trigger_data):
-        """Create a new neuron and connect it to existing ones"""
-        base_name = {
-            'novelty': 'novel',
-            'stress': 'defense',
-            'reward': 'reward'
-        }.get(neuron_type, 'new')
-        
-        new_name = f"{base_name}_{len(self.brain_window.brain_widget.neurogenesis_data['new_neurons'])}"
-        
-        # Add to brain widget
-        self.brain_window.brain_widget.create_neuron(neuron_type, trigger_data)
-        
-        # Initialize connections with existing neurons
-        for existing_neuron in self.brain_window.brain_widget.neuron_positions:
-            if existing_neuron != new_name:
-                # Stronger initial connection if related
-                if (neuron_type == 'novelty' and existing_neuron == 'curiosity') or \
-                   (neuron_type == 'stress' and existing_neuron == 'anxiety') or \
-                   (neuron_type == 'reward' and existing_neuron == 'satisfaction'):
-                    weight = self.config.combined['new_neuron_connection_strength'] * 1.5
-                else:
-                    weight = self.config.combined['new_neuron_connection_strength']
-                
-                self.brain_window.brain_widget.weights[(new_name, existing_neuron)] = weight
-                self.brain_window.brain_widget.weights[(existing_neuron, new_name)] = weight * 0.5
-        
-        # Activate neurogenesis boost
-        self.neurogenesis_active = True
-        self.last_neurogenesis_time = time.time()
-        QtCore.QTimer.singleShot(10000, self.end_neurogenesis_boost)  # 10 second boost
-        
-        return new_name
-    
+        """Delegate to the one creation path, then run the reflex boost.
+
+        The old body wired the new neuron to EVERY existing neuron in both
+        directions under a name it invented itself and never actually gave to
+        the neuron - so the connections it made pointed at nothing.
+        """
+        brain_widget = getattr(self.brain_window, 'brain_widget', None)
+        engine = getattr(brain_widget, 'enhanced_neurogenesis', None)
+        if engine is None:
+            return None
+
+        brain_state = trigger_data if isinstance(trigger_data, dict) else None
+        name = engine.create_neuron(neuron_type, brain_state=brain_state,
+                                    environment={})
+        if name:
+            self.neurogenesis_active = True
+            self.last_neurogenesis_time = time.time()
+            QtCore.QTimer.singleShot(10000, self.end_neurogenesis_boost)
+        return name
+
     def end_neurogenesis_boost(self):
         self.neurogenesis_active = False
 
@@ -671,6 +730,15 @@ class LearningConfig:
                 self.neurogenesis['reward_threshold'] = neuro_config['triggers']['reward']['threshold']
                 self.neurogenesis['cooldown'] = neuro_config['general']['cooldown']
                 self.neurogenesis['decay_rate'] = neuro_config['triggers']['novelty']['decay_rate']
+                # showmanship and max_neurons were never carried across, so the
+                # Preferences checkbox and the config.ini ceiling both had no
+                # effect on the engine that reads config.neurogenesis.
+                self.neurogenesis['showmanship'] = neuro_config['general'].get(
+                    'showmanship', self.neurogenesis.get('showmanship', True))
+                self.neurogenesis['max_neurons'] = neuro_config['general'].get(
+                    'max_neurons', self.neurogenesis.get('max_neurons', 32))
+                self.neurogenesis['pruning_enabled'] = neuro_config['general'].get(
+                    'pruning_enabled', self.neurogenesis.get('pruning_enabled', True))
             
             print("Configuration loaded from config.ini")
         except Exception as e:

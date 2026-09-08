@@ -1,3 +1,74 @@
+### version 3.1.0.0
+`8 Sep 2026`
+
+#### Neurogenesis is now capability-driven
+
+New neurons no longer appear because an event crossed a threshold. They appear
+because the network has a **persistent functional deficiency it cannot fix with
+the structure it already has** — something it cannot represent, regulate or
+express — and ordinary learning has already had its chance at it. New module
+`capability.py` diagnoses five kinds of deficit from the live network; the
+diagnosis is visible in the new Knowledge tab as it happens.
+
+#### The squid works out what its own actions cause
+
+New module `causal_learning.py`. Every behaviour opens an episode; its
+consequence is measured over the following seconds and compared against how the
+drives drift when it is *not* doing that. The outcome is then broadcast back
+along the spike-timing eligibility traces — temporal credit assignment — so a
+consequence that lands seconds after the action still reaches the synapses that
+produced it.
+
+#### Full provenance, and a Knowledge tab to read it
+
+New module `neural_provenance.py`. Every synaptic change and every grown neuron
+records its cause, its evidence and the experience behind it, and it is all
+saved with the squid. The new **Knowledge** tab, the Learning tab and the Neuron
+Laboratory read that record — they no longer reconstruct an approximation of it.
+
+* *"Why did this weight change from 0.31 to 0.47?"*
+* *"Why does this neuron exist?"*
+* *"What does the squid know about food?"*
+
+#### One implementation of every neural mechanism
+
+* Forward propagation extracted to `propagation.py`; the game, the neurogenesis
+  engine and the headless trainer now step a network identically.
+* The **STDP plugin** no longer monkey-patches `BrainWorker` or keeps its own
+  learner — it is an inspector over the engine's. Spike timing itself is core.
+* The **Sleep Replay plugin** no longer runs a second replay engine over the
+  same brain — it is an inspector over `ConsolidationManager`.
+* `HebbianLearning` is now the squid's innate reflexes, delegating every write
+  to the one recorded path, instead of a second weight formula.
+* The **headless trainer** imports the real engine instead of reimplementing
+  it. It previously had its own propagation, its own Hebbian rule (which could
+  not produce an inhibitory synapse at all) and its own growth thresholds.
+* `NeurogenesisTriggerSystem` and the `ShowmanNeurogenesis` wrapper are gone;
+  the wrapper was constructed and immediately discarded, so `showmanship` did
+  nothing. It now works, as a naming choice made once at birth.
+
+#### Fixed
+
+* STDP contributed **nothing**: the core blended a tuple where it expected a
+  float, the exception was swallowed, and the spike-timing term was zero for
+  every pair on every cycle.
+* Eligibility traces were laid on the 20-second commit cycle while the window
+  was 2 seconds, so the three-factor rule could never fire. Traces are now laid
+  as the spikes happen, with an 8-second window.
+* A grown neuron's display name rendered as the literal `{type}: {spec}{suffix}`
+  because the localisation fallback dropped its arguments.
+* `strength_multiplier` had no ceiling; long runs produced multipliers in the
+  hundreds, so one neuron saturated the whole network.
+* Structural wiring could be silently collapsed onto its own reverse edge,
+  destroying the inhibition a regulator neuron exists for.
+* `[Neurogenesis] showmanship`, `max_neurons` and `pruning_enabled` never
+  reached the engine that reads them.
+* `learn_from_sickness()` was disabled entirely — every one of its connections
+  starts at `is_sick`, which was on the exclusion list.
+* The Laboratory's "force neurogenesis" button wrote a state key nothing read.
+
+-------------------------
+
 ### version 2.6.1.2
 `23 Feb 2026`
 
