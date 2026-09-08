@@ -306,8 +306,11 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         card_layout = QtWidgets.QVBoxLayout(card)
         card_layout.setContentsMargins(25, 25, 25, 25)
 
-        # Title
+        # Title. Wrapped, because an unwrapped QLabel reports its entire single
+        # line as a minimum width and that minimum propagates up to the Brain
+        # Tool window, which then cannot open any narrower than this heading.
         title_label = QtWidgets.QLabel(f"<h2 style='color: #2c3e50; margin: 0 0 20px 0;'>{title}</h2>")
+        title_label.setWordWrap(True)
         card_layout.addWidget(title_label)
 
         # Content

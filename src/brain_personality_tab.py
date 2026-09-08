@@ -100,6 +100,9 @@ class PersonalityTab(BrainBaseTab):
         note_font.setPointSize(self.base_font_size)
         note_font.setItalic(True)
         note_label.setFont(note_font)
+        # Wrapped so this one-line note cannot dictate the Brain Tool window's
+        # minimum width (see _create_educational_card in brain_learning_tab).
+        note_label.setWordWrap(True)
         self.tab_layout.addWidget(note_label)
         
         # Set fixed heights for text boxes to make them more compact

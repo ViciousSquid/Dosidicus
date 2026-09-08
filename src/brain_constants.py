@@ -289,3 +289,51 @@ INNATE_CONNECTIONS = (
     ("can_see_food", "hunger",        0.20),
     ("can_see_food", "happiness",     0.50),
 )
+
+
+# ---------------------------------------------------------------------------
+# Where a neuron is allowed to sit
+# ---------------------------------------------------------------------------
+# Every neuron the brain grows has to stay inside the area the Brain Tool shows
+# without being resized, so the whole network is visible at the size the window
+# opens at. That area is defined RELATIVE TO THE DEFAULT LAYOUT rather than to
+# the logical canvas: a neuron may sit at most LAYOUT_MARGIN pixels outside the
+# box the eight default neurons occupy.
+#
+# Placement used to run against the full 1024x768 logical canvas with a
+# centering force pulling everything toward (512, 384), which put grown neurons
+# in a clump in the middle of a canvas far taller than the default layout - so
+# the interesting part of the network was both bunched up and partly below the
+# visible area.
+LAYOUT_MARGIN = 50
+
+# Never let a neuron sit so close to the canvas edge that its circle and label
+# are clipped, even if the margin above would allow it.
+LAYOUT_EDGE_GUARD = 25
+
+
+def layout_bounds(default_positions=None, margin=LAYOUT_MARGIN):
+    """Return (min_x, min_y, max_x, max_y) that any neuron must stay inside.
+
+    This is the bounding box of `default_positions` (the eight neurons a squid
+    is born with, by default) grown by `margin` on every side, then held off
+    the canvas edge by LAYOUT_EDGE_GUARD.
+    """
+    positions = default_positions or REQUIRED_NEURONS
+    xs = [p[0] for p in positions.values()]
+    ys = [p[1] for p in positions.values()]
+    if not xs or not ys:
+        xs, ys = [50, 840], [81, 389]
+    return (
+        max(LAYOUT_EDGE_GUARD, min(xs) - margin),
+        max(LAYOUT_EDGE_GUARD, min(ys) - margin),
+        max(xs) + margin,
+        max(ys) + margin,
+    )
+
+
+def clamp_to_layout(x, y, default_positions=None, margin=LAYOUT_MARGIN):
+    """Clamp a point into the region layout_bounds() describes."""
+    min_x, min_y, max_x, max_y = layout_bounds(default_positions, margin)
+    return (max(min_x, min(max_x, float(x))),
+            max(min_y, min(max_y, float(y))))

@@ -1277,10 +1277,10 @@ class Ui:
             squid.squid_item.setPos(squid.squid_x, squid.squid_y)
             if hasattr(squid, 'update_view_cone'):
                 squid.update_view_cone()
-            if hasattr(squid, 'startled_icon') and squid.startled_icon is not None:
-                squid.update_startled_icon_position()
-            if hasattr(squid, 'sick_icon_item') and squid.sick_icon_item is not None:
-                squid.update_sick_icon_position()
+            # One call for every head-mounted icon - the neurogenesis icon used
+            # to be left behind here, as it was in move_squid.
+            if hasattr(squid, 'update_head_icon_positions'):
+                squid.update_head_icon_positions()
 
     def show_message(self, message):
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:

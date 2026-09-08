@@ -85,6 +85,17 @@ class KnowledgeTab(BrainBaseTab):
         self.tabs.addTab(self._build_capability_page(), "What it can't do yet")
 
         self.summary_label = QtWidgets.QLabel("")
+        # The summary text grows with the brain ("N recorded synaptic changes
+        # across M synapses . ..."), and an unwrapped QLabel reports that whole
+        # string as its minimum width. That minimum propagates all the way up
+        # to the Brain Tool window, which Qt then refuses to open any narrower
+        # - so the window silently ignored its own configured width and opened
+        # ~1150px wide. Wrapping the label, and pinning an explicit minimum,
+        # keeps this line from dictating the size of the window that shows it.
+        self.summary_label.setWordWrap(True)
+        self.summary_label.setMinimumWidth(DisplayScaling.scale(120))
+        self.summary_label.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
+                                         QtWidgets.QSizePolicy.Preferred)
         self.summary_label.setStyleSheet(
             f"color:#546e7a; font-size:{DisplayScaling.font_size(10)}pt; padding:4px;")
         self.layout.addWidget(self.summary_label)

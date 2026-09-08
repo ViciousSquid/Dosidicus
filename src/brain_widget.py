@@ -2859,15 +2859,18 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
     def apply_repulsion_force(self, iterations=15, strength=0.6, threshold=120.0):
         """Applies repulsion force and enforces boundary constraints from config."""
         
+        from .brain_constants import layout_bounds
+
         neuron_props = self.config.neurogenesis.get('neuron_properties', {})
         force_bounds = neuron_props.get('force_bounds', True)
         centering_force = neuron_props.get('centering_force', 0.02)
-        padding = neuron_props.get('canvas_padding', 60)
-        
-        # Logical canvas center
-        center_x, center_y = 512, 384
-        min_x, max_x = padding, 1024 - padding
-        min_y, max_y = padding, 768 - padding
+
+        # Bounds and centre both come from the DEFAULT neuron layout rather than
+        # from the 1024x768 logical canvas. Pulling toward the canvas centre
+        # while allowing the full canvas let the network drift into a clump
+        # well below the area the Brain Tool shows at its opening size.
+        min_x, min_y, max_x, max_y = layout_bounds(self.original_neuron_positions)
+        center_x, center_y = (min_x + max_x) / 2.0, (min_y + max_y) / 2.0
 
         neuron_list = [name for name in self.neuron_positions.keys() if name not in self.excluded_neurons]
 
@@ -4529,17 +4532,18 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
     def _randomize_all_positions(self):
         """Randomize positions of all neurons within safe bounds."""
         import random
-        padding = self.config.neurogenesis.get('neuron_properties', {}).get('canvas_padding', 60)
-        
-        # Canvas dimensions (assumed roughly 1024x768 logical)
-        min_x, max_x = padding, 1024 - padding
-        min_y, max_y = padding, 768 - padding
-        
+        from .brain_constants import layout_bounds
+
+        # Scattered across the DEFAULT layout's box (plus its margin), not the
+        # whole logical canvas - a randomised start that puts neurons where the
+        # Brain Tool cannot show them is not a start the player can read.
+        min_x, min_y, max_x, max_y = layout_bounds(self.original_neuron_positions)
+
         for name in self.neuron_positions:
-            rx = random.randint(min_x, max_x)
-            ry = random.randint(min_y, max_y)
+            rx = random.randint(int(min_x), int(max_x))
+            ry = random.randint(int(min_y), int(max_y))
             self.neuron_positions[name] = (rx, ry)
-        
+
         print("🎲 Randomized neuron positions")
         
     def start_tutorial_glow(self, duration_ms=5000):

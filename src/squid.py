@@ -733,6 +733,19 @@ class Squid:
                 self.squid_y + self.startled_icon_offset.y()
             )
 
+    def update_head_icon_positions(self):
+        """Re-pin every head-mounted icon to the squid's head.
+
+        The sick, startled and neurogenesis icons are all separate scene items
+        drawn at an offset from the squid rather than children of it, so each
+        one has to be moved every time the squid moves. Only the sick icon was
+        being moved, so the other two stayed floating wherever the squid
+        happened to be standing when they appeared and never caught up.
+        """
+        self.update_sick_icon_position()
+        self.update_startled_icon_position()
+        self.update_neurogenesis_icon_position()
+
     def load_poop_images(self):
         self.poop_images = [
             QtGui.QPixmap(os.path.join("images", "poop1.png")),
@@ -774,10 +787,7 @@ class Squid:
         self.squid_y = max(50, min(self.squid_y, self.ui.window_height - 120 - self.squid_height))
         self.squid_item.setPos(self.squid_x, self.squid_y)
         self.update_view_cone()
-        if self.startled_icon is not None:
-            self.update_startled_icon_position()
-        if self.ng_icon is not None:
-            self.update_neurogenesis_icon_position()
+        self.update_head_icon_positions()
 
     def update_needs(self):
         # This method was moved to TamagotchiLogic 26/07/2024
@@ -1770,7 +1780,7 @@ class Squid:
         # Set new position and update related elements
         self.squid_item.setPos(self.squid_x, self.squid_y)
         self.update_view_cone()
-        self.update_sick_icon_position()
+        self.update_head_icon_positions()
 
         # Comprehensive boundary exit check in multiplayer mode
         if multiplayer_enabled:
