@@ -256,3 +256,36 @@ def get_all_standard_neurons() -> dict:
 def get_missing_required(existing_neurons: set) -> list:
     """Get list of required neurons not in the given set."""
     return [name for name in REQUIRED_NEURONS if name not in existing_neurons]
+
+# ---------------------------------------------------------------------------
+# The brain a squid is born with
+# ---------------------------------------------------------------------------
+# Every Dosidicus squid hatches with the same small set of reflexes, and this
+# is the only place they are written down. The game used to build a newborn
+# brain out of 40% random connections at random weights in [-1, +1], while the
+# headless trainer built one from a fixed innate table - so "the same squid,
+# raised differently" was never a comparison anyone could actually make, two
+# squids of the same species were born with different instincts, and none of
+# those synapses could say where it came from because they were assigned
+# straight into the weights dict.
+#
+# Read as (source, target, weight) and written through the recorded write path
+# with mechanism 'innate', so a newborn brain can explain itself as readily as
+# an old one. Every neuron a squid is born with appears at least once, so a
+# newborn is never diagnosed with a connectivity deficit it was created with.
+INNATE_CONNECTIONS = (
+    ("hunger",       "satisfaction", -0.30),
+    ("happiness",    "satisfaction",  0.40),
+    ("anxiety",      "satisfaction", -0.35),
+    ("cleanliness",  "happiness",     0.20),
+    ("sleepiness",   "happiness",    -0.15),
+    ("curiosity",    "happiness",     0.25),
+    # Seeing food sharpens the appetite, and is something to look forward to.
+    # These two were previously written three separate times in BrainWidget -
+    # once before initialize_weights() and once after it, so the later pair
+    # silently overwrote whatever the first had decided - and the happiness one
+    # was behind a coin flip, which meant half of all squid were born without
+    # it.
+    ("can_see_food", "hunger",        0.20),
+    ("can_see_food", "happiness",     0.50),
+)

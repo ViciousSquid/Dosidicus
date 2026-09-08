@@ -78,6 +78,23 @@ def tearDownModule():
             BRAIN.stop_worker()
     except Exception:
         pass
+    # A BrainWidget owns a render thread. Leaving it running means Qt aborts
+    # the process when the widget is finally collected, which happens after
+    # unittest has already printed OK - so a green run still exited 134 and any
+    # CI watching the exit code called it a failure.
+    try:
+        if BRAIN is not None:
+            BRAIN._cleanup_render_worker()
+    except Exception:
+        pass
+    for timer_name in ('neurogenesis_timer', 'animation_timer', '_render_timer',
+                       '_brain_export_timer', '_link_fade_timer'):
+        timer = getattr(BRAIN, timer_name, None) if BRAIN is not None else None
+        if timer is not None:
+            try:
+                timer.stop()
+            except Exception:
+                pass
     if _PREV_CWD:
         os.chdir(_PREV_CWD)
     if _TMPDIR is not None:

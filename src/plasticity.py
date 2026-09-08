@@ -122,6 +122,12 @@ class PlasticityEngine:
     def __init__(self, config: Optional[PlasticityConfig] = None, stdp_learner=None):
         self.config = config or PlasticityConfig()
 
+        # One clock for the whole engine, shared with the spike tracker below.
+        # The game runs on the wall clock; the headless trainer and the test
+        # harness substitute simulated seconds so that spike timing means the
+        # same thing when a life is lived faster than real time.
+        self._clock = time.time
+
         # Running statistics for a TRUE covariance over the window:
         #   cov(x,y) = E[xy] - E[x]E[y]
         # Centring on a fixed midpoint instead would make a mostly-OFF event
@@ -142,6 +148,8 @@ class PlasticityEngine:
                 self.stdp = STDPLearner()
             except Exception:
                 self.stdp = None
+        if self.stdp is not None:
+            self.stdp.clock = self._clock
 
         # Rotation bookkeeping, so every pair gets its turn.
         self._last_committed: List[Pair] = []
@@ -160,13 +168,30 @@ class PlasticityEngine:
             return float(raw)
         return None
 
+    @property
+    def clock(self):
+        return self._clock
+
+    @clock.setter
+    def clock(self, fn):
+        """Set the clock for the engine AND the spike tracker it drives."""
+        self._clock = fn
+        if self.stdp is not None:
+            self.stdp.clock = fn
+
     def observe(self, state: Dict[str, float], candidates: Optional[Sequence[str]] = None,
                 timestamp: Optional[float] = None) -> int:
         """Accumulate one tick of evidence. Cheap: O(pairs).
 
         Call every simulation tick. This is what lets a 1-second event survive
         until the next commit.
+
+        The tick is stamped with this engine's clock, which the spike tracker
+        shares, so "how long ago did that neuron fire" is answered in the same
+        units the simulation is running in.
         """
+        if timestamp is None:
+            timestamp = self.clock()
         if candidates is None:
             candidates = [n for n in state.keys()]
 
@@ -228,7 +253,8 @@ class PlasticityEngine:
         return max(1, min(cfg.max_pairs_per_cycle, want, candidate_pairs))
 
     @staticmethod
-    def orient(pair: Pair, weights: Dict[Pair, float]) -> Optional[Pair]:
+    def orient(pair: Pair, weights: Dict[Pair, float],
+               externally_driven: Iterable[str] = ()) -> Optional[Pair]:
         """Choose the direction for this synapse.
 
         An existing edge keeps its direction. A new edge points at whichever
@@ -236,21 +262,29 @@ class PlasticityEngine:
         propagation, or a core stat via modulation. If neither end qualifies
         (two sensors) the pair is skipped rather than silently creating a
         weight that nothing can ever read.
+
+        `externally_driven` names neurons the world writes each tick - a grown
+        action representation, say. A synapse pointing into one of those is
+        exactly as inert as a synapse pointing into a sensor, because the
+        external writer overwrites it before anything can read it, so it is
+        refused for the same reason.
         """
         n1, n2 = pair
         if (n1, n2) in weights:
             return (n1, n2)
         if (n2, n1) in weights:
             return (n2, n1)
-        if is_learning_target(n2):
+        external = set(externally_driven or ())
+        if is_learning_target(n2) and n2 not in external:
             return (n1, n2)
-        if is_learning_target(n1):
+        if is_learning_target(n1) and n1 not in external:
             return (n2, n1)
         return None
 
     def commit(self, weights: Dict[Pair, float], neuron_names: Iterable[str],
                excluded: Iterable[str] = (), connectors: Iterable[str] = (),
-               new_neurons: Iterable[str] = ()) -> Dict:
+               new_neurons: Iterable[str] = (),
+               externally_driven: Iterable[str] = ()) -> Dict:
         """Turn accumulated evidence into weight changes.
 
         Returns a payload shaped like the one BrainWidget._on_hebbian_complete
@@ -284,7 +318,7 @@ class PlasticityEngine:
         updated_pairs: List[Pair] = []
 
         for _, pair, mean_cov in chosen:
-            edge = self.orient(pair, weights)
+            edge = self.orient(pair, weights, externally_driven)
             if edge is None:
                 continue
 

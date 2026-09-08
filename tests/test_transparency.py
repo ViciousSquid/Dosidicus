@@ -287,25 +287,28 @@ class CausalLearningTests(unittest.TestCase):
         self.assertTrue(item.consequence)
         self.assertIn("background drift", item.reason)
 
+    def _idle_window(self, before, after, t0):
+        """One outcome window in which the squid does nothing at all."""
+        self.brain.state.update(before)
+        self.causal.on_tick(self.brain.state, now=t0)
+        self.brain.state.update(after)
+        self.causal.on_tick(self.brain.state, now=t0 + 1.5)
+
     def test_contingency_is_measured_against_the_background_drift(self):
         """Something that happens anyway is not caused by the action."""
-        entry_seen = []
         # Every window, hunger rises 5 whether or not the squid explores.
         t = 1000.0
-        for i in range(8):
-            self.brain.state['hunger'] = 50.0
-            self.causal._advance_baseline(self.causal._numeric(self.brain.state), t)
-            self.brain.state['hunger'] = 55.0
-            self.causal._advance_baseline(self.causal._numeric(self.brain.state), t + 1.5)
+        for _ in range(8):
+            self._idle_window({'hunger': 50.0}, {'hunger': 55.0}, t)
             t += 3.0
-        for i in range(6):
+        for _ in range(6):
             self._episode('exploring', {'hunger': 50.0}, {'hunger': 55.0}, t)
             t += 10.0
 
         table = self.causal.contingencies.get('exploring', {})
         self.assertIn('hunger', table)
         entry = table['hunger']
-        baseline = self.causal.baseline_drift('hunger')
+        baseline = self.causal.baseline_drift('hunger', 'exploring')
         self.assertGreater(baseline, 0.0, "baseline drift was never measured")
         self.assertLess(abs(entry.effect(baseline)), abs(entry.mean_delta),
                         "the background drift was not subtracted")

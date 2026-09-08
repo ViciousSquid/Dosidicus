@@ -27,7 +27,7 @@ because a particular event occurred.
 
 ---
 
-## The five deficits
+## The six deficits
 
 `CapabilityMonitor` observes the live network every tick and re-diagnoses it on
 the neurogenesis timer. Every measurement comes from the network's own state —
@@ -39,10 +39,55 @@ none of them is an event counter.
 | **regulation** | A drive outside its comfort band for a sustained fraction of the last 240 ticks **and not coming back** — the second half of the window is no better than the first. | A regulator: driven *by* the drive (and whatever predicts it), pushing back *on* it. |
 | **expression** | A cue → action → outcome contingency `ActionOutcomeLedger` is confident about, with no synaptic path from the cue to the outcome of the right sign. The brain knows something it has no structure to act on. | A relay: cue → new neuron → outcome, signed by the measured effect. |
 | **differentiation** | One neuron driven by two sources whose long-run correlation is strongly negative. It is being asked to stand for two incompatible situations at once, so it represents neither. | A second neuron that takes one of the two drivers over, and inherits its synapse onto the shared target. |
+| **causal differentiation** | Two of the squid's own actions have shared the credit for the same outcome and have *never once been observed apart*, and no neuron in the brain fires any differently for one than for the other (Cohen's *d* between the two actions' activation distributions). The split is the correct conclusion from the evidence, but the network has nowhere to put a different one. | A neuron that stands for **one** of the actions and nothing else, driven by the action rather than by the synapses, with a single outgoing synapse onto the disputed outcome **at weight zero**. |
 | **connectivity** | A neuron with no working connections. Nothing it computes can reach the rest of the brain. | A connector that bridges it back into the network. |
 
 Comfort bands live in `capability.COMFORT_BANDS` and cover exactly the seven
 core drives.
+
+### Perfectly confounded actions
+
+The most interesting of the six is causal differentiation, because it is the
+one case where the squid is *right* and still stuck.
+
+If wiggling and fluttering always happen together and satisfaction always
+follows, Rescorla-Wagner settlement gives each of them half the credit. That is
+the honest answer — nothing in the squid's experience separates them, and
+inventing a winner would be worse than admitting the tie — but two permanent
+half-strength claims are not knowledge, and no amount of repeating the same
+experience will improve them.
+
+`ActionOutcomeLedger` records, for every ordered pair of actions, how often the
+two ran together and how often the first ran *without* the second.
+`unresolved_attributions()` reports an outcome whose credit is split between
+actions whose "apart" count is zero. `CapabilityMonitor` then asks the
+structural half of the question — is there any neuron in this brain whose
+activation tells one of those actions from the other? — and only reports a
+deficit when the answer is no.
+
+Both halves are required, and the second one is the point. A split the network
+*could* represent is not a deficit; it is a squid waiting for evidence, and
+evidence is not something structure can manufacture. A split it could never
+represent is a dead end.
+
+What is grown is deliberately modest. It represents **one** of the candidates
+(chosen by name order, because it does not matter — representing either one is
+enough to hold a two-way distinction). It is driven by the action itself rather
+than by synapses, so it is added to `BrainWidget.externally_driven` and
+propagation leaves it alone, exactly as it leaves a sensor alone. And its one
+outgoing synapse, onto the disputed outcome, is created **at zero**.
+
+That zero is the whole design. The new structure does not encode the A-and-B
+association the squid is already stuck on, and it does not assert that this
+candidate is the cause. It is somewhere for evidence to go. While the two
+actions remain confounded it stays near zero, because the correlation that
+would move it is shared equally by both. The first time one of them happens
+without the other, ordinary plasticity and ordinary Rescorla-Wagner settlement
+do the rest, and the pathway from the real cause is the one that strengthens.
+
+Neurogenesis cannot discover what the environment never showed the squid. It
+can only make sure that when the environment finally does show it, the brain
+has somewhere to put the answer.
 
 The regulation test deliberately has **no threshold on how big the corrective
 push is**. Any such number is arbitrary, and the one that used to be there

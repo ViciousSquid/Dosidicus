@@ -46,9 +46,10 @@ from src.brain_constants import (  # noqa: E402
     CORE_STAT_NEURONS as CORE_NEURONS,
     PURE_INPUT_NEURONS as PURE_INPUTS,
     INPUT_SENSORS as _INPUT_SENSOR_POSITIONS,
+    INNATE_CONNECTIONS,
     is_network_driven,
 )
-from src.propagation import propagate  # noqa: E402
+from src.propagation import ExternallyDriven, propagate  # noqa: E402
 from src.plasticity import PlasticityEngine, PlasticityConfig  # noqa: E402
 from src.capability import CapabilityMonitor  # noqa: E402
 from src.causal_learning import ActionOutcomeLedger  # noqa: E402
@@ -340,7 +341,7 @@ class HeadlessSquid:
 # HEADLESS BRAIN
 # ============================================================================
 
-class HeadlessBrain(RecordedSynapses):
+class HeadlessBrain(RecordedSynapses, ExternallyDriven):
     """
     Neural network brain without GUI dependencies.
     Handles state updates, Hebbian learning, and neurogenesis.
@@ -379,6 +380,10 @@ class HeadlessBrain(RecordedSynapses):
         self.weight_animations: List[Dict] = []
         self.excluded_neurons: List[str] = ['is_sick', 'is_eating', 'pursuing_food',
                                             'direction', 'is_sleeping']
+        # Neurons written from outside the forward pass - see
+        # src/propagation.ExternallyDriven.
+        self.action_representations: Dict[str, str] = {}
+        self.externally_driven: Set[str] = set()
         self.last_neurogenesis_tick = 0
         # One tick is one second of the squid's life. The trainer runs
         # thousands of them per real second, so every pacing rule expressed in
@@ -409,9 +414,16 @@ class HeadlessBrain(RecordedSynapses):
         self.consolidation = ConsolidationManager(self)
         self.enhanced_neurogenesis = EnhancedNeurogenesis(self, learning_config)
         self.enhanced_neurogenesis.clock = lambda: self.sim_seconds
-        # Persistence is counted in evaluations (one per tick here), so only
-        # the wall-clock age gate needs standing down in simulated time.
-        self.capability.config.min_age = 0.0
+        # The monitor reads the same simulated clock, so "a deficit must
+        # persist for 20 seconds" means 20 simulated seconds rather than being
+        # switched off - which is what the trainer used to have to do.
+        self.capability.clock = lambda: self.sim_seconds
+        self.causal_learning.clock = lambda: self.sim_seconds
+        # Spike timing is the one mechanism that is ABOUT time. On the wall
+        # clock a trainer stepping 1 500 ticks a second presents every spike as
+        # arriving under a millisecond after the last, and STDP computes
+        # exactly zero for every synapse.
+        self.plasticity.clock = lambda: self.sim_seconds
         self.experience_buffer = self.enhanced_neurogenesis.experience_buffer
 
         # Initialize default state
@@ -492,18 +504,12 @@ class HeadlessBrain(RecordedSynapses):
             else:
                 self.state[name] = 50.0
                 
-        # Default connections
-        default_connections = [
-            ("hunger", "satisfaction", -0.3),
-            ("happiness", "satisfaction", 0.4),
-            ("anxiety", "satisfaction", -0.35),
-            ("cleanliness", "happiness", 0.2),
-            ("sleepiness", "happiness", -0.15),
-            ("curiosity", "happiness", 0.25),
-        ]
-        
-        for src, dst, weight in default_connections:
-            self.weights[(src, dst)] = weight
+        # The instincts of the species, from the one table that holds them.
+        for src, dst, weight in INNATE_CONNECTIONS:
+            if src in self.positions and dst in self.positions:
+                self.apply_weight_change(
+                    (src, dst), value=float(weight), mechanism='innate',
+                    detail={'note': "this squid was born with it"}, create=True)
             
     def load_brain(self, brain_data: Dict) -> bool:
         """Load a brain from dictionary (JSON structure)"""
@@ -579,6 +585,12 @@ class HeadlessBrain(RecordedSynapses):
             
             # Load output bindings
             self.output_bindings = brain_data.get('output_bindings', [])
+
+            self.action_representations = {}
+            self.externally_driven = set()
+            for action, neuron in (brain_data.get('action_representations') or {}).items():
+                if neuron in self.positions:
+                    self.represent_action(str(action), str(neuron))
             
             # Load neurogenesis data if present
             if 'neurogenesis_data' in brain_data:
@@ -635,6 +647,10 @@ class HeadlessBrain(RecordedSynapses):
             'connections': connections, # _parse() Format 2: list of dicts
             # ────────────────────────────────────────────────────────────────
             'neuron_shapes': dict(self.neuron_shapes),
+            # Which neurons stand for which of the squid's own actions. A brain
+            # that grew one of these to resolve a confounded cause needs it, or
+            # the neuron arrives with nothing driving it.
+            'action_representations': dict(self.action_representations),
             'output_bindings': self.output_bindings,
             'state': {k: v for k, v in self.state.items()},
             'neurogenesis_data': {
@@ -657,6 +673,17 @@ class HeadlessBrain(RecordedSynapses):
             print(f"✗ Error saving brain: {e}")
             return False
             
+    def advance_clock(self, seconds: float = 1.0) -> float:
+        """One tick is one second of the squid's life.
+
+        Everything paced in seconds - growth cooldowns, how long a deficit must
+        persist - reads this rather than the wall clock, so a run of 100 000
+        ticks is a hundred thousand seconds of living even though it finishes
+        in under a minute.
+        """
+        self.sim_seconds += float(seconds)
+        return self.sim_seconds
+
     def update_state(self, squid_state: Dict[str, Any]):
         """Update brain state from squid state"""
         for key, value in squid_state.items():
@@ -668,12 +695,15 @@ class HeadlessBrain(RecordedSynapses):
                     
     def propagate(self):
         """One timestep, through the project's single transfer function."""
-        # Learning evidence first, exactly as BrainWidget does it, so a brief
-        # event contributes to the next commit instead of being invisible.
+        # Neurons the world writes go first, then learning evidence, exactly
+        # as BrainWidget does it, so a brief event contributes to the next
+        # commit instead of being invisible.
+        self.drive_external_neurons()
         self.observe_for_learning()
 
         targets = [n for n in self.positions
-                   if is_network_driven(n) and n not in self.excluded_neurons]
+                   if is_network_driven(n) and n not in self.excluded_neurons
+                   and n not in self.externally_driven]
         if not targets:
             return {}
 
@@ -710,7 +740,8 @@ class HeadlessBrain(RecordedSynapses):
             neuron_names=list(self.positions.keys()),
             excluded=self.excluded_neurons,
             connectors=self._connector_neuron_names(),
-            new_neurons=self.new_neurons)
+            new_neurons=self.new_neurons,
+            externally_driven=self.externally_driven)
 
         updated = []
         for edge, update in (result.get('weight_updates') or {}).items():
@@ -751,9 +782,6 @@ class HeadlessBrain(RecordedSynapses):
         if not self.config.neurogenesis_enabled:
             return None
 
-        # Simulated time advances one second per tick, so the engine's
-        # cooldowns are honoured in the units the trainer's config states.
-        self.sim_seconds = float(tick)
         if tick - self.last_neurogenesis_tick < self.config.neurogenesis_cooldown:
             return None
 
@@ -773,10 +801,15 @@ class HeadlessBrain(RecordedSynapses):
             brain_state=self.state,
             recent_actions=[squid_state.get('status', 'roaming')],
             environment={'headless': True})
-        if not engine.should_create_neuron(context):
+        # Pass the diagnosis through rather than letting the engine re-run it,
+        # exactly as BrainWidget.check_neurogenesis_triggers does. A second
+        # reading of a state that has moved on could disagree with the first,
+        # and then the birth record would name a different deficit from the one
+        # that actually justified the growth.
+        if not engine.should_create_neuron(context, deficit=deficit):
             return None
 
-        name = engine.create_functional_neuron(context)
+        name = engine.create_functional_neuron(context, deficit=deficit)
         if name:
             self.last_neurogenesis_tick = tick
             self.custom_neurons.add(name)
@@ -970,9 +1003,17 @@ class HeadlessSimulation:
         # 2. Environment events
         self._update_environment()
         
-        # 3. Update brain with squid state
+        # 3. Update brain with squid state. One tick is one second of the
+        #    squid's life, and every pacing rule reads that clock.
+        self.brain.advance_clock(1.0)
         squid_state = self.squid.get_state_dict()
         self.brain.update_state(squid_state)
+
+        # Open a causal episode for whatever the squid has committed to doing,
+        # exactly as TamagotchiLogic does in the game. Without this the trainer
+        # ran the causal machinery with no actions in it, so a brain trained
+        # headlessly could never learn what its own behaviour does.
+        self.brain.causal_learning.on_action(str(squid_state.get('status', '')))
         
         # 4. Propagate brain activations
         self.brain.propagate()

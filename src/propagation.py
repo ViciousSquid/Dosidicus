@@ -100,3 +100,110 @@ def propagate(state: Dict[str, object],
         state[name] = new_val
 
     return changed
+
+
+# ---------------------------------------------------------------------------
+# Neurons the world writes, rather than the synapses
+# ---------------------------------------------------------------------------
+# A sensor is written by the environment. An action-representation neuron -
+# grown when the brain turns out to have no way of telling one of its own
+# actions from another - is written by what the squid is currently doing.
+# Neither is computed by the forward pass, and `propagate` must not be given
+# them as targets: two writers on one neuron is exactly the class of bug this
+# module exists to remove.
+#
+# Kept here, next to the transfer function, because "who writes what, each
+# tick" is one question and it should have one answer.
+
+ACTION_ACTIVE = 100.0
+ACTION_RESTING = BASELINE
+
+
+class ExternallyDriven:
+    """Mixed into any brain that can grow action representations.
+
+    Both the game's BrainWidget and the headless trainer inherit this, so an
+    action the squid can represent in one is representable in the other.
+    """
+
+    #: action name -> the neuron that stands for it
+    action_representations: Dict[str, str]
+    #: every neuron written from outside the forward pass
+    externally_driven: set
+
+    def _external_maps(self):
+        if not hasattr(self, 'action_representations') or \
+                self.action_representations is None:
+            self.action_representations = {}
+        if not hasattr(self, 'externally_driven') or \
+                self.externally_driven is None:
+            self.externally_driven = set()
+        return self.action_representations, self.externally_driven
+
+    def represent_action(self, action: str, neuron: str) -> None:
+        """Bind a neuron to one of the squid's own actions.
+
+        The neuron now says "I am doing this" and nothing else. It asserts
+        nothing about what the action causes - that is for plasticity to
+        discover from what follows.
+        """
+        actions, external = self._external_maps()
+        existing = actions.get(str(action))
+        if existing and existing != str(neuron) and \
+                existing in (getattr(self, 'neuron_positions', None) or {}):
+            # This action already has a living representation. Rebinding it
+            # would leave the old neuron in the network with nothing driving
+            # it - an orphan the brain would then have to rescue.
+            return
+        actions[str(action)] = str(neuron)
+        external.add(str(neuron))
+
+    def forget_action_representation(self, neuron: str) -> None:
+        """Drop a binding, e.g. when the neuron is pruned."""
+        actions, external = self._external_maps()
+        for action, name in list(actions.items()):
+            if name == neuron:
+                del actions[action]
+        external.discard(neuron)
+
+    def action_for_neuron(self, neuron: str) -> str:
+        actions, _ = self._external_maps()
+        for action, name in actions.items():
+            if name == neuron:
+                return action
+        return ""
+
+    def drive_external_neurons(self, smoothing: float = DEFAULT_SMOOTHING
+                               ) -> Dict[str, float]:
+        """Write the action neurons from what the squid is actually doing.
+
+        Called once per tick, immediately before propagation, so the rest of
+        the network sees the action the same way it sees a sensor: as a fact
+        about the world it can learn from. Rising and falling through the same
+        smoothing as everything else means the representation leaves a short
+        trace after the action ends, which is what gives spike timing and the
+        eligibility traces something to work with.
+        """
+        actions, _external = self._external_maps()
+        if not actions:
+            return {}
+        causal = getattr(self, 'causal_learning', None)
+        current = getattr(causal, 'current_action', "") if causal is not None else ""
+        state = getattr(self, 'state', None)
+        if state is None:
+            return {}
+
+        changed: Dict[str, float] = {}
+        for action, neuron in actions.items():
+            if neuron not in state:
+                continue
+            target = ACTION_ACTIVE if action == current else ACTION_RESTING
+            old = activation_of(state.get(neuron, BASELINE))
+            if old is None:
+                old = BASELINE
+            new = old + (target - old) * smoothing
+            new = max(0.0, min(100.0, new))
+            if abs(new - old) > 1e-9:
+                changed[neuron] = new
+            state[neuron] = new
+        return changed

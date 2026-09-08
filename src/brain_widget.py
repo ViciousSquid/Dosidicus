@@ -18,6 +18,7 @@ from datetime import datetime
 
 from .brain_render_worker import BrainRenderWorker, create_render_state_from_widget, RenderState
 from .neural_provenance import RecordedSynapses
+from .propagation import ExternallyDriven
 from .brain_worker import BrainWorker
 from .compute_backend import get_backend
 from .neurogenesis import EnhancedNeurogenesis, ExperienceBuffer
@@ -67,7 +68,7 @@ try:
 except ImportError:
     _PERF_TRACKING_AVAILABLE = False
 
-class BrainWidget(RecordedSynapses, QtWidgets.QWidget):
+class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
     
     neuronClicked = QtCore.pyqtSignal(str)
     animationStyleChanged = QtCore.pyqtSignal(str)  # Emitted when style changes
@@ -127,6 +128,14 @@ class BrainWidget(RecordedSynapses, QtWidgets.QWidget):
         self._link_start_times = {}        # (src,dst) → when this link should start
 
         self.excluded_neurons = ['is_sick', 'is_eating', 'pursuing_food', 'direction', 'is_sleeping']
+
+        # Neurons written from outside the forward pass. Sensors are already
+        # kept out of it by is_network_driven(); this is the set the brain adds
+        # to at runtime, currently the action representations neurogenesis
+        # grows when the squid turns out to be unable to tell two of its own
+        # actions apart.
+        self.action_representations = {}
+        self.externally_driven = set()
         
         # Build animation palette from selected style
         self._build_animation_palette()
@@ -242,12 +251,8 @@ class BrainWidget(RecordedSynapses, QtWidgets.QWidget):
         if neuron_props.get('randomize_start_positions', False):
             self._randomize_all_positions()
 
-        # Ensure connection to hunger exists (always)
-        self.weights[("can_see_food", "hunger")] = 0.2  # Seeing food increases hunger slightly
-
-        # Random chance (50%) for happiness connection
-        if random.random() < 0.5:
-            self.weights[("can_see_food", "happiness")] = 0.5  # Seeing food can increase happiness
+        # The instincts a squid is born with are hatched in one place:
+        # initialize_weights(), from brain_constants.INNATE_CONNECTIONS.
 
         # Track which neurons are visible (for animated reveal on new game)
         self.visible_neurons = set()
@@ -351,9 +356,6 @@ class BrainWidget(RecordedSynapses, QtWidgets.QWidget):
         self.setMouseTracking(True)
         self.show_weights = False
 
-        # Ensure connections to hunger and happiness exist with initial weights
-        self.weights[("can_see_food", "hunger")] = 0.2  # Seeing food increases hunger slightly
-        self.weights[("can_see_food", "happiness")] = 0.5
         _link_fade_speed = 3.0   # opacity units per second (tweak for faster/slower)
 
          # ===== OFFSCREEN RENDERING SETUP =====
@@ -2164,6 +2166,7 @@ class BrainWidget(RecordedSynapses, QtWidgets.QWidget):
             excluded=self.excluded_neurons,
             connectors=connectors,
             new_neurons=new_neurons,
+            externally_driven=self.externally_driven,
         )
         self._on_hebbian_complete(result)
         return result
@@ -2411,17 +2414,30 @@ class BrainWidget(RecordedSynapses, QtWidgets.QWidget):
         pass  # connections is now derived from weights; nothing to sync.
 
     def initialize_weights(self):
-        """Initialize weights with sparse random connections (40% density)."""
-        neurons = list(self.neuron_positions.keys())
-        # Create sparse random connections (40% density)
-        connection_probability = 0.4
-        
-        for i in range(len(neurons)):
-            for j in range(i+1, len(neurons)):
-                if random.random() < connection_probability:
-                    self.weights[(neurons[i], neurons[j])] = random.uniform(-1, 1)
-        
-        # Sync connections list from weights
+        """Give a newborn squid the instincts of its species.
+
+        The innate table lives in brain_constants.INNATE_CONNECTIONS and the
+        headless trainer hatches from the same one, so a brain trained without
+        the GUI starts from the same place the squid does.
+
+        This used to be 40% random connections at random weights in [-1, +1],
+        assigned straight into the weights dict. Three things were wrong with
+        that: two squids of the same species were born with different
+        instincts, so "the same squid, raised differently" was not a comparison
+        anyone could make; the trainer disagreed with the game about what a
+        newborn is; and none of those synapses could ever say where it came
+        from, because they never went through the recorded write path. Some
+        rolls of the dice also left a drive with no connections at all, and the
+        brain then grew a connector to rescue a defect it was born with.
+        """
+        from .brain_constants import INNATE_CONNECTIONS
+        for source, target, weight in INNATE_CONNECTIONS:
+            if source not in self.neuron_positions or target not in self.neuron_positions:
+                continue
+            self.apply_weight_change(
+                (source, target), value=float(weight), mechanism='innate',
+                detail={'note': "this squid was born with it"},
+                create=True, animate=False)
         self.sync_connections_from_weights()
 
     def get_neuron_count(self):
@@ -2564,6 +2580,11 @@ class BrainWidget(RecordedSynapses, QtWidgets.QWidget):
         if smoothing is None:
             smoothing = getattr(self, 'propagation_smoothing', 0.5)
 
+        # Neurons the world writes go first, so everything downstream - the
+        # learning mechanisms below and the transfer function after them - sees
+        # one consistent tick.
+        self.drive_external_neurons(smoothing)
+
         # Gather learning evidence FIRST. A default 8-neuron brain has no
         # network-driven neurons at all, so doing this after the early return
         # meant the squid could never learn until the user added a neuron in
@@ -2574,7 +2595,8 @@ class BrainWidget(RecordedSynapses, QtWidgets.QWidget):
         # Which neurons may we compute? Anything in the network that is not
         # owned by the world. neuron_positions is the network's membership list.
         targets = [n for n in self.neuron_positions
-                   if is_network_driven(n) and n not in self.excluded_neurons]
+                   if is_network_driven(n) and n not in self.excluded_neurons
+                   and n not in self.externally_driven]
         if not targets:
             return {}
 
@@ -2811,6 +2833,7 @@ class BrainWidget(RecordedSynapses, QtWidgets.QWidget):
                 del self.neuron_shapes[neuron_to_remove]
             if neuron_to_remove in self.state_colors:
                 del self.state_colors[neuron_to_remove]
+            self.forget_action_representation(neuron_to_remove)
                 
             for conn in list(self.weights.keys()):
                 if isinstance(conn, tuple) and (conn[0] == neuron_to_remove or conn[1] == neuron_to_remove):

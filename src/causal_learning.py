@@ -70,6 +70,11 @@ _NON_ACTIONS = {'', 'none', 'idle', 'unknown'}
 _MAX_OPEN_EPISODES = 16
 _MAX_HISTORY = 400
 
+# A sensor reads 0 when it has nothing to report and 100 when it does. The
+# threshold matches CapabilityMonitor.situation_signature, so "the squid could
+# see food" means the same thing to the causal ledger and to the diagnosis.
+SENSOR_PRESENT = 70.0
+
 
 @dataclass
 class Contingency:
@@ -163,6 +168,13 @@ class ActionOutcomeLedger:
         self.brain = brain
         self.config = config or CausalConfig()
 
+        # How this ledger reads the passage of time. The game uses the wall
+        # clock; the headless trainer substitutes simulated seconds. An outcome
+        # window measured in wall-clock seconds would be nine thousand ticks
+        # long in a trainer running 1 500 ticks a second, so nothing would ever
+        # settle and the trainer would learn no contingencies at all.
+        self.clock = time.time
+
         self._open: Deque[_OpenEpisode] = deque(maxlen=_MAX_OPEN_EPISODES)
         self._current_action: str = ""
         self.closed_episodes = 0
@@ -174,11 +186,49 @@ class ActionOutcomeLedger:
         # Baseline drift of each drive over one outcome window, measured while
         # NOT performing the action in question. Without this the squid would
         # credit "exploring" with the hunger it accumulates simply by existing.
-        self._baseline: Dict[str, Contingency] = {}
-        self._baseline_probe: Optional[_OpenEpisode] = None
+        # Raw measured change per outcome window: every window once in
+        # `_all_windows`, and once per action that was running in `_raw`. The
+        # difference between the two is what an action is actually worth -
+        # "hunger fell 20 while eating; over windows in which the squid was NOT
+        # eating it rose 0.4" is a causal claim, and it is the only comparison
+        # that makes one.
+        self._all_windows: Dict[str, Contingency] = {}
+        self._raw: Dict[Tuple[str, str], Contingency] = {}
+        # A window measured while the squid was doing nothing at all. These
+        # count toward every action's background: without them, a squid whose
+        # only behaviour is grooming has no window that does not contain
+        # grooming, and so no way to discover that hunger climbs anyway.
+        self._idle_probe: Optional[_OpenEpisode] = None
+
+        # How often each action has been observed, and - for every ordered
+        # pair - how often the two ran together and how often the first ran
+        # WITHOUT the second. Two actions that have never once occurred apart
+        # are perfectly confounded: no amount of further repetition can tell
+        # them apart, and the ledger has to be able to say so rather than
+        # quietly splitting the credit forever.
+        self.action_episodes: Dict[str, int] = {}
+        self._together: Dict[Tuple[str, str], int] = {}
+        self._apart: Dict[Tuple[str, str], int] = {}
+
+        # The windows of episodes that have already settled. Two behaviours
+        # that overlap need not expire together - a bout of A started a second
+        # before a bout of B closes a second before it too - and reading only
+        # the episodes still open at settlement time made the whole question of
+        # what overlapped what depend on which one happened to expire first.
+        self._settled_windows: Deque[Tuple[str, float, float]] = deque(maxlen=64)
 
         self.history: Deque[Episode] = deque(maxlen=_MAX_HISTORY)
         self.last_outcome: Dict[str, Any] = {}
+
+    @property
+    def current_action(self) -> str:
+        """What the squid has most recently committed to doing.
+
+        Read by the brain to drive any action-representation neuron it has
+        grown: an action the network can represent is one it can learn about
+        synaptically rather than only in a table.
+        """
+        return self._current_action
 
     # ------------------------------------------------------------------
     # Plumbing
@@ -212,8 +262,13 @@ class ActionOutcomeLedger:
         sensors = {k: v for k, v in state.items() if k in PURE_INPUT_NEURONS}
         drives = {k: v for k, v in state.items() if k in CORE_STAT_NEURONS}
         cue: Dict[str, float] = {}
-        for name, value in sorted(sensors.items(), key=lambda kv: -abs(kv[1] - 50.0)):
-            if abs(value - 50.0) > 20.0:
+        # A sensor is salient when it is REPORTING something, not when it is
+        # far from the middle of its range. Scoring it by deviation from 50
+        # made "no food anywhere" (can_see_food = 0) the most salient thing in
+        # the squid's world, and the brain went on to grow structure to act on
+        # the absence of food.
+        for name, value in sorted(sensors.items(), key=lambda kv: -kv[1]):
+            if value >= SENSOR_PRESENT:
                 cue[name] = value
         for name, value in sorted(drives.items(), key=lambda kv: -abs(kv[1] - 50.0)):
             if len(cue) >= self.config.cue_size:
@@ -244,7 +299,7 @@ class ActionOutcomeLedger:
                 open_ep.action == action for open_ep in self._open):
             return None
 
-        now = now or time.time()
+        now = self.clock() if now is None else now
         self._current_action = action
         snapshot = self._numeric(state if state is not None
                                  else getattr(self.brain, 'state', {}) or {})
@@ -264,13 +319,13 @@ class ActionOutcomeLedger:
     def on_tick(self, state: Optional[Dict[str, Any]] = None,
                 now: Optional[float] = None) -> List[Episode]:
         """Advance every open episode; close the ones whose window has expired."""
-        now = now or time.time()
+        now = self.clock() if now is None else now
         snapshot = self._numeric(state if state is not None
                                  else getattr(self.brain, 'state', {}) or {})
         if not snapshot:
             return []
 
-        self._advance_baseline(snapshot, now)
+        self._advance_idle_probe(snapshot, now)
 
         expiring: List[_OpenEpisode] = []
         still_open: List[_OpenEpisode] = []
@@ -285,38 +340,83 @@ class ActionOutcomeLedger:
         # cannot decide which action gets the credit.
         return self._settle(expiring, snapshot, now)
 
-    def _advance_baseline(self, snapshot: Dict[str, float], now: float) -> None:
-        """Measure how the drives drift on their own, over the same window."""
-        probe = self._baseline_probe
-        if probe is None:
-            self._baseline_probe = _OpenEpisode(
-                episode_id='baseline', action='baseline', started=now,
-                closes_at=now + self.config.outcome_window, cue={},
-                baseline_state={k: v for k, v in snapshot.items()
-                                if k in CORE_STAT_NEURONS})
-            return
-        if now < probe.closes_at:
-            return
+    def _advance_idle_probe(self, snapshot: Dict[str, float], now: float) -> None:
+        """Measure one outcome window's worth of doing nothing.
 
-        for stat, before in probe.baseline_state.items():
-            after = snapshot.get(stat)
-            if after is None:
-                continue
-            entry = self._baseline.get(stat)
-            if entry is None:
-                entry = Contingency(action='baseline', stat=stat)
-                self._baseline[stat] = entry
-            entry.observe(after - before, now)
-
-        self._baseline_probe = _OpenEpisode(
-            episode_id='baseline', action='baseline', started=now,
+        Runs only while no episode is open, and files its result alongside the
+        action windows, attributed to no action. That is what makes it a
+        background: it counts in the total every action is compared against and
+        in none of the per-action totals.
+        """
+        if self._open:
+            self._idle_probe = None
+            return
+        probe = self._idle_probe
+        if probe is None or now < probe.closes_at:
+            if probe is None:
+                self._idle_probe = _OpenEpisode(
+                    episode_id='idle', action='', started=now,
+                    closes_at=now + self.config.outcome_window, cue={},
+                    baseline_state={k: v for k, v in snapshot.items()
+                                    if k in CORE_STAT_NEURONS})
+            return
+        self._record_window(probe, set(), snapshot, now)
+        self._idle_probe = _OpenEpisode(
+            episode_id='idle', action='', started=now,
             closes_at=now + self.config.outcome_window, cue={},
             baseline_state={k: v for k, v in snapshot.items()
                             if k in CORE_STAT_NEURONS})
 
-    def baseline_drift(self, stat: str) -> float:
-        entry = self._baseline.get(stat)
-        return entry.mean_delta if entry is not None else 0.0
+    def baseline_drift(self, stat: str, action: Optional[str] = None) -> float:
+        """How this drive moves over an outcome window ANYWAY.
+
+        With an action named, over the windows in which that action was not
+        running - which is the comparison a contingency actually needs. A
+        dedicated "the squid is doing nothing" probe cannot supply it: the
+        squid is always doing something, so such a probe either never fires or,
+        if it is allowed to run during actions, measures a background that
+        already contains the effect being tested and cancels it out. Both of
+        those were tried; this is the arithmetic that answers the question.
+        """
+        total = self._all_windows.get(stat)
+        if total is None or total.n == 0:
+            return 0.0
+        if action is None:
+            return total.mean_delta
+        with_action = self._raw.get((action, stat))
+        if with_action is None or with_action.n == 0:
+            return total.mean_delta
+        without_n = total.n - with_action.n
+        if without_n <= 0:
+            # This action has been running for every window ever measured, so
+            # there is no "otherwise" to compare it against. Zero is the honest
+            # answer: no evidence about the background. Falling back to the
+            # overall mean was worse than useless - that mean is made entirely
+            # of windows containing the action, so subtracting it cancels the
+            # effect out and can flip its sign.
+            return 0.0
+        return (total.sum_delta - with_action.sum_delta) / without_n
+
+    def _record_window(self, episode: _OpenEpisode, scope: Set[str],
+                       snapshot: Dict[str, float], now: float) -> None:
+        """File one outcome window's raw measurements."""
+        for stat, before in episode.baseline_state.items():
+            after = snapshot.get(stat)
+            if after is None:
+                continue
+            delta = after - before
+            entry = self._all_windows.get(stat)
+            if entry is None:
+                entry = Contingency(action='window', stat=stat)
+                self._all_windows[stat] = entry
+            entry.observe(delta, now)
+            for action in scope:
+                key = (action, stat)
+                raw = self._raw.get(key)
+                if raw is None:
+                    raw = Contingency(action=action, stat=stat)
+                    self._raw[key] = raw
+                raw.observe(delta, now)
 
     # ------------------------------------------------------------------
     # Closing an episode: this is where learning happens
@@ -344,16 +444,29 @@ class ActionOutcomeLedger:
         nothing and the real cause absorbs the effect. That is the difference
         between learning a contingency and noticing a coincidence.
 
-        Every estimate is read BEFORE any of them moves, so settlement does not
-        depend on the order the episodes happen to be visited in - which is
-        what made an earlier attempt at this give all the credit to whichever
-        action's window expired first.
+        Every action in scope for an outcome is updated against that outcome,
+        with a single shared prediction error, and every estimate is read
+        BEFORE any of them moves. Both halves are needed.
+
+        Updating only the episode that happened to expire is what made an
+        earlier attempt at this hand the whole effect to whichever action's
+        window closed first: two behaviours that always overlap almost never
+        expire on the same tick, so the first one to settle took the error
+        while the second, settling a second later, found its partner's estimate
+        already explaining everything and learned nothing. That is not cue
+        competition, it is a race. Updating every action that was running gives
+        the same result whichever order the windows close in, and it is also
+        what Rescorla and Wagner actually say: all cues present on a trial move
+        together, on the error they jointly failed to predict.
         """
-        in_scope: Set[str] = {ep.action for ep in expiring}
-        for other in self._open:
-            if any(other.started <= ep.closes_at and other.closes_at >= ep.started
-                   for ep in expiring):
-                in_scope.add(other.action)
+        scopes: Dict[str, Set[str]] = {}
+        in_scope: Set[str] = set()
+        for episode in expiring:
+            scope = {episode.action} | self._overlapping(episode, expiring)
+            scopes[episode.episode_id] = scope
+            in_scope.update(scope)
+
+        self._record_co_occurrence(expiring)
 
         prior: Dict[Tuple[str, str], float] = {}
         for action in in_scope:
@@ -383,12 +496,14 @@ class ActionOutcomeLedger:
             # correlational rule that carries what the squid actually
             # experienced. As the squid learns what its actions do, routine
             # outcomes stop moving weights and only genuine surprises do.
+            scope = scopes.get(open_ep.episode_id, {open_ep.action})
+            self._record_window(open_ep, scope, snapshot, now)
             valence = 0.0
             for stat, delta in consequence.items():
                 weight = VALENCE_WEIGHTS.get(stat, 0.0)
                 if not weight:
                     continue
-                predicted = sum(prior.get((a, stat), 0.0) for a in in_scope)
+                predicted = sum(prior.get((a, stat), 0.0) for a in scope)
                 # Normalise: a full 100-point swing in one drive is one unit.
                 valence += weight * ((delta - predicted) / 100.0)
             valence = max(-1.0, min(1.0, valence))
@@ -406,8 +521,7 @@ class ActionOutcomeLedger:
             # unlearned. The episode's `consequence` still carries only what
             # actually moved, because that is what gets shown to the player.
             settled = set(consequence)
-            settled.update(stat for (action, stat) in prior
-                           if action == open_ep.action)
+            settled.update(stat for (action, stat) in prior if action in scope)
             for stat in settled:
                 if stat not in open_ep.baseline_state:
                     continue
@@ -415,9 +529,11 @@ class ActionOutcomeLedger:
                 if after is None:
                     continue
                 delta = after - open_ep.baseline_state[stat]
-                predicted = sum(prior.get((a, stat), 0.0) for a in in_scope)
-                own = prior.get((open_ep.action, stat), 0.0)
-                pending.append((open_ep.action, stat, own + (delta - predicted), now))
+                predicted = sum(prior.get((a, stat), 0.0) for a in scope)
+                error = delta - predicted
+                for action in scope:
+                    own = prior.get((action, stat), 0.0)
+                    pending.append((action, stat, own + error, now))
 
             self.closed_episodes += 1
             self.history.append(episode)
@@ -439,6 +555,160 @@ class ActionOutcomeLedger:
         for episode in closed:
             self._assign_credit(episode)
         return closed
+
+    def _record_co_occurrence(self, expiring: List[_OpenEpisode]) -> None:
+        """Note, for each closing episode, which other actions overlapped it.
+
+        This is the evidence that separates "two causes the squid has not yet
+        told apart" from "two causes it never can": an action that has run at
+        least once while another did not is separable in principle, and
+        ordinary Rescorla-Wagner settlement will do the separating. An action
+        that has NEVER run apart from another is perfectly confounded with it,
+        and no amount of further repetition of the same experience will help.
+        """
+        for episode in expiring:
+            action = episode.action
+            concurrent = self._overlapping(episode, expiring)
+
+            self.action_episodes[action] = self.action_episodes.get(action, 0) + 1
+            known = set(self.action_episodes) | concurrent
+            for other in known:
+                if other == action:
+                    continue
+                if other in concurrent:
+                    key = (action, other)
+                    self._together[key] = self._together.get(key, 0) + 1
+                else:
+                    key = (action, other)
+                    self._apart[key] = self._apart.get(key, 0) + 1
+
+        for episode in expiring:
+            self._settled_windows.append(
+                (episode.action, episode.started, episode.closes_at))
+
+    def _overlapping(self, episode: _OpenEpisode,
+                     expiring: List[_OpenEpisode]) -> Set[str]:
+        """Which other behaviours were running during this episode's window.
+
+        Read from the windows themselves - open, expiring and recently
+        settled - rather than from whatever happens to be open at the moment of
+        settlement. Two behaviours that always overlap do not expire together,
+        so reading the open list alone made A look like it always had company
+        and B look like it never did, purely from the order the windows closed
+        in. Everything downstream of this - cue competition, the confounding
+        record, the deficit - inherited that asymmetry.
+        """
+        others: Set[str] = set()
+        for other in expiring:
+            if other is episode:
+                continue
+            if (other.started <= episode.closes_at
+                    and other.closes_at >= episode.started):
+                others.add(other.action)
+        for other in self._open:
+            if (other.started <= episode.closes_at
+                    and other.closes_at >= episode.started):
+                others.add(other.action)
+        for action, started, closes_at in self._settled_windows:
+            if started <= episode.closes_at and closes_at >= episode.started:
+                others.add(action)
+        others.discard(episode.action)
+        return others
+
+    def together(self, a: str, b: str) -> int:
+        """Episodes of `a` during which `b` was also running."""
+        return self._together.get((a, b), 0)
+
+    def apart(self, a: str, b: str) -> int:
+        """Episodes of `a` during which `b` was NOT running."""
+        return self._apart.get((a, b), 0)
+
+    def is_confounded(self, a: str, b: str, min_episodes: int = 4) -> bool:
+        """Have these two actions genuinely never been observed apart?"""
+        if a == b:
+            return False
+        if self.together(a, b) < min_episodes:
+            return False
+        return self.apart(a, b) == 0 and self.apart(b, a) == 0
+
+    def unresolved_attributions(self, min_episodes: int = 4,
+                                min_effect: float = 1.0,
+                                balance: float = 0.4) -> List[Dict[str, Any]]:
+        """Outcomes whose cause the squid demonstrably cannot pin down.
+
+        An entry appears when two or more of the squid's actions each carry a
+        substantial share of the same outcome, in the same direction, and have
+        never once been observed apart. Splitting the credit between them is
+        the correct thing for the learning rule to do - inventing a winner
+        would be worse - but a permanent half-strength claim about each is not
+        knowledge, it is an admission that the evidence so far cannot decide.
+
+        Reported so the capability monitor can ask the structural question:
+        does the network even have the means to hold the distinction, should
+        the evidence ever arrive?
+        """
+        out: List[Dict[str, Any]] = []
+        by_stat: Dict[str, List[Tuple[str, float, Contingency]]] = {}
+        for action, table in self.contingencies.items():
+            if self.action_episodes.get(action, 0) < min_episodes:
+                continue
+            for stat, entry in table.items():
+                effect = entry.effect(self.baseline_drift(stat, action))
+                if abs(effect) < min_effect or entry.n < min_episodes:
+                    continue
+                by_stat.setdefault(stat, []).append((action, effect, entry))
+
+        for stat, rows in by_stat.items():
+            for sign in (1.0, -1.0):
+                same = [r for r in rows if r[1] * sign > 0]
+                if len(same) < 2:
+                    continue
+                same.sort(key=lambda r: -abs(r[1]))
+                # Grow a clique of mutually confounded candidates around the
+                # largest share, keeping only shares of comparable size: a
+                # bystander with a tenth of the effect is not a rival
+                # explanation, it is noise.
+                lead_effect = abs(same[0][1])
+                clique: List[Tuple[str, float, Contingency]] = [same[0]]
+                for candidate in same[1:]:
+                    if abs(candidate[1]) < lead_effect * balance:
+                        continue
+                    if all(self.is_confounded(candidate[0], member[0], min_episodes)
+                           for member in clique):
+                        clique.append(candidate)
+                if len(clique) < 2:
+                    continue
+
+                actions = sorted(row[0] for row in clique)
+                shares = {row[0]: round(row[1], 3) for row in clique}
+                together = min(self.together(a, b)
+                               for a in actions for b in actions if a != b)
+                out.append({
+                    'stat': stat,
+                    'candidates': actions,
+                    'shares': shares,
+                    'combined': round(sum(shares.values()), 3),
+                    'together': together,
+                    'apart': {a: sum(self.apart(a, b) for b in actions if b != a)
+                              for a in actions},
+                    'episodes': {a: self.action_episodes.get(a, 0) for a in actions},
+                    'confidence': round(max(
+                        row[2].confidence(self.baseline_drift(stat, row[0]))
+                        for row in clique), 3),
+                })
+        out.sort(key=lambda row: (-abs(row['combined']), row['stat']))
+        return out
+
+    def describe_attribution(self, row: Dict[str, Any]) -> str:
+        """The confounded claim, in the words the squid would use."""
+        names = [humanise(a) for a in row['candidates']]
+        joined = " and ".join(names) if len(names) == 2 else \
+            ", ".join(names[:-1]) + " and " + names[-1]
+        direction = "up" if row['combined'] > 0 else "down"
+        return (f"Something about {joined} sends {humanise(row['stat'])} "
+                f"{direction} by about {abs(row['combined']):.0f} points, but "
+                f"they have happened together {row['together']} times and apart "
+                f"none, so the squid cannot tell which of them does it.")
 
     def _assign_credit(self, episode: Episode) -> None:
         """Broadcast the outcome to the synapses that were causally active.
@@ -499,7 +769,7 @@ class ActionOutcomeLedger:
         out = []
         for table in self.contingencies.values():
             for entry in table.values():
-                baseline = self.baseline_drift(entry.stat)
+                baseline = self.baseline_drift(entry.stat, entry.action)
                 confidence = entry.confidence(baseline)
                 if confidence >= threshold:
                     out.append((entry, entry.effect(baseline), confidence))
@@ -517,7 +787,7 @@ class ActionOutcomeLedger:
         """What the squid knows about its own effect on the world."""
         items: List[KnowledgeItem] = []
         for entry, effect, confidence in self.known_contingencies():
-            baseline = self.baseline_drift(entry.stat)
+            baseline = self.baseline_drift(entry.stat, entry.action)
             recent = self._last_episode_for(entry.action)
             experience = recent.describe() if recent is not None else (
                 f"{entry.n} separate occasions on which it {humanise(entry.action)}")
@@ -540,6 +810,32 @@ class ActionOutcomeLedger:
                            "traces, so the synapses that produced the action are the ones "
                            "that change"),
                 kind='contingency', updated=entry.last_seen))
+
+        # What it knows it does NOT know. An honest account of the squid's
+        # knowledge has to include the questions its experience cannot answer,
+        # otherwise two permanent half-strength claims read as two facts.
+        for row in self.unresolved_attributions():
+            names = " and ".join(humanise(a) for a in row['candidates'])
+            items.append(KnowledgeItem(
+                subject=humanise(row['stat']),
+                statement=self.describe_attribution(row),
+                experience=(f"{row['together']} occasions on which {names} "
+                            f"happened together, and none on which either "
+                            f"happened without the other"),
+                action=" + ".join(row['candidates']),
+                consequence=(f"{humanise(row['stat'])} moved by "
+                             f"{row['combined']:+.0f} on average"),
+                reason=("the credit is split between them because nothing in "
+                        "the squid's experience separates them; a share each "
+                        "is the honest answer, not two facts"),
+                confidence=row['confidence'],
+                strength=row['combined'] / 100.0,
+                behaviour=("until one of them happens without the other, or the "
+                           "brain grows structure that can represent them "
+                           "separately, neither claim can get any stronger"),
+                kind='confounded', updated=max(
+                    (e.ended for e in self.history
+                     if e.action in row['candidates']), default=0.0)))
         return items
 
     def _last_episode_for(self, action: str) -> Optional[Episode]:
@@ -563,7 +859,10 @@ class ActionOutcomeLedger:
                 if episode.action != entry.action:
                     continue
                 for cue_name, cue_value in episode.cue.items():
-                    if abs(cue_value - 50.0) < 20.0:
+                    if cue_name in PURE_INPUT_NEURONS:
+                        if cue_value < SENSOR_PRESENT:
+                            continue
+                    elif abs(cue_value - 50.0) < 20.0:
                         continue
                     key = (cue_name, entry.action, entry.stat)
                     if key in seen:
@@ -580,6 +879,7 @@ class ActionOutcomeLedger:
             'rewarded': self.rewarded_episodes,
             'actions_tracked': len(self.contingencies),
             'confident_contingencies': len(self.known_contingencies()),
+            'unresolved_attributions': self.unresolved_attributions(),
             'last_outcome': dict(self.last_outcome),
         }
 
@@ -592,8 +892,12 @@ class ActionOutcomeLedger:
             'rewarded_episodes': self.rewarded_episodes,
             'contingencies': [c.to_dict() for table in self.contingencies.values()
                               for c in table.values()],
-            'baseline': [c.to_dict() for c in self._baseline.values()],
+            'all_windows': [c.to_dict() for c in self._all_windows.values()],
+            'raw': [c.to_dict() for c in self._raw.values()],
             'history': [e.to_dict() for e in list(self.history)[-120:]],
+            'action_episodes': dict(self.action_episodes),
+            'together': [[a, b, n] for (a, b), n in self._together.items()],
+            'apart': [[a, b, n] for (a, b), n in self._apart.items()],
         }
 
     def from_dict(self, data: dict) -> None:
@@ -609,20 +913,38 @@ class ActionOutcomeLedger:
                 continue
             if entry.action and entry.stat:
                 self.contingencies[entry.action][entry.stat] = entry
-        self._baseline = {}
-        for raw in data.get('baseline') or []:
+        self._all_windows = {}
+        for row in data.get('all_windows') or []:
             try:
-                entry = Contingency.from_dict(raw)
+                entry = Contingency.from_dict(row)
             except Exception:
                 continue
             if entry.stat:
-                self._baseline[entry.stat] = entry
+                self._all_windows[entry.stat] = entry
+        self._raw = {}
+        for row in data.get('raw') or []:
+            try:
+                entry = Contingency.from_dict(row)
+            except Exception:
+                continue
+            if entry.action and entry.stat:
+                self._raw[(entry.action, entry.stat)] = entry
         self.history.clear()
         for raw in data.get('history') or []:
             try:
                 self.history.append(Episode.from_dict(raw))
             except Exception:
                 continue
+        self.action_episodes = {str(k): int(v) for k, v in
+                                (data.get('action_episodes') or {}).items()}
+        self._together = {}
+        for row in data.get('together') or []:
+            if isinstance(row, (list, tuple)) and len(row) == 3:
+                self._together[(str(row[0]), str(row[1]))] = int(row[2])
+        self._apart = {}
+        for row in data.get('apart') or []:
+            if isinstance(row, (list, tuple)) and len(row) == 3:
+                self._apart[(str(row[0]), str(row[1]))] = int(row[2])
 
     def reset(self) -> None:
         self._open.clear()
@@ -630,7 +952,12 @@ class ActionOutcomeLedger:
         self.closed_episodes = 0
         self.rewarded_episodes = 0
         self.contingencies = defaultdict(dict)
-        self._baseline = {}
-        self._baseline_probe = None
+        self._all_windows = {}
+        self._raw = {}
+        self._idle_probe = None
+        self.action_episodes = {}
+        self._together = {}
+        self._apart = {}
+        self._settled_windows.clear()
         self.history.clear()
         self.last_outcome = {}

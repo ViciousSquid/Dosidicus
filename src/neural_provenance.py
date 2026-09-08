@@ -67,6 +67,9 @@ DEFICIT_PHRASING: Dict[str, str] = {
     'expression':     "the brain had learned something it had no pathway to act on",
     'differentiation': "one neuron was being asked to stand for two unrelated things at once",
     'connectivity':   "part of the network had been left unreachable",
+    'causal_differentiation':
+        "the brain had no way to represent which of two things that always "
+        "happen together was the one actually causing the outcome",
 }
 
 _MAX_EVENTS_PER_EDGE = 24
@@ -956,6 +959,30 @@ class CausalLedger:
         items.sort(key=lambda i: (-i.confidence, -abs(i.strength)))
         return items[:limit]
 
+    def edges_touched_by(self, mechanism: str) -> Dict[Pair, float]:
+        """Every synapse this mechanism has moved, and by how much in total.
+
+        Reads the running totals rather than the narrated event list. A
+        high-frequency mechanism - an outcome reaching back along the
+        eligibility traces, say - moves many synapses by thousandths many times
+        a minute; those changes are real and are accounted for exactly here,
+        but they are not narrated one by one because four hundred lines of
+        "+0.002" would bury the handful of changes that tell the squid's story.
+        Anything asking "has this mechanism ever actually done anything?" has
+        to ask the totals.
+        """
+        return {edge: totals[mechanism]
+                for edge, totals in self._totals.items()
+                if mechanism in totals and totals[mechanism]}
+
+    def mechanism_totals(self) -> Dict[str, float]:
+        """How far each mechanism has moved the network, summed over synapses."""
+        out: Dict[str, float] = {}
+        for totals in self._totals.values():
+            for mechanism, delta in totals.items():
+                out[mechanism] = out.get(mechanism, 0.0) + abs(delta)
+        return out
+
     def summary(self) -> Dict[str, Any]:
         return {
             'weight_changes': self.total_changes,
@@ -964,6 +991,7 @@ class CausalLedger:
             'neurons_pruned': len(self.pruned),
             'episodes': len(self.episodes),
             'recent_events': len(self._recent),
+            'by_mechanism': self.mechanism_totals(),
         }
 
     def recent_events(self, limit: int = 25) -> List[WeightEvent]:

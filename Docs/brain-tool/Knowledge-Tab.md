@@ -31,11 +31,18 @@ A searchable list of everything the squid has learned. Type a topic (`food`,
 | **Confidence** | magnitude × consistency × support, as a percentage and a bar |
 | **Effect on behaviour** | how much this synapse has actually pushed the squid around, and what it chose next |
 
-Three kinds of item appear:
+Four kinds of item appear:
 
 * **association** — a synapse, and what it means
 * **cause and effect** — a contingency between one of the squid's actions and a
   consequence, measured against the background drift
+* **an open question** — an outcome the squid cannot attribute, because two of
+  its behaviours have never once been observed apart. This is deliberately not
+  presented as two facts: *"Something about wiggling and fluttering sends
+  satisfaction up by about 5 points, but they have happened together 26 times
+  and apart none, so the squid cannot tell which of them does it."* An honest
+  account of what a creature knows has to include the questions its experience
+  cannot answer.
 * **new structure** — a neuron that did not exist when the squid was born
 
 **Export…** writes the whole lot to a text file, including what the squid

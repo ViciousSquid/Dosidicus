@@ -38,6 +38,13 @@ an event:
                    anti-correlated: it is being asked to stand for two
                    incompatible situations at once, so it represents neither.
 
+  causal           Two of the squid's own actions always happen together and
+  differentiation  share the credit for the same outcome, and no neuron in the
+                   brain fires any differently for one than for the other. The
+                   split is the correct conclusion from the evidence, but the
+                   network has no means of ever holding the distinction, so no
+                   future evidence could resolve it either.
+
   connectivity     Part of the network has been left unreachable.
 
 Everything here is diagnosis. Growing the remedy is neurogenesis.py's job.
@@ -55,7 +62,7 @@ from .brain_constants import (CORE_STAT_NEURONS, PURE_INPUT_NEURONS,
                               is_learning_target, is_network_driven)
 
 DEFICIT_KINDS = ('representation', 'regulation', 'expression',
-                 'differentiation', 'connectivity')
+                 'differentiation', 'causal_differentiation', 'connectivity')
 
 # The range each drive is comfortable in. Outside it, the squid is in trouble
 # and the network is supposed to be doing something about it.
@@ -79,6 +86,15 @@ SATURATION = 0.85
 MIN_CORRECTIVE_PUSH = 0.25
 
 _MAX_SIGNATURES = 24
+_MAX_TRACKED_ACTIONS = 16
+
+# Below this variance a neuron is, for practical purposes, constant, and the
+# correlation between two constants is noise amplified to +/-1. Structural
+# decisions were being made on exactly that: two drives wobbling by a tenth of
+# a point in opposite directions read as a perfect anti-correlation, and the
+# brain grew a neuron to separate them. Activations are scaled to 0..1 here, so
+# this is a standard deviation of two points on the 0-100 scale.
+_MIN_CORRELATION_VAR = 4.0e-4
 _CORRELATION_HALFLIFE = 600.0     # seconds; long-run, so it survives a commit
 _MIN_TICKS_FOR_STATS = 40
 
@@ -229,6 +245,8 @@ class CapabilityConfig:
     # differentiation
     conflict_correlation: float = -0.4
     conflict_weight: float = 0.25
+    # causal differentiation
+    confounded_min_episodes: int = 4
 
 
 class CapabilityMonitor:
@@ -238,9 +256,22 @@ class CapabilityMonitor:
         self.brain = brain
         self.config = config or CapabilityConfig()
 
+        # How this monitor reads the passage of time. The game uses the wall
+        # clock; the headless trainer substitutes simulated seconds, so
+        # "a deficit must persist for 20 seconds" means the same thing when
+        # 1500 ticks run per real second. Before this the trainer had to
+        # disable the age gate outright, which is a different rule quietly
+        # replacing the documented one.
+        self.clock = time.time
+
         self.ticks = 0
         self._global: Dict[str, _Running] = {}
         self._signatures: Dict[str, Dict[str, Any]] = {}
+
+        # How the whole network behaves while each of the squid's actions is
+        # running. This is what makes "does anything in this brain fire
+        # differently for A than for B?" a measurement rather than a guess.
+        self._action_stats: Dict[str, Dict[str, _Running]] = {}
 
         # Long-run co-activation, kept independently of the plasticity engine
         # because that one is reset on every commit and a structural question
@@ -248,7 +279,7 @@ class CapabilityMonitor:
         self._co: Dict[Tuple[str, str], float] = {}
         self._mean: Dict[str, float] = {}
         self._var: Dict[str, float] = {}
-        self._decay_last = time.time()
+        self._decay_last = self.clock()
 
         # Drive comfort tracking.
         self._band_history: Dict[str, Deque[bool]] = {}
@@ -286,6 +317,8 @@ class CapabilityMonitor:
         if signature:
             self._record_signature(signature, values)
 
+        self._record_action(values)
+
         for stat, (low, high) in COMFORT_BANDS.items():
             value = values.get(stat)
             if value is None:
@@ -300,6 +333,58 @@ class CapabilityMonitor:
             self._update_correlations(values)
 
     # ------------------------------------------------------------------
+    def _record_action(self, values: Dict[str, float]) -> None:
+        """Accumulate what the network looks like while each action runs."""
+        causal = getattr(self.brain, 'causal_learning', None)
+        action = getattr(causal, 'current_action', "") if causal is not None else ""
+        if not action:
+            return
+        stats = self._action_stats.get(action)
+        if stats is None:
+            if len(self._action_stats) >= _MAX_TRACKED_ACTIONS:
+                stalest = min(self._action_stats.items(),
+                              key=lambda kv: sum(r.n for r in kv[1].values()))[0]
+                del self._action_stats[stalest]
+            stats = {}
+            self._action_stats[action] = stats
+        for name, value in values.items():
+            run = stats.get(name)
+            if run is None:
+                run = _Running()
+                stats[name] = run
+            run.add(value)
+
+    def action_separability(self, a: str, b: str) -> Tuple[float, str]:
+        """How well the best neuron in this brain tells action `a` from `b`.
+
+        Cohen's *d* between the two actions' activation distributions, over
+        every neuron the network computes for itself. Sensors are excluded:
+        the world writes those, so a sensor separating two actions says
+        something about the world, not about what the brain can represent.
+
+        A value below `discriminability_floor` means the brain is, in the most
+        literal sense, unable to notice the difference between doing `a` and
+        doing `b` - which is exactly the situation in which splitting the
+        credit between them is permanent.
+        """
+        stats_a = self._action_stats.get(a)
+        stats_b = self._action_stats.get(b)
+        if not stats_a or not stats_b:
+            return 0.0, ""
+        excluded = self._excluded()
+        best_d, best_neuron = 0.0, ""
+        for name in self._neuron_names():
+            if name in excluded or name in PURE_INPUT_NEURONS:
+                continue
+            ra, rb = stats_a.get(name), stats_b.get(name)
+            if ra is None or rb is None or ra.n < 3 or rb.n < 3:
+                continue
+            pooled = math.sqrt(max(1.0, (ra.var + rb.var) / 2.0))
+            d = abs(ra.mean - rb.mean) / pooled
+            if d > best_d:
+                best_d, best_neuron = d, name
+        return best_d, best_neuron
+
     def situation_signature(self, values: Dict[str, float]) -> str:
         """A compact, stable name for 'the kind of situation the squid is in'.
 
@@ -332,12 +417,12 @@ class CapabilityMonitor:
                 stalest = min(self._signatures.items(),
                               key=lambda kv: kv[1]['last_seen'])[0]
                 del self._signatures[stalest]
-            entry = {'count': 0, 'stats': {}, 'first_seen': time.time(),
-                     'last_seen': time.time(),
+            entry = {'count': 0, 'stats': {}, 'first_seen': self.clock(),
+                     'last_seen': self.clock(),
                      'defining': [p.split('-')[0] for p in signature.split('|')]}
             self._signatures[signature] = entry
         entry['count'] += 1
-        entry['last_seen'] = time.time()
+        entry['last_seen'] = self.clock()
         stats: Dict[str, _Running] = entry['stats']
         for name, value in values.items():
             run = stats.get(name)
@@ -349,7 +434,7 @@ class CapabilityMonitor:
     def _update_correlations(self, values: Dict[str, float]) -> None:
         """Slow exponential moving statistics, so structural questions can be
         asked over minutes rather than over one learning cycle."""
-        now = time.time()
+        now = self.clock()
         dt = max(0.0, now - self._decay_last)
         self._decay_last = now
         alpha = 1.0 - math.exp(-dt / _CORRELATION_HALFLIFE) if dt > 0 else 0.02
@@ -384,7 +469,7 @@ class CapabilityMonitor:
             return 0.0
         va = self._var.get(a, 0.0)
         vb = self._var.get(b, 0.0)
-        if va < 1e-6 or vb < 1e-6:
+        if va < _MIN_CORRELATION_VAR or vb < _MIN_CORRELATION_VAR:
             return 0.0
         return max(-1.0, min(1.0, cov / math.sqrt(va * vb)))
 
@@ -401,14 +486,15 @@ class CapabilityMonitor:
         found: List[Deficit] = []
         for detector in (self._detect_connectivity, self._detect_regulation,
                          self._detect_representation, self._detect_expression,
-                         self._detect_differentiation):
+                         self._detect_differentiation,
+                         self._detect_causal_differentiation):
             try:
                 found.extend(detector())
             except Exception as exc:   # a broken detector must not stop the brain
                 print(f"[Capability] {detector.__name__} failed: "
                       f"{type(exc).__name__}: {exc}")
 
-        now = time.time()
+        now = self.clock()
         seen_keys = set()
         for deficit in found:
             seen_keys.add(deficit.key)
@@ -455,7 +541,7 @@ class CapabilityMonitor:
     def clear(self, key: str, reason: str = "resolved by new structure") -> None:
         deficit = self.active.pop(key, None)
         if deficit is not None:
-            self.resolved.append((time.time(), deficit.kind, reason))
+            self.resolved.append((self.clock(), deficit.kind, reason))
 
     # ------------------------------------------------------------------
     # Detectors
@@ -698,10 +784,16 @@ class CapabilityMonitor:
         for cue, action, stat, confidence in causal.cue_outcome_links():
             if cue not in names or stat not in names:
                 continue
+            if cue == stat:
+                # "satisfaction predicts satisfaction" is not knowledge the
+                # brain lacks a pathway for, it is the cue being the outcome.
+                # The remedy for it wired stat -> new neuron -> stat, which is
+                # a positive feedback loop the squid grew on purpose.
+                continue
             entry = causal.contingencies.get(action, {}).get(stat)
             if entry is None:
                 continue
-            effect = entry.effect(causal.baseline_drift(stat))
+            effect = entry.effect(causal.baseline_drift(stat, action))
             if abs(effect) < 1.0:
                 continue
             wanted = 1.0 if effect > 0 else -1.0
@@ -770,8 +862,23 @@ class CapabilityMonitor:
                 continue
             worst = 0.0
             pair: Optional[Tuple[str, str]] = None
-            for i, (a, _wa) in enumerate(drivers):
-                for b, _wb in drivers[i + 1:]:
+            for i, (a, wa) in enumerate(drivers):
+                for b, wb in drivers[i + 1:]:
+                    # Only SAME-SIGNED drivers can conflict.
+                    #
+                    # Two anti-correlated sources pushing a neuron in opposite
+                    # directions are not a defect, they are push-pull - the
+                    # shape of every regulator the engine grows, and of half
+                    # the innate wiring. Calling that an overloaded neuron made
+                    # the detector diagnose the architecture's own healthy
+                    # structure, and each remedy created a fresh pair for it to
+                    # complain about. A neuron is only being asked to stand for
+                    # two incompatible situations when both of them are trying
+                    # to make it mean THEIR one.
+                    if wa * wb <= 0:
+                        continue
+                    if self._already_differentiated(target, a, b):
+                        continue
                     r = self.correlation(a, b)
                     if r < worst:
                         worst = r
@@ -783,10 +890,11 @@ class CapabilityMonitor:
             severity = min(1.0, 0.35 + abs(worst) * 0.6)
             out.append(Deficit(
                 kind='differentiation', key=f"differentiation:{target}:{a}:{b}",
-                summary=(f"{target.replace('_', ' ')} is driven by both "
-                         f"{a.replace('_', ' ')} and {b.replace('_', ' ')}, which "
-                         f"pull in opposite directions (correlation {worst:+.2f}); "
-                         f"one neuron cannot stand for both situations at once"),
+                summary=(f"{target.replace('_', ' ')} is pushed the same way by "
+                         f"both {a.replace('_', ' ')} and {b.replace('_', ' ')}, "
+                         f"which are almost never active at the same time "
+                         f"(correlation {worst:+.2f}); one neuron cannot stand "
+                         f"for both situations at once"),
                 target=target, sources=[b],
                 remedy=(f"take {b.replace('_', ' ')} off {target.replace('_', ' ')} "
                         f"and represent it separately"),
@@ -795,6 +903,118 @@ class CapabilityMonitor:
                           'correlation': round(worst, 3)},
                 suggested_type='novelty', specialization='role_separation'))
         return out
+
+    # -- causal differentiation -----------------------------------------
+    def _detect_causal_differentiation(self) -> List[Deficit]:
+        """Two of the squid's actions share the credit and nothing tells them apart.
+
+        This is the one deficit whose evidence comes from the causal ledger
+        rather than from activation statistics alone, and it is still a
+        capability claim rather than an event: the ledger supplies the
+        *problem* (an outcome whose credit is split between actions that have
+        never once been seen apart) and this monitor supplies the *capability*
+        half by measuring whether any neuron in the brain fires differently for
+        one of them than for the other.
+
+        Both halves are required. A split that the network could represent is
+        not a deficit - it is a squid waiting for evidence, and evidence is not
+        something structure can manufacture. A split the network could never
+        represent is a dead end: no future experience could resolve it, because
+        the brain has nowhere to put the answer.
+        """
+        if self.ticks < _MIN_TICKS_FOR_STATS:
+            return []
+        causal = getattr(self.brain, 'causal_learning', None)
+        if causal is None or not hasattr(causal, 'unresolved_attributions'):
+            return []
+
+        cfg = self.config
+        out: List[Deficit] = []
+        for row in causal.unresolved_attributions(
+                min_episodes=cfg.confounded_min_episodes):
+            candidates = list(row['candidates'])
+            separability: Dict[str, Tuple[float, str]] = {}
+            unrepresented: List[str] = []
+            # A representation the brain has already grown counts even before
+            # the statistics catch up with it. Measurement is what decides
+            # whether an EXISTING network can hold the distinction; a neuron
+            # created three seconds ago has not been observed under both
+            # actions yet, and without this the monitor would keep reporting
+            # the same gap and the engine would grow the same structure again.
+            represented = set(getattr(self.brain, 'action_representations', {}) or {})
+            for action in candidates:
+                # An action counts as represented only if some neuron tells it
+                # from EVERY rival, so the worst pairing is the one that
+                # decides. Taking the best would let one lucky separation stand
+                # in for a distinction the brain still cannot make.
+                scores = [self.action_separability(action, other)
+                          for other in candidates if other != action]
+                if not scores:
+                    continue
+                best_d, best_neuron = min(scores, key=lambda pair: pair[0])
+                separability[action] = (round(best_d, 3), best_neuron)
+                if best_d < cfg.discriminability_floor and action not in represented:
+                    unrepresented.append(action)
+            if not unrepresented:
+                continue    # the brain can already hold the distinction
+
+            readable = " and ".join(a.replace('_', ' ') for a in candidates)
+            stat = row['stat']
+            severity = min(1.0, 0.45
+                           + min(1.0, row['together'] / 20.0) * 0.3
+                           + float(row['confidence']) * 0.25)
+            best_overall = max(d for d, _ in separability.values())
+            out.append(Deficit(
+                kind='causal_differentiation',
+                key=f"causal_differentiation:{stat}:{'+'.join(candidates)}",
+                summary=(f"{readable} have happened together {row['together']} "
+                         f"times and apart none, and between them they move "
+                         f"{stat} by {row['combined']:+.0f}; the squid has split "
+                         f"the credit ("
+                         + ", ".join(f"{a.replace('_', ' ')} {row['shares'][a]:+.1f}"
+                                     for a in candidates)
+                         + f") because no neuron in the brain fires any "
+                           f"differently for one than for the other "
+                           f"(best separation {best_overall:.2f})"),
+                target=stat,
+                sources=sorted(unrepresented),
+                remedy=(f"represent which of {readable} is happening, so that if "
+                        f"they ever come apart the difference has somewhere to "
+                        f"be learned"),
+                severity=severity,
+                evidence={'stat': stat, 'candidates': candidates,
+                          'unrepresented': sorted(unrepresented),
+                          'shares': dict(row['shares']),
+                          'combined': row['combined'],
+                          'together': row['together'],
+                          'apart': dict(row['apart']),
+                          'episodes': dict(row['episodes']),
+                          'separability': {a: v[0] for a, v in separability.items()},
+                          'closest_neuron': {a: v[1] for a, v in separability.items()},
+                          'confidence': row['confidence']},
+                suggested_type='novelty',
+                specialization='causal_attribution'))
+        return out
+
+    def _already_differentiated(self, target: str, a: str, b: str) -> bool:
+        """Has one of these two drivers already been grown to separate them?
+
+        The remedy for a differentiation deficit takes one driver off the
+        overloaded neuron and gives it a neuron of its own, which then drives
+        the target in its place. That new neuron necessarily carries the driver
+        it took over, so it is necessarily still anti-correlated with the one
+        that stayed - and without this check the monitor re-diagnoses the exact
+        conflict it just resolved, one neuron further out, for ever.
+        """
+        engine = getattr(self.brain, 'enhanced_neurogenesis', None)
+        functional = getattr(engine, 'functional_neurons', {}) or {}
+        for name in (a, b):
+            neuron = functional.get(name)
+            origin = getattr(neuron, 'origin_deficit', None) or {}
+            if origin.get('kind') == 'differentiation' and \
+                    origin.get('target') == target:
+                return True
+        return False
 
     # ==================================================================
     # Reporting
@@ -837,6 +1057,8 @@ class CapabilityMonitor:
                       'last_seen': e['last_seen'], 'defining': list(e['defining']),
                       'stats': {k: v.to_dict() for k, v in e['stats'].items()}}
                 for sig, e in self._signatures.items()},
+            'actions': {action: {k: v.to_dict() for k, v in stats.items()}
+                        for action, stats in self._action_stats.items()},
             'mean': dict(self._mean),
             'var': dict(self._var),
             'co': [[a, b, v] for (a, b), v in self._co.items()],
@@ -868,6 +1090,10 @@ class CapabilityMonitor:
                 'stats': {str(k): _Running.from_dict(v)
                           for k, v in (raw.get('stats') or {}).items()},
             }
+        self._action_stats = {}
+        for action, stats in (data.get('actions') or {}).items():
+            self._action_stats[str(action)] = {
+                str(k): _Running.from_dict(v) for k, v in (stats or {}).items()}
         self._mean = {str(k): float(v) for k, v in (data.get('mean') or {}).items()}
         self._var = {str(k): float(v) for k, v in (data.get('var') or {}).items()}
         self._co = {}
@@ -884,6 +1110,7 @@ class CapabilityMonitor:
         self.evaluations = 0
         self._global.clear()
         self._signatures.clear()
+        self._action_stats.clear()
         self._co.clear()
         self._mean.clear()
         self._var.clear()

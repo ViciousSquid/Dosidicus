@@ -870,6 +870,12 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             'enhanced_neurogenesis': enhanced_neurogenesis_data,  # Full neurogenesis state
             'output_bindings': output_bindings,
             'provenance': _dump('ledger'),
+            # Which neurons stand for which of the squid's own actions. Without
+            # this a loaded brain would still have the neuron but nothing would
+            # drive it, and a structure grown to resolve a confounded cause
+            # would quietly stop working.
+            'action_representations': dict(
+                getattr(self.brain_widget, 'action_representations', {}) or {}),
             'causal_learning': _dump('causal_learning'),
             'capability': _dump('capability'),
             'plasticity': _dump('plasticity'),
@@ -983,6 +989,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 owner.from_dict(payload)
             except Exception as e:
                 print(f"⚠️  Could not restore {key}: {type(e).__name__}: {e}")
+
+        for action, neuron in (state.get('action_representations') or {}).items():
+            if neuron in self.brain_widget.neuron_positions:
+                self.brain_widget.represent_action(str(action), str(neuron))
 
         # A brain grown before provenance existed, or one whose ledger did not
         # survive, still deserves an answer to "why does this neuron exist?".

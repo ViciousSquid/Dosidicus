@@ -140,6 +140,16 @@ class SpikeTracker:
     """
     
     def __init__(self, config: Optional[STDPConfig] = None):
+        # How this tracker reads the passage of time. Spike timing is the one
+        # mechanism in the project that is ABOUT time, so it must read the same
+        # clock as the simulation it is timing. The game uses the wall clock;
+        # the headless trainer and the test harness substitute simulated
+        # seconds. Before this, a trainer stepping 1 500 ticks a real second
+        # presented every spike as arriving 0.7 ms after the last, which is far
+        # inside any plausible timing window - so STDP computed a delta of
+        # exactly zero for every synapse and contributed nothing at all to a
+        # brain trained without the GUI.
+        self.clock = time.time
         self.config = config or STDPConfig()
         self._mutex = QMutex()
         
@@ -178,7 +188,7 @@ class SpikeTracker:
             SpikeEvent if a spike was detected, None otherwise
         """
         if timestamp is None:
-            timestamp = time.time()
+            timestamp = self.clock()
             
         with QMutexLocker(self._mutex):
             # Get previous activation
@@ -244,7 +254,7 @@ class SpikeTracker:
             List of (neuron_name, SpikeEvent) tuples for detected spikes
         """
         if timestamp is None:
-            timestamp = time.time()
+            timestamp = self.clock()
 
         self.observe_interval(timestamp)
 
@@ -273,7 +283,7 @@ class SpikeTracker:
 
     def _get_recent_spikes_nolock(self, neuron_name: str, window: float) -> List[SpikeEvent]:
         """Lock-free version — caller must already hold _mutex."""
-        cutoff = time.time() - window
+        cutoff = self.clock() - window
         if neuron_name not in self._spike_history:
             return []
         return [s for s in self._spike_history[neuron_name] if s.timestamp >= cutoff]
@@ -293,7 +303,7 @@ class SpikeTracker:
         if max_age is None:
             max_age = self.config.time_window * 3
             
-        current_time = time.time()
+        current_time = self.clock()
         cutoff = current_time - max_age
         
         with QMutexLocker(self._mutex):
@@ -309,7 +319,7 @@ class SpikeTracker:
                     del self._spike_history[neuron_name]
             
             # Decay burst counts periodically
-            current_time = time.time()
+            current_time = self.clock()
             if current_time - self._last_burst_check > self.config.burst_window:
                 self._burst_counts = {k: max(0, v - 1) for k, v in self._burst_counts.items()}
                 self._last_burst_check = current_time
@@ -378,7 +388,22 @@ class STDPLearner:
         self._ltp_count = 0  # Long-term potentiation events
         self._ltd_count = 0  # Long-term depression events
         self._total_delta = 0.0
-        
+        self._clock = time.time
+
+    @property
+    def clock(self):
+        return self._clock
+
+    @clock.setter
+    def clock(self, fn):
+        """Set the clock for the learner AND its spike tracker together.
+
+        They time the same events; two clocks would put the spikes and the
+        window that measures them in different frames of reference.
+        """
+        self._clock = fn
+        self.spike_tracker.clock = fn
+
     def record_activation(self, neuron_name: str, activation: float, 
                           timestamp: Optional[float] = None) -> Optional[SpikeEvent]:
         """Record activation and detect spikes. Delegates to spike tracker."""
@@ -410,7 +435,7 @@ class STDPLearner:
         """
         if not values:
             return 0
-        timestamp = timestamp or time.time()
+        timestamp = timestamp or self.clock()
         threshold = self.config.eligibility_threshold
 
         # Deviation from the neutral baseline, in [-1, 1]. A neuron sitting at
@@ -460,7 +485,7 @@ class STDPLearner:
 
     def eligibility_snapshot(self, limit: int = 20) -> List[Tuple[Tuple[str, str], float]]:
         """Current live traces, strongest first - for the STDP inspector."""
-        now = time.time()
+        now = self.clock()
         rows = []
         with QMutexLocker(self._mutex):
             items = list(self._eligibility_traces.items())
@@ -602,7 +627,7 @@ class STDPLearner:
             current_time: Optional timestamp
         """
         if current_time is None:
-            current_time = time.time()
+            current_time = self.clock()
             
         key = (pre_neuron, post_neuron)
         
@@ -630,7 +655,7 @@ class STDPLearner:
                                current_time: Optional[float] = None) -> float:
         """Get the current eligibility trace for a connection."""
         if current_time is None:
-            current_time = time.time()
+            current_time = self.clock()
             
         key = (pre_neuron, post_neuron)
         
@@ -675,7 +700,7 @@ class STDPLearner:
         """
         if rate is None:
             rate = self.config.reward_learning_rate
-        current_time = time.time()
+        current_time = self.clock()
         weight_deltas = {}
 
         # One outcome carries a fixed budget of plasticity, shared among the
@@ -781,7 +806,7 @@ class STDPLearner:
         self.spike_tracker.cleanup_old_spikes()
         
         # Cleanup old eligibility traces
-        current_time = time.time()
+        current_time = self.clock()
         cutoff = current_time - self.config.eligibility_window * 2
         
         with QMutexLocker(self._mutex):

@@ -36,6 +36,18 @@ moves over identical windows while that action is *not* running:
 Without it the squid would credit "exploring" with the hunger it accumulates
 simply by existing.
 
+Every settled window is filed twice: once against every action that was
+running in it, and once in a per-drive total covering *all* windows. The
+background for one action is then the arithmetic difference — the windows that
+did not contain it — plus the windows measured while the squid was doing
+nothing at all. Two earlier designs both failed here. A probe that ran
+continuously measured a "background" that already contained every action
+window, so a real contingency read as no contingency; a probe that ran only
+while the squid was idle almost never fired, because the squid is almost always
+doing something. Where an action has genuinely been running for every window
+ever measured, the background is reported as zero — no evidence — rather than
+as an average that contains the effect being tested.
+
 **Cue competition.** Actions overlap constantly — a squid is exploring while it
 notices food while it drifts — so every expiring episode is settled *together*,
 by shared prediction error:
@@ -45,14 +57,38 @@ error  = observed change − what every action in scope already predicts
 target = this action's own current estimate + error
 ```
 
-Two actions that always co-occur end up **splitting** the effect. That is the
-honest answer: nothing can separate perfectly confounded causes, and inventing
-a split would be worse than admitting the tie. The moment one of them happens
-without the other, its estimate is corrected toward nothing and the real cause
-absorbs the effect.
+Every action in scope for an outcome is updated against that outcome, and
+every estimate is read before any of them moves. Both halves are needed.
+Updating only the episode that happened to expire handed the whole effect to
+whichever window closed first — two behaviours that always overlap almost never
+expire on the same tick, so the first to settle took the error and the second,
+settling a second later, found its partner's estimate already explaining
+everything. That is not cue competition, it is a race.
 
-Every estimate is read before any of them moves, so settlement does not depend
-on which episode's window happens to expire first.
+Two actions that always co-occur therefore end up **splitting** the effect
+exactly. That is the honest answer: nothing can separate perfectly confounded
+causes, and inventing a split would be worse than admitting the tie. The moment
+one of them happens without the other, its estimate is corrected toward nothing
+and the real cause absorbs the effect.
+
+## 3b. When the split is permanent
+
+Splitting the credit is right, but it is not a destination. The ledger records,
+for every ordered pair of actions, how often they ran together and how often
+the first ran **without** the second, and `unresolved_attributions()` reports
+outcomes whose credit is split between actions whose "apart" count is zero.
+
+Those are reported to the player as what they are — an open question, not two
+facts:
+
+> Something about wiggling and fluttering sends satisfaction up by about 5
+> points, but they have happened together 26 times and apart none, so the squid
+> cannot tell which of them does it.
+
+and they are handed to the capability monitor, which asks whether the network
+could hold the distinction even if the evidence arrived. When it could not,
+that is a **causal-differentiation deficit** and the squid grows structure for
+it. See [Neurogenesis](Neurogenesis.md#perfectly-confounded-actions).
 
 **Extinction.** An episode settles every drive the action already has an
 expectation about, not only the ones that visibly moved. *"I did that and the

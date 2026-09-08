@@ -1,3 +1,138 @@
+### version 3.1.2.0
+`8 Sep 2026`
+
+#### When the squid cannot tell which of its own actions did it
+
+If wiggling and fluttering always happen together and satisfaction always
+follows, Rescorla-Wagner settlement gives each of them half the credit. That is
+the honest answer, and v3.1.1.0 left it there. Two permanent half-strength
+claims are not knowledge, though, and no amount of repeating the same
+experience improves them.
+
+The causal ledger now records, for every ordered pair of the squid's
+behaviours, how often the two ran together and how often the first ran
+*without* the second. An outcome whose credit is split between behaviours that
+have never once been observed apart is reported to the player as what it is —
+an open question rather than two facts — and handed to the capability monitor,
+which asks the structural half: does any neuron in this brain fire differently
+for one of them than for the other?
+
+When the answer is no, that is a **causal-differentiation deficit**, the sixth
+kind, and the squid grows a neuron that stands for one of the behaviours and
+nothing else. It is driven by the action rather than by synapses (a new
+"externally driven" role, which propagation leaves alone exactly as it leaves a
+sensor alone), and its single outgoing synapse onto the disputed outcome is
+created **at zero**. It encodes neither the confounded pair nor a guess about
+which one is the cause; it is somewhere for evidence to go. The first time one
+of the behaviours happens without the other, ordinary plasticity and ordinary
+settlement resolve it, and the pathway from the real cause is the one that
+strengthens.
+
+Neurogenesis cannot discover what the environment never showed the squid. It
+can make sure that when the environment finally does show it, the brain has
+somewhere to put the answer.
+
+#### Ten defects the new test suite found
+
+`tests/test_organism.py` runs the real BrainWidget inside a scripted world and
+asserts on what the squid demonstrably did. Writing it turned up ten things
+that were wrong, all fixed at source rather than tested around.
+
+**Cue competition was still a race.** Only the episode that happened to expire
+was updated against an outcome. Two behaviours that always overlap almost never
+expire on the same tick, so the first to settle took the whole error and the
+second learned nothing. Every action in scope is now updated on the shared
+prediction error, which is both order-independent and what Rescorla and Wagner
+actually say.
+
+**Overlap was read from the wrong place.** Which behaviours counted as
+concurrent was decided by what happened to be open at settlement time, so of
+two behaviours that always overlap one looked like it always had company and
+the other like it never did. It is now read from the episodes' own windows,
+including recently settled ones.
+
+**The background drift measured a background containing the thing being
+tested.** The probe ran during action windows too, so an action's effect was
+compared against an average that already included it. Fixing it by running the
+probe only while idle almost never fired, because the squid is almost always
+doing something. Every settled window is now filed against the actions running
+in it and in a per-drive total, and the background is the difference.
+
+**Spike timing had no clock of its own.** STDP measured spike intervals on the
+wall clock, so a headless trainer stepping 1 500 ticks a real second presented
+every spike as arriving under a millisecond after the last — inside any
+plausible window — and computed a delta of exactly zero for every synapse. A
+brain trained without the GUI had no spike timing in it at all. The plasticity
+engine and the spike tracker now share a clock, as the capability monitor,
+causal ledger and neurogenesis engine already did; the trainer sets all four to
+simulated seconds and no longer has to disable the deficit age gate.
+
+**Every squid was born with a different brain.** `initialize_weights()` built a
+newborn out of 40% random connections at random weights in [-1, +1] — assigned
+straight into the weights dict, so none of them could say where it came from —
+while the headless trainer hatched from a fixed innate table, and two further
+places in BrainWidget wrote `can_see_food` connections afterwards, one of them
+behind a coin flip. The instincts of the species are now written once, in
+`brain_constants.INNATE_CONNECTIONS`, through the recorded write path. "The
+same squid, raised differently" is now a comparison anyone can make.
+
+**The differentiation detector diagnosed healthy structure and then its own
+remedy.** Two anti-correlated sources pushing a neuron in *opposite* directions
+is push-pull — the shape of every regulator the engine grows — not an
+overloaded neuron; only same-signed drivers can conflict. And because the
+remedy hands one driver to a new neuron, that new neuron is necessarily still
+anti-correlated with the one that stayed, so the monitor re-diagnosed the
+conflict it had just resolved, one neuron further out, until it hit the type
+cap. Both are fixed at the detector.
+
+**Correlations were computed on constants.** Two drives wobbling by a tenth of
+a point in opposite directions read as a perfect anti-correlation, and the brain
+grew a neuron to separate them. A variance floor of two activation points now
+applies.
+
+**A cue could be its own outcome.** "Satisfaction predicts satisfaction" was
+reported as an expression deficit, and the remedy wired satisfaction to a new
+neuron and back — a positive feedback loop grown on purpose.
+
+**A sensor reading zero was the most salient thing in the world.** Cue capture
+scored sensors by distance from 50, so "no food anywhere" outranked everything,
+and the squid grew structure to act on the absence of food. A sensor is now
+salient when it is reporting something.
+
+**Restoring a neuron on load wrote unrecorded synapses**, and a synapse could
+be created pointing *into* an action representation, which the world overwrites
+every tick — the same inert-by-construction bug as a synapse into a sensor.
+
+**A green test run still exited 134.** A BrainWidget owns a render thread, and
+leaving it running made Qt abort the process after unittest had already printed
+OK, so any CI watching the exit code called a passing run a failure.
+
+#### The organism test suite
+
+Sixty-five tests in `tests/test_organism.py`, none of them a unit test. Each
+runs the production BrainWidget in a scripted, deterministic world and asserts
+on an observable consequence: perception reaching the network, activation
+propagating one hop per tick, episodes opening and settling, delayed outcomes
+finding eligible synapses, potentiation and depression on real weights, sleep
+replaying the same weight store the squid wakes up in, pruning removing real
+synapses, an evolved brain surviving save/load, learning changing what the
+sight of food does to a squid, and every one of it explicable afterwards in
+plain English.
+
+Seven of them are scripted lives run twice with the causality reversed: food
+that pays off and food that does not, and the whole confounded-actions
+lifecycle — confounded phase, persistent deficit, growth, separation,
+resolution — run once with each behaviour as the true cause, checking that the
+resulting brains differ accordingly and that a behaviour which never produced
+the outcome is never credited with it.
+
+The last group is a regression sweep of the repository for competing
+implementations of propagation, Hebbian learning, STDP, eligibility traces,
+three-factor learning, causal learning, neurogenesis, pruning, sleep
+consolidation, weight mutation and provenance — plus a runtime audit that
+replaces the live weights dict with one that records the identity of every
+writer and asserts nothing reaches it except the recorded write path.
+
 ### version 3.1.1.0
 `8 Sep 2026`
 

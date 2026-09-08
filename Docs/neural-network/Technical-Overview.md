@@ -23,6 +23,22 @@ them makes is recorded with its reason.
 The headless trainer imports the same modules, so a brain trained without the
 GUI behaves identically inside it.
 
+### One clock
+
+Four of those mechanisms are paced in seconds: how long a deficit must persist,
+how long an action's consequence is watched, how long after growing one neuron
+another may be grown, and — most of all — how long ago a neuron fired. Each of
+them reads a `clock` attribute that defaults to the wall clock and that the
+headless trainer and the test harness replace with simulated seconds.
+
+Without that, a trainer stepping 1 500 ticks per real second presented every
+spike as arriving under a millisecond after the last, far inside any plausible
+timing window, so STDP computed a delta of exactly zero for every synapse and a
+brain trained without the GUI had no spike timing in it at all. The same clock
+substitution is what makes the behavioural experiments in
+`tests/test_organism.py` mean anything: a squid can live an hour in a tenth of
+a second and every pacing rule still means what it says.
+
 ---
 
 ## 1. Architecture
@@ -37,13 +53,23 @@ Activations run 0–100 with **50 as the neutral baseline**, so a silent input
 contributes nothing and a negative weight is genuinely inhibitory. Weights run
 −1 … +1.
 
-Three roles decide what may write a neuron (`src/brain_constants.py`):
+Every squid hatches with the same instincts, listed once in
+`brain_constants.INNATE_CONNECTIONS` and written through the recorded write
+path with mechanism `innate`, so even a newborn brain can explain itself. The
+game used to build one out of 40% random connections at random weights while
+the headless trainer used a fixed table, which meant two squid of the same
+species were born with different instincts and "the same squid, raised
+differently" was not a comparison anyone could make.
+
+Four roles decide what may write a neuron (`src/brain_constants.py`,
+`src/propagation.py`):
 
 | Role | Written by | May a synapse point at it? |
 |------|-----------|----------------------------|
 | **Pure input** (sensors) | the world, via `BrainNeuronHooks` | No — the world overwrites it every tick, so the synapse would be inert |
 | **Core drive** | the squid model | Yes — via modulation (see §4) |
 | **Network-driven** (grown, Designer, connector) | forward propagation | Yes |
+| **Externally driven** (action representations) | what the squid is currently doing, via `ExternallyDriven.drive_external_neurons()` | No — same reason as a sensor |
 
 ## 2. Forward propagation
 

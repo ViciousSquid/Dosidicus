@@ -83,6 +83,7 @@ EVOCATIVE_NAMES: Dict[str, List[str]] = {
     'exploration_memory':          ["exploration_reward", "place_memory"],
     'general_novelty_processing':  ["new_experience", "discovery_satisfaction"],
     'role_separation':             ["role_separation", "second_opinion"],
+    'causal_attribution':          ["was_it_this_one", "attribution_probe"],
     # learned expectation
     'learned_expectation':         ["learned_expectation", "anticipation"],
     # connectivity
@@ -249,6 +250,11 @@ class FunctionalNeuron:
         # authoritative answer to "why does this neuron exist?" and travels
         # with the neuron through save/load.
         self.origin_deficit: Dict[str, Any] = dict(origin_deficit or {})
+        # Set when this neuron was grown to stand for one of the squid's own
+        # actions. The brain's action_representations map is authoritative for
+        # driving it; this is the neuron's own copy, so a birth record can say
+        # what it was grown to represent.
+        self.represents_action: str = ""
 
     @property
     def display_name(self) -> str:
@@ -285,6 +291,7 @@ class FunctionalNeuron:
         neuron.utility_score = data['utility_score']
         neuron.strength_multiplier = data['strength_multiplier']
         neuron.origin_deficit = dict(data.get('origin_deficit') or {})
+        neuron.represents_action = str(data.get('represents_action', '') or '')
         return neuron
 
     def to_dict(self):
@@ -297,6 +304,7 @@ class FunctionalNeuron:
             'utility_score': self.utility_score,
             'strength_multiplier': self.strength_multiplier,
             'origin_deficit': dict(self.origin_deficit),
+            'represents_action': self.represents_action,
             'creation_context': {
                 'trigger_type': self.creation_context.trigger_type,
                 'timestamp': self.creation_context.timestamp,
@@ -399,11 +407,25 @@ class FunctionalNeuron:
             # keeps it viable if it was created without one.
             if 'satisfaction' in all_neurons: connections['satisfaction'] = 0.4
             if 'curiosity' in all_neurons: connections['curiosity'] = 0.3
+        elif self.specialization == 'causal_attribution':
+            # Deliberately nothing. This neuron exists to stand for one of the
+            # squid's own actions and NOTHING else; any default outgoing weight
+            # would be the architecture asserting what that action causes,
+            # which is precisely the question its own experience has so far
+            # been unable to answer. The remedy wiring gives it one synapse
+            # onto the disputed outcome at zero - capacity, not content.
+            pass
         elif self.specialization == 'role_separation':
-            # Its real inputs come from the differentiation deficit; this is
-            # only what it does with them.
-            if 'satisfaction' in all_neurons: connections['satisfaction'] = 0.3
-            if 'happiness' in all_neurons: connections['happiness'] = 0.3
+            # Deliberately nothing. This neuron exists to carry ONE offloaded
+            # driver to ONE target, and the differentiation remedy supplies
+            # exactly that wiring. Giving it default synapses onto happiness
+            # and satisfaction made every one of them a generic driver of the
+            # drives, anti-correlated with whatever it had been split from - so
+            # each one produced a fresh differentiation deficit on a fresh
+            # target, and the engine grew role-separation neurons until it hit
+            # its type cap. _ensure_viable() still catches the case where the
+            # neuron is created without a deficit to wire it.
+            pass
         elif self.specialization in ('network_bridge', 'connectivity_bridge'):
             # A connector's whole job is the orphan it was grown for; the
             # connectivity remedy supplies that wiring.
@@ -608,6 +630,13 @@ class EnhancedNeurogenesis:
         # "strongest knowledge" ended up being tautologies about neurons it had
         # just grown. config.ini has declared reciprocal_strength since 2.4 and
         # nothing read it; it is what this is for.
+        if not is_learning_target(new_neuron) or \
+                new_neuron in getattr(bw, 'externally_driven', set()):
+            # Nothing can drive this neuron through a synapse: the world writes
+            # it every tick, so a return path would be overwritten before
+            # anything could read it. It does not need one - it is already
+            # driven, just not by the network.
+            return wiring
         props = self.config.neurogenesis.get('neuron_properties', {}) or {}
         damping = float(props.get('reciprocal_strength', 0.15) or 0.15)
         outgoing = [(tgt, w) for (src, tgt), w in bw.weights.items()
@@ -816,6 +845,11 @@ class EnhancedNeurogenesis:
             return False
         if not is_learning_target(dst):
             return False      # a synapse into a sensor can never do anything
+        if dst in getattr(bw, 'externally_driven', set()):
+            # ...and neither can one into a neuron the world writes every tick.
+            # An action representation is overwritten before anything could
+            # read what a synapse put there, exactly as a sensor is.
+            return False
 
         note = (f"wired at birth to {purpose}"
                 + (f" — {deficit.remedy}" if deficit and purpose == 'remedy' else ""))
@@ -892,6 +926,40 @@ class EnhancedNeurogenesis:
                     self._retire_edge((offload, target),
                                       f"handed over to {neuron_name}")
 
+        elif deficit.kind == 'causal_differentiation':
+            # The squid has two candidate causes for one outcome and no way to
+            # tell them apart, because nothing in the brain fires differently
+            # for one than for the other.
+            #
+            # What is grown is a neuron that stands for ONE of the candidates
+            # and nothing else, driven by the action itself rather than by the
+            # synapses. That is the missing capacity: with it, "I am doing this
+            # one" is a fact the network can hold, and so is "I am not".
+            #
+            # What is deliberately NOT grown:
+            #   * anything encoding the A-and-B association the squid already
+            #     has - that is the thing it is stuck on, not the remedy;
+            #   * any claim that this candidate is the cause. The one outgoing
+            #     synapse, onto the disputed outcome, is created at weight
+            #     ZERO. It asserts nothing. It is somewhere for evidence to go
+            #     if the two ever come apart, and until then it stays at zero
+            #     because the correlation that would move it is shared equally
+            #     by both candidates.
+            #
+            # Which candidate gets the representation is decided by name order
+            # rather than by anything about the evidence, and it does not
+            # matter: representing either one is enough to hold a two-way
+            # distinction, and the representation makes no causal claim.
+            candidates = sorted(deficit.sources) or sorted(
+                deficit.evidence.get('candidates') or [])
+            action = candidates[0] if candidates else ''
+            stat = deficit.target
+            if action and hasattr(self.brain_widget, 'represent_action'):
+                self.brain_widget.represent_action(action, neuron_name)
+                func_neuron.represents_action = action
+                if stat and stat in getattr(self.brain_widget, 'neuron_positions', {}):
+                    plan.append((neuron_name, stat, 0.0, 'remedy'))
+
         elif deficit.kind == 'connectivity':
             orphan = deficit.target
             if orphan:
@@ -913,7 +981,12 @@ class EnhancedNeurogenesis:
         bw = self.brain_widget
         incoming = [e for e in bw.weights if e[1] == neuron_name]
         outgoing = [e for e in bw.weights if e[0] == neuron_name]
-        if incoming and outgoing:
+        # A neuron the world writes is driven by the world; giving it an
+        # incoming synapse would create a second writer whose contribution is
+        # overwritten before anything can read it. Its input arrives every
+        # tick, so only the output half of viability applies.
+        externally_driven = neuron_name in getattr(bw, 'externally_driven', set())
+        if outgoing and (incoming or externally_driven):
             return []
 
         added: List[Tuple[str, str, float, str]] = []
@@ -1289,7 +1362,13 @@ class EnhancedNeurogenesis:
                 if target in core_neurons and target not in CORE_STAT_NEURONS:
                     continue  # never create an edge into a sensor
                 if (name, target) not in self.brain_widget.weights:
-                    self.brain_widget.weights[(name, target)] = weight
+                    self.brain_widget.apply_weight_change(
+                        (name, target), value=float(weight),
+                        mechanism='neurogenesis',
+                        detail={'purpose': 'specialisation',
+                                'note': f"restored on load - {name} came back "
+                                        f"without its synapses"},
+                        create=True)
         self._rebuild_new_neurons_details()
         new_neurons_list = self.brain_widget.neurogenesis_data.setdefault('new_neurons', [])
         restored_to_list = 0
@@ -1691,6 +1770,10 @@ class EnhancedNeurogenesis:
         neuron_to_prune = candidates[0][0]
         if neuron_to_prune in self.brain_widget.neuron_positions: del self.brain_widget.neuron_positions[neuron_to_prune]
         if neuron_to_prune in self.brain_widget.state: del self.brain_widget.state[neuron_to_prune]
+        # A pruned neuron stops being written by the world too, or the brain
+        # would keep driving an activation nothing reads.
+        if hasattr(self.brain_widget, 'forget_action_representation'):
+            self.brain_widget.forget_action_representation(neuron_to_prune)
         prune_reason = (f"lowest utility of {len(candidates)} candidates "
                         f"(score {candidates[0][1]:.2f}) while the brain was at "
                         f"its size limit")
