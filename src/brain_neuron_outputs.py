@@ -380,10 +380,10 @@ class NeuronOutputMonitor:
         Bindings the player or a custom brain already defined for a neuron are
         left alone, so this can never overwrite a deliberate choice.
         """
-        from .brain_constants import INNATE_ACTION_BINDINGS
+        from .brain_constants import innate_bindings
 
         installed = 0
-        for neuron, hook, threshold, cooldown, probability in INNATE_ACTION_BINDINGS:
+        for neuron, hook, threshold, cooldown, probability in innate_bindings():
             if any(b.neuron_name == neuron for b in self.bindings):
                 continue
             self.bindings.append(NeuronOutputBinding(
@@ -729,7 +729,19 @@ class NeuronOutputMonitor:
             msm.set_state('startled', False)
 
     def _handle_sleep(self, neuron_name, activation, squid, **kwargs):
-        if squid and not getattr(squid, 'is_sleeping', False):
+        """Go to sleep the way the rest of the game does.
+
+        Setting the two attributes by hand skipped everything else
+        go_to_sleep() does - the sink animation, the anxiety relief, the
+        on_sleep hook, the short-term memory clear - so a squid put to sleep
+        by its own brain went to sleep differently from one put to sleep by
+        anything else.
+        """
+        if not squid or getattr(squid, 'is_sleeping', False):
+            return
+        if hasattr(squid, 'go_to_sleep'):
+            squid.go_to_sleep()
+        else:
             squid.is_sleeping = True
             squid.status = "sleeping"
 

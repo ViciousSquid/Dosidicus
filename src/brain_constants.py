@@ -311,13 +311,17 @@ INNATE_CONNECTIONS = (
 # Positions sit in the band between the sensor column and the core stats, and
 # inside layout_bounds() like everything else.
 ACTION_NEURONS = {
-    "act_move":    (170, 250),
-    "act_eat":     (330, 250),
-    "act_flee":    (470, 250),
-    "act_ink":     (610, 250),
-    "act_play":    (750, 250),
-    "act_shelter": (250, 160),
-    "act_rest":    (620, 160),
+    "act_move":     (170, 250),
+    "act_eat":      (330, 250),
+    "act_flee":     (470, 250),
+    "act_ink":      (610, 250),
+    "act_play":     (750, 250),
+    "act_shelter":  (250, 160),
+    "act_rest":     (620, 160),
+    # Involuntary. Not the same neuron as act_rest: choosing to rest before
+    # you are exhausted is a thing a squid can learn, and collapsing when you
+    # are is a thing that happens to it. See the homeostatic drives below.
+    "act_collapse": (440, 160),
 }
 
 ACTION_NEURON_NAMES = tuple(ACTION_NEURONS.keys())
@@ -336,6 +340,9 @@ ACTION_NEURON_NAMES = tuple(ACTION_NEURONS.keys())
 # would need in order to learn any of the rest. Movement is the floor that the
 # whole "learn it by doing it" design stands on.
 ACTION_RESTING_LEVELS = {
+    # A tonic bias, not a wish: locomotion idles at the ordinary midpoint so a
+    # squid that wants nothing in particular still swims, and goes on meeting
+    # things it can learn from.
     "act_move": 50.0,
 }
 
@@ -348,13 +355,56 @@ def action_resting_level(name: str) -> float:
 # What each action neuron is called when the squid is doing it. The decision
 # engine reports the winning action; this is the only place the mapping lives.
 ACTION_BEHAVIOURS = {
-    "act_move":    "exploring",
-    "act_eat":     "eating",
-    "act_flee":    "fleeing",
-    "act_ink":     "inking",
-    "act_play":    "playing",
-    "act_shelter": "approaching_plant",
-    "act_rest":    "sleeping",
+    "act_move":     "exploring",
+    "act_eat":      "eating",
+    "act_flee":     "fleeing",
+    "act_ink":      "inking",
+    "act_play":     "playing",
+    "act_shelter":  "approaching_plant",
+    "act_rest":     "sleeping",
+    "act_collapse": "exhausted",
+}
+
+
+# ---------------------------------------------------------------------------
+# Firing thresholds
+# ---------------------------------------------------------------------------
+# The activation an action neuron has to reach before it drives anything - a
+# property of the neuron, in the same units as its activation, not a rule
+# about behaviour. Every consumer reads these: the actuator fires on them and
+# the decision engine ranks by how far past its own threshold each urge is, so
+# an urge can never be "chosen" at a level too weak to reach the body.
+#
+# They are calibrated against what the innate pathways can actually produce,
+# which is bounded: a saturated sensor contributes half its value (see
+# propagation.signal_of), so is_startled at 100 through a 0.80 synapse is 40,
+# not 80. A threshold above what its own pathway can reach is a behaviour that
+# can never happen - the ink reflex was first set at 80, which the startle
+# pathway tops out well below, so a startled squid could never have inked.
+ACTION_FIRING_THRESHOLDS = {
+    "act_move":     45.0,
+    # Seeing food is enough on its own: a saturated can_see_food gives 42.5
+    # through the innate 0.85 synapse. Set below that with room to spare, so
+    # the decision noise cannot push a squid that can plainly see food back
+    # under the line - "swim towards food" is the instinct it is born with,
+    # not a coin flip it wins slightly more often than not.
+    "act_eat":      38.0,
+    "act_flee":     50.0,
+    "act_ink":      45.0,
+    # The learned actions sit in the same band as the innate ones, and for the
+    # same reason: a threshold has to be REACHABLE by the pathways that could
+    # drive it. A core drive contributes at most 50 (propagation.signal_of), so
+    # thresholds of 60 and 85 meant a squid could learn "when anxious, shelter"
+    # as strongly as a synapse can be learned and still never do it - the
+    # behaviour would have been permanently out of reach, which is not the same
+    # thing as having to be learned. One strong learned pathway from a drive
+    # that is clearly signalling now makes a behaviour available; the
+    # competition between actions decides whether it actually happens.
+    "act_play":     38.0,
+    "act_shelter":  38.0,
+    "act_rest":     38.0,
+    # Only at the very top of the sleepiness scale.
+    "act_collapse": 45.0,
 }
 
 
@@ -378,43 +428,111 @@ ACTION_BEHAVIOURS = {
 # ordinary learning can strengthen, weaken or invert them from experience. An
 # instinct here is a starting point, not a law.
 INNATE_ACTION_WIRING = (
-    # MOVE. Baseline locomotion, so a newborn is out in the world where things
-    # can happen to it. Curiosity drives it; being startled does not stop it
-    # (fleeing is movement too), but being asleep does.
-    ("curiosity",      "act_move",  0.45),
-    ("is_sleeping",    "act_move", -0.90),
+    # --- SENSORIMOTOR PRIORS -------------------------------------------
+    # The squid is born already wired from a sense to the action that sense is
+    # for. Seeing food drives the neuron that swims towards food; it does not
+    # consult a rule that says so. This is the "move towards food" instinct,
+    # and it is one synapse.
+    ("can_see_food",   "act_eat",      0.85),
 
-    # EAT. Seeing food is most of it; hunger sharpens it. This is the "move
-    # towards food automatically" reflex: act_eat is bound to the food-seeking
-    # actuator, so a squid that can see food swims to it without being taught.
-    ("can_see_food",   "act_eat",   0.85),
-    ("hunger",         "act_eat",   0.40),
-    ("is_sleeping",    "act_eat",  -0.90),
+    # --- REFLEX PATHWAYS -----------------------------------------------
+    # Short, strong, sensor-to-motor. Startle alone reaches the flight
+    # threshold: a squid that has just been frightened should not need
+    # corroborating evidence to run. Threat sustains what startle begins.
+    ("is_startled",    "act_flee",     1.00),
+    ("threat_level",   "act_flee",     0.55),
+    # Inking runs from the same startle, in parallel with flight rather than
+    # instead of it - see REFLEX_ACTIONS. The probability on its binding is
+    # what makes it a CHANCE of inking rather than a certainty.
+    ("is_startled",    "act_ink",      0.80),
+    ("threat_level",   "act_ink",      0.35),
 
-    # FLEE. Startle is the reflex trigger; a high threat level sustains it.
-    # Startle alone is enough to reach the threshold: a squid that has just
-    # been frightened should not need corroborating evidence to run.
-    ("is_startled",    "act_flee",  1.00),
-    ("threat_level",   "act_flee",  0.55),
-    ("anxiety",        "act_flee",  0.25),
+    # --- HOMEOSTATIC DRIVES --------------------------------------------
+    # A drive away from its comfortable level pushes the action that would
+    # correct it. Hunger sharpens the appetite the food prior already
+    # supplies; sleepiness, at the very top of its range, drives an
+    # involuntary collapse.
+    #
+    # act_collapse is deliberately NOT act_rest. Collapsing from exhaustion is
+    # homeostasis and every squid is born with it. Choosing to rest BEFORE
+    # exhaustion is a thing a squid has to learn, and act_rest is left unwired
+    # so that it can.
+    ("hunger",         "act_eat",      0.40),
+    ("sleepiness",     "act_collapse", 0.95),
+    ("anxiety",        "act_flee",     0.25),
 
-    # INK. Part of the startle reflex rather than a decision - see the
-    # probability on its binding below, which is what makes it a CHANCE of
-    # inking rather than a certainty.
-    ("is_startled",    "act_ink",   0.80),
-    ("threat_level",   "act_ink",   0.35),
+    # --- TONIC BIAS ----------------------------------------------------
+    # Locomotion has a resting level of its own (ACTION_RESTING_LEVELS), so a
+    # squid that wants nothing in particular still swims. Curiosity modulates
+    # it above that floor. A motionless newborn never meets anything, so it
+    # never has the experience it would need to learn any of the rest.
+    ("curiosity",      "act_move",     0.45),
+
+    # --- SLEEP GATING ---------------------------------------------------
+    # Being asleep inhibits the voluntary actions rather than being checked
+    # for by a rule outside the network. A sleeping squid's action neurons sit
+    # below their thresholds because something is holding them there, which is
+    # why the decision engine needs no "if asleep" branch at all.
+    ("is_sleeping",    "act_move",    -0.90),
+    ("is_sleeping",    "act_eat",     -0.90),
+    ("is_sleeping",    "act_flee",    -0.90),
+    ("is_sleeping",    "act_collapse", -0.90),
 )
 
 
-# Actions the squid never *chooses*. They happen through their output binding
-# when the network drives them past their threshold, and the decision engine
-# leaves them out of the contest.
+# ---------------------------------------------------------------------------
+# Competition between actions
+# ---------------------------------------------------------------------------
+# A squid cannot flee and eat at the same time, and deciding which it does is
+# not arithmetic performed outside its head: the action neurons INHIBIT ONE
+# ANOTHER, so a strongly driven one suppresses its rivals and the winner is
+# whatever survives that. This is ordinary lateral inhibition, written as
+# ordinary synapses, and it is subject to the same plasticity as everything
+# else - a squid whose experience keeps pairing two actions can weaken the
+# inhibition between them.
 #
-# Inking is the case this exists for. It is a defensive reflex that goes off
-# WHILE the squid is bolting, not an alternative to bolting - and if it were
-# ranked against fleeing it would sometimes win, and a frightened squid would
-# stand still and release a cloud of ink instead of escaping.
-REFLEX_ACTIONS = ("act_ink",)
+# Locomotion is inhibited by every other action but does not inhibit them
+# back. That asymmetry is what makes swimming the thing a squid does when
+# nothing else is worth doing, without anything having to declare it the
+# "fallback": any real urge quietly suppresses idling, and when the urge
+# passes, idling comes back on its own.
+#
+# Reflexes (inking, collapsing) sit outside the competition. Inking runs
+# alongside flight rather than against it, and an exhausted squid does not
+# get a vote.
+COMPETING_ACTIONS = ("act_eat", "act_flee", "act_play", "act_shelter", "act_rest")
+
+#: How hard a driven action suppresses its rivals, and idle swimming.
+LATERAL_INHIBITION = -0.22
+LOCOMOTION_INHIBITION = -0.30
+#: How hard an imminent collapse silences everything else.
+COLLAPSE_INHIBITION = -0.45
+
+
+def action_competition_wiring():
+    """Mutual inhibition between action neurons, as (source, target, weight).
+
+    Generated rather than typed out: with five competing actions this is
+    twenty synapses plus five onto locomotion, and a hand-written table of
+    those would be a place for one of them to go quietly missing.
+    """
+    wiring = []
+    for source in COMPETING_ACTIONS:
+        for target in COMPETING_ACTIONS:
+            if source != target:
+                wiring.append((source, target, LATERAL_INHIBITION))
+        wiring.append((source, "act_move", LOCOMOTION_INHIBITION))
+
+    # Collapse takes no part in the competition - it is not chosen - but it
+    # silences it. An exhausted squid stops doing things; without this it went
+    # on reporting whatever it had been up to for the tick between crossing
+    # the collapse threshold and the sleep gating taking hold.
+    for target in COMPETING_ACTIONS + ("act_move",):
+        wiring.append(("act_collapse", target, COLLAPSE_INHIBITION))
+    return tuple(wiring)
+
+
+REFLEX_ACTIONS = ("act_ink", "act_collapse")
 
 # What the squid does when nothing else is worth doing. Not a competitor: an
 # urge only has to beat its own threshold, not this.
@@ -448,23 +566,33 @@ LEARNED_ACTIONS = tuple(
 # startle reflex tops out well below, so a startled squid could never have
 # inked at all.
 INNATE_ACTION_BINDINGS = (
-    ("act_move",    "neuron_output_wander",      45.0, 3.0, 1.00),
-    # Seeing food is enough on its own (a saturated can_see_food gives 42.5
-    # through the innate 0.85 synapse): "swim towards food" is the reflex a
-    # squid is born with, and hunger then makes it more or less urgent than
-    # whatever else is going on.
-    ("act_eat",     "neuron_output_seek_food",   40.0, 1.5, 1.00),
-    ("act_flee",    "neuron_output_flee",        50.0, 3.0, 1.00),
+    ("act_move",     "neuron_output_wander",         3.0, 1.00),
+    ("act_eat",      "neuron_output_seek_food",      1.5, 1.00),
+    ("act_flee",     "neuron_output_flee",           3.0, 1.00),
     # Reachable on a real startle, and then only about a third of the time.
-    ("act_ink",     "neuron_output_ink_cloud",   45.0, 8.0, 0.35),
-    # Learned actions are bound to their actuators from birth too. The binding
-    # is the squid's BODY - it can always ink, or hold a rock. What it does not
-    # have is anything driving these neurons, so until experience wires one up
-    # it never crosses its threshold and the behaviour never happens.
-    ("act_play",    "neuron_output_approach_rock", 60.0, 5.0, 1.00),
-    ("act_shelter", "neuron_output_seek_plant",    55.0, 4.0, 1.00),
-    ("act_rest",    "neuron_output_sleep",         85.0, 10.0, 1.00),
+    ("act_ink",      "neuron_output_ink_cloud",      8.0, 0.35),
+    # The body can always do these. What it lacks is anything driving the
+    # neuron, and for a learned action nothing does until experience wires it.
+    ("act_play",     "neuron_output_approach_rock",  5.0, 1.00),
+    ("act_shelter",  "neuron_output_seek_plant",     4.0, 1.00),
+    ("act_rest",     "neuron_output_sleep",         10.0, 1.00),
+    ("act_collapse", "neuron_output_sleep",         10.0, 1.00),
 )
+
+
+# The activation at which each action becomes something the squid will
+# actually do. Read from the neuron's own firing threshold rather than written
+# again here, so the threshold the decision engine tests is by construction
+# the one the actuator fires on.
+ACTION_THRESHOLDS = dict(ACTION_FIRING_THRESHOLDS)
+
+
+def innate_bindings():
+    """(neuron, hook, threshold, cooldown, probability) for each reflex."""
+    return tuple(
+        (neuron, hook, ACTION_FIRING_THRESHOLDS.get(neuron, 50.0),
+         cooldown, probability)
+        for neuron, hook, cooldown, probability in INNATE_ACTION_BINDINGS)
 
 
 # The sensors a squid is born able to read. can_see_food is already mandatory;
@@ -483,7 +611,7 @@ INNATE_SENSORS = {
 def newborn_neurons() -> dict:
     """Every neuron a squid hatches with, as {name: (x, y)}.
 
-    Eight required neurons, the sensors the innate reflexes read, and the
+    Eight required neurons, the sensors the innate pathways read, and the
     action neurons that are the motor end of behaviour. Neurogenesis adds to
     this over the squid's life; nothing else is there at birth.
     """
@@ -491,7 +619,7 @@ def newborn_neurons() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Personality, as a tilt on the instincts rather than a rule about behaviour
+# Personality, as a tilt on the innate pathways rather than a rule
 # ---------------------------------------------------------------------------
 # A timid squid is not one that consults a rule saying "multiply fleeing by
 # 1.5 when deciding". It is one born with a stronger startle reflex. The
@@ -532,17 +660,6 @@ INNATE_PERSONALITY_BIAS = {
         ("curiosity",    "act_move", 0.85),
         ("threat_level", "act_flee", 1.15),
     ),
-}
-
-
-# The activation at which each action becomes something the squid will
-# actually do. Derived from the bindings rather than written twice, so the
-# threshold the decision engine tests is by construction the same one the
-# actuator fires on - an urge is never "chosen" at a level that could not
-# reach the body.
-ACTION_THRESHOLDS = {
-    neuron: threshold
-    for neuron, _hook, threshold, _cooldown, _probability in INNATE_ACTION_BINDINGS
 }
 
 

@@ -116,13 +116,19 @@ class BlankBrainTests(unittest.TestCase):
         brain = newborn_brain()
         self.assertEqual(set(brain.positions), set(newborn_neurons()))
 
-    def test_the_newborn_reflexes_are_the_documented_three_plus_ink(self):
+    def test_the_newborn_pathways_are_the_documented_ones(self):
         brain = newborn_brain()
         driven = {t for _s, t, _w in INNATE_ACTION_WIRING}
-        self.assertEqual(driven, {"act_move", "act_eat", "act_flee", "act_ink"})
+        self.assertEqual(
+            driven,
+            {"act_move", "act_eat", "act_flee", "act_ink", "act_collapse"})
+        # A learned action does have INBOUND synapses at birth - the other
+        # actions inhibit it, which is what the competition is made of. What
+        # it must not have is anything that could drive it.
         for action in LEARNED_ACTIONS:
             with self.subTest(action=action):
-                drivers = [k for k in brain.weights if k[1] == action]
+                drivers = [k for k, w in brain.weights.items()
+                           if k[1] == action and w > 0]
                 self.assertEqual(drivers, [],
                                  f"{action} is supposed to have to be learned")
 

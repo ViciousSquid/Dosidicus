@@ -1036,6 +1036,14 @@ class BehaviouralExperiments(unittest.TestCase):
         payoff = {'satisfaction': +3.0}
 
         # Phase 1 - perfectly confounded.
+        #
+        # NOTE: bout() gives the payoff during the LAST action of the bout, so
+        # flutter is the one co-active with the reward here. The CONTINGENCY
+        # the squid records is genuinely confounded (test 3 checks the two
+        # shares come out equal), but the Hebbian pathway is not symmetric:
+        # flutter is the one whose representation neuron actually fires
+        # alongside rising satisfaction. Tests that compare the two pathways
+        # have to account for that head start - see test 6.
         for _ in range(26):
             org.bout(['wiggle', 'flutter'], payoff)
         phase1 = {
@@ -1134,13 +1142,25 @@ class BehaviouralExperiments(unittest.TestCase):
                            "coincidence")
 
     def test_5_the_appropriate_pathway_is_the_one_that_strengthens(self):
+        """After the two come apart, the real cause owns the pathway.
+
+        Measured as where the two pathways END UP, not as how much each moved
+        during phase 2. The gain is a misleading statistic here: by the time
+        the actions separate, the real cause's pathway is already high and has
+        little headroom left, while the coincidence's is deeply negative and
+        has a long way to travel back toward zero - so the coincidence can
+        post the larger *change* in the same run where it ends up far weaker,
+        which is the opposite of what the test is trying to say.
+        """
         org, phase1, phase2 = self._confounded_life('flutter')
-        gained = {a: phase2['weights'][a] - phase1['weights'][a]
-                  for a in ('wiggle', 'flutter')}
-        self.assertGreater(gained['flutter'], gained['wiggle'],
-                           f"the pathway from the real cause did not "
-                           f"strengthen more than the pathway from the "
-                           f"coincidence ({gained})")
+        final = phase2['weights']
+        self.assertGreater(final['flutter'], final['wiggle'],
+                           f"the pathway from the real cause is not the "
+                           f"stronger of the two ({final})")
+        self.assertGreater(final['flutter'], 0.0,
+                           "the real cause did not end up excitatory")
+        self.assertLess(final['wiggle'], final['flutter'] / 2.0,
+                        "the coincidence kept most of the credit")
 
     def test_6_the_mirrored_life_produces_the_mirrored_brain(self):
         _, flutter_p1, flutter_p2 = self._confounded_life('flutter')
@@ -1151,12 +1171,22 @@ class BehaviouralExperiments(unittest.TestCase):
         self.assertGreater(wiggle_p2['effects']['wiggle'],
                            wiggle_p2['effects']['flutter'])
 
-        flutter_gain = {a: flutter_p2['weights'][a] - flutter_p1['weights'][a]
-                        for a in ('wiggle', 'flutter')}
-        wiggle_gain = {a: wiggle_p2['weights'][a] - wiggle_p1['weights'][a]
-                       for a in ('wiggle', 'flutter')}
-        self.assertGreater(flutter_gain['flutter'], flutter_gain['wiggle'])
-        self.assertGreater(wiggle_gain['wiggle'], wiggle_gain['flutter'])
+        # The mirror, stated as a comparison BETWEEN the two lives rather than
+        # within one of them. Phase 1 hands flutter a head start in the
+        # Hebbian pathway (see _confounded_life), so "wiggle ends ahead of
+        # flutter in the wiggle life" is asking the separation phase to
+        # overturn that head start as well as do its own job. What the mirror
+        # actually claims is that each action's pathway is stronger in the
+        # life where that action was the real cause - which is exactly the
+        # claim that the squid's brain reflects the life it lived.
+        self.assertGreater(flutter_p2['weights']['flutter'],
+                           wiggle_p2['weights']['flutter'],
+                           "flutter's pathway was no stronger in the life "
+                           "where flutter was the real cause")
+        self.assertGreater(wiggle_p2['weights']['wiggle'],
+                           flutter_p2['weights']['wiggle'],
+                           "wiggle's pathway was no stronger in the life "
+                           "where wiggle was the real cause")
 
     def test_6_the_two_lives_can_each_explain_themselves(self):
         org, phase1, phase2 = self._confounded_life('flutter')

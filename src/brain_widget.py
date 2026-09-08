@@ -2453,8 +2453,10 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         brain then grew a connector to rescue a defect it was born with.
         """
         from .brain_constants import (INNATE_CONNECTIONS, INNATE_ACTION_WIRING,
-                                       LEARNED_ACTIONS)
-        innate = tuple(INNATE_CONNECTIONS) + tuple(INNATE_ACTION_WIRING)
+                                       LEARNED_ACTIONS,
+                                       action_competition_wiring)
+        innate = (tuple(INNATE_CONNECTIONS) + tuple(INNATE_ACTION_WIRING)
+                  + action_competition_wiring())
         for source, target, weight in innate:
             if source not in self.neuron_positions or target not in self.neuron_positions:
                 continue

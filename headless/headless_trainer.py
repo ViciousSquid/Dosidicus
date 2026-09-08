@@ -48,6 +48,7 @@ from src.brain_constants import (  # noqa: E402
     INPUT_SENSORS as _INPUT_SENSOR_POSITIONS,
     INNATE_CONNECTIONS,
     INNATE_ACTION_WIRING,
+    action_competition_wiring,
     ACTION_NEURONS,
     newborn_neurons,
     action_resting_level,
@@ -523,7 +524,9 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
                 self.state[name] = 50.0
 
         # The instincts of the species, from the one table that holds them.
-        for src, dst, weight in tuple(INNATE_CONNECTIONS) + tuple(INNATE_ACTION_WIRING):
+        innate = (tuple(INNATE_CONNECTIONS) + tuple(INNATE_ACTION_WIRING)
+                  + action_competition_wiring())
+        for src, dst, weight in innate:
             if src in self.positions and dst in self.positions:
                 self.apply_weight_change(
                     (src, dst), value=float(weight), mechanism='innate',

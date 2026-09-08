@@ -34,21 +34,37 @@ class DecisionEngine:
     --------------------
     The network has action neurons (brain_constants.ACTION_NEURONS), one per
     thing the squid can do. Forward propagation drives them like any other
-    network-driven neuron. This engine reads their activations and reports the
-    strongest as the squid's choice. That is the whole policy - so every number
-    behind a behaviour is now a synapse, and every synapse is something
-    Hebbian learning, STDP, sleep consolidation or neurogenesis can move.
+    network-driven neuron, and THEY INHIBIT ONE ANOTHER - a strongly driven
+    action suppresses its rivals, so the winner is whatever survives that
+    competition rather than the result of a comparison made out here. This
+    engine reads the outcome and carries it out. Every number behind a
+    behaviour is a synapse, and every synapse is something Hebbian learning,
+    STDP, sleep consolidation or neurogenesis can move.
 
-    The squid is born able to MOVE, EAT and FLEE (with a chance of inking when
-    startled), because a newborn that does nothing never generates the
-    experience it would need in order to learn. Playing, sheltering by a plant
-    and choosing to rest have no innate wiring at all: those action neurons sit
-    at zero until something the squid experiences builds a path to them.
+    What the squid is born with is not a rule anywhere; it is structure
+    (brain_constants.INNATE_ACTION_WIRING), of four kinds:
 
-    Two things here are still unconditional, and both are physiology rather
-    than choice: a squid that is asleep is asleep, and a squid at the top of
-    the sleepiness scale collapses. Learning to rest BEFORE collapsing is one
-    of the things a squid can acquire - that is what act_rest is for.
+      sensorimotor priors  seeing food drives the neuron that swims to food
+      reflex pathways      startle drives flight, and in parallel the ink
+                           reflex, which fires with a probability rather than
+                           a certainty
+      homeostatic drives   hunger sharpens the food prior; sleepiness past
+                           the top of its range drives an involuntary collapse
+      tonic bias           locomotion idles above zero, so a squid that wants
+                           nothing still swims and goes on meeting things
+
+    All of it is ordinary synapses written through the recorded path, so an
+    instinct is a starting point rather than a law: experience can strengthen,
+    weaken or invert any of it.
+
+    Playing, sheltering by a plant, and choosing to rest before exhaustion
+    have no innate wiring at all. Those neurons sit at zero until something the
+    squid experiences builds a path to them.
+
+    There is no "if asleep" branch here and no "if exhausted" branch. Being
+    asleep inhibits the voluntary action neurons (sleep gating), and an
+    imminent collapse silences them, so in both cases the network itself
+    produces nothing to do.
     """
 
     def __init__(self, squid):
@@ -152,14 +168,14 @@ class DecisionEngine:
         brain_state.update(perceptual_inputs)
         decision_data['brain_state'] = brain_state
 
-        # --- Physiology. Not decisions: a squid does not choose to be asleep,
-        #     and past a certain exhaustion it does not choose to stay awake. ---
-        if self.squid.is_sleeping:
-            return self._record(decision_data, "sleeping peacefully", 1.0)
-
-        if self._activation(brain_state, 'sleepiness') >= 95:
-            self.squid.go_to_sleep()
-            return self._record(decision_data, "exhausted", 1.0)
+        # There is no "if asleep" branch and no "if exhausted" branch here.
+        # Both used to be written as stimulus-to-action rules - `if
+        # sleepiness >= 95: go_to_sleep()` - and both are pathways in the
+        # network now: sleepiness drives act_collapse (a homeostatic drive),
+        # and is_sleeping inhibits every voluntary action neuron (sleep
+        # gating). A sleeping squid's actions sit below their thresholds
+        # because something in its brain is holding them there, which is what
+        # being asleep is.
 
         # --- The decision itself: whatever the network wants most. ---
         weights = self._action_weights(brain_state)
@@ -201,10 +217,15 @@ class DecisionEngine:
             urgency[behaviour] = (value - threshold) / headroom
 
         if not urgency:
-            # Nothing in the network is driving any action hard enough to act
-            # on. The squid swims - which is the floor act_move rests at, and
-            # is how it goes on meeting things it can learn from.
-            return self._record(decision_data, self._drift(), 0.0)
+            # Nothing is driving any action hard enough to act on. Locomotion
+            # is the fallback, but it has to clear its own threshold like
+            # anything else - which is how a sleeping squid, whose act_move is
+            # held down by the sleep gating, ends up doing nothing at all
+            # rather than drifting around the tank in its sleep.
+            locomotion = jittered[ACTION_BEHAVIOURS[FALLBACK_ACTION]]
+            if self._wants(FALLBACK_ACTION, locomotion):
+                return self._record(decision_data, self._drift(), 0.0)
+            return self._record(decision_data, self._resting_status(), 0.0)
 
         winner = max(urgency, key=urgency.get)
         ordered = sorted(urgency.values(), reverse=True)
@@ -288,7 +309,16 @@ class DecisionEngine:
             s.go_to_sleep()
             return "settling down to sleep"
 
+        if decision == "exhausted":
+            s.go_to_sleep()
+            return "exhausted"
+
         return self._drift()
+
+    def _resting_status(self):
+        """Nothing in the network wants anything. Usually: it is asleep."""
+        return ("sleeping peacefully" if getattr(self.squid, 'is_sleeping', False)
+                else "resting")
 
     def _drift(self):
         """Move, without having chosen anywhere in particular to go."""
