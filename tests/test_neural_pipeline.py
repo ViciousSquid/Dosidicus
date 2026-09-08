@@ -668,9 +668,15 @@ class ConcreteKnowledgeTests(NeuralPipelineTestCase):
             shown.extend(label.text() for label in widget.findChildren(QtWidgets.QLabel))
         blob = " ".join(shown)
 
-        self.assertIn("can_see_food", blob, "the synapse is missing from the inspector")
+        # The Laboratory names neurons the way the Knowledge tab does, so the
+        # two never describe the same synapse differently.
+        self.assertIn("can see food", blob,
+                      "the synapse is missing from the inspector")
         self.assertIn("kept happening together", blob,
                       "the Laboratory shows the weight but not why it is that value")
+        self.assertIn("above its resting level", blob,
+                      "the Laboratory shows the weight without saying what it "
+                      "means for the squid")
 
 
 # ---------------------------------------------------------------------------

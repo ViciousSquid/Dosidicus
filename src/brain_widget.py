@@ -18,7 +18,7 @@ from datetime import datetime
 
 from .brain_render_worker import BrainRenderWorker, create_render_state_from_widget, RenderState
 from .neural_provenance import RecordedSynapses
-from .propagation import ExternallyDriven
+from .propagation import ExternallyDriven, signal_of
 from .brain_worker import BrainWorker
 from .compute_backend import get_backend
 from .neurogenesis import EnhancedNeurogenesis, ExperienceBuffer
@@ -2210,7 +2210,10 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 value = float(raw)
             else:
                 continue
-            push = ((value - 50.0) / 100.0) * float(weight)
+            # Same reading of "how much is this neuron contributing" that
+            # propagation uses, from the same function - a sensor with nothing
+            # to report contributes nothing here too.
+            push = (signal_of(src, value) / 50.0) * float(weight)
             deltas[dst] = deltas.get(dst, 0.0) + push
             if abs(push) > 1e-4:
                 contributions.append(((src, dst), push * gain, dst))

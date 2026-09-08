@@ -440,11 +440,11 @@ class FunctionalNeuron:
         every neuron in the network. Kept here so a tool can ask "what would
         this neuron do given that state?" without stepping the brain.
         """
+        from .propagation import signal_of
         activation = 50.0
         for (source, target), weight in weights.items():
             if target == self.name and source in brain_state:
-                source_activation = float(brain_state[source])
-                influence = (source_activation - 50.0) * weight
+                influence = signal_of(source, float(brain_state[source])) * weight
                 activation += influence
         activation = 50.0 + (activation - 50.0) * self.strength_multiplier
         activation = max(0.0, min(100.0, activation))
@@ -1494,7 +1494,8 @@ class EnhancedNeurogenesis:
                     src_value = 100.0 if src_value else 0.0
                 if not isinstance(src_value, (int, float)):
                     continue
-                push = ((float(src_value) - 50.0) / 100.0) * float(weight)
+                from .propagation import signal_of
+                push = (signal_of(src, float(src_value)) / 50.0) * float(weight)
                 if push * needed > 0:
                     corrective += abs(push)
                     if abs(float(weight)) >= SATURATION:

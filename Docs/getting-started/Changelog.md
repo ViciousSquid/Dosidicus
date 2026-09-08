@@ -1,3 +1,73 @@
+### version 3.1.3.0
+`8 Sep 2026`
+
+#### The Neuron Laboratory now explains, rather than displays
+
+Double-clicking a neuron used to give you a raw weight table, a hypothetical
+impact table and a static "did you know" tip. All three described the *category*
+a neuron fell into rather than the neuron: a table of numbers is not an
+explanation, a simulated impact is not something that happened, and a tip keyed
+on a neuron's name says the same thing about every neuron that shares it. A
+grown neuron with a perfectly good birth record in the ledger was told its
+"purpose was inferred from birth context", because the tip consulted the ledger
+only after it had already given up.
+
+The Deep Inspector now answers six questions, in the order somebody actually
+asks them:
+
+* **What is this?** — what kind of neuron, and *who writes it each tick*: the
+  world, the squid's body, the network, or what the squid is currently doing.
+  What it reads right now in words rather than as a number. Whether it is part
+  of a problem the brain has not solved.
+* **Why does this neuron exist?** — the birth record, plus the measurements
+  behind the diagnosis. A diagnosis without its evidence is an assertion.
+* **What does it stand for?** — measured, not asserted. The capability monitor
+  keeps, for every recurring situation and every action the squid performs, how
+  the whole network behaves while it holds; the separation between this
+  neuron's activation then and the rest of the time is Cohen's *d*. It is the
+  same statistic the representation detector uses, read from the same totals,
+  so what the Laboratory says a neuron means and what neurogenesis believes
+  about it can never disagree. A neuron that stands for nothing is told so.
+* **What do its connections mean?** — each synapse as a sentence, with the
+  ledger's running total naming the mechanism responsible for its value.
+* **What has it actually done?** — the recorded influence on the squid's
+  physiology, not a simulation of what it could do. The projection is still
+  there, at the end, labelled as one.
+* **What has changed here, and why** — every recorded change, with its evidence.
+
+The Live Overview's counter bars are gone. They filled toward novelty, stress
+and reward thresholds that stopped deciding anything in v4.0. In their place is
+the diagnosis growth actually consults: what the brain currently cannot do,
+each deficit's severity, and whether it is ready to grow structure, still being
+watched, or already shrinking under ordinary learning.
+
+#### A silent sensor was not silent
+
+The documentation has always said that activations run 0-100 with 50 as the
+neutral baseline, "so a silent input contributes nothing". That was false for
+every sense organ in the network. A sensor rests at **zero**, not at 50, so
+`can_see_food` reading 0 - the squid cannot see any food - contributed
+`-50 x weight`: as loud as seeing food, and pointing the other way.
+
+A squid born with the instinct `can_see_food -> happiness +0.5` was therefore
+made actively unhappy by the *absence* of food, every tick of its life, at
+exactly the strength that its presence made it happy. Every association learned
+with anything rare encoded the base rate rather than the contingency.
+
+`propagation.signal_of()` is now the one place the project decides what an
+activation means as a contribution, and everything that reads one goes through
+it: propagation, neural modulation, the corrective-push measurement in the
+capability monitor, the acute-deficit test in neurogenesis, the inspection
+transfer function and the Laboratory's projection. A sensor at full signal
+contributes exactly what it always did, so a brain behaves as before whenever
+its senses have something to report. What has changed is what silence means:
+nothing, which is what silence is.
+
+Also: a neuron was reported as standing for a situation it helped define, which
+is the neuron restating itself; and a neuron pinned at one value inside a
+situation and another outside produced a Cohen's *d* in the dozens, which is
+arithmetically correct and tells a reader nothing.
+
 ### version 3.1.2.0
 `8 Sep 2026`
 

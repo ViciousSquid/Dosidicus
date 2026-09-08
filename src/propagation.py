@@ -11,13 +11,30 @@ do the same thing when the squid ran it.
 
 The rule
 --------
-    target = 50 + sum((activation[src] - 50) * weight) * strength
+    target = 50 + sum(signal(src) * weight) * strength
     new    = old + (target - old) * smoothing         clamped to 0..100
 
-50 is the neutral baseline, so a silent input contributes nothing and a
-negative weight is genuinely inhibitory. `strength` is the per-neuron
-multiplier a grown neuron accumulates when neurogenesis strengthens it rather
-than duplicating it.
+`signal()` is how far a neuron is from ITS OWN resting level, which is not the
+same number for every neuron. A drive rests at 50 and ranges +/-50 either side
+of it. A sensor rests at ZERO - "I cannot see any food" is a sensor with
+nothing to report - and ranges from 0 up to a full signal.
+
+That distinction is the whole reason `signal()` exists rather than a bare
+`value - 50`. Subtracting 50 from a sensor made *not* seeing food a signal of
+-50: as loud as seeing food, and pointing the other way. A squid born with the
+instinct `can_see_food -> happiness +0.5` was therefore made actively unhappy by
+the absence of food, every tick of its life, at exactly the strength that the
+presence of food made it happy. Every association a squid learned with anything
+rare encoded the base rate rather than the contingency, and the documentation's
+claim that "a silent input contributes nothing" was false for every sensor in
+the network.
+
+A sensor at full signal still contributes exactly what it always did, so a
+brain behaves as before whenever its senses have something to report. What has
+changed is what silence means: nothing, which is what silence is.
+
+`strength` is the per-neuron multiplier a grown neuron accumulates when
+neurogenesis strengthens it rather than duplicating it.
 
 Contract
 --------
@@ -36,6 +53,31 @@ Pair = Tuple[str, str]
 
 BASELINE = 50.0
 DEFAULT_SMOOTHING = 0.5
+
+# Neurons whose quiet state is zero rather than the midpoint: the sense organs.
+# Imported lazily-ish at module level because brain_constants has no imports of
+# its own and cannot cycle.
+from .brain_constants import BINARY_NEURONS, PURE_INPUT_NEURONS  # noqa: E402
+
+_RESTS_AT_ZERO = set(PURE_INPUT_NEURONS) | set(BINARY_NEURONS)
+
+
+def signal_of(name: str, value: float) -> float:
+    """How much this neuron is contributing right now.
+
+    Deviation from the neuron's own resting level, scaled so that every neuron
+    contributes at most 50 in each direction. This is the one place the project
+    decides what an activation MEANS, and everything that reads an activation as
+    a contribution - propagation, neural modulation, the corrective-push
+    measurement in the capability monitor, the Laboratory's projection - goes
+    through it.
+    """
+    if name in _RESTS_AT_ZERO:
+        # Rests at 0, full signal at 100. Halved so a saturated sensor pushes
+        # exactly as hard as a saturated drive, which is what every weight in
+        # the project was tuned against.
+        return max(0.0, min(100.0, float(value))) * 0.5
+    return float(value) - BASELINE
 
 
 def activation_of(raw) -> Optional[float]:
@@ -76,7 +118,7 @@ def propagate(state: Dict[str, object],
         src_val = activation_of(state.get(src))
         if src_val is None:
             continue
-        net_input[dst] += (src_val - BASELINE) * float(weight)
+        net_input[dst] += signal_of(src, src_val) * float(weight)
 
     # 2. Transfer function + per-neuron strength multiplier.
     changed: Dict[str, float] = {}

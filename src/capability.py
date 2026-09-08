@@ -60,6 +60,7 @@ from typing import Any, Deque, Dict, Iterable, List, Optional, Set, Tuple
 
 from .brain_constants import (CORE_STAT_NEURONS, PURE_INPUT_NEURONS,
                               is_learning_target, is_network_driven)
+from .propagation import signal_of
 
 DEFICIT_KINDS = ('representation', 'regulation', 'expression',
                  'differentiation', 'causal_differentiation', 'connectivity')
@@ -621,7 +622,7 @@ class CapabilityMonitor:
                         src_value = 100.0 if src_value else 0.0
                     if not isinstance(src_value, (int, float)):
                         continue
-                push = ((float(src_value) - 50.0) / 100.0) * float(weight)
+                push = (signal_of(src, float(src_value)) / 50.0) * float(weight)
                 if push * needed > 0:
                     corrective += abs(push)
                     contributors += 1
@@ -1015,6 +1016,80 @@ class CapabilityMonitor:
                     origin.get('target') == target:
                 return True
         return False
+
+    # ==================================================================
+    # What one neuron has turned out to stand for
+    # ==================================================================
+    def what_does_it_represent(self, name: str, limit: int = 4,
+                               floor: float = 0.35) -> List[Dict[str, Any]]:
+        """The situations and actions this neuron actually distinguishes.
+
+        Measured, not asserted. The monitor already keeps, for every recurring
+        situation and every action the squid performs, how the whole network
+        behaves while it holds; the separation between a neuron's activation
+        then and its activation the rest of the time is Cohen's *d*, and a
+        neuron with a large *d* for one situation and a small one for
+        everything else is, in the only sense the network has, a detector for
+        that situation.
+
+        This is the same statistic the representation detector uses to decide
+        whether the brain can tell a situation apart at all, read from the same
+        streaming totals - so what the Laboratory says a neuron means and what
+        neurogenesis believes about it can never disagree.
+        """
+        whole = self._global.get(name)
+        if whole is None or whole.n < _MIN_TICKS_FOR_STATS:
+            return []
+        out: List[Dict[str, Any]] = []
+
+        def _score(inside: '_Running', occurrences: int, kind: str, label: str):
+            outside_n = whole.n - inside.n
+            if inside.n < 3 or outside_n < 5:
+                return
+            outside_mean = (whole.total - inside.total) / outside_n
+            outside_sq = (whole.total_sq - inside.total_sq) / outside_n
+            outside_var = max(0.0, outside_sq - outside_mean ** 2)
+            pooled = math.sqrt(max(1.0, (inside.var + outside_var) / 2.0))
+            # Capped for reporting. A neuron pinned at one value inside and
+            # another outside has no variance at all, and the floored pooled
+            # deviation then turns the difference of the means into a Cohen's
+            # d in the dozens - a number that is arithmetically correct and
+            # tells a reader nothing except that the separation is total.
+            separation = min(9.99, abs(inside.mean - outside_mean) / pooled)
+            if separation < floor:
+                return
+            out.append({
+                'kind': kind,
+                'name': label,
+                'separation': round(separation, 2),
+                'direction': 1 if inside.mean > outside_mean else -1,
+                'inside_mean': round(inside.mean, 1),
+                'outside_mean': round(outside_mean, 1),
+                'occurrences': occurrences,
+            })
+
+        for signature, entry in self._signatures.items():
+            # A situation the neuron itself helps define is not something the
+            # neuron represents; it is the neuron restating itself. The
+            # representation detector skips these for the same reason.
+            if name in set(entry.get('defining') or ()):
+                continue
+            inside = entry['stats'].get(name)
+            if inside is not None:
+                _score(inside, entry['count'], 'situation', signature)
+        for action, stats in self._action_stats.items():
+            inside = stats.get(name)
+            if inside is not None:
+                _score(inside, inside.n, 'action', action)
+
+        out.sort(key=lambda row: -row['separation'])
+        return out[:limit]
+
+    def deficits_naming(self, name: str) -> List[Deficit]:
+        """Open deficits this neuron is part of - as the gap or as evidence."""
+        return [d for d in self.active.values()
+                if d.target == name or name in (d.sources or [])
+                or name in (d.evidence.get('conflicting') or [])]
 
     # ==================================================================
     # Reporting

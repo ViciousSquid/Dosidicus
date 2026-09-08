@@ -49,9 +49,17 @@ sensor:
 * **Basic needs**: `hunger`, `happiness`, `cleanliness`, `sleepiness`
 * **Complex states**: `satisfaction`, `anxiety`, `curiosity`
 
-Activations run 0–100 with **50 as the neutral baseline**, so a silent input
-contributes nothing and a negative weight is genuinely inhibitory. Weights run
-−1 … +1.
+Activations run 0–100 and weights run −1 … +1. How much a neuron *contributes*
+is its distance from **its own resting level**, which is not the same number
+for every neuron: a drive rests at 50 and ranges ±50 either side of it, while a
+sense organ rests at **zero** — "I cannot see any food" is a sensor with nothing
+to report. `propagation.signal_of()` is the one place that distinction is made,
+and everything that reads an activation as a contribution goes through it.
+
+Subtracting 50 from a sensor made *not* seeing food a signal of −50: as loud as
+seeing food and pointing the other way, so a squid born with
+`can_see_food → happiness +0.5` was made actively unhappy by the absence of
+food, every tick of its life.
 
 Every squid hatches with the same instincts, listed once in
 `brain_constants.INNATE_CONNECTIONS` and written through the recorded write

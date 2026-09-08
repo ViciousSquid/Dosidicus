@@ -169,7 +169,9 @@ class Episode:
             f"{humanise(k)} {'rose' if d > 0 else 'fell'} {abs(d):.0f}"
             for k, d in sorted(self.consequence.items(),
                                key=lambda kv: -abs(kv[1]))[:3] if abs(d) >= 0.5)
-        parts = [f"it {humanise(self.action)}"]
+        # "it was doing eating" rather than "it eating": an action name is a
+        # label, not a verb, and English does not conjugate it for us.
+        parts = [f"it was doing {humanise(self.action)}"]
         if cue_bits:
             parts.append(f"while {cue_bits}")
         if out_bits:
@@ -869,6 +871,21 @@ class CausalLedger:
                         f"starting {when}", "", "", None)
             return (f"repeated experience starting {when}", "", "", None)
         return ("", "", "", None)
+
+    def about_neuron(self, name: str, limit: int = 40) -> List['KnowledgeItem']:
+        """Everything the squid knows that involves this neuron.
+
+        Filtered from the same knowledge() the Knowledge tab shows, so the
+        Laboratory and the Knowledge tab word the same synapse the same way.
+        There is one account of what this brain knows, and both of them read it.
+        """
+        items = []
+        for item in self.knowledge(limit=600):
+            if item.neuron == name:
+                items.append(item)
+            elif item.edge and name in item.edge:
+                items.append(item)
+        return items[:limit]
 
     def knowledge(self, topic: Optional[str] = None, min_strength: float = 0.12,
                   limit: int = 60) -> List[KnowledgeItem]:

@@ -164,6 +164,11 @@ class Organism:
 
         brain.causal_learning.on_action(action, brain.state)
         brain.propagate_activations()
+        # The game runs this immediately after propagation: it is where a grown
+        # neuron's activity is counted and where the stress family applies its
+        # regulatory feedback. Leaving it out made every grown neuron report
+        # that it had never been active.
+        brain.enhanced_neurogenesis.update_neuron_activations(brain.state)
 
         self.modulation = brain.compute_neural_modulation() or {}
         for stat, delta in self.modulation.items():
@@ -747,14 +752,126 @@ class TransparencyTests(unittest.TestCase):
         self.assertIs(tab.causal, self.org.brain.causal_learning)
         tab.refresh()
 
-    def test_the_laboratory_reads_the_live_network(self):
+    def _lab(self):
         from src.laboratory import NeuronLaboratory
         lab = NeuronLaboratory(self.org.brain)
+        lab.timer.stop()
+        lab._force_timer.stop()
+        self.addCleanup(lab.deleteLater)
+        return lab
+
+    @staticmethod
+    def _card_text(lab, name):
+        """Every word the Deep Inspector shows about one neuron."""
+        from PyQt5 import QtWidgets
+        lab._inspect_neuron(name)
+        parts = []
+        for i in range(lab.inspector_lay.count()):
+            widget = lab.inspector_lay.itemAt(i).widget()
+            if widget is None:
+                continue
+            parts.append(widget.title())
+            for label in widget.findChildren(QtWidgets.QLabel):
+                parts.append(label.text())
+        return "\n".join(parts)
+
+    def test_the_laboratory_reads_the_live_network(self):
+        lab = self._lab()
         self.assertIs(lab.bw, self.org.brain,
                       "the Laboratory works from something other than the "
                       "brain the squid is using")
         self.assertIs(lab.bw.weights, self.org.brain.weights)
         self.assertIs(lab.bw.ledger, self.org.brain.ledger)
+
+    def test_the_inspector_answers_the_six_questions(self):
+        lab = self._lab()
+        text = self._card_text(lab, 'satisfaction')
+        for question in ("What is this?",
+                         "Why does this neuron exist?",
+                         "What does it stand for?",
+                         "What do its connections mean?",
+                         "What has it actually done?",
+                         "What has changed here, and why"):
+            self.assertIn(question, text,
+                          f"the Laboratory no longer answers {question!r}")
+
+    def test_the_inspector_explains_a_connection_rather_than_listing_it(self):
+        brain = self.org.brain
+        brain.apply_weight_change(('can_see_food', 'satisfaction'), value=0.63,
+                                  mechanism='designer',
+                                  detail={'note': 'set by hand for this test'})
+        text = self._card_text(self._lab(), 'satisfaction')
+        self.assertIn('+0.63', text, "the live weight is not on the page")
+        self.assertIn('above its resting level', text,
+                      "the connection is shown as a number without saying what "
+                      "it means")
+        self.assertIn('strongly', text,
+                      "the strength of a synapse is not put into words")
+
+    def test_the_inspector_reports_the_role_that_decides_who_writes_a_neuron(self):
+        lab = self._lab()
+        self.assertIn('sense organ', self._card_text(lab, 'can_see_food'))
+        self.assertIn('core drive', self._card_text(lab, 'hunger').lower())
+
+    def test_a_neuron_says_what_it_stands_for_from_measured_behaviour(self):
+        """The concept is read from statistics, not from the neuron's name."""
+        brain = self.org.brain
+        brain.neuron_positions['food_detector'] = (10.0, 10.0)
+        brain.state['food_detector'] = 50.0
+        brain.apply_weight_change(('can_see_food', 'food_detector'), value=0.9,
+                                  mechanism='designer')
+        for _ in range(30):
+            self.org.tick('eating', sensors={'can_see_food': 100.0})
+            self.org.tick('eating')
+            self.org.idle(4, sensors={'can_see_food': 0.0})
+
+        readings = brain.capability.what_does_it_represent('food_detector')
+        self.assertTrue(readings,
+                        "a neuron that fires for one situation and nothing "
+                        "else was not found to stand for anything")
+        self.assertTrue(any('can_see_food' in str(r['name']) for r in readings),
+                        f"it was said to stand for the wrong thing: {readings}")
+        text = self._card_text(self._lab(), 'food_detector')
+        self.assertIn('can see food', text.replace('_', ' '))
+
+    def test_the_overview_shows_the_diagnosis_growth_actually_uses(self):
+        lab = self._lab()
+        lab._paint_overview()
+        from PyQt5 import QtWidgets
+        titles = [w.title() for w in
+                  lab.ov_widget.findChildren(QtWidgets.QGroupBox)]
+        self.assertIn("What the brain cannot do yet", titles,
+                      "the Laboratory still reports the event counters that "
+                      "stopped deciding anything in v4.0")
+        self.assertNotIn("Counter progress", titles)
+
+    def test_a_grown_neuron_is_never_told_its_purpose_was_inferred(self):
+        """It has a birth record. The tool must consult it before guessing."""
+        for _ in range(26):
+            self.org.bout(['wiggle', 'flutter'], {'satisfaction': +3.0})
+        grown = self.org.grown()
+        self.assertTrue(grown)
+        lab = self._lab()
+        for row in grown:
+            if row['neuron'] not in self.org.brain.neuron_positions:
+                continue
+            text = self._card_text(lab, row['neuron'])
+            self.assertNotIn("purpose inferred from birth context", text,
+                             "the Laboratory guessed at a neuron whose reason "
+                             "for existing is written down in the ledger")
+
+    def test_a_grown_neuron_explains_itself_in_the_laboratory(self):
+        for _ in range(26):
+            self.org.bout(['wiggle', 'flutter'], {'satisfaction': +3.0})
+        grown = self.org.grown()
+        self.assertTrue(grown)
+        name = grown[-1]['neuron']
+        text = self._card_text(self._lab(), name)
+        self.assertIn("because", text)
+        self.assertIn("Connections made at birth", text)
+        self.assertIn("The measurements behind that diagnosis", text,
+                      "the Laboratory states the diagnosis without showing "
+                      "the evidence for it")
 
     def test_an_explanation_changes_when_the_brain_does(self):
         brain = self.org.brain
