@@ -322,10 +322,15 @@ class DecisionEngine:
         }.get(s.personality, ["wandering", "exploring curiously"])
 
         style = random.choice(flavors)
+        # Personality colours the SPEED of exploration; the movement itself is
+        # left to move_squid via the drive, so the squid is not moved twice in
+        # one tick.
         if "zoom" in style or "bounc" in style:
-            s.move_erratically()
+            s.current_speed = s.base_speed * 1.5
         elif "loung" in style or "drift" in style:
-            s.move_slowly()
+            s.current_speed = max(1.0, s.base_speed * 0.4)
+        else:
+            s.current_speed = s.base_speed
         s.set_neural_drive('wander', duration=3.0, priority=s.DRIVE_DECISION)
 
         return style

@@ -712,6 +712,29 @@ class BehaviourArbitrationTests(NeuralPipelineTestCase):
         self.assertEqual(drive["action"], "flee")
         self.assertTrue(SQUID.is_fleeing)
 
+    def test_repeated_slow_movement_does_not_paralyse_the_squid(self):
+        """move_slowly() used to permanently halve the squid's base speed.
+
+        90 -> 45 -> 22 -> 11 -> 5 -> 2 -> 1 -> 0 with integer division and no
+        restore, so seven "lounging" decisions left the squid unable to move
+        for the rest of the session. Wiring the DecisionEngine in made that
+        reachable in ordinary play.
+        """
+        base = SQUID.base_squid_speed
+        vertical = SQUID.base_vertical_speed
+        for _ in range(10):
+            SQUID.move_slowly()
+        self.assertEqual(SQUID.base_squid_speed, base,
+                         "move_slowly permanently damaged the squid's base speed")
+        self.assertEqual(SQUID.base_vertical_speed, vertical)
+        self.assertAlmostEqual(SQUID.speed_multiplier(), 1.0, places=6)
+
+    def test_erratic_movement_restores_speed(self):
+        SQUID.current_speed = SQUID.base_speed
+        for _ in range(5):
+            SQUID.move_erratically()
+        self.assertAlmostEqual(SQUID.speed_multiplier(), 1.0, places=6)
+
     def test_squid_delegates_throw_poop(self):
         self.assertTrue(hasattr(SQUID, "throw_poop"))
         self.assertFalse(SQUID.throw_poop("left"))  # nothing carried

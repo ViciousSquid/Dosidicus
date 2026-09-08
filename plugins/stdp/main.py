@@ -48,7 +48,7 @@ except ImportError:
 
 # Import STDP core from this package
 try:
-    from .stdp_core import STDPLearner, STDPConfig
+    from src.stdp import STDPLearner, STDPConfig
 except ImportError:
     from stdp_core import STDPLearner, STDPConfig
 

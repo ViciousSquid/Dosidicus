@@ -449,12 +449,17 @@ class EnhancedNeurogenesis:
         return self._create_neuron_internal(context, trigger_value, is_emergency)
     
     def _make_reciprocal_connections(self, new_neuron: str):
+        from .brain_constants import is_learning_target
         bw = self.brain_widget
         created = []                       
         MIN_RECIPROCAL = 0.2               
         outgoing = [(tgt, w) for (src, tgt), w in bw.weights.items() if src == new_neuron and abs(w) >= MIN_RECIPROCAL]
         for target, w in outgoing:
             if (target, new_neuron) in bw.weights: continue
+            # The reverse edge must be readable. A synapse pointing into a
+            # sensor is inert - the world overwrites that neuron every tick.
+            if not is_learning_target(new_neuron):
+                continue
             bw.weights[(target, new_neuron)] = w
             created.append(f"{target}→{new_neuron}:{w:+.2f}")
         if created: print(f"   🔗 {loc('log_reciprocal_links', default='Reciprocal links added')}: {', '.join(created)}")
@@ -635,6 +640,23 @@ class EnhancedNeurogenesis:
             return (x, y)
         return (random.randint(100, 900), random.randint(100, 600))
 
+    @staticmethod
+    def _orient_new_edge(a: str, b: str):
+        """Point a fresh synapse at an end that can actually read it.
+
+        Direction used to be a coin flip, which produced edges into sensors -
+        neurons the world rewrites every tick, so the synapse could never do
+        anything.
+        """
+        from .brain_constants import is_learning_target
+        import random as _random
+        a_ok, b_ok = is_learning_target(a), is_learning_target(b)
+        if a_ok and b_ok:
+            return (a, b) if _random.random() > 0.5 else (b, a)
+        if b_ok:
+            return (a, b)
+        return (b, a)
+
     def rescue_orphan(self, orphan_name: str):
         connector_type = 'connector'
         neuron_name = self._get_unique_neuron_name(f"{connector_type}_rescue")
@@ -659,13 +681,11 @@ class EnhancedNeurogenesis:
             targets.append(candidates.pop(0))
             if candidates: targets.append(random.choice(candidates))
         weight = random.uniform(0.5, 0.9)
-        if random.random() > 0.5: self.brain_widget.weights[(neuron_name, orphan_name)] = weight
-        else: self.brain_widget.weights[(orphan_name, neuron_name)] = weight
+        self.brain_widget.weights[self._orient_new_edge(neuron_name, orphan_name)] = weight
         for target in targets:
             w = random.uniform(-0.5, 0.8)
             if abs(w) < 0.2: w = 0.3
-            if random.random() > 0.5: self.brain_widget.weights[(neuron_name, target)] = w
-            else: self.brain_widget.weights[(target, neuron_name)] = w
+            self.brain_widget.weights[self._orient_new_edge(neuron_name, target)] = w
         self._set_neuron_appearance(neuron_name, func_neuron)
         if hasattr(self.brain_widget, 'visible_neurons'): self.brain_widget.visible_neurons.add(neuron_name)
         self.brain_widget.neurogenesis_highlight = {'neuron': neuron_name, 'start_time': time.time(), 'duration': 8.0, 'pulse_phase': 0}

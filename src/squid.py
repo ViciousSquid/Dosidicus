@@ -1255,14 +1255,28 @@ class Squid:
         return self.tamagotchi_logic.rock_interaction.start_rock_test(target_rock)
 
     def move_erratically(self):
-        directions = ["left", "right", "up", "down"]
-        self.squid_direction = random.choice(directions)
+        """Dart about for one tick."""
+        self.squid_direction = random.choice(["left", "right", "up", "down"])
+        self.current_speed = self.base_speed * 1.5
         self.move_squid()
+        self.current_speed = self.base_speed
 
     def move_slowly(self):
-        self.base_squid_speed = self.base_squid_speed // 2
-        self.base_vertical_speed = self.base_vertical_speed // 2
-        self.move_squid()
+        """Drift for one tick.
+
+        This used to do `base_squid_speed = base_squid_speed // 2` with no
+        restore, so the squid's baseline was permanently halved on every call:
+        90 -> 45 -> 22 -> 11 -> 5 -> 2 -> 1 -> 0. Seven "lounging" decisions
+        left it with a base speed of zero and it could never move again for
+        the rest of the session. Speed is now a transient multiplier, which is
+        what current_speed is for.
+        """
+        previous = self.current_speed
+        self.current_speed = max(1.0, self.base_speed * 0.4)
+        try:
+            self.move_squid()
+        finally:
+            self.current_speed = previous
 
     def explore_environment(self):
         if random.random() < 0.3:

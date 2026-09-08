@@ -1600,6 +1600,19 @@ class TamagotchiLogic:
                 if neuro is not None and hasattr(neuro, 'update_neuron_activations'):
                     neuro.update_neuron_activations(bw.state)
 
+                # Learned associations modulate the squid's physiology. This
+                # is what makes a synapse between two core stats mean
+                # something, and it is the channel through which a squid's
+                # history shows up in how it reacts.
+                self.apply_neural_modulation(bw)
+
+                # Sleep consolidation: samples while awake, replays and prunes
+                # while asleep. Core, not a plugin.
+                consolidation = getattr(bw, 'consolidation', None)
+                if consolidation is not None:
+                    consolidation.on_tick(
+                        getattr(self.squid, 'is_sleeping', False), bw.state)
+
             if not getattr(self.squid, 'is_sleeping', False):
                 if hasattr(self, 'neuron_output_monitor'):
                     self.neuron_output_monitor.process_outputs()
@@ -1622,6 +1635,35 @@ class TamagotchiLogic:
         if _PERF_TRACKING_AVAILABLE and perf_tracker.enabled:
             _sim_elapsed = (time.perf_counter() - _sim_start) * 1000
             perf_tracker.record("simulation_tick", _sim_elapsed)
+
+    def apply_neural_modulation(self, brain_widget=None):
+        """Apply the brain's learned influence to the squid's statistics.
+
+        Deliberately gentle: the natural drift of a core stat is around 0.3
+        per tick, and a maximal synapse from a saturated source contributes
+        0.15, so learning colours the squid's physiology over minutes without
+        ever seizing control of it.
+        """
+        bw = brain_widget or getattr(self.brain_window, 'brain_widget', None)
+        squid = getattr(self, 'squid', None)
+        if bw is None or squid is None:
+            return {}
+        if not hasattr(bw, 'compute_neural_modulation'):
+            return {}
+
+        deltas = bw.compute_neural_modulation()
+        applied = {}
+        for stat, delta in deltas.items():
+            if not hasattr(squid, stat) or abs(delta) < 1e-9:
+                continue
+            try:
+                current = float(getattr(squid, stat))
+            except (TypeError, ValueError):
+                continue
+            setattr(squid, stat, max(0.0, min(100.0, current + delta)))
+            applied[stat] = delta
+        self.last_neural_modulation = applied
+        return applied
 
     def run_decision_engine(self):
         """Let the DecisionEngine choose the squid's next deliberate behaviour.

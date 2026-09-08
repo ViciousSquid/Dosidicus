@@ -122,6 +122,19 @@ def is_network_driven(name: str) -> bool:
     return name not in NON_PROPAGATED_NEURONS
 
 
+def is_learning_target(name: str) -> bool:
+    """True if a learned synapse pointing AT this neuron can do anything.
+
+    Sensors are written by the world every tick, so a synapse into one is
+    inert and must never be created. Core stats are different: propagation
+    does not overwrite them (the squid model owns them), but learned synapses
+    into a core stat MODULATE it - see TamagotchiLogic.apply_neural_modulation.
+    That is how a default eight-neuron brain, which contains nothing but
+    sensors and core stats, is able to develop at all.
+    """
+    return name not in PURE_INPUT_NEURONS
+
+
 def normalise_activation(name: str, value):
     """
     Coerce any stored neuron value into the project's 0-100 activation scale.

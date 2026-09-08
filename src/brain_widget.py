@@ -99,12 +99,18 @@ class BrainWidget(QtWidgets.QWidget):
         self.hover_value_opacity = 0.0
         self.hover_value_animation_time = 0.0
         self.hover_animation_time = 0
-        if not hasattr(self.config, 'hebbian'): #
-            self.config.hebbian = { #
-                'learning_interval': 30000, #
-                'weight_decay': 0.01, #
-                'active_threshold': 50 #
-            }
+        # SquidBrainWindow hands us a ConfigManager (it discards the
+        # LearningConfig main.py passes it), and a ConfigManager carries no
+        # hebbian/neurogenesis section. This used to be patched with hardcoded
+        # literals, which silently overrode config.ini for every learning
+        # parameter in the game - the tuning in the file had no effect at all.
+        # Populate from the real LearningConfig instead, which reads the file.
+        if not hasattr(self.config, 'hebbian') or not hasattr(self.config, 'neurogenesis'):
+            _loaded = LearningConfig()
+            if not hasattr(self.config, 'hebbian'):
+                self.config.hebbian = _loaded.hebbian
+            if not hasattr(self.config, 'neurogenesis'):
+                self.config.neurogenesis = _loaded.neurogenesis
         super().__init__() #
 
         # Get neuron label font size from config (single source of truth)
@@ -168,6 +174,19 @@ class BrainWidget(QtWidgets.QWidget):
             'last_neuron_time': time.time(),
             'new_neurons_details': {}   # used by inspector / logging
         }
+
+        # Plasticity: Hebbian (covariance, signed) + STDP over an eligibility
+        # trace. Owned by the widget so the Designer, the Learning tab and the
+        # save file all see one implementation.
+        from .plasticity import PlasticityEngine, PlasticityConfig
+        self.plasticity = PlasticityEngine(
+            PlasticityConfig.from_learning_config(self.config))
+
+        # Sleep-time consolidation. Waking experience proposes small changes;
+        # sleep replays the day's strongest co-activations into durable
+        # structure and prunes what never amounted to anything.
+        from .consolidation import ConsolidationManager
+        self.consolidation = ConsolidationManager(self)
 
         # Neural state initialization
         self.state = { #
@@ -2107,135 +2126,104 @@ class BrainWidget(QtWidgets.QWidget):
 
 
     def perform_hebbian_learning(self):
+        """Commit one plasticity cycle.
+
+        The cycle runs through PlasticityEngine, which has been accumulating
+        co-activation every tick. It runs on the main thread because that is
+        where the state it reads is authoritative, and because the work is
+        O(pairs) - trivially cheap next to rendering.
+
+        The previous implementation existed twice (a threaded copy in
+        BrainWorker and an unreachable synchronous copy here) and both sampled
+        the network once per 30s cycle, which could not see the brief events
+        that carry what actually happened to the squid.
         """
-        One full Hebbian update cycle.
-        Queues work to background thread for non-blocking operation.
+        squid = getattr(getattr(self, 'tamagotchi_logic', None), 'squid', None)
+        if squid is not None and getattr(squid, 'is_sleeping', False):
+            # Waking plasticity pauses during sleep; consolidation runs instead.
+            return None
+
+        engine = getattr(self, 'plasticity', None)
+        if engine is None:
+            return None
+
+        connectors = self._connector_neuron_names()
+
+        new_neurons = set()
+        raw_new = getattr(self, 'new_neurons', None)
+        if isinstance(raw_new, dict):
+            new_neurons = set(raw_new.keys())
+        elif raw_new:
+            new_neurons = set(raw_new)
+
+        result = engine.commit(
+            weights=self.weights,
+            neuron_names=list(self.neuron_positions.keys()),
+            excluded=self.excluded_neurons,
+            connectors=connectors,
+            new_neurons=new_neurons,
+        )
+        self._on_hebbian_complete(result)
+        return result
+
+    def _connector_neuron_names(self):
+        neuro = getattr(self, 'enhanced_neurogenesis', None)
+        if neuro is None:
+            return set()
+        return {name for name, fn in neuro.functional_neurons.items()
+                if getattr(fn, 'neuron_type', '') == 'connector'}
+
+    def compute_neural_modulation(self, gain: float = 0.30):
+        """How the learned network nudges the squid's core statistics.
+
+        Propagation deliberately never overwrites a core stat - the squid model
+        owns those, and two writers would fight. But a brain that cannot touch
+        its own physiology cannot express what it has learned, and a default
+        eight-neuron brain contains nothing BUT sensors and core stats.
+
+        So learned synapses pointing at a core stat act as a modulation: for
+        each such stat, sum (source_activation - 50)/100 * weight and return a
+        small per-tick delta. A squid whose experience taught it
+        can_see_food -> anxiety becomes anxious at the sight of food; one that
+        learned can_see_food -> happiness brightens instead. Same stimulus,
+        opposite response, because they lived different lives.
+
+        Returns {stat_name: delta}. Bounded by design: a saturated source
+        through a maximal synapse contributes gain/2 per tick.
         """
-        # === Disable Hebbian while squid is sleeping ===
-        if (hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic and
-            hasattr(self.tamagotchi_logic.squid, 'is_sleeping') and
-            self.tamagotchi_logic.squid.is_sleeping):
-            # print("DEBUG: Hebbian learning skipped - squid is sleeping")
-            return
+        from .brain_constants import CORE_STAT_NEURONS
 
-        # Skip if already pending
-        if self._pending_hebbian_learning:
-            return
-        
-        # CRITICAL: Update cache BEFORE queueing work
-        self._update_worker_cache()
-        
-        if self._use_threaded_processing and hasattr(self, 'brain_worker') and self.brain_worker.isRunning():
-            # Queue the work to the background thread
-            self._pending_hebbian_learning = True
-            self.brain_worker.queue_hebbian_learning()
-        else:
-            # Fallback: synchronous processing
-            self._perform_hebbian_learning_sync()
-
-
-    def _perform_hebbian_learning_sync(self):
-        """Original synchronous Hebbian learning (fallback if threading disabled)."""
-        from heapq import nlargest
-
-        print(f"++ [Sync] Hebbian learning cycle triggered")
-
-        COLORS = ["\033[96m", "\033[93m", "\033[95m", "\033[92m", "\033[94m"]
-        RESET = "\033[0m"
-
-        if not hasattr(self, 'weights'):
-            self.weights = {}
-        
-        # Ensure list exists (used for history tracking in sync mode)
-        if not hasattr(self, 'recently_updated_neuron_pairs'):
-            self.recently_updated_neuron_pairs = []
-
-        # NEW: Get connector neurons to exclude from learning
-        connector_neurons = set()
-        if hasattr(self, 'enhanced_neurogenesis') and self.enhanced_neurogenesis:
-            connector_neurons = {name for name, fn in self.enhanced_neurogenesis.functional_neurons.items()
-                            if fn.neuron_type == 'connector'}
-        
-        # PURE_INPUTS (Sensors) - Do not include in Hebbian learning
-        PURE_INPUTS = PURE_INPUT_NEURONS
-
-        # Combine excluded neurons, connector neurons, and pure inputs
-        learning_excluded = set(self.excluded_neurons) | connector_neurons | PURE_INPUTS
-        
-        neurons = [n for n in self.neuron_positions.keys() if n not in learning_excluded]
-        print(f"   [Sync] Neurons available: {len(neurons)} (excluded {len(connector_neurons)} connectors + inputs), "
-            f"Weights tracked: {len(self.weights)}")
-
-        scored_pairs = []
-        
-        # Prepare history for quick lookup (ensure sorted tuples)
-        recent_history_sorted = set()
-        for p in self.recently_updated_neuron_pairs:
-            if isinstance(p, (list, tuple)) and len(p) == 2:
-                recent_history_sorted.add(tuple(sorted(p)))
-
-        for i, n1 in enumerate(neurons):
-            for n2 in neurons[i + 1:]:
-                v1 = self.get_neuron_value(self.state.get(n1, 50))
-                v2 = self.get_neuron_value(self.state.get(n2, 50))
-                
-                # Base Score
-                score = v1 + v2
-                
-                # 1. Add Random Noise to break deterministic loops
-                score += random.uniform(0, 40)
-                
-                # 2. Penalize recently updated pairs to prevent loops
-                current_pair = tuple(sorted((n1, n2)))
-                
-                if current_pair in recent_history_sorted:
-                    score -= 500 # Heavy penalty
-
-                scored_pairs.append((score, n1, n2, v1, v2))
-        top_k = self.config.neurogenesis.get('max_hebbian_pairs', 2)
-        top_pairs = nlargest(top_k, scored_pairs)
-        print(f"   [Sync] Top {top_k} pairs selected from {len(scored_pairs)} candidates")
-
-        updated_pairs = []
-
-        for _, n1, n2, v1, v2 in top_pairs:
-            base_lr = self.learning_rate
-            decay_rate = self.config.hebbian.get('weight_decay', 0.01)
-
-            if self.is_new_neuron(n1) or self.is_new_neuron(n2):
-                base_lr *= 2.0
-
-            delta = base_lr * (v1 / 100.0) * (v2 / 100.0)
-
-            pair = (n1, n2)
-            reverse_pair = (n2, n1)
-            use_pair = pair if pair in self.weights else reverse_pair
-
-            if use_pair not in self.weights:
-                print(f"   [Sync] Skipping pair {n1}-{n2}: not in weights dict")
+        deltas = {}
+        for (src, dst), weight in self.weights.items():
+            if dst not in CORE_STAT_NEURONS:
                 continue
+            raw = self.state.get(src)
+            if isinstance(raw, bool):
+                value = 100.0 if raw else 0.0
+            elif isinstance(raw, (int, float)):
+                value = float(raw)
+            else:
+                continue
+            deltas[dst] = deltas.get(dst, 0.0) + ((value - 50.0) / 100.0) * float(weight)
 
-            old_w = self.weights[use_pair]
-            new_w = old_w + delta - (old_w * decay_rate)
-            new_w = max(self.config.hebbian.get('min_weight', -1.0),
-                        min(self.config.hebbian.get('max_weight', 1.0), new_w))
+        return {k: v * gain for k, v in deltas.items()}
 
-            self.weights[use_pair] = new_w
-            self.add_weight_animation(n1, n2, old_w, new_w)
-            updated_pairs.append((n1, n2))
+    def observe_for_learning(self):
+        """Feed one tick of evidence to the plasticity engine.
 
-        if updated_pairs:
-            colored = []
-            for i, (a, b) in enumerate(updated_pairs):
-                color = COLORS[i % len(COLORS)]
-                colored.append(f"{color}{a} ↔ {b}{RESET}")
-            print("     Hebbian learning chosen pairs: " + "  ".join(colored))
-        else:
-            print("   [Sync] No pairs were updated this cycle")
+        Called from propagate_activations, i.e. once per simulation tick, so a
+        one-second event still contributes to the next commit instead of being
+        invisible to a 30-second snapshot.
+        """
+        engine = getattr(self, 'plasticity', None)
+        if engine is None:
+            return 0
+        candidates = engine.eligible_neurons(
+            self.neuron_positions.keys(),
+            self.excluded_neurons,
+            self._connector_neuron_names())
+        return engine.observe(self.state, candidates)
 
-        self.recently_updated_neuron_pairs = updated_pairs
-        self.last_hebbian_time = time.time()
-        self.update()
 
 
     def get_recently_updated_neurons(self):
@@ -2548,6 +2536,13 @@ class BrainWidget(QtWidgets.QWidget):
 
         # Which neurons may we compute? Anything in the network that is not
         # owned by the world. neuron_positions is the network's membership list.
+        # Gather learning evidence FIRST. A default 8-neuron brain has no
+        # network-driven neurons at all, so doing this after the early return
+        # meant the squid could never learn until the user added a neuron in
+        # the Designer - the exact opposite of "it learns from its
+        # environment".
+        self.observe_for_learning()
+
         targets = [n for n in self.neuron_positions
                    if is_network_driven(n) and n not in self.excluded_neurons]
         if not targets:
