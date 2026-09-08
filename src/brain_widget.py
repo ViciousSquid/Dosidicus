@@ -4527,20 +4527,72 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self.update()
 
     def _randomize_all_positions(self):
-        """Randomize positions of all neurons within safe bounds."""
+        """Shuffle neurons while keeping can_see_food and hunger together."""
+        import math
         import random
-        padding = self.config.neurogenesis.get('neuron_properties', {}).get('canvas_padding', 60)
-        
-        # Canvas dimensions (assumed roughly 1024x768 logical)
-        min_x, max_x = padding, 1024 - padding
-        min_y, max_y = padding, 768 - padding
-        
-        for name in self.neuron_positions:
-            rx = random.randint(min_x, max_x)
-            ry = random.randint(min_y, max_y)
-            self.neuron_positions[name] = (rx, ry)
-        
-        print("🎲 Randomized neuron positions")
+
+        center_x, center_y = 512, 384
+        max_pair_distance = 180
+
+        names = list(self.original_neuron_positions.keys())
+        positions = list(self.original_neuron_positions.values())
+
+        paired_neurons = ("can_see_food", "hunger")
+        other_neurons = [n for n in names if n not in paired_neurons]
+
+        # Find pairs of canonical slots that are close enough for the
+        # can_see_food/hunger pair.
+        candidate_pairs = []
+
+        for i, pos_a in enumerate(positions):
+            for j, pos_b in enumerate(positions):
+                if i >= j:
+                    continue
+
+                distance = math.hypot(
+                    pos_b[0] - pos_a[0],
+                    pos_b[1] - pos_a[1]
+                )
+
+                if distance <= max_pair_distance:
+                    candidate_pairs.append((pos_a, pos_b))
+
+        # Pick one valid pair for can_see_food + hunger.
+        pair_positions = random.choice(candidate_pairs)
+
+        remaining_positions = [
+            p for p in positions if p not in pair_positions
+        ]
+        random.shuffle(remaining_positions)
+
+        randomized = {}
+
+        # The two neurons may swap within their pair.
+        pair_positions = list(pair_positions)
+        random.shuffle(pair_positions)
+
+        randomized[paired_neurons[0]] = pair_positions[0]
+        randomized[paired_neurons[1]] = pair_positions[1]
+
+        # Assign the remaining neurons normally.
+        for name, position in zip(other_neurons, remaining_positions):
+            randomized[name] = position
+
+        # Move every neuron up to 50 px toward the centre.
+        for name, (x, y) in randomized.items():
+            dx = center_x - x
+            dy = center_y - y
+            distance = math.hypot(dx, dy)
+
+            if distance > 0:
+                movement = random.uniform(0, min(50, distance))
+
+                x += int(round(dx / distance * movement))
+                y += int(round(dy / distance * movement))
+
+            randomized[name] = (x, y)
+
+        self.neuron_positions = randomized
         
     def start_tutorial_glow(self, duration_ms=5000):
         """Start a glowing, pulsing border effect for tutorial purposes"""
