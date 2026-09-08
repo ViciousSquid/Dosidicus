@@ -81,7 +81,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Define initial window dimensions directly, without DisplayScaling
         # This will use absolute pixel values for the window size
-        final_width = 1400 # Direct pixel width
+        final_width = 900 # Direct pixel width
         final_height = 900 # Direct pixel height
 
         # Ensure the final window dimensions do not exceed the actual screen available geometry
@@ -92,7 +92,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Position window properly in the top-right corner of the *available* screen geometry
         # x-coordinate: right edge of available geometry minus window width, then shift left by 200 pixels
-        x_pos = screen_geometry.right() - final_width - 10 # Shift left by subtracting 1and using final_width
+        x_pos = screen_geometry.right() - final_width - 900 # Shift left by subtracting 1and using final_width
         # y-coordinate: top edge of available geometry
         y_pos = screen_geometry.top() # Use top of available geometry
 
