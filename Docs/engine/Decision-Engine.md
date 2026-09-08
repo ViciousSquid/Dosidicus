@@ -1,249 +1,243 @@
-#### view source: _[decision_engine.py](https://github.com/ViciousSquid/Dosidicus/blob/2.6.1.2_LatestVersion/src/decision_engine.py)_ _version 2.6.1.2_
+#### view source: _[decision_engine.py](../../src/decision_engine.py)_ &nbsp;·&nbsp; _version 5.0_
 
 ## Overview
 
 ```
- exploration of emergent behavioural complexity via dynamic, biologically-inspired neural architecture rather than a static state machine. 
+ exploration of emergent behavioural complexity via dynamic, biologically-inspired
+ neural architecture rather than a static state machine.
 ```
 
-The **Decision Engine** is the core action-selection system for Dosidicus. It is responsible for selecting and executing behaviour based on the squid’s *current neural state*, *physiological drives*, *memory influences*, and *personality modifiers*. 
+The **Decision Engine** does not decide anything.
 
-Unlike traditional game AI systems (finite-state machines, behaviour trees, or rule stacks), the Decision Engine is **neural-first**: it does not directly reason about the world. Instead, *all perception and context must flow through the brain*.
-
-In practical terms, this means behaviour is not scripted. It **emerges** from continuous internal signals competing for expression.
-
-The engine is designed to be:
-
-* Explainable (full decision traces are recorded)
-* Extensible (new drives, memories, or actions integrate naturally)
-* Compatible with future learning systems (dopamine, reinforcement, plasticity)
+That sounds like a joke, but it is the whole design. The network has one
+**action neuron** per thing the squid can do. Forward propagation drives those
+neurons like any other, they **inhibit one another**, and whichever survives
+that competition is what the squid does. The engine reads the outcome and
+carries it out.
 
 ---
 
-## Design Philosophy
+## What changed in 5.0, and why
 
-### Neural-First Authority
+Version 4.0 computed behaviour from hand-written formulas:
 
-The Decision Engine treats the brain as the **single source of truth**. It does not perform manual world queries (e.g. checking for food, scanning objects) to *decide* what to do. Instead, it consumes:
+```python
+weights["eating"] = hunger * (3.0 if can_see_food > 80 else 0.3) \
+                    * 1.6 ** (hunger / 25)
+weights["approaching_plant"] = (anxiety / 40) * (3.0 if near_plant else 0.5) \
+                               * (4.0 if personality is TIMID else 1.8)
+```
 
-* Perceptual neuron outputs (via [`BrainNeuronHooks`](../source-reference/brain_neuron_hooks.py.md))
-* Internal state neurons (hunger, anxiety, curiosity, etc.)
-* Learned and persistent neural values
+...and a dozen more like them, followed by a memory-influence table and a
+per-personality multiplier table.
 
-Direct world interaction is limited to *execution*, not *decision-making*.
+Those numbers *were* the squid's behaviour policy. The network could rewire
+itself completely — grow neurons, invert synapses, consolidate a lifetime of
+experience — and the squid would still do exactly what that arithmetic said,
+because **nothing the squid learned was ever consulted when it chose what to
+do**. The Brain Tool showed you a network that was, behaviourally, decorative.
 
-### Continuous Competition
-
-Actions are not triggered by rules. Instead, all candidate actions receive **weights** derived from internal signals. These weights compete, and the strongest wins. Small differences matter, enabling hesitation, oscillation, and personality-driven variance.
-
-### Modulation, Not Commands
-
-Memory and personality do not issue instructions. They *bias* behaviour by scaling weights. This ensures:
-
-* Memories influence but do not dominate
-* Personalities remain relevant in all contexts
-* New behaviours automatically inherit modulation
-
----
-
-## Decision Pipeline
-
-The decision process is executed in six structured stages.
+In 5.0 the arithmetic *is* the network. Every number behind a behaviour is a
+synapse, and every synapse is something Hebbian learning, STDP, sleep
+consolidation or neurogenesis can move.
 
 ---
 
-### 1. Perceptual & Brain State Construction
+## Action neurons
 
-All perceptual input is retrieved via [`BrainNeuronHooks`](../source-reference/brain_neuron_hooks.py.md):
+Defined in `brain_constants.ACTION_NEURONS`:
 
-* Temporal sensors are decayed each tick
-* No manual perception checks are allowed
+| Neuron | Behaviour | Innate? |
+| --- | --- | --- |
+| `act_move` | swim around | yes — tonic bias |
+| `act_eat` | go to food and eat | yes — sensorimotor prior |
+| `act_flee` | flee | yes — reflex pathway |
+| `act_ink` | release an ink cloud | yes — reflex, *probabilistic* |
+| `act_collapse` | collapse from exhaustion | yes — homeostatic drive |
+| `act_play` | play with a rock or poop | **no — must be learned** |
+| `act_shelter` | shelter by a plant | **no — must be learned** |
+| `act_rest` | choose to rest | **no — must be learned** |
 
-The full brain state is constructed from:
+Each has a **firing threshold** (`ACTION_FIRING_THRESHOLDS`) — the activation
+it must reach before the squid will act on it. That threshold is a property of
+the neuron, in the same units as its activation, and it is the *same* number
+the actuator binding fires on, so an urge can never be "chosen" at a level too
+weak to reach the body.
 
-* Core neurons
-* Learned neurons
-* Perceptual inputs (merged defensively)
-
-This combined state represents the squid’s *entire subjective reality* at the moment of decision.
-
----
-
-### 2. Memory Influence
-
-Active memories are retrieved from the memory manager and converted into **multiplicative biases** on specific actions.
-
-Examples:
-
-* Positive food memories bias eating
-* Object interaction memories bias play and throwing
-* Startle memories suppress exploration and increase comfort-seeking
-
-Memory effects are:
-
-* Directional (positive or negative bias)
-* Non-deterministic
-* Stackable
-
-This models habits, preferences, and learned aversions rather than explicit recall.
+Action neurons **rest at zero**, not at the 50 midpoint a drive rests at. If
+they rested at 50, an action the squid had never learned would sit permanently
+at the midpoint and compete with the ones it had — a newborn would be born
+wanting to do everything equally. Locomotion is the one exception and rests at
+the midpoint, because a squid that is not doing anything else is still
+swimming, and a motionless squid never meets anything it could learn from.
 
 ---
 
-### 3. Physiological Urgency (Nonlinear Drives)
+## What a squid is born knowing
 
-Physiological needs generate **exponential urgency curves**:
+Moving, eating and fleeing — and nothing else. It is not a rule anywhere; it
+is structure, in `brain_constants.INNATE_ACTION_WIRING`, of four kinds:
 
-* Hunger amplifies eating
-* Sleepiness amplifies sleeping
+**Sensorimotor priors.** `can_see_food → act_eat (+0.85)`. Seeing food drives
+the neuron that swims to food. This is the "automatically move towards food"
+instinct, and it is one synapse. A saturated `can_see_food` gives 42.5, and
+`act_eat` fires at 38, so seeing food is enough on its own.
 
-Nonlinear scaling ensures that high-need states *crowd out* other motivations rather than simply increasing priority linearly.
+**Reflex pathways.** `is_startled → act_flee (+1.00)`, sustained by
+`threat_level (+0.55)`. Startle alone reaches the flight threshold: a squid
+that has just been frightened should not need corroborating evidence to run.
+`is_startled → act_ink (+0.80)` runs *in parallel* with flight rather than
+against it.
 
-#### Reflex Overrides
+**Homeostatic drives.** `hunger → act_eat (+0.40)` sharpens the food prior.
+`sleepiness → act_collapse (+0.95)` drives an involuntary collapse at the very
+top of the sleepiness range.
 
-Certain extreme states bypass competition entirely:
+**Tonic bias.** `curiosity → act_move (+0.45)`, on top of locomotion's resting
+level.
 
-* Exhaustion → forced sleep
-* Active sleep → no decision
-* Extreme external stimulus → startle response
+**Sleep gating.** `is_sleeping` inhibits every voluntary action neuron at
+−0.90. This is why there is no `if asleep:` branch in the engine — a sleeping
+squid's actions sit below their thresholds *because something in its brain is
+holding them there*, which is what being asleep is.
 
-These represent **reflex arcs**, not cognitive decisions.
+All of it is written through the recorded synapse path with mechanism
+`innate`, so a newborn brain explains itself in the Knowledge tab like any
+other, and **ordinary learning can strengthen, weaken or invert any of it**.
+An instinct is a starting point, not a law.
 
----
+### What must be learned
 
-### 4. Base Action Weight Construction
+`act_play`, `act_shelter` and `act_rest` have **no innate wiring at all**.
+Those neurons sit at zero until something the squid experiences builds a path
+to them. A squid that never meets a rock never learns to play with one.
 
-Each candidate action receives a base weight derived from the brain state.
+`LEARNED_ACTIONS` states this explicitly rather than leaving it to be inferred
+from an absence — and `find_orphan_neurons()` knows to leave them alone, so
+the brain does not "rescue" a capability the squid is supposed to earn.
 
-Actions include:
-
-* Exploring
-* Eating
-* Approaching plants (comfort-seeking)
-* Playing
-* Throwing objects
-* Sleeping
-* Fleeing
-
-Weights are influenced by:
-
-* Drives (hunger, curiosity, satisfaction)
-* Threat and anxiety
-* Perceptual confidence (e.g. food visibility)
-* Contextual suppressors (illness, external stimuli)
-
-This stage defines *what the squid wants* before learning, memory, or personality intervene.
-
----
-
-### 5. Memory & Personality Modulation
-
-#### Memory Modifiers
-
-Memory multipliers are applied to relevant actions, biasing selection without enforcing outcomes.
-
-#### Personality Modifiers
-
-[Personalities](../neural-network/Personality.md) act as **gain controls**:
-
-* **Adventurous**: boosts exploration and play
-* **Timid**: suppresses exploration, amplifies comfort-seeking
-* **Greedy**: amplifies eating
-* **Lazy**: suppresses energetic actions
-* **Energetic**: boosts play and exploration
-
-Personality does not define behaviour — it shapes *how strongly* drives express themselves.
-
-#### Anxiety Coupling
-
-High anxiety further amplifies comfort-seeking behaviour, creating feedback between affect and action selection.
+Note the deliberate split between `act_collapse` and `act_rest`: **collapsing**
+when exhausted is homeostasis every squid is born with; **choosing to rest**
+before exhaustion is something it has to learn.
 
 ---
 
-### 6. Stochastic Selection & Confidence
+## Competition
 
-After all modifiers:
+`action_competition_wiring()` generates mutual inhibition between the
+competing actions (−0.22), plus inhibition onto locomotion (−0.30).
 
-* Small stochastic noise is applied to prevent determinism
-* The highest-weighted action is selected
+Locomotion is inhibited by every other action and inhibits none of them. That
+asymmetry is what makes swimming the thing a squid does when nothing else is
+worth doing, **without anything having to declare it a fallback**: any real
+urge quietly suppresses idling, and when the urge passes, idling comes back on
+its own.
 
-#### Confidence Metric
+Reflexes sit outside the competition. Inking runs alongside flight rather than
+against it — if it were ranked against fleeing it would sometimes win, and a
+frightened squid would stand still and release a cloud of ink instead of
+escaping. An imminent collapse silences everything.
 
-Decision confidence is computed as the relative margin between the top two competing actions.
-
-This signal can be used for:
-
-* Animation blending
-* UI visualization
-* Learning-rate modulation
-* Behavioural hesitation
-
----
-
-## Execution Phase
-
-Once an action is selected, it is executed via `_execute_neural_decision`.
-
-Key principles:
-
-* Execution respects neural intent
-* World scanning is minimized
-* Fallback behaviours preserve personality flavour
-
-Execution returns a *descriptive outcome string*, not just an action label, enabling rich UI feedback.
+The competition **settles rather than rings**: zero oscillation across every
+scenario after 40 ticks, checked as a test
+(`test_the_competition_settles_instead_of_oscillating`).
 
 ---
 
-## Decision Tracing & Visualization
+## Personality
 
-Each decision produces a full trace containing:
+Personality used to be a multiplier table applied to finished behaviour
+weights, which put it outside the network entirely: nothing the squid
+experienced could ever change it, and it appeared nowhere in the brain the
+player was looking at.
 
-* Raw perceptual inputs
-* Brain state snapshot
-* Base action weights
-* Memory influences
-* Urgency multipliers
-* Personality modifiers
-* Final adjusted weights
-* Selected action
-* Confidence score
-
-This trace is exposed to the Brain Tool UI for inspection and debugging.
+A timid squid is now one **born with a stronger startle reflex**
+(`INNATE_PERSONALITY_BIAS`, applied once when the squid's personality becomes
+known). Ordinary learning can wear that down, so a timid squid that is never
+frightened can genuinely grow out of it.
 
 ---
 
-## What the Decision Engine Is (and Is Not)
+## The decision, in full
 
-### It Is:
+1. **Perception.** Every input reaches the brain through `BrainNeuronHooks`.
+   There is no manual scanning of the scene.
+2. **Read the action neurons.** Their activations *are* the behaviour weights.
+3. **Rank by margin over each neuron's own threshold**, as a fraction of the
+   room it had left. Comparing raw activations would be unfair between actions
+   whose thresholds differ — a 50 is a strong wish to flee and a weak wish to
+   eat. Reflexes and the fallback sit out.
+4. **A little noise** (±6%), so a squid whose two strongest urges are neck and
+   neck does not lock onto one of them forever. This is the only number in the
+   file that is not a synapse.
+5. **Carry it out** as a `DRIVE_DECISION` drive. `move_squid()` is the only
+   thing that moves the squid, so routing through the drive keeps one movement
+   channel and lets an output binding's urge outrank a decision.
 
-* A neural-modulated action selection system
-* Continuous and explainable
-* Designed for emergent behaviour
-* Compatible with learning extensions
-
-### It Is Not:
-
-* A finite-state machine
-* A behaviour tree
-* A planner or lookahead system
-* A reinforcement learner (yet)
-
----
-
-## Future Extensions
-
-The Decision Engine is intentionally structured to support:
-
-* Dopaminergic reinforcement signals
-* Action-value learning
-* Noise modulation by arousal or confidence
-* Fully neural affordance perception
-
-The hardest architectural work — unified perception, continuous competition, and traceability — is already in place.
+If nothing clears a threshold, the squid swims — provided locomotion itself
+clears *its* threshold. That is how a sleeping squid ends up doing nothing at
+all rather than drifting around the tank in its sleep.
 
 ---
 
-## Summary
+## Reflex probability
 
-The Decision Engine forms the behavioural core of Dosidicus. By enforcing neural authority, continuous competition, and modulation-based influence, it produces behaviour that is adaptive, interpretable, and personality-consistent — without relying on brittle scripts or hard-coded modes.
+`INNATE_ACTION_BINDINGS` carries a **probability** per reflex. The ink cloud is
+`0.35`: once `act_ink` crosses its threshold, the squid inks about a third of
+the time. The cooldown is consumed on a failed roll too, so "a chance of
+inking when startled" does not degrade into "keep rolling every tick until it
+inks", which is the same as always inking, just later.
 
-It is not merely a controller, but a foundation for a growing cognitive system.
+Keeping the chance on the binding makes it a visible, tunable property of the
+reflex rather than a `random.random()` buried in a behaviour rule.
+
+---
+
+## Tracing
+
+Every decision is kept — the last 240 of them — as a plain, serialisable
+snapshot (`DecisionEngine.get_history()`), containing:
+
+* the activation and threshold of **every** action neuron
+* what each incoming synapse contributed to each action, this tick
+* how hard each action was being pushed down by its rivals
+* the margin each competitor had over its own threshold
+* the sensors and drives that produced it
+
+`DecisionEngine.explain(snapshot)` turns one into plain English:
+
+> It chose to go and eat because that neuron reached 49, past the 38 it has to
+> clear before the squid will act on it.
+> What drove it: can see food (+42), hunger (+14).
+> Nothing else was in contention; the closest was play, which reached 0 of the
+> 38 it needed.
+> Winning it also pushed the alternatives down: swim around (−7), flee (−5).
+
+Every sentence is read off the snapshot. There is no claim in it the network
+did not make. The [Decisions tab](../brain-tool/Decisions-Tab.md) renders this,
+with a slider to scrub back through the history.
+
+---
+
+## What it is, and is not
+
+**It is:** a reader of neural competition; continuous; explainable; entirely
+subject to the learning mechanisms, because it has no policy of its own.
+
+**It is not:** a finite-state machine; a behaviour tree; a planner; a
+reinforcement learner (yet); and — as of 5.0 — no longer a table of formulas
+wearing a neural network as a hat.
+
+---
+
+## Tests
+
+`tests/test_neural_pipeline.py` holds the contract:
+
+* `InnateBehaviourTests` — what a squid is born with, and what it is not
+* `ActionCompetitionTests` — that actions genuinely inhibit one another, that
+  danger beats appetite, that the competition settles
+* `InnatePathwayShapeTests` — that no stimulus→action rule has crept back into
+  `make_decision`
+* `DecisionTimelineTests` — that every decision is kept, is plain data, and
+  can explain itself

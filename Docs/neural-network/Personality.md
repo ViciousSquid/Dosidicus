@@ -12,6 +12,22 @@ There are seven different squid personalities that affect their needs and how th
 
 One of these is randomly chosen at launch
 
+### How personality reaches behaviour
+
+Since v5.0, personality is **innate synaptic weight**, not a rule applied to
+decisions. A timid squid is one born with a stronger startle reflex: the
+tilt in `brain_constants.INNATE_PERSONALITY_BIAS` is applied once, to the
+squid's innate synapses, the moment its personality becomes known.
+
+It used to be a per-personality multiplier table the decision engine applied to
+finished behaviour weights. That put personality *outside* the network
+entirely: nothing the squid experienced could ever change it, and it appeared
+nowhere in the brain the player was looking at.
+
+Because it is now ordinary weight, ordinary learning can reach it — so a timid
+squid that is never frightened can genuinely grow out of it, and you can see
+that happen in the [Knowledge tab](../brain-tool/Knowledge-Tab.md).
+
 A personality type can be forced at launch using the `-p` flag followed by the personality name above (example: `main.py -p lazy`) 
 
 Each personality type presents unique challenges and requirements for the player to manage. Understanding and accommodating the specific needs and behaviors of each personality type is crucial for the player's success in caring for the squid and maintaining its well-being.

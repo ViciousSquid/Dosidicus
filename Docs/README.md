@@ -19,7 +19,9 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 - [Build-your-own neural network ](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) - learn neuroscience by raising a squid that **might develop irrational fears**
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **No Tensorflow or PyTorch**
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
-- Starts with 8 neurons — grows via **neurogenesis** and rewires using **Hebbian learning**.
+- Hatches with a small innate brain — the 8 core neurons, the senses its
+  reflexes read, and one neuron per action it can take — then grows via
+  **neurogenesis** and rewires using **Hebbian learning**.
 - Every synaptic change and every grown neuron records **why**, and the inspection tools read that record rather than reconstructing it.
 - Includes `achievements` with **50** to collect!
 

@@ -14,6 +14,54 @@ A headless training tool is included in the `headless` folder. This can be used 
   (`brain.explain_weight(...)`, `brain.explain_neuron(...)`).
 * **Training Scenarios**: Predefined scenarios for different training goals
 * **Export Trained Brains**: Save trained brains back to JSON for use in the main game
+* **A blank control condition**: `--blank` hatches the eight required neurons
+  with no synapses and no innate reflexes, so anything the brain knows at the
+  end of a run was learned during it. Without the flag it hatches the newborn a
+  real squid gets — able to move, eat and flee from birth.
+* **Reproducible runs**: `--seed N` makes a run deterministic. The same seed,
+  the same starting brain and the same tick count produce the same trained
+  brain, so a result you publish is one somebody else can check.
+
+### Running an experiment
+
+```bash
+# a blank brain, trained reproducibly
+python headless/headless_trainer.py --blank --seed 42 --ticks 10000 -o trained.json
+
+# the same command again produces an identical brain
+python headless/headless_trainer.py --blank --seed 42 --ticks 10000 -o check.json
+```
+
+Or in Python:
+
+```python
+from headless_trainer import HeadlessSimulation, TrainingConfig
+
+sim = HeadlessSimulation(TrainingConfig(seed=42, blank=True))
+sim.run(ticks=10000, progress_interval=0)
+sim.brain.save_brain("trained.json")
+
+print(sim.brain.explain_weight(("hunger", "anxiety")))   # why this weight?
+```
+
+### The saved file can be asked *why*
+
+A trained brain is written with its **whole account of itself** — the
+provenance ledger, the causal record, the capability diagnosis, the plasticity
+and consolidation state — under the same keys the game's save uses. Load one
+back and it answers exactly what it answered before it was written out:
+
+```
+When Stress: Filth Avoidance is high, satisfaction strongly goes up.
+  Learned from: ... watched together across 29 moments of the squid's life
+  Why it changed: last strengthened by 0.116 because they kept happening
+    together (measured correlation +1.00)
+  Confidence: 83% (very confident), strength +0.78
+```
+
+Until v5.0 the export carried the network and nothing else, so a brain trained
+here arrived with an evolved network and no idea why any of it was the way it
+was. You could read its weights; you could not ask it anything.
 
 ### A note on time
 

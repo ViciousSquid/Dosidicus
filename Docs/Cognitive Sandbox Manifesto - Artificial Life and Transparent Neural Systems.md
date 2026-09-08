@@ -27,7 +27,8 @@ It is a contained environment where systems interact, evolve, and reveal behavio
 Each squid:
 
 * Is born with a randomly wired neural architecture
-* Starts with 8 neurons
+* Starts with a small innate brain: 8 core neurons, the senses its reflexes
+  read, and one neuron per action it can take
 * Learns through Hebbian dynamics
 * Grows new structure through neurogenesis
 * Forms memories

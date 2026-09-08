@@ -42,6 +42,13 @@ none of them is an event counter.
 | **causal differentiation** | Two of the squid's own actions have shared the credit for the same outcome and have *never once been observed apart*, and no neuron in the brain fires any differently for one than for the other (Cohen's *d* between the two actions' activation distributions). The split is the correct conclusion from the evidence, but the network has nowhere to put a different one. | A neuron that stands for **one** of the actions and nothing else, driven by the action rather than by the synapses, with a single outgoing synapse onto the disputed outcome **at weight zero**. |
 | **connectivity** | A neuron with no working connections. Nothing it computes can reach the rest of the brain. | A connector that bridges it back into the network. |
 
+> **An unlearned action is not an orphan.** `act_play`, `act_shelter` and
+> `act_rest` are deliberately born with nothing driving them — that is what
+> "the squid has to learn this" is made of — so `find_orphan_neurons()` leaves
+> them alone. Before v5.0 they were reported as orphans, and the brain grew a
+> rescue connector for each within the first seconds of life, wiring up by
+> accident exactly the capabilities the squid was supposed to earn.
+
 Comfort bands live in `capability.COMFORT_BANDS` and cover exactly the seven
 core drives.
 
@@ -112,7 +119,10 @@ of:
   need new structure; the network is handling it, just slowly.
 
 `EnhancedNeurogenesis._growth_blocked()` then applies the pacing rules: the
-brain must have been alive for 5 s, must be under `max_neurons`, and must be
+brain must have been alive for 5 s, must be under `max_neurons` (counted by
+membership — before v5.0 this subtracted the *length* of the excluded-neurons
+list rather than counting the excluded neurons actually present, so a brain
+containing none of them ran five neurons past its own ceiling), and must be
 past the growth cooldown. A maximum-severity (acute) deficit may grow sooner
 than the full cooldown but never instantly — there is a floor of
 `max(10 s, cooldown / 4)`, so a squid with several pinned drives cannot burst

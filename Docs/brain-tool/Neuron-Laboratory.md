@@ -108,6 +108,25 @@ thresholds. Those counters stopped deciding anything in v4.0 — growth is drive
 by persistent capability deficits now — so the bars were filling up toward
 numbers that no longer meant anything.
 
+Alongside it, the neuron budget as a meter that turns amber and then red as the
+brain fills toward `max_neurons`, whether pruning is on, and how long is left
+on the growth cooldown.
+
+---
+
+## The window
+
+The Laboratory opens at up to 1280×900, sized to the screen it is opening on,
+and the cards flow into **two columns** so the extra width is used rather than
+left as margin. "What is this?" and "Why does this neuron exist?" take the full
+width, because everything else answers a detail of those two.
+
+Cards are coloured by what they say, in the same palette the
+[Memory tab](Memory-Tab.md) uses — a neuron that is part of an unsolved problem
+is pink, the origin card is the blue the Memory tab gives neurogenesis, what a
+neuron has done is amber, and the teaching card is gold. A page of uniform white
+panels told you nothing about which one to read first.
+
 ---
 
 ## Edit Sandbox

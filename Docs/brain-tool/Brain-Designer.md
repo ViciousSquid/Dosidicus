@@ -65,7 +65,7 @@ These can be combined to create reactive behaviours (simulated _biological drive
 
 ### `Generate sparse network`
 
-The 'generate sparse network' button creates biologically-inspired neural networks using the core 8 neurons. Each generated brain is unique and randomised.
+The 'generate sparse network' button creates biologically-inspired neural networks using the 8 required neurons. Each generated brain is unique and randomised.
 
 
 <img src="https://github.com/user-attachments/assets/d15321ca-cc53-44f8-bc45-c4f787995f38" width="300">
