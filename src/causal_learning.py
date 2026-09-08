@@ -42,7 +42,7 @@ import time
 import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Any, Deque, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Deque, Dict, Iterable, List, Optional, Set, Tuple
 
 from .brain_constants import CORE_STAT_NEURONS, PURE_INPUT_NEURONS
 from .neural_provenance import Episode, KnowledgeItem, humanise
@@ -272,19 +272,18 @@ class ActionOutcomeLedger:
 
         self._advance_baseline(snapshot, now)
 
-        closed: List[Episode] = []
+        expiring: List[_OpenEpisode] = []
         still_open: List[_OpenEpisode] = []
         for episode in self._open:
             episode.ticks += 1
-            if now >= episode.closes_at:
-                result = self._close(episode, snapshot, now)
-                if result is not None:
-                    closed.append(result)
-            else:
-                still_open.append(episode)
+            (expiring if now >= episode.closes_at else still_open).append(episode)
 
         self._open = deque(still_open, maxlen=_MAX_OPEN_EPISODES)
-        return closed
+        if not expiring:
+            return []
+        # Settled together, so which episode happens to be first in the deque
+        # cannot decide which action gets the credit.
+        return self._settle(expiring, snapshot, now)
 
     def _advance_baseline(self, snapshot: Dict[str, float], now: float) -> None:
         """Measure how the drives drift on their own, over the same window."""
@@ -322,50 +321,124 @@ class ActionOutcomeLedger:
     # ------------------------------------------------------------------
     # Closing an episode: this is where learning happens
     # ------------------------------------------------------------------
-    def _close(self, open_ep: _OpenEpisode, snapshot: Dict[str, float],
-               now: float) -> Optional[Episode]:
-        consequence: Dict[str, float] = {}
-        for stat, before in open_ep.baseline_state.items():
-            after = snapshot.get(stat)
-            if after is None:
-                continue
-            delta = after - before
-            if abs(delta) >= 0.25:
-                consequence[stat] = delta
+    def _settle(self, expiring: List[_OpenEpisode], snapshot: Dict[str, float],
+                now: float) -> List[Episode]:
+        """Close every episode whose window has run out, competing for credit.
 
-        valence = 0.0
-        for stat, delta in consequence.items():
-            weight = VALENCE_WEIGHTS.get(stat, 0.0)
-            # Normalise: a full 100-point swing in one drive is one unit.
-            valence += weight * (delta / 100.0)
-        valence = max(-1.0, min(1.0, valence))
+        Actions overlap constantly - a squid is exploring while it notices food
+        while it drifts - so the question is never "what happened after this
+        action?" but "how much of what happened was down to THIS action rather
+        than whatever else was going on?".
 
-        episode = Episode(
-            episode_id=open_ep.episode_id, action=open_ep.action,
-            started=open_ep.started, ended=now, cue=dict(open_ep.cue),
-            consequence=consequence, valence=round(valence, 4))
+        Each drive is settled by shared prediction error, the rule animal
+        learning calls cue competition:
 
-        # Contingency bookkeeping - the squid's running estimate of what this
-        # action does, which is what makes the claim causal rather than anecdotal.
-        for stat, delta in consequence.items():
-            table = self.contingencies[open_ep.action]
+            error   = observed change  -  what every action in scope already
+                                          predicts, together
+            target  = this action's own current estimate + error
+
+        Two actions that always co-occur end up splitting the effect, which is
+        the honest answer: nothing can separate perfectly confounded causes,
+        and inventing a split would be worse than admitting the tie. The moment
+        one of them happens without the other, its estimate is corrected toward
+        nothing and the real cause absorbs the effect. That is the difference
+        between learning a contingency and noticing a coincidence.
+
+        Every estimate is read BEFORE any of them moves, so settlement does not
+        depend on the order the episodes happen to be visited in - which is
+        what made an earlier attempt at this give all the credit to whichever
+        action's window expired first.
+        """
+        in_scope: Set[str] = {ep.action for ep in expiring}
+        for other in self._open:
+            if any(other.started <= ep.closes_at and other.closes_at >= ep.started
+                   for ep in expiring):
+                in_scope.add(other.action)
+
+        prior: Dict[Tuple[str, str], float] = {}
+        for action in in_scope:
+            for stat, entry in self.contingencies.get(action, {}).items():
+                prior[(action, stat)] = entry.mean_delta if entry.n else 0.0
+
+        closed: List[Episode] = []
+        pending: List[Tuple[str, str, float, float]] = []
+
+        for open_ep in expiring:
+            consequence: Dict[str, float] = {}
+            for stat, before in open_ep.baseline_state.items():
+                after = snapshot.get(stat)
+                if after is None:
+                    continue
+                delta = after - before
+                if abs(delta) >= 0.25:
+                    consequence[stat] = delta
+
+            # Valence is the SURPRISE, not the raw change.
+            #
+            # An outcome the squid already expects teaches it nothing - that is
+            # the whole content of prediction-error learning, and it is what
+            # keeps the reward channel honest. Scoring the raw change instead
+            # made almost every episode "rewarding", because the drives always
+            # drift a little, so reward fired constantly and swamped the
+            # correlational rule that carries what the squid actually
+            # experienced. As the squid learns what its actions do, routine
+            # outcomes stop moving weights and only genuine surprises do.
+            valence = 0.0
+            for stat, delta in consequence.items():
+                weight = VALENCE_WEIGHTS.get(stat, 0.0)
+                if not weight:
+                    continue
+                predicted = sum(prior.get((a, stat), 0.0) for a in in_scope)
+                # Normalise: a full 100-point swing in one drive is one unit.
+                valence += weight * ((delta - predicted) / 100.0)
+            valence = max(-1.0, min(1.0, valence))
+
+            episode = Episode(
+                episode_id=open_ep.episode_id, action=open_ep.action,
+                started=open_ep.started, ended=now, cue=dict(open_ep.cue),
+                consequence=consequence, valence=round(valence, 4))
+
+            # Settle every drive this action already has an expectation about,
+            # not just the ones that visibly moved. "I did that and the thing I
+            # expected did NOT happen" is the observation that corrects a
+            # mistaken belief; discarding it because the change was too small
+            # to display meant a coincidence, once learned, could never be
+            # unlearned. The episode's `consequence` still carries only what
+            # actually moved, because that is what gets shown to the player.
+            settled = set(consequence)
+            settled.update(stat for (action, stat) in prior
+                           if action == open_ep.action)
+            for stat in settled:
+                if stat not in open_ep.baseline_state:
+                    continue
+                after = snapshot.get(stat)
+                if after is None:
+                    continue
+                delta = after - open_ep.baseline_state[stat]
+                predicted = sum(prior.get((a, stat), 0.0) for a in in_scope)
+                own = prior.get((open_ep.action, stat), 0.0)
+                pending.append((open_ep.action, stat, own + (delta - predicted), now))
+
+            self.closed_episodes += 1
+            self.history.append(episode)
+            self.last_outcome = {'action': episode.action, 'valence': valence,
+                                 'consequence': consequence, 'at': now}
+            ledger = self._ledger
+            if ledger is not None:
+                ledger.record_episode(episode)
+            closed.append(episode)
+
+        for action, stat, target, when in pending:
+            table = self.contingencies[action]
             entry = table.get(stat)
             if entry is None:
-                entry = Contingency(action=open_ep.action, stat=stat)
+                entry = Contingency(action=action, stat=stat)
                 table[stat] = entry
-            entry.observe(delta, now)
+            entry.observe(target, when)
 
-        self.closed_episodes += 1
-        self.history.append(episode)
-        self.last_outcome = {'action': episode.action, 'valence': valence,
-                             'consequence': consequence, 'at': now}
-
-        ledger = self._ledger
-        if ledger is not None:
-            ledger.record_episode(episode)
-
-        self._assign_credit(episode)
-        return episode
+        for episode in closed:
+            self._assign_credit(episode)
+        return closed
 
     def _assign_credit(self, episode: Episode) -> None:
         """Broadcast the outcome to the synapses that were causally active.
@@ -384,8 +457,11 @@ class ActionOutcomeLedger:
         if stdp is None or brain is None:
             return
 
+        engine = getattr(brain, 'plasticity', None)
+        rate = getattr(getattr(engine, 'config', None), 'learning_rate', None)
         try:
-            deltas = stdp.apply_reward_modulation(episode.valence * self.config.reward_gain)
+            deltas = stdp.apply_reward_modulation(
+                episode.valence * self.config.reward_gain, rate=rate)
         except Exception:
             return
         if not deltas:

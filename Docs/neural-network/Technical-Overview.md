@@ -113,9 +113,11 @@ Every removal is recorded with its reason.
 ## 7. Transparency
 
 Transparency is an architectural requirement, not a debugging feature. Every
-weight change and every neuron birth goes through one recorded write path, and
-the inspection tools read that record rather than reconstructing an
-approximation of it:
+weight change and every neuron birth goes through one recorded write path -
+`neural_provenance.RecordedSynapses`, which the game's BrainWidget, the headless
+trainer and every test double all inherit, so "record every change" cannot be
+true in one and quietly false in another. The inspection tools read that record
+rather than reconstructing an approximation of it:
 
 ```python
 brain_widget.explain_weight(("can_see_food", "satisfaction"))

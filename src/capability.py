@@ -72,9 +72,10 @@ COMFORT_BANDS: Dict[str, Tuple[float, float]] = {
 # A synapse this close to the clamp has nothing left to give.
 SATURATION = 0.85
 
-# How much corrective push counts as the network genuinely fighting back.
-# One synapse at weight w with its source fully on contributes w/2, so 0.25 is
-# roughly one solid, half-strength-or-better connection actively correcting.
+# Only used to WORD the diagnosis, never to decide it: a push below this is
+# described as too weak, above it as present but ineffective. One synapse at
+# weight w with its source fully on contributes w/2, so 0.25 is roughly one
+# solid, half-strength connection actively correcting.
 MIN_CORRECTIVE_PUSH = 0.25
 
 _MAX_SIGNATURES = 24
@@ -511,17 +512,29 @@ class CapabilityMonitor:
             needed = -1.0 if too_high else 1.0
 
             # What corrective push does the existing structure actually supply?
+            #
+            # Measured over the SAME window as the out-of-band fraction above,
+            # using each source's mean activation. Reading the sources at the
+            # instant of evaluation compared a 240-tick complaint against a
+            # one-moment defence: a synapse that corrects hard whenever the
+            # drive spikes read as useless whenever the monitor happened to
+            # look during a quiet stretch, and the brain grew a neuron it did
+            # not need.
             corrective = 0.0
             saturated = 0
             contributors = 0
             for (src, dst), weight in weights.items():
                 if dst != stat:
                     continue
-                src_value = state.get(src)
-                if isinstance(src_value, bool):
-                    src_value = 100.0 if src_value else 0.0
-                if not isinstance(src_value, (int, float)):
-                    continue
+                source = self._global.get(src)
+                if source is not None and source.n >= 2:
+                    src_value = source.mean
+                else:
+                    src_value = state.get(src)
+                    if isinstance(src_value, bool):
+                        src_value = 100.0 if src_value else 0.0
+                    if not isinstance(src_value, (int, float)):
+                        continue
                 push = ((float(src_value) - 50.0) / 100.0) * float(weight)
                 if push * needed > 0:
                     corrective += abs(push)
@@ -529,11 +542,20 @@ class CapabilityMonitor:
                     if abs(float(weight)) >= SATURATION:
                         saturated += 1
 
-            # The network is coping if it has meaningful corrective push AND
-            # that push still has somewhere to grow. Push at the clamp with the
-            # drive still stuck is the network doing all it can and failing,
-            # which is exactly the case new structure is for.
-            if corrective >= MIN_CORRECTIVE_PUSH and saturated == 0:
+            # Is the network actually getting on top of it?
+            #
+            # The deciding question is not how big the corrective push is - any
+            # threshold on that is a magic number, and one that compared a
+            # 240-tick complaint against a one-moment defence. It is whether
+            # the drive is coming back. The band history covers the same window
+            # as the complaint, so its own trend answers it: if the drive was
+            # out of band less often in the recent half than the earlier half,
+            # existing structure is working and needs time, not company.
+            half = len(history) // 2
+            earlier = sum(1 for bad in list(history)[:half] if bad) / max(1, half)
+            recent = sum(1 for bad in list(history)[half:] if bad) / max(1, len(history) - half)
+            improving = recent < earlier - 0.1
+            if improving and corrective > 0:
                 continue
 
             excess = abs(value - (high if too_high else low)) / 100.0
@@ -545,11 +567,13 @@ class CapabilityMonitor:
                 gap = "there is no synapse at all that pushes it that way"
             elif saturated:
                 gap = (f"the {saturated} synapse(s) that push it that way are "
-                       f"already at full strength and it is still not enough")
-            else:
+                       f"already at full strength and it is not coming back")
+            elif corrective < MIN_CORRECTIVE_PUSH:
                 gap = (f"the existing synapses only supply {corrective:.2f} of "
-                       f"corrective push, and it needs at least "
-                       f"{MIN_CORRECTIVE_PUSH:.2f}")
+                       f"corrective push and it is not coming back")
+            else:
+                gap = (f"the existing synapses supply {corrective:.2f} of "
+                       f"corrective push and it is still not coming back")
 
             out.append(Deficit(
                 kind='regulation', key=f"regulation:{stat}:{direction}",
@@ -562,6 +586,8 @@ class CapabilityMonitor:
                 severity=severity,
                 evidence={'stat': stat, 'value': round(float(value), 1),
                           'out_of_band_fraction': round(fraction, 3),
+                          'earlier_half': round(earlier, 3),
+                          'recent_half': round(recent, 3),
                           'corrective_push': round(corrective, 3),
                           'saturated_synapses': saturated,
                           'contributors': contributors,

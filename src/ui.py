@@ -1089,147 +1089,50 @@ class Ui:
         self.dirty_text_target_count = 0
         self.scene.update()
 
-    def check_neurogenesis(self, state):
-        current_time = time.time()
-        
-        if state.get('_debug_forced_neurogenesis', False):
-            new_name = f"debug_neuron_{int(current_time)}"
-            if self.neuron_positions:
-                center_x = sum(pos[0] for pos in self.neuron_positions.values()) / len(self.neuron_positions)
-                center_y = sum(pos[1] for pos in self.neuron_positions.values()) / len(self.neuron_positions)
-            else:
-                center_x, center_y = 600, 300
-            self.neuron_positions[new_name] = (
-                center_x + random.randint(-100, 100),
-                center_y + random.randint(-100, 100)
-            )
-            self.state[new_name] = 80
-            self.state_colors[new_name] = (150, 200, 255)
-            for existing in self.neuron_positions:
-                if existing != new_name:
-                    self.weights[(new_name, existing)] = random.uniform(-0.8, 0.8)
-                    self.weights[(existing, new_name)] = random.uniform(-0.8, 0.8)
-            if 'new_neurons' not in self.neurogenesis_data:
-                self.neurogenesis_data['new_neurons'] = []
-            self.neurogenesis_data['new_neurons'].append(new_name)
-            self.neurogenesis_data['last_neuron_time'] = current_time
-            print(f"DEBUG: Created neuron '{new_name}' at {self.neuron_positions[new_name]}")
-            print(f"New connections: {[(k,v) for k,v in self.weights.items() if new_name in k]}")
-            self.update()
-            return True
+    def grow_neuron_on_demand(self, neuron_type='novelty'):
+        """Grow one neuron through the engine, for the menu and the Shift+N key.
 
-        if current_time - self.neurogenesis_data.get('last_neuron_time', 0) > self.neurogenesis_config['cooldown']:
-            created = False
-            if state.get('novelty_exposure', 0) > self.neurogenesis_config['novelty_threshold']:
-                self._create_neuron_internal('novelty', state)
-                created = True
-            if state.get('sustained_stress', 0) > self.neurogenesis_config['stress_threshold']:
-                self._create_neuron_internal('stress', state)
-                created = True
-            if state.get('recent_rewards', 0) > self.neurogenesis_config['reward_threshold']:
-                self._create_neuron_internal('reward', state)
-                created = True
-            return created
-        return False
-    
-    def _create_neuron(self, neuron_type, trigger_data):
-        base_name = {
-            'novelty': 'novel',
-            'stress': 'defense', 
-            'reward': 'reward'
-        }[neuron_type]
-        new_name = f"{base_name}_{len(self.neurogenesis_data['new_neurons'])}"
-        active_neurons = sorted(
-            [(k, v) for k, v in self.state.items() if isinstance(v, (int, float))],
-            key=lambda x: x[1],
-            reverse=True
-        )
-        if active_neurons:
-            base_x, base_y = self.neuron_positions[active_neurons[0][0]]
-        else:
-            base_x, base_y = 600, 300
-        self.neuron_positions[new_name] = (
-            base_x + random.randint(-50, 50),
-            base_y + random.randint(-50, 50)
-        )
-        self.state[new_name] = 50
-        self.state_colors[new_name] = {
-            'novelty': (255, 255, 150),
-            'stress': (255, 150, 150),
-            'reward': (150, 255, 150)
-        }[neuron_type]
-        default_weights = {
-            'novelty': {'curiosity': 0.6, 'anxiety': -0.4},
-            'stress': {'anxiety': -0.7, 'happiness': 0.3},
-            'reward': {'satisfaction': 0.8, 'happiness': 0.5}
-        }
-        for target, weight in default_weights[neuron_type].items():
-            self.weights[(new_name, target)] = weight
-            self.weights[(target, new_name)] = weight * 0.5
-        self.neurogenesis_data['new_neurons'].append(new_name)
-        self.neurogenesis_data['last_neuron_time'] = time.time()
-        return new_name
-    
-    def trigger_neurogenesis(self):
-        try:
-            if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
-                print("Brain window not found")
-                self.show_message("Brain window not initialized")
-                return
-            brain = self.squid_brain_window.brain_widget
-            import time
-            import random
-            prev_neurons = set(brain.neuron_positions.keys())
-            new_name = f"forced_{int(time.time())}"
-            if brain.neuron_positions:
-                x_values = [pos[0] for pos in brain.neuron_positions.values()]
-                y_values = [pos[1] for pos in brain.neuron_positions.values()]
-                center_x = sum(x_values) / len(x_values)
-                center_y = sum(y_values) / len(y_values)
-            else:
-                center_x, center_y = 600, 300
-            pos_x = center_x + random.randint(-100, 100)
-            pos_y = center_y + random.randint(-100, 100)
-            print(f"Creating neuron {new_name} at ({pos_x}, {pos_y})")
-            brain.neuron_positions[new_name] = (pos_x, pos_y)
-            brain.state[new_name] = 75
-            if hasattr(brain, 'state_colors'):
-                brain.state_colors[new_name] = (150, 200, 255)
-            for existing in list(prev_neurons):
-                if existing in getattr(brain, 'excluded_neurons', []):
-                    continue
-                weight = random.uniform(-0.3, 0.3)
-                brain.weights[(new_name, existing)] = weight
-                brain.weights[(existing, new_name)] = weight * 0.8
-            if hasattr(brain, 'neurogenesis_data'):
-                if 'new_neurons' not in brain.neurogenesis_data:
-                    brain.neurogenesis_data['new_neurons'] = []
-                brain.neurogenesis_data['new_neurons'].append(new_name)
-                brain.neurogenesis_data['last_neuron_time'] = time.time()
-            if hasattr(brain, 'neurogenesis_highlight'):
-                brain.neurogenesis_highlight = {
-                    'neuron': new_name,
-                    'start_time': time.time(),
-                    'duration': 5.0
-                }
+        This replaced three separate ad-hoc creators that lived here: a
+        `check_neurogenesis` carrying a fifth copy of the old event thresholds
+        (and calling a `_create_neuron_internal` that does not exist on Ui, and
+        reading a `self.weights` that Ui does not have), a `_create_neuron`
+        with its own hard-coded wiring table, and two menu handlers that wrote
+        random symmetric synapses straight into brain.weights.
+
+        Neurons made that way were ghosts: no FunctionalNeuron, so the engine's
+        caps, pruning and strengthening could not see them; no birth record, so
+        the brain could not say why they existed; and synapses pointing into
+        sensors, which nothing can ever drive.
+
+        On-demand growth is still a real thing a player can ask for. It just
+        goes through the same creation path as every other neuron.
+        """
+        brain = getattr(getattr(self, 'squid_brain_window', None), 'brain_widget', None)
+        if brain is None:
+            print("Brain window not initialized")
+            self.show_message("Brain window not initialized")
+            return None
+
+        engine = getattr(brain, 'enhanced_neurogenesis', None)
+        if engine is None:
+            self.show_message("This brain has no neurogenesis engine")
+            return None
+
+        name = engine.create_neuron(neuron_type, brain_state=dict(brain.state),
+                                    environment={'on_demand': True})
+        if name:
             brain.update()
-            new_neurons = set(brain.neuron_positions.keys()) - prev_neurons
-            if new_neurons:
-                try:
-                    self.show_message(f"Created neuron: {new_name}")
-                except:
-                    pass
-                print(f"Successfully created neuron: {new_name}")
-            else:
-                self.show_message("Neuron creation failed!")
-                print("ERROR: Failed to create neuron")
-        except Exception as e:
-            import traceback
-            print(f"NEUROGENESIS FAILURE:\n{traceback.format_exc()}")
-            try:
-                self.show_message(f"Neurogenesis Error: {str(e)}")
-            except:
-                pass
+            self.show_message(f"Grew a neuron: {name}")
+            print(f"Grew {name} on demand ({neuron_type})")
+        else:
+            self.show_message(f"Could not grow a {neuron_type} neuron "
+                              f"(type cap or neuron limit reached)")
+            print(f"On-demand growth declined: {neuron_type} capped")
+        return name
+
+    def trigger_neurogenesis(self):
+        """Plugins/debug menu: grow a neuron now."""
+        self.grow_neuron_on_demand('novelty')
 
     def toggle_decoration_window(self, checked):
         if checked:
@@ -1521,50 +1424,8 @@ class Ui:
         self._preferences_window.activateWindow()
 
     def direct_create_neuron(self):
-        try:
-            if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
-                print("ERROR: Brain window not initialized")
-                return
-            brain = self.squid_brain_window.brain_widget
-            import time
-            import random
-            new_name = f"forced_{int(time.time())}"
-            if brain.neuron_positions:
-                x_values = [pos[0] for pos in brain.neuron_positions.values()]
-                y_values = [pos[1] for pos in brain.neuron_positions.values()]
-                center_x = sum(x_values) / len(x_values)
-                center_y = sum(y_values) / len(y_values)
-            else:
-                center_x, center_y = 600, 300
-            pos_x = center_x + random.randint(-100, 100)
-            pos_y = center_y + random.randint(-100, 100)
-            print(f"Creating neuron {new_name} at ({pos_x}, {pos_y})")
-            brain.neuron_positions[new_name] = (pos_x, pos_y)
-            brain.state[new_name] = 75
-            if hasattr(brain, 'state_colors'):
-                brain.state_colors[new_name] = (150, 200, 255)
-            excluded = getattr(brain, 'excluded_neurons', [])
-            for existing in list(brain.neuron_positions.keys()):
-                if existing != new_name and existing not in excluded:
-                    weight = random.uniform(-0.3, 0.3)
-                    brain.weights[(new_name, existing)] = weight
-                    brain.weights[(existing, new_name)] = weight * 0.8
-            if hasattr(brain, 'neurogenesis_data'):
-                if 'new_neurons' not in brain.neurogenesis_data:
-                    brain.neurogenesis_data['new_neurons'] = []
-                brain.neurogenesis_data['new_neurons'].append(new_name)
-                brain.neurogenesis_data['last_neuron_time'] = time.time()
-            if hasattr(brain, 'neurogenesis_highlight'):
-                brain.neurogenesis_highlight = {
-                    'neuron': new_name,
-                    'start_time': time.time(),
-                    'duration': 5.0
-                }
-            brain.update()
-            print(f"Successfully created neuron: {new_name}")
-        except Exception as e:
-            import traceback
-            print(f"NEUROGENESIS FAILURE:\n{traceback.format_exc()}")
+        """Shift+N: grow a neuron now, through the one creation path."""
+        self.grow_neuron_on_demand('novelty')
 
     def delete_selected_items(self):
         for item in self.scene.selectedItems():

@@ -383,13 +383,12 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
             change_indicator = f"<span style='color: #f44336; font-size: {DisplayScaling.font_size(24)}px; margin-left: 10px;'>↘</span>"
 
         # STDP: resolve directional arrow and LTP/LTD info
+        # The pair is a directed synapse: 'causal' means this synapse's own
+        # presynaptic neuron led, 'acausal' means it lagged. The old labels
+        # ('n1_to_n2'/'n2_to_n1') came from a symmetric comparison that has been
+        # removed, because it discarded the direction the weight was applied in.
         stdp_direction = stdp_meta.get('stdp_direction', 'none') if stdp_meta else 'none'
-        if stdp_direction == 'n1_to_n2':
-            arrow_char = "→"
-        elif stdp_direction == 'n2_to_n1':
-            arrow_char = "←"
-        else:
-            arrow_char = "↔"
+        arrow_char = "→" if stdp_direction in ('causal', 'acausal') else "↔"
 
         card = QtWidgets.QWidget()
         card.setStyleSheet(f"""

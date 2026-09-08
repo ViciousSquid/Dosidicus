@@ -9,6 +9,7 @@ from src.brain_widget import BrainWidget
 from src.interactions import RockInteractionManager
 from src.interactions2 import PoopInteractionManager
 from src.neurogenesis import EnhancedNeurogenesis
+from src.neural_provenance import CausalLedger, RecordedSynapses
 from src.squid import Squid
 from src.squid_statistics import SquidStatistics
 from src.tamagotchi_logic import TamagotchiLogic
@@ -38,6 +39,25 @@ class ConnectableSignal:
     def emit(self, *args):
         for slot in list(self.slots):
             slot(*args)
+
+
+class _DoubleBrain(RecordedSynapses, SimpleNamespace):
+    """A brain stand-in that writes synapses the way the real one does.
+
+    A double that sets weights itself would let neurogenesis pass a test
+    against a write path production does not have, so it inherits the real one
+    and supplies its own ledger.
+    """
+
+    def __init__(self, **kwargs):
+        SimpleNamespace.__init__(self, **kwargs)
+        self.ledger = CausalLedger(self)
+
+    def add_weight_animation(self, *args, **kwargs):
+        pass
+
+    def mark_render_dirty(self):
+        pass
 
 
 class NotifyingNeurogenesis:
@@ -251,7 +271,7 @@ class StatisticsEventWiringTests(unittest.TestCase):
 
     def test_orphan_rescue_emits_one_completed_birth(self):
         signal = RecordingSignal()
-        brain_widget = SimpleNamespace(
+        brain_widget = _DoubleBrain(
             neuronCreated=signal,
             neuron_positions={
                 "orphan": (100, 100),

@@ -570,6 +570,93 @@ class NeurogenesisTests(NeuralPipelineTestCase):
 
 
 # ---------------------------------------------------------------------------
+# 5b. Acquiring a concrete fact, and explaining it
+# ---------------------------------------------------------------------------
+class ConcreteKnowledgeTests(NeuralPipelineTestCase):
+    """The headline claim: it learns something nameable, and can say why."""
+
+    EDGE = ("can_see_food", "satisfaction")
+
+    def _live(self, kind, ticks=600):
+        """Run a controlled life and return the synapse it produced.
+
+        kind='cared'  - seeing food is followed by satisfaction rising
+        kind='harmed' - seeing food is followed by satisfaction falling
+        """
+        BRAIN.weights[self.EDGE] = 0.0
+        BRAIN.ledger.reset()
+        BRAIN.plasticity.reset()
+        for i in range(ticks):
+            seeing = (i % 12) < 4
+            BRAIN.state["can_see_food"] = 100.0 if seeing else 0.0
+            good = seeing if kind == "cared" else not seeing
+            SQUID.satisfaction = 80.0 if good else 25.0
+            BRAIN.state["satisfaction"] = SQUID.satisfaction
+            BRAIN.observe_for_learning()
+            if i % 40 == 39:
+                BRAIN.perform_hebbian_learning()
+        return BRAIN.weights.get(self.EDGE, 0.0)
+
+    def test_the_same_brain_learns_opposite_things_from_opposite_lives(self):
+        cared = self._live("cared")
+        harmed = self._live("harmed")
+        self.assertGreater(cared, 0.15,
+                           "a squid fed whenever it saw food learned nothing good about food")
+        self.assertLess(harmed, -0.15,
+                        "a squid that suffered whenever it saw food learned no aversion")
+
+    def test_the_learned_fact_can_be_explained_in_plain_english(self):
+        self._live("cared")
+        knowledge = [k for k in BRAIN.what_do_you_know("food") if k.edge == self.EDGE]
+        self.assertTrue(knowledge, "the squid cannot say what it learned about food")
+        item = knowledge[0]
+        self.assertIn("can see food", item.statement.lower())
+        self.assertIn("goes up", item.statement)
+        self.assertTrue(item.experience, "no experience was named")
+        self.assertIn("correlation", item.reason)
+        self.assertGreater(item.confidence, 0.5)
+
+    def test_every_individual_weight_change_behind_it_is_recoverable(self):
+        final = self._live("cared")
+        history = BRAIN.ledger.weight_history(self.EDGE, limit=50)
+        self.assertGreater(len(history), 3,
+                           "the changes that produced the fact were not recorded")
+
+        # The recorded steps must actually add up to the weight it now has.
+        self.assertAlmostEqual(history[-1].new_weight, final, places=6)
+        for event in history:
+            self.assertEqual(event.mechanism, "hebbian")
+            self.assertIsNotNone(event.detail.get("correlation"))
+            self.assertTrue(event.detail.get("samples"))
+
+        answer = BRAIN.explain_weight(self.EDGE)
+        self.assertIn("0.000", answer)
+        self.assertIn("kept happening together", answer)
+        self.assertIn("observations", answer)
+
+    def test_the_laboratory_reconstructs_the_same_account(self):
+        """The inspection tool must read the brain, not re-derive it."""
+        from src.laboratory import NeuronLaboratory
+
+        self._live("cared")
+        lab = NeuronLaboratory(BRAIN)
+        lab.select_neuron_by_name("satisfaction")
+        APP.processEvents()
+
+        shown = []
+        for i in range(lab.inspector_lay.count()):
+            widget = lab.inspector_lay.itemAt(i).widget()
+            if widget is None:
+                continue
+            shown.extend(label.text() for label in widget.findChildren(QtWidgets.QLabel))
+        blob = " ".join(shown)
+
+        self.assertIn("can_see_food", blob, "the synapse is missing from the inspector")
+        self.assertIn("kept happening together", blob,
+                      "the Laboratory shows the weight but not why it is that value")
+
+
+# ---------------------------------------------------------------------------
 # 6. Designer round trip
 # ---------------------------------------------------------------------------
 class DesignerRoundTripTests(NeuralPipelineTestCase):

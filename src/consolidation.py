@@ -143,17 +143,13 @@ class ConsolidationManager:
         old = float(bw.weights[edge])
         direction = 1.0 if old >= 0 else -1.0
         score = float(getattr(item, 'salience', 0.0) or 0.0)
-        apply_change = getattr(bw, 'apply_weight_change', None)
         note = ("replayed during sleep because these two were among the day's "
                 "strongest co-activations")
-        if apply_change is not None:
-            apply_change(edge, delta=direction * abs(delta),
-                         mechanism='consolidation',
-                         detail={'note': note, 'salience': round(score, 4),
-                                 'night': self.nights_completed + 1},
-                         create=False, animate=True)
-        else:
-            bw.weights[edge] = max(-1.0, min(1.0, old + direction * abs(delta)))
+        bw.apply_weight_change(edge, delta=direction * abs(delta),
+                               mechanism='consolidation',
+                               detail={'note': note, 'salience': round(score, 4),
+                                       'night': self.nights_completed + 1},
+                               create=False, animate=True)
 
     def _finish_night(self) -> Dict:
         bw = self.brain_widget
@@ -165,16 +161,13 @@ class ConsolidationManager:
 
         try:
             plan = self.engine.plan_prune(bw.weights, is_immune)
-            remove = getattr(bw, 'remove_weight', None)
             for edge in plan or []:
                 if edge not in bw.weights:
                     continue
-                reason = ("pruned during sleep - it stayed weak and was never "
-                          "replayed, so it never came to mean anything")
-                if remove is not None:
-                    remove(edge, mechanism='prune', reason=reason)
-                else:
-                    del bw.weights[edge]
+                bw.remove_weight(
+                    edge, mechanism='prune',
+                    reason="pruned during sleep - it stayed weak and was never "
+                           "replayed, so it never came to mean anything")
                 pruned.append(edge)
         except Exception as e:
             print(f"[Consolidation] prune skipped: {type(e).__name__}: {e}")
@@ -187,15 +180,11 @@ class ConsolidationManager:
             for edge, new_w in (self.engine.plan_downscale(bw.weights, is_immune) or {}).items():
                 if edge not in bw.weights:
                     continue
-                apply_change = getattr(bw, 'apply_weight_change', None)
-                if apply_change is not None:
-                    if apply_change(edge, value=new_w, mechanism='consolidation',
-                                    detail={'note': "scaled back during sleep "
-                                                    "(synaptic homeostasis)"},
-                                    create=False, animate=False):
-                        downscaled += 1
-                else:
-                    bw.weights[edge] = new_w
+                if bw.apply_weight_change(
+                        edge, value=new_w, mechanism='consolidation',
+                        detail={'note': "scaled back during sleep "
+                                        "(synaptic homeostasis)"},
+                        create=False, animate=False):
                     downscaled += 1
         except Exception as e:
             print(f"[Consolidation] downscale skipped: {type(e).__name__}: {e}")

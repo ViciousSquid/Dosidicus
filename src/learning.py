@@ -739,6 +739,12 @@ class LearningConfig:
                     'max_neurons', self.neurogenesis.get('max_neurons', 32))
                 self.neurogenesis['pruning_enabled'] = neuro_config['general'].get(
                     'pruning_enabled', self.neurogenesis.get('pruning_enabled', True))
+                # [Neurogenesis.NeuronProperties] has been in config.ini since
+                # 2.4 and nothing ever carried it across, so reciprocal_strength
+                # and the placement settings had no effect on the engine.
+                if 'neuron_properties' in neuro_config:
+                    existing = self.neurogenesis.setdefault('neuron_properties', {})
+                    existing.update(neuro_config['neuron_properties'])
             
             print("Configuration loaded from config.ini")
         except Exception as e:

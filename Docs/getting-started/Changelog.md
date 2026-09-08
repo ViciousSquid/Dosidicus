@@ -1,3 +1,92 @@
+### version 3.1.1.0
+`8 Sep 2026`
+
+#### Architecture validation
+
+The v3.1.0.0 architecture was audited by measurement rather than by reading:
+every write to `brain.weights` was instrumented and diffed against the ledger,
+and each of the four learning mechanisms was traced end to end in a running
+game. Eight defects were found and fixed at source.
+
+**Provenance was not actually total.** Two live entry points wrote synapses
+without recording them: the Plugins menu's neurogenesis action and Shift+N.
+Both created ghost neurons — no `FunctionalNeuron`, so caps and pruning could
+not see them, no birth record, and random symmetric synapses including some
+pointing into sensors. `src/ui.py` also held a fifth (dead, and broken) copy of
+the old event thresholds. All of it now goes through the one creation path.
+Unrecorded deletions in `prune_weak_neurons`, `intelligent_pruning` and the
+tutorial were routed through `remove_weight`.
+
+**The write path itself existed twice**, in BrainWidget and in the headless
+trainer, with test doubles implementing a third. It is now
+`neural_provenance.RecordedSynapses`, inherited by all of them, so a double
+cannot pass a test against a path production does not have.
+
+**STDP was applying the wrong sign to the wrong direction.**
+`compute_symmetric_stdp` returns the stronger of the two orderings — always the
+causal, positive one — and that value was applied to whichever direction
+`orient()` chose. LTD never reached a weight. The commit now asks for the
+directed delta of the synapse it is updating.
+
+**STDP could only see simultaneity.** Its 0.5 s window was shorter than the
+game's ~1 s tick, so two neurons that fired one tick apart were out of window
+entirely and how much learning happened depended on how fast the machine ran.
+The window is now measured in samples of the cadence the tracker is actually
+fed at.
+
+**The three-factor rule was inert.** Eligibility was restricted to pairs that
+both crossed the spike threshold inside the timing window; over 600 ticks of
+ordinary life that produced ten spikes, essentially none coincident, so no
+outcome ever reached a synapse. Eligibility is now participation — a low-pass
+of pre × post activity, which is the textbook definition — and a reward is
+consumed in proportion to the credit it takes instead of clearing every trace,
+so the first outcome to land no longer robs every concurrent behaviour.
+
+**Reward was a step, not a rate.** One outcome touching ninety synapses at a
+fixed 0.08 was worth more than a hundred plasticity commits, and it flattened
+everything experience had built. It is now scaled by the same learning rate the
+correlational rule uses and shares a fixed budget among the synapses that
+earned it, so broader eligibility no longer means stronger learning.
+
+**Actions did not compete for credit.** Two overlapping behaviours each
+recorded the full measured consequence, so an action that merely happened to be
+running while another produced the result acquired an identical contingency —
+the "things that co-occur must be related" mistake, moved up from neurons to
+actions. Episodes are now settled together by shared prediction error: perfect
+confounds split the effect, and the moment one dissociates the real cause
+absorbs it. A null outcome now teaches too, so a coincidence once learned can
+be unlearned. Valence is the **surprise**, not the raw change, so a fully
+predicted outcome stops paying out.
+
+**Neurogenesis mixed timescales and could grow inert neurons.** The regulation
+deficit compared a 240-tick complaint against a single-moment reading of the
+corrective synapses; it now asks whether the drive is coming back, with no
+arbitrary threshold on push magnitude. A neuron whose specialisation had no
+entry in the wiring table could be born with *zero* synapses and then be
+"rescued" by the connectivity detector; the table is complete and birth has a
+viability post-condition. Reciprocal links are damped by
+`[Neurogenesis.NeuronProperties] reciprocal_strength`, which config.ini has
+declared since 2.4 and nothing read — copying the forward weight made every
+grown neuron half of a runaway loop.
+
+#### Also fixed
+
+* `[Neurogenesis.NeuronProperties]` never reached the engine at all.
+* The Laboratory's "force neurogenesis" button now grows a real neuron.
+* A synapse that changes sign starts its behavioural record again, so the
+  Knowledge tab can no longer say "satisfaction goes up … it has spent 600
+  ticks lowering satisfaction".
+* High-frequency thousandth-of-a-point changes are accounted for exactly but
+  no longer narrated one by one, so they stop burying the changes that matter.
+
+199 tests pass, including one regression test per defect above and an
+end-to-end test that raises two squids with the same brain and opposite lives,
+checks they learn opposite signs for the same sensor, and checks the Laboratory
+and the Knowledge tab can reconstruct the fact, the reason and every individual
+weight change behind it.
+
+-------------------------
+
 ### version 3.1.0.0
 `8 Sep 2026`
 

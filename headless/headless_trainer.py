@@ -52,7 +52,7 @@ from src.propagation import propagate  # noqa: E402
 from src.plasticity import PlasticityEngine, PlasticityConfig  # noqa: E402
 from src.capability import CapabilityMonitor  # noqa: E402
 from src.causal_learning import ActionOutcomeLedger  # noqa: E402
-from src.neural_provenance import CausalLedger  # noqa: E402
+from src.neural_provenance import CausalLedger, RecordedSynapses  # noqa: E402
 from src.consolidation import ConsolidationManager  # noqa: E402
 from src.neurogenesis import EnhancedNeurogenesis  # noqa: E402
 from src.learning import LearningConfig  # noqa: E402
@@ -340,7 +340,7 @@ class HeadlessSquid:
 # HEADLESS BRAIN
 # ============================================================================
 
-class HeadlessBrain:
+class HeadlessBrain(RecordedSynapses):
     """
     Neural network brain without GUI dependencies.
     Handles state updates, Hebbian learning, and neurogenesis.
@@ -461,51 +461,10 @@ class HeadlessBrain:
     def add_weight_animation(self, *args, **kwargs):
         pass
 
-    def apply_weight_change(self, edge, delta=None, value=None, mechanism='manual',
-                            detail=None, episode_id=None, create=True,
-                            animate=True, directed=True) -> bool:
-        """The single recorded write path, same contract as BrainWidget's."""
-        if not (isinstance(edge, tuple) and len(edge) == 2) or edge[0] == edge[1]:
-            return False
-        existing = edge in self.weights
-        if not existing and not directed and (edge[1], edge[0]) in self.weights:
-            edge = (edge[1], edge[0])
-            existing = True
-        if not existing and not create:
-            return False
-
-        old = float(self.weights.get(edge, 0.0))
-        if value is not None:
-            new = float(value)
-        elif delta is not None:
-            new = old + float(delta)
-        else:
-            return False
-        new = max(-1.0, min(1.0, new))
-        if existing and abs(new - old) < 1e-9:
-            return False
-
-        self.weights[edge] = new
-        self.ledger.record_weight_change(edge, old, new, mechanism, detail, episode_id)
-        return True
-
-    def remove_weight(self, edge, mechanism='prune', reason="") -> bool:
-        if edge not in self.weights:
-            return False
-        old = float(self.weights.pop(edge))
-        self.ledger.record_weight_change(edge, old, 0.0, mechanism,
-                                         {'note': reason or 'removed', 'removed': True})
-        return True
-
-    def explain_weight(self, edge, from_value=None, to_value=None) -> str:
-        return self.ledger.explain_weight(tuple(edge), from_value, to_value)
-
-    def explain_neuron(self, name: str) -> str:
-        return self.ledger.explain_neuron(name)
-
-    def what_do_you_know(self, topic=None, limit=60):
-        return self.ledger.knowledge(topic, limit=limit)
-
+    # apply_weight_change / remove_weight / explain_* come from
+    # RecordedSynapses. The trainer used to carry its own copy of the write
+    # path, which is the same duplication in miniature that this refactor
+    # exists to remove.
     def _connector_neuron_names(self) -> Set[str]:
         return {name for name, fn in
                 self.enhanced_neurogenesis.functional_neurons.items()

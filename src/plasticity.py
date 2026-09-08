@@ -194,12 +194,12 @@ class PlasticityEngine:
 
         if self.stdp is not None and self.config.stdp_enabled:
             try:
-                spiked = self.stdp.record_state(values, timestamp)
-                # Lay eligibility traces now, while the spikes are fresh. A
-                # consequence that arrives seconds later reaches back along
-                # these; laying them on the commit cycle instead put them out
-                # of reach of every outcome the squid ever had.
-                self.stdp.lay_eligibility_traces(spiked, timestamp)
+                self.stdp.record_state(values, timestamp)
+                # Mark what was carrying signal this tick, so a consequence
+                # arriving seconds later can reach back to it. Laying these on
+                # the commit cycle instead put them out of reach of every
+                # outcome the squid ever had.
+                self.stdp.lay_eligibility_traces(values, timestamp)
             except Exception:
                 pass  # spike tracking must never break the simulation tick
 
@@ -297,24 +297,31 @@ class PlasticityEngine:
 
             hebb_delta = lr * mean_cov
 
-            # compute_symmetric_stdp returns (delta, direction). Coercing the
-            # tuple to a float raised, the exception was swallowed, and the
-            # spike-timing term was silently zero for every pair on every
-            # cycle - so STDP was documented, implemented, wired in, and
-            # contributed nothing. Unpack it properly, and keep the direction
-            # so the Learning tab can show LTP/LTD.
+            # The DIRECTED delta for the synapse actually being updated.
+            #
+            # This used to ask compute_symmetric_stdp(), which returns the
+            # stronger of the two orderings - and since the causal ordering
+            # always beats the acausal one, it was essentially always positive.
+            # Worse, that value was applied to whichever direction orient()
+            # had chosen, which need not be the direction STDP measured. So
+            # LTD never reached a weight, and LTP could be applied backwards:
+            # a synapse whose own ordering was acausal got strengthened.
+            #
+            # Asking about edge[0] -> edge[1] gives potentiation when this
+            # synapse's own presynaptic neuron leads, and depression when it
+            # lags, which is what spike-timing plasticity means.
             stdp_delta = 0.0
             stdp_direction = 'none'
             if self.stdp is not None and cfg.stdp_enabled and cfg.stdp_weight > 0:
                 try:
-                    result = self.stdp.compute_symmetric_stdp(edge[0], edge[1])
-                    if isinstance(result, tuple):
-                        stdp_delta, stdp_direction = float(result[0]), str(result[1])
-                    elif result:
-                        stdp_delta = float(result)
+                    stdp_delta = float(
+                        self.stdp.compute_stdp_delta(edge[0], edge[1]) or 0.0)
                 except Exception:
                     stdp_delta = 0.0
-                    stdp_direction = 'none'
+                if stdp_delta > 0:
+                    stdp_direction = 'causal'
+                elif stdp_delta < 0:
+                    stdp_direction = 'acausal'
 
 
             # Blend ONLY where STDP actually has an opinion. Spike timing is

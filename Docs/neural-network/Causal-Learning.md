@@ -26,24 +26,63 @@ closes, the change in every drive over that window is the measured
 
 ## 3. Contingency, not co-occurrence
 
-The consequence is compared against the **baseline drift** of the same drive,
-measured over identical windows while that action was not running:
+Two corrections separate a contingency from a coincidence.
+
+**Baseline drift.** The consequence is compared against how the same drive
+moves over identical windows while that action is *not* running:
 
 > Hunger fell 24 while eating. Hunger drifts *up* 0.4 otherwise.
-> Effect = −24.4.
 
-Without that subtraction the squid would credit "exploring" with the hunger it
-accumulates simply by existing. Confidence grows with repetition and with the
-size of the effect relative to how variable it is; a single observation is
-never confident, however dramatic.
+Without it the squid would credit "exploring" with the hunger it accumulates
+simply by existing.
+
+**Cue competition.** Actions overlap constantly — a squid is exploring while it
+notices food while it drifts — so every expiring episode is settled *together*,
+by shared prediction error:
+
+```
+error  = observed change − what every action in scope already predicts
+target = this action's own current estimate + error
+```
+
+Two actions that always co-occur end up **splitting** the effect. That is the
+honest answer: nothing can separate perfectly confounded causes, and inventing
+a split would be worse than admitting the tie. The moment one of them happens
+without the other, its estimate is corrected toward nothing and the real cause
+absorbs the effect.
+
+Every estimate is read before any of them moves, so settlement does not depend
+on which episode's window happens to expire first.
+
+**Extinction.** An episode settles every drive the action already has an
+expectation about, not only the ones that visibly moved. *"I did that and the
+thing I expected did not happen"* is the observation that corrects a mistaken
+belief; discarding it because the change was too small to display meant a
+coincidence, once learned, could never be unlearned.
+
+Confidence grows with repetition and with the size of the effect relative to
+how variable it is; a single observation is never confident, however dramatic.
 
 ## 4. Temporal credit assignment
 
-When an episode closes with a meaningful valence, that value is broadcast to the
-STDP eligibility traces laid down during it. Synapses that were causally active
-in the seconds leading up to a good outcome are strengthened; those active
-before a bad one are weakened. The change is recorded as `causal_reward` with
-the episode attached, so it can name the action, the cue and the consequence.
+An episode's **valence is the surprise**, not the raw change: the part of the
+outcome that the actions in scope did not already predict. An outcome the squid
+expects teaches it nothing, which is the whole content of prediction-error
+learning and what keeps the reward channel honest. Scoring the raw change
+instead made almost every episode "rewarding" — the drives always drift a
+little — so reward fired constantly and swamped the correlational rule that
+carries what the squid actually experienced.
+
+That value is then broadcast to the eligibility traces laid down during the
+episode (see [STDP](STDP.md)). Synapses that were participating in the run-up
+to a good outcome are strengthened; those participating before a bad one are
+weakened. One outcome carries a **fixed budget** of plasticity shared among the
+synapses that earned it, so making eligibility broader does not make learning
+stronger — if the whole network was active when something good happened, no
+synapse in particular is responsible.
+
+The change is recorded as `causal_reward` with the episode attached, so it can
+name the action, the cue and the consequence.
 
 ## 5. What it produces
 

@@ -320,8 +320,9 @@ class CausalLearningTests(unittest.TestCase):
             def __init__(self):
                 self.rewarded = None
 
-            def apply_reward_modulation(self, signal):
+            def apply_reward_modulation(self, signal, rate=None):
                 self.rewarded = signal
+                self.rate = rate
                 return {('can_see_food', 'satisfaction'): 0.02 * signal}
 
         stdp = FakeSTDP()
@@ -360,8 +361,29 @@ class CapabilityTests(unittest.TestCase):
         monitor.config = cfg
         return monitor
 
-    def test_a_regulated_drive_produces_no_deficit(self):
-        """Anxiety high but the network is already pulling it down."""
+    def test_a_drive_the_network_is_bringing_back_is_not_a_deficit(self):
+        """The test is whether the drive is recovering, not how big the synapse is.
+
+        Any threshold on corrective push is a magic number, and one that
+        compared a 240-tick complaint against a single-moment defence. What
+        matters is whether existing structure is getting on top of it.
+        """
+        brain = FakeBrain(
+            weights={('coping', 'anxiety'): -0.7},
+            state={'anxiety': 95.0, 'coping': 100.0, 'hunger': 40.0,
+                   'happiness': 60.0, 'satisfaction': 60.0, 'cleanliness': 60.0,
+                   'sleepiness': 40.0, 'curiosity': 50.0})
+        monitor = self._monitor(brain)
+        # Out of band throughout, but steadily coming back down.
+        for i in range(120):
+            brain.state['anxiety'] = 95.0 - (i * 0.4)
+            monitor.observe(brain.state)
+        deficits = [d for d in monitor.evaluate() if d.kind == 'regulation']
+        self.assertEqual(deficits, [],
+                         "grew a deficit for a drive that was already recovering")
+
+    def test_a_drive_that_is_stuck_despite_a_synapse_is_still_a_deficit(self):
+        """Structure that exists but is not working is a capability gap."""
         brain = FakeBrain(
             weights={('coping', 'anxiety'): -0.7},
             state={'anxiety': 80.0, 'coping': 100.0, 'hunger': 40.0,
@@ -371,8 +393,9 @@ class CapabilityTests(unittest.TestCase):
         for _ in range(120):
             monitor.observe(brain.state)
         deficits = [d for d in monitor.evaluate() if d.kind == 'regulation']
-        self.assertEqual(deficits, [],
-                         "grew a deficit for a drive the network is already handling")
+        self.assertTrue(deficits, "a drive stuck out of band despite a synapse "
+                                  "went undiagnosed")
+        self.assertIn("not coming back", deficits[0].summary)
 
     def test_an_unregulated_drive_produces_a_regulation_deficit(self):
         """Same anxiety, but nothing in the network corrects it."""
@@ -588,6 +611,232 @@ class SingleSourceOfTruthTests(unittest.TestCase):
                           "self._weights ="):
             self.assertNotIn(forbidden, source,
                              "the Knowledge tab is building its own model of the brain")
+
+
+# ===========================================================================
+# 4b. The defects the architecture audit found, so they cannot come back
+# ===========================================================================
+class AuditRegressionTests(unittest.TestCase):
+    """One case per defect the validation pass turned up by measurement."""
+
+    # -- credit assignment ---------------------------------------------
+    def _ledger(self, window=2.0):
+        brain = FakeBrain(state={'hunger': 60.0, 'happiness': 50.0, 'anxiety': 50.0,
+                                 'satisfaction': 50.0, 'cleanliness': 50.0,
+                                 'sleepiness': 50.0, 'curiosity': 50.0})
+        return brain, ActionOutcomeLedger(brain, CausalConfig(outcome_window=window))
+
+    def _trial(self, causal, base, actions, after, t):
+        for offset, action in enumerate(actions):
+            causal.on_action(action, dict(base), now=t + offset * 0.1)
+        snapshot = dict(base); snapshot.update(after)
+        causal.on_tick(snapshot, now=t + 2.2)
+        causal.on_tick(snapshot, now=t + 2.6)
+
+    def test_two_actions_that_always_co_occur_split_the_credit(self):
+        """Nothing can separate perfectly confounded causes; claiming otherwise lies."""
+        brain, causal = self._ledger()
+        base = dict(brain.state)
+        t = 1000.0
+        for _ in range(12):
+            self._trial(causal, base, ['drifting', 'eating'], {'hunger': 35.0}, t)
+            t += 6.0
+        eat = causal.contingencies['eating']['hunger'].mean_delta
+        drift = causal.contingencies['drifting']['hunger'].mean_delta
+        self.assertAlmostEqual(eat, drift, delta=1.0,
+                               msg="a perfect confound was resolved by invention")
+        self.assertGreater(abs(eat), 5.0, "neither action learned anything")
+
+    def test_an_action_that_sometimes_occurs_alone_is_corrected(self):
+        """The moment the confound dissociates, the real cause absorbs the effect."""
+        brain, causal = self._ledger()
+        base = dict(brain.state)
+        t = 1000.0
+        for i in range(30):
+            if i % 2 == 0:
+                self._trial(causal, base, ['drifting', 'eating'], {'hunger': 35.0}, t)
+            else:
+                self._trial(causal, base, ['drifting'], {}, t)
+            t += 6.0
+        eat = causal.contingencies['eating']['hunger'].mean_delta
+        drift = causal.contingencies['drifting']['hunger'].mean_delta
+        self.assertLess(eat, drift - 8.0,
+                        "the passenger action kept as much credit as the cause")
+
+    def test_credit_does_not_depend_on_which_episode_closes_first(self):
+        results = []
+        for order in (['drifting', 'eating'], ['eating', 'drifting']):
+            brain, causal = self._ledger()
+            base = dict(brain.state)
+            t = 1000.0
+            for i in range(20):
+                if i % 2 == 0:
+                    self._trial(causal, base, order, {'hunger': 35.0}, t)
+                else:
+                    self._trial(causal, base, ['drifting'], {}, t)
+                t += 6.0
+            results.append(round(causal.contingencies['eating']['hunger'].mean_delta, 3))
+        self.assertEqual(results[0], results[1],
+                         "settlement depended on deque order, not on evidence")
+
+    def test_a_null_outcome_corrects_a_mistaken_belief(self):
+        """Extinction. 'I did that and nothing happened' has to teach something."""
+        brain, causal = self._ledger()
+        base = dict(brain.state)
+        t = 1000.0
+        for _ in range(6):
+            self._trial(causal, base, ['eating'], {'hunger': 35.0}, t)
+            t += 6.0
+        learned = causal.contingencies['eating']['hunger'].mean_delta
+        for _ in range(20):
+            self._trial(causal, base, ['eating'], {}, t)
+            t += 6.0
+        after = causal.contingencies['eating']['hunger'].mean_delta
+        self.assertGreater(after, learned + 5.0,
+                           "a belief that stopped being true was never revised")
+
+    def test_valence_is_surprise_not_raw_change(self):
+        """An expected outcome must not keep paying out reward."""
+        brain, causal = self._ledger()
+        base = dict(brain.state)
+        t = 1000.0
+        first = None
+        for i in range(14):
+            self._trial(causal, base, ['eating'], {'hunger': 35.0}, t)
+            t += 6.0
+            if causal.history:
+                if first is None:
+                    first = abs(causal.history[-1].valence)
+                last = abs(causal.history[-1].valence)
+        self.assertIsNotNone(first)
+        self.assertLess(last, first,
+                        "a fully predicted outcome still generated a reward signal")
+
+    # -- STDP ----------------------------------------------------------
+    def test_stdp_depresses_a_synapse_whose_own_ordering_is_acausal(self):
+        from src.plasticity import PlasticityEngine, PlasticityConfig
+
+        def run(pre_leads):
+            eng = PlasticityEngine(PlasticityConfig(stdp_weight=0.9, learning_rate=0.4,
+                                                    min_pairs_per_cycle=8))
+            eng.stdp.config.refractory_period = 0.0
+            weights = {('pre', 'post'): 0.0}
+            t = 0.0
+            for _ in range(40):
+                eng.observe({'pre': 10., 'post': 10.}, ['pre', 'post'], timestamp=t); t += 0.05
+                if pre_leads:
+                    eng.observe({'pre': 95., 'post': 10.}, ['pre', 'post'], timestamp=t); t += 0.05
+                else:
+                    eng.observe({'pre': 10., 'post': 95.}, ['pre', 'post'], timestamp=t); t += 0.05
+                eng.observe({'pre': 95., 'post': 95.}, ['pre', 'post'], timestamp=t); t += 0.05
+                eng.observe({'pre': 10., 'post': 10.}, ['pre', 'post'], timestamp=t); t += 0.30
+            return eng.commit(weights, ['pre', 'post'])['weight_updates'].get(('pre', 'post'))
+
+        causal = run(True)
+        acausal = run(False)
+        self.assertGreater(causal['stdp_delta'], 0.0, "no potentiation for a causal pair")
+        self.assertLess(acausal['stdp_delta'], 0.0,
+                        "LTD never reaches a weight: the symmetric maximum is back")
+
+    def test_stdp_works_at_the_cadence_the_game_actually_ticks_at(self):
+        """One sample per simulated second, as TamagotchiLogic supplies."""
+        from src.plasticity import PlasticityEngine, PlasticityConfig
+        eng = PlasticityEngine(PlasticityConfig(stdp_weight=0.5, learning_rate=0.2,
+                                                min_pairs_per_cycle=8))
+        weights = {('can_see_food', 'satisfaction'): 0.0}
+        t = 0.0
+        for i in range(60):
+            eng.observe({'can_see_food': 100.0 if (i % 6) in (0, 1) else 0.0,
+                         'satisfaction': 85.0 if (i % 6) in (1, 2) else 40.0},
+                        ['can_see_food', 'satisfaction'], timestamp=t)
+            t += 1.0
+        stats = eng.stdp.get_stats()
+        self.assertGreater(stats['ltp_events'] + stats['ltd_events'], 0,
+                           "spike timing is silent at the rate the game runs")
+        self.assertAlmostEqual(eng.stdp.spike_tracker.sample_interval, 1.0, delta=0.2)
+
+    def test_an_outcome_finds_traces_to_reach(self):
+        """Eligibility is participation, not a rare spike coincidence."""
+        from src.plasticity import PlasticityEngine, PlasticityConfig
+        eng = PlasticityEngine(PlasticityConfig())
+        t = 0.0
+        for _ in range(5):
+            eng.observe({'can_see_food': 90.0, 'satisfaction': 80.0, 'hunger': 20.0},
+                        ['can_see_food', 'satisfaction', 'hunger'], timestamp=t)
+            t += 1.0
+        self.assertTrue(eng.stdp.eligibility_snapshot(),
+                        "nothing was eligible, so no outcome could ever reach a synapse")
+
+    def test_one_outcome_does_not_consume_every_trace(self):
+        from src.stdp import STDPLearner, STDPConfig
+        learner = STDPLearner(STDPConfig())
+        learner.update_eligibility_trace('a', 'b', 0.5)
+        first = learner.apply_reward_modulation(0.4)
+        second = learner.apply_reward_modulation(0.4)
+        self.assertTrue(first)
+        self.assertTrue(second, "the first outcome to land took all the credit")
+
+    def test_broader_eligibility_does_not_mean_more_learning(self):
+        """If everything was active, no synapse in particular is responsible."""
+        from src.stdp import STDPLearner, STDPConfig
+
+        def total(n):
+            learner = STDPLearner(STDPConfig())
+            for i in range(n):
+                learner.update_eligibility_trace(f'a{i}', f'b{i}', 1.0)
+            return sum(abs(v) for v in learner.apply_reward_modulation(1.0, rate=0.04).values())
+
+        self.assertLess(total(80), total(8) * 2.0,
+                        "one outcome delivered more learning the wider it spread")
+
+    # -- neurogenesis --------------------------------------------------
+    def test_a_neuron_is_never_born_unable_to_participate(self):
+        from src.neurogenesis import EnhancedNeurogenesis
+        from src.learning import LearningConfig
+
+        class Brain(FakeBrain):
+            def __init__(self):
+                super().__init__(state={'hunger': 50.0, 'happiness': 50.0,
+                                        'anxiety': 50.0, 'satisfaction': 50.0,
+                                        'cleanliness': 50.0, 'sleepiness': 50.0,
+                                        'curiosity': 50.0})
+                self.neuron_shapes = {}
+                self.state_colors = {}
+                self.visible_neurons = set()
+                self.neurogenesis_data = {'new_neurons': [], 'new_neurons_details': {}}
+                self.neurogenesis_highlight = {}
+                self.communication_events = {}
+                self.weight_animations = []
+                self.tamagotchi_logic = None
+
+            def log_neurogenesis_event(self, *a, **k):
+                pass
+
+            def update(self):
+                pass
+
+        brain = Brain()
+        engine = EnhancedNeurogenesis(brain, LearningConfig())
+        for neuron_type in ('novelty', 'reward', 'stress'):
+            name = engine.create_neuron(neuron_type, brain_state=dict(brain.state),
+                                        environment={})
+            if name is None:
+                continue
+            incoming = [e for e in brain.weights if e[1] == name]
+            outgoing = [e for e in brain.weights if e[0] == name]
+            self.assertTrue(incoming, f"{name} cannot be driven by anything")
+            self.assertTrue(outgoing, f"{name} cannot drive anything")
+
+    def test_a_grown_neuron_is_not_half_of_a_runaway_loop(self):
+        """The return path is damped, per config.ini's reciprocal_strength."""
+        from src.learning import LearningConfig
+        config = LearningConfig()
+        damping = config.neurogenesis.get('neuron_properties', {}).get(
+            'reciprocal_strength')
+        self.assertIsNotNone(damping,
+                             "config.ini declares reciprocal_strength and the engine "
+                             "still cannot see it")
+        self.assertLess(float(damping), 1.0)
 
 
 # ===========================================================================

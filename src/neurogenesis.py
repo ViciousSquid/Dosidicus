@@ -377,6 +377,37 @@ class FunctionalNeuron:
             if 'cleanliness' in all_neurons: connections['cleanliness'] = 0.6
             if 'satisfaction' in all_neurons: connections['satisfaction'] = 0.5
             if 'anxiety' in all_neurons: connections['anxiety'] = -0.3
+        # The table below used to stop here, so a neuron with any other
+        # specialisation - general_reward, general_novelty_processing,
+        # exploration_memory, learned_expectation, role_separation - got
+        # nothing at all, and in a brain sitting near neutral it was born
+        # with ZERO synapses: counted, drawn, capped against, and unable to
+        # do anything. The connectivity detector would then "rescue" it,
+        # which is the architecture patching a defect it created at birth.
+        # Every specialisation the engine can produce now says what it does.
+        elif self.specialization == 'general_reward':
+            if 'satisfaction' in all_neurons: connections['satisfaction'] = 0.7
+            if 'happiness' in all_neurons: connections['happiness'] = 0.5
+        elif self.specialization == 'general_novelty_processing':
+            if 'curiosity' in all_neurons: connections['curiosity'] = 0.6
+            if 'satisfaction' in all_neurons: connections['satisfaction'] = 0.3
+        elif self.specialization == 'exploration_memory':
+            if 'curiosity' in all_neurons: connections['curiosity'] = 0.5
+            if 'anxiety' in all_neurons: connections['anxiety'] = -0.3
+        elif self.specialization == 'learned_expectation':
+            # Wired specifically by the expression deficit that grew it; this
+            # keeps it viable if it was created without one.
+            if 'satisfaction' in all_neurons: connections['satisfaction'] = 0.4
+            if 'curiosity' in all_neurons: connections['curiosity'] = 0.3
+        elif self.specialization == 'role_separation':
+            # Its real inputs come from the differentiation deficit; this is
+            # only what it does with them.
+            if 'satisfaction' in all_neurons: connections['satisfaction'] = 0.3
+            if 'happiness' in all_neurons: connections['happiness'] = 0.3
+        elif self.specialization in ('network_bridge', 'connectivity_bridge'):
+            # A connector's whole job is the orphan it was grown for; the
+            # connectivity remedy supplies that wiring.
+            pass
         return connections
     
     def calculate_activation(self, brain_state: Dict[str, float], weights: Dict[Tuple[str, str], float]) -> float:
@@ -568,6 +599,17 @@ class EnhancedNeurogenesis:
         created = []
         wiring: List[Tuple[str, str, float, str]] = []
         MIN_RECIPROCAL = 0.2
+        # The return path is DAMPED, not a copy of the forward weight.
+        #
+        # Copying it made every grown neuron half of a self-amplifying loop:
+        # satisfaction drives the neuron, the neuron drives satisfaction, and a
+        # correlational rule that converges a synapse to the correlation
+        # between its endpoints then pinned both at the clamp. The squid's
+        # "strongest knowledge" ended up being tautologies about neurons it had
+        # just grown. config.ini has declared reciprocal_strength since 2.4 and
+        # nothing read it; it is what this is for.
+        props = self.config.neurogenesis.get('neuron_properties', {}) or {}
+        damping = float(props.get('reciprocal_strength', 0.15) or 0.15)
         outgoing = [(tgt, w) for (src, tgt), w in bw.weights.items()
                     if src == new_neuron and abs(w) >= MIN_RECIPROCAL]
         for target, w in outgoing:
@@ -576,9 +618,10 @@ class EnhancedNeurogenesis:
             # sensor is inert - the world overwrites that neuron every tick.
             if not is_learning_target(new_neuron):
                 continue
-            if self._wire(target, new_neuron, w, 'reciprocal', deficit):
-                created.append(f"{target}→{new_neuron}:{w:+.2f}")
-                wiring.append((target, new_neuron, float(w), 'reciprocal'))
+            back = w * damping
+            if self._wire(target, new_neuron, back, 'reciprocal', deficit):
+                created.append(f"{target}→{new_neuron}:{back:+.2f}")
+                wiring.append((target, new_neuron, float(back), 'reciprocal'))
         if created: print(f"   🔗 {loc('log_reciprocal_links', default='Reciprocal links added')}: {', '.join(created)}")
         return wiring
     
@@ -724,6 +767,13 @@ class EnhancedNeurogenesis:
                 wiring.append((src, dst, weight, purpose))
         wiring.extend(self._make_reciprocal_connections(neuron_name, deficit))
 
+        # A neuron that cannot be driven, or cannot drive anything, is not a
+        # neuron - it is an entry in a dictionary. Growing one is worse than
+        # growing nothing, because it counts against the caps and has to be
+        # rescued later. Check the post-condition here, where it can still be
+        # met, rather than leaving the connectivity detector to find it.
+        wiring.extend(self._ensure_viable(neuron_name, func_neuron, deficit))
+
         if hasattr(self.brain_widget, 'visible_neurons'): self.brain_widget.visible_neurons.add(neuron_name)
         self.brain_widget.neurogenesis_highlight = {
             'neuron': neuron_name, 'start_time': time.time(),
@@ -769,11 +819,9 @@ class EnhancedNeurogenesis:
 
         note = (f"wired at birth to {purpose}"
                 + (f" — {deficit.remedy}" if deficit and purpose == 'remedy' else ""))
-        apply_change = getattr(bw, 'apply_weight_change', None)
-        if apply_change is None:
-            bw.weights[(src, dst)] = float(weight)
-            return True
-        return bool(apply_change(
+        # No fallback: a brain that cannot record a synapse has no business
+        # growing one. Both BrainWidget and the headless trainer implement this.
+        return bool(bw.apply_weight_change(
             (src, dst), value=float(weight), mechanism='neurogenesis',
             detail={'purpose': purpose, 'note': note,
                     'deficit': deficit.key if deficit else ''},
@@ -851,15 +899,61 @@ class EnhancedNeurogenesis:
                 plan.append((orphan, neuron_name, 0.7, 'remedy'))
         return plan
 
+    def _ensure_viable(self, neuron_name: str, func_neuron: 'FunctionalNeuron',
+                       deficit: Optional[Deficit]
+                       ) -> List[Tuple[str, str, float, str]]:
+        """Guarantee the new neuron can be driven and can drive something.
+
+        Its specialisation says what it is for; if the wiring so far has not
+        connected it to the drives that specialisation names, connect it now.
+        Falls back to whatever the squid's state was actually doing at the
+        moment of birth, which is the most relevant thing available.
+        """
+        from .brain_constants import CORE_STAT_NEURONS
+        bw = self.brain_widget
+        incoming = [e for e in bw.weights if e[1] == neuron_name]
+        outgoing = [e for e in bw.weights if e[0] == neuron_name]
+        if incoming and outgoing:
+            return []
+
+        added: List[Tuple[str, str, float, str]] = []
+        present = set(getattr(bw, 'neuron_positions', {}))
+
+        # What this kind of neuron is supposed to touch.
+        targets = list(func_neuron._get_specialization_connections(list(present)))
+        if deficit is not None and deficit.target in present:
+            targets.insert(0, deficit.target)
+        # Otherwise: the drives that were furthest from neutral when it was born.
+        if not targets:
+            ranked = sorted(
+                ((abs(float(v) - 50.0), k) for k, v in bw.state.items()
+                 if k in CORE_STAT_NEURONS and isinstance(v, (int, float))
+                 and not isinstance(v, bool)), reverse=True)
+            targets = [k for _, k in ranked[:2]]
+
+        for target in targets[:2]:
+            if target == neuron_name:
+                continue
+            if not outgoing and self._wire(neuron_name, target, 0.5,
+                                           'viability', deficit):
+                added.append((neuron_name, target, 0.5, 'viability'))
+                outgoing.append((neuron_name, target))
+            if not incoming and self._wire(target, neuron_name, 0.5,
+                                           'viability', deficit):
+                added.append((target, neuron_name, 0.5, 'viability'))
+                incoming.append((target, neuron_name))
+        if added:
+            partners = sorted({n for edge in added for n in edge[:2]
+                               if n != neuron_name})
+            print(f"   \U0001f9ea {neuron_name} would have been born inert; "
+                  f"wired it to {', '.join(partners)}")
+        return added
+
     def _retire_edge(self, edge: Tuple[str, str], reason: str) -> None:
         bw = self.brain_widget
         if edge not in getattr(bw, 'weights', {}):
             return
-        remove = getattr(bw, 'remove_weight', None)
-        if remove is not None:
-            remove(edge, mechanism='neurogenesis', reason=reason)
-        else:
-            del bw.weights[edge]
+        bw.remove_weight(edge, mechanism='neurogenesis', reason=reason)
 
     def _choose_name(self, trigger_type: str, spec: str) -> str:
         """type_specialisation, or an evocative name when showmanship is on.
@@ -1326,6 +1420,10 @@ class EnhancedNeurogenesis:
                     corrective += abs(push)
                     if abs(float(weight)) >= SATURATION:
                         saturated += 1
+            # Acute means the drive is pinned at an extreme right now. The
+            # only thing that excuses it is structure that is already pulling
+            # it back hard; anything less is a capability gap, whatever events
+            # produced it.
             if corrective >= MIN_CORRECTIVE_PUSH and saturated == 0:
                 continue
 
@@ -1593,19 +1691,21 @@ class EnhancedNeurogenesis:
         neuron_to_prune = candidates[0][0]
         if neuron_to_prune in self.brain_widget.neuron_positions: del self.brain_widget.neuron_positions[neuron_to_prune]
         if neuron_to_prune in self.brain_widget.state: del self.brain_widget.state[neuron_to_prune]
+        prune_reason = (f"lowest utility of {len(candidates)} candidates "
+                        f"(score {candidates[0][1]:.2f}) while the brain was at "
+                        f"its size limit")
         for conn in list(self.brain_widget.weights.keys()):
-            if neuron_to_prune in conn: del self.brain_widget.weights[conn]
+            if neuron_to_prune in conn:
+                self.brain_widget.remove_weight(
+                    conn, mechanism='prune',
+                    reason=f"{neuron_to_prune} was pruned - {prune_reason}")
         if neuron_to_prune in self.functional_neurons:
             fn = self.functional_neurons[neuron_to_prune]
             if fn.neuron_type == 'novelty': self.novelty_neuron_count -= 1
             del self.functional_neurons[neuron_to_prune]
         ledger = getattr(self.brain_widget, 'ledger', None)
         if ledger is not None:
-            ledger.record_neuron_pruned(
-                neuron_to_prune,
-                reason=(f"lowest utility of {len(candidates)} candidates "
-                        f"(score {candidates[0][1]:.2f}) while the brain was at "
-                        f"its size limit"))
+            ledger.record_neuron_pruned(neuron_to_prune, reason=prune_reason)
         print(f"🗑️ {loc('log_pruned', default='Pruned')}: {neuron_to_prune}")
         return neuron_to_prune
     

@@ -71,6 +71,21 @@ DEFICIT_PHRASING: Dict[str, str] = {
 
 _MAX_EVENTS_PER_EDGE = 24
 _MAX_RECENT_EVENTS = 400
+
+# A change smaller than this is accounted for but not narrated.
+#
+# Some mechanisms are high-frequency and small: an outcome touches every
+# synapse that was participating, many times a minute, by thousandths. Those
+# are real and their totals must be exact, but four hundred lines of "+0.002
+# because an action led to a result worth repeating" bury the handful of
+# changes that actually tell the squid's story - and push them out of the
+# bounded event list entirely. The running totals below are unaffected, so
+# "why is this weight 0.47" still adds up exactly.
+_NARRATABLE_DELTA = 0.005
+
+# Changes that are always worth narrating whatever their size, because they
+# say something structural rather than incremental.
+_ALWAYS_NARRATE = {'neurogenesis', 'designer', 'prune', 'innate'}
 _MAX_EPISODES = 200
 _MAX_DECISIONS = 120
 _MAX_PRUNED = 60
@@ -352,6 +367,126 @@ class KnowledgeItem:
 
 
 # ---------------------------------------------------------------------------
+# The write path
+# ---------------------------------------------------------------------------
+class RecordedSynapses:
+    """The one way a synapse is allowed to change.
+
+    Mixed into anything that owns a `weights` dict and a `ledger`: the game's
+    BrainWidget and the headless trainer's HeadlessBrain both use this exact
+    implementation, so "record every change" cannot be true in one and subtly
+    false in the other. Test doubles get it for free, which means a double
+    cannot silently exercise a path production does not have.
+
+    Presentation is the only thing subclasses add, through the two hooks at the
+    bottom. Nothing else about a weight change is theirs to vary.
+    """
+
+    weights: Dict[Pair, float]
+
+    def apply_weight_change(self, edge, delta: Optional[float] = None,
+                            value: Optional[float] = None,
+                            mechanism: str = 'manual',
+                            detail: Optional[dict] = None,
+                            episode_id: Optional[str] = None,
+                            create: bool = True, animate: bool = True,
+                            directed: bool = True) -> bool:
+        """Change one synapse and record the reason.
+
+        Pass `delta` to nudge the existing weight or `value` to set it outright.
+        Returns True if the weight actually moved.
+
+        `directed` says whether the caller means this exact synapse. It must,
+        for anything structural: a regulator neuron is wired
+        drive -> regulator excitatory AND regulator -> drive inhibitory, and
+        collapsing those onto one undirected edge silently destroys the second
+        one - the whole point of the neuron. Callers that hold an unordered
+        pair (an innate reflex, a direct co-activation update) pass
+        directed=False and get the existing synapse in whichever direction it
+        already runs.
+        """
+        if not (isinstance(edge, tuple) and len(edge) == 2):
+            return False
+        src, dst = edge
+        if src == dst:
+            return False
+
+        existing = edge in self.weights
+        if not existing and not directed:
+            reverse = (dst, src)
+            if reverse in self.weights:
+                edge = reverse
+                src, dst = edge
+                existing = True
+
+        if not existing and not create:
+            return False
+
+        old = float(self.weights.get(edge, 0.0))
+        if value is not None:
+            new = float(value)
+        elif delta is not None:
+            new = old + float(delta)
+        else:
+            return False
+
+        new = max(-1.0, min(1.0, new))
+        if existing and abs(new - old) < 1e-9:
+            return False
+
+        self.weights[edge] = new
+
+        ledger = getattr(self, 'ledger', None)
+        if ledger is not None:
+            ledger.record_weight_change(edge, old, new, mechanism,
+                                        detail=detail, episode_id=episode_id)
+
+        self._on_weight_changed(edge, old, new, animate)
+        return True
+
+    def remove_weight(self, edge, mechanism: str = 'prune',
+                      reason: str = "") -> bool:
+        """Delete one synapse, recording why it went."""
+        if edge not in self.weights:
+            return False
+        old = float(self.weights.pop(edge))
+        ledger = getattr(self, 'ledger', None)
+        if ledger is not None:
+            ledger.record_weight_change(edge, old, 0.0, mechanism,
+                                        detail={'note': reason or 'removed',
+                                                'removed': True})
+        self._on_weight_removed(edge, old)
+        return True
+
+    # -- questions any brain can answer about itself --------------------
+    def explain_weight(self, edge, from_value=None, to_value=None) -> str:
+        ledger = getattr(self, 'ledger', None)
+        if ledger is None:
+            return "This brain keeps no provenance."
+        return ledger.explain_weight(tuple(edge), from_value, to_value)
+
+    def explain_neuron(self, name: str) -> str:
+        ledger = getattr(self, 'ledger', None)
+        if ledger is None:
+            return "This brain keeps no provenance."
+        return ledger.explain_neuron(name)
+
+    def what_do_you_know(self, topic: Optional[str] = None, limit: int = 60):
+        ledger = getattr(self, 'ledger', None)
+        if ledger is None:
+            return []
+        return ledger.knowledge(topic, limit=limit)
+
+    # -- presentation hooks ---------------------------------------------
+    def _on_weight_changed(self, edge: Pair, old: float, new: float,
+                           animate: bool) -> None:
+        """Called after the change is recorded. Override to draw it."""
+
+    def _on_weight_removed(self, edge: Pair, old: float) -> None:
+        """Called after the removal is recorded. Override to draw it."""
+
+
+# ---------------------------------------------------------------------------
 # The ledger
 # ---------------------------------------------------------------------------
 class CausalLedger:
@@ -405,18 +540,33 @@ class CausalLedger:
                             mechanism=mechanism, timestamp=timestamp or time.time(),
                             detail=dict(detail or {}), episode_id=episode_id)
 
-        bucket = self._events_by_edge.get(edge)
-        if bucket is None:
-            bucket = deque(maxlen=_MAX_EVENTS_PER_EDGE)
-            self._events_by_edge[edge] = bucket
+        if edge not in self._first_seen:
             self._first_seen[edge] = event.timestamp
-        bucket.append(event)
-        self._recent.append(event)
+
+        # Narrate the changes worth reading; account for all of them.
+        crossed_zero = (old_weight > 0) != (new_weight > 0)
+        if (abs(event.delta) >= _NARRATABLE_DELTA
+                or mechanism in _ALWAYS_NARRATE or crossed_zero):
+            bucket = self._events_by_edge.get(edge)
+            if bucket is None:
+                bucket = deque(maxlen=_MAX_EVENTS_PER_EDGE)
+                self._events_by_edge[edge] = bucket
+            bucket.append(event)
+            self._recent.append(event)
 
         totals = self._totals.setdefault(edge, {})
         totals[mechanism] = totals.get(mechanism, 0.0) + event.delta
         counts = self._counts.setdefault(edge, {})
         counts[mechanism] = counts.get(mechanism, 0) + 1
+
+        # A synapse that changes sign means the opposite thing from now on, so
+        # its behavioural record starts again. Carrying the old total forward
+        # produced flat contradictions - "when food is in sight satisfaction
+        # goes DOWN ... it has spent 626 ticks raising satisfaction" - because
+        # the influence had been accumulated while the weight was positive.
+        if crossed_zero:
+            self._influence.pop(edge, None)
+
         self.total_changes += 1
         return event
 
@@ -662,10 +812,18 @@ class CausalLedger:
         infl = self._influence.get(edge)
         src, dst = edge
         if infl and infl.get('ticks'):
-            direction = "raising" if infl['net'] > 0 else "lowering"
-            base = (f"it has spent {infl['ticks']} ticks {direction} "
-                    f"{self.label(infl.get('target') or dst)} "
-                    f"({infl['net']:+.1f} points in total)")
+            # Activations are centred on 50, so an excitatory synapse pushes its
+            # target UP when the source is above neutral and DOWN when it is
+            # below. Reporting only the net made a positive synapse read as
+            # "lowering satisfaction" whenever the source had lately been quiet,
+            # which flatly contradicted the statement above it.
+            target = self.label(infl.get('target') or dst)
+            swing = "up when" if weight > 0 else "down when"
+            counter = "down" if weight > 0 else "up"
+            base = (f"over {infl['ticks']} ticks it has moved {target} by "
+                    f"{infl['total']:.1f} points in total "
+                    f"({infl['net']:+.1f} net) - {swing} {self.label(src)} is "
+                    f"above its resting level, {counter} when it is below")
             recent = self._decision_after(infl.get('last', 0.0))
             if recent:
                 base += f"; the squid's next choice was to be {recent}"

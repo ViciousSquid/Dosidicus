@@ -708,8 +708,17 @@ class TutorialManager:
                 targets = random.sample(existing_neurons, 2)
                 for target in targets:
                     weight = random.uniform(0.5, 0.8)
-                    brain_widget.weights[(neuron_name, target)] = weight
-                    brain_widget.weights[(target, neuron_name)] = weight * 0.5
+                    # Illustration only, but it still goes through the recorded
+                    # write path - otherwise the tutorial would leave synapses
+                    # in the player's brain that nothing could account for.
+                    brain_widget.apply_weight_change(
+                        (neuron_name, target), value=weight, mechanism='designer',
+                        detail={'note': 'tutorial illustration neuron'},
+                        create=True, animate=False)
+                    brain_widget.apply_weight_change(
+                        (target, neuron_name), value=weight * 0.5, mechanism='designer',
+                        detail={'note': 'tutorial illustration neuron'},
+                        create=True, animate=False)
         
         brain_widget.update()
 
@@ -735,6 +744,8 @@ class TutorialManager:
             
             keys_to_remove = [k for k in brain_widget.weights.keys() if neuron_name in k]
             for key in keys_to_remove:
-                del brain_widget.weights[key]
+                brain_widget.remove_weight(
+                    key, mechanism='prune',
+                    reason='tutorial illustration neuron removed')
         
         brain_widget.update()

@@ -41,6 +41,16 @@ Three kinds of item appear:
 **Export…** writes the whole lot to a text file, including what the squid
 cannot do yet.
 
+### Narrated vs accounted
+
+Some mechanisms are high-frequency and small: an outcome touches every synapse
+that was participating, many times a minute, by thousandths. Those changes are
+real and their **totals are exact** — "why is this weight 0.47" still adds up —
+but they are not listed one by one, because four hundred lines of "+0.002" bury
+the handful of changes that actually tell the squid's story. Anything
+structural (a neuron wired in, a synapse pruned, a hand edit, a change that
+flips a synapse's sign) is always listed, whatever its size.
+
 ## Why this weight?
 
 Pick any synapse. You get its whole recorded life: the running total of what

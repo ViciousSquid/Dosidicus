@@ -36,13 +36,23 @@ none of them is an event counter.
 | Deficit | What is measured | What is grown |
 |---------|------------------|---------------|
 | **representation** | A recurring situation signature. For every neuron, the separation between its activation when the situation holds and when it does not (Cohen's *d* over streaming statistics). If **no** neuron separates the two, the brain literally cannot tell the situation apart. | A neuron wired from the sensors that define the situation, so it and nothing else fires for it. |
-| **regulation** | A drive outside its comfort band for a sustained fraction of the last 240 ticks, while the corrective synaptic push into that drive is absent, below `MIN_CORRECTIVE_PUSH`, or already at the clamp. | A regulator: driven *by* the drive (and whatever predicts it), pushing back *on* it. |
+| **regulation** | A drive outside its comfort band for a sustained fraction of the last 240 ticks **and not coming back** — the second half of the window is no better than the first. | A regulator: driven *by* the drive (and whatever predicts it), pushing back *on* it. |
 | **expression** | A cue → action → outcome contingency `ActionOutcomeLedger` is confident about, with no synaptic path from the cue to the outcome of the right sign. The brain knows something it has no structure to act on. | A relay: cue → new neuron → outcome, signed by the measured effect. |
 | **differentiation** | One neuron driven by two sources whose long-run correlation is strongly negative. It is being asked to stand for two incompatible situations at once, so it represents neither. | A second neuron that takes one of the two drivers over, and inherits its synapse onto the shared target. |
 | **connectivity** | A neuron with no working connections. Nothing it computes can reach the rest of the brain. | A connector that bridges it back into the network. |
 
 Comfort bands live in `capability.COMFORT_BANDS` and cover exactly the seven
 core drives.
+
+The regulation test deliberately has **no threshold on how big the corrective
+push is**. Any such number is arbitrary, and the one that used to be there
+compared a 240-tick complaint against a single-moment reading of the sources:
+a synapse that corrects hard whenever the drive spikes read as useless if the
+monitor happened to look during a quiet stretch, and the brain grew a neuron it
+did not need. What matters is whether existing structure is *getting on top of
+it*, and the band history already answers that. The push magnitude now only
+words the diagnosis — "no synapse at all", "already at full strength", "only
+supplies 0.14" — never decides it.
 
 ## Persistence: a deficit has to earn its neuron
 
@@ -97,8 +107,21 @@ neuron. Given a `Deficit` it:
 3. merges the **specialisation wiring** (what a neuron of this kind always
    does) with the **remedy wiring** (what this specific deficit needs) before
    writing anything, so each synapse is created once with its final value;
-4. adds reciprocal links so the neuron can be driven as well as drive;
-5. writes a **birth record** to the provenance ledger.
+4. adds reciprocal links so the neuron can be driven as well as drive —
+   **damped** by `[Neurogenesis.NeuronProperties] reciprocal_strength`, a
+   setting config.ini has carried since 2.4 that nothing read. Copying the
+   forward weight made every grown neuron half of a self-amplifying loop, and a
+   rule that converges a synapse to the correlation between its endpoints then
+   pinned both at the clamp — so the squid's "strongest knowledge" ended up
+   being tautologies about neurons it had just grown;
+5. checks a **viability post-condition**: a neuron that cannot be driven, or
+   cannot drive anything, is not a neuron, it is an entry in a dictionary. If
+   the wiring so far has left it inert it is connected to the drives its
+   specialisation names. Before this, a neuron grown into a brain sitting near
+   neutral could be born with *zero* synapses — counted, drawn, capped against,
+   and unable to do anything — and the connectivity detector would later
+   "rescue" it, which is the architecture patching a defect it created at birth;
+6. writes a **birth record** to the provenance ledger.
 
 Wiring is directional and stays that way. A regulator is
 `drive → regulator` excitatory **and** `regulator → drive` inhibitory; those

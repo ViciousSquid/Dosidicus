@@ -1270,7 +1270,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 if target in NON_PROPAGATED_NEURONS and target not in CORE_STAT_NEURONS:
                     continue  # never wire into a sensor
                 if (name, target) not in self.brain_widget.weights:
-                    self.brain_widget.weights[(name, target)] = weight
+                    self.brain_widget.apply_weight_change(
+                        (name, target), value=weight, mechanism='neurogenesis',
+                        detail={'note': f"restored at load: {name} came back from "
+                                        f"the save file with no synapses at all"},
+                        create=True, animate=False)
         
         if rebuilt_count > 0:
             print(f"🔧 Force rebuilt {rebuilt_count} neurogenesis neurons from save data")

@@ -17,6 +17,7 @@ from PyQt5.QtGui import QPixmap, QFont, QImage
 from datetime import datetime
 
 from .brain_render_worker import BrainRenderWorker, create_render_state_from_widget, RenderState
+from .neural_provenance import RecordedSynapses
 from .brain_worker import BrainWorker
 from .compute_backend import get_backend
 from .neurogenesis import EnhancedNeurogenesis, ExperienceBuffer
@@ -66,7 +67,7 @@ try:
 except ImportError:
     _PERF_TRACKING_AVAILABLE = False
 
-class BrainWidget(QtWidgets.QWidget):
+class BrainWidget(RecordedSynapses, QtWidgets.QWidget):
     
     neuronClicked = QtCore.pyqtSignal(str)
     animationStyleChanged = QtCore.pyqtSignal(str)  # Emitted when style changes
@@ -2035,65 +2036,13 @@ class BrainWidget(QtWidgets.QWidget):
     # =========================================================================
     # THE SINGLE SYNAPTIC WRITE PATH
     #
-    # Every mechanism that changes a weight - plasticity, STDP, causal reward,
-    # sleep consolidation, neurogenesis, the Designer, pruning - goes through
-    # here. That is what makes "why did this weight change from 0.31 to 0.47?"
-    # answerable: nothing can move a synapse without saying why.
+    # apply_weight_change / remove_weight come from RecordedSynapses, which the
+    # headless trainer and every test double share. Only the drawing is ours:
+    # everything about what a weight change IS lives in one place, so it cannot
+    # be true here and subtly different there.
     # =========================================================================
-    def apply_weight_change(self, edge, delta: float = None, value: float = None,
-                            mechanism: str = 'manual', detail: dict = None,
-                            episode_id: str = None, create: bool = True,
-                            animate: bool = True, directed: bool = True) -> bool:
-        """Change one synapse and record the reason.
-
-        Pass `delta` to nudge the existing weight or `value` to set it outright.
-        Returns True if the weight actually moved.
-
-        `directed` says whether the caller means this exact synapse. It must,
-        for anything structural: a regulator neuron is wired
-        drive -> regulator excitatory AND regulator -> drive inhibitory, and
-        collapsing those onto one undirected edge silently destroys the second
-        one - the whole point of the neuron. Callers that hold an unordered
-        pair (an innate reflex, a direct co-activation update) pass
-        directed=False and get the existing synapse in whichever direction it
-        already runs.
-        """
-        if not (isinstance(edge, tuple) and len(edge) == 2):
-            return False
+    def _on_weight_changed(self, edge, old, new, animate):
         src, dst = edge
-        if src == dst:
-            return False
-
-        existing = edge in self.weights
-        if not existing and not directed:
-            reverse = (dst, src)
-            if reverse in self.weights:
-                edge = reverse
-                src, dst = edge
-                existing = True
-
-        if not existing and not create:
-            return False
-
-        old = float(self.weights.get(edge, 0.0))
-        if value is not None:
-            new = float(value)
-        elif delta is not None:
-            new = old + float(delta)
-        else:
-            return False
-
-        new = max(-1.0, min(1.0, new))
-        if existing and abs(new - old) < 1e-9:
-            return False
-
-        self.weights[edge] = new
-
-        ledger = getattr(self, 'ledger', None)
-        if ledger is not None:
-            ledger.record_weight_change(edge, old, new, mechanism,
-                                        detail=detail, episode_id=episode_id)
-
         now = time.time()
         self.weight_change_events[src] = now
         self.weight_change_events[dst] = now
@@ -2105,41 +2054,9 @@ class BrainWidget(QtWidgets.QWidget):
         if animate:
             self.add_weight_animation(src, dst, old, new)
         self.mark_render_dirty()
-        return True
 
-    def remove_weight(self, edge, mechanism: str = 'prune', reason: str = "") -> bool:
-        """Delete one synapse, recording why it went."""
-        if edge not in self.weights:
-            return False
-        old = float(self.weights.pop(edge))
-        ledger = getattr(self, 'ledger', None)
-        if ledger is not None:
-            ledger.record_weight_change(edge, old, 0.0, mechanism,
-                                        detail={'note': reason or 'removed',
-                                                'removed': True})
+    def _on_weight_removed(self, edge, old):
         self.mark_render_dirty()
-        return True
-
-    def explain_weight(self, edge, from_value=None, to_value=None) -> str:
-        """Why is this synapse the value it is? Reads the brain's own record."""
-        ledger = getattr(self, 'ledger', None)
-        if ledger is None:
-            return "This brain keeps no provenance."
-        return ledger.explain_weight(tuple(edge), from_value, to_value)
-
-    def explain_neuron(self, name: str) -> str:
-        """Why does this neuron exist? Reads the brain's own record."""
-        ledger = getattr(self, 'ledger', None)
-        if ledger is None:
-            return "This brain keeps no provenance."
-        return ledger.explain_neuron(name)
-
-    def what_do_you_know(self, topic: str = None, limit: int = 60):
-        """Everything the squid has learned, in plain English."""
-        ledger = getattr(self, 'ledger', None)
-        if ledger is None:
-            return []
-        return ledger.knowledge(topic, limit=limit)
 
     def is_connector_neuron(self, neuron_name: str) -> bool:
         """
@@ -2736,7 +2653,8 @@ class BrainWidget(QtWidgets.QWidget):
         if stdp is None or not signal:
             return 0
         try:
-            deltas = stdp.apply_reward_modulation(float(signal))
+            deltas = stdp.apply_reward_modulation(
+                float(signal), rate=engine.config.learning_rate)
         except Exception:
             return 0
 
@@ -2896,7 +2814,10 @@ class BrainWidget(QtWidgets.QWidget):
                 
             for conn in list(self.weights.keys()):
                 if isinstance(conn, tuple) and (conn[0] == neuron_to_remove or conn[1] == neuron_to_remove):
-                    del self.weights[conn]
+                    self.remove_weight(
+                        conn, mechanism='prune',
+                        reason=f"{neuron_to_remove} was pruned for weak connections "
+                               f"and inactivity, so its synapses went with it")
                     
             if neuron_to_remove in self.neurogenesis_data.get('new_neurons', []):
                 self.neurogenesis_data['new_neurons'].remove(neuron_to_remove)
