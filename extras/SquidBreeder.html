@@ -141,8 +141,8 @@ const input = t => document.getElementById("input"+t);
 // ================= BREED =================
 
 function breed(){
-    const A=JSON.parse(inputA.value);
-    const B=JSON.parse(inputB.value);
+    const A=normaliseBrain(JSON.parse(inputA.value));
+    const B=normaliseBrain(JSON.parse(inputB.value));
 
     const child=structuredClone(A);
     child._lineage={neurons:{},weights:{}};
@@ -235,7 +235,54 @@ const rand=()=>Math.random()*2-1;
 // ================= RENDER =================
 
 function renderNetwork(t){
-    try{ render(JSON.parse(input(t).value),"canvas"+t); }catch{}
+    try{ render(normaliseBrain(JSON.parse(input(t).value)),"canvas"+t); }catch{}
+}
+
+// ---------------------------------------------------------------------------
+// Accept every brain format the project actually writes.
+//
+// This tool only ever understood `weights` as an object keyed "source|target",
+// which is its own internal shape and not one anything in Dosidicus produces:
+// the headless trainer writes `connections` (a list of {source, target,
+// weight}), the game's save writes `weights_list` (a list of [source, target,
+// weight]), and the Designer writes `connections` too. Given any real brain
+// file this tool found no weights at all and drew eight unconnected dots.
+function normaliseBrain(data){
+    if(!data || typeof data !== "object") return data;
+
+    // Neurons: accept {name: {position: [x,y]}} and [{name, position}].
+    if(Array.isArray(data.neurons)){
+        const asMap={};
+        for(const n of data.neurons){ if(n && n.name) asMap[n.name]=n; }
+        data.neurons=asMap;
+    }
+    if(!data.neurons && data.neuron_positions){
+        data.neurons={};
+        for(const [name,pos] of Object.entries(data.neuron_positions)){
+            data.neurons[name]={position:pos};
+        }
+    }
+
+    // Weights: build the "source|target" map this tool works in.
+    if(!data.weights || Array.isArray(data.weights)){
+        const map={};
+        const add=(src,dst,w)=>{ if(src&&dst) map[`${src}|${dst}`]=Number(w)||0; };
+
+        if(Array.isArray(data.weights)){
+            for(const row of data.weights){
+                if(Array.isArray(row)) add(row[0],row[1],row[2]);
+            }
+        }
+        for(const row of data.connections||[]){
+            if(Array.isArray(row)) add(row[0],row[1],row[2]);
+            else if(row) add(row.source??row.from, row.target??row.to, row.weight);
+        }
+        for(const row of data.weights_list||[]){
+            if(Array.isArray(row)) add(row[0],row[1],row[2]);
+        }
+        data.weights=map;
+    }
+    return data;
 }
 
 function renderOffspring(d){ render(d,"canvasOffspring",true); }

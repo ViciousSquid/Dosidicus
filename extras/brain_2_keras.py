@@ -177,11 +177,22 @@ def parse_design(data):
     
     # Logic to distinguish inputs:
     # Look for 'sensor' type or specific names in standard inputs
-    known_inputs = [
-        'external_stimulus', 'plant_proximity', 'threat_level', 
-        'pursuing_food', 'is_sick', 'is_fleeing', 'is_eating', 
-        'is_sleeping', 'is_startled', 'can_see_food'
-    ]
+    # Read from the project's own definition where it is importable, so this
+    # cannot drift the way a second copy of a list always does. The literal
+    # below is the fallback for running this script on its own, away from the
+    # repository.
+    try:
+        import os as _os, sys as _sys
+        _sys.path.insert(0, _os.path.dirname(_os.path.dirname(
+            _os.path.abspath(__file__))))
+        from src.brain_constants import DEFAULT_INPUT_SENSORS
+        known_inputs = list(DEFAULT_INPUT_SENSORS)
+    except Exception:
+        known_inputs = [
+            'external_stimulus', 'plant_proximity', 'threat_level',
+            'pursuing_food', 'is_sick', 'is_fleeing', 'is_eating',
+            'is_sleeping', 'is_startled', 'can_see_food'
+        ]
     
     for name, props in neurons.items():
         n_type = props.get('type', props.get('neuron_type', 'hidden')).lower()
