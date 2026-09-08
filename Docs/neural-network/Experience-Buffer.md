@@ -14,7 +14,19 @@ The experience buffer is technically implemented as the `ExperienceBuffer` class
 
 *  **Core Pattern**: A minimal pattern used for "fuzzy matching" or identifying basic event categories.
 
-The system analyses these counts to determine if a situation is a novel event or a recurring pattern, which heavily influences whether a new neuron is created, or if an existing neuron is strengthened.
+These counts describe how repetitive the squid's life has been.
+
+**As of v4.0 they no longer decide whether a neuron is created.** Experience is
+not by itself a reason to grow structure: a pattern can recur a hundred times
+and need no new neuron if the network already handles it perfectly well. That
+decision belongs to [`CapabilityMonitor`](Neurogenesis.md), which asks what the
+network cannot represent, regulate or express.
+
+The buffer's job now is **context**: when a neuron is grown, its
+`ExperienceContext` is the snapshot of what the squid's life looked like at the
+moment of birth, and it is what the Knowledge tab shows under *"What the squid
+was living through at the time"*. The authoritative reason for the growth is
+the `Deficit` stored alongside it.
 
 
 

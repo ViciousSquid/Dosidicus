@@ -9,6 +9,7 @@ from src.brain_widget import BrainWidget
 from src.interactions import RockInteractionManager
 from src.interactions2 import PoopInteractionManager
 from src.neurogenesis import EnhancedNeurogenesis
+from src.neural_provenance import CausalLedger, RecordedSynapses
 from src.squid import Squid
 from src.squid_statistics import SquidStatistics
 from src.tamagotchi_logic import TamagotchiLogic
@@ -40,6 +41,25 @@ class ConnectableSignal:
             slot(*args)
 
 
+class _DoubleBrain(RecordedSynapses, SimpleNamespace):
+    """A brain stand-in that writes synapses the way the real one does.
+
+    A double that sets weights itself would let neurogenesis pass a test
+    against a write path production does not have, so it inherits the real one
+    and supplies its own ledger.
+    """
+
+    def __init__(self, **kwargs):
+        SimpleNamespace.__init__(self, **kwargs)
+        self.ledger = CausalLedger(self)
+
+    def add_weight_animation(self, *args, **kwargs):
+        pass
+
+    def mark_render_dirty(self):
+        pass
+
+
 class NotifyingNeurogenesis:
     def __init__(self, brain_widget, neuron_name):
         self.brain_widget = brain_widget
@@ -48,8 +68,14 @@ class NotifyingNeurogenesis:
     def capture_experience_context(self, **_kwargs):
         return object()
 
-    def should_create_neuron(self, _context):
+    def should_create_neuron(self, _context=None, **_kwargs):
         return True
+
+    def find_deficit(self, _brain_state=None):
+        # Any non-None value: this double stands in for the engine's decision,
+        # and the widget only needs a deficit to carry into the birth record.
+        return SimpleNamespace(suggested_type="stress", key="regulation:anxiety:down",
+                               summary="test deficit", severity=1.0)
 
     def create_functional_neuron(self, _context, **_kwargs):
         EnhancedNeurogenesis._notify_neuron_created(self, self.neuron_name)
@@ -245,7 +271,7 @@ class StatisticsEventWiringTests(unittest.TestCase):
 
     def test_orphan_rescue_emits_one_completed_birth(self):
         signal = RecordingSignal()
-        brain_widget = SimpleNamespace(
+        brain_widget = _DoubleBrain(
             neuronCreated=signal,
             neuron_positions={
                 "orphan": (100, 100),

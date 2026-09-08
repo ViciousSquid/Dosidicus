@@ -383,13 +383,12 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
             change_indicator = f"<span style='color: #f44336; font-size: {DisplayScaling.font_size(24)}px; margin-left: 10px;'>↘</span>"
 
         # STDP: resolve directional arrow and LTP/LTD info
+        # The pair is a directed synapse: 'causal' means this synapse's own
+        # presynaptic neuron led, 'acausal' means it lagged. The old labels
+        # ('n1_to_n2'/'n2_to_n1') came from a symmetric comparison that has been
+        # removed, because it discarded the direction the weight was applied in.
         stdp_direction = stdp_meta.get('stdp_direction', 'none') if stdp_meta else 'none'
-        if stdp_direction == 'n1_to_n2':
-            arrow_char = "→"
-        elif stdp_direction == 'n2_to_n1':
-            arrow_char = "←"
-        else:
-            arrow_char = "↔"
+        arrow_char = "→" if stdp_direction in ('causal', 'acausal') else "↔"
 
         card = QtWidgets.QWidget()
         card.setStyleSheet(f"""
@@ -488,6 +487,16 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
                 badge_row.addStretch()
 
                 card_layout.addLayout(badge_row)
+
+        # Why it changed. Straight from the ledger entry the mechanism wrote,
+        # so the card states the actual reason rather than a plausible one.
+        if stdp_meta and stdp_meta.get('explanation'):
+            reason = QtWidgets.QLabel(stdp_meta['explanation'])
+            reason.setWordWrap(True)
+            reason.setStyleSheet(
+                f"font-size: {DisplayScaling.font_size(12)}px; color: #455a64; "
+                f"background: transparent; border: none;")
+            card_layout.addWidget(reason)
 
         # Bottom row - metadata
         meta_layout = QtWidgets.QHBoxLayout()
@@ -594,31 +603,68 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         pass
 
     def update_from_brain_state(self, state):
-        """Update display based on brain state changes"""
-        if hasattr(self.brain_widget, 'recently_updated_neuron_pairs'):
+        """Show what actually changed, as the mechanism that changed it recorded it.
+
+        This used to keep its own cache of the weights and diff it, so the tab
+        was a reconstruction of learning rather than a view of it: it could not
+        tell you which rule fired, what evidence backed it, or which experience
+        it came from, and a change it missed between two refreshes was gone.
+        It now reads the brain's provenance ledger, which is the same record
+        the organism itself keeps.
+        """
+        ledger = getattr(self.brain_widget, 'ledger', None)
+        if ledger is not None:
+            self._render_ledger_events(ledger)
+        elif hasattr(self.brain_widget, 'recently_updated_neuron_pairs'):
+            # A brain with no ledger (a bare BrainWidget in a tool or a test)
+            # still gets the pair list, just without the reasons.
             for pair in self.brain_widget.recently_updated_neuron_pairs:
                 if pair not in self.learning_history:
-                    weight = getattr(self.brain_widget, 'weights', {}).get(pair, 0)
-
-                    # Compare against the value seen last refresh. Both sides of
-                    # this test used to read the SAME dict, so weight_change was
-                    # permanently None and the arrow could never render.
-                    if not hasattr(self, '_last_seen_weights'):
-                        self._last_seen_weights = {}
-                    prev_weight = self._last_seen_weights.get(pair, weight)
-                    self._last_seen_weights[pair] = weight
-
-                    weight_change = None
-                    if weight > prev_weight:
-                        weight_change = "increase"
-                    elif weight < prev_weight:
-                        weight_change = "decrease"
-
-                    self.add_log_entry("", pair, weight_change)
+                    self.add_log_entry("", pair, None)
 
         # Sync Hebbian timer from brain_widget
         if hasattr(self.brain_widget, 'hebbian_countdown_seconds'):
             self.update_hebbian_label_learning(self.brain_widget.hebbian_countdown_seconds)
+
+    def _render_ledger_events(self, ledger):
+        """Turn newly recorded weight events into cards, newest last seen first."""
+        if not hasattr(self, '_seen_event_keys'):
+            self._seen_event_keys = set()
+            self._seen_event_order = []
+
+        try:
+            events = ledger.recent_events(limit=30)
+        except Exception:
+            return
+
+        for event in events:
+            key = (round(event.timestamp, 4), event.edge, round(event.new_weight, 6))
+            if key in self._seen_event_keys:
+                continue
+            self._seen_event_keys.add(key)
+            self._seen_event_order.append(key)
+            if len(self._seen_event_order) > 400:
+                self._seen_event_keys.discard(self._seen_event_order.pop(0))
+
+            direction = "increase" if event.delta > 0 else (
+                "decrease" if event.delta < 0 else None)
+
+            # The card's STDP badge is fed from the ledger's own detail, so
+            # LTP/LTD is shown when spike timing genuinely contributed and not
+            # otherwise. Nothing here re-derives it.
+            meta = {
+                'stdp_direction': event.detail.get('stdp_direction', 'none'),
+                'is_ltp': bool(event.detail.get('is_ltp')),
+                'is_ltd': bool(event.detail.get('is_ltd')),
+                'stdp_delta': float(event.detail.get('stdp_delta') or 0.0),
+                'stdp_weight': float(event.detail.get('stdp_weight') or 0.0),
+                'mechanism': event.mechanism,
+                'explanation': event.describe(),
+            }
+            if not meta['stdp_delta']:
+                meta['stdp_direction'] = 'none'
+
+            self.add_log_entry("", event.edge, direction, stdp_meta=meta)
 
     def update_hebbian_label_learning(self, value):
         """Update the Hebbian countdown label and handle blinking when <5s"""

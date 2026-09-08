@@ -81,10 +81,12 @@ class SleepReplayControlPanel(QtWidgets.QWidget):
         header.addWidget(subtitle)
         root.addLayout(header)
 
-        # Enabled toggle
-        self.enabled_check = QtWidgets.QCheckBox("Plugin enabled")
-        self.enabled_check.setChecked(self.plugin.enabled)
-        self.enabled_check.toggled.connect(self.plugin.set_enabled)
+        # Toggles the CORE feature, not this window: consolidation is part of
+        # the engine and runs whether or not this panel is open.
+        self.enabled_check = QtWidgets.QCheckBox(
+            "Consolidation runs during sleep (core engine)")
+        self.enabled_check.setChecked(self.plugin.consolidation_active)
+        self.enabled_check.toggled.connect(self.plugin.set_consolidation_active)
         root.addWidget(self.enabled_check)
 
         # --- Live stats ---

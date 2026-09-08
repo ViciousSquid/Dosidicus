@@ -20,7 +20,7 @@
 
 | Worker | Responsibility | Output |
 |--------|----------------|--------|
-| [**BrainWorker**](../source-reference/brain_worker.py.md) | Hebbian learning, Neurogenesis | Signals → BrainWidget |
+| [**BrainWorker**](../source-reference/brain_worker.py.md) | Retired for learning and growth — both now run on the main thread, where the state they read is authoritative | Health-check signals only |
 | [**BrainRenderWorker**](../source-reference/brain_render_worker.py.md) | Offscreen painting | QImage → paintEvent |
 | [**NeuronOutputMonitor**](../source-reference/brain_neuron_outputs.py.md) | Threshold checks | Hooks → Squid behaviors |
 
@@ -47,7 +47,12 @@ BrainRenderWorker ────┘
 
 2. **Processing Stage**
    - [`BrainWidget`](../source-reference/brain_widget.py.md) updates state dictionary
-   - [`BrainWorker`](../source-reference/brain_worker.py.md) performs Hebbian learning (weight updates)
+   - `propagate_activations()` steps the network through `src/propagation.py`,
+     the project's single transfer function
+   - `PlasticityEngine.observe()` accumulates learning evidence every tick;
+     `perform_hebbian_learning()` commits it on the cycle
+   - `CapabilityMonitor.observe()` and `ActionOutcomeLedger.on_tick()` run on
+     the same tick, off the same authoritative state
    - [`BrainWorker`](../source-reference/brain_worker.py.md) checks [neurogenesis](../neural-network/Neurogenesis.md) triggers
 
 3. **Output Stage**

@@ -1,39 +1,37 @@
 """
-Sleep Replay & Consolidation Plugin for Dosidicus
-=================================================
+Sleep Replay & Consolidation plugin - a control surface, not a second engine.
 
-Turns sleep from a stat-restore into a cognitively load-bearing phase.
+Sleep-dependent replay is a CORE feature. It lives in
+src/sleep_consolidation.py (the algorithm) and src/consolidation.py (the
+engine-side owner), it runs on every simulation tick from
+TamagotchiLogic.update_simulation, and it consolidates the squid's day whether
+this plugin is loaded or not.
 
-While the squid is awake, the plugin quietly records which neurons fire together
-(a recency-weighted "experience buffer", biased by the memories the squid forms).
-When the squid falls asleep, the day's strongest co-activations are **replayed**
-in a series of bursts – their connections are strengthened, the analogue of
-hippocampal sharp-wave-ripple consolidation. Sleep then **prunes** weak, unused
-synapses (the synaptic-homeostasis hypothesis), so the connectome reflects what
-actually mattered instead of only ever growing.
+This plugin used to be a complete parallel implementation: its own
+SleepReplayEngine, its own sampling timer, its own sleep-edge detection, its
+own replay bursts and its own pruning pass, all mutating brain_widget.weights
+directly. With the core manager also running, two engines sampled the same
+brain, built two different experience buffers, and both strengthened and pruned
+the same synapses - and neither recorded why.
 
-Integration
------------
-Purely additive – no core files are modified. The plugin:
-  * polls ``squid.is_sleeping`` on a main-thread timer to detect sleep/wake edges
-    (robust to every sleep path, including forced sleep at 100% sleepiness, which
-    fires no hook);
-  * samples ``brain_widget.state`` while awake to accumulate co-activation;
-  * mutates ``brain_widget.weights`` on the main thread during sleep (same pattern
-    the STDP plugin uses for reward modulation) and drives the existing weight
-    animations;
-  * reuses the brain widget's own connector / new-neuron immunity for pruning.
+What is left is the part that was always the plugin's job: showing the player
+what consolidation is doing, and letting them drive it.
 
-All heavy lifting lives in ``replay_core.py`` (Qt-free, unit-testable).
+  * live view of the buffer, the night's replay and the pruning
+  * "Replay Now" to force a consolidation pass while awake
+  * runtime tuning of the real ReplayConfig the engine reads
+  * a status banner on the Learning tab
+
+Enabling and disabling this plugin shows and hides the inspector; the
+"Consolidation runs during sleep" toggle is the one that turns the core
+feature itself on and off.
 """
 
 import os
 import sys
-import time
 import logging
 import traceback
-from collections import deque
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 
 # ---------------------------------------------------------------------------
 # Make the project root importable (mirrors the STDP / multiplayer plugins)
@@ -64,66 +62,38 @@ except ImportError:  # pragma: no cover - fallback when scaling helper absent
         def scale_css(cls, css):
             return css
 
-# Core engine (package-relative, with flat fallback)
+# The engine's own config type - the plugin edits the live instance of it,
+# and only falls back to a detached default before the brain window exists.
 try:
-    from src.sleep_consolidation import ReplayConfig, SleepReplayEngine
+    from src.sleep_consolidation import ReplayConfig
 except ImportError:  # pragma: no cover
-    from replay_core import ReplayConfig, SleepReplayEngine
+    from sleep_consolidation import ReplayConfig
 
 # ---------------------------------------------------------------------------
 # Plugin metadata
 # ---------------------------------------------------------------------------
 PLUGIN_NAME        = "Sleep Replay"
-PLUGIN_VERSION     = "1.0.0"
+PLUGIN_VERSION     = "2.0.0"
 PLUGIN_AUTHOR      = "ViciousSquid"
-PLUGIN_DESCRIPTION = ("Replays the day's strongest co-activations during sleep to "
-                      "consolidate them, and prunes weak unused synapses")
+PLUGIN_DESCRIPTION = ("Inspector and controls for the engine's core sleep replay "
+                      "and synaptic consolidation")
 PLUGIN_REQUIRES    = []
-
-# Sensor neurons that receive external input – never learned on or pruned.
-PURE_INPUTS = {
-    "can_see_food", "is_eating", "is_sleeping", "is_sick",
-    "pursuing_food", "is_fleeing", "is_startled", "external_stimulus",
-    "plant_proximity", "threat_level",
-}
 
 
 class SleepReplayPlugin:
-    """Sleep-dependent replay, consolidation and synaptic pruning."""
+    """A window onto the engine's own sleep consolidation."""
 
     def __init__(self):
         self.logger: Optional[logging.Logger] = None
         self.plugin_manager = None
         self.tamagotchi_logic = None
 
-        # Resolved during setup()
         self._brain_widget = None
         self._brain_window = None
-
-        # Engine
-        self.config = ReplayConfig()
-        self.engine = SleepReplayEngine(self.config)
-
-        # Timers (all main-thread)
-        self._sample_timer: Optional[QtCore.QTimer] = None
-        self._sleep_timer: Optional[QtCore.QTimer] = None
-        self._replay_timer: Optional[QtCore.QTimer] = None
-        self._banner_timer: Optional[QtCore.QTimer] = None
         self._resolve_attempts = 0
+        self._fallback_config = ReplayConfig()
 
-        # Sleep-edge state machine
-        self._asleep = False
-        self._session = None
-        self._replay_running = False
-        self._pending_prune = False
-        self._session_replayed = 0
-        self._last_pruned = 0
-
-        # Memory-harvest dedupe
-        self._seen_memories: deque = deque(maxlen=256)
-        self._seen_memory_set: set = set()
-
-        # UI
+        self._banner_timer: Optional[QtCore.QTimer] = None
         self._ui_banner: Optional[QtWidgets.QWidget] = None
         self._banner_stats_label: Optional[QtWidgets.QLabel] = None
         self._panel = None
@@ -132,14 +102,38 @@ class SleepReplayPlugin:
         self.enabled = False
 
     # =====================================================================
+    # The core objects this panel is a view of
+    # =====================================================================
+    @property
+    def consolidation(self):
+        """The engine's one ConsolidationManager."""
+        return getattr(self._brain_widget, 'consolidation', None)
+
+    @property
+    def engine(self):
+        """The engine's one SleepReplayEngine."""
+        manager = self.consolidation
+        return getattr(manager, 'engine', None) if manager is not None else None
+
+    @property
+    def config(self) -> ReplayConfig:
+        """The live ReplayConfig - editing it changes what the squid does."""
+        engine = self.engine
+        cfg = getattr(engine, 'config', None) if engine is not None else None
+        return cfg if cfg is not None else self._fallback_config
+
+    @property
+    def consolidation_active(self) -> bool:
+        manager = self.consolidation
+        return bool(getattr(manager, 'enabled', False)) if manager is not None else False
+
+    # =====================================================================
     # Lifecycle
     # =====================================================================
-
     def setup(self, plugin_manager, tamagotchi_logic) -> bool:
         self.plugin_manager = plugin_manager
         self.tamagotchi_logic = tamagotchi_logic
 
-        # Logger
         if hasattr(plugin_manager, 'logger'):
             self.logger = plugin_manager.logger.getChild(PLUGIN_NAME.replace(' ', ''))
         else:  # pragma: no cover
@@ -148,53 +142,27 @@ class SleepReplayPlugin:
 
         self.logger.info(f"Setting up {PLUGIN_NAME} v{PLUGIN_VERSION}...")
 
-        # Read the default-enabled flag from the registry (set in initialize()).
         plugin_key = PLUGIN_NAME.lower()
         plugin_data = plugin_manager.plugins.get(plugin_key, {})
         self.enabled = plugin_data.get('is_enabled_by_default', True)
 
-        # Resolve brain references (retries if the brain window isn't ready yet).
         self._resolve_brain_references()
 
-        # Awake co-activation sampling
-        self._sample_timer = QtCore.QTimer()
-        self._sample_timer.timeout.connect(self._sample_tick)
-        self._sample_timer.start(self.config_sample_interval_ms())
-
-        # Sleep/wake edge detection
-        self._sleep_timer = QtCore.QTimer()
-        self._sleep_timer.timeout.connect(self._sleep_tick)
-        self._sleep_timer.start(500)
-
-        # Replay burst driver (started/stopped per sleep episode)
-        self._replay_timer = QtCore.QTimer()
-        self._replay_timer.timeout.connect(self._replay_cycle)
-
-        # Also subscribe to the on_sleep hook as a prompt (idempotent with polling)
-        self._subscribe_hooks()
-
         self.is_setup = True
-
         if self.enabled:
             QtCore.QTimer.singleShot(1200, self._inject_ui_banner)
 
         self._print_banner()
         return True
 
-    def config_sample_interval_ms(self) -> int:
-        # Sampling cadence is independent of sim speed so the "day" is wall-clock.
-        return 650
-
     def cleanup(self):
         if self.logger:
             self.logger.info(f"{PLUGIN_NAME}: cleanup called")
-        for t in (self._sample_timer, self._sleep_timer,
-                  self._replay_timer, self._banner_timer):
-            try:
-                if t:
-                    t.stop()
-            except Exception:
-                pass
+        try:
+            if self._banner_timer:
+                self._banner_timer.stop()
+        except Exception:
+            pass
         if self._panel is not None:
             try:
                 self._panel.close()
@@ -210,7 +178,6 @@ class SleepReplayPlugin:
     # =====================================================================
     # Reference resolution
     # =====================================================================
-
     def _resolve_brain_references(self) -> bool:
         tl = self.tamagotchi_logic
         brain_window = getattr(tl, 'brain_window', None) if tl else None
@@ -223,11 +190,10 @@ class SleepReplayPlugin:
 
         if self._brain_widget is not None:
             self.logger.info(
-                f"References resolved: widget={type(self._brain_widget).__name__}"
+                f"References resolved: watching {type(self.consolidation).__name__}"
             )
             return True
 
-        # Not ready yet – retry a handful of times, then give up quietly.
         self._resolve_attempts += 1
         if self._resolve_attempts <= 20:
             QtCore.QTimer.singleShot(750, self._resolve_brain_references)
@@ -244,326 +210,57 @@ class SleepReplayPlugin:
         return getattr(bw, 'nn_viz_tab', None) if bw else None
 
     # =====================================================================
-    # Awake: co-activation sampling
+    # Public API (used by control panel and menu)
     # =====================================================================
-
-    def _sample_tick(self):
-        if not self.enabled or self._brain_widget is None:
-            return
-        squid = self._get_squid()
-        if squid is None:
-            return
-        # Only accumulate experience while awake.
-        if getattr(squid, 'is_sleeping', False):
-            return
-
-        active = self._learnable_state()
-        if len(active) >= 2:
-            self.engine.record_sample(active)
-
-        # Fold in any newly-formed memories before sleep clears them.
-        self._harvest_new_memories(squid)
-
-    def _learnable_state(self) -> Dict[str, float]:
-        """Filtered view of the brain state: real, learnable neuron activations."""
-        bw = self._brain_widget
-        state = getattr(bw, 'state', None)
-        if not state:
-            return {}
-        excluded = getattr(bw, 'excluded_neurons', set()) or set()
-        out: Dict[str, float] = {}
-        for name, val in state.items():
-            if name in PURE_INPUTS or name in excluded:
-                continue
-            if isinstance(val, bool):
-                continue
-            if not isinstance(val, (int, float)):
-                continue
-            try:
-                if bw.is_connector_neuron(name):
-                    continue
-            except Exception:
-                pass
-            out[name] = float(val)
-        return out
-
-    def _harvest_new_memories(self, squid):
-        mm = getattr(squid, 'memory_manager', None)
-        if mm is None or not hasattr(mm, 'get_all_short_term_memories'):
-            return
-        try:
-            mems = mm.get_all_short_term_memories(raw=True)
-        except Exception:
-            return
-        fresh = []
-        for m in mems or []:
-            try:
-                sig = (m.get('category'), m.get('key'), m.get('timestamp'))
-            except Exception:
-                continue
-            if sig in self._seen_memory_set:
-                continue
-            self._seen_memory_set.add(sig)
-            self._seen_memories.append(sig)
-            # Keep the dedupe set bounded alongside the deque.
-            while len(self._seen_memory_set) > self._seen_memories.maxlen:
-                old = self._seen_memories.popleft()
-                self._seen_memory_set.discard(old)
-            fresh.append(m)
-        if fresh:
-            self.engine.harvest_memory(fresh)
-
-    # =====================================================================
-    # Sleep/wake edge detection
-    # =====================================================================
-
-    def _sleep_tick(self):
-        if not self.enabled:
-            return
-        squid = self._get_squid()
-        if squid is None:
-            return
-        sleeping = bool(getattr(squid, 'is_sleeping', False))
-        if sleeping and not self._asleep:
-            self._asleep = True
-            self._on_sleep_onset()
-        elif not sleeping and self._asleep:
-            self._asleep = False
-            self._on_wake()
-
-    def _on_sleep_hook(self, **kwargs):
-        """on_sleep hook – prompt an immediate edge check (idempotent)."""
-        QtCore.QTimer.singleShot(0, self._sleep_tick)
-
-    def _on_sleep_onset(self):
-        if self._brain_widget is None:
-            return
-        if not self.engine.has_enough_to_replay():
-            self.logger.info("Sleep onset – not enough experience to replay yet.")
-            return
-        self._start_replay(manual=False)
-
-    def _on_wake(self):
-        # If a replay was still in flight when the squid woke, wrap it up.
-        if self._replay_running:
-            self._finish_replay()
-        stats = self.engine.get_stats()
-        self.logger.info(
-            f"Wake – day complete. Replayed {stats['last_replay_pairs']} pair(s), "
-            f"pruned {stats['last_pruned']}."
-        )
-        self._refresh_banner_stats()
-
-    # =====================================================================
-    # Replay
-    # =====================================================================
-
-    def _start_replay(self, manual: bool = False):
-        if self._replay_running:
-            return
-        session = self.engine.build_session()
-        if not session.cycles:
-            self.logger.info("Replay: nothing salient to consolidate.")
-            return
-        self._session = session
-        self._replay_running = True
-        self._session_replayed = 0
-
-        n_sel = len(session.selected)
-        tag = " (manual)" if manual else ""
-        print(f"\n🌙 Sleep replay{tag}: consolidating {n_sel} experience(s) "
-              f"over {session.total_cycles} ripple burst(s)...")
-        self.logger.info(f"Replay session started: {n_sel} pairs, "
-                         f"{session.total_cycles} cycles.")
-
-        # Kick the first burst immediately, then space the rest out.
-        self._replay_timer.start(self._replay_cycle_interval_ms())
-        self._replay_cycle()
-
-    def _replay_cycle_interval_ms(self) -> int:
-        return 1400
-
-    def _replay_cycle(self):
-        if self._session is None:
-            self._replay_timer.stop()
-            self._replay_running = False
-            return
-
-        batch = self._session.next_cycle()
-        if batch is None:
-            # All bursts done – prune, then finish.
-            self._replay_timer.stop()
-            self._do_prune()
-            self._finish_replay()
-            return
-
-        applied = 0
-        nn_tab = self._nn_viz_tab()
-        for item in batch:
-            if self._apply_replay_item(item):
-                applied += 1
-                self._session_replayed += 1
-                if nn_tab is not None and hasattr(nn_tab, 'add_log_entry'):
-                    try:
-                        nn_tab.add_log_entry("", item.pair, "increase", stdp_meta=None)
-                    except Exception:
-                        pass
-
-        # Make the consolidation visible in the network view.
-        try:
-            self._brain_widget.mark_render_dirty()
-            self._brain_widget.update()
-        except Exception:
-            pass
-
-        cyc = self._session.cycles_done
-        print(f"   🌙 ripple {cyc}/{self._session.total_cycles}: "
-              f"strengthened {applied} connection(s)")
-
-    def _apply_replay_item(self, item) -> bool:
-        """Strengthen one connection on the main thread. Returns True if changed."""
-        bw = self._brain_widget
-        weights = getattr(bw, 'weights', None)
-        if weights is None:
-            return False
-
-        a, b = item.pair
-        pair = (a, b)
-        rev = (b, a)
-        use = pair if pair in weights else (rev if rev in weights else None)
-
-        if use is None:
-            if not self.config.create_missing_connections:
-                return False
-            positions = getattr(bw, 'neuron_positions', {})
-            if a not in positions or b not in positions:
-                return False
-            # Respect the same connector degree limit as update_connection().
-            try:
-                if bw.is_connector_neuron(a) and bw.get_neuron_degree(a) >= 3:
-                    return False
-                if bw.is_connector_neuron(b) and bw.get_neuron_degree(b) >= 3:
-                    return False
-            except Exception:
-                pass
-            weights[pair] = 0.0
-            use = pair
-
-        old_w = weights[use]
-        new_w = max(-1.0, min(1.0, old_w + item.delta))
-        if new_w == old_w:
-            return False
-        weights[use] = new_w
-
-        try:
-            bw.add_weight_animation(use[0], use[1], old_w, new_w)
-        except Exception:
-            pass
-        return True
-
-    def _do_prune(self):
-        bw = self._brain_widget
-        weights = getattr(bw, 'weights', None)
-        if weights is None:
-            return
-        # Honour the core pruning switch too – if the user disabled pruning
-        # globally, don't prune here either.
-        if not getattr(bw, 'pruning_enabled', True):
-            return
-
-        prunes = self.engine.plan_prune(weights, self._is_immune)
-        removed = 0
-        for pair in prunes:
-            if pair in weights:
-                del weights[pair]
-                removed += 1
-
-        downs = self.engine.plan_downscale(weights, self._is_immune)
-        for pair, new_w in downs.items():
-            if pair in weights:
-                weights[pair] = new_w
-
-        if removed or downs:
-            print(f"   ✂️  sleep pruning: removed {removed} weak synapse(s)"
-                  + (f", down-scaled {len(downs)}" if downs else ""))
-            try:
-                bw.mark_render_dirty()
-                bw.update()
-            except Exception:
-                pass
-        self._last_pruned = removed
-
-    def _is_immune(self, n1: str, n2: str) -> bool:
-        """Connections spared from pruning: connectors, pure inputs, immature."""
-        if n1 in PURE_INPUTS or n2 in PURE_INPUTS:
-            return True
-        bw = self._brain_widget
-        try:
-            if bw.is_connector_neuron(n1) or bw.is_connector_neuron(n2):
-                return True
-        except Exception:
-            pass
-        try:
-            age = self.config.prune_min_age_sec
-            if bw.is_new_neuron(n1, age) or bw.is_new_neuron(n2, age):
-                return True
-        except Exception:
-            pass
-        return False
-
-    def _finish_replay(self):
-        pruned = getattr(self, '_last_pruned', 0)
-        cycles = self._session.total_cycles if self._session else 0
-        self.engine.finish_day(self._session_replayed, pruned, cycles)
-
-        # Push the consolidated weights to the worker cache so the change sticks.
-        try:
-            if hasattr(self._brain_widget, '_update_worker_cache'):
-                self._brain_widget._update_worker_cache()
-        except Exception:
-            pass
-
-        stats = self.engine.get_stats()
-        print(f"🌙 Consolidation complete: {self._session_replayed} strengthened, "
-              f"{pruned} pruned. (day #{stats['days_completed']})\n")
-
-        self._session = None
-        self._replay_running = False
-        self._last_pruned = 0
-        self._refresh_banner_stats()
-
-    # =====================================================================
-    # Public API (used by control panel)
-    # =====================================================================
-
     def force_replay_now(self):
-        """Trigger a consolidation pass on demand (works even while awake)."""
-        if not self.enabled:
-            print("🌙 Sleep Replay is disabled – enable it first.")
+        """Ask the engine to consolidate now, awake or asleep."""
+        manager = self.consolidation
+        if manager is None:
+            print("🌙 No brain to consolidate yet.")
             return
-        if self._brain_widget is None:
+        if not manager.enabled:
+            print("🌙 Consolidation is switched off - turn it back on first.")
             return
-        if not self.engine.has_enough_to_replay():
+        summary = manager.force_consolidation()
+        if summary is None:
             print("🌙 Not enough experience buffered yet to replay.")
-            return
-        self._start_replay(manual=True)
+        else:
+            print(f"🌙 Manual consolidation: replayed {summary.get('replayed', 0)}, "
+                  f"pruned {summary.get('pruned', 0)}.")
+        self._refresh_banner_stats()
 
     def clear_buffer(self):
-        self.engine.tracker.clear()
+        manager = self.consolidation
+        if manager is not None:
+            manager.clear_buffer()
+            print("🌙 Experience buffer cleared.")
         self._refresh_banner_stats()
-        print("🌙 Experience buffer cleared.")
 
     def get_stats(self) -> dict:
-        stats = self.engine.get_stats()
-        stats['enabled'] = self.enabled
-        stats['asleep'] = self._asleep
-        stats['replaying'] = self._replay_running
+        manager = self.consolidation
+        if manager is None:
+            return {'enabled': False, 'buffer_size': 0, 'samples_today': 0,
+                    'total_replayed': 0, 'total_pruned': 0}
+        try:
+            stats = manager.get_stats()
+        except Exception:
+            stats = {}
+        squid = self._get_squid()
+        stats['enabled'] = manager.enabled
+        stats['asleep'] = bool(getattr(squid, 'is_sleeping', False))
+        stats['replaying'] = manager.is_replaying
         return stats
 
-    # =====================================================================
-    # Enable / disable
-    # =====================================================================
+    def set_consolidation_active(self, active: bool):
+        """Turn the core sleep-consolidation feature on or off."""
+        manager = self.consolidation
+        if manager is not None:
+            manager.enabled = bool(active)
+        print(f"🌙 Sleep consolidation {'enabled' if active else 'disabled'} in the engine")
 
+    # =====================================================================
+    # Enable / disable (the inspector, not the feature)
+    # =====================================================================
     def enable(self):
         self.set_enabled(True)
         return True
@@ -574,36 +271,17 @@ class SleepReplayPlugin:
 
     def set_enabled(self, enabled: bool):
         self.enabled = bool(enabled)
-        status = "enabled" if enabled else "disabled"
         if self.logger:
-            self.logger.info(f"Sleep Replay {status}")
-        print(f"🌙 Sleep Replay {status}")
+            self.logger.info(
+                f"Sleep Replay inspector {'shown' if enabled else 'hidden'} "
+                f"(consolidation itself is unaffected)")
         if enabled:
             if self._ui_banner is None:
                 QtCore.QTimer.singleShot(0, self._inject_ui_banner)
             else:
                 self._ui_banner.setVisible(True)
-        else:
-            if self._replay_running:
-                self._replay_timer.stop()
-                self._replay_running = False
-                self._session = None
-            if self._ui_banner is not None:
-                self._ui_banner.setVisible(False)
-
-    # =====================================================================
-    # Hooks
-    # =====================================================================
-
-    def _subscribe_hooks(self):
-        pm = self.plugin_manager
-        if pm is None or not hasattr(pm, 'subscribe_to_hook'):
-            return
-        try:
-            pm.subscribe_to_hook("on_sleep", PLUGIN_NAME, self._on_sleep_hook)
-        except Exception as exc:
-            if self.logger:
-                self.logger.warning(f"Could not subscribe to on_sleep: {exc}")
+        elif self._ui_banner is not None:
+            self._ui_banner.setVisible(False)
 
     # =====================================================================
     # UI: Learning-tab banner
@@ -692,13 +370,17 @@ class SleepReplayPlugin:
         if self._ui_banner is None or self._banner_stats_label is None:
             return
         try:
-            s = self.engine.get_stats()
-            phase = "💤 replaying" if self._replay_running else (
-                "asleep" if self._asleep else "awake")
+            s = self.get_stats()
+            phase = "💤 replaying" if s.get('replaying') else (
+                "asleep" if s.get('asleep') else "awake")
+            if not s.get('enabled', True):
+                phase = "switched off"
             self._banner_stats_label.setText(
-                f"{phase} · buffer {s['buffer_size']} · "
-                f"today {s['samples_today']} · "
-                f"replayed {s['total_replayed']} · pruned {s['total_pruned']}"
+                f"{phase} · buffer {s.get('buffer_size', 0)} · "
+                f"today {s.get('samples_today', 0)} · "
+                f"replayed {s.get('total_replayed', 0)} · "
+                f"pruned {s.get('total_pruned', 0)} · "
+                f"nights {s.get('nights_completed', 0)}"
             )
         except RuntimeError:
             # Banner was swept by a reloaded instance – stop this stale timer.
@@ -732,7 +414,13 @@ class SleepReplayPlugin:
 
         menu.addSeparator()
 
-        toggle_action = QtWidgets.QAction("Enabled", main_window)
+        core_action = QtWidgets.QAction("Consolidation runs during sleep", main_window)
+        core_action.setCheckable(True)
+        core_action.setChecked(self.consolidation_active)
+        core_action.toggled.connect(self.set_consolidation_active)
+        menu.addAction(core_action)
+
+        toggle_action = QtWidgets.QAction("Show inspector", main_window)
         toggle_action.setCheckable(True)
         toggle_action.setChecked(self.enabled)
         toggle_action.toggled.connect(self.set_enabled)
@@ -756,10 +444,10 @@ class SleepReplayPlugin:
 
     def _print_banner(self):
         print("\n" + "=" * 60)
-        if self.enabled:
-            print("  🌙  SLEEP REPLAY & CONSOLIDATION IS ACTIVE  🌙")
-        else:
-            print("  🌙  Sleep Replay loaded (DISABLED – enable via Plugins menu)  🌙")
+        print("  🌙  SLEEP REPLAY INSPECTOR  🌙")
+        print("=" * 60)
+        print("  Consolidation is part of the engine, not this plugin.")
+        print("  This plugin shows you what it is doing and lets you drive it.")
         print("=" * 60)
         print(f"  Replay      : top {self.config.replay_top_k} experiences "
               f"× {self.config.replay_cycles} ripple bursts")

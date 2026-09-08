@@ -17,6 +17,7 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
+from src.neural_provenance import CausalLedger, RecordedSynapses  # noqa: E402
 from src.plasticity import PlasticityEngine, PlasticityConfig  # noqa: E402
 
 
@@ -228,17 +229,28 @@ class DivergentUpbringingTests(unittest.TestCase):
 class ConsolidationTests(unittest.TestCase):
     """Sleep replays the day's structure and prunes what never mattered."""
 
-    class _FakeBrain:
+    class _FakeBrain(RecordedSynapses):
+        """A brain with no Qt, but the real write path.
+
+        Inheriting RecordedSynapses is deliberate: a double that implements its
+        own weight-setting would let consolidation pass a test against a path
+        the game does not have.
+        """
+
         def __init__(self):
             self.weights = {('a', 'b'): 0.5, ('c', 'd'): -0.4, ('e', 'f'): 0.01}
             self.neurogenesis_data = {'new_neurons': []}
             self.enhanced_neurogenesis = None
             self.tamagotchi_logic = None
+            self.ledger = CausalLedger(self)
 
         def mark_render_dirty(self):
             pass
 
         def sync_connections_from_weights(self):
+            pass
+
+        def add_weight_animation(self, *args, **kwargs):
             pass
 
     def _run_night(self):

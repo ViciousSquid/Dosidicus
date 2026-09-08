@@ -28,7 +28,36 @@ import math
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Set
-from PyQt5.QtCore import QMutex, QMutexLocker
+# STDP is a core neural mechanism, so it must be usable everywhere the brain
+# is - including the headless trainer, which deliberately has no Qt. Qt's mutex
+# is used when Qt is present (the game runs the learner from a worker thread);
+# a plain threading lock is an exact substitute otherwise.
+try:
+    from PyQt5.QtCore import QMutex, QMutexLocker
+except ImportError:  # pragma: no cover - headless / no Qt
+    import threading
+
+    class QMutex:
+        def __init__(self):
+            self._lock = threading.RLock()
+
+        def lock(self):
+            self._lock.acquire()
+
+        def unlock(self):
+            self._lock.release()
+
+    class QMutexLocker:
+        def __init__(self, mutex):
+            self._mutex = mutex
+
+        def __enter__(self):
+            self._mutex.lock()
+            return self
+
+        def __exit__(self, *exc):
+            self._mutex.unlock()
+            return False
 
 
 @dataclass
@@ -43,14 +72,29 @@ class SpikeEvent:
 class STDPConfig:
     """Configuration for STDP learning parameters."""
     
-    # Time constants (in seconds) - controls how fast learning decays with time difference
+    # Timing, expressed in SAMPLES rather than absolute seconds.
+    #
+    # The absolute values below were chosen for a sampler running every 50ms.
+    # The brain is actually observed once per simulation tick - about once a
+    # second at 1x speed, and much faster when the game is sped up or a test
+    # loops flat out. With a 0.5s window and 1s ticks, two neurons that fired
+    # one tick apart were outside the window entirely, so spike timing could
+    # only ever see simultaneity - which carries no ordering information at
+    # all - and how much STDP happened depended on how fast the machine ran.
+    #
+    # Scaling to the observed sampling interval makes "pre fired one sample
+    # before post" mean the same thing at any speed, on any machine.
+    window_samples: float = 3.0  # how many samples apart still counts as related
+    tau_samples: float = 1.0     # decay constant, in samples
+
+    # Fallbacks, used until an interval has actually been observed.
     tau_plus: float = 0.15       # LTP time constant (pre before post)
     tau_minus: float = 0.15      # LTD time constant (post before pre)
-    
+
     # Learning amplitudes
     A_plus: float = 0.08         # Maximum LTP amplitude
     A_minus: float = 0.05        # Maximum LTD amplitude (often smaller for stability)
-    
+
     # Timing window
     time_window: float = 0.5     # Maximum time difference to consider (seconds)
     
@@ -68,8 +112,19 @@ class STDPConfig:
     stdp_weight: float = 0.4            # How much STDP contributes vs rate-based (0-1)
     
     # Eligibility traces (for delayed reward learning)
-    eligibility_decay: float = 0.95     # How fast eligibility traces decay
-    eligibility_window: float = 2.0     # How long eligibility persists (seconds)
+    # Eligibility must outlive the action that laid it down: a squid eats and
+    # the satisfaction arrives seconds later. A 2-second window with a 0.95
+    # per-100ms decay left nothing for a delayed consequence to reach, so the
+    # three-factor rule could never fire. These are matched to
+    # CausalConfig.outcome_window.
+    eligibility_decay: float = 0.98     # per 100ms
+    eligibility_window: float = 8.0     # How long eligibility persists (seconds)
+    eligibility_threshold: float = 10.0 # activation points from neutral to count as participating
+    eligibility_gain: float = 0.15      # one tick of participation marks a synapse this much;
+                                        # a trace builds over several ticks rather than saturating at once
+    max_eligibility_traces: int = 600   # bound on the trace table
+    reward_learning_rate: float = 0.04  # fallback; callers pass the engine's own rate
+    credit_budget: float = 8.0          # synapses' worth of learning one outcome is worth
     
     # Connection-specific learning rate modulation
     new_connection_boost: float = 2.0   # Boost for newly formed connections
@@ -85,6 +140,16 @@ class SpikeTracker:
     """
     
     def __init__(self, config: Optional[STDPConfig] = None):
+        # How this tracker reads the passage of time. Spike timing is the one
+        # mechanism in the project that is ABOUT time, so it must read the same
+        # clock as the simulation it is timing. The game uses the wall clock;
+        # the headless trainer and the test harness substitute simulated
+        # seconds. Before this, a trainer stepping 1 500 ticks a real second
+        # presented every spike as arriving 0.7 ms after the last, which is far
+        # inside any plausible timing window - so STDP computed a delta of
+        # exactly zero for every synapse and contributed nothing at all to a
+        # brain trained without the GUI.
+        self.clock = time.time
         self.config = config or STDPConfig()
         self._mutex = QMutex()
         
@@ -94,6 +159,11 @@ class SpikeTracker:
         
         # Previous activation values for edge detection
         self._previous_activations: Dict[str, float] = {}
+
+        # How often this tracker is actually fed. Measured, not assumed, so the
+        # learning window means the same thing whatever the simulation speed.
+        self.sample_interval: Optional[float] = None
+        self._last_batch_time: Optional[float] = None
         
         # Burst tracking
         self._burst_counts: Dict[str, int] = {}  # Recent spike counts
@@ -118,7 +188,7 @@ class SpikeTracker:
             SpikeEvent if a spike was detected, None otherwise
         """
         if timestamp is None:
-            timestamp = time.time()
+            timestamp = self.clock()
             
         with QMutexLocker(self._mutex):
             # Get previous activation
@@ -160,6 +230,18 @@ class SpikeTracker:
             
             return spike
     
+    def observe_interval(self, timestamp: float) -> None:
+        """Track the cadence we are being sampled at (exponential moving mean)."""
+        if self._last_batch_time is not None:
+            gap = timestamp - self._last_batch_time
+            # Ignore pauses and clock jumps; they are not the sampling rate.
+            if 1e-4 < gap < 10.0:
+                if self.sample_interval is None:
+                    self.sample_interval = gap
+                else:
+                    self.sample_interval += 0.1 * (gap - self.sample_interval)
+        self._last_batch_time = timestamp
+
     def record_batch(self, state: Dict[str, float], timestamp: Optional[float] = None) -> List[Tuple[str, SpikeEvent]]:
         """
         Record activations for multiple neurons at once.
@@ -172,8 +254,10 @@ class SpikeTracker:
             List of (neuron_name, SpikeEvent) tuples for detected spikes
         """
         if timestamp is None:
-            timestamp = time.time()
-            
+            timestamp = self.clock()
+
+        self.observe_interval(timestamp)
+
         spikes = []
         for neuron_name, activation in state.items():
             if isinstance(activation, (int, float)):
@@ -199,7 +283,7 @@ class SpikeTracker:
 
     def _get_recent_spikes_nolock(self, neuron_name: str, window: float) -> List[SpikeEvent]:
         """Lock-free version — caller must already hold _mutex."""
-        cutoff = time.time() - window
+        cutoff = self.clock() - window
         if neuron_name not in self._spike_history:
             return []
         return [s for s in self._spike_history[neuron_name] if s.timestamp >= cutoff]
@@ -219,7 +303,7 @@ class SpikeTracker:
         if max_age is None:
             max_age = self.config.time_window * 3
             
-        current_time = time.time()
+        current_time = self.clock()
         cutoff = current_time - max_age
         
         with QMutexLocker(self._mutex):
@@ -235,7 +319,7 @@ class SpikeTracker:
                     del self._spike_history[neuron_name]
             
             # Decay burst counts periodically
-            current_time = time.time()
+            current_time = self.clock()
             if current_time - self._last_burst_check > self.config.burst_window:
                 self._burst_counts = {k: max(0, v - 1) for k, v in self._burst_counts.items()}
                 self._last_burst_check = current_time
@@ -304,7 +388,22 @@ class STDPLearner:
         self._ltp_count = 0  # Long-term potentiation events
         self._ltd_count = 0  # Long-term depression events
         self._total_delta = 0.0
-        
+        self._clock = time.time
+
+    @property
+    def clock(self):
+        return self._clock
+
+    @clock.setter
+    def clock(self, fn):
+        """Set the clock for the learner AND its spike tracker together.
+
+        They time the same events; two clocks would put the spikes and the
+        window that measures them in different frames of reference.
+        """
+        self._clock = fn
+        self.spike_tracker.clock = fn
+
     def record_activation(self, neuron_name: str, activation: float, 
                           timestamp: Optional[float] = None) -> Optional[SpikeEvent]:
         """Record activation and detect spikes. Delegates to spike tracker."""
@@ -313,7 +412,110 @@ class STDPLearner:
     def record_state(self, state: Dict[str, float], timestamp: Optional[float] = None):
         """Record full brain state for spike detection."""
         return self.spike_tracker.record_batch(state, timestamp)
+
+    def lay_eligibility_traces(self, values: Dict[str, float],
+                               timestamp: Optional[float] = None) -> int:
+        """Mark the synapses that were carrying signal, so a later reward can find them.
+
+        An eligibility trace is a low-pass record of pre x post activity: it
+        says "this connection was participating just now", which is what a
+        delayed outcome needs in order to reach the synapses responsible for
+        it. The sign of any spike ordering is folded in where one exists, so a
+        causally-ordered pair is marked positively and an acausal one
+        negatively.
+
+        This used to be laid only for pairs that both crossed the spike
+        threshold within the timing window. That is a much sparser thing than
+        eligibility: over 600 ticks of ordinary life the squid produced ten
+        spikes, essentially none of them coincident, so no outcome ever found a
+        trace and the three-factor rule - wired up, documented, and
+        contributing exactly nothing - was inert in every real game.
+
+        Returns the number of traces touched.
+        """
+        if not values:
+            return 0
+        timestamp = timestamp or self.clock()
+        threshold = self.config.eligibility_threshold
+
+        # Deviation from the neutral baseline, in [-1, 1]. A neuron sitting at
+        # neutral is not participating in anything and marks nothing.
+        active = {}
+        for name, value in values.items():
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                continue
+            deviation = (float(value) - 50.0) / 50.0
+            if abs(deviation) * 50.0 >= threshold:
+                active[name] = max(-1.0, min(1.0, deviation))
+        if len(active) < 2:
+            return 0
+
+        names = sorted(active)
+        laid = 0
+        for i, pre in enumerate(names):
+            for post in names[i + 1:]:
+                joint = active[pre] * active[post]
+                if abs(joint) < 1e-3:
+                    continue
+                for a, b in ((pre, post), (post, pre)):
+                    ordered = self.compute_stdp_delta(a, b)
+                    if ordered:
+                        # Spike timing has an opinion about this direction.
+                        magnitude = abs(joint) * (1.0 if ordered > 0 else -1.0)
+                    else:
+                        magnitude = joint
+                    self.update_eligibility_trace(
+                        a, b, magnitude * self.config.eligibility_gain, timestamp)
+                    laid += 1
+        self._prune_eligibility(timestamp)
+        return laid
+
+    def _prune_eligibility(self, timestamp: float) -> None:
+        """Keep the trace table bounded; expired traces carry no credit anyway."""
+        with QMutexLocker(self._mutex):
+            if len(self._eligibility_traces) <= self.config.max_eligibility_traces:
+                return
+            window = self.config.eligibility_window
+            live = {k: v for k, v in self._eligibility_traces.items()
+                    if timestamp - v[1] <= window}
+            if len(live) > self.config.max_eligibility_traces:
+                live = dict(sorted(live.items(), key=lambda kv: -abs(kv[1][0]))
+                            [:self.config.max_eligibility_traces])
+            self._eligibility_traces = live
+
+    def eligibility_snapshot(self, limit: int = 20) -> List[Tuple[Tuple[str, str], float]]:
+        """Current live traces, strongest first - for the STDP inspector."""
+        now = self.clock()
+        rows = []
+        with QMutexLocker(self._mutex):
+            items = list(self._eligibility_traces.items())
+        for (pre, post), (trace, last_time) in items:
+            elapsed = now - last_time
+            if elapsed > self.config.eligibility_window:
+                continue
+            decayed = trace * (self.config.eligibility_decay ** (elapsed / 0.1))
+            if abs(decayed) < 1e-4:
+                continue
+            rows.append(((pre, post), decayed))
+        rows.sort(key=lambda r: -abs(r[1]))
+        return rows[:limit]
     
+    def timing_window(self) -> Tuple[float, float, float]:
+        """(window, tau_plus, tau_minus) in seconds, scaled to the real cadence.
+
+        The brain is sampled once per simulation tick. Whether that is every
+        second at 1x or every few milliseconds in a headless run, "one sample
+        apart" is the unit that means something; absolute seconds are not.
+        Until an interval has been observed, the configured absolutes apply.
+        """
+        interval = self.spike_tracker.sample_interval
+        if not interval:
+            return (self.config.time_window, self.config.tau_plus,
+                    self.config.tau_minus)
+        window = self.config.window_samples * interval
+        tau = max(1e-4, self.config.tau_samples * interval)
+        return window, tau, tau
+
     def compute_stdp_delta(self, pre_neuron: str, post_neuron: str,
                            connection_age: float = 1.0,
                            is_custom_neuron: bool = False) -> float:
@@ -343,23 +545,27 @@ class STDPLearner:
         
         # Compute time difference: positive means pre fired first
         dt = post_time - pre_time
-        
+
+        window, tau_plus, tau_minus = self.timing_window()
+
         # Check if within learning window
-        if abs(dt) > self.config.time_window:
+        if abs(dt) > window:
             return 0.0
         
         # Compute STDP delta using exponential decay
         if dt > 0:
             # Pre before post: LTP (causal, strengthen)
-            delta = self.config.A_plus * math.exp(-dt / self.config.tau_plus)
+            delta = self.config.A_plus * math.exp(-dt / tau_plus)
             self._ltp_count += 1
         elif dt < 0:
             # Post before pre: LTD (acausal, weaken)
-            delta = -self.config.A_minus * math.exp(dt / self.config.tau_minus)
+            delta = -self.config.A_minus * math.exp(dt / tau_minus)
             self._ltd_count += 1
         else:
-            # Simultaneous (very rare): small potentiation
-            delta = self.config.A_plus * 0.5
+            # Fired on the same sample. There is no ordering information here,
+            # so this is co-activation, not spike timing: the correlational
+            # rule already accounts for it and STDP says nothing.
+            return 0.0
         
         # Apply modifiers
         # 1. New connection boost
@@ -421,7 +627,7 @@ class STDPLearner:
             current_time: Optional timestamp
         """
         if current_time is None:
-            current_time = time.time()
+            current_time = self.clock()
             
         key = (pre_neuron, post_neuron)
         
@@ -449,7 +655,7 @@ class STDPLearner:
                                current_time: Optional[float] = None) -> float:
         """Get the current eligibility trace for a connection."""
         if current_time is None:
-            current_time = time.time()
+            current_time = self.clock()
             
         key = (pre_neuron, post_neuron)
         
@@ -468,23 +674,47 @@ class STDPLearner:
             decay_factor = self.config.eligibility_decay ** (elapsed / 0.1)
             return trace * decay_factor
     
-    def apply_reward_modulation(self, reward_signal: float) -> Dict[Tuple[str, str], float]:
+    def apply_reward_modulation(self, reward_signal: float,
+                                rate: Optional[float] = None
+                                ) -> Dict[Tuple[str, str], float]:
         """
         Apply reward modulation to all active eligibility traces.
-        
+
         This implements the third factor in three-factor learning rules:
         connections with positive eligibility traces are strengthened by
         positive rewards and weakened by negative rewards (and vice versa).
-        
+
+        `rate` is a LEARNING RATE, and callers should pass the same one the
+        correlational rule uses. An outcome touches every synapse that was
+        participating - often most of the network - so a fixed step per synapse
+        made a single reward worth more than a hundred plasticity commits, and
+        the reward channel simply flattened everything the squid's experience
+        had built. A rate keeps the two channels comparable.
+
         Args:
             reward_signal: Reward value (positive = good outcome, negative = bad)
-            
+            rate: Learning rate for the modulation
+
         Returns:
             Dictionary of (pre, post) -> weight_delta for all affected connections
         """
-        current_time = time.time()
+        if rate is None:
+            rate = self.config.reward_learning_rate
+        current_time = self.clock()
         weight_deltas = {}
-        
+
+        # One outcome carries a fixed budget of plasticity, shared among the
+        # synapses that earned it. Without this, making eligibility broader
+        # made learning stronger - which is backwards: if the whole network was
+        # active when something good happened, no synapse in particular is
+        # responsible, and the credit each one deserves goes DOWN, not up.
+        with QMutexLocker(self._mutex):
+            eligible = sum(
+                1 for (trace, last_time) in self._eligibility_traces.values()
+                if current_time - last_time <= self.config.eligibility_window
+                and abs(trace) >= 0.01)
+        share = self.config.credit_budget / max(self.config.credit_budget, eligible or 1)
+
         with QMutexLocker(self._mutex):
             for (pre, post), (trace, last_time) in list(self._eligibility_traces.items()):
                 # Skip expired traces
@@ -499,12 +729,23 @@ class STDPLearner:
                 if abs(current_trace) < 0.01:
                     continue
                 
-                # Weight delta = eligibility * reward
-                delta = current_trace * reward_signal * 0.1
+                # Weight delta = eligibility * reward * rate, diluted by how
+                # many other synapses have an equal claim on this outcome.
+                delta = current_trace * reward_signal * rate * share
                 weight_deltas[(pre, post)] = delta
-                
-                # Clear the trace after applying
-                self._eligibility_traces[(pre, post)] = (0.0, current_time)
+
+                # Consume the trace in PROPORTION to how much credit this
+                # outcome took, rather than clearing it outright.
+                #
+                # Clearing made credit assignment first-come-take-all: a squid
+                # doing two things at once had the first outcome to land
+                # consume the eligibility of both, and every later outcome in
+                # the same few seconds found nothing at all. A trace is a
+                # record of causal ordering, not a token that one reward is
+                # entitled to spend; what ends it is its own decay.
+                consumed = min(1.0, abs(reward_signal))
+                self._eligibility_traces[(pre, post)] = (
+                    current_trace * (1.0 - consumed), current_time)
         
         return weight_deltas
     
@@ -565,7 +806,7 @@ class STDPLearner:
         self.spike_tracker.cleanup_old_spikes()
         
         # Cleanup old eligibility traces
-        current_time = time.time()
+        current_time = self.clock()
         cutoff = current_time - self.config.eligibility_window * 2
         
         with QMutexLocker(self._mutex):

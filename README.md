@@ -46,17 +46,25 @@ The project is designed to make artificial cognition visible.
 
 Instead of hiding intelligence inside millions of parameters, Dosidicus starts with just eight neurons. Every connection can be inspected. Every activation can be visualised. Every learned behaviour can be traced back to experience.
 
-As the squid lives, its brain rewires itself through Hebbian learning, strengthens useful pathways using [STDP](https://github.com/ViciousSquid/Dosidicus/wiki/Spike%E2%80%90Timing%E2%80%90Dependent-Plasticity-(STDP)), and grows entirely new neurons through neurogenesis.
+As the squid lives, its brain rewires itself through Hebbian learning, strengthens useful pathways using [STDP](https://github.com/ViciousSquid/Dosidicus/wiki/Spike%E2%80%90Timing%E2%80%90Dependent-Plasticity-(STDP)), works out which of its own actions cause which consequences, and grows entirely new neurons when its existing structure cannot cope.
+
+And it can tell you all of it. Every synaptic change and every grown neuron records **why** — the mechanism, the evidence, the experience, the action, the consequence — and the brain tools read that record rather than reconstructing an approximation of it:
+
+> *"Why did this weight change from 0.31 to 0.47?"*
+> *"Why does this neuron exist?"*
+> *"What does the squid know about food?"*
 
 No two brains ever develop the same way.
 
-Every save file becomes a permanent cognitive history.
+Every save file becomes a permanent cognitive history — the provenance is saved with the squid.
 
 ## As the caretaker you will
 
 - Feed, clean and care for your squid.
 - Introduce it to new experiences.
 - Watch neurons fire in real time.
+- Read, in plain English, everything it has learned and what taught it.
+- Trace any synapse back to the experience that changed it.
 - Watch memories form and influence future behaviour.
 - Observe fears, habits and preferences emerge.
 - Raise a brain unlike anyone else's.
@@ -67,9 +75,11 @@ Every save file becomes a permanent cognitive history.
 * No TensorFlow. No PyTorch.
 * [Wire your own](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) squid brain, add or erase entire behaviours
 * Fully visible neuron activations
-* Structural growth over time
+* Full provenance: every weight change and every new neuron records its cause
+* Capability-driven structural growth — new neurons appear when the network genuinely cannot cope, not because an event happened
+* Action → consequence learning with temporal credit assignment
 * Dual memory system
-* Headless training mode
+* Headless training mode, running the identical engine
 
 Most AI is a black box: Dosidicus lets you see the mind forming - every neuron is visible & understandable.
 

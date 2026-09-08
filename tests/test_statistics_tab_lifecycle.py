@@ -120,9 +120,14 @@ class StatisticsTabLifecycleTests(unittest.TestCase):
                     debug_mode=False,
                     config=None,
                 )
-                self.assertEqual(window.tabs.count(), 7)
+                self.assertEqual(window.tabs.count(), 8)
                 self.assertGreaterEqual(
                     window.tabs.indexOf(window.statistics_tab),
+                    0,
+                )
+                # Transparency is a first-class tab, not an optional extra.
+                self.assertGreaterEqual(
+                    window.tabs.indexOf(window.knowledge_tab),
                     0,
                 )
                 self.assertFalse(hasattr(window, "learning_tab"))

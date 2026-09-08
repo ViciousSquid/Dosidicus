@@ -20,6 +20,7 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 - Custom [simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview) using Numpy - **No Tensorflow or PyTorch**
 - Most AI is a **black box**; Dosidicus is **transparent** - every neuron is visible, stimulatable, understandable.
 - Starts with 8 neurons — grows via **neurogenesis** and rewires using **Hebbian learning**.
+- Every synaptic change and every grown neuron records **why**, and the inspection tools read that record rather than reconstructing it.
 - Includes `achievements` with **50** to collect!
 
  <img src="https://github.com/user-attachments/assets/23e98046-23a6-44a1-b4c8-a57abfff5501" width="180">
@@ -61,7 +62,8 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 | [Technical Overview](neural-network/Technical-Overview.md) | Neural network architecture |
 | [Hebbian Learning](neural-network/Hebbian-Learning.md) | Weight update algorithm |
 | [STDP](neural-network/STDP.md) | Spike-Timing-Dependent Plasticity |
-| [Neurogenesis](neural-network/Neurogenesis.md) | Creating new neurons at runtime |
+| [Causal Learning](neural-network/Causal-Learning.md) | Discovering what its own actions cause |
+| [Neurogenesis](neural-network/Neurogenesis.md) | Capability-driven structural growth |
 | [Experience Buffer](neural-network/Experience-Buffer.md) | Short/long-term memory experiences |
 | [Vision System](neural-network/Vision-System.md) | Food detection via vision cone |
 | [Personality](neural-network/Personality.md) | The 7 personality types |
@@ -77,6 +79,7 @@ Micro neural engine for small autonomous agents that learn via Hebbian dynamics 
 | [Brain Trainer (Headless)](brain-tool/Brain-Trainer-Headless.md) | CLI training without a GUI |
 | [Network Tab](brain-tool/Network-Tab.md) | Visualising the neuron network |
 | [Learning Tab](brain-tool/Learning-Tab.md) | Monitoring learning in real time |
+| [Knowledge Tab](brain-tool/Knowledge-Tab.md) | What the squid knows, and why |
 | [Memory Tab](brain-tool/Memory-Tab.md) | Inspecting memory contents |
 | [Decisions Tab](brain-tool/Decisions-Tab.md) | Watching decision-making live |
 | [Personality Tab](brain-tool/Personality-Tab.md) | Adjusting personality traits |
@@ -96,7 +99,7 @@ Documentation for individual source files:
 | [memory_manager.py](source-reference/memory_manager.py.md) | [brain_render_worker.py](source-reference/brain_render_worker.py.md) |
 | [vision_worker.py](source-reference/vision_worker.py.md) | [brain_neuron_hooks.py](source-reference/brain_neuron_hooks.py.md) |
 | [custom_brain_loader.py](source-reference/custom_brain_loader.py.md) | [brain_neuron_outputs.py](source-reference/brain_neuron_outputs.py.md) |
-| [designer_window.py](source-reference/designer_window.py.md) | [neurogenesis_show.py](source-reference/neurogenesis_show.py.md) |
+| [designer_window.py](source-reference/designer_window.py.md) | |
 
 ---
 

@@ -78,6 +78,23 @@ def tearDownModule():
             BRAIN.stop_worker()
     except Exception:
         pass
+    # A BrainWidget owns a render thread. Leaving it running means Qt aborts
+    # the process when the widget is finally collected, which happens after
+    # unittest has already printed OK - so a green run still exited 134 and any
+    # CI watching the exit code called it a failure.
+    try:
+        if BRAIN is not None:
+            BRAIN._cleanup_render_worker()
+    except Exception:
+        pass
+    for timer_name in ('neurogenesis_timer', 'animation_timer', '_render_timer',
+                       '_brain_export_timer', '_link_fade_timer'):
+        timer = getattr(BRAIN, timer_name, None) if BRAIN is not None else None
+        if timer is not None:
+            try:
+                timer.stop()
+            except Exception:
+                pass
     if _PREV_CWD:
         os.chdir(_PREV_CWD)
     if _TMPDIR is not None:
@@ -419,6 +436,59 @@ class PersistenceTests(NeuralPipelineTestCase):
         self.assertEqual(BRAIN.weights[("anxiety", "persist_neuron")], 0.77)
         self.assertTrue(before_functional <= set(BRAIN.enhanced_neurogenesis.functional_neurons))
 
+    def test_cognitive_history_survives_a_round_trip(self):
+        """A save file is a cognitive history, or it is just a snapshot.
+
+        The weights alone tell you what the squid became; the provenance tells
+        you why, and that is the thing the project is actually about.
+        """
+        self.add_neuron("provenance_neuron", position=(222, 333))
+        BRAIN.apply_weight_change(("anxiety", "provenance_neuron"), value=0.42,
+                                  mechanism='hebbian',
+                                  detail={'correlation': 0.55, 'samples': 123})
+        BRAIN.ledger.record_neuron_birth(
+            "provenance_neuron", 'representation',
+            "nothing in the network told this situation apart",
+            remedy="fire when it happens", neuron_type='novelty',
+            specialization='general_novelty_processing',
+            display_name='Novelty: General Novelty Processing')
+
+        before = BRAIN.ledger.summary()
+        before_reason = BRAIN.explain_weight(("anxiety", "provenance_neuron"))
+
+        LOGIC.save_game(is_autosave=False)
+        LOGIC.load_game()
+
+        after = BRAIN.ledger.summary()
+        self.assertEqual(after['weight_changes'], before['weight_changes'])
+        self.assertIn("provenance_neuron", BRAIN.ledger.origins)
+        self.assertIn("123 observations",
+                      BRAIN.explain_weight(("anxiety", "provenance_neuron")))
+        self.assertIn("kept happening together", before_reason)
+
+    def test_a_grown_neuron_can_always_say_why_it_exists(self):
+        neuro = BRAIN.enhanced_neurogenesis
+        name = neuro.create_neuron("novelty", brain_state=dict(BRAIN.state),
+                                   environment={})
+        if name is None:
+            self.skipTest("novelty neuron capped by neurogenesis limits")
+        self.addCleanup(self._drop_neuron, name)
+
+        answer = BRAIN.explain_neuron(name)
+        self.assertTrue(answer)
+        self.assertNotIn("There is no neuron", answer)
+        self.assertIn("grown", answer.lower())
+
+    def test_every_weight_change_lands_in_the_ledger(self):
+        """Nothing may move a synapse without saying why."""
+        self.add_neuron("audited_neuron")
+        before = BRAIN.ledger.summary()['weight_changes']
+        BRAIN.apply_weight_change(("anxiety", "audited_neuron"), value=0.3,
+                                  mechanism='designer')
+        BRAIN.strengthen_connection("anxiety", "audited_neuron", 0.1)
+        BRAIN.remove_weight(("anxiety", "audited_neuron"), reason="test cleanup")
+        self.assertEqual(BRAIN.ledger.summary()['weight_changes'], before + 3)
+
     def test_output_bindings_survive_a_round_trip(self):
         from src.brain_neuron_outputs import OutputTriggerMode
 
@@ -514,6 +584,99 @@ class NeurogenesisTests(NeuralPipelineTestCase):
             tick()
 
         self.assertNotAlmostEqual(BRAIN.state[name], start, places=3)
+
+
+# ---------------------------------------------------------------------------
+# 5b. Acquiring a concrete fact, and explaining it
+# ---------------------------------------------------------------------------
+class ConcreteKnowledgeTests(NeuralPipelineTestCase):
+    """The headline claim: it learns something nameable, and can say why."""
+
+    EDGE = ("can_see_food", "satisfaction")
+
+    def _live(self, kind, ticks=600):
+        """Run a controlled life and return the synapse it produced.
+
+        kind='cared'  - seeing food is followed by satisfaction rising
+        kind='harmed' - seeing food is followed by satisfaction falling
+        """
+        BRAIN.weights[self.EDGE] = 0.0
+        BRAIN.ledger.reset()
+        BRAIN.plasticity.reset()
+        for i in range(ticks):
+            seeing = (i % 12) < 4
+            BRAIN.state["can_see_food"] = 100.0 if seeing else 0.0
+            good = seeing if kind == "cared" else not seeing
+            SQUID.satisfaction = 80.0 if good else 25.0
+            BRAIN.state["satisfaction"] = SQUID.satisfaction
+            BRAIN.observe_for_learning()
+            if i % 40 == 39:
+                BRAIN.perform_hebbian_learning()
+        return BRAIN.weights.get(self.EDGE, 0.0)
+
+    def test_the_same_brain_learns_opposite_things_from_opposite_lives(self):
+        cared = self._live("cared")
+        harmed = self._live("harmed")
+        self.assertGreater(cared, 0.15,
+                           "a squid fed whenever it saw food learned nothing good about food")
+        self.assertLess(harmed, -0.15,
+                        "a squid that suffered whenever it saw food learned no aversion")
+
+    def test_the_learned_fact_can_be_explained_in_plain_english(self):
+        self._live("cared")
+        knowledge = [k for k in BRAIN.what_do_you_know("food") if k.edge == self.EDGE]
+        self.assertTrue(knowledge, "the squid cannot say what it learned about food")
+        item = knowledge[0]
+        self.assertIn("can see food", item.statement.lower())
+        self.assertIn("goes up", item.statement)
+        self.assertTrue(item.experience, "no experience was named")
+        self.assertIn("correlation", item.reason)
+        self.assertGreater(item.confidence, 0.5)
+
+    def test_every_individual_weight_change_behind_it_is_recoverable(self):
+        final = self._live("cared")
+        history = BRAIN.ledger.weight_history(self.EDGE, limit=50)
+        self.assertGreater(len(history), 3,
+                           "the changes that produced the fact were not recorded")
+
+        # The recorded steps must actually add up to the weight it now has.
+        self.assertAlmostEqual(history[-1].new_weight, final, places=6)
+        for event in history:
+            self.assertEqual(event.mechanism, "hebbian")
+            self.assertIsNotNone(event.detail.get("correlation"))
+            self.assertTrue(event.detail.get("samples"))
+
+        answer = BRAIN.explain_weight(self.EDGE)
+        self.assertIn("0.000", answer)
+        self.assertIn("kept happening together", answer)
+        self.assertIn("observations", answer)
+
+    def test_the_laboratory_reconstructs_the_same_account(self):
+        """The inspection tool must read the brain, not re-derive it."""
+        from src.laboratory import NeuronLaboratory
+
+        self._live("cared")
+        lab = NeuronLaboratory(BRAIN)
+        lab.select_neuron_by_name("satisfaction")
+        APP.processEvents()
+
+        shown = []
+        for i in range(lab.inspector_lay.count()):
+            widget = lab.inspector_lay.itemAt(i).widget()
+            if widget is None:
+                continue
+            shown.extend(label.text() for label in widget.findChildren(QtWidgets.QLabel))
+        blob = " ".join(shown)
+
+        # The Laboratory names neurons the way the Knowledge tab does, so the
+        # two never describe the same synapse differently.
+        self.assertIn("can see food", blob,
+                      "the synapse is missing from the inspector")
+        self.assertIn("kept happening together", blob,
+                      "the Laboratory shows the weight but not why it is that value")
+        self.assertIn("above its resting level", blob,
+                      "the Laboratory shows the weight without saying what it "
+                      "means for the squid")
 
 
 # ---------------------------------------------------------------------------

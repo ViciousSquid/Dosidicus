@@ -16,3 +16,12 @@ dist/
 # OS / editor cruft
 .DS_Store
 Thumbs.db
+
+# Runtime output written by a running squid
+saves/
+_memory/
+logs/
+learning_events.json
+neurogenesis_log.txt
+network_evolution_*.json
+training_data/

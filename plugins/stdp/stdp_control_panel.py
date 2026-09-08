@@ -387,9 +387,9 @@ class STDPControlPanel(QtWidgets.QDialog):
     # ── Config helpers ─────────────────────────────────────────────────────
 
     def _set_cfg(self, attr: str, value: float):
+        # plugin.config IS the engine's live STDPConfig, so this tunes the real
+        # learning rule rather than a copy the plugin keeps to itself.
         setattr(self.plugin.config, attr, value)
-        if self.plugin.stdp_learner:
-            setattr(self.plugin.stdp_learner.config, attr, value)
 
     def _reset_stats(self):
         self.plugin.reset_stats()
