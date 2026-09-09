@@ -1,0 +1,29 @@
+             WORLD
+               │
+               ▼
+        objective events
+               │
+               ▼
+          MULTIPLAYER
+               │
+        ┌──────┴──────┐
+        ▼             ▼
+     Squid A        Squid B
+        │             │
+    perception    perception
+        │             │
+      brain           brain
+        │             │
+     action          action
+        │             │
+        └──── event ──┘
+               │
+               ▼
+       consequences
+               │
+        ┌──────┴──────┐
+        ▼             ▼
+      A memory      B memory
+        │             │
+        ▼             ▼
+     A learns       B learns
