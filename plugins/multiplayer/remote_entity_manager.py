@@ -487,6 +487,43 @@ class RemoteEntityManager:
         cone_item.setBrush(QtGui.QBrush(QtGui.QColor(q_color.red(),q_color.green(),q_color.blue(),25)))
         cone_item.setZValue(visual_item.zValue()-1); self.scene.addItem(cone_item); remote_squid_info['view_cone']=cone_item
 
+    def show_notice_icon(self, node_id: str, duration_ms: int = 3000) -> bool:
+        """Flash the exclamation icon above a visiting squid.
+
+        The visitor's own body is on this screen, so this is where its "I have
+        noticed you" has to be drawn - its real squid is hidden in its own tank
+        for the duration of the visit. Same artwork the resident uses, so the
+        two squid noticing each other reads as one event.
+        """
+        info = self.remote_squids.get(node_id)
+        if not info or not info.get('visual'):
+            return False
+        icon = info.get('notice_icon')
+        if icon is None:
+            pixmap = QtGui.QPixmap(os.path.join("images", "curious.png"))
+            if pixmap.isNull():
+                return False
+            icon = QtWidgets.QGraphicsPixmapItem(pixmap)
+            icon.setZValue(500)
+            self.scene.addItem(icon)
+            info['notice_icon'] = icon
+        visual = info['visual']
+        icon.setPos(visual.x() + visual.boundingRect().width() / 2
+                    - icon.pixmap().width() / 2,
+                    visual.y() - 100)
+        icon.setVisible(True)
+        QtCore.QTimer.singleShot(duration_ms,
+                                 lambda: self.hide_notice_icon(node_id))
+        return True
+
+    def hide_notice_icon(self, node_id: str) -> None:
+        info = self.remote_squids.get(node_id)
+        if not info:
+            return
+        icon = info.pop('notice_icon', None)
+        if icon is not None and icon.scene() is self.scene:
+            self.scene.removeItem(icon)
+
     def _create_arrival_animation(self, visual_item):
         if hasattr(visual_item, 'setOpacity'): visual_item.setOpacity(self.remote_opacity)
         if hasattr(visual_item, 'setScale'): visual_item.setScale(1.0)

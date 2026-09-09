@@ -961,7 +961,17 @@ class Squid:
                     'squid_width': self.squid_width,
                     'squid_height': self.squid_height,
                     'window_width': self.ui.window_width,
-                    'window_height': self.ui.window_height
+                    'window_height': self.ui.window_height,
+                    # Who is asking to come in. The host needs this to decide
+                    # whether to admit the visitor at all, and to recognise it
+                    # if it has been here before.
+                    'identity': {
+                        'uuid': str(getattr(self, 'uuid', '')),
+                        'name': getattr(self, 'name', 'Squid'),
+                        'personality': str(getattr(getattr(self, 'personality', None),
+                                                   'value', '') or 'unknown'),
+                        'protocol': 1,
+                    },
                 }
                 
                 print("Exit Data Details:")
@@ -1052,7 +1062,16 @@ class Squid:
                         'squid_width': self.squid_width,
                         'squid_height': self.squid_height,
                         'window_width': self.ui.window_width,
-                        'window_height': self.ui.window_height
+                        'window_height': self.ui.window_height,
+                        # See the other exit payload: the host cannot consent
+                        # to, or recognise, a visitor it cannot identify.
+                        'identity': {
+                            'uuid': str(getattr(self, 'uuid', '')),
+                            'name': getattr(self, 'name', 'Squid'),
+                            'personality': str(getattr(getattr(self, 'personality', None),
+                                                       'value', '') or 'unknown'),
+                            'protocol': 1,
+                        },
                     }
                     
                     print("Exit Data:")
@@ -2003,58 +2022,96 @@ class Squid:
         distance = math.sqrt((squid_center_x - food_x)**2 + (squid_center_y - food_y)**2)
         return distance < 100  # Adjust the distance threshold as needed
     
-    def process_squid_detection(self, remote_node_id, is_visible=True):
-        """
-        Process the detection of another squid in this squid's vision cone
-        
+    def process_squid_detection(self, peer_id, is_visible=True):
+        """Another squid has come into view, or gone out of it.
+
+        What this NO LONGER does is reach into the squid's drives and add 15
+        curiosity and 10 anxiety. That was a rule outside the network deciding
+        how meeting a squid feels, which is exactly the shape of thing the
+        decision engine stopped doing in v5: it made the reaction the same for
+        every squid and put it somewhere no experience could ever change it.
+
+        What happens instead is that the arrival is reported to the senses.
+        Novelty goes through external_stimulus, which is the channel every
+        other new thing in the tank already uses, and a genuinely startling
+        arrival fires the startle reflex - a pathway with synapses on it, which
+        personality already tilts and learning can still move. Whether the
+        squid is curious or frightened is then something its own network works
+        out, and two squid can answer differently.
+
         Args:
-            remote_node_id (str): ID of the detected squid
+            peer_id (str): persistent identity of the detected squid
             is_visible (bool): Whether the squid is currently visible
         """
         # Only react if the squid is not sleeping
         if self.is_sleeping:
             return
-        
+
+        peer_id = str(peer_id)
+        if not hasattr(self, '_seen_squids'):
+            self._seen_squids = set()
+
         if is_visible:
-            # Detected a new squid or is continuing to see it
-            
-            # Increase curiosity when first detected
-            if not hasattr(self, '_seen_squids') or remote_node_id not in self._seen_squids:
-                # First time seeing this squid
-                self.curiosity = min(100, self.curiosity + 15)
-                
-                # Small anxiety spike from the surprise
-                self.anxiety = min(100, self.anxiety + 10)
-                
-                # Add memory
-                self.memory_manager.add_short_term_memory(
-                    'social', 'squid_detection',
-                    f"Detected another squid (ID: {remote_node_id[-4:]})"
-                )
-                
-                # Initialize tracking of seen squids if needed
-                if not hasattr(self, '_seen_squids'):
-                    self._seen_squids = set()
-                
-                # Add to seen squids
-                self._seen_squids.add(remote_node_id)
-                
-                # Chance to get startled
-                if random.random() < 0.3:  # 30% chance
-                    # Try to use the startle function if it exists
-                    if hasattr(self.tamagotchi_logic, 'startle_squid'):
-                        self.tamagotchi_logic.startle_squid(source="detected_squid")
-            else:
-                # Already seen this squid before, smaller reaction
-                self.curiosity = min(100, self.curiosity + 5)
+            first_sight = peer_id not in self._seen_squids
+            if not first_sight:
+                return
+            self._seen_squids.add(peer_id)
+
+            # A squid appearing is a new object in the world. Reported through
+            # the sense that already means that, rather than as a stat edit.
+            logic = getattr(self, 'tamagotchi_logic', None)
+            hooks = getattr(logic, 'brain_hooks', None)
+            if hooks is not None and hasattr(hooks, 'on_object_spawned'):
+                hooks.on_object_spawned('conspecific')
+
+            # Show that it has noticed. Purely a display, and separate from
+            # the real curious state - see show_noticed_squid_icon.
+            self.show_noticed_squid_icon()
+
+            # A reflex, not a rule: is_startled drives act_flee through an
+            # ordinary synapse that INNATE_PERSONALITY_BIAS has already tilted,
+            # so a timid squid and a stubborn one respond differently to the
+            # same arrival without anything here knowing that they should.
+            if random.random() < 0.3:  # 30% chance
+                if logic is not None and hasattr(logic, 'startle_squid'):
+                    logic.startle_squid(source="detected_squid")
         else:
-            # Lost sight of a squid
-            # Nothing special happens, just note it
-            if hasattr(self, '_seen_squids') and remote_node_id in self._seen_squids:
-                self.memory_manager.add_short_term_memory(
-                    'social', 'squid_lost',
-                    f"Lost sight of squid (ID: {remote_node_id[-4:]})"
-                )
+            self._seen_squids.discard(peer_id)
+
+    #: How long the "I have noticed another squid" icon stays up.
+    NOTICED_SQUID_ICON_MS = 3000
+
+    def show_noticed_squid_icon(self):
+        """Flash the exclamation icon on first sight of another squid.
+
+        This shares the curious icon's ARTWORK and nothing else. It is its own
+        mental state, so turning it on and off cannot disturb the real curious
+        state - a squid that happens to be genuinely curious when a visitor
+        arrives keeps being curious for exactly as long as it would have.
+
+        Shown once per individual per first sighting: process_squid_detection
+        only reaches here on the first sight of a given peer, and the squid
+        forgets a peer when it loses track of it, so a visitor that comes back
+        later is noticed again.
+        """
+        manager = getattr(self, 'mental_state_manager', None)
+        if manager is None or not hasattr(manager, 'set_state'):
+            return
+        try:
+            manager.set_state("noticed_squid", True)
+            QtCore.QTimer.singleShot(self.NOTICED_SQUID_ICON_MS,
+                                     self.hide_noticed_squid_icon)
+        except Exception as exc:
+            print(f"[Squid] could not show the noticed-squid icon: {exc}")
+
+    def hide_noticed_squid_icon(self):
+        manager = getattr(self, 'mental_state_manager', None)
+        if manager is None or not hasattr(manager, 'set_state'):
+            return
+        try:
+            manager.set_state("noticed_squid", False)
+        except Exception:
+            pass
 
     def react_to_rock_throw(self, source_node_id, is_target=False):
         """

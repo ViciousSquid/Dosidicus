@@ -779,17 +779,43 @@ class NeuronOutputMonitor:
             squid.move_randomly()
 
     def _handle_approach_rock(self, neuron_name, activation, squid, tamagotchi_logic=None, **kwargs):
+        """Swim at an object. Sometimes another squid had a claim to it.
+
+        One action, two situations. When the object the squid is going for is
+        nearer another squid than to itself, taking it is a contest, and the
+        tank changes in a way both squid can perceive. The squid did not
+        decide to contest anything and has no capability for it: it decided to
+        go and get that object, and the situation supplied the rest.
+        """
         if not squid or not tamagotchi_logic:
             return
         rocks = self._nearby_rocks(squid, tamagotchi_logic, 300)
         if not rocks:
             return
-        nearest = min(rocks, key=lambda r: self._dist_to_squid(r, squid))
-        squid.status = "approaching_rock"
-        squid.current_rock_target = nearest
+
+        contested, rival = self._contested_item(squid, tamagotchi_logic, rocks)
+        target = contested if contested is not None else min(
+            rocks, key=lambda r: self._dist_to_squid(r, squid))
+
+        # Reported distinctly so the causal ledger has two actions to tell
+        # apart. Whether the squid's network CAN tell them apart is the open
+        # question; naming them is what lets the capability monitor ask it.
+        squid.status = "contesting" if contested is not None else "approaching_rock"
+        squid.current_rock_target = target
         if hasattr(squid, 'set_neural_drive'):
-            squid.set_neural_drive('approach_rock', duration=6.0, target=nearest,
+            squid.set_neural_drive('approach_rock', duration=6.0, target=target,
                                    priority=squid.DRIVE_URGE)
+
+        if contested is None:
+            return
+        taken = False
+        if (self._dist_to_squid(contested, squid) <= 120
+                and not getattr(squid, 'carrying_rock', False)
+                and hasattr(squid, 'pick_up_rock')):
+            taken = bool(squid.pick_up_rock(contested))
+        view = getattr(tamagotchi_logic, 'conspecific_view', None)
+        if view is not None and hasattr(view, 'note_contest'):
+            view.note_contest(rival, contested, taken=taken, squid=squid)
 
     def _handle_throw_rock(self, neuron_name, activation, squid, **kwargs):
         if squid and getattr(squid, 'carrying_rock', False):
@@ -838,6 +864,38 @@ class NeuronOutputMonitor:
             squid.pursuing_food = True
             squid.set_neural_drive('seek_food', duration=4.0, target=(c.x(), c.y()),
                                    priority=squid.DRIVE_URGE)
+
+    @staticmethod
+    def _contested_item(squid, logic, candidates):
+        """The nearest of `candidates` that is closer to another squid than to us.
+
+        This is what makes an approach a CONTEST, and note where the fact
+        lives: in the tank, not in the squid. A squid does not need a
+        dedicated contest capability any more than it needs a dedicated
+        capability for picking up a rock that happens to be blue. It swims at
+        an object; whether another squid had a claim to that object is a
+        property of the situation it swam into.
+
+        Whether the squid can tell the two situations apart - whether anything
+        in its brain fires differently for a contested rock than a free one -
+        is exactly the question the capability monitor exists to ask, and it
+        can only ask it if both are reachable by the same action.
+        """
+        view = getattr(logic, 'conspecific_view', None)
+        rival = view.nearest() if view is not None else None
+        if rival is None or not candidates:
+            return None, None
+        rx, ry = rival.x, rival.y
+        contested = []
+        for item in candidates:
+            centre = item.sceneBoundingRect().center()
+            to_rival = ((centre.x() - rx) ** 2 + (centre.y() - ry) ** 2) ** 0.5
+            to_self = NeuronOutputMonitor._dist_to_squid(item, squid)
+            if to_rival < to_self:
+                contested.append((to_self, item))
+        if not contested:
+            return None, rival
+        return min(contested, key=lambda pair: pair[0])[1], rival
 
     # ---- helpers -----------------------------------------------------------
     @staticmethod

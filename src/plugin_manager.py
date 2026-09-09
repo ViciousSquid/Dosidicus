@@ -86,7 +86,7 @@ class PluginManager:
         self.auto_load_blacklist: set[str] = {"multiplayer"}  ### FIX: Stop Multiplayer plugin freaking out at startup  ** ESSENTIAL **
                                                                 ## This is super important. All plugins start austomatically unless
                                                                 ## specifically blacklisted here... DO NOT LET MULTIPLAYER AUTO START.
-                                                                ## (stdp is allowed to auto-start; it is gated instead by its own
+                                                                ## (everything else is gated by its own
                                                                 ##  is_enabled_by_default flag and the whitelist.)
 
         self.auto_load_allowlist: set[str] = set()  # If non-empty, ONLY these plugins load

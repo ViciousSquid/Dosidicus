@@ -10,8 +10,12 @@ from its environment": waking experience proposes, sleep disposes.
 The replay algorithm itself lives in src/sleep_consolidation.py (formerly
 plugins/sleep_replay/replay_core.py). This module is the engine-side owner:
 it samples during waking hours, runs the replay session when the squid falls
-asleep, and applies the results to the live network. The Sleep Replay plugin
-is now a control surface over this instance rather than a second copy.
+asleep, and applies the results to the live network.
+
+There is no Sleep Replay plugin any more. It became a control surface over
+this instance once the algorithm moved here, and then there was nothing left
+for it to switch on: consolidation is not optional, and a squid that could be
+shipped without it would be a squid that never consolidates anything.
 """
 
 from __future__ import annotations
@@ -226,7 +230,7 @@ class ConsolidationManager:
         return protected
 
     # ------------------------------------------------------------------
-    # Manual control (used by the Sleep Replay control panel)
+    # Manual control - for experiments that cannot wait for a real night.
     # ------------------------------------------------------------------
     def force_consolidation(self, max_cycles: int = 200) -> Optional[Dict]:
         """Run a full consolidation pass now, even while the squid is awake.

@@ -2121,6 +2121,12 @@ class TamagotchiLogic:
         elif 'distressed' in status_lower:
             return 'distressed'
         
+        # Encounters with another squid. These have to be nameable actions or
+        # causal_learning sees 'idle' (a _NON_ACTION) and drops the episode,
+        # so nothing an encounter causes could ever be attributed to it.
+        elif 'contesting' in status_lower:
+            return 'contesting'
+
         # Exploration behaviors
         elif 'exploring' in status_lower:
             return 'exploring'

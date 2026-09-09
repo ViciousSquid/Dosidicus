@@ -55,6 +55,14 @@ class NetworkNode:
         self._seen_message_ids: dict = {}  # {(node_id, timestamp): time_first_seen}
         self._dedup_ttl: float = 10.0      # seconds before a seen-key is expired
 
+        # Traffic counters. The dashboard reported "N/A" for these, which is
+        # why a plugin that could send but never listened looked healthy: there
+        # was no number anywhere that would have been zero.
+        self.messages_sent = 0
+        self.messages_received = 0
+        self.packets_dropped_self = 0
+        self.packets_dropped_duplicate = 0
+
         self.known_nodes = {} # Stores info about other detected nodes
         self.last_sync_time = 0 # Timestamp of the last sync operation
         self.debug_mode = False # Controlled by MultiplayerPlugin
@@ -498,6 +506,8 @@ class NetworkNode:
                     sent_ok = True
                 except OSError as e_send:
                     self.logger.warning(f"[MCAST] Send on interface {iface_ip} failed: {e_send}")
+            if sent_ok:
+                self.messages_sent += 1
 
             if self.debug_mode and message_type not in ['object_sync', 'squid_move', 'heartbeat']:
                 self.logger.debug(f"Sent '{message_type}' ({len(data_to_send)} bytes) on {len(send_ips)} interface(s).")
@@ -653,6 +663,7 @@ class NetworkNode:
             
             # Critical filter: Ignore messages from self
             if final_sender_node_id == self.node_id:
+                self.packets_dropped_self += 1
                 continue
 
             # ── Deduplication ────────────────────────────────────────────────────────
@@ -669,6 +680,7 @@ class NetworkNode:
             }
             msg_dedup_key = (final_sender_node_id, message_dict.get('timestamp'))
             if msg_dedup_key in self._seen_message_ids:
+                self.packets_dropped_duplicate += 1
                 if self.debug_mode:
                     self.logger.debug(
                         f"Dropping duplicate message key={msg_dedup_key} from {addr}"
@@ -690,6 +702,7 @@ class NetworkNode:
             if message_dict.get('type') == 'squid_exit' and isinstance(squid_info_for_known_nodes.get('payload'), dict):
                 squid_info_for_known_nodes = squid_info_for_known_nodes.get('payload')
 
+            self.messages_received += 1
             self.known_nodes[final_sender_node_id] = (addr[0], time.time(), squid_info_for_known_nodes)
             
             # Add the fully processed message and its original address to the list for the caller

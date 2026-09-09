@@ -11,6 +11,94 @@ from .brain_constants import (
 )
 
 
+def action_activations(brain_state):
+    """The squid's behaviour, as the network currently computes it."""
+    return {
+        ACTION_BEHAVIOURS[name]: max(0.0, _activation_of(brain_state, name))
+        for name in ACTION_NEURONS
+    }
+
+
+def _activation_of(brain_state, name):
+    raw = brain_state.get(name, 0.0)
+    if isinstance(raw, bool):
+        return 100.0 if raw else 0.0
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def wants(name, activation):
+    """Is this urge strong enough to act on?
+
+    The threshold is the one the action's own output binding fires at
+    (ACTION_THRESHOLDS), not a number invented here, so an urge can never be
+    "chosen" at a level too weak to reach the body.
+    """
+    return activation >= ACTION_THRESHOLDS.get(name, 50.0)
+
+
+def rank_actions(activations):
+    """How far past its OWN threshold each urge is, as a fraction of the room
+    it had left.
+
+    Comparing raw activations would be unfair between actions whose thresholds
+    differ - a 50 is a strong wish to flee and a weak wish to eat.
+
+    Two kinds of action sit out the contest. FALLBACK_ACTION (swimming) is what
+    the squid does when nothing else is worth doing, so it is a fallback rather
+    than a competitor a mild but genuine urge would have to outrank.
+    REFLEX_ACTIONS (inking) are never chosen at all - they fire through their
+    own binding while the squid gets on with whatever it decided.
+    """
+    urgency = {}
+    skip = set(REFLEX_ACTIONS) | {FALLBACK_ACTION}
+    for name in ACTION_NEURONS:
+        if name in skip:
+            continue
+        behaviour = ACTION_BEHAVIOURS[name]
+        value = activations.get(behaviour, 0.0)
+        if not wants(name, value):
+            continue
+        threshold = ACTION_THRESHOLDS.get(name, 50.0)
+        headroom = max(1.0, 100.0 - threshold)
+        urgency[behaviour] = (value - threshold) / headroom
+    return urgency
+
+
+def select_action(brain_state, jitter=True):
+    """Which behaviour this brain state wants, and how sure it is.
+
+    THE one definition of the rule. It is a module-level function rather than
+    a method because a squid VISITING ANOTHER TANK has to be able to use it:
+    its body is on the host machine but its brain is still here, and the whole
+    point of the remote-mind round trip is that the visiting squid's action is
+    chosen by exactly the arithmetic that would have chosen it at home. A
+    second copy of this rule living in the multiplayer plugin would be a
+    second squid, and the two would drift.
+
+    Returns (behaviour, confidence, urgency). `behaviour` is None when nothing
+    clears its own threshold, which is the caller's cue to fall back to
+    locomotion - or, for a sleeping squid whose act_move is held down by the
+    sleep gating, to nothing at all.
+    """
+    activations = action_activations(brain_state)
+    if jitter:
+        # A small amount of noise, so a squid whose two strongest urges are
+        # neck and neck does not lock onto one of them forever. This is the
+        # only number in this file that is not a synapse.
+        activations = {k: v * random.uniform(0.94, 1.06)
+                       for k, v in activations.items()}
+    urgency = rank_actions(activations)
+    if not urgency:
+        return None, 0.0, activations
+    winner = max(urgency, key=urgency.get)
+    ordered = sorted(urgency.values(), reverse=True)
+    confidence = 1.0 if len(ordered) < 2 else (ordered[0] - ordered[1]) / ordered[0]
+    return winner, confidence, urgency
+
+
 class DecisionEngine:
     """Reads the squid's behaviour off its own network.
 
@@ -170,50 +258,23 @@ class DecisionEngine:
         # any more - a synapse is not a multiplier applied after the fact.
         decision_data['innate_drivers'] = self._innate_drivers(brain_state)
 
-        # A small amount of noise, so a squid whose two strongest urges are
-        # neck and neck does not lock onto one of them forever. This is the
-        # only number in this file that is not a synapse.
-        jittered = {k: v * random.uniform(0.94, 1.06) for k, v in weights.items()}
-        decision_data['adjusted_weights'] = jittered
+        # The rule itself lives at module level (select_action), because a
+        # squid visiting another tank chooses its action with the same
+        # arithmetic while its body is on someone else's machine.
+        winner, confidence, urgency = select_action(brain_state)
+        decision_data['adjusted_weights'] = action_activations(brain_state)
 
-        # Rank each urge by how far past its OWN threshold it is, as a fraction
-        # of the room it had left. Comparing raw activations would be unfair
-        # between actions whose thresholds differ - a 50 is a strong wish to
-        # flee and a weak wish to eat.
-        #
-        # Two kinds of action sit out the contest. FALLBACK_ACTION (swimming) is
-        # what the squid does when nothing else is worth doing, so it is the
-        # fallback below rather than a competitor a mild but genuine urge would
-        # have to outrank. REFLEX_ACTIONS (inking) are never chosen at all -
-        # they fire through their own binding while the squid gets on with
-        # whatever it decided, which for a frightened squid is escaping.
-        urgency = {}
-        skip = set(REFLEX_ACTIONS) | {FALLBACK_ACTION}
-        for name in ACTION_NEURONS:
-            if name in skip:
-                continue
-            behaviour = ACTION_BEHAVIOURS[name]
-            value = jittered[behaviour]
-            if not self._wants(name, value):
-                continue
-            threshold = ACTION_THRESHOLDS.get(name, 50.0)
-            headroom = max(1.0, 100.0 - threshold)
-            urgency[behaviour] = (value - threshold) / headroom
-
-        if not urgency:
+        if winner is None:
             # Nothing is driving any action hard enough to act on. Locomotion
             # is the fallback, but it has to clear its own threshold like
             # anything else - which is how a sleeping squid, whose act_move is
             # held down by the sleep gating, ends up doing nothing at all
             # rather than drifting around the tank in its sleep.
-            locomotion = jittered[ACTION_BEHAVIOURS[FALLBACK_ACTION]]
-            if self._wants(FALLBACK_ACTION, locomotion):
+            locomotion = self._activation(brain_state, FALLBACK_ACTION)
+            if wants(FALLBACK_ACTION, locomotion):
                 return self._record(decision_data, self._drift(), 0.0)
             return self._record(decision_data, self._resting_status(), 0.0)
 
-        winner = max(urgency, key=urgency.get)
-        ordered = sorted(urgency.values(), reverse=True)
-        confidence = 1.0 if len(ordered) < 2 else (ordered[0] - ordered[1]) / ordered[0]
         decision_data['confidence'] = confidence
         decision_data['urgency_multipliers'] = {k: round(v, 3) for k, v in urgency.items()}
 

@@ -287,9 +287,8 @@ class ConsolidationTests(unittest.TestCase):
         import src.consolidation  # noqa: F401
         import src.sleep_consolidation  # noqa: F401
         self.assertFalse(
-            os.path.exists(os.path.join(_REPO_ROOT, 'plugins', 'sleep_replay',
-                                        'replay_core.py')),
-            "the algorithm still has a second copy under plugins/")
+            os.path.exists(os.path.join(_REPO_ROOT, 'plugins', 'sleep_replay')),
+            "consolidation is core and always on; there is no plugin for it")
 
 
 class CoreIntegrationTests(unittest.TestCase):
@@ -298,9 +297,8 @@ class CoreIntegrationTests(unittest.TestCase):
     def test_stdp_is_a_core_module(self):
         import src.stdp  # noqa: F401
         self.assertFalse(
-            os.path.exists(os.path.join(_REPO_ROOT, 'plugins', 'stdp',
-                                        'stdp_core.py')),
-            "the STDP algorithm still has a second copy under plugins/")
+            os.path.exists(os.path.join(_REPO_ROOT, 'plugins', 'stdp')),
+            "STDP is core and always on; there is no plugin for it")
 
     def test_plasticity_attaches_stdp_by_default(self):
         engine = PlasticityEngine()

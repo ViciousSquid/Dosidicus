@@ -58,7 +58,8 @@ DEFAULT_SMOOTHING = 0.5
 # Imported lazily-ish at module level because brain_constants has no imports of
 # its own and cannot cycle.
 from .brain_constants import (BINARY_NEURONS, PURE_INPUT_NEURONS,  # noqa: E402
-                              ACTION_NEURONS, action_resting_level)
+                              ACTION_NEURONS, action_resting_level,
+                              on_input_sensor_change)
 
 # Action neurons rest at zero for the same reason sensors do. "I do not want to
 # do anything" is a neuron with nothing to report, and it has to be worth
@@ -68,6 +69,23 @@ from .brain_constants import (BINARY_NEURONS, PURE_INPUT_NEURONS,  # noqa: E402
 # everything equally. Resting at zero is what makes "the squid has not learned
 # this yet" a state the network can actually be in.
 _RESTS_AT_ZERO = set(PURE_INPUT_NEURONS) | set(BINARY_NEURONS) | set(ACTION_NEURONS)
+
+
+def _follow_sensor_registration(name: str, _binary: bool, added: bool) -> None:
+    """Keep the resting-level set in step with sensors registered at runtime.
+
+    This set is DERIVED from the role sets in brain_constants, so an in-place
+    mutation over there is invisible here. A sensor whose resting level was
+    left at the 50 midpoint would report "nothing to see" as a mid-strength
+    signal, which is the bug this subscription exists to prevent.
+    """
+    if added:
+        _RESTS_AT_ZERO.add(name)
+    else:
+        _RESTS_AT_ZERO.discard(name)
+
+
+on_input_sensor_change(_follow_sensor_registration)
 
 
 def baseline_of(name: str) -> float:

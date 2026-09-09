@@ -38,7 +38,15 @@ class PacketValidator:
         valid_types = [
             'heartbeat', 'squid_move', 'squid_action', 'object_sync', 
             'rock_throw', 'player_join', 'player_leave', 'state_update',
-            'squid_exit', 'new_squid_arrival'
+            'squid_exit', 'new_squid_arrival',
+            # Encounters. 'visit_request' asks the host for entry and
+            # 'visit_response' carries its answer, so arriving in a tank is
+            # something the host agreed to rather than something a sender did.
+            'visit_request', 'visit_response',
+            # The remote-mind round trip: the host says what the visiting
+            # squid can see, the visiting squid's own brain answers with what
+            # it decided, and the host reports what actually happened.
+            'perception_frame', 'action_intent', 'consequence', 'visit_end',
         ]
         if message['type'] not in valid_types:
             return False, f"Unknown message type: {message['type']}"
@@ -50,12 +58,62 @@ class PacketValidator:
         # Type-specific validation
         if message['type'] == 'squid_exit':
             return PacketValidator.validate_squid_exit(message['payload'])
+        elif message['type'] in ('visit_request', 'visit_response'):
+            return PacketValidator.validate_visit(message['type'], message['payload'])
+        elif message['type'] in ('perception_frame', 'action_intent',
+                                 'consequence', 'visit_end'):
+            return PacketValidator.validate_remote_mind(message['payload'])
         elif message['type'] == 'object_sync':
             return PacketValidator.validate_object_sync(message['payload'])
         
         # Default to valid for types without specific validation
         return True, None
     
+    @staticmethod
+    def validate_remote_mind(payload: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """Cheap structural check on a remote-mind message.
+
+        The real parsing is in remote_protocol, which rejects anything
+        carrying private cognitive state. This is the packet-level gate: a
+        visit id, and nothing that obviously does not belong on the wire.
+        """
+        if not isinstance(payload, dict):
+            return False, "Remote-mind payload must be a dictionary"
+        visit_id = payload.get('visit_id')
+        if not isinstance(visit_id, str) or not visit_id.strip():
+            return False, "Remote-mind message has no visit id"
+        if len(visit_id) > 64:
+            return False, "Visit id too long"
+        try:
+            from .remote_protocol import FORBIDDEN_KEYS
+        except ImportError:
+            return True, None
+        for key in payload:
+            if str(key).lower() in FORBIDDEN_KEYS:
+                return False, f"'{key}' is private cognitive state"
+        return True, None
+
+    @staticmethod
+    def validate_visit(message_type: str, payload: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """Check a consent handshake payload.
+
+        Both sides carry a peer uuid, which becomes a memory key on receipt,
+        so it is checked here rather than trusted further in.
+        """
+        if not isinstance(payload, dict):
+            return False, "Visit payload must be a dictionary"
+        if message_type == 'visit_response':
+            if not isinstance(payload.get('accepted'), bool):
+                return False, "visit_response must carry a boolean 'accepted'"
+            if not isinstance(payload.get('reason', ''), str):
+                return False, "visit_response 'reason' must be a string"
+        identity = payload.get('identity') if message_type == 'visit_request' else payload
+        peer_uuid = (identity or {}).get('uuid') if isinstance(identity, dict) else None
+        peer_uuid = peer_uuid or payload.get('peer_uuid')
+        if peer_uuid is not None and not re.match(r'^[0-9a-fA-F-]{32,36}$', str(peer_uuid)):
+            return False, "Invalid peer uuid"
+        return True, None
+
     @staticmethod
     def validate_squid_exit(payload: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         """Validate squid exit payload"""
