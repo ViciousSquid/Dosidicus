@@ -21,7 +21,13 @@ class MentalStateManager:
             "sick": MentalState("sick", "sick.png"),                #   SICK
             "thinking": MentalState("thinking", "think.png"),       #   THINKING - CURRENTLY UNUSED
             "startled": MentalState("startled", "startled.png"),    #   STARTLED
-            "curious": MentalState("curious", "curious.png")        #   CURIOUS
+            "curious": MentalState("curious", "curious.png"),       #   CURIOUS
+            # Laying eyes on another squid for the first time. Deliberately a
+            # SEPARATE state that happens to share the curious icon: it is not
+            # the squid being curious, it is the squid noticing something, and
+            # conflating the two would mean this display could turn the real
+            # curious state on and off behind its back.
+            "noticed_squid": MentalState("noticed_squid", "curious.png"),
         }
 
     def set_mental_states_enabled(self, enabled):

@@ -531,51 +531,48 @@ class ConspecificSensorTests(unittest.TestCase):
 
 
 # ===========================================================================
-# 5 & 6. act_contest
+# 5 & 6. A contest, with no contest capability
 # ===========================================================================
-class ActContestTests(unittest.TestCase):
-    """The squid can contest an object, and has not learned to."""
+class NoDedicatedContestActionTests(unittest.TestCase):
+    """The squid is NOT born able to contest, because it does not need to be.
 
-    def test_act_contest_is_an_action_neuron_the_squid_is_born_with(self):
-        self.assertIn("act_contest", bc.ACTION_NEURONS)
-        self.assertIn("act_contest", bc.newborn_neurons())
-        self.assertIn("act_contest", bc.ACTION_BEHAVIOURS)
-        self.assertEqual(bc.ACTION_BEHAVIOURS["act_contest"], "contesting")
+    An earlier cut of this added act_contest as an unwired learned action. It
+    could not be justified: a squid swimming at an object it wants is act_play,
+    and whether another squid had a claim to that object is a fact about the
+    TANK, not a capability the squid needs. Adding a dedicated action would
+    have decided in advance that contesting is its own kind of behaviour -
+    which is the question, not the answer.
 
-    def test_act_contest_is_unwired(self):
-        """No innate pathway: nothing drives it until experience does.
+    If repeated encounters turn out to produce something the existing actions
+    genuinely cannot express, the capability monitor is what should say so.
+    """
 
-        This is the same standing act_play and act_shelter already have - a
-        squid that never meets another squid never learns to contest anything,
-        exactly as one that never meets a rock never learns to play.
-        """
-        self.assertIn("act_contest", bc.LEARNED_ACTIONS)
-        drivers = [row for row in bc.INNATE_ACTION_WIRING if row[1] == "act_contest"]
-        self.assertEqual(drivers, [])
+    def test_there_is_no_contest_action_neuron(self):
+        self.assertNotIn("act_contest", bc.ACTION_NEURONS)
+        self.assertNotIn("act_contest", bc.newborn_neurons())
+        self.assertNotIn("act_contest", bc.ACTION_BEHAVIOURS)
+        self.assertNotIn("act_contest", bc.COMPETING_ACTIONS)
 
-    def test_act_contest_rests_at_zero_and_has_a_reachable_threshold(self):
-        self.assertEqual(propagation.baseline_of("act_contest"), 0.0)
-        threshold = bc.ACTION_THRESHOLDS["act_contest"]
-        self.assertGreater(threshold, 0.0)
-        self.assertLessEqual(threshold, 50.0,
-                             "a threshold above what a learned pathway can "
-                             "reach is a behaviour that can never happen")
-
-    def test_act_contest_takes_part_in_the_action_competition(self):
-        """Lateral inhibition is the arbiter, so it has to be in the contest."""
-        self.assertIn("act_contest", bc.COMPETING_ACTIONS)
-        wiring = bc.action_competition_wiring()
-        inhibits = [row for row in wiring if row[0] == "act_contest"]
-        inhibited_by = [row for row in wiring if row[1] == "act_contest"]
-        self.assertTrue(inhibits)
-        self.assertTrue(inhibited_by)
-
-    def test_act_contest_is_bound_to_an_actuator(self):
-        bindings = [b for b in bc.innate_bindings() if b[0] == "act_contest"]
-        self.assertEqual(len(bindings), 1)
-        self.assertEqual(bindings[0][1], "neuron_output_contest")
+    def test_no_actuator_is_bound_to_a_contest(self):
         from src.brain_neuron_outputs import STANDARD_OUTPUT_HOOKS
-        self.assertIn("neuron_output_contest", STANDARD_OUTPUT_HOOKS)
+        self.assertNotIn("neuron_output_contest", STANDARD_OUTPUT_HOOKS)
+        self.assertEqual(
+            [b for b in bc.innate_bindings() if 'contest' in b[1]], [])
+
+    def test_the_squid_is_still_born_able_to_move_eat_and_flee_only(self):
+        driven = {target for _src, target, _w in bc.INNATE_ACTION_WIRING}
+        self.assertEqual(
+            driven,
+            {"act_move", "act_eat", "act_flee", "act_ink", "act_collapse"})
+        self.assertEqual(set(bc.LEARNED_ACTIONS),
+                         set(bc.ACTION_NEURONS) - driven)
+
+    def test_a_contest_is_reachable_through_an_existing_action(self):
+        """act_play's actuator is where a contest can happen at all."""
+        import inspect
+        from src.brain_neuron_outputs import NeuronOutputMonitor
+        source = inspect.getsource(NeuronOutputMonitor._handle_approach_rock)
+        self.assertIn("_contested_item", source)
 
 
 class FakeRect:
@@ -610,6 +607,7 @@ class FakeSquid:
         self.squid_width, self.squid_height = 0.0, 0.0
         self.carrying_rock = False
         self.current_rock = None
+        self.current_rock_target = None
         self.status = ""
         self.drives = []
 
@@ -632,7 +630,11 @@ class FakeLogic:
 
 
 class ContestConsequenceTests(unittest.TestCase):
-    """A contest has to change the tank, or nothing can be learned from it."""
+    """A contest has to change the tank, or nothing can be learned from it.
+
+    Everything here is driven by act_play's actuator. There is no contest
+    action anywhere in the path.
+    """
 
     def setUp(self):
         from src.brain_neuron_outputs import NeuronOutputMonitor
@@ -650,20 +652,20 @@ class ContestConsequenceTests(unittest.TestCase):
                                observer_y=self.squid.squid_y, now=self.now)
         return peer
 
-    def test_a_contest_transfers_an_object_that_was_the_rivals(self):
+    def _play(self, logic):
+        self.monitor._handle_approach_rock("act_play", 60.0, self.squid,
+                                           tamagotchi_logic=logic)
+
+    def test_playing_at_a_rivals_object_transfers_it(self):
         # Rival at 150, object at 100: 50 from the rival, 100 from us, and
         # inside the 120px reach at which an object can actually be taken.
         self._rival_at(150.0, 0.0)
         contested = FakeItem(100.0, 0.0)
-        logic = FakeLogic([contested], self.view)
-
-        self.monitor._handle_contest("act_contest", 60.0, self.squid,
-                                     tamagotchi_logic=logic)
+        self._play(FakeLogic([contested], self.view))
 
         self.assertTrue(self.squid.carrying_rock,
                         "a contest that wins must actually change the tank")
         self.assertIs(self.squid.current_rock, contested)
-        self.assertEqual(self.squid.status, "contesting")
 
     def test_the_contest_is_perceptible_to_the_other_squid(self):
         """The outcome has to reach a sense organ, or it teaches nobody."""
@@ -672,35 +674,43 @@ class ContestConsequenceTests(unittest.TestCase):
         sensors = EncounterSensors(self.view, None, clock=lambda: self.now)
 
         self.assertEqual(sensors.contesting(), 0.0)
-        self.monitor._handle_contest("act_contest", 60.0, self.squid,
-                                     tamagotchi_logic=logic)
+        self._play(logic)
         self.assertEqual(sensors.contesting(), 100.0)
 
     def test_the_contest_is_recorded_for_the_encounter_to_file(self):
         self._rival_at(150.0, 0.0)
-        logic = FakeLogic([FakeItem(100.0, 0.0)], self.view)
-        self.monitor._handle_contest("act_contest", 60.0, self.squid,
-                                     tamagotchi_logic=logic)
+        self._play(FakeLogic([FakeItem(100.0, 0.0)], self.view))
         log = self.view.drain_contests()
         self.assertEqual(len(log), 1)
         self.assertEqual(log[0]['peer_uuid'], UUID_B)
         self.assertTrue(log[0]['taken'])
 
-    def test_nothing_happens_with_no_other_squid_present(self):
-        """A solitary squid can be born able to contest and never do it."""
+    def test_the_same_action_is_ordinary_play_with_nobody_there(self):
+        """One action, two situations - and the tank decides which."""
         logic = FakeLogic([FakeItem(100.0, 0.0)], self.view)
-        self.monitor._handle_contest("act_contest", 90.0, self.squid,
-                                     tamagotchi_logic=logic)
+        self._play(logic)
         self.assertFalse(self.squid.carrying_rock)
-        self.assertEqual(self.squid.status, "")
+        self.assertEqual(self.squid.status, "approaching_rock")
+        self.assertEqual(self.view.drain_contests(), [])
 
-    def test_an_object_nearer_to_us_than_to_the_rival_is_not_contested(self):
+    def test_an_object_nearer_to_us_than_to_the_rival_is_not_a_contest(self):
         """Ordinary foraging is not a contest."""
         self._rival_at(400.0, 0.0)
-        logic = FakeLogic([FakeItem(20.0, 0.0)], self.view)
-        self.monitor._handle_contest("act_contest", 60.0, self.squid,
-                                     tamagotchi_logic=logic)
+        self._play(FakeLogic([FakeItem(20.0, 0.0)], self.view))
         self.assertFalse(self.squid.carrying_rock)
+        self.assertEqual(self.squid.status, "approaching_rock")
+
+    def test_the_two_situations_are_named_differently_for_the_ledger(self):
+        """Contested and uncontested play must be separable ACTIONS.
+
+        Not because anything has decided they are different behaviours, but
+        because the causal ledger can only ask whether the squid's network
+        tells two things apart if they arrive as two things. This is the setup
+        for that question, not an answer to it.
+        """
+        self._rival_at(150.0, 0.0)
+        self._play(FakeLogic([FakeItem(100.0, 0.0)], self.view))
+        self.assertEqual(self.squid.status, "contesting")
 
     def test_an_encounter_records_a_contested_item_as_an_outcome(self):
         peer = identity(UUID_B, "Nautilus")

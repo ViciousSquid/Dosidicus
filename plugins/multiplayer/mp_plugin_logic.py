@@ -27,6 +27,12 @@ from .consent import ConsentPolicy, MODE_OPEN
 from .peer_ledger import PeerLedger
 from .encounter import EncounterSession
 from .encounter_sensors import ConspecificView, EncounterSensors
+from .host_body import HostBody
+from .visitor_mind import VisitorMind
+from .remote_protocol import (
+    ActionIntent, PerceptionFrame, ProtocolError, VisitEnd,
+    END_EJECTED, ROUND_TRIP_INTERVAL, new_visit_id,
+)
 
 # TamagotchiLogic is imported in main.py and should be in sys.path
 # If type hinting is needed here and main.py's import might not be seen by linters:
@@ -78,6 +84,16 @@ class MultiplayerPlugin:
         self.peer_ledger: PeerLedger | None = None
         self.encounter_sensors: EncounterSensors | None = None
         self.open_encounters: Dict[str, EncounterSession] = {}   # peer uuid -> session
+
+        # --- The remote-mind round trip ---
+        # host_body is this tank acting as a visiting squid's body; visitor_mind
+        # is this squid's brain while its body is in someone else's tank. Both
+        # exist at once because every instance is both a host and a potential
+        # visitor.
+        self.host_body: HostBody | None = None
+        self.visitor_mind: VisitorMind | None = None
+        self.visit_node_ids: Dict[str, str] = {}   # peer uuid -> node_id
+        self._last_round_trip = 0.0
 
         # --- Configuration ---
         self.MULTICAST_GROUP = mp_constants.MULTICAST_GROUP
@@ -283,6 +299,15 @@ class MultiplayerPlugin:
                 'player_leave',
                 {'node_id': self.network_node.node_id, 'reason': 'plugin_disabled'}
             )
+
+        # A squid that is away when the plugin stops has to come home. Its
+        # body is on someone else's machine and its brain is here; leaving it
+        # in that state is the one unrecoverable failure this design has.
+        if self.visitor_mind is not None and self.visitor_mind.perception.away:
+            self.visitor_mind.end_visit(reason='departed', notify=True)
+        if self.host_body is not None:
+            for actor in list(self.host_body.visitors.values()):
+                self.end_visit_as_host(actor, reason='ejected')
 
         # Close whatever encounters were still open, so an experience the
         # squid was in the middle of having is not simply lost.
@@ -522,8 +547,20 @@ class MultiplayerPlugin:
 
         memory_manager = getattr(squid, 'memory_manager', None)
         self.peer_ledger = PeerLedger(memory_manager)
+
+        # This squid's brain, for when its body is in someone else's tank.
+        self.visitor_mind = VisitorMind(
+            tamagotchi_logic=self.tamagotchi_logic,
+            peer_ledger=self.peer_ledger,
+            send=self._send, logger=self.logger)
+        # This tank, for when it is hosting someone else's squid.
+        self.host_body = HostBody(tamagotchi_logic=self.tamagotchi_logic,
+                                  conspecific_view=self.conspecific_view,
+                                  logger=self.logger)
+
         self.encounter_sensors = EncounterSensors(self.conspecific_view,
-                                                  self.peer_ledger)
+                                                  self.peer_ledger,
+                                                  remote=self.visitor_mind)
 
         # Published the way latest_vision_result is, so the engine's own
         # actuator can consult it through getattr and run without it.
@@ -542,8 +579,169 @@ class MultiplayerPlugin:
         registered = self.encounter_sensors.register(
             self.plugin_manager, brain_constants,
             plugin_name=mp_constants.PLUGIN_NAME, brain_widget=brain_widget)
+
+        # While the squid is away, three of its BUILT-IN senses report the
+        # host tank instead of this one. Registered as plugin handlers, which
+        # take precedence in BrainNeuronHooks, and each wraps the original so
+        # the squid keeps one set of sense organs for its whole life - they
+        # simply point somewhere else for the duration of a visit.
+        try:
+            from src.brain_neuron_hooks import BrainNeuronHooks
+        except ImportError:
+            from brain_neuron_hooks import BrainNeuronHooks
+        builtin = BrainNeuronHooks(self.tamagotchi_logic).handlers
+        for name, handler in self.visitor_mind.sensor_overrides(builtin).items():
+            self.plugin_manager.register_neuron_handler(
+                neuron_name=name, handler=handler,
+                plugin_name=mp_constants.PLUGIN_NAME,
+                metadata={'description': f'{name} (host tank while visiting)',
+                          'category': 'conspecific', 'source': 'plugin'})
+            registered.append(name)
+
         self.logger.info(f"Encounter sensors registered: {', '.join(registered)}")
         return True
+
+    # ------------------------------------------------------------------
+    # The remote-mind round trip
+    # ------------------------------------------------------------------
+    def _send(self, message_type: str, payload: Dict) -> bool:
+        """One place messages leave this instance, so failure is one shape."""
+        if not self.network_node:
+            return False
+        try:
+            return bool(self.network_node.send_message(message_type, payload))
+        except Exception as exc:
+            self.logger.error(f"Could not send {message_type}: {exc}")
+            return False
+
+    def run_round_trip(self) -> None:
+        """One behavioural cadence, for both roles this instance plays.
+
+        As a HOST: tell each visitor what it can see, and report anything that
+        happened to it. As a VISITOR: ask this squid's own brain what it wants
+        and post that to whoever is hosting it.
+
+        Runs on ROUND_TRIP_INTERVAL, which is the agreed cadence rather than
+        the sync interval, so behaviour and rendering can be paced separately.
+        """
+        now = time.time()
+        if now - self._last_round_trip < ROUND_TRIP_INTERVAL:
+            return
+        self._last_round_trip = now
+
+        if self.host_body is not None:
+            for actor, reason in self.host_body.tick():
+                self.end_visit_as_host(actor, reason)
+            for actor in list(self.host_body.visitors.values()):
+                self._send('perception_frame',
+                           self.host_body.build_frame(actor).to_payload())
+                for consequence in self.host_body.drain_consequences(actor):
+                    self._send('consequence', consequence.to_payload())
+            # Both squid show that they have noticed each other. The
+            # resident's own icon comes from process_squid_detection; this is
+            # the visitor's, drawn above its body here because its real squid
+            # is hidden at home for the duration of the visit.
+            for actor in self.host_body.drain_first_sightings():
+                node_id = self.visit_node_ids.get(actor.uuid)
+                if node_id and self.entity_manager:
+                    self.entity_manager.show_notice_icon(node_id)
+
+        if self.visitor_mind is not None:
+            self.visitor_mind.tick()
+
+    def handle_visit_response(self, node, message: Dict, addr) -> bool:
+        """The host has answered this squid's arrival.
+
+        Accepted, the squid's brain switches its senses to the host's frames.
+        Refused, it comes straight back - the alternative is a squid that has
+        left its own tank and been let into nobody else's.
+        """
+        if self.visitor_mind is None:
+            return False
+        payload = message.get('payload') or {}
+        squid = getattr(self.tamagotchi_logic, 'squid', None)
+        if squid is None or payload.get('peer_uuid') != str(getattr(squid, 'uuid', '')):
+            return False          # somebody else's answer
+
+        if payload.get('accepted'):
+            host_identity = self.peer_identities.get(message.get('node_id'))
+            self.visitor_mind.begin_visit(host_identity)
+            self.logger.info(f"Entry accepted; awaiting perception from the host.")
+            return True
+
+        self.logger.info(f"Entry refused ({payload.get('reason')}); coming home.")
+        self.visitor_mind.end_visit(reason='departed', notify=False)
+        return True
+
+    def handle_perception_frame(self, node, message: Dict, addr) -> bool:
+        """A host is telling this squid what it can see over there."""
+        if self.visitor_mind is None:
+            return False
+        return self.visitor_mind.on_perception_frame(message.get('payload') or {})
+
+    def handle_action_intent(self, node, message: Dict, addr) -> bool:
+        """A visiting squid's brain has decided something. Carry it out.
+
+        Validated, then dispatched. This instance never works out what the
+        visitor should do - it does not have the visitor's brain, drives or
+        memory and cannot ask for them.
+        """
+        if self.host_body is None:
+            return False
+        payload = message.get('payload') or {}
+        try:
+            intent = ActionIntent.from_payload(payload)
+        except ProtocolError as exc:
+            self.logger.warning(f"Rejected an action intent: {exc}")
+            return False
+        for actor in self.host_body.visitors.values():
+            if actor.visit_id == intent.visit_id:
+                return self.host_body.apply_intent(actor, intent)
+        return False
+
+    def handle_consequence(self, node, message: Dict, addr) -> bool:
+        """The host is reporting what actually happened to this squid."""
+        if self.visitor_mind is None:
+            return False
+        return self.visitor_mind.on_consequence(
+            message.get('payload') or {}) is not None
+
+    def handle_visit_end(self, node, message: Dict, addr) -> bool:
+        """Either side has ended a visit."""
+        payload = message.get('payload') or {}
+        handled = False
+        if self.visitor_mind is not None:
+            handled = self.visitor_mind.on_visit_end(payload)
+        if not handled and self.host_body is not None:
+            try:
+                ending = VisitEnd.from_payload(payload)
+            except ProtocolError:
+                return False
+            for actor in list(self.host_body.visitors.values()):
+                if actor.visit_id == ending.visit_id:
+                    self.end_visit_as_host(actor, ending.reason, notify=False)
+                    return True
+        return handled
+
+    def end_visit_as_host(self, actor, reason: str = END_EJECTED,
+                          notify: bool = True) -> None:
+        """Take a visitor's body out of this tank, and say so."""
+        if self.host_body is None:
+            return
+        if notify:
+            self._send('visit_end',
+                       VisitEnd(actor.visit_id, reason).to_payload())
+        self.host_body.remove(actor.uuid)
+        self.visit_node_ids.pop(actor.uuid, None)
+        node_id = next((n for n, i in self.peer_identities.items()
+                        if i and i.uuid == actor.uuid), None)
+        if node_id and self.entity_manager:
+            try:
+                self.entity_manager.remove_remote_squid(node_id)
+            except Exception as exc:
+                self.logger.error(f"Could not remove a departed visitor: {exc}")
+        self.close_encounter(actor.uuid)
+        self.logger.info(f"Visit by {actor.identity} ended: {reason}")
 
     def update_encounters(self) -> None:
         """Open, feed and close encounters. Called on the sync tick.
@@ -1150,12 +1348,13 @@ class MultiplayerPlugin:
             # ---------- HOST CONSENT ----------
             # Entry used to be unconditional: any squid_exit on the multicast
             # group put a visitor in the tank. The host decides now, and a
-            # refusal is where the visit ends - nothing visual is created and
-            # no autopilot is built, so a refused visitor cannot enter.
+            # refusal is where the visit ends - no body is created, so a
+            # refused visitor cannot enter.
             visitor_identity = SquidIdentity.from_payload(
                 exit_payload_inner.get('identity') or {})
+            current = len(self.host_body.visitors) if self.host_body else 0
             decision = self.consent_policy.evaluate(
-                visitor_identity, current_visitors=len(self.remote_squid_controllers))
+                visitor_identity, current_visitors=current)
             if not decision.accepted:
                 self.logger.info(
                     f"Refused entry to {visitor_identity or source_node_id}: {decision.reason}")
@@ -1178,23 +1377,31 @@ class MultiplayerPlugin:
                 update_success = self.entity_manager.update_remote_squid(
                     source_node_id, exit_payload_inner, is_new_arrival=True
                 )
-                if update_success and source_node_id not in self.remote_squid_controllers:
-                    self.logger.info(f"Creating new autopilot for remote squid {source_node_id}")
+                if update_success and self.host_body is not None:
+                    # A BODY, not a brain. The visitor is given a position in
+                    # this tank and nothing that decides what to do with it -
+                    # that stays on the visitor's own machine, and arrives as
+                    # action intents. Before Stage 1 this built a
+                    # RemoteSquidController: a four-state policy running here,
+                    # standing in for a brain that was running perfectly well
+                    # somewhere else. Nothing stands in for it now.
                     entry_details = self.entity_manager.get_last_calculated_entry_details(source_node_id)
-                    initial_data = exit_payload_inner.copy()
+                    entry_x, entry_y = self.calculate_entry_position(exit_dir)
                     if entry_details:
-                        initial_data['x'], initial_data['y'] = entry_details['entry_pos']
-                        initial_data['entry_direction_on_this_screen'] = entry_details['entry_direction']
+                        entry_x, entry_y = entry_details['entry_pos']
 
-                    autopilot_controller = RemoteSquidController(
-                        squid_data=initial_data,
-                        scene=self.tamagotchi_logic.user_interface.scene,
-                        plugin_instance=self,
-                        debug_mode=self.debug_mode,
-                        remote_entity_manager=self.entity_manager
-                    )
-                    self.remote_squid_controllers[source_node_id] = autopilot_controller
-                    self.logger.info(f"Autopilot for {source_node_id} created.")
+                    visit_id = new_visit_id(
+                        str(getattr(self.local_identity, 'uuid', '')),
+                        visitor_identity.uuid)
+                    actor = self.host_body.admit(visitor_identity, visit_id,
+                                                 entry_x, entry_y)
+                    self.visit_node_ids[visitor_identity.uuid] = source_node_id
+                    # First frame straight away, so the visitor's brain has
+                    # something to decide from without waiting a cadence.
+                    self._send('perception_frame',
+                               self.host_body.build_frame(actor).to_payload())
+                    self.logger.info(
+                        f"Visitor {visitor_identity} admitted as visit {visit_id}")
                 else:
                     self.logger.warning(f"Failed to create/update remote squid {source_node_id} in entity_manager.")
             else:
@@ -1937,7 +2144,15 @@ class MultiplayerPlugin:
             "on_network_heartbeat": self.handle_heartbeat,
             "on_network_state_update": self.handle_state_update, # Generic state update
             # Add new 'squid_return' handler
-            "on_network_squid_return": self.handle_squid_return 
+            "on_network_squid_return": self.handle_squid_return,
+            # The remote-mind round trip. Four messages, two roles: this
+            # instance is a host to other people's squid and the home of its
+            # own, so it subscribes to both directions.
+            "on_network_perception_frame": self.handle_perception_frame,
+            "on_network_action_intent": self.handle_action_intent,
+            "on_network_consequence": self.handle_consequence,
+            "on_network_visit_end": self.handle_visit_end,
+            "on_network_visit_response": self.handle_visit_response,
         }
 
         for hook_name_to_register, handler_method_to_call in hook_handlers.items():
@@ -2026,6 +2241,11 @@ class MultiplayerPlugin:
                 self.update_encounters()
             except Exception as exc:
                 self.logger.error(f"Encounter update failed: {exc}", exc_info=True)
+
+            try:
+                self.run_round_trip()
+            except Exception as exc:
+                self.logger.error(f"Remote-mind round trip failed: {exc}", exc_info=True)
 
             squid_current_state = self._get_squid_state()
             objects_current_state = self._get_objects_state() # Get state of syncable objects

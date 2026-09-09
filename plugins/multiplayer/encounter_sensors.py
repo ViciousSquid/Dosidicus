@@ -232,13 +232,46 @@ class ConspecificView:
 
 
 class EncounterSensors:
-    """Registers the conspecific sensors and computes their values."""
+    """Registers the conspecific sensors and computes their values.
 
-    def __init__(self, view: ConspecificView, ledger=None, clock=time.time):
+    One set of sense organs for the squid's whole life. Where they POINT
+    depends on where the squid is:
+
+      at home     the local ConspecificView, fed by remote squid state
+      away        the host tank's perception frame
+
+    with one deliberate exception. Familiarity and recalled valence are read
+    from this squid's own PeerLedger in BOTH cases, because they are what this
+    squid remembers and no host can be allowed to assert them. Away, they are
+    keyed on the identity of the resident the host named in the frame.
+    """
+
+    def __init__(self, view: ConspecificView, ledger=None, clock=time.time,
+                 remote=None):
         self.view = view
         self.ledger = ledger
         self.clock = clock
+        #: A VisitorMind, when this squid is capable of visiting. Consulted
+        #: through duck typing so the sensors work with no multiplayer at all.
+        self.remote = remote
         self._registered: List[str] = []
+
+    # -- where the senses currently point --------------------------------
+    def _away(self) -> bool:
+        remote = self.remote
+        return bool(remote is not None and remote.perception.linked)
+
+    def _observed(self, name: str) -> Optional[float]:
+        """The host's value for an observable sensor, if we are its guest."""
+        if not self._away():
+            return None
+        return _clamp(self.remote.perception.sensor(name, 0.0))
+
+    def _remembered(self, name: str) -> Optional[float]:
+        """Our own memory of whoever we are looking at, wherever we are."""
+        if not self._away():
+            return None
+        return _clamp(self.remote.recalled_sensors().get(name, 0.0))
 
     # -- the sensors ----------------------------------------------------
     def handlers(self) -> Dict[str, Callable[[], float]]:
@@ -258,26 +291,41 @@ class EncounterSensors:
         return self.view.nearest(self.clock())
 
     def visible(self) -> float:
+        observed = self._observed('conspecific_visible')
+        if observed is not None:
+            return observed
         return 100.0 if self._nearest() is not None else 0.0
 
     def proximity(self) -> float:
         """Closer reads higher, on the same shape as plant_proximity."""
+        observed = self._observed('conspecific_proximity')
+        if observed is not None:
+            return observed
         nearest = self._nearest()
         if nearest is None:
             return 0.0
         return _clamp(100.0 - (nearest.distance / PROXIMITY_RANGE * 100.0))
 
     def ahead(self) -> float:
+        observed = self._observed('conspecific_ahead')
+        if observed is not None:
+            return observed
         nearest = self._nearest()
         return 0.0 if nearest is None else _clamp(nearest.ahead)
 
     def closing(self) -> float:
+        observed = self._observed('conspecific_closing')
+        if observed is not None:
+            return observed
         nearest = self._nearest()
         if nearest is None or nearest.closing_rate <= 0:
             return 0.0
         return _clamp(nearest.closing_rate / FULL_CLOSING_SPEED * 100.0)
 
     def receding(self) -> float:
+        observed = self._observed('conspecific_receding')
+        if observed is not None:
+            return observed
         nearest = self._nearest()
         if nearest is None or nearest.closing_rate >= 0:
             return 0.0
@@ -290,24 +338,36 @@ class EncounterSensors:
         it is represented by a sense organ with nothing to report, which is
         exactly what uncertainty about an unfamiliar individual is.
         """
+        remembered = self._remembered('conspecific_familiarity')
+        if remembered is not None:
+            return remembered
         nearest = self._nearest()
         if nearest is None or self.ledger is None:
             return 0.0
         return _clamp(self.ledger.familiarity(nearest.uuid))
 
     def recalled_good(self) -> float:
+        remembered = self._remembered('conspecific_recalled_good')
+        if remembered is not None:
+            return remembered
         nearest = self._nearest()
         if nearest is None or self.ledger is None:
             return 0.0
         return _clamp(self.ledger.recalled_good(nearest.uuid))
 
     def recalled_bad(self) -> float:
+        remembered = self._remembered('conspecific_recalled_bad')
+        if remembered is not None:
+            return remembered
         nearest = self._nearest()
         if nearest is None or self.ledger is None:
             return 0.0
         return _clamp(self.ledger.recalled_bad(nearest.uuid))
 
     def contesting(self) -> float:
+        observed = self._observed('conspecific_contesting')
+        if observed is not None:
+            return observed
         return 100.0 if self.view.any_contesting(self.clock()) else 0.0
 
     # -- registration ---------------------------------------------------

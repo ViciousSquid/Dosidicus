@@ -2064,6 +2064,10 @@ class Squid:
             if hooks is not None and hasattr(hooks, 'on_object_spawned'):
                 hooks.on_object_spawned('conspecific')
 
+            # Show that it has noticed. Purely a display, and separate from
+            # the real curious state - see show_noticed_squid_icon.
+            self.show_noticed_squid_icon()
+
             # A reflex, not a rule: is_startled drives act_flee through an
             # ordinary synapse that INNATE_PERSONALITY_BIAS has already tilted,
             # so a timid squid and a stubborn one respond differently to the
@@ -2073,6 +2077,41 @@ class Squid:
                     logic.startle_squid(source="detected_squid")
         else:
             self._seen_squids.discard(peer_id)
+
+    #: How long the "I have noticed another squid" icon stays up.
+    NOTICED_SQUID_ICON_MS = 3000
+
+    def show_noticed_squid_icon(self):
+        """Flash the exclamation icon on first sight of another squid.
+
+        This shares the curious icon's ARTWORK and nothing else. It is its own
+        mental state, so turning it on and off cannot disturb the real curious
+        state - a squid that happens to be genuinely curious when a visitor
+        arrives keeps being curious for exactly as long as it would have.
+
+        Shown once per individual per first sighting: process_squid_detection
+        only reaches here on the first sight of a given peer, and the squid
+        forgets a peer when it loses track of it, so a visitor that comes back
+        later is noticed again.
+        """
+        manager = getattr(self, 'mental_state_manager', None)
+        if manager is None or not hasattr(manager, 'set_state'):
+            return
+        try:
+            manager.set_state("noticed_squid", True)
+            QtCore.QTimer.singleShot(self.NOTICED_SQUID_ICON_MS,
+                                     self.hide_noticed_squid_icon)
+        except Exception as exc:
+            print(f"[Squid] could not show the noticed-squid icon: {exc}")
+
+    def hide_noticed_squid_icon(self):
+        manager = getattr(self, 'mental_state_manager', None)
+        if manager is None or not hasattr(manager, 'set_state'):
+            return
+        try:
+            manager.set_state("noticed_squid", False)
+        except Exception:
+            pass
 
     def react_to_rock_throw(self, source_node_id, is_target=False):
         """

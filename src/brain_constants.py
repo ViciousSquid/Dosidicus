@@ -435,11 +435,6 @@ ACTION_NEURONS = {
     "act_play":     (750, 250),
     "act_shelter":  (250, 160),
     "act_rest":     (620, 160),
-    # Contesting an object with another squid. Like act_play and act_shelter
-    # it has NO innate wiring: the squid is born able to do it and with
-    # nothing driving it, so whether it ever contests anything is something
-    # its experience has to decide.
-    "act_contest":  (800, 160),
     # Involuntary. Not the same neuron as act_rest: choosing to rest before
     # you are exhausted is a thing a squid can learn, and collapsing when you
     # are is a thing that happens to it. See the homeostatic drives below.
@@ -485,7 +480,6 @@ ACTION_BEHAVIOURS = {
     "act_shelter":  "approaching_plant",
     "act_rest":     "sleeping",
     "act_collapse": "exhausted",
-    "act_contest":  "contesting",
 }
 
 
@@ -526,9 +520,6 @@ ACTION_FIRING_THRESHOLDS = {
     "act_play":     38.0,
     "act_shelter":  38.0,
     "act_rest":     38.0,
-    # Same band as the other learned actions, and for the same reason: a
-    # threshold has to be reachable by the pathways that could drive it.
-    "act_contest":  38.0,
     # Only at the very top of the sleepiness scale.
     "act_collapse": 45.0,
 }
@@ -626,8 +617,7 @@ INNATE_ACTION_WIRING = (
 # Reflexes (inking, collapsing) sit outside the competition. Inking runs
 # alongside flight rather than against it, and an exhausted squid does not
 # get a vote.
-COMPETING_ACTIONS = ("act_eat", "act_flee", "act_play", "act_shelter", "act_rest",
-                     "act_contest")
+COMPETING_ACTIONS = ("act_eat", "act_flee", "act_play", "act_shelter", "act_rest")
 
 #: How hard a driven action suppresses its rivals, and idle swimming.
 LATERAL_INHIBITION = -0.22
@@ -704,11 +694,6 @@ INNATE_ACTION_BINDINGS = (
     ("act_shelter",  "neuron_output_seek_plant",     4.0, 1.00),
     ("act_rest",     "neuron_output_sleep",         10.0, 1.00),
     ("act_collapse", "neuron_output_sleep",         10.0, 1.00),
-    # The body can contest an object; nothing drives the neuron until the
-    # squid has learned to. With no conspecific in the tank the actuator has
-    # no target and does nothing, which is the correct answer rather than a
-    # special case.
-    ("act_contest",  "neuron_output_contest",        6.0, 1.00),
 )
 
 
