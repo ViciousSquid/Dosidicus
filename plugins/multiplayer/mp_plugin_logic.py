@@ -200,93 +200,97 @@ class MultiplayerPlugin:
             self.logger.debug(f"  Target: {'Yes (' + type(target_obj).__name__ + ')' if target_obj else 'No'}")
         self.logger.debug("=====================================\n")
 
-        def enable(self):
-            self.logger.info("Attempting to enable Multiplayer...")
 
-            # --- NEW: Debug log all key objects ---
-            self.logger.debug(f"[ENABLE] status_widget: {self.status_widget}")
-            self.logger.debug(f"[ENABLE] entity_manager: {self.entity_manager}")
-            self.logger.debug(f"[ENABLE] network_node: {self.network_node}")
-            self.logger.debug(f"[ENABLE] tamagotchi_logic: {self.tamagotchi_logic}")
-            self.logger.debug(f"[ENABLE] config_manager: {getattr(self, 'config_manager', None)}")
-            # --- END DEBUG LOG ---
+    # NOTE: this used to be defined INSIDE debug_autopilot_status(), one
+    # indent level too deep - so it was a local function that method built
+    # and threw away, and MultiplayerPlugin had no enable() at all.
+    def enable(self):
+        self.logger.info("Attempting to enable Multiplayer...")
 
-            # Plugin already set up?
-            if not self.is_setup:
-                self.logger.info("Multiplayer plugin is not set up. Calling setup()...")
-                # Assuming self.plugin_manager and self.tamagotchi_logic_ref are available
-                if not self.setup(self.plugin_manager, self.tamagotchi_logic_ref): # Pass necessary args
-                    self.logger.error("Multiplayer setup failed during enable(). Cannot enable.")
-                    return False
-            else:
-                self.logger.info("Multiplayer is already marked as set up. Re-enabling components.")
+        # --- NEW: Debug log all key objects ---
+        self.logger.debug(f"[ENABLE] status_widget: {self.status_widget}")
+        self.logger.debug(f"[ENABLE] entity_manager: {self.entity_manager}")
+        self.logger.debug(f"[ENABLE] network_node: {self.network_node}")
+        self.logger.debug(f"[ENABLE] tamagotchi_logic: {self.tamagotchi_logic}")
+        self.logger.debug(f"[ENABLE] config_manager: {getattr(self, 'config_manager', None)}")
+        # --- END DEBUG LOG ---
 
-            # --- BEGIN NEW/MODIFIED SECTION ---
-            # Ensure network node is ready and listening
-            if self.network_node:
-                # Ensure the socket structure is initialized (it should be by NetworkNode.__init__ or a previous setup)
-                # but a re-check or re-init if disconnected can be robust.
-                if not self.network_node.is_connected:
-                    self.logger.info("NetworkNode socket not connected, attempting to initialize in enable()...")
-                    if not self.network_node.initialize_socket_structure():
-                        self.logger.error("Failed to initialize NetworkNode socket in enable(). Cannot proceed with enabling multiplayer.")
-                        # Potentially set self.enabled = False or similar state management
-                        return False # Or handle error appropriately
+        # Plugin already set up?
+        if not self.is_setup:
+            self.logger.info("Multiplayer plugin is not set up. Calling setup()...")
+            # Assuming self.plugin_manager and self.tamagotchi_logic_ref are available
+            if not self.setup(self.plugin_manager, self.tamagotchi_logic_ref): # Pass necessary args
+                self.logger.error("Multiplayer setup failed during enable(). Cannot enable.")
+                return False
+        else:
+            self.logger.info("Multiplayer is already marked as set up. Re-enabling components.")
 
-                # Explicitly start the listener thread if it's not already active
-                if not self.network_node.is_listening():
-                    self.logger.info("NetworkNode listener not active, starting it explicitly in enable()...")
-                    if not self.network_node.start_listening():
-                        self.logger.error("Failed to start NetworkNode listener in enable(). Multiplayer might not receive messages.")
-                        # Decide if this is a fatal error for enabling or just a warning
-                        # For now, let's treat it as potentially non-fatal but log an error.
-                        # Depending on requirements, you might return False here.
-                    else:
-                        self.logger.info(">>>>>> NetworkNode listener started successfully!")
+        # --- BEGIN NEW/MODIFIED SECTION ---
+        # Ensure network node is ready and listening
+        if self.network_node:
+            # Ensure the socket structure is initialized (it should be by NetworkNode.__init__ or a previous setup)
+            # but a re-check or re-init if disconnected can be robust.
+            if not self.network_node.is_connected:
+                self.logger.info("NetworkNode socket not connected, attempting to initialize in enable()...")
+                if not self.network_node.initialize_socket_structure():
+                    self.logger.error("Failed to initialize NetworkNode socket in enable(). Cannot proceed with enabling multiplayer.")
+                    # Potentially set self.enabled = False or similar state management
+                    return False # Or handle error appropriately
+
+            # Explicitly start the listener thread if it's not already active
+            if not self.network_node.is_listening():
+                self.logger.info("NetworkNode listener not active, starting it explicitly in enable()...")
+                if not self.network_node.start_listening():
+                    self.logger.error("Failed to start NetworkNode listener in enable(). Multiplayer might not receive messages.")
+                    # Decide if this is a fatal error for enabling or just a warning
+                    # For now, let's treat it as potentially non-fatal but log an error.
+                    # Depending on requirements, you might return False here.
                 else:
-                    self.logger.info("NetworkNode listener was already active.")
+                    self.logger.info(">>>>>> NetworkNode listener started successfully!")
             else:
-                self.logger.error("NetworkNode not found after setup in enable(). Cannot enable multiplayer fully.")
-                # Potentially set self.enabled = False
-                return False # This is likely a critical failure
-            # --- END NEW/MODIFIED SECTION ---
+                self.logger.info("NetworkNode listener was already active.")
+        else:
+            self.logger.error("NetworkNode not found after setup in enable(). Cannot enable multiplayer fully.")
+            # Potentially set self.enabled = False
+            return False # This is likely a critical failure
+        # --- END NEW/MODIFIED SECTION ---
 
-            # Resume original enable logic:
-            # For example, re-initialize UI components, timers, etc.
-            # Ensure any components that were disabled are re-enabled.
+        # Resume original enable logic:
+        # For example, re-initialize UI components, timers, etc.
+        # Ensure any components that were disabled are re-enabled.
 
-            # Re-initialize or ensure timers are running (if they were stopped in disable)
-            if self.message_process_timer:
-                if not self.message_process_timer.isActive():
-                    self.message_process_timer.start(50)
-                    self.logger.info("Message processing timer restarted.")
-            else:
-                self.logger.warning("message_process_timer is None in enable(). Skipping.")
+        # Re-initialize or ensure timers are running (if they were stopped in disable)
+        if self.message_process_timer:
+            if not self.message_process_timer.isActive():
+                self.message_process_timer.start(50)
+                self.logger.info("Message processing timer restarted.")
+        else:
+            self.logger.warning("message_process_timer is None in enable(). Skipping.")
 
-            if hasattr(self, 'sync_timer') and self.sync_timer:
-                if not self.sync_timer.isActive():
-                    self.logger.info("Sync timer not active, starting/restarting it.")
-                    self.start_sync_timer()
-            else:
-                self.logger.warning("sync_timer not found or is None. Skipping.")
+        if hasattr(self, 'sync_timer') and self.sync_timer:
+            if not self.sync_timer.isActive():
+                self.logger.info("Sync timer not active, starting/restarting it.")
+                self.start_sync_timer()
+        else:
+            self.logger.warning("sync_timer not found or is None. Skipping.")
 
-            # Update status widget if applicable
-            if self.status_widget:
-                try:
-                    self.status_widget.update_status("Enabled", True)
-                    current_ip = self.network_node.local_ip if self.network_node else "N/A"
-                    if hasattr(self.status_widget, 'set_ip_address'):
-                        self.status_widget.set_ip_address(current_ip)
-                    else:
-                        self.logger.warning("status_widget has no set_ip_address method.")
-                except Exception as e:
-                    self.logger.error(f"Error updating status_widget in enable(): {e}", exc_info=True)
-            else:
-                self.logger.warning("status_widget is None in enable(). Skipping UI update.")
+        # Update status widget if applicable
+        if self.status_widget:
+            try:
+                self.status_widget.update_status("Enabled", True)
+                current_ip = self.network_node.local_ip if self.network_node else "N/A"
+                if hasattr(self.status_widget, 'set_ip_address'):
+                    self.status_widget.set_ip_address(current_ip)
+                else:
+                    self.logger.warning("status_widget has no set_ip_address method.")
+            except Exception as e:
+                self.logger.error(f"Error updating status_widget in enable(): {e}", exc_info=True)
+        else:
+            self.logger.warning("status_widget is None in enable(). Skipping UI update.")
 
-            self.enabled = True # Mark as enabled
-            self.logger.info("Multiplayer enabled successfully.")
-            return True
+        self.enabled = True # Mark as enabled
+        self.logger.info("Multiplayer enabled successfully.")
+        return True
 
     def disable(self):
         """Disables the multiplayer plugin and cleans up resources."""
@@ -402,7 +406,30 @@ class MultiplayerPlugin:
         node_id_val = f"squid_{uuid.uuid4().hex[:6]}"
         self.network_node = NetworkNode(node_id_val, logger=self.logger)
         self.network_node.debug_mode = self.debug_mode # Pass debug mode to network node
-        
+
+        # START LISTENING.
+        #
+        # Nothing did. NetworkNode.__init__ builds the socket, binds it and
+        # joins the multicast group - which is why the dashboard said
+        # "Connected" - but the thread that actually READS the socket is
+        # started by start_listening(), and the only call to it in this plugin
+        # had ended up inside debug_autopilot_status(), which returns early
+        # whenever there are no remote controllers. There never are at
+        # startup, so the listener never started.
+        #
+        # Sending was unaffected, so every instance broadcast happily into a
+        # group nobody was reading. incoming_queue stayed empty, known_nodes
+        # stayed empty, and no peer was ever detected - on one machine or
+        # across a LAN.
+        if not self.network_node.is_listening():
+            if self.network_node.start_listening():
+                self.logger.info(
+                    f"[MCAST] Listening for peers on {self.MULTICAST_GROUP}:{self.MULTICAST_PORT}")
+            else:
+                self.logger.error(
+                    "[MCAST] Could not start the listener thread. This instance "
+                    "can send but will never see another squid.")
+
         if self.tamagotchi_logic: # Ensure tamagotchi_logic exists before setting attribute
             setattr(self.tamagotchi_logic, 'multiplayer_network_node', self.network_node)
 
@@ -475,6 +502,19 @@ class MultiplayerPlugin:
         self.logger.info(f"Setup complete. Node: {node_id_val} on IP: {node_ip}. Listening for multicast on port: {node_port}")
         self.is_setup = True
         return True
+
+    def _network_health_check(self):
+        """Keep the connection lines fresh, and the listener alive.
+
+        NetworkNode.watchdog_check() existed and nothing called it, so a
+        listener thread that died stayed dead for the rest of the session.
+        """
+        if self.network_node is not None:
+            try:
+                self.network_node.watchdog_check()
+            except Exception as exc:
+                self.logger.error(f"Listener watchdog failed: {exc}")
+        self.update_connection_lines()
 
     def _process_network_node_queue(self, **kwargs):
         """Called by a QTimer to process messages from the NetworkNode's incoming_queue."""
@@ -1071,8 +1111,16 @@ class MultiplayerPlugin:
         # Network Stats Group (Conceptual)
         stats_group = QtWidgets.QGroupBox("Network Statistics (Conceptual)")
         stats_form = QtWidgets.QFormLayout(stats_group)
-        stats_form.addRow("Messages Sent (Total):", QtWidgets.QLabel(str(getattr(self.network_node, 'total_sent_count', 'N/A'))))
-        stats_form.addRow("Messages Received (Total):", QtWidgets.QLabel(str(getattr(self.network_node, 'total_received_count', 'N/A'))))
+        # These read the real counters now. Both rows used to name attributes
+        # NetworkNode has never had, so they showed "N/A" - and an instance
+        # that was sending into a group it never listened to looked exactly
+        # like a healthy one.
+        sent_label = QtWidgets.QLabel("0")
+        received_label = QtWidgets.QLabel("0")
+        listening_label = QtWidgets.QLabel("unknown")
+        stats_form.addRow("Messages Sent:", sent_label)
+        stats_form.addRow("Messages Received:", received_label)
+        stats_form.addRow("Listener:", listening_label)
         main_layout.addWidget(stats_group)
 
 
@@ -1081,6 +1129,19 @@ class MultiplayerPlugin:
             is_connected = self.network_node.is_connected
             status_val_label.setText("Connected" if is_connected else "Disconnected")
             status_val_label.setStyleSheet("color: green; font-weight: bold;" if is_connected else "color: red; font-weight: bold;")
+
+            # Traffic, so "am I actually hearing anything" is answerable at a
+            # glance. Received sitting at 0 while Sent climbs means this
+            # instance is talking and not listening.
+            node = self.network_node
+            sent_label.setText(str(getattr(node, 'messages_sent', 0)))
+            received_label.setText(str(getattr(node, 'messages_received', 0)))
+            if node is not None and node.is_listening():
+                listening_label.setText("running")
+                listening_label.setStyleSheet("color: green;")
+            else:
+                listening_label.setText("NOT RUNNING - no peer can be seen")
+                listening_label.setStyleSheet("color: red; font-weight: bold;")
 
             # Update peers table
             peers_table_widget.setRowCount(0) # Clear table
@@ -2020,7 +2081,7 @@ class MultiplayerPlugin:
         
         if not self.connection_timer_basic:
             self.connection_timer_basic = QtCore.QTimer()
-            self.connection_timer_basic.timeout.connect(self.update_connection_lines) # Fallback line drawing
+            self.connection_timer_basic.timeout.connect(self._network_health_check)
             self.connection_timer_basic.start(1200) # Update lines every 1.2s
 
 
