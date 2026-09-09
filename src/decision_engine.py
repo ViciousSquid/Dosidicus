@@ -14,23 +14,7 @@ from .brain_constants import (
 class DecisionEngine:
     """Reads the squid's behaviour off its own network.
 
-    WHAT THIS NO LONGER DOES
-    ------------------------
-    Earlier versions computed behaviour from hand-written formulas:
-
-        weights["eating"] = hunger * (3.0 if can_see_food > 80 else 0.3) \
-                            * 1.6 ** (hunger / 25)
-        weights["approaching_plant"] = (anxiety / 40) * (3.0 if near_plant else 0.5) \
-                                       * (4.0 if personality is TIMID else 1.8)
-
-    ...and a dozen more like them, followed by a memory-influence table and a
-    per-personality multiplier table. Those numbers were the squid's real
-    behaviour policy. The network could rewire itself completely - grow
-    neurons, invert synapses, consolidate a lifetime of experience - and the
-    squid would still do exactly what that arithmetic said, because nothing
-    the squid learned was ever consulted when it chose what to do.
-
-    WHAT IT DOES INSTEAD
+    WHAT IT DOES
     --------------------
     The network has action neurons (brain_constants.ACTION_NEURONS), one per
     thing the squid can do. Forward propagation drives them like any other
