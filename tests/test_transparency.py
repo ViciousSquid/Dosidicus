@@ -559,21 +559,48 @@ class SingleSourceOfTruthTests(unittest.TestCase):
         with open(os.path.join(_REPO_ROOT, relative_path), encoding='utf-8') as f:
             return f.read()
 
+    def _plugin_sources(self):
+        """Every plugin's Python, whichever plugins happen to be installed.
+
+        This used to name plugins/stdp/main.py and plugins/sleep_replay/main.py
+        directly. Both are gone - the mechanisms they wrapped are core engine
+        features now - but the thing those tests protected is not about those
+        two plugins: NO plugin may carry a second copy of a learning mechanism,
+        because then a squid's behaviour depends on which plugins are loaded
+        and the network stops being one explainable object.
+        """
+        import glob
+        root = os.path.join(_REPO_ROOT, 'plugins')
+        for path in glob.glob(os.path.join(root, '**', '*.py'), recursive=True):
+            if '__pycache__' in path:
+                continue
+            with open(path, encoding='utf-8') as handle:
+                yield os.path.relpath(path, _REPO_ROOT), handle.read()
+
     def test_no_plugin_monkey_patches_the_learning_rule(self):
-        for path in ('plugins/stdp/main.py', 'plugins/sleep_replay/main.py'):
-            source = self._source(path)
-            self.assertNotIn("_perform_hebbian_learning =", source,
-                             f"{path} patches the worker's learning rule again")
+        for path, source in self._plugin_sources():
+            with self.subTest(plugin=path):
+                self.assertNotIn("_perform_hebbian_learning =", source,
+                                 f"{path} patches the worker's learning rule")
 
-    def test_the_stdp_plugin_uses_the_engines_learner(self):
-        source = self._source('plugins/stdp/main.py')
-        self.assertNotIn("STDPLearner(", source,
-                         "the STDP plugin built a second learner")
+    def test_no_plugin_builds_a_second_learning_engine(self):
+        """One STDP learner and one replay engine per brain, both core-owned."""
+        for path, source in self._plugin_sources():
+            for constructor in ("STDPLearner(", "SleepReplayEngine(",
+                                "PlasticityEngine(", "ConsolidationManager("):
+                with self.subTest(plugin=path, constructor=constructor):
+                    self.assertNotIn(constructor, source,
+                                     f"{path} built its own {constructor[:-1]}")
 
-    def test_the_sleep_plugin_uses_the_engines_consolidation(self):
-        source = self._source('plugins/sleep_replay/main.py')
-        self.assertNotIn("SleepReplayEngine(", source,
-                         "the sleep plugin built a second replay engine")
+    def test_stdp_and_consolidation_are_not_plugins_any_more(self):
+        """They are always on. There is nothing left to enable or disable."""
+        for folder in ('stdp', 'sleep_replay'):
+            with self.subTest(plugin=folder):
+                self.assertFalse(
+                    os.path.isdir(os.path.join(_REPO_ROOT, 'plugins', folder)),
+                    f"plugins/{folder} is back; the engine already does this")
+        import src.stdp             # noqa: F401
+        import src.consolidation    # noqa: F401
 
     def test_there_is_one_neurogenesis_trigger_system(self):
         source = self._source('src/neurogenesis.py')
