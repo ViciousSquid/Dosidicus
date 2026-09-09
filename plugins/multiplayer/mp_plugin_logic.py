@@ -25,7 +25,7 @@ from .asset_paths import resolve_local_asset, is_inside_assets
 from .identity import SquidIdentity
 from .consent import ConsentPolicy, MODE_OPEN
 from .peer_ledger import PeerLedger
-from .encounter import EncounterSession
+from .encounter import EncounterSession, drive_snapshot
 from .encounter_sensors import ConspecificView, EncounterSensors
 from .host_body import HostBody
 from .visitor_mind import VisitorMind
@@ -767,14 +767,21 @@ class MultiplayerPlugin:
 
         now = time.time()
         self.conspecific_view.prune(now)
-        drives = self._drive_snapshot(squid)
+        drives = drive_snapshot(squid)
         action = getattr(squid, 'status', '') or ''
 
         # Anything the actuator did since the last tick belongs to whichever
         # encounter is open with that peer.
         for contest in self.conspecific_view.drain_contests():
             session = self.open_encounters.get(contest.get('peer_uuid', ''))
-            if session is not None and contest.get('taken'):
+            if session is None or not contest.get('taken'):
+                continue
+            # Which way the object went is the whole difference between a good
+            # encounter and a bad one, and it is an objective fact about the
+            # tank rather than an interpretation of it.
+            if contest.get('by') == 'peer':
+                session.note_item_lost()
+            else:
                 session.note_item_taken()
 
         present = {}
@@ -817,7 +824,7 @@ class MultiplayerPlugin:
             return
         squid = getattr(self.tamagotchi_logic, 'squid', None)
         if drives is None:
-            drives = self._drive_snapshot(squid)
+            drives = drive_snapshot(squid)
         if not session.is_memorable(now):
             self.logger.debug(f"Encounter with {session.peer} too brief to remember.")
             return
@@ -881,18 +888,6 @@ class MultiplayerPlugin:
         from .encounter_sensors import SENSOR_NAMES
         return [name for name in SENSOR_NAMES if float(state.get(name, 0) or 0) > 20.0]
 
-    @staticmethod
-    def _drive_snapshot(squid) -> Dict[str, float]:
-        """The drives an encounter's outcome is measured against."""
-        if squid is None:
-            return {}
-        snapshot = {}
-        for drive in ('hunger', 'happiness', 'satisfaction', 'anxiety',
-                      'curiosity', 'cleanliness', 'sleepiness'):
-            value = getattr(squid, drive, None)
-            if isinstance(value, (int, float)):
-                snapshot[drive] = float(value)
-        return snapshot
 
     def handle_squid_interaction(self, local_squid, remote_node_id, remote_squid_data):
         """Handles interactions between the local squid and a detected remote squid."""

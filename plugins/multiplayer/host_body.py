@@ -557,7 +557,9 @@ class HostBody:
         presence = view.presences.get(actor.uuid)
         rival = presence if presence is not None else actor
         try:
-            view.note_contest(rival, item, taken=taken)
+            # From the RESIDENT's point of view, which is whose view this is:
+            # a visitor taking an object is the resident losing one.
+            view.note_contest(rival, item, taken=taken, by='peer')
         except Exception as exc:
             self._log(f"could not record a contest: {exc}")
 

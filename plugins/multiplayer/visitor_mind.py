@@ -30,6 +30,7 @@ from - which is exactly the state Stage 0 existed to get out of.
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+from .encounter import EncounterSession, drive_snapshot
 from .identity import SquidIdentity
 from .remote_protocol import (
     ActionIntent, Consequence, PerceptionFrame, ProtocolError, VisitEnd,
@@ -146,6 +147,15 @@ class VisitorMind:
         self.intents_sent = 0
         self.last_intent: Optional[ActionIntent] = None
         self.consequences: List[Consequence] = []
+        #: The visit, as an experience this squid is having. Opened when the
+        #: host names its resident and closed when the visit ends, at which
+        #: point it becomes an ordinary memory keyed to that individual.
+        #:
+        #: Before Stage 2A a visiting squid recorded nothing at all: it could
+        #: READ what it remembered about a resident but never wrote anything
+        #: new, so the loop that is supposed to make a second encounter
+        #: different from a first was open at exactly the point that matters.
+        self.session: Optional[EncounterSession] = None
         self._seq = 0
         self._restore: Dict[str, Callable] = {}
 
@@ -194,7 +204,29 @@ class VisitorMind:
             # a consequence for this visit is recognised even before this
             # squid has had a chance to decide anything.
             self.visit_id = self.perception.visit_id
+            self._open_session()
         return accepted
+
+    def _open_session(self) -> None:
+        """Start recording the experience, once we know whose tank this is.
+
+        The resident's identity arrives with the first frame, and an
+        experience has to be filed against an individual or it is not the kind
+        of memory this stage is about - so the session cannot exist before
+        then.
+        """
+        if self.session is not None or not self.perception.resident:
+            return
+        squid = getattr(self.logic, 'squid', None)
+        first_meeting = True
+        if self.peer_ledger is not None:
+            first_meeting = (
+                self.peer_ledger.summary(self.perception.resident.uuid).encounters == 0)
+        self.session = EncounterSession(
+            self.perception.resident, drive_snapshot(squid),
+            first_meeting=first_meeting, now=self.clock(), clock=self.clock)
+        self._log(f"Encounter opened with {self.perception.resident} "
+                  f"(first meeting: {first_meeting})")
 
     # ==================================================================
     # Decision: the squid's own network, and the engine's own rule
@@ -236,6 +268,17 @@ class VisitorMind:
         action = self._neuron_for(behaviour)
         if action is None:
             return None
+
+        # The encounter is being had, not just transacted: what this squid did
+        # and how its drives moved while it was here are what the record is
+        # made of when the visit ends.
+        if self.session is not None:
+            self.session.observe(
+                drives=drive_snapshot(getattr(self.logic, 'squid', None)),
+                action=behaviour,
+                proximity=self.perception.sensor('conspecific_proximity', 0.0),
+                visible=bool(self.perception.sensor('conspecific_visible', 0.0)),
+                now=self.clock())
 
         self._seq += 1
         intent = ActionIntent(
@@ -326,6 +369,17 @@ class VisitorMind:
             return consequence
 
         kind, detail = consequence.kind, consequence.detail
+
+        # File the objective fact against this individual. What went into the
+        # tank's ledger is what HAPPENED - an object changed hands, food was
+        # eaten, an action found nothing - never a verdict about the resident.
+        if self.session is not None:
+            if kind == CONSEQUENCE_CONTEST:
+                if detail.get('won'):
+                    self.session.note_item_taken()
+                self.session.observe(action='contesting', now=self.clock())
+            elif kind == CONSEQUENCE_ATE and detail.get('ok'):
+                self.session.observe(action='eating', now=self.clock())
         if kind == CONSEQUENCE_ATE and detail.get('ok'):
             squid.hunger = max(0.0, float(getattr(squid, 'hunger', 50.0))
                                - _ATE_HUNGER_RELIEF)
@@ -373,6 +427,7 @@ class VisitorMind:
                           VisitEnd(self.visit_id, reason).to_payload())
             except Exception as exc:
                 self._log(f"could not announce departure: {exc}")
+        self.close_session()
         self.perception.end()
         self.visit_id = ''
         self.host_uuid = ''
@@ -386,6 +441,42 @@ class VisitorMind:
                     squid.squid_item.setVisible(True)
                 except Exception:
                     pass
+
+    def close_session(self) -> Optional[Any]:
+        """Turn the visit into a memory of that individual.
+
+        Written through PeerLedger, which writes through the squid's own
+        MemoryManager - so a visit becomes an ordinary memory, promoted by the
+        ordinary rule, readable by the Memory tab, and keyed to the resident
+        so it can never colour an encounter with anyone else.
+
+        Returns the record, or None if nothing worth remembering happened.
+        """
+        session, self.session = self.session, None
+        if session is None or self.peer_ledger is None:
+            return None
+        if not session.is_memorable(self.clock()):
+            self._log(f"Visit to {session.peer} too brief to remember.")
+            return None
+        record = session.close(
+            drives=drive_snapshot(getattr(self.logic, 'squid', None)),
+            now=self.clock(),
+            related_neurons=self._active_conspecific_neurons())
+        if self.peer_ledger.record(record):
+            self._log(f"Visit remembered: {record.describe()}")
+            return record
+        return None
+
+    def _active_conspecific_neurons(self) -> List[str]:
+        """Which conspecific sensors were reporting during this.
+
+        Stored on the memory as related_neurons, so the record points at the
+        structure that was involved in having the experience.
+        """
+        from .encounter_sensors import SENSOR_NAMES
+        state = self._brain_state()
+        return [name for name in SENSOR_NAMES
+                if float(state.get(name, 0) or 0) > 20.0]
 
     def tick(self) -> Optional[ActionIntent]:
         """One behavioural cadence. Returns the intent sent, if any.

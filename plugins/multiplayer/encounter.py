@@ -54,6 +54,26 @@ _IMPORTANCE_PER_VALENCE = 0.22
 _MAX_IMPORTANCE = 10.0
 
 
+#: The drives an encounter's outcome is measured against. One definition,
+#: because the visiting squid and the resident squid measure the same visit
+#: from their own ends and a disagreement about which drives count would make
+#: the two records incomparable.
+SNAPSHOT_DRIVES = ('hunger', 'happiness', 'satisfaction', 'anxiety',
+                   'curiosity', 'cleanliness', 'sleepiness')
+
+
+def drive_snapshot(squid) -> Dict[str, float]:
+    """Where a squid's drives stand right now."""
+    if squid is None:
+        return {}
+    snapshot = {}
+    for drive in SNAPSHOT_DRIVES:
+        value = getattr(squid, drive, None)
+        if isinstance(value, (int, float)):
+            snapshot[drive] = float(value)
+    return snapshot
+
+
 class EncounterRecord:
     """The finished experience: what happened, and how it went."""
 
@@ -274,5 +294,6 @@ class EncounterSession:
 
 
 __all__ = ['EncounterSession', 'EncounterRecord', 'OUTCOME_DRIVES',
+           'drive_snapshot', 'SNAPSHOT_DRIVES',
            'LOST_SIGHT_GRACE', 'MAX_ENCOUNTER_DURATION',
            'MIN_ENCOUNTER_DURATION']

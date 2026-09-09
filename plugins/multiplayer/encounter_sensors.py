@@ -206,11 +206,17 @@ class ConspecificView:
 
     # -- consequences ---------------------------------------------------
     def note_contest(self, rival, item=None, taken: bool = False,
-                     squid=None, now: Optional[float] = None) -> None:
+                     squid=None, now: Optional[float] = None,
+                     by: str = 'local') -> None:
         """A contest happened with this squid. Called by the actuator.
 
         Recorded rather than scored: what it did to either squid is measured
         from their drives when the encounter closes, not decided here.
+
+        `by` says WHICH squid ended up with the object - 'local' when this
+        squid took it, 'peer' when the other one did. Without it the same
+        record meant opposite things depending on who wrote it, and a squid
+        that had just been robbed filed the event as a gain.
         """
         stamp = now if now is not None else self.clock()
         presence = self.presences.get(getattr(rival, 'uuid', ''))
@@ -219,6 +225,7 @@ class ConspecificView:
         self._contest_log.append({
             'peer_uuid': getattr(rival, 'uuid', ''),
             'taken': bool(taken),
+            'by': 'peer' if by == 'peer' else 'local',
             'at': stamp,
             'item': getattr(item, 'filename', None),
         })
