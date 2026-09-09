@@ -86,7 +86,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             display_cfg = self.config_manager.get_display_settings() or {}
         except Exception:
             display_cfg = {}
-        final_width = int(display_cfg.get('brain_tool_width', 1300))
+        final_width = int(display_cfg.get('brain_tool_width', 1200))
         final_height = int(display_cfg.get('brain_tool_height', 900))
 
         # The size set here is the size the window OPENS at, and nothing else is
@@ -108,7 +108,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Position window properly in the top-right corner of the *available* screen geometry
         # x-coordinate: right edge of available geometry minus window width, then shift left by 200 pixels
-        x_pos = screen_geometry.right() - final_width - 900 # Shift left by subtracting 1and using final_width
+        x_pos = screen_geometry.right() - final_width - 100 # Shift left by subtracting 1and using final_width
         # y-coordinate: top edge of available geometry
         y_pos = screen_geometry.top() # Use top of available geometry
 
