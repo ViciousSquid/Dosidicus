@@ -135,6 +135,31 @@ class MemoryManager:
         sorted_memories = sorted(valid_memories, key=lambda x: x.get('timestamp', 0), reverse=True)
         return sorted_memories if raw else [self._format_memory_for_display(mem) for mem in sorted_memories]
 
+    def get_memories_by_key_prefix(self, category, prefix, include_short_term=True):
+        """Every memory in `category` whose key starts with `prefix`.
+
+        Memories are identified by (category, key), so an experience that is
+        ABOUT a particular thing carries that thing's identity in its key -
+        'peer:<uuid>' for an encounter with one individual. Without this, code
+        wanting "everything that happened with that squid" had to either scan
+        both lists by hand or keep a second store of its own.
+
+        Long-term memories come first: they are the ones that survived, and a
+        caller summarising a relationship wants the durable record to lead.
+        """
+        if not prefix:
+            return []
+        found = [m for m in self.long_term_memory
+                 if m.get('category') == category
+                 and isinstance(m.get('key'), str)
+                 and m['key'].startswith(prefix)]
+        if include_short_term:
+            found.extend(m for m in self.short_term_memory
+                         if m.get('category') == category
+                         and isinstance(m.get('key'), str)
+                         and m['key'].startswith(prefix))
+        return found
+
     def get_all_long_term_memories(self, category=None):
         filtered = [m for m in self.long_term_memory if not (isinstance(m.get('key'), str) and m['key'].isdigit())]
         if category:

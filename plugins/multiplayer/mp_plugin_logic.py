@@ -21,6 +21,12 @@ from . import mp_constants # Access constants like mp_constants.PLUGIN_NAME
 from .mp_network_node import NetworkNode
 from .remote_entity_manager import RemoteEntityManager # Ensure this is imported if type hinting or direct use
 from .squid_multiplayer_autopilot import RemoteSquidController # Ensure this for autopilot logic
+from .asset_paths import resolve_local_asset, is_inside_assets
+from .identity import SquidIdentity
+from .consent import ConsentPolicy, MODE_OPEN
+from .peer_ledger import PeerLedger
+from .encounter import EncounterSession
+from .encounter_sensors import ConspecificView, EncounterSensors
 
 # TamagotchiLogic is imported in main.py and should be in sys.path
 # If type hinting is needed here and main.py's import might not be seen by linters:
@@ -60,6 +66,18 @@ class MultiplayerPlugin:
         self.pending_controller_creations: List[Dict[str, Any]] = []
         self.connection_lines: Dict[str, QtWidgets.QGraphicsLineItem] = {}
         self.last_message_times: Dict[str, float] = {}
+
+        # --- Encounters ---
+        # Identity is the squid's own persistent uuid, not node_id: node_id is
+        # regenerated every setup and cannot answer "is this the same squid I
+        # met last week".
+        self.local_identity: SquidIdentity | None = None
+        self.peer_identities: Dict[str, SquidIdentity] = {}   # node_id -> identity
+        self.consent_policy = ConsentPolicy(mode=MODE_OPEN)
+        self.conspecific_view = ConspecificView()
+        self.peer_ledger: PeerLedger | None = None
+        self.encounter_sensors: EncounterSensors | None = None
+        self.open_encounters: Dict[str, EncounterSession] = {}   # peer uuid -> session
 
         # --- Configuration ---
         self.MULTICAST_GROUP = mp_constants.MULTICAST_GROUP
@@ -266,6 +284,20 @@ class MultiplayerPlugin:
                 {'node_id': self.network_node.node_id, 'reason': 'plugin_disabled'}
             )
 
+        # Close whatever encounters were still open, so an experience the
+        # squid was in the middle of having is not simply lost.
+        for peer_uuid in list(self.open_encounters):
+            try:
+                self.close_encounter(peer_uuid)
+            except Exception as exc:
+                self.logger.error(f"Could not close encounter with {peer_uuid}: {exc}")
+        self.conspecific_view.clear()
+        if self.encounter_sensors and self.plugin_manager:
+            # Stops the values. Deliberately leaves both the neurons and their
+            # sensor classification in place - see EncounterSensors.unregister.
+            self.encounter_sensors.unregister(self.plugin_manager,
+                                              plugin_name=mp_constants.PLUGIN_NAME)
+
         self.cleanup()
 
         if self.status_widget: self.status_widget.hide()
@@ -407,6 +439,9 @@ class MultiplayerPlugin:
 
         self.initialize_status_ui() # Initialize status widget or bar
 
+        # --- Encounters: make another squid something the brain can sense ---
+        self.install_encounter_sensors()
+
         if self.tamagotchi_logic and hasattr(self.tamagotchi_logic, 'show_message') and self.network_node:
             self.tamagotchi_logic.show_message(f"Multiplayer active! Node ID: {self.network_node.node_id}")
 
@@ -467,6 +502,199 @@ class MultiplayerPlugin:
             if self.debug_mode:
                 self.logger.error(f"Error updating remote squid image for direction '{direction}': {e}", exc_info=True)
             return False
+
+    # =====================================================================
+    # ENCOUNTERS
+    # =====================================================================
+
+    def install_encounter_sensors(self) -> bool:
+        """Give the local brain the sense organs an encounter needs.
+
+        Three registrations, in three different places, because a sensor is
+        three different things to three parts of the engine: a handler the
+        hooks will call, a classification the structural systems reason about,
+        and a neuron that has to exist in the brain for either to matter.
+        """
+        if not self.tamagotchi_logic or not self.plugin_manager:
+            return False
+        squid = getattr(self.tamagotchi_logic, 'squid', None)
+        self.local_identity = SquidIdentity.from_squid(squid)
+
+        memory_manager = getattr(squid, 'memory_manager', None)
+        self.peer_ledger = PeerLedger(memory_manager)
+        self.encounter_sensors = EncounterSensors(self.conspecific_view,
+                                                  self.peer_ledger)
+
+        # Published the way latest_vision_result is, so the engine's own
+        # actuator can consult it through getattr and run without it.
+        self.tamagotchi_logic.conspecific_view = self.conspecific_view
+
+        try:
+            from src import brain_constants
+        except ImportError:
+            import brain_constants  # standalone layout
+
+        brain_widget = None
+        brain_window = getattr(self.tamagotchi_logic, 'brain_window', None)
+        if brain_window is not None:
+            brain_widget = getattr(brain_window, 'brain_widget', None)
+
+        registered = self.encounter_sensors.register(
+            self.plugin_manager, brain_constants,
+            plugin_name=mp_constants.PLUGIN_NAME, brain_widget=brain_widget)
+        self.logger.info(f"Encounter sensors registered: {', '.join(registered)}")
+        return True
+
+    def update_encounters(self) -> None:
+        """Open, feed and close encounters. Called on the sync tick.
+
+        This does not decide anything. It notices that another squid is
+        present, records what this squid did while it was, and writes down how
+        the drives moved - which is the evidence the existing learning systems
+        already work from.
+        """
+        if not self.tamagotchi_logic or self.peer_ledger is None:
+            return
+        squid = getattr(self.tamagotchi_logic, 'squid', None)
+        if squid is None:
+            return
+        if self.encounter_sensors is not None:
+            # The brain window may not have existed when the plugin set up.
+            # A sensor whose neuron is missing from the brain is never asked
+            # for a value, so this is retried until it lands.
+            brain_window = getattr(self.tamagotchi_logic, 'brain_window', None)
+            widget = getattr(brain_window, 'brain_widget', None)
+            if widget is not None:
+                self.encounter_sensors.attach_to_brain(widget)
+
+        now = time.time()
+        self.conspecific_view.prune(now)
+        drives = self._drive_snapshot(squid)
+        action = getattr(squid, 'status', '') or ''
+
+        # Anything the actuator did since the last tick belongs to whichever
+        # encounter is open with that peer.
+        for contest in self.conspecific_view.drain_contests():
+            session = self.open_encounters.get(contest.get('peer_uuid', ''))
+            if session is not None and contest.get('taken'):
+                session.note_item_taken()
+
+        present = {}
+        for presence in self.conspecific_view.presences.values():
+            if now - presence.last_update > 3.0:
+                continue
+            present[presence.uuid] = presence
+
+        for uuid_key, presence in present.items():
+            session = self.open_encounters.get(uuid_key)
+            if session is None:
+                summary = self.peer_ledger.summary(uuid_key)
+                session = EncounterSession(
+                    presence.identity, drives,
+                    first_meeting=(summary.encounters == 0), now=now)
+                self.open_encounters[uuid_key] = session
+                self.logger.info(
+                    f"Encounter opened with {presence.identity} "
+                    f"(first meeting: {session.first_meeting})")
+            proximity = max(0.0, 100.0 - presence.distance / 4.0)
+            session.observe(drives=drives, action=action,
+                            peer_action=presence.status,
+                            proximity=proximity, visible=True, now=now)
+
+        for uuid_key, session in list(self.open_encounters.items()):
+            if not session.should_close(now):
+                continue
+            # Closed on its own terms, which includes a visitor that has been
+            # here longer than MAX_ENCOUNTER_DURATION. A peer that is STILL
+            # present simply starts a fresh encounter on the next tick, so a
+            # squid that shares its tank for an hour accumulates experiences
+            # rather than one enormous unwritten one.
+            self.close_encounter(uuid_key, drives, now)
+
+    def close_encounter(self, peer_uuid: str, drives: Dict[str, float] | None = None,
+                        now: float | None = None) -> None:
+        """Finish an encounter and file it as an experience."""
+        session = self.open_encounters.pop(peer_uuid, None)
+        if session is None:
+            return
+        squid = getattr(self.tamagotchi_logic, 'squid', None)
+        if drives is None:
+            drives = self._drive_snapshot(squid)
+        if not session.is_memorable(now):
+            self.logger.debug(f"Encounter with {session.peer} too brief to remember.")
+            return
+        record = session.close(drives=drives, now=now,
+                               related_neurons=list(self._active_encounter_neurons()))
+        if self.peer_ledger.record(record):
+            self.logger.info(f"Encounter remembered: {record.describe()}")
+            if hasattr(self.tamagotchi_logic, 'show_message'):
+                self.tamagotchi_logic.show_message(
+                    f"Your squid remembers a {record.outcome} encounter with {record.peer.name}.")
+
+    def perceive_remote_squid(self, remote_node_id: str, squid_data: Dict) -> bool:
+        """Tell the local squid's senses where another squid is.
+
+        Position only, plus who it is and what it is visibly doing. Nothing
+        about the other squid's brain crosses this line, because nothing about
+        it needs to: the local squid can see a squid, not its intentions.
+        """
+        if not squid_data or self.encounter_sensors is None:
+            return False
+        local_squid = getattr(self.tamagotchi_logic, 'squid', None)
+        if local_squid is None:
+            return False
+
+        identity = self.peer_identities.get(remote_node_id)
+        if identity is None:
+            identity = SquidIdentity.from_payload(squid_data.get('identity') or {})
+            if identity is None:
+                # No usable identity: still perceptible as A squid, but not
+                # recognisable as a PARTICULAR one, so it gets a per-node
+                # stand-in that will never match a remembered individual.
+                return False
+            self.peer_identities[remote_node_id] = identity
+
+        try:
+            peer_x = float(squid_data.get('x', 0.0))
+            peer_y = float(squid_data.get('y', 0.0))
+        except (TypeError, ValueError):
+            return False
+
+        self.conspecific_view.observe_peer(
+            identity,
+            x=peer_x, y=peer_y,
+            observer_x=getattr(local_squid, 'squid_x', 0.0),
+            observer_y=getattr(local_squid, 'squid_y', 0.0),
+            facing=getattr(local_squid, 'squid_direction', 'right'),
+            status=str(squid_data.get('status', ''))[:32],
+        )
+        return True
+
+    def _active_encounter_neurons(self) -> List[str]:
+        """Which conspecific sensors were actually reporting during this.
+
+        Stored on the memory as related_neurons, which the Memory tab already
+        knows how to show, so an encounter memory can point at the structure
+        that was involved in having it.
+        """
+        brain_window = getattr(self.tamagotchi_logic, 'brain_window', None)
+        widget = getattr(brain_window, 'brain_widget', None)
+        state = getattr(widget, 'state', {}) or {}
+        from .encounter_sensors import SENSOR_NAMES
+        return [name for name in SENSOR_NAMES if float(state.get(name, 0) or 0) > 20.0]
+
+    @staticmethod
+    def _drive_snapshot(squid) -> Dict[str, float]:
+        """The drives an encounter's outcome is measured against."""
+        if squid is None:
+            return {}
+        snapshot = {}
+        for drive in ('hunger', 'happiness', 'satisfaction', 'anxiety',
+                      'curiosity', 'cleanliness', 'sleepiness'):
+            value = getattr(squid, drive, None)
+            if isinstance(value, (int, float)):
+                snapshot[drive] = float(value)
+        return snapshot
 
     def handle_squid_interaction(self, local_squid, remote_node_id, remote_squid_data):
         """Handles interactions between the local squid and a detected remote squid."""
@@ -919,6 +1147,25 @@ class MultiplayerPlugin:
                 self.logger.debug(f"Ignoring own squid_exit broadcast for {source_node_id}.")
                 return False
 
+            # ---------- HOST CONSENT ----------
+            # Entry used to be unconditional: any squid_exit on the multicast
+            # group put a visitor in the tank. The host decides now, and a
+            # refusal is where the visit ends - nothing visual is created and
+            # no autopilot is built, so a refused visitor cannot enter.
+            visitor_identity = SquidIdentity.from_payload(
+                exit_payload_inner.get('identity') or {})
+            decision = self.consent_policy.evaluate(
+                visitor_identity, current_visitors=len(self.remote_squid_controllers))
+            if not decision.accepted:
+                self.logger.info(
+                    f"Refused entry to {visitor_identity or source_node_id}: {decision.reason}")
+                if self.network_node:
+                    self.network_node.send_message('visit_response', decision.to_payload())
+                return False
+            self.peer_identities[source_node_id] = visitor_identity
+            if self.network_node:
+                self.network_node.send_message('visit_response', decision.to_payload())
+
             # ========== NEW: SHOW THE BIG EXIT ARROW ==========
             exit_dir = exit_payload_inner.get('direction', 'right')
             if self.debug_mode:
@@ -1240,30 +1487,21 @@ class MultiplayerPlugin:
                     continue
 
                 # --- Asset Path Resolution ---
-                # This logic attempts to find the image based on the original_filename.
-                # It assumes original_filename might be a base name or include a subfolder like "decoration/".
-                possible_paths = [
-                    os.path.join("images", original_filename), 
-                    os.path.join("images", "decoration", os.path.basename(original_filename)),
-                    os.path.join("images", "items", os.path.basename(original_filename)),
-                    os.path.join("images", "food", os.path.basename(original_filename)), # If food can be carried
-                    os.path.join("images", "rocks", os.path.basename(original_filename)), # If rocks are in subfolder
-                    original_filename # If original_filename was already a relative path like "images/foo.png"
-                ]
-                
-                item_image_path = None
-                for p_path in possible_paths:
-                    # Normalize path for consistent checking
-                    normalized_path = os.path.normpath(p_path)
-                    if os.path.exists(normalized_path):
-                        item_image_path = normalized_path
-                        break
-                
+                # original_filename arrives from another machine. It is used
+                # ONLY to pick a file out of this installation's own asset
+                # directories: resolve_local_asset takes the basename and then
+                # verifies the resolved path really is inside those roots, so
+                # a name like '../../etc/passwd.png' resolves to nothing.
+                # This used to end with the remote value used verbatim as a
+                # relative path, which resolved wherever the sender liked.
+                item_image_path = resolve_local_asset(original_filename)
+
                 if not item_image_path:
-                    self.logger.warning(f"Could not find local image asset for '{original_filename}'. Attempting fallback to default rock/item.")
+                    self.logger.warning(f"No local asset matches remote item name '{original_filename}'. Falling back to the default rock.")
                     # Fallback to a generic rock image if specific image not found
                     item_image_path = os.path.join("images", "rock.png") # Default fallback
-                    if not os.path.exists(item_image_path):
+                    if not (os.path.exists(item_image_path)
+                            and is_inside_assets(item_image_path)):
                         self.logger.error(f"Default fallback image 'images/rock.png' also not found. Cannot recreate item.")
                         continue # Skip this item
                     original_category = 'rock' # Override category if using fallback rock
@@ -1781,6 +2019,14 @@ class MultiplayerPlugin:
             return # Prerequisites not met
 
         try:
+            # Encounters are advanced on the same tick the state goes out, so
+            # "how long was that squid here" is measured on the same clock the
+            # rest of multiplayer runs on.
+            try:
+                self.update_encounters()
+            except Exception as exc:
+                self.logger.error(f"Encounter update failed: {exc}", exc_info=True)
+
             squid_current_state = self._get_squid_state()
             objects_current_state = self._get_objects_state() # Get state of syncable objects
 
@@ -1833,7 +2079,13 @@ class MultiplayerPlugin:
             'node_id': self.network_node.node_id, # Include node_id for identification
             'view_cone_visible': getattr(squid, 'view_cone_visible', False), # Is view cone active
             'squid_width': getattr(squid, 'squid_width', 60), # For rendering remote squid
-            'squid_height': getattr(squid, 'squid_height', 40) # For rendering remote squid
+            'squid_height': getattr(squid, 'squid_height', 40), # For rendering remote squid
+            # Who this is, as opposed to which socket it came from. node_id is
+            # regenerated every setup; squid.uuid is written into the save file
+            # and restored from it, so it is what makes "the same squid again"
+            # a question with an answer.
+            'identity': (self.local_identity.to_payload()
+                         if self.local_identity else None),
         }
 
 
@@ -1971,12 +2223,14 @@ class MultiplayerPlugin:
                     for obj_id_to_remove in ids_to_remove:
                         self.remove_remote_object(obj_id_to_remove) # Method to remove visual and from dict
 
-            # Optional: Trigger local squid's reaction to seeing a remote squid
-            if self.tamagotchi_logic.squid and hasattr(self.tamagotchi_logic.squid, 'process_squid_detection') and remote_squid_state:
-                # Pass remote_squid_state as remote_squid_props for position-based fleeing
-                self.tamagotchi_logic.squid.process_squid_detection(
-                    remote_node_id=sender_node_id, is_visible=True, remote_squid_props=remote_squid_state
-                )
+            # Tell the local squid it can see another squid. Keyed on the
+            # PERSISTENT identity, not the node id: "have I seen this one
+            # before" has to survive the sender restarting.
+            if self.tamagotchi_logic.squid and remote_squid_state:
+                identity = self.peer_identities.get(sender_node_id)
+                if identity is not None:
+                    self.tamagotchi_logic.squid.process_squid_detection(
+                        identity.uuid, is_visible=True)
         except Exception as e:
             if self.debug_mode: self.logger.error(f"Handling object_sync from {addr} failed: {e}", exc_info=True)
 
@@ -2026,19 +2280,16 @@ class MultiplayerPlugin:
         # For example, if you had a special shared item type like 'portal' or 'shared_toy'
         # that you *did* want mirrored, its processing would continue here.
 
-        base_filename = os.path.basename(remote_obj_data.get('filename', 'unknown_sync_item.png'))
-        
-        # Asset path resolution (same as before)
-        resolved_filename = os.path.join("images", base_filename) 
-        if not os.path.exists(resolved_filename):
-            for subdir in ["decoration", "items", "food", "rocks"]: # Add other relevant subdirs if needed
-                path_attempt = os.path.join("images", subdir, base_filename)
-                if os.path.exists(path_attempt):
-                    resolved_filename = path_attempt
-                    break
-            else: 
-                if self.debug_mode: self.logger.warning(f"process_remote_object: Image for allowed sync item '{base_filename}' (type: '{item_type_from_remote}') not found locally for clone '{clone_id}'. Skipping visual.")
-                return
+        # One definition of "which local file does this remote name mean" -
+        # see asset_paths.resolve_local_asset. It takes the basename and then
+        # verifies the resolved path is genuinely inside this installation's
+        # asset directories, so nothing a peer sends can name a file outside
+        # them.
+        base_filename = remote_obj_data.get('filename', 'unknown_sync_item.png')
+        resolved_filename = resolve_local_asset(base_filename)
+        if not resolved_filename:
+            if self.debug_mode: self.logger.warning(f"process_remote_object: Image for allowed sync item '{base_filename}' (type: '{item_type_from_remote}') not found in local assets for clone '{clone_id}'. Skipping visual.")
+            return
 
         # Thread safety for self.remote_objects dictionary
         with self.remote_objects_lock: 
@@ -2138,6 +2389,11 @@ class MultiplayerPlugin:
         """Updates or creates the visual representation of a remote squid.
            This method now primarily defers to self.entity_manager if available."""
         if not self.logger: return False
+
+        # Perception first: this is the one place every remote squid position
+        # passes through, so it is where the local brain gets told that
+        # another squid is there.
+        self.perceive_remote_squid(remote_node_id, squid_data_dict)
         
         if self.entity_manager:
             # entity_manager.update_remote_squid will handle all visual creation and updates

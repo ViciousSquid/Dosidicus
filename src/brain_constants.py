@@ -117,6 +117,123 @@ CORE_STAT_NEURONS = set(CORE_NEURONS.keys())
 NON_PROPAGATED_NEURONS = PURE_INPUT_NEURONS | CORE_STAT_NEURONS
 
 
+# =============================================================================
+# REGISTERING A SENSOR AT RUNTIME
+#
+# A plugin can already supply the VALUE of a new input neuron - see
+# PluginManager.register_neuron_handler and BrainNeuronHooks. What it could
+# not do was tell the rest of the project that the neuron is a SENSE ORGAN,
+# because the four sets above were built once at import and a plugin sensor
+# was in none of them. The consequences were not cosmetic:
+#
+#   propagation.baseline_of()      it rested at the 50 midpoint instead of 0,
+#                                  so "nothing to report" read as a signal -
+#                                  and forward propagation was free to
+#                                  overwrite whatever the world had written
+#   capability.situation_signature() the situation it defines could never be
+#                                  named, so no representation deficit could
+#                                  ever be raised for it
+#   causal_learning._capture_cue() it could never be the antecedent of a
+#                                  causal claim, so no expression deficit
+#                                  either
+#   is_learning_target()           plasticity was allowed to write synapses
+#                                  INTO a neuron the world overwrites every
+#                                  tick, which are inert by construction
+#
+# So the sets are mutated in place rather than rebuilt: every module that did
+# `from .brain_constants import PURE_INPUT_NEURONS` holds a reference to the
+# set object itself, and rebinding the name here would leave all of them
+# looking at a stale copy.
+#
+# This is deliberately generic. Nothing here knows what a sensor is FOR.
+# =============================================================================
+
+#: Where a registered sensor asked to be drawn, if it said. Kept apart from
+#: INPUT_SENSORS so that the built-in layout is exactly what it always was.
+PLUGIN_INPUT_SENSORS: dict = {}
+
+#: Which sensors arrived at runtime, and who registered them. Only these can
+#: be unregistered - a plugin can never remove a built-in sense organ.
+_REGISTERED_SENSORS: dict = {}
+
+#: Anything holding a derived copy of the role sets subscribes here.
+#: propagation does, because its resting-level set is one.
+_SENSOR_LISTENERS: list = []
+
+
+def on_input_sensor_change(callback) -> None:
+    """Subscribe to sensor registration.
+
+    `callback(name, binary, added)` runs whenever a sensor is registered or
+    unregistered. Used by modules that cache a set derived from the role sets
+    above and cannot see an in-place mutation of a different set.
+    """
+    if callback not in _SENSOR_LISTENERS:
+        _SENSOR_LISTENERS.append(callback)
+
+
+def _notify_sensor_change(name: str, binary: bool, added: bool) -> None:
+    for callback in list(_SENSOR_LISTENERS):
+        try:
+            callback(name, binary, added)
+        except Exception as exc:      # a bad listener must not break the brain
+            print(f"[brain_constants] sensor listener failed for '{name}': {exc}")
+
+
+def register_input_sensor(name: str, *, binary: bool = False,
+                          position=None, owner: str = "plugin") -> bool:
+    """Classify `name` as a pure input neuron for the rest of its process life.
+
+    The caller is separately responsible for supplying the value (a neuron
+    handler) and for the neuron existing in the brain. This function only
+    answers the question every system above asks: "is this a sense organ?"
+
+    Registering a name that is already a built-in sensor is a no-op, and
+    returns False - a plugin may override the built-in's VALUE through the
+    handler registry, but it may not reclassify the neuron.
+    """
+    if not isinstance(name, str) or not name:
+        raise ValueError("sensor name must be a non-empty string")
+    if name in CORE_STAT_NEURONS or name in ACTION_NEURONS:
+        raise ValueError(
+            f"'{name}' is a core stat or an action neuron and cannot be a sensor")
+    if name in PURE_INPUT_NEURONS and name not in _REGISTERED_SENSORS:
+        return False                  # already a built-in; leave it alone
+
+    binary = bool(binary)
+    _REGISTERED_SENSORS[name] = {'binary': binary, 'owner': owner}
+    (BINARY_NEURONS if binary else ANALOGUE_SENSORS).add(name)
+    PURE_INPUT_NEURONS.add(name)
+    NON_PROPAGATED_NEURONS.add(name)
+    if position is not None:
+        PLUGIN_INPUT_SENSORS[name] = tuple(position)
+    _notify_sensor_change(name, binary, True)
+    return True
+
+
+def unregister_input_sensor(name: str) -> bool:
+    """Undo `register_input_sensor`. Built-in sensors are never removed."""
+    entry = _REGISTERED_SENSORS.pop(name, None)
+    if entry is None:
+        return False
+    (BINARY_NEURONS if entry['binary'] else ANALOGUE_SENSORS).discard(name)
+    PURE_INPUT_NEURONS.discard(name)
+    NON_PROPAGATED_NEURONS.discard(name)
+    PLUGIN_INPUT_SENSORS.pop(name, None)
+    _notify_sensor_change(name, entry['binary'], False)
+    return True
+
+
+def registered_input_sensors() -> dict:
+    """{name: {'binary': bool, 'owner': str}} for sensors added at runtime."""
+    return {name: dict(entry) for name, entry in _REGISTERED_SENSORS.items()}
+
+
+def is_registered_input_sensor(name: str) -> bool:
+    """True if this sensor arrived at runtime rather than being built in."""
+    return name in _REGISTERED_SENSORS
+
+
 def is_network_driven(name: str) -> bool:
     """True if this neuron's activation is computed by forward propagation."""
     return name not in NON_PROPAGATED_NEURONS
@@ -318,6 +435,11 @@ ACTION_NEURONS = {
     "act_play":     (750, 250),
     "act_shelter":  (250, 160),
     "act_rest":     (620, 160),
+    # Contesting an object with another squid. Like act_play and act_shelter
+    # it has NO innate wiring: the squid is born able to do it and with
+    # nothing driving it, so whether it ever contests anything is something
+    # its experience has to decide.
+    "act_contest":  (800, 160),
     # Involuntary. Not the same neuron as act_rest: choosing to rest before
     # you are exhausted is a thing a squid can learn, and collapsing when you
     # are is a thing that happens to it. See the homeostatic drives below.
@@ -363,6 +485,7 @@ ACTION_BEHAVIOURS = {
     "act_shelter":  "approaching_plant",
     "act_rest":     "sleeping",
     "act_collapse": "exhausted",
+    "act_contest":  "contesting",
 }
 
 
@@ -403,6 +526,9 @@ ACTION_FIRING_THRESHOLDS = {
     "act_play":     38.0,
     "act_shelter":  38.0,
     "act_rest":     38.0,
+    # Same band as the other learned actions, and for the same reason: a
+    # threshold has to be reachable by the pathways that could drive it.
+    "act_contest":  38.0,
     # Only at the very top of the sleepiness scale.
     "act_collapse": 45.0,
 }
@@ -500,7 +626,8 @@ INNATE_ACTION_WIRING = (
 # Reflexes (inking, collapsing) sit outside the competition. Inking runs
 # alongside flight rather than against it, and an exhausted squid does not
 # get a vote.
-COMPETING_ACTIONS = ("act_eat", "act_flee", "act_play", "act_shelter", "act_rest")
+COMPETING_ACTIONS = ("act_eat", "act_flee", "act_play", "act_shelter", "act_rest",
+                     "act_contest")
 
 #: How hard a driven action suppresses its rivals, and idle swimming.
 LATERAL_INHIBITION = -0.22
@@ -577,6 +704,11 @@ INNATE_ACTION_BINDINGS = (
     ("act_shelter",  "neuron_output_seek_plant",     4.0, 1.00),
     ("act_rest",     "neuron_output_sleep",         10.0, 1.00),
     ("act_collapse", "neuron_output_sleep",         10.0, 1.00),
+    # The body can contest an object; nothing drives the neuron until the
+    # squid has learned to. With no conspecific in the tank the actuator has
+    # no target and does nothing, which is the correct answer rather than a
+    # special case.
+    ("act_contest",  "neuron_output_contest",        6.0, 1.00),
 )
 
 

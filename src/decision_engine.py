@@ -305,6 +305,18 @@ class DecisionEngine:
                 return "seeking toy"
             return self._drift()
 
+        if decision == "contesting":
+            # The actuator (neuron_output_contest) is what finds the rival and
+            # the object, because it is the only thing that knows where other
+            # squid are. If there is nothing to contest the squid drifts, and
+            # the disappointment is itself experience - the same rule the rest
+            # of this method follows.
+            logic = getattr(s, 'tamagotchi_logic', None)
+            view = getattr(logic, 'conspecific_view', None)
+            if view is not None and view.nearest() is not None:
+                return "contesting"
+            return self._drift()
+
         if decision == "sleeping":
             s.go_to_sleep()
             return "settling down to sleep"

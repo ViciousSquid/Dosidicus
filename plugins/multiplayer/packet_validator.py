@@ -38,7 +38,11 @@ class PacketValidator:
         valid_types = [
             'heartbeat', 'squid_move', 'squid_action', 'object_sync', 
             'rock_throw', 'player_join', 'player_leave', 'state_update',
-            'squid_exit', 'new_squid_arrival'
+            'squid_exit', 'new_squid_arrival',
+            # Encounters. 'visit_request' asks the host for entry and
+            # 'visit_response' carries its answer, so arriving in a tank is
+            # something the host agreed to rather than something a sender did.
+            'visit_request', 'visit_response',
         ]
         if message['type'] not in valid_types:
             return False, f"Unknown message type: {message['type']}"
@@ -50,12 +54,35 @@ class PacketValidator:
         # Type-specific validation
         if message['type'] == 'squid_exit':
             return PacketValidator.validate_squid_exit(message['payload'])
+        elif message['type'] in ('visit_request', 'visit_response'):
+            return PacketValidator.validate_visit(message['type'], message['payload'])
         elif message['type'] == 'object_sync':
             return PacketValidator.validate_object_sync(message['payload'])
         
         # Default to valid for types without specific validation
         return True, None
     
+    @staticmethod
+    def validate_visit(message_type: str, payload: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """Check a consent handshake payload.
+
+        Both sides carry a peer uuid, which becomes a memory key on receipt,
+        so it is checked here rather than trusted further in.
+        """
+        if not isinstance(payload, dict):
+            return False, "Visit payload must be a dictionary"
+        if message_type == 'visit_response':
+            if not isinstance(payload.get('accepted'), bool):
+                return False, "visit_response must carry a boolean 'accepted'"
+            if not isinstance(payload.get('reason', ''), str):
+                return False, "visit_response 'reason' must be a string"
+        identity = payload.get('identity') if message_type == 'visit_request' else payload
+        peer_uuid = (identity or {}).get('uuid') if isinstance(identity, dict) else None
+        peer_uuid = peer_uuid or payload.get('peer_uuid')
+        if peer_uuid is not None and not re.match(r'^[0-9a-fA-F-]{32,36}$', str(peer_uuid)):
+            return False, "Invalid peer uuid"
+        return True, None
+
     @staticmethod
     def validate_squid_exit(payload: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         """Validate squid exit payload"""

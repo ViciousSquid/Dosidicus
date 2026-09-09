@@ -282,6 +282,11 @@ STANDARD_OUTPUT_HOOKS = {
         'category': 'action',
         'default_threshold': 50.0,
     },
+    'neuron_output_contest': {
+        'description': 'Contest an object another squid has claim to',
+        'category': 'action',
+        'default_threshold': 38.0,
+    },
     
     # State changes
     'neuron_output_sleep': {
@@ -838,6 +843,71 @@ class NeuronOutputMonitor:
             squid.pursuing_food = True
             squid.set_neural_drive('seek_food', duration=4.0, target=(c.x(), c.y()),
                                    priority=squid.DRIVE_URGE)
+
+    def _handle_contest(self, neuron_name, activation, squid, tamagotchi_logic=None, **kwargs):
+        """Take an object another squid has a claim to.
+
+        What makes this a contest rather than ordinary foraging is the target:
+        the object contested is one that is NEARER TO ANOTHER SQUID than to
+        this one. That is the only thing this actuator knows about the other
+        squid, and it is deliberately all it knows - whether contesting is
+        ever worth doing is a question for the network, not for this method.
+
+        With no conspecific present there is nothing to contest and this does
+        nothing. That is the correct answer rather than a special case: a
+        solitary squid can be born able to contest and simply never find an
+        occasion to, exactly as it is born able to play and may never meet a
+        rock.
+        """
+        logic = tamagotchi_logic or self.logic
+        if not squid or not logic:
+            return
+
+        # Published by whatever is tracking other squid - the multiplayer
+        # plugin, in practice. Read through getattr for the same reason
+        # latest_vision_result is: the engine must run without it.
+        view = getattr(logic, 'conspecific_view', None)
+        rival = view.nearest() if view is not None else None
+        if rival is None:
+            return
+
+        contested = self._nearest_contested_item(squid, logic, rival)
+        if contested is None:
+            return
+
+        squid.status = "contesting"
+        if hasattr(squid, 'set_neural_drive'):
+            squid.set_neural_drive('approach_rock', duration=5.0, target=contested,
+                                   priority=squid.DRIVE_URGE)
+        # Close enough to actually take it. The consequence is a real change
+        # to the tank, which is what makes the outcome something both squid
+        # can perceive and learn from.
+        taken = False
+        if (self._dist_to_squid(contested, squid) <= 120
+                and not getattr(squid, 'carrying_rock', False)
+                and hasattr(squid, 'pick_up_rock')):
+            taken = bool(squid.pick_up_rock(contested))
+
+        if hasattr(view, 'note_contest'):
+            view.note_contest(rival, contested, taken=taken, squid=squid)
+
+    @staticmethod
+    def _nearest_contested_item(squid, logic, rival):
+        """The nearest carryable object that is closer to `rival` than to us."""
+        rocks = NeuronOutputMonitor._nearby_rocks(squid, logic, 400)
+        if not rocks:
+            return None
+        rx, ry = rival.x, rival.y
+        contested = []
+        for rock in rocks:
+            centre = rock.sceneBoundingRect().center()
+            to_rival = ((centre.x() - rx) ** 2 + (centre.y() - ry) ** 2) ** 0.5
+            to_self = NeuronOutputMonitor._dist_to_squid(rock, squid)
+            if to_rival < to_self:
+                contested.append((to_self, rock))
+        if not contested:
+            return None
+        return min(contested, key=lambda pair: pair[0])[1]
 
     # ---- helpers -----------------------------------------------------------
     @staticmethod
