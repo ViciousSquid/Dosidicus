@@ -25,6 +25,7 @@ from .neurogenesis import EnhancedNeurogenesis, ExperienceBuffer
 from .brain_tooltips import EnhancedBrainTooltips
 from .brain_constants import (
     CORE_NEURONS, INPUT_SENSORS, is_core_neuron,
+    NEURON_RADIUS, NEURON_HIGHLIGHT_FACTOR, NEURON_HIT_FACTOR,
     BINARY_NEURONS, PURE_INPUT_NEURONS, NON_PROPAGATED_NEURONS,
     is_network_driven, normalise_activation,
 )
@@ -130,6 +131,12 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         # Get neuron label font size from config (single source of truth)
         display_config = self.config.get_display_config()
         self.neuron_label_font_size = display_config['neuron_label_font_size']
+
+        # How big a neuron is drawn, in logical canvas units. config.ini has
+        # carried a [Display] neuron_radius the whole time and every renderer
+        # ignored it in favour of a hardcoded 20, so the setting did nothing.
+        self.neuron_radius = float(
+            display_config.get('neuron_radius') or NEURON_RADIUS)
 
         # Tutorial glow effect properties
         self.tutorial_glow_active = False
@@ -3670,7 +3677,11 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
     def get_neuron_at_pos(self, widget_pos):
         """Finds a neuron at the given QPoint widget coordinates."""
         logical_pos = self._get_logical_coords(widget_pos)
-        neuron_radius = 50  # Increased to 50 for better click detection on all neurons
+        # Generous next to the drawn circle, because a neuron is a small
+        # target - but derived from the neuron's size rather than a flat 50,
+        # which is wider than half the gap between neighbours in a row and so
+        # claimed clicks belonging to the neuron next door.
+        neuron_radius = self.neuron_radius * NEURON_HIT_FACTOR
         for name, pos in self.neuron_positions.items():
             dist_sq = (logical_pos.x() - pos[0])**2 + (logical_pos.y() - pos[1])**2
             if dist_sq <= neuron_radius**2:
@@ -3790,7 +3801,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             elapsed = time.time() - nh.get('start_time', 0)
             pulse = 0.5 + 0.5 * math.sin(elapsed * 4)
             
-            radius = 40 * scale * (1 + pulse * 0.2)
+            radius = self.neuron_radius * NEURON_HIGHLIGHT_FACTOR * scale * (1 + pulse * 0.2)
             alpha = int(200 * (1 - elapsed / nh.get('duration', 1)))
             
             painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, alpha), 3))
@@ -3828,7 +3839,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         
         x = pos[0] * scale
         y = pos[1] * scale
-        radius = 20 * scale
+        radius = self.neuron_radius * scale
         
         # Temporarily set painter to high quality
         painter.save()
@@ -3850,7 +3861,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 painter, temp_positions, temp_states,
                 visible_neurons={name}, 
                 scale=scale, 
-                base_font_size=self.neuron_label_font_size
+                base_font_size=self.neuron_label_font_size,
+                neuron_radius=self.neuron_radius
             )
             
         painter.restore()
@@ -3881,7 +3893,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             x_logical, y_logical = pos
             x = x_logical * scale
             y = y_logical * scale
-            radius = 20 * scale
+            radius = self.neuron_radius * scale
 
             # Check shape early
             shape = self.neuron_shapes.get(name, 'circle')
@@ -4083,7 +4095,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         text_rect = QtCore.QRectF(
             x - rect_width / 2,
-            y + (20 * scale) + 5 * scale,
+            y + (self.neuron_radius * scale) + 4 * scale,
             rect_width,
             rect_height,
         )
@@ -4237,7 +4249,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         text_rect = QtCore.QRectF(
             x - rect_width / 2,
-            y + (20 * scale) + 5 * scale,
+            y + (self.neuron_radius * scale) + 4 * scale,
             rect_width,
             rect_height,
         )
@@ -4276,7 +4288,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         NetworkRenderingMixin.draw_neurons_static(
             painter, temp_positions, temp_states,
             visible_neurons={name}, excluded_neurons=excluded_neurons,
-            scale=scale, base_font_size=self.neuron_label_font_size
+            scale=scale, base_font_size=self.neuron_label_font_size,
+            neuron_radius=self.neuron_radius
         )
 
     def draw_triangular_neuron(self, painter, x, y, radius, label, scale=1.0, alpha=255):
@@ -4422,7 +4435,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         if (self.neurogenesis_highlight['neuron'] and time.time() - self.neurogenesis_highlight['start_time'] < self.neurogenesis_highlight['duration']):
             pos = self.neuron_positions.get(self.neurogenesis_highlight['neuron'])
             if pos:
-                painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), int(3 * scale))); painter.setBrush(QtCore.Qt.NoBrush); radius = int(40 * scale)
+                painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), int(3 * scale))); painter.setBrush(QtCore.Qt.NoBrush); radius = int(self.neuron_radius * NEURON_HIGHLIGHT_FACTOR * scale)
                 x, y, width, height = int(pos[0] - radius), int(pos[1] - radius), int(radius * 2), int(radius * 2)
                 painter.drawEllipse(x, y, width, height)
 
@@ -4676,8 +4689,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             
             # Optional: Add star indicator
             star_radius = 8 * scale
-            star_x = x + 20 * scale
-            star_y = y - 20 * scale
+            star_x = x + self.neuron_radius * scale
+            star_y = y - self.neuron_radius * scale
             
             painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 215, 0, 200)))
             painter.setPen(QtGui.QPen(QtGui.QColor(255, 165, 0), max(1, int(2 * scale))))
@@ -5080,7 +5093,7 @@ class NetworkRenderingMixin:
     def draw_neurons_static(
         painter, neuron_positions, neuron_states,
         visible_neurons=None, excluded_neurons=None,
-        scale=1.0, base_font_size=6):
+        scale=1.0, base_font_size=6, neuron_radius=NEURON_RADIUS):
         """
         Static neuron drawing with full localisation fallback support.
         """
@@ -5122,7 +5135,7 @@ class NetworkRenderingMixin:
 
             x = pos[0] * scale
             y = pos[1] * scale
-            radius = 20 * scale
+            radius = neuron_radius * scale
 
             painter.setBrush(QtGui.QBrush(color))
             painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), max(1, int(2 * scale))))

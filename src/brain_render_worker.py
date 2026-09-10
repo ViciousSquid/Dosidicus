@@ -107,6 +107,10 @@ class RenderState:
     
     # Font settings
     neuron_label_font_size: int = 6
+
+    # How big a neuron is drawn, in logical units. Comes from config.ini's
+    # [Display] neuron_radius by way of the widget.
+    neuron_radius: float = 14.0
     
     # Timestamp for cache invalidation
     timestamp: float = field(default_factory=time.time)
@@ -651,7 +655,7 @@ class BrainRenderWorker(QThread):
                 birth = reveal_scale(current_time - hatching.get('start_time', 0.0))
                 if birth <= 0.0:
                     continue
-            radius = (20 * scale) * birth
+            radius = (state.neuron_radius * scale) * birth
             # The caption grows with the neuron rather than sitting at full
             # size next to a half-grown circle.
             scale = scale_base * birth
@@ -839,13 +843,16 @@ class BrainRenderWorker(QThread):
         local_fm = painter.fontMetrics()
 
         text_width = local_fm.horizontalAdvance(display_name)
-        padding = 10 * scale
+        # Padding sized for the neuron, not for the old one: a 10px gutter each
+        # side of a six-point word made the caption wider than the circle it
+        # belonged to, and neighbouring captions ran into each other.
+        padding = 5 * scale
         rect_width = text_width + padding * 2
-        rect_height = local_fm.height() + 4
+        rect_height = local_fm.height() + 2
 
         text_rect = QRectF(
             x - rect_width / 2,
-            y + clearance + 5 * scale,
+            y + clearance + 4 * scale,
             rect_width,
             rect_height
         )
@@ -1028,5 +1035,7 @@ def create_render_state_from_widget(brain_widget) -> RenderState:
     
     # Font settings
     state.neuron_label_font_size = getattr(brain_widget, 'neuron_label_font_size', 6)
+    from .brain_constants import NEURON_RADIUS
+    state.neuron_radius = float(getattr(brain_widget, 'neuron_radius', NEURON_RADIUS))
     
     return state

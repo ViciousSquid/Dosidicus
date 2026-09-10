@@ -217,7 +217,7 @@ class ConfigManager:
 
         # Display Settings
         self.config['Display'] = {
-            'neuron_label_font_size': '8',
+            'neuron_label_font_size': '6',
             'neuron_radius': '14',  # Updated to match current default
             'connection_line_width': '1.5',
             'button_font_size': '16',
@@ -607,7 +607,7 @@ class ConfigManager:
     def get_display_config(self):
         """Get display configuration settings"""
         return {
-            'neuron_label_font_size': self.config.getint('Display', 'neuron_label_font_size', fallback=8),
+            'neuron_label_font_size': self.config.getint('Display', 'neuron_label_font_size', fallback=6),
             'neuron_radius': self.config.getint('Display', 'neuron_radius', fallback=14),
             'connection_line_width': self.config.getfloat('Display', 'connection_line_width', fallback=1.5),
             'button_font_size': self.config.getint('Display', 'button_font_size', fallback=16),
