@@ -27,6 +27,7 @@ from .brain_statistics_tab import StatisticsTab
 from .brain_knowledge_tab import KnowledgeTab
 from .task_manager import TaskManagerWindow
 from .localisation import Localisation, set_language
+from .brain_ui_utils import set_html, set_plain_text
 
 # 2.6.1.0 Robust import for Designer
 _DESIGNER_AVAILABLE = False
@@ -1473,7 +1474,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         </div>
         """
         
-        self.overview_stats.setHtml(stats_html)
+        set_html(self.overview_stats, stats_html)
 
     def _clear_layout(self, layout):
         """Clear all widgets from the given layout"""
@@ -1794,7 +1795,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             stats_html += "</table>"
         
         # Update stats display
-        self.memory_stats_text.setHtml(stats_html)
+        set_html(self.memory_stats_text, stats_html)
 
 
     def add_thought(self, thought):
@@ -2196,9 +2197,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 effects_text.append(effect)
         
         if effects_text:
-            self.personality_effects.setPlainText("\n".join(effects_text))
+            set_plain_text(self.personality_effects, "\n".join(effects_text))
         else:
-            self.personality_effects.setPlainText("No significant personality effects")
+            set_plain_text(self.personality_effects, "No significant personality effects")
 
     def update_brain(self, state):
         """Main update method to distribute state changes to all tabs"""
@@ -2757,7 +2758,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         details_html += "</div>"
         
         # Update the details widget
-        self.connection_details.setHtml(details_html)
+        set_html(self.connection_details, details_html)
 
     def apply_neurogenesis_settings(self):
         """Apply changes to neurogenesis settings"""

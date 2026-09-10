@@ -20,6 +20,7 @@ Four questions, four sub-tabs:
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from .brain_base_tab import BrainBaseTab
+from .brain_ui_utils import set_html, set_plain_text, preserve_scroll
 from .display_scaling import DisplayScaling
 from .neural_provenance import humanise
 
@@ -262,27 +263,27 @@ class KnowledgeTab(BrainBaseTab):
     def _refresh_knowledge(self):
         ledger = self.ledger
         if ledger is None:
-            self.knowledge_view.setHtml("<p>This brain keeps no provenance.</p>")
+            set_html(self.knowledge_view, "<p>This brain keeps no provenance.</p>")
             return
         try:
             items = ledger.knowledge(self._topic or None)
         except Exception as exc:
-            self.knowledge_view.setHtml(f"<p>Could not read the ledger: {exc}</p>")
+            set_html(self.knowledge_view, f"<p>Could not read the ledger: {exc}</p>")
             return
 
         if not items:
             if self._topic:
-                self.knowledge_view.setHtml(
+                set_html(self.knowledge_view, 
                     f"<p style='padding:20px;'>The squid has not learned anything "
                     f"about <b>{self._topic}</b> yet. Everything it knows comes "
                     f"from experience, so give it some.</p>")
             else:
-                self.knowledge_view.setHtml(
+                set_html(self.knowledge_view, 
                     "<p style='padding:20px;'>The squid has not learned anything "
                     "yet. Its synapses are still the ones it was born with.</p>")
             return
 
-        self.knowledge_view.setHtml(self._render_items(items))
+        set_html(self.knowledge_view, self._render_items(items))
 
     def _render_items(self, items) -> str:
         parts = ["<body style='font-family:sans-serif;'>"]
@@ -326,7 +327,7 @@ class KnowledgeTab(BrainBaseTab):
         ledger = self.ledger
         edge = self.edge_combo.currentData()
         if ledger is None or not edge:
-            self.weight_view.setPlainText("")
+            set_plain_text(self.weight_view, "")
             self.weight_table.setRowCount(0)
             return
 
@@ -334,7 +335,7 @@ class KnowledgeTab(BrainBaseTab):
             text = ledger.explain_weight(tuple(edge))
         except Exception as exc:
             text = f"Could not explain this synapse: {exc}"
-        self.weight_view.setPlainText(text)
+        set_plain_text(self.weight_view, text)
 
         events = ledger.weight_history(tuple(edge), limit=40)
         self.weight_table.setRowCount(len(events))
@@ -371,19 +372,19 @@ class KnowledgeTab(BrainBaseTab):
         ledger = self.ledger
         name = self.neuron_combo.currentData()
         if ledger is None or not name:
-            self.neuron_view.setPlainText("")
+            set_plain_text(self.neuron_view, "")
             return
         try:
-            self.neuron_view.setPlainText(ledger.explain_neuron(name))
+            set_plain_text(self.neuron_view, ledger.explain_neuron(name))
         except Exception as exc:
-            self.neuron_view.setPlainText(f"Could not explain this neuron: {exc}")
+            set_plain_text(self.neuron_view, f"Could not explain this neuron: {exc}")
 
     # ------------------------------------------------------------------
     def _refresh_capability(self):
         monitor = self.capability
         engine = getattr(self.brain_widget, 'enhanced_neurogenesis', None)
         if monitor is None:
-            self.capability_view.setHtml("<p>This brain has no capability monitor.</p>")
+            set_html(self.capability_view, "<p>This brain has no capability monitor.</p>")
             return
 
         parts = ["<body style='font-family:sans-serif;'>"]
@@ -391,7 +392,7 @@ class KnowledgeTab(BrainBaseTab):
             deficits = sorted(monitor.active.values(), key=lambda d: -d.severity)
             actionable = {d.key for d in monitor.actionable()}
         except Exception as exc:
-            self.capability_view.setHtml(f"<p>Could not read the monitor: {exc}</p>")
+            set_html(self.capability_view, f"<p>Could not read the monitor: {exc}</p>")
             return
 
         if not deficits:
@@ -443,7 +444,7 @@ class KnowledgeTab(BrainBaseTab):
                 parts.append("</ul>")
 
         parts.append("</body>")
-        self.capability_view.setHtml("".join(parts))
+        set_html(self.capability_view, "".join(parts))
 
     # ------------------------------------------------------------------
     def _export_knowledge(self):

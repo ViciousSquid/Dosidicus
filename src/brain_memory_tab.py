@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
-from .brain_ui_utils import UiUtils
+from .brain_ui_utils import UiUtils, set_html, preserve_scroll
 from .localisation import Localisation  # Import Localisation
 from datetime import datetime
 
@@ -137,35 +137,32 @@ class MemoryTab(BrainBaseTab):
                         seen_keys.add(key)
                         ltm_deduped.append(m)
                 
-                # Save scroll positions before rebuilding
-                stm_scroll_pos = self.stm_scroll.verticalScrollBar().value()
-                ltm_scroll_pos = self.ltm_scroll.verticalScrollBar().value()
+                # Rebuilding the cards throws both lists back to the top, so
+                # both rebuilds happen inside preserve_scroll.
+                #
+                # This block already saved and restored the scrollbar values
+                # and it never worked, for two reasons. It called setWidget()
+                # with the widget the scroll area was ALREADY showing, and
+                # setWidget resets the scroll position - so the save was undone
+                # a line before the restore. And the restore ran immediately
+                # after the rebuild, when the new cards had not been laid out
+                # yet: the scrollbar's maximum was still whatever the emptied
+                # layout left behind, so setValue clamped the position to
+                # somewhere near the top whatever it had been handed.
+                with preserve_scroll(self.stm_scroll), preserve_scroll(self.ltm_scroll):
+                    self._clear_layout(self.stm_content_layout)
+                    self._clear_layout(self.ltm_content_layout)
 
-                # Clear existing content
-                self._clear_layout(self.stm_content_layout)
-                self._clear_layout(self.ltm_content_layout)
-                
-                # Add memory cards
-                for memory in stm_deduped:
-                    self._create_memory_widget(memory, self.stm_content_layout)
-                    
-                for memory in ltm_deduped:
-                    self._create_memory_widget(memory, self.ltm_content_layout)
-                
-                # Update overview
-                self._update_overview_stats(stm_deduped, ltm_deduped)
-                
-                # Force UI update
-                self.stm_content.update()
-                self.ltm_content.update()
-                
-                # Make sure the scroll areas show their content
-                self.stm_scroll.setWidget(self.stm_content)
-                self.ltm_scroll.setWidget(self.ltm_content)
+                    for memory in stm_deduped:
+                        self._create_memory_widget(memory, self.stm_content_layout)
 
-                # Restore scroll positions
-                self.stm_scroll.verticalScrollBar().setValue(stm_scroll_pos)
-                self.ltm_scroll.verticalScrollBar().setValue(ltm_scroll_pos)
+                    for memory in ltm_deduped:
+                        self._create_memory_widget(memory, self.ltm_content_layout)
+
+                    self._update_overview_stats(stm_deduped, ltm_deduped)
+
+                    self.stm_content.update()
+                    self.ltm_content.update()
                 
         except Exception as e:
             print(f"Error updating memory tab: {e}")
@@ -872,7 +869,7 @@ class MemoryTab(BrainBaseTab):
         # Use the new key function for sorting
         recent_memories = sorted(stm, key=get_timestamp_key, reverse=True)[:5]
         
-        self.overview_stats.setHtml(stats_html)
+        set_html(self.overview_stats, stats_html)
 
     def _update_memory_importance(self, memory):
         """Increase importance of displayed memory and check for transfer"""

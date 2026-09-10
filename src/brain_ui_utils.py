@@ -194,3 +194,174 @@ def darken_color(color, amount=20):
     
     # Convert back to hex
     return f"#{r:02x}{g:02x}{b:02x}"
+
+# =============================================================================
+# KEEPING A PANEL WHERE THE READER LEFT IT
+# =============================================================================
+# Every panel in the Brain Tool is rebuilt on a timer, and a rebuilt panel
+# starts at the top. Read a long explanation in the Knowledge tab, or scroll
+# back through the memories, and the next refresh threw you back to the first
+# line - which made the longer panels effectively unreadable while the game was
+# running.
+#
+# Two shapes of rebuild cause it, and both are handled here:
+#
+#   a text view rewritten wholesale   setHtml()/setPlainText() replace the
+#                                     document, and a new document scrolls to
+#                                     the top
+#   a scroll area repopulated         the contents are deleted and rebuilt, so
+#                                     the scroll area has nothing to be
+#                                     scrolled through at the moment it is
+#                                     asked to stay put
+#
+# The best fix for the first is not to rebuild at all: set_html() and
+# set_plain_text() compare against what they last wrote and return early when
+# nothing has changed, which is the common case on a timer-driven refresh. That
+# also keeps any text the reader has SELECTED, which no amount of scroll
+# restoration can bring back.
+
+from contextlib import contextmanager
+
+_LAST_SOURCE = "_dosidicus_last_source"
+
+
+def _scrollbars(widget):
+    """(vertical, horizontal) scrollbars, or (None, None) if it has none."""
+    getters = (getattr(widget, 'verticalScrollBar', None),
+               getattr(widget, 'horizontalScrollBar', None))
+    if not callable(getters[0]):
+        return None, None
+    try:
+        return getters[0](), getters[1]() if callable(getters[1]) else None
+    except RuntimeError:          # underlying C++ widget already gone
+        return None, None
+
+
+_ACTIVE_RESTORE = "_dosidicus_scroll_restore"
+
+
+def _apply_until_range_settles(vbar, apply_fn, timeout_ms=400):
+    """Run `apply_fn` now, and again each time the scrollbar's range changes.
+
+    Restoring a scroll position immediately after a rebuild does not work: the
+    new contents have not been laid out, so the scrollbar's range is still the
+    old one (or nothing at all) and setValue clamps against it. Nor is one
+    deferred call enough - a QScrollArea needs the layout request to reach it
+    AND to resize its contents, which is two turns of the event loop, not one.
+
+    So rather than guessing at a delay, listen for the range actually changing
+    and re-apply whenever it does, until it has stopped moving.
+
+    Only one of these may be live per scrollbar. A second refresh arriving
+    inside the timeout would otherwise leave the FIRST one still listening,
+    and it would happily undo the second one's work using a position measured
+    before either of them ran.
+    """
+    previous = getattr(vbar, _ACTIVE_RESTORE, None)
+    if callable(previous):
+        previous()
+
+    def stop():
+        if getattr(vbar, _ACTIVE_RESTORE, None) is stop:
+            setattr(vbar, _ACTIVE_RESTORE, None)
+        try:
+            vbar.rangeChanged.disconnect(on_range)
+        except (TypeError, RuntimeError):
+            pass
+
+    def on_range(_minimum, _maximum):
+        try:
+            apply_fn()
+        except RuntimeError:
+            stop()
+
+    try:
+        apply_fn()
+        vbar.rangeChanged.connect(on_range)
+        setattr(vbar, _ACTIVE_RESTORE, stop)
+        QtCore.QTimer.singleShot(timeout_ms, stop)
+    except RuntimeError:
+        pass                      # the widget went away mid-refresh
+
+
+@contextmanager
+def preserve_scroll(widget, follow_tail=False):
+    """Put `widget` back where it was scrolled to after the block rebuilds it.
+
+    `follow_tail` is for logs: a reader sitting at the bottom is watching for
+    new entries and wants to stay at the bottom, while a reader who has
+    scrolled up is reading something and wants to stay there.
+    """
+    vbar, hbar = _scrollbars(widget)
+    if vbar is None:
+        yield
+        return
+
+    at_tail = follow_tail and vbar.value() >= vbar.maximum() - 2
+    want_v = vbar.value()
+    want_h = hbar.value() if hbar is not None else 0
+
+    def restore():
+        vbar.setValue(vbar.maximum() if at_tail else min(want_v, vbar.maximum()))
+        if hbar is not None:
+            hbar.setValue(min(want_h, hbar.maximum()))
+
+    try:
+        yield
+    finally:
+        _apply_until_range_settles(vbar, restore)
+
+
+@contextmanager
+def hold_position_on_prepend(scroll_area):
+    """Keep the reader on the same content while a card is added ABOVE it.
+
+    The learning log inserts each new pair at the top, which pushes everything
+    below it down by the height of the new card. Restoring the old scroll VALUE
+    is wrong here - the value is a distance from the top, and the top just
+    moved - so a reader studying a card three down would find themselves
+    looking at a different one every time the squid learned something.
+
+    Instead, measure how much taller the content got and scroll down by exactly
+    that. A reader already at the top stays at the top, where the new card is
+    the thing they wanted to see.
+    """
+    vbar, _hbar = _scrollbars(scroll_area)
+    if vbar is None:
+        yield
+        return
+
+    before_value = vbar.value()
+    before_max = vbar.maximum()
+
+    def restore():
+        if before_value <= 0:
+            return                         # at the top: watch the new arrivals
+        grew_by = vbar.maximum() - before_max
+        if grew_by:
+            vbar.setValue(min(before_value + grew_by, vbar.maximum()))
+
+    try:
+        yield
+    finally:
+        _apply_until_range_settles(vbar, restore)
+
+
+def set_html(view, html, follow_tail=False):
+    """setHtml() that leaves the reader where they were. True if it rewrote."""
+    if getattr(view, _LAST_SOURCE, None) == html:
+        return False
+    setattr(view, _LAST_SOURCE, html)
+    with preserve_scroll(view, follow_tail):
+        view.setHtml(html)
+    return True
+
+
+def set_plain_text(view, text, follow_tail=False):
+    """setPlainText() that leaves the reader where they were."""
+    if getattr(view, _LAST_SOURCE, None) == text:
+        return False
+    setattr(view, _LAST_SOURCE, text)
+    with preserve_scroll(view, follow_tail):
+        view.setPlainText(text)
+    return True

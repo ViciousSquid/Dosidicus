@@ -1,5 +1,6 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
+from .brain_ui_utils import hold_position_on_prepend
 import random
 import time
 from .localisation import Localisation
@@ -555,26 +556,32 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
     def add_log_entry(self, message, pair=None, weight_change=None, stdp_meta=None):
         """Add a new learning pair card to the display"""
         if pair and hasattr(self, 'learning_content_layout'):
-            # Remove placeholder if it exists
-            if self.learning_content_layout.count() == 1:
-                item = self.learning_content_layout.takeAt(0)
-                if item and item.widget():
-                    item.widget().deleteLater()
+            # Cards go in at the TOP, which pushes whatever the reader was
+            # looking at down the page. hold_position_on_prepend scrolls down
+            # by however much the content grew, so they stay on the card they
+            # were reading instead of being shunted onto a different one every
+            # time the squid learns something.
+            with hold_position_on_prepend(getattr(self, 'learning_scroll', None)):
+                # Remove placeholder if it exists
+                if self.learning_content_layout.count() == 1:
+                    item = self.learning_content_layout.takeAt(0)
+                    if item and item.widget():
+                        item.widget().deleteLater()
 
-            # Get weight
-            weight = getattr(self.brain_widget, 'weights', {}).get(pair, 0)
+                # Get weight
+                weight = getattr(self.brain_widget, 'weights', {}).get(pair, 0)
 
-            # Create card
-            card = self._create_learning_pair_card(pair, weight, weight_change, stdp_meta)
+                # Create card
+                card = self._create_learning_pair_card(pair, weight, weight_change, stdp_meta)
 
-            # Insert at the top (before stretch)
-            self.learning_content_layout.insertWidget(0, card)
+                # Insert at the top (before stretch)
+                self.learning_content_layout.insertWidget(0, card)
 
-            # Keep only last 20 cards
-            while self.learning_content_layout.count() > 21:  # 20 cards + 1 stretch
-                item = self.learning_content_layout.takeAt(20)
-                if item and item.widget():
-                    item.widget().deleteLater()
+                # Keep only last 20 cards
+                while self.learning_content_layout.count() > 21:  # 20 cards + 1 stretch
+                    item = self.learning_content_layout.takeAt(20)
+                    if item and item.widget():
+                        item.widget().deleteLater()
 
             # Update history
             if pair not in self.learning_history:
