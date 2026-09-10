@@ -13,15 +13,6 @@ turn it on from the Plugin manager.
 > A visiting squid's brain stays on its own machine. The host runs its body,
 > not its mind.
 
-Everything in the design follows from that. Before this was true, a visitor was
-driven by `RemoteSquidController` — a four-state policy running on the host,
-standing in for a brain that was running perfectly well somewhere else. Every
-decision it made was invisible to the real squid's learning, so a visit taught
-the visiting squid nothing.
-
-Now the host sends what the visitor can see, the visitor's own network decides,
-and the host carries it out:
-
 ```
         HOST TANK                              VISITOR'S HOME INSTANCE
         ---------                              -----------------------
