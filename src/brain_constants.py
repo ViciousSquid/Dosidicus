@@ -69,6 +69,61 @@ def row_positions(names, row: str) -> dict:
     return {name: (ROW_X_FIRST + i * step, y) for i, name in enumerate(names)}
 
 
+# --- What sits on each row, left to right --------------------------------
+# All three memberships are declared together, because a neuron belongs to
+# exactly one row and that fact is easiest to check when you can see all of
+# them at once.
+
+#: The seven drives. Everything on the CORE row is a reading about the squid
+#: ITSELF - which is why can_see_food, which is a reading about the world, is
+#: not up here even though it is one of the eight a squid is born with.
+CORE_ROW_ORDER = (
+    "hunger", "happiness", "cleanliness", "sleepiness",
+    "satisfaction", "anxiety", "curiosity",
+)
+
+#: The motor bank, voluntary actions first and the two reflexes last.
+MOTOR_ROW_ORDER = (
+    "act_move",
+    "act_eat",
+    "act_flee",
+    "act_play",
+    "act_shelter",
+    "act_rest",
+    "act_ink",
+    # Involuntary. Not the same neuron as act_rest: choosing to rest before
+    # you are exhausted is a thing a squid can learn, and collapsing when you
+    # are is a thing that happens to it. See the homeostatic drives below.
+    "act_collapse",
+)
+
+#: Everything the world writes into the brain each tick. can_see_food leads it:
+#: it is MANDATORY where the rest are optional, but it is a sense like all of
+#: them and belongs among them rather than up on the CORE row.
+SENSOR_ROW_ORDER = (
+    "can_see_food",        # MANDATORY - the squid must be able to see food
+    "external_stimulus",   # Environmental changes (resize, interactions)
+    "plant_proximity",     # Distance to nearest plant decoration
+    "threat_level",        # Computed from anxiety + startle state
+    "pursuing_food",       # Currently chasing food
+    "is_sick",             # Sickness state
+    "is_fleeing",          # Currently fleeing
+    "is_eating",           # Currently eating
+    "is_sleeping",         # Currently sleeping
+    "is_startled",         # Startled state
+)
+
+_CORE_ROW = row_positions(CORE_ROW_ORDER, 'core')
+_MOTOR_ROW = row_positions(MOTOR_ROW_ORDER, 'motor')
+_SENSOR_ROW = row_positions(SENSOR_ROW_ORDER, 'sensor')
+
+#: The eight neurons a squid is born with, in the order the birth animation
+#: reveals them. Sight first - a squid that cannot see food will not live long
+#: enough for any of the drives to matter. Distinct from CORE_ROW_ORDER:
+#: that is a layout, and this is a birth.
+BIRTH_REVEAL_ORDER = ("can_see_food",) + CORE_ROW_ORDER
+
+
 # =============================================================================
 # REQUIRED NEURONS - Mandatory for all brain designs
 # These 8 neurons MUST exist in any valid Dosidicus brain.
@@ -84,28 +139,16 @@ def row_positions(names, row: str) -> dict:
 # that has to tell a born neuron from a grown one.
 # =============================================================================
 
-# The order the eight sit in along the CORE row, and the order the birth
-# animation reveals them in. Sight comes first because it is the one thing on
-# this row that is about the world rather than about the squid.
-CORE_ROW_ORDER = (
-    "can_see_food",
-    "hunger", "happiness", "cleanliness", "sleepiness",
-    "satisfaction", "anxiety", "curiosity",
-)
-
-_CORE_ROW = row_positions(CORE_ROW_ORDER, 'core')
-
 # Core stat neurons - the seven drives, laid out along the CORE row.
-CORE_NEURONS = {
-    name: _CORE_ROW[name] for name in CORE_ROW_ORDER if name != "can_see_food"
-}
+CORE_NEURONS = dict(_CORE_ROW)
 
-# can_see_food is MANDATORY - the squid must be able to see food.
-# It is a sensor by behaviour (the world writes it every tick) but it is one of
-# the original eight, so it sits on the CORE row with them rather than down
-# among the senses.
+# can_see_food is MANDATORY - the squid must be able to see food - and it is
+# separate from the optional sensors below for that reason. It is still a
+# SENSOR, so it is drawn on the SENSES row with its own kind; being one of the
+# eight a squid is born with is a fact about its birth, not about what kind of
+# neuron it is.
 MANDATORY_SENSOR = {
-    "can_see_food": _CORE_ROW["can_see_food"],
+    "can_see_food": _SENSOR_ROW["can_see_food"],
 }
 
 # All required neurons combined (7 core + 1 mandatory sensor)
@@ -123,19 +166,11 @@ REQUIRED_NEURON_NAMES = CORE_NEURON_NAMES + ["can_see_food"]
 # neural propagation. They represent environmental/state observations.
 # NOTE: can_see_food is NOT here - it's in REQUIRED_NEURONS
 # =============================================================================
-SENSOR_ROW_ORDER = (
-    "external_stimulus",   # Environmental changes (resize, interactions)
-    "plant_proximity",     # Distance to nearest plant decoration
-    "threat_level",        # Computed from anxiety + startle state
-    "pursuing_food",       # Currently chasing food
-    "is_sick",             # Sickness state
-    "is_fleeing",          # Currently fleeing
-    "is_eating",           # Currently eating
-    "is_sleeping",         # Currently sleeping
-    "is_startled",         # Startled state
-)
-
-INPUT_SENSORS = row_positions(SENSOR_ROW_ORDER, 'sensor')
+# Laid out with can_see_food (it shares their row) but not listed with it -
+# these are the OPTIONAL ones.
+INPUT_SENSORS = {
+    name: pos for name, pos in _SENSOR_ROW.items() if name != "can_see_food"
+}
 
 # Tuple for compatibility with brain_neuron_hooks.py (includes can_see_food)
 DEFAULT_INPUT_SENSORS = (
@@ -364,7 +399,6 @@ EXCLUDED_NEURONS = [
 # Ring colors for neuron types
 CORE_NEURON_RING_COLOR = (255, 215, 0)      # Gold
 INPUT_SENSOR_RING_COLOR = (100, 149, 237)   # Cornflower blue
-MOTOR_NEURON_RING_COLOR = (205, 120, 90)    # Terracotta - the motor bank
 CUSTOM_NEURON_RING_COLOR = (180, 180, 180)  # Gray
 
 # -----------------------------------------------------------------------------
@@ -532,22 +566,8 @@ INNATE_CONNECTIONS = (
 # what made a newborn look like a nineteen-neuron brain instead of eight
 # neurons and a motor bank.
 #
-# Ordered voluntary-first, with the two reflexes last.
-MOTOR_ROW_ORDER = (
-    "act_move",
-    "act_eat",
-    "act_flee",
-    "act_play",
-    "act_shelter",
-    "act_rest",
-    "act_ink",
-    # Involuntary. Not the same neuron as act_rest: choosing to rest before
-    # you are exhausted is a thing a squid can learn, and collapsing when you
-    # are is a thing that happens to it. See the homeostatic drives below.
-    "act_collapse",
-)
-
-ACTION_NEURONS = row_positions(MOTOR_ROW_ORDER, 'motor')
+# Membership and order are declared with the other rows, at the top.
+ACTION_NEURONS = dict(_MOTOR_ROW)
 
 ACTION_NEURON_NAMES = tuple(ACTION_NEURONS.keys())
 
@@ -923,8 +943,10 @@ def neuron_row(name: str):
     each keeping their own hardcoded list of core neuron names - there were
     three such lists, and they had already drifted apart.
     """
-    if name in REQUIRED_NEURONS:
+    if name in CORE_NEURONS:
         return 'core'
+    if name in MANDATORY_SENSOR:
+        return 'sensor'
     if name in ACTION_NEURONS:
         return 'motor'
     if name in INPUT_SENSORS or name in PLUGIN_INPUT_SENSORS:

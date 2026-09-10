@@ -262,11 +262,11 @@ class BrainRenderWorker(QThread):
             painter.translate(offset_x, indicator_space)
             painter.scale(scale, scale)
             
-            # Draw the row bands first, so everything else sits on top of
+            # The row bands go down first, so everything else sits on top of
             # them. These are what make the three populations - what the squid
             # is, what it can do, what it can notice - legible as populations
             # rather than as nineteen circles in a heap.
-            self._draw_rows(painter, state)
+            self._draw_row_bands(painter, state)
 
             # Draw layers
             self._draw_layers(painter, state, 1.0)
@@ -276,39 +276,65 @@ class BrainRenderWorker(QThread):
             
             # Draw neurons
             self._draw_neurons(painter, state, scale)
+
+            # Row labels go on LAST. They started out drawn with the bands,
+            # where a single connection crossing a row was enough to strike
+            # the label out - and a label a line can cross out is a label that
+            # cannot be relied on to say which row you are looking at.
+            self._draw_row_labels(painter, state)
             
         finally:
             painter.end()
         
         return image
     
-    def _draw_rows(self, painter: QPainter, state: RenderState):
-        """Draw the labelled band behind each row of the newborn layout.
+    def _draw_row_bands(self, painter: QPainter, state: RenderState):
+        """Draw the band behind each row of the newborn layout.
 
         Drawn in logical coordinates - the painter is already scaled - and
         deliberately faint: the bands are there to group the neurons, not to
         compete with them.
         """
-        from .brain_constants import (NEURON_ROWS, ROW_BAND_COLORS,
-                                      row_label_anchor, LOGICAL_CANVAS)
+        from .brain_constants import NEURON_ROWS, ROW_BAND_COLORS, LOGICAL_CANVAS
 
         canvas_w = LOGICAL_CANVAS[0]
         for row, spec in NEURON_ROWS.items():
             top, bottom = spec['band']
             fill, border = ROW_BAND_COLORS[row]
-
             painter.setBrush(QBrush(QColor(*fill)))
             painter.setPen(QPen(QColor(*border), 1, Qt.DashLine))
             painter.drawRoundedRect(
                 QRectF(24.0, top, canvas_w - 48.0, bottom - top), 8, 8)
 
-            label_x, label_y = row_label_anchor(row)
-            label_font = QFont("Arial", 11)
-            label_font.setBold(True)
-            label_font.setLetterSpacing(QFont.PercentageSpacing, 130)
-            painter.setFont(label_font)
+    def _draw_row_labels(self, painter: QPainter, state: RenderState):
+        """Name each row, on top of everything else.
+
+        Each label sits on a chip in the page background colour, so it stays
+        readable where a connection runs underneath it.
+        """
+        from .brain_constants import (NEURON_ROWS, ROW_BAND_COLORS,
+                                      row_label_anchor)
+
+        label_font = QFont("Arial", 11)
+        label_font.setBold(True)
+        label_font.setLetterSpacing(QFont.PercentageSpacing, 130)
+        painter.setFont(label_font)
+        fm = painter.fontMetrics()
+
+        for row, spec in NEURON_ROWS.items():
+            _fill, border = ROW_BAND_COLORS[row]
+            label = spec['label']
+            x, y = row_label_anchor(row)
+
+            chip = QRectF(x - 6.0, y - 2.0,
+                          fm.horizontalAdvance(label) + 12.0,
+                          fm.height() + 4.0)
+            painter.setBrush(QBrush(QColor(*state.anim_background_colour, 210)))
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(chip, 4, 4)
+
             painter.setPen(QColor(*border))
-            painter.drawText(QPointF(label_x, label_y + 11.0), spec['label'])
+            painter.drawText(chip, Qt.AlignCenter, label)
 
     def _draw_layers(self, painter: QPainter, state: RenderState, scale: float):
         """Draw layer background rectangles"""
@@ -642,8 +668,8 @@ class BrainRenderWorker(QThread):
                     color = QColor(0, 255, 0) if is_active else QColor(255, 0, 0)
 
                 # Green/red is the neuron's VALUE; the border is which row it
-                # belongs to. can_see_food is a sense but one of the original
-                # eight, so it is bordered in core indigo up on the CORE row.
+                # belongs to, so a square is still placed even where the fill
+                # is saying something else entirely.
                 painter.setBrush(QBrush(color))
                 painter.setPen(QPen(QColor(*neuron_row_color(name)),
                                     max(2, int(3 * scale))))

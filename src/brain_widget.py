@@ -269,12 +269,13 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         # Track which neurons are visible (for animated reveal on new game)
         self.visible_neurons = set()
-        # The eight, in the order the birth animation reveals them - which is
-        # also the order they sit in along the CORE row, so the reveal runs
-        # left to right across the screen. Ask self.innate_neurons, not this,
-        # if the question is "was this neuron grown?".
-        from .brain_constants import CORE_ROW_ORDER
-        self.original_neurons = list(CORE_ROW_ORDER)
+        # The eight neurons a squid is born with, in the order the birth
+        # animation reveals them. NOT the CORE row: can_see_food is one of the
+        # eight but is a sensor, and is drawn down on the SENSES row with the
+        # other things the world writes. Ask self.innate_neurons, not this, if
+        # the question is "was this neuron grown?".
+        from .brain_constants import BIRTH_REVEAL_ORDER
+        self.original_neurons = list(BIRTH_REVEAL_ORDER)
         # Animation state for neuron reveals
         self.neuron_reveal_animations = {}  # {neuron_name: {'start_time': float, 'progress': float}}
         # --- link fade animation ---
