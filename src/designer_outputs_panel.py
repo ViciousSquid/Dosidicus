@@ -21,6 +21,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
 
+from .localisation import loc
+
 try:
     from .brain_neuron_outputs import (
         NeuronOutputBinding, OutputTriggerMode,
@@ -70,7 +72,9 @@ class OutputBindingDialog(QDialog):
         if existing_binding and existing_binding.hook_params:
             self.current_params = existing_binding.hook_params.copy()
         
-        self.setWindowTitle("Configure Output Binding" if existing_binding else "Add Output Binding")
+        self.setWindowTitle(
+            loc("designer_binding_title_edit", "Configure Output Binding") if existing_binding
+            else loc("designer_binding_title_add", "Add Output Binding"))
         self.setMinimumWidth(450)
         self.setup_ui()
         
@@ -81,28 +85,28 @@ class OutputBindingDialog(QDialog):
         layout = QVBoxLayout(self)
         
         # 1. Selection Group
-        type_group = QGroupBox("Select Neuron Type")
+        type_group = QGroupBox(loc("designer_binding_grp_neuron", "Source Neuron"))
         type_layout = QFormLayout(type_group)
         
         self.neuron_combo = QComboBox()
         self._populate_neurons()
-        type_layout.addRow("Neuron:", self.neuron_combo)
+        type_layout.addRow(loc("designer_binding_lbl_neuron", "Neuron:"), self.neuron_combo)
         
         # Show current activation hint
-        self.activation_label = QLabel("Current: --")
+        self.activation_label = QLabel(loc("designer_binding_lbl_current", "Current: --"))
         self.activation_label.setStyleSheet("color: #888;")
         type_layout.addRow("", self.activation_label)
         
         layout.addWidget(type_group)
         
         # 2. Output hook selection
-        hook_group = QGroupBox("Output Behavior")
+        hook_group = QGroupBox(loc("designer_binding_grp_hook", "Output Behavior"))
         hook_layout = QFormLayout(hook_group)
         
         self.hook_combo = QComboBox()
         self._populate_hooks()
         self.hook_combo.currentTextChanged.connect(self._on_hook_changed)
-        hook_layout.addRow("Trigger:", self.hook_combo)
+        hook_layout.addRow(loc("designer_binding_lbl_trigger", "Trigger:"), self.hook_combo)
         
         self.hook_description = QLabel("")
         self.hook_description.setWordWrap(True)
@@ -112,7 +116,7 @@ class OutputBindingDialog(QDialog):
         layout.addWidget(hook_group)
 
         # === Dynamic Parameters Area ===
-        self.params_group = QGroupBox("Behavior Parameters")
+        self.params_group = QGroupBox(loc("designer_binding_grp_params", "Behavior Parameters"))
         self.params_layout = QVBoxLayout(self.params_group)
         
         # Color Picker UI (Hidden by default)
@@ -124,13 +128,13 @@ class OutputBindingDialog(QDialog):
         self.color_preview.setFixedSize(30, 30)
         self.color_preview.setStyleSheet("background-color: #CCCCCC; border: 1px solid #888;")
         
-        self.pick_color_btn = QPushButton("Pick Colour...")
+        self.pick_color_btn = QPushButton(loc("designer_binding_btn_pick_colour", "Pick Colour..."))
         self.pick_color_btn.clicked.connect(self._pick_color)
         
-        self.reset_color_btn = QPushButton("Reset (Random)")
+        self.reset_color_btn = QPushButton(loc("designer_binding_btn_reset_colour", "Reset (Random)"))
         self.reset_color_btn.clicked.connect(self._reset_color)
         
-        color_layout.addWidget(QLabel("Tint Colour:"))
+        color_layout.addWidget(QLabel(loc("designer_binding_lbl_tint", "Tint Colour:")))
         color_layout.addWidget(self.color_preview)
         color_layout.addWidget(self.pick_color_btn)
         color_layout.addWidget(self.reset_color_btn)
@@ -143,7 +147,7 @@ class OutputBindingDialog(QDialog):
         self.params_group.hide() # Hide group initially
         
         # Trigger configuration
-        trigger_group = QGroupBox("Trigger Settings")
+        trigger_group = QGroupBox(loc("designer_binding_grp_settings", "Trigger Settings"))
         trigger_layout = QFormLayout(trigger_group)
         
         # Threshold
@@ -151,28 +155,40 @@ class OutputBindingDialog(QDialog):
         self.threshold_spin.setRange(0, 100)
         self.threshold_spin.setValue(70)
         self.threshold_spin.setSuffix(" %")
-        self.threshold_spin.setToolTip("Activation level required to trigger the output")
-        trigger_layout.addRow("Threshold:", self.threshold_spin)
+        self.threshold_spin.setToolTip(loc("designer_binding_tooltip_thresh",
+                                           "Activation level required to trigger the output"))
+        trigger_layout.addRow(loc("designer_binding_lbl_thresh", "Threshold:"), self.threshold_spin)
         
         # Trigger mode
         self.mode_combo = QComboBox()
-        self.mode_combo.addItem("Rising Edge (cross threshold going up)", OutputTriggerMode.THRESHOLD_RISING.value)
-        self.mode_combo.addItem("Falling Edge (cross threshold going down)", OutputTriggerMode.THRESHOLD_FALLING.value)
-        self.mode_combo.addItem("While Above (continuous while > threshold)", OutputTriggerMode.THRESHOLD_ABOVE.value)
-        self.mode_combo.addItem("While Below (continuous while < threshold)", OutputTriggerMode.THRESHOLD_BELOW.value)
-        self.mode_combo.addItem("On Change (any significant change)", OutputTriggerMode.ON_CHANGE.value)
-        trigger_layout.addRow("Mode:", self.mode_combo)
+        self.mode_combo.addItem(
+            loc("designer_mode_rising", "Rising Edge (cross threshold going up)"),
+            OutputTriggerMode.THRESHOLD_RISING.value)
+        self.mode_combo.addItem(
+            loc("designer_mode_falling", "Falling Edge (cross threshold going down)"),
+            OutputTriggerMode.THRESHOLD_FALLING.value)
+        self.mode_combo.addItem(
+            loc("designer_mode_above", "While Above (continuous while > threshold)"),
+            OutputTriggerMode.THRESHOLD_ABOVE.value)
+        self.mode_combo.addItem(
+            loc("designer_mode_below", "While Below (continuous while < threshold)"),
+            OutputTriggerMode.THRESHOLD_BELOW.value)
+        self.mode_combo.addItem(
+            loc("designer_mode_change", "On Change (any significant change)"),
+            OutputTriggerMode.ON_CHANGE.value)
+        trigger_layout.addRow(loc("designer_binding_lbl_mode", "Mode:"), self.mode_combo)
         
         # Cooldown
         self.cooldown_spin = QDoubleSpinBox()
         self.cooldown_spin.setRange(0.1, 60)
         self.cooldown_spin.setValue(1.0)
         self.cooldown_spin.setSuffix(" sec")
-        self.cooldown_spin.setToolTip("Minimum time between triggers")
-        trigger_layout.addRow("Cooldown:", self.cooldown_spin)
+        self.cooldown_spin.setToolTip(loc("designer_binding_tooltip_cool",
+                                          "Minimum time between triggers"))
+        trigger_layout.addRow(loc("designer_binding_lbl_cool", "Cooldown:"), self.cooldown_spin)
         
         # Enabled
-        self.enabled_check = QCheckBox("Enabled")
+        self.enabled_check = QCheckBox(loc("designer_binding_chk_enabled", "Enabled"))
         self.enabled_check.setChecked(True)
         trigger_layout.addRow("", self.enabled_check)
         
@@ -210,7 +226,9 @@ class OutputBindingDialog(QDialog):
                     display = f"💎 {name}"
 
                 if is_never_driven(name, neuron, counts):
-                    display = f"⚠ {display}  (no inputs - activation never changes)"
+                    display = loc("designer_binding_never_driven",
+                                  "⚠ {display}  (no inputs - activation never changes)",
+                                  display=display)
 
                 self.neuron_combo.addItem(display, name)
         
@@ -230,7 +248,9 @@ class OutputBindingDialog(QDialog):
             hooks = by_category[category]
             
             # Add category header
-            self.hook_combo.addItem(f"── {category.title()} ──", None)
+            self.hook_combo.addItem(
+                loc("designer_sensor_cat_label", "── {name} ──",
+                    name=loc("hook_cat_" + str(category), category.title())), None)
             
             # Make header non-selectable
             idx = self.hook_combo.count() - 1
@@ -337,11 +357,13 @@ class OutputBindingDialog(QDialog):
         hook_name = self.hook_combo.currentData()
         
         if not neuron_name:
-            QMessageBox.warning(self, "Error", "Please select a neuron")
+            QMessageBox.warning(self, loc("designer_msg_error_title", "Error"),
+                                loc("designer_binding_err_neuron", "Please select a neuron"))
             return
         
         if not hook_name:
-            QMessageBox.warning(self, "Error", "Please select an output behavior")
+            QMessageBox.warning(self, loc("designer_msg_error_title", "Error"),
+                                loc("designer_binding_err_hook", "Please select an output behavior"))
             return
         
         mode_value = self.mode_combo.currentData()
@@ -382,26 +404,27 @@ class NeuronOutputsPanel(QWidget):
         layout = QVBoxLayout(self)
         
         # Header with description
-        header = QLabel(
+        header = QLabel(loc(
+            "designer_output_header",
             "<b>Output Bindings</b><br>"
             "<small>Connect neurons to squid behaviors. When a neuron's activation "
             "exceeds the threshold, it triggers the bound action.</small>"
-        )
+        ))
         header.setWordWrap(True)
         layout.addWidget(header)
         
         # Toolbar
         toolbar = QHBoxLayout()
         
-        add_btn = QPushButton("➕ Add Binding")
+        add_btn = QPushButton(loc("designer_output_btn_add", "➕ Add Binding"))
         add_btn.clicked.connect(self.add_binding)
         toolbar.addWidget(add_btn)
         
-        edit_btn = QPushButton("✏️ Edit")
+        edit_btn = QPushButton(loc("designer_output_btn_edit", "✏️ Edit"))
         edit_btn.clicked.connect(self.edit_binding)
         toolbar.addWidget(edit_btn)
         
-        remove_btn = QPushButton("🗑️ Remove")
+        remove_btn = QPushButton(loc("designer_output_btn_remove", "🗑️ Remove"))
         remove_btn.clicked.connect(self.remove_binding)
         toolbar.addWidget(remove_btn)
         
@@ -412,7 +435,11 @@ class NeuronOutputsPanel(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels([
-            "Neuron", "→ Behavior", "Threshold", "Mode", "Enabled"
+            loc("designer_output_col_neuron", "Neuron"),
+            loc("designer_output_col_behavior", "→ Behavior"),
+            loc("designer_output_col_threshold", "Threshold"),
+            loc("designer_output_col_mode", "Mode"),
+            loc("designer_output_col_enabled", "Enabled"),
         ])
         
         # [CHANGED] Enable interactive column resizing and set default widths
@@ -444,7 +471,8 @@ class NeuronOutputsPanel(QWidget):
             neuron_item = QTableWidgetItem(binding.neuron_name)
             if binding.neuron_name not in self.design.neurons:
                 neuron_item.setForeground(QColor(255, 100, 100))  # Red if missing
-                neuron_item.setToolTip("⚠️ Neuron not found in design")
+                neuron_item.setToolTip(loc("designer_output_err_missing",
+                                           "⚠️ Neuron not found in design"))
             self.table.setItem(row, 0, neuron_item)
             
             # Output hook (formatted nicely)
@@ -490,7 +518,9 @@ class NeuronOutputsPanel(QWidget):
         
         # Update info
         enabled_count = sum(1 for b in self.bindings if b.enabled)
-        self.info_label.setText(f"{len(self.bindings)} binding(s), {enabled_count} enabled")
+        self.info_label.setText(loc("designer_output_info",
+                                    "{count} binding(s), {enabled} enabled",
+                                    count=len(self.bindings), enabled=enabled_count))
     
     def add_binding(self):
         """Show dialog to add a new binding."""
@@ -525,8 +555,9 @@ class NeuronOutputsPanel(QWidget):
         
         binding = self.bindings[row]
         reply = QMessageBox.question(
-            self, "Remove Binding",
-            f"Remove binding: {binding.neuron_name} → {binding.output_hook}?",
+            self, loc("designer_output_dlg_remove_title", "Remove Binding"),
+            loc("designer_output_dlg_remove_msg", "Remove binding: {neuron} → {hook}?",
+                neuron=binding.neuron_name, hook=binding.output_hook),
             QMessageBox.Yes | QMessageBox.No
         )
         
@@ -560,12 +591,16 @@ class NeuronOutputsPanel(QWidget):
         counts = incoming_counts(self.design)
         for binding in self.bindings:
             if binding.neuron_name not in self.design.neurons:
-                warnings.append(f"Binding references missing neuron: {binding.neuron_name}")
+                warnings.append(loc("designer_output_warn_missing",
+                                    "Binding references missing neuron: {neuron}",
+                                    neuron=binding.neuron_name))
                 continue
             neuron = self.design.neurons[binding.neuron_name]
             if is_never_driven(binding.neuron_name, neuron, counts):
-                warnings.append(
-                    f"'{binding.neuron_name}' has no incoming connections, so its "
-                    f"activation can never change and this binding will not fire."
-                )
+                warnings.append(loc(
+                    "designer_output_warn_never_driven",
+                    "'{neuron}' has no incoming connections, so its "
+                    "activation can never change and this binding will not fire.",
+                    neuron=binding.neuron_name
+                ))
         return warnings

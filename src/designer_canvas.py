@@ -13,6 +13,8 @@ from PyQt5.QtWidgets import (
     QCheckBox, QMessageBox
 )
 from PyQt5.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal, QTimer
+
+from .localisation import loc
 from PyQt5.QtGui import (
     QPainter, QPen, QBrush, QColor, QFont, QFontMetrics, QPainterPath, 
     QRadialGradient, QTransform, QCursor, QPainterPathStroker, QPolygonF
@@ -332,18 +334,20 @@ class ConfirmDeleteDialog(QDialog):
     """Confirmation dialog."""
     def __init__(self, source, target, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Delete Connection")
+        self.setWindowTitle(loc("designer_cnv_del_conn_title", "Delete Connection"))
         self.dont_ask_again = False
         layout = QVBoxLayout()
-        msg = QLabel(f"Are you sure you want to delete the connection:\n{source} → {target}?")
+        msg = QLabel(loc("designer_cnv_del_conn_msg",
+                         "Are you sure you want to delete the connection:\n{source} → {target}?",
+                         source=source, target=target))
         msg.setWordWrap(True)
         layout.addWidget(msg)
-        self.checkbox = QCheckBox("Don't ask again")
+        self.checkbox = QCheckBox(loc("designer_cnv_chk_dont_ask", "Don't ask again"))
         layout.addWidget(self.checkbox)
         button_layout = QHBoxLayout()
-        self.yes_button = QPushButton("Yes, Delete")
+        self.yes_button = QPushButton(loc("designer_cnv_btn_del", "Yes, Delete"))
         self.yes_button.clicked.connect(self.accept)
-        self.no_button = QPushButton("Cancel")
+        self.no_button = QPushButton(loc("designer_cnv_btn_cancel", "Cancel"))
         self.no_button.clicked.connect(self.reject)
         button_layout.addWidget(self.no_button)
         button_layout.addWidget(self.yes_button)
@@ -364,14 +368,15 @@ class ConnectionWeightDialog(QDialog):
         self.target = target
         self.config = config
         self.delete_requested = False
-        self.setWindowTitle("Edit Connection")
+        self.setWindowTitle(loc("designer_cnv_dlg_edit_title", "Edit Connection"))
         self.setModal(True)
         layout = QVBoxLayout()
-        info_label = QLabel(f"Connection: {source} → {target}")
+        info_label = QLabel(loc("designer_cnv_lbl_conn", "Connection: {source} → {target}",
+                                source=source, target=target))
         info_label.setStyleSheet("font-weight: bold;")
         layout.addWidget(info_label)
         weight_layout = QHBoxLayout()
-        weight_layout.addWidget(QLabel("Weight:"))
+        weight_layout.addWidget(QLabel(loc("designer_cnv_lbl_weight", "Weight:")))
         self.weight_spin = QDoubleSpinBox()
         self.weight_spin.setRange(-1.0, 1.0)
         self.weight_spin.setSingleStep(0.05)
@@ -380,20 +385,21 @@ class ConnectionWeightDialog(QDialog):
         self.weight_spin.setMinimumWidth(100)
         weight_layout.addWidget(self.weight_spin)
         layout.addLayout(weight_layout)
-        info_text = QLabel("Positive = Excitatory (green), Negative = Inhibitory (red)")
+        info_text = QLabel(loc("designer_cnv_info_weight",
+                               "Positive = Excitatory (green), Negative = Inhibitory (red)"))
         info_text.setStyleSheet("color: gray; font-size: 9pt;")
         layout.addWidget(info_text)
         layout.addSpacing(10)
         button_layout = QHBoxLayout()
-        self.delete_button = QPushButton("Delete Connection")
+        self.delete_button = QPushButton(loc("designer_cnv_btn_del_conn", "Delete Connection"))
         self.delete_button.setStyleSheet("background-color: #d32f2f; color: white;")
         self.delete_button.clicked.connect(self.on_delete_clicked)
         button_layout.addWidget(self.delete_button)
         button_layout.addStretch()
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(loc("designer_cnv_btn_cancel", "Cancel"))
         self.cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(self.cancel_button)
-        self.ok_button = QPushButton("OK")
+        self.ok_button = QPushButton(loc("designer_cnv_btn_ok", "OK"))
         self.ok_button.clicked.connect(self.accept)
         self.ok_button.setDefault(True)
         button_layout.addWidget(self.ok_button)
@@ -916,7 +922,8 @@ class BrainCanvas(QGraphicsView):
                     self.select_connection(self.drag_source_id, target_id)
                     self.rebuild()
                 else:
-                    QToolTip.showText(QCursor.pos(), "Invalid connection", self)
+                    QToolTip.showText(QCursor.pos(),
+                                      loc("designer_cnv_tooltip_invalid", "Invalid connection"), self)
             self.drag_source_id = None
             event.accept()
             return

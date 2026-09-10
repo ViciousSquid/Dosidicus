@@ -17,12 +17,17 @@ except ImportError:
     REQUIRED_NEURONS = {}
     BINARY_NEURONS = set()
 
-# Localization helper
+# Localisation helper.
+# The package-relative import is the one that works when the designer runs as
+# part of the game; the flat import covers the standalone designer.
 try:
-    from localization import tr
+    from .localisation import loc as tr
 except ImportError:
-    def tr(key, **kwargs):
-        return key
+    try:
+        from localisation import loc as tr
+    except ImportError:
+        def tr(key, default=None, **kwargs):
+            return default if default is not None else key
 
 
 def get_plugin_manager() -> Optional[Any]:
@@ -64,9 +69,10 @@ def get_builtin_sensors() -> Dict[str, Dict]:
     # NOTE: In brain_constants, values are (x, y) tuples, not dicts.
     for name, info in INPUT_SENSORS.items():
         # Default values
-        description = tr("desc_builtin_sensor").format(name=name.replace('_', ' ').title())
+        description = tr("desc_builtin_sensor", "Built-in sensor: {name}").format(
+            name=name.replace('_', ' ').title())
         is_binary = name in BINARY_NEURONS
-        category = tr("desc_builtin")
+        category = tr("desc_builtin", "builtin")
         default_connections = []
         
         # Handle case where info is a dict (future compatibility) vs tuple (current)
@@ -89,7 +95,7 @@ def get_builtin_sensors() -> Dict[str, Dict]:
         # Check if REQUIRED_NEURONS uses dicts or tuples
         info = REQUIRED_NEURONS['can_see_food']
         
-        description = tr("desc_vision_food")
+        description = tr("desc_vision_food", "Detects food in vision cone")
         default_connections = []
         
         if isinstance(info, dict):
@@ -99,7 +105,7 @@ def get_builtin_sensors() -> Dict[str, Dict]:
         sensors['can_see_food'] = {
             'description': description,
             'is_binary': True,
-            'category': tr("desc_vision"),
+            'category': tr("desc_vision", "vision"),
             'plugin': None,
             'default_connections': default_connections
         }
@@ -123,12 +129,13 @@ def get_plugin_sensors() -> Dict[str, Dict]:
         for name, data in pm.get_all_neuron_handler_info().items():
             metadata = data.get('metadata', {})
             plugin_name = data.get("plugin", "unknown")
-            default_desc = tr("desc_custom_sensor").format(plugin=plugin_name)
+            default_desc = tr("desc_custom_sensor", "Custom sensor from {plugin}").format(
+                plugin=plugin_name)
             
             sensors[name] = {
                 'description': metadata.get('description', default_desc),
                 'is_binary': metadata.get('is_binary', False),
-                'category': metadata.get('category', tr("desc_plugin")),
+                'category': metadata.get('category', tr("desc_plugin", "plugin")),
                 'plugin': data.get('plugin'),
                 'default_connections': metadata.get('default_connections', [])
             }
@@ -176,7 +183,7 @@ def get_sensors_by_category() -> Dict[str, Dict[str, Dict]]:
     by_category = {}
     
     for name, info in sensors.items():
-        category = info.get('category', tr("desc_other"))
+        category = info.get('category', tr("desc_other", "other"))
         if category not in by_category:
             by_category[category] = {}
         by_category[category][name] = info

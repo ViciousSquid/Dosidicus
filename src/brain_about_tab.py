@@ -2,7 +2,7 @@ import random
 import os
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
-from .localisation import Localisation
+from .localisation import Localisation, loc
 from .compute_backend import get_backend
 
 # Predefined list of approved squid names
@@ -86,7 +86,7 @@ class AboutTab(BrainBaseTab):
                 _provider = _short.get(_raw, _raw.replace('ExecutionProvider', ''))
             backend_text = f'ONNX · {_provider}' if _provider else 'ONNX'
         elif 'unavailable' in _bname:
-            backend_text = 'NumPy (ONNX unavailable)'
+            backend_text = loc('about_numpy_no_onnx', 'NumPy (ONNX unavailable)')
         else:
             backend_text = 'NumPy'
         
