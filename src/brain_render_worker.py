@@ -47,6 +47,10 @@ class RenderState:
     
     # [NEW] Active weight animations for Hebbian learning
     weight_animations: List[Dict] = field(default_factory=list)
+
+    # Birth reveals in flight: {name: {'start_time': float}}. A neuron listed
+    # here is mid-hatch and is drawn at reveal_scale() of its full size.
+    neuron_reveal_animations: Dict[str, Dict] = field(default_factory=dict)
     
     # Display settings
     show_weights: bool = False
@@ -611,7 +615,8 @@ class BrainRenderWorker(QThread):
     
     def _draw_neurons(self, painter: QPainter, state: RenderState, scale: float):
         """Draw all neurons with localized labels, connector relay animations, and Hebbian pulse effects"""
-        from .brain_constants import BINARY_NEURONS, neuron_row_color
+        from .brain_constants import (BINARY_NEURONS, neuron_row_color,
+                                      reveal_scale)
 
         # Set up default font
         font = QFont("Arial", state.neuron_label_font_size)
@@ -619,7 +624,7 @@ class BrainRenderWorker(QThread):
         painter.setFont(font)
         fm = painter.fontMetrics()
 
-        radius = 20 * scale
+        scale_base = scale
         current_time = state.animation_time
 
         for name, pos in state.neuron_positions.items():
@@ -628,9 +633,28 @@ class BrainRenderWorker(QThread):
             if name not in state.visible_neurons:
                 continue
 
+            scale = scale_base
+
             x, y = pos
             raw_value = state.neuron_states.get(name, 50)
             shape = state.neuron_shapes.get(name, 'circle')
+
+            # Birth reveal: swell past full size, settle back onto it. A
+            # neuron still waiting its turn in the stagger has a start_time in
+            # the future, scales to zero, and is not drawn at all - which is
+            # what makes the eight arrive one after another rather than all at
+            # once.
+            hatching = state.neuron_reveal_animations.get(name)
+            if hatching is None:
+                birth = 1.0
+            else:
+                birth = reveal_scale(current_time - hatching.get('start_time', 0.0))
+                if birth <= 0.0:
+                    continue
+            radius = (20 * scale) * birth
+            # The caption grows with the neuron rather than sitting at full
+            # size next to a half-grown circle.
+            scale = scale_base * birth
             
             # ========== CHECK FOR ACTIVE HEBBIAN ANIMATION ==========
             animation_color = self._get_neuron_animation_color(state, name, current_time)
@@ -944,6 +968,10 @@ def create_render_state_from_widget(brain_widget) -> RenderState:
     
     # [NEW] Copy active weight animations for Hebbian learning
     state.weight_animations = [dict(anim) for anim in getattr(brain_widget, 'weight_animations', [])]
+    state.neuron_reveal_animations = {
+        name: dict(anim) for name, anim
+        in getattr(brain_widget, 'neuron_reveal_animations', {}).items()
+    }
     
     # Copy display settings
     state.show_weights = getattr(brain_widget, 'show_weights', False)

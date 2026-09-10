@@ -58,7 +58,7 @@ except ImportError:
 from .animation_styles import (
     AnimationStyle, VibrantStyle, SubtleStyle,
     get_animation_style, get_available_styles, get_style_info,
-    ANIMATION_STYLES
+    ANIMATION_STYLES, DEFAULT_ANIMATION_STYLE
 )
 
 # Performance tracking for Task Manager
@@ -75,15 +75,27 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
     neuronCreated = QtCore.pyqtSignal(str)  # Emitted when neurogenesis creates a new neuron
 
     def __init__(self, config=None, debug_mode=False, tamagotchi_logic=None,
-                 animation_style: str = "vibrant"):
+                 animation_style: str = None):
         self.resolution_scale = 1.0  # Default resolution scale
         self.config = config if config else LearningConfig()
         self._laboratory = None
         self._last_lang = Localisation.instance().current_language
-        
+
         # ===== ANIMATION STYLE INITIALIZATION =====
+        # No style named: take the one saved in config.ini, and DEFAULT_
+        # ANIMATION_STYLE if there is none. The style the player picks in the
+        # Network tab has always been written to the config, but nothing ever
+        # read it back - the widget was constructed with a hardcoded 'vibrant'
+        # every time - so the setting silently reverted on every launch.
+        if animation_style is None:
+            getter = getattr(self.config, 'get_animation_style', None)
+            animation_style = getter() if callable(getter) else DEFAULT_ANIMATION_STYLE
+        try:
+            self._animation_style: AnimationStyle = get_animation_style(animation_style)
+        except KeyError:
+            animation_style = DEFAULT_ANIMATION_STYLE
+            self._animation_style = get_animation_style(animation_style)
         self._animation_style_name = animation_style
-        self._animation_style: AnimationStyle = get_animation_style(animation_style)
         self.layers = []
 
         # State update batching
@@ -395,7 +407,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         # Timer for periodic render requests (catches animation updates)
         self._render_timer = QtCore.QTimer(self)
         self._render_timer.timeout.connect(self._request_render_if_dirty)
-        self._render_timer.start(100)  # 10 FPS
+        self._render_timer.start(int(1000 / self.IDLE_RENDER_FPS))
 
     def set_brain_worker(self, worker):
         """Accept an external BrainWorker instance."""
@@ -1485,6 +1497,21 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
     # =========================================================================
 
         
+    #: Normal render rate. Ten frames a second is plenty for a brain whose
+    #: state changes on a game tick.
+    IDLE_RENDER_FPS = 10
+
+    #: Rate while neurons are hatching. A 0.45s expand-and-settle rendered at
+    #: ten frames a second is four frames, which reads as a stutter rather than
+    #: as a pulse; the burst lasts only as long as the birth sequence does.
+    REVEAL_RENDER_FPS = 40
+
+    def _set_render_fps(self, fps: int):
+        """Retune the offscreen render timer."""
+        timer = getattr(self, '_render_timer', None)
+        if timer is not None:
+            timer.setInterval(max(1, int(1000 / max(1, fps))))
+
     def is_neuron_revealed(self, name):
         """Return True if the neuron has finished its reveal animation.
         Only checks revealed tracking during tutorial mode."""
@@ -1495,9 +1522,10 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         # During tutorial, check if neuron has completed its animation
         if name not in self.neuron_reveal_animations:
             return name in self.visible_neurons  # never animated = already visible
+        from .brain_constants import NEURON_REVEAL_DURATION
         anim = self.neuron_reveal_animations[name]
         elapsed = time.time() - anim['start_time']
-        return elapsed >= 0.4  # same duration used in draw_neurons
+        return elapsed >= NEURON_REVEAL_DURATION
     
 
     def _advance_link_fades(self):
@@ -1581,20 +1609,35 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         # 2. Neuron reveal animations - only if we have any
         if self.neuron_reveal_animations:
+            from .brain_constants import (NEURON_REVEAL_DURATION,
+                                          reveal_progress)
+
             completed_reveals = []
             for neuron_name, anim_data in self.neuron_reveal_animations.items():
                 elapsed = current_time - anim_data['start_time']
-                if elapsed >= 0.4:
+                if elapsed >= NEURON_REVEAL_DURATION:
                     anim_data['progress'] = 1.0
                     completed_reveals.append(neuron_name)
                 else:
-                    anim_data['progress'] = 1 - (1 - elapsed / 0.4) ** 3
+                    # Linear 0..1. The SIZE curve (which overshoots past 1) is
+                    # applied by the renderer from the same elapsed time, so
+                    # the two cannot disagree about where the reveal is up to.
+                    anim_data['progress'] = reveal_progress(elapsed)
 
             for neuron_name in completed_reveals:
                 del self.neuron_reveal_animations[neuron_name]
-            
+
             needs_repaint = True
-            
+            # The reveal is drawn INSIDE the cached frame, so a repaint alone
+            # re-blits the same picture. Without this the neurons' sizes only
+            # ever changed on a frame something else happened to dirty, which
+            # is why the expand animation reveal_neuron() has always claimed
+            # to do was never visible.
+            self.mark_render_dirty()
+
+            if not self.neuron_reveal_animations:
+                self._set_render_fps(self.IDLE_RENDER_FPS)
+
             # Enable links after last reveal
             if (len(self.visible_neurons) == len(self.original_neurons) and
                 not self.neuron_reveal_animations and not self.show_links):
@@ -1700,7 +1743,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             'progress': 0.0
         }
 
-        pos = self.neuron_positions[neuron_name]
+        self._set_render_fps(self.REVEAL_RENDER_FPS)
         self.mark_render_dirty()
 
     def _enable_links_after_reveal(self):

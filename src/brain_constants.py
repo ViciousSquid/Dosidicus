@@ -428,6 +428,51 @@ ROW_BAND_COLORS = {
 PROTECTED_RING_WIDTH = 3
 NORMAL_RING_WIDTH = 2
 
+# -----------------------------------------------------------------------------
+# BIRTH REVEAL - how a neuron arrives
+# -----------------------------------------------------------------------------
+# Each of the eight swells past full size and settles back onto it, so a neuron
+# is BORN rather than simply present in the next frame. reveal_neuron() has
+# always described itself as an expand animation and always recorded a
+# progress value for one, but nothing ever read that value: the neuron was
+# drawn at its final radius from the first frame it appeared in, so the whole
+# hatching sequence was eight neurons popping into existence.
+
+#: How long one neuron's reveal takes. Read by everything that has to agree
+#: about it - the tick that advances the animation, the "has it finished?"
+#: check that gates connection drawing, and the renderer that sizes it. Those
+#: three each had their own 0.4 written into them, with a comment on one of
+#: them asking the reader to keep it in step with the others.
+NEURON_REVEAL_DURATION = 0.45
+
+#: Ease-out-back tension. 2.5 peaks at about 1.19x full size - a distinct pulse
+#: that still reads as the neuron settling rather than as a bounce.
+REVEAL_OVERSHOOT_TENSION = 2.5
+
+
+def reveal_progress(elapsed: float) -> float:
+    """How far through its reveal a neuron is, 0 to 1, before easing."""
+    if elapsed <= 0.0:
+        return 0.0
+    return min(1.0, elapsed / NEURON_REVEAL_DURATION)
+
+
+def reveal_scale(elapsed: float) -> float:
+    """Size multiplier for a neuron `elapsed` seconds into its reveal.
+
+    0 before it starts - a neuron waiting its turn in the stagger is not drawn
+    at all - then an ease-out-back up to REVEAL_OVERSHOOT_TENSION's peak and
+    back down onto 1.0, which it holds forever after.
+    """
+    t = reveal_progress(elapsed)
+    if t <= 0.0:
+        return 0.0
+    if t >= 1.0:
+        return 1.0
+    c1 = REVEAL_OVERSHOOT_TENSION
+    u = t - 1.0
+    return 1.0 + (c1 + 1.0) * u ** 3 + c1 * u ** 2
+
 # Default neuron colors by type
 DEFAULT_COLORS = {
     'core': (150, 150, 220),      # Soft purple
