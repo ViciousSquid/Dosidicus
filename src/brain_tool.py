@@ -87,8 +87,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             display_cfg = self.config_manager.get_display_settings() or {}
         except Exception:
             display_cfg = {}
-        final_width = int(display_cfg.get('brain_tool_width', 1200))
-        final_height = int(display_cfg.get('brain_tool_height', 900))
+        final_width = int(display_cfg.get('brain_tool_width', 1300))
+        final_height = int(display_cfg.get('brain_tool_height', 1100))
 
         # The size set here is the size the window OPENS at, and nothing else is
         # allowed to override it. Qt will not honour resize() below a window's
