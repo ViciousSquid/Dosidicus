@@ -161,8 +161,6 @@ Troubleshooting (quick):
 
 ## Technical Overview
 
--  41,636 lines, one developer, 28 months, GPL 2.0 license
-
 - **Dependencies:**
   - Python ^3.9
   - PyQt5 ^5.15 (GUI framework)
