@@ -53,20 +53,38 @@ NEURON_ROWS = {
 GROWTH_ZONE = (70.0, 500.0, 954.0, 716.0)
 
 
-def row_positions(names, row: str) -> dict:
-    """Lay `names` out evenly along row `row`, as {name: (x, y)}.
+def spread_along(names, y: float) -> dict:
+    """Lay `names` out evenly across the row span at height `y`.
 
     A single neuron is centred rather than pinned to the left edge, so a row
     that happens to hold one thing still looks deliberate.
     """
     names = tuple(names)
-    y = NEURON_ROWS[row]['y']
     if not names:
         return {}
     if len(names) == 1:
         return {names[0]: ((ROW_X_FIRST + ROW_X_LAST) / 2.0, y)}
     step = (ROW_X_LAST - ROW_X_FIRST) / (len(names) - 1)
     return {name: (ROW_X_FIRST + i * step, y) for i, name in enumerate(names)}
+
+
+def row_positions(names, row: str) -> dict:
+    """Lay `names` out evenly along row `row`, as {name: (x, y)}."""
+    return spread_along(names, NEURON_ROWS[row]['y'])
+
+
+#: The growth zone is rows too. Grown neurons used to be scattered inside it by
+#: a nearest-neighbour search anchored on the weighted centre of whatever the
+#: neuron wired to - and since a new neuron typically wires to several core
+#: drives spread along the top, that anchor was almost always the middle, so
+#: everything the squid ever grew ended up in one central clump.
+GROWTH_ROW_YS = (530.0, 606.0, 682.0)
+
+#: Neurons per growth row before a new one is opened. Past the last row the
+#: rows simply get denser - a brain with more than two dozen grown neurons is
+#: crowded however you arrange it, and staying in ordered rows is still the
+#: most legible way to be crowded.
+GROWTH_ROW_CAPACITY = 8
 
 
 # --- What sits on each row, left to right --------------------------------
@@ -117,10 +135,9 @@ _CORE_ROW = row_positions(CORE_ROW_ORDER, 'core')
 _MOTOR_ROW = row_positions(MOTOR_ROW_ORDER, 'motor')
 _SENSOR_ROW = row_positions(SENSOR_ROW_ORDER, 'sensor')
 
-#: The eight neurons a squid is born with, in the order the birth animation
-#: reveals them. Sight first - a squid that cannot see food will not live long
-#: enough for any of the drives to matter. Distinct from CORE_ROW_ORDER:
-#: that is a layout, and this is a birth.
+#: The eight neurons a squid is born with, in the order they would be revealed
+#: on their own. Distinct from CORE_ROW_ORDER: that is a layout, and this is
+#: the design claim about what a squid starts as.
 BIRTH_REVEAL_ORDER = ("can_see_food",) + CORE_ROW_ORDER
 
 
@@ -914,6 +931,28 @@ def newborn_neurons() -> dict:
     return {**REQUIRED_NEURONS, **INNATE_SENSORS, **ACTION_NEURONS}
 
 
+def birth_sequence() -> tuple:
+    """Every neuron a squid hatches with, in the order it is revealed.
+
+    Row by row down the screen - CORE, then ACTIONS, then SENSES - and left to
+    right within each row, so the hatching sequence builds the picture the
+    player is about to be looking at.
+
+    The birth animation used to walk the eight required neurons alone, which
+    is why the ACTIONS row was empty in a newly hatched brain and stayed that
+    way: a neuron that is never revealed is never added to visible_neurons,
+    and a neuron that is not in visible_neurons is never drawn. The motor bank
+    and the innate sensors are every bit as innate as the drives are.
+    """
+    innate = newborn_neurons()
+    ordered = []
+    for names in (CORE_ROW_ORDER, MOTOR_ROW_ORDER, SENSOR_ROW_ORDER):
+        ordered.extend(name for name in names if name in innate)
+    # Anything a custom brain added that is not on a known row still hatches.
+    ordered.extend(name for name in innate if name not in ordered)
+    return tuple(ordered)
+
+
 def innate_neuron_names() -> frozenset:
     """Every neuron name a squid is born with.
 
@@ -1047,6 +1086,26 @@ def layout_bounds(default_positions=None, margin=LAYOUT_MARGIN):
     exactly the mistake this replaced - it would hand back the rows.
     """
     return GROWTH_ZONE
+
+
+def growth_positions(names) -> dict:
+    """Lay grown neurons out in rows across the growth zone, as {name: (x, y)}.
+
+    `names` in the order they were grown, so the oldest sits leftmost on the
+    top growth row and the brain's history reads left to right and down.
+    """
+    names = tuple(names)
+    if not names:
+        return {}
+    rows = max(1, min(len(GROWTH_ROW_YS),
+                      -(-len(names) // GROWTH_ROW_CAPACITY)))
+    per_row = -(-len(names) // rows)
+
+    positions = {}
+    for row_index in range(rows):
+        chunk = names[row_index * per_row:(row_index + 1) * per_row]
+        positions.update(spread_along(chunk, GROWTH_ROW_YS[row_index]))
+    return positions
 
 
 def clamp_to_layout(x, y, default_positions=None, margin=LAYOUT_MARGIN):

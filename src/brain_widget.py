@@ -254,11 +254,12 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self.neuron_positions = self.original_neuron_positions.copy()
 
         # Every neuron the squid was BORN with - the eight, the innate sensors
-        # and the motor bank. Distinct from self.original_neurons below, which
-        # is only the eight, and only for the birth animation. Several
-        # renderers used to ask "was this grown?" against that eight-name list,
-        # so the motor bank and the innate sensors were captioned as if the
-        # squid had grown them within its first second of life.
+        # and the motor bank - as a set, for asking "was this grown?".
+        # self.original_neurons below holds the same names as an ORDERED list,
+        # because the birth animation needs an order and this does not.
+        # Several renderers used to ask "was this grown?" against a hardcoded
+        # list of the eight, so the motor bank and the innate sensors were
+        # captioned as if the squid had grown them in its first second of life.
         self.innate_neurons = frozenset(self.original_neuron_positions)
 
         # Action neurons are network-driven like any other: propagation writes
@@ -281,13 +282,16 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         # Track which neurons are visible (for animated reveal on new game)
         self.visible_neurons = set()
-        # The eight neurons a squid is born with, in the order the birth
-        # animation reveals them. NOT the CORE row: can_see_food is one of the
-        # eight but is a sensor, and is drawn down on the SENSES row with the
-        # other things the world writes. Ask self.innate_neurons, not this, if
-        # the question is "was this neuron grown?".
-        from .brain_constants import BIRTH_REVEAL_ORDER
-        self.original_neurons = list(BIRTH_REVEAL_ORDER)
+        # Every neuron the squid hatches with, in the order the birth
+        # animation reveals them: the CORE row, then ACTIONS, then SENSES.
+        #
+        # This was the eight required neurons alone, and that is why a newly
+        # hatched brain had an empty ACTIONS row. A neuron that is never
+        # revealed is never added to visible_neurons, and a neuron that is not
+        # in visible_neurons is never drawn - so the motor bank, which the
+        # squid is every bit as born with as its hunger, simply was not there.
+        from .brain_constants import birth_sequence
+        self.original_neurons = list(birth_sequence())
         # Animation state for neuron reveals
         self.neuron_reveal_animations = {}  # {neuron_name: {'start_time': float, 'progress': float}}
         # --- link fade animation ---
@@ -1704,11 +1708,17 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             self._cached_pens[key] = QtGui.QPen(color, width)
         return self._cached_pens[key]
 
-    def reveal_neuron(self, neuron_name):
-        """Reveal a neuron with an expand animation – forces links OFF during reveal."""
+    def reveal_neuron(self, neuron_name, delay: float = None):
+        """Reveal a neuron with an expand animation - forces links OFF during reveal.
+
+        `delay` is seconds to wait before the expand starts. The caller sets
+        the pace because the caller is the one synchronising with something -
+        the hatching splash's frames, or a fixed run for a loaded game. Left
+        unset it falls back to staggering by how many neurons are already up.
+        """
         import time
-        
-        if neuron_name not in self.original_neurons:
+
+        if neuron_name not in self.innate_neurons:
             return
         if neuron_name in self.visible_neurons:
             return
@@ -1724,9 +1734,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 nt.checkbox_links.setChecked(False)
                 nt.checkbox_links.setEnabled(False)
 
-        # Staggered start
-        stagger = 0.4
-        delay = len(self.visible_neurons) * stagger
+        if delay is None:
+            delay = len(self.visible_neurons) * 0.4
 
         self.visible_neurons.add(neuron_name)
 
@@ -1744,6 +1753,37 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         }
 
         self._set_render_fps(self.REVEAL_RENDER_FPS)
+        self.mark_render_dirty()
+
+    def play_birth_sequence(self, duration: float = 5.0):
+        """Reveal every neuron the squid is born with, spread over `duration`.
+
+        For callers that are not synchronised to anything - a loaded game, or
+        a brain window opened after the fact. The splash-driven hatch paces
+        itself against its own frames instead.
+        """
+        sequence = list(self.original_neurons)
+        if not sequence:
+            return
+        step = duration / len(sequence)
+        for index, name in enumerate(sequence):
+            self.reveal_neuron(name, delay=index * step)
+
+    def relayout_grown_neurons(self):
+        """Spread every grown neuron evenly along the growth rows.
+
+        Run after each birth, so the arrangement is a property of HOW MANY
+        neurons the squid has grown rather than of the order chance happened
+        to place them in. Neurons the squid was born with are never moved -
+        their rows are structure.
+        """
+        from .brain_constants import growth_positions
+
+        grown = [name for name in self.neuron_positions
+                 if name not in self.innate_neurons]
+        if not grown:
+            return
+        self.neuron_positions.update(growth_positions(grown))
         self.mark_render_dirty()
 
     def _enable_links_after_reveal(self):
