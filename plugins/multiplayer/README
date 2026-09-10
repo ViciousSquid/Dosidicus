@@ -1,29 +1,219 @@
-             WORLD
-               │
-               ▼
-        objective events
-               │
-               ▼
-          MULTIPLAYER
-               │
-        ┌──────┴──────┐
-        ▼             ▼
-     Squid A        Squid B
-        │             │
-    perception    perception
-        │             │
-      brain           brain
-        │             │
-     action          action
-        │             │
-        └──── event ──┘
-               │
-               ▼
-       consequences
-               │
-        ┌──────┴──────┐
-        ▼             ▼
-      A memory      B memory
-        │             │
-        ▼             ▼
-     A learns       B learns
+# 🦑 Multiplayer
+
+Lets a squid swim out of its tank and into somebody else's, over the LAN. The
+two squid can perceive each other, act on what they perceive, and remember the
+individual afterwards.
+
+**Experimental.** LAN only — no internet transport, no matchmaking, no NAT
+traversal. Not enabled at startup (`auto_load_blacklist` in `plugin_manager.py`);
+turn it on from the Plugin manager.
+
+## The invariant
+
+> A visiting squid's brain stays on its own machine. The host runs its body,
+> not its mind.
+
+Everything in the design follows from that. Before this was true, a visitor was
+driven by `RemoteSquidController` — a four-state policy running on the host,
+standing in for a brain that was running perfectly well somewhere else. Every
+decision it made was invisible to the real squid's learning, so a visit taught
+the visiting squid nothing.
+
+Now the host sends what the visitor can see, the visitor's own network decides,
+and the host carries it out:
+
+```
+        HOST TANK                              VISITOR'S HOME INSTANCE
+        ---------                              -----------------------
+  what the visitor can see  --perception_frame->  its own sensors
+                                                  its own propagation
+                                                  its own action neurons
+  apply it, resolve it      <--action_intent----  decision_engine.select_action
+  what actually happened    --consequence------>  its own senses again
+                                                  its own memory
+```
+
+The action selection is `src/decision_engine.select_action` — the same function
+a squid uses at home, not a copy. A second copy would be a second squid, and the
+two would drift.
+
+## What crosses the wire
+
+Two rules decide what may be in a message: **only what the other squid could
+actually observe**, and **private cognitive state never leaves home**.
+
+| Direction | Message | Carries |
+|-----------|---------|---------|
+| host → visitor | `perception_frame` | position, tank bounds, facing, nine observable sensor values, the resident's identity, host-issued item ids |
+| visitor → host | `action_intent` | an action **neuron name**, its activation, confidence, heading, target id, lease |
+| host → visitor | `consequence` | what happened: a contest resolved, food eaten, an action blocked |
+| either | `visit_request` / `visit_response` / `visit_end` | consent, and the end of a visit |
+
+**Never crosses:** weights, neuron activations, drives, memories, the capability
+ledger, neurogenesis state, scene contents, or any filesystem path. A message
+containing any of them is rejected on arrival at any nesting depth
+(`FORBIDDEN_KEYS` in `remote_protocol.py`).
+
+A host also may **not** assert `conspecific_familiarity`, `conspecific_recalled_good`
+or `conspecific_recalled_bad`. Those are the visitor's own memory of the resident,
+computed at home from its own `PeerLedger`. A frame carrying one raises.
+
+### An intent is a lease, not a command
+
+Every `action_intent` expires. If the network drops after the visitor asks to
+swim left, the host stops applying it when the lease runs out and the visitor
+**stops** — it does not carry on, and it does not get a stand-in policy to keep
+it looking alive. Both would be the host inventing behaviour.
+
+## Encounters
+
+Another squid reaches the brain as **ordinary input sensors**, registered through
+`plugin_manager.register_neuron_handler` and classified through
+`brain_constants.register_input_sensor` so that propagation, the capability
+monitor, the causal ledger and the plasticity rules all treat them as sense
+organs.
+
+| Sensor | Reads |
+|--------|-------|
+| `conspecific_visible` | another squid is in view |
+| `conspecific_proximity` | how close it is |
+| `conspecific_ahead` | how squarely it sits in front |
+| `conspecific_closing` / `conspecific_receding` | whether it is approaching or leaving |
+| `conspecific_familiarity` | how well this **individual** is known |
+| `conspecific_recalled_good` / `conspecific_recalled_bad` | how past encounters with this individual went |
+| `conspecific_contesting` | it is contesting an object with this squid |
+
+Every one rests at **zero**, and zero always means "nothing to report". That is
+why anything with two directions is two sensors in push-pull rather than one
+signed sensor: a neutral reading of 50 would be indistinguishable from a real
+mid-strength signal, and a squid that had never met anyone would be born with
+half a sensation of something. A stranger reads zero everywhere, which is what
+uncertainty about an unfamiliar individual is in this engine's own units.
+
+**There is no social behaviour here.** Nothing in this plugin maps "another
+squid" to an action, and there is no social neuron type. The sensors report, the
+action neurons compete, the decision engine reads the winner. There is also no
+contest action: a squid swimming at an object it wants is `act_play`, and whether
+another squid had a claim to that object is a fact about the tank.
+
+### Memory
+
+A visit becomes an ordinary memory, filed against the individual:
+
+```
+category 'social', key 'peer:<squid uuid>'
+```
+
+Identity is `Squid.uuid`, which the save file already persists and restores —
+not `node_id`, which is regenerated every session and so cannot answer "is this
+the same squid I met last week".
+
+`PeerLedger` is a **view** over the squid's own `MemoryManager`, not a second
+store. Long-term memory already persists, already promotes what matters, and
+already raises the importance of a repeated experience; a parallel database
+would drift from it. What gets recorded is objective — an object changed hands,
+food was eaten, how the squid's drives moved — never a verdict about the peer.
+
+## Consent
+
+Entry is something the host agrees to. A refused visitor gets no body and no
+autopilot, so it cannot enter.
+
+| Mode | Behaviour |
+|------|-----------|
+| `open` | every visitor admitted (the default; fine on a trusted LAN) |
+| `known` | only peers on the allow list |
+| `closed` | nobody |
+
+## Timings
+
+| Constant | Default | Meaning |
+|----------|---------|---------|
+| `ROUND_TRIP_INTERVAL` | 0.5 s | one perception → decision → action cycle |
+| `INTENT_LEASE` | 1.5 s | how long an intent stays valid |
+| `LINK_TIMEOUT` | 4.0 s | silence after which a visitor stops / a visitor comes home |
+| `VISIT_ABANDON_TIMEOUT` | 12.0 s | silence after which the host ends the visit |
+| `SYNC_INTERVAL` | 1.0 s | state broadcast cadence |
+| `MULTICAST_GROUP` : `PORT` | `224.3.29.71:10000` | where peers find each other |
+
+## Files
+
+**The round trip**
+
+| File | What it owns |
+|------|--------------|
+| `remote_protocol.py` | the four messages, their validation, and what may not cross |
+| `host_body.py` | the host as a visitor's body: perception out, intents in, consequences back |
+| `visitor_mind.py` | the visitor's end — its own brain, its own senses, its own memory |
+
+**Encounters**
+
+| File | What it owns |
+|------|--------------|
+| `encounter_sensors.py` | the nine sensors, and where they point (home tank or host frame) |
+| `encounter.py` | an encounter as a bout with an outcome, measured from drives |
+| `peer_ledger.py` | what this squid remembers about individuals, over `MemoryManager` |
+| `identity.py` | `SquidIdentity` — persistent, wire-safe |
+| `consent.py` | who may enter |
+
+**Transport and UI**
+
+| File | What it owns |
+|------|--------------|
+| `main.py` | plugin entry point: registers `MultiplayerPlugin` with the plugin manager |
+| `mp_plugin_logic.py` | the plugin itself: lifecycle, timers, message handlers, wiring |
+| `mp_network_node.py` | the multicast socket, the listener thread, peer discovery |
+| `mp_constants.py` | group, port, cadence, plugin metadata |
+| `network_utilities.py` | message compression and node-id helpers |
+| `packet_validator.py` | packet-level checks before anything is parsed |
+| `remote_entity_manager.py` | drawing remote squid |
+| `asset_paths.py` | turning a remote item name into a local asset, safely |
+| `multiplayer_status_widget.py`, `status_bar_component.py`, `multiplayer_config_dialog.py` | UI |
+| `__init__.py` | empty; makes the folder a package |
+
+**Dead code**
+
+Two files are no longer reachable. Both are kept for reference and should be
+deleted once nothing wants to look at them.
+
+| File | Why it is dead |
+|------|----------------|
+| `squid_multiplayer_autopilot.py` | `RemoteSquidController` is the stand-in brain the round trip replaced. Nothing appends to `pending_controller_creations`, so `_setup_controller_immediately` never runs and no controller is ever constructed. **While it exists, re-wiring it would silently reintroduce a second brain on the host** — the one thing the design forbids. |
+| `multiplayer_events.py` | `MultiplayerEventDispatcher` is imported by nothing. Message dispatch goes through the plugin manager's hooks (`on_network_*`) instead. |
+
+## Running two instances
+
+Start the game twice on one machine (or on two machines on the same LAN), enable
+Multiplayer in both, and open **Plugins → Multiplayer → Network Dashboard**.
+
+Each should list the other under **Detected Peers** within a second or two.
+
+**If Detected Peers stays empty**, read the dashboard's stats:
+
+| Reading | Means |
+|---------|-------|
+| Listener: **NOT RUNNING** | the receive thread did not start — nothing can ever be detected |
+| Sent climbing, Received **0** | this instance is talking and not hearing. Multicast is not reaching it: check the firewall (on Windows, inbound UDP for `python.exe`), and that both are on the same subnet |
+| Both climbing, no peers | packets arrive but are rejected — run with `multiplayer_debug = True` in `config.ini` |
+
+Sending and listening are independent, which is worth remembering: an instance
+can log *"Exit message successfully broadcast"* every time while hearing nothing
+at all.
+
+## Tests
+
+| File | Covers |
+|------|--------|
+| `tests/test_peer_discovery.py` | real sockets: two nodes on one machine must hear each other |
+| `tests/test_encounter_stage0.py` | the sensor seam, identity, encounter memory, safe asset paths, consent |
+| `tests/test_remote_mind_stage1.py` | the round trip, and that the plugin does not choose the visitor's behaviour |
+| `tests/test_social_consequences_stage2a.py` | that a memory of one individual can change what the squid does |
+
+The load-bearing one is `PluginDoesNotChooseBehaviourTests` in the Stage 1 file.
+Every other test could pass while this plugin quietly decided what a visitor did;
+that one fails if it does.
+
+## Not built yet
+
+Signalling, gossip, asynchronous visits to offline tanks, internet transport,
+and any social behaviour beyond individual-specific memory.
