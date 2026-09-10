@@ -23,6 +23,7 @@ from .brain_worker import BrainWorker
 from .compute_backend import get_backend
 from .neurogenesis import EnhancedNeurogenesis, ExperienceBuffer
 from .brain_tooltips import EnhancedBrainTooltips
+from .localisation import loc
 from .brain_constants import (
     CORE_NEURONS, INPUT_SENSORS, is_core_neuron,
     BINARY_NEURONS, PURE_INPUT_NEURONS, NON_PROPAGATED_NEURONS,
@@ -2462,7 +2463,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 continue
             self.apply_weight_change(
                 (source, target), value=float(weight), mechanism='innate',
-                detail={'note': "this squid was born with it"},
+                detail={'note': loc("prov_note_innate", "this squid was born with it")},
                 create=True, animate=False)
         self.sync_connections_from_weights()
         if LEARNED_ACTIONS:
@@ -2573,17 +2574,27 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 return # Cannot log without a neuron type
 
             # General creation message
-            log_entry += f"{timestamp} - a {neuron_type.upper()} neuron ({neuron_name}) was created because {neuron_type} counter was {trigger_value:.2f}\n"
+            log_entry += loc(
+                "log_created",
+                "{time} - a {type} neuron ({name}) was created because "
+                "{type} counter was {value}",
+                time=timestamp, type=neuron_type.upper(), name=neuron_name,
+                value=f"{trigger_value:.2f}") + "\n"
 
             # Specific details for stress neurons
             if neuron_type == "stress":
-                log_entry += "An inhibitory connection was made to ANXIETY\n"
-                log_entry += "Maximum anxiety value has been permanently reduced by 10\n"
+                log_entry += loc(
+                    "log_stress_detail",
+                    "An inhibitory connection was made to ANXIETY\n"
+                    "Maximum anxiety value has been permanently reduced by 10") + "\n"
 
         elif event_type == "pruned":
             # A more consistent format for pruned events
             timestamp_full = datetime.now().strftime("%H:%M:%S")
-            log_entry = f"{timestamp_full} - a neuron ({neuron_name}) was PRUNED due to {reason if reason else 'unknown reason'}\n"
+            log_entry = loc(
+                "log_pruned", "{time} - a neuron ({name}) was PRUNED due to {reason}",
+                time=timestamp_full, name=neuron_name,
+                reason=reason or loc("log_unknown_reason", "unknown reason")) + "\n"
 
         if log_entry:
             try:
@@ -2754,8 +2765,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             return 0
 
         applied = 0
-        note = reason or ("something good happened" if signal > 0
-                          else "something bad happened")
+        note = reason or (loc("prov_note_good", "something good happened") if signal > 0
+                          else loc("prov_note_bad", "something bad happened"))
         for edge, delta in (deltas or {}).items():
             if not delta:
                 continue
@@ -2763,8 +2774,10 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             if self.apply_weight_change(
                     edge, delta=delta, mechanism='causal_reward',
                     detail={'reward_signal': round(float(signal), 3),
-                            'note': f"{note}, and this synapse was firing in the "
-                                    f"right order just before it"},
+                            'note': loc(
+                                "prov_note_reward",
+                                "{note}, and this synapse was firing in the "
+                                "right order just before it", note=note)},
                     create=False, directed=False):
                 applied += 1
         if applied:
@@ -2912,13 +2925,15 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 if isinstance(conn, tuple) and (conn[0] == neuron_to_remove or conn[1] == neuron_to_remove):
                     self.remove_weight(
                         conn, mechanism='prune',
-                        reason=f"{neuron_to_remove} was pruned for weak connections "
-                               f"and inactivity, so its synapses went with it")
+                        reason=loc(
+                            "prov_note_pruned",
+                            "{name} was pruned for weak connections and inactivity, "
+                            "so its synapses went with it", name=neuron_to_remove))
                     
             if neuron_to_remove in self.neurogenesis_data.get('new_neurons', []):
                 self.neurogenesis_data['new_neurons'].remove(neuron_to_remove)
                 
-            reason = "weak connections/activity"
+            reason = loc("log_reason_weak", "weak connections/activity")
             self.log_neurogenesis_event(neuron_to_remove, "pruned", reason)
             
             self.mark_render_dirty()

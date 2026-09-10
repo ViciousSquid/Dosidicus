@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from typing import Optional, Dict
 
 from .designer_core import BrainDesign, DesignerNeuron, DesignerLayer
+from .localisation import loc
 from .designer_constants import (
     NeuronType, INPUT_SENSORS, REQUIRED_NEURONS, DEFAULT_SENSOR_CONNECTIONS,
     is_required_neuron, is_input_sensor
@@ -36,7 +37,7 @@ class AddNeuronDialog(QDialog):
         self.position = position or (400, 200)
         self.result_neuron = None
         self.result_message = ""
-        self.setWindowTitle("Add Neuron")
+        self.setWindowTitle(loc("designer_add_title", "Add Neuron"))
         self.setMinimumWidth(400)
         self.setup_ui()
     
@@ -44,24 +45,25 @@ class AddNeuronDialog(QDialog):
         layout = QVBoxLayout(self)
         
         # 1. Selection Group
-        type_group = QGroupBox("Select Neuron Type")
+        type_group = QGroupBox(loc("designer_add_grp_type", "Select Neuron Type"))
         type_layout = QVBoxLayout(type_group)
         
         # Custom Neuron Button (The "Magic" one)
-        custom_btn = QPushButton("✨ Custom / Plugin Neuron")
-        custom_btn.setToolTip("Create a neuron with a specific name to link with game plugins")
+        custom_btn = QPushButton(loc("designer_add_btn_custom", "✨ Custom / Plugin Neuron"))
+        custom_btn.setToolTip(loc("designer_add_tooltip_custom",
+                                  "Create a neuron with a specific name to link with game plugins"))
         custom_btn.clicked.connect(lambda: self.select_type('custom'))
         type_layout.addWidget(custom_btn)
         
         # Sensor Button
-        sensor_btn = QPushButton("📡 Input Sensor")
+        sensor_btn = QPushButton(loc("designer_add_btn_sensor", "📡 Input Sensor"))
         sensor_btn.clicked.connect(lambda: self.select_type('sensor'))
         type_layout.addWidget(sensor_btn)
         
         layout.addWidget(type_group)
         
         # 2. Sensor Selection Group (Hidden by default)
-        self.sensor_group = QGroupBox("Select Sensor")
+        self.sensor_group = QGroupBox(loc("designer_add_grp_sensor", "Select Sensor"))
         sensor_layout = QVBoxLayout(self.sensor_group)
         self.sensor_list = QListWidget()
         self.sensor_list.itemDoubleClicked.connect(self.accept_sensor)
@@ -70,23 +72,24 @@ class AddNeuronDialog(QDialog):
         self.sensor_group.hide()
         
         # 3. Custom Neuron Entry Group (Hidden by default)
-        self.custom_group = QGroupBox("Define Custom Neuron")
+        self.custom_group = QGroupBox(loc("designer_add_grp_custom", "Define Custom Neuron"))
         custom_layout = QFormLayout(self.custom_group)
         
         # Magic Link Instruction
-        info_label = QLabel(
+        info_label = QLabel(loc(
+            "designer_add_info_custom",
             "<i>To affect the squid, the <b>Name</b> must match a plugin ID.<br>"
             "Example: Name it <b>'jet_boost'</b> to activate a jetpack plugin.</i>"
-        )
+        ))
         info_label.setWordWrap(True)
         info_label.setStyleSheet("color: #666; margin-bottom: 5px;")
         custom_layout.addRow(info_label)
         
         self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("e.g. turbo_mode")
-        custom_layout.addRow("Plugin ID / Name:", self.name_edit)
+        self.name_edit.setPlaceholderText(loc("designer_add_ph_id", "e.g. turbo_mode"))
+        custom_layout.addRow(loc("designer_add_lbl_id", "Plugin ID / Name:"), self.name_edit)
         
-        add_custom_btn = QPushButton("Create Link")
+        add_custom_btn = QPushButton(loc("designer_add_btn_create", "Create Link"))
         add_custom_btn.setStyleSheet("font-weight: bold; background-color: #E0F7FA; color: #006064;")
         add_custom_btn.clicked.connect(self.accept_custom)
         custom_layout.addRow(add_custom_btn)
@@ -123,7 +126,7 @@ class AddNeuronDialog(QDialog):
         available = {k: v for k, v in all_sensors.items() if k not in existing}
         
         if not available:
-            self.sensor_list.addItem("All sensors added")
+            self.sensor_list.addItem(loc("designer_add_all_added", "All sensors added"))
             return
 
         for name in sorted(available.keys()):
@@ -140,7 +143,8 @@ class AddNeuronDialog(QDialog):
             # Add tooltip
             tooltip = info.get('description', '')
             if info.get('plugin'):
-                tooltip += f"\n[Plugin: {info['plugin']}]"
+                tooltip += "\n" + loc("designer_tooltip_plugin", "[Plugin: {plugin}]",
+                                      plugin=info['plugin'])
             if tooltip:
                 item.setToolTip(tooltip.strip())
             
@@ -156,16 +160,18 @@ class AddNeuronDialog(QDialog):
         if success:
             self.result_message = msg
             self.accept()
-        else: QMessageBox.warning(self, "Error", msg)
+        else:
+            QMessageBox.warning(self, loc("designer_add_err_title", "Error"), msg)
 
     def accept_custom(self):
         name = self.name_edit.text().strip().lower().replace(' ', '_')
         if not name: return
         if name in self.design.neurons:
-            QMessageBox.warning(self, "Error", "Exists")
+            QMessageBox.warning(self, loc("designer_add_err_title", "Error"),
+                                loc("designer_add_err_exists", "Exists"))
             return
         self.design.add_neuron(DesignerNeuron(name=name, neuron_type=NeuronType.HIDDEN, position=self.position))
-        self.result_message = f"Created {name}"
+        self.result_message = loc("designer_add_msg_created", "Created {name}", name=name)
         self.accept()
 
 class NeuronPropertiesPanel(QWidget):
@@ -178,31 +184,31 @@ class NeuronPropertiesPanel(QWidget):
         
     def setup_ui(self):
         layout = QVBoxLayout(self)
-        self.header_label = QLabel("No neuron selected")
+        self.header_label = QLabel(loc("designer_prop_no_selection", "No neuron selected"))
         layout.addWidget(self.header_label)
         
         form = QFormLayout()
         self.name_edit = QLineEdit()
         self.name_edit.editingFinished.connect(self.on_name_changed)
-        form.addRow("Name:", self.name_edit)
+        form.addRow(loc("designer_prop_lbl_name", "Name:"), self.name_edit)
         
         self.type_combo = QComboBox()
         # [UPDATED] Added CONNECTOR to valid types
         self.type_combo.addItems(["CORE", "SENSOR", "INPUT", "OUTPUT", "HIDDEN", "CONNECTOR"])
         self.type_combo.currentTextChanged.connect(self.on_type_changed)
-        form.addRow("Type:", self.type_combo)
+        form.addRow(loc("designer_prop_lbl_type", "Type:"), self.type_combo)
         
         self.x_spin = QDoubleSpinBox()
         self.x_spin.setRange(-1000, 2000)
         self.x_spin.valueChanged.connect(self.on_pos_changed)
-        form.addRow("X:", self.x_spin)
+        form.addRow(loc("designer_prop_lbl_x", "X:"), self.x_spin)
         self.y_spin = QDoubleSpinBox()
         self.y_spin.setRange(-500, 1000)
         self.y_spin.valueChanged.connect(self.on_pos_changed)
-        form.addRow("Y:", self.y_spin)
+        form.addRow(loc("designer_prop_lbl_y", "Y:"), self.y_spin)
         layout.addLayout(form)
         
-        self.delete_btn = QPushButton("Delete Neuron")
+        self.delete_btn = QPushButton(loc("designer_prop_btn_delete", "Delete Neuron"))
         self.delete_btn.clicked.connect(self.on_delete)
         layout.addWidget(self.delete_btn)
         layout.addStretch()
@@ -212,7 +218,7 @@ class NeuronPropertiesPanel(QWidget):
         self.current_neuron = name
         if not name:
             self.setEnabled(False)
-            self.header_label.setText("No Selection")
+            self.header_label.setText(loc("designer_prop_no_selection_disabled", "No Selection"))
             return
         
         self.setEnabled(True)
@@ -271,7 +277,7 @@ class LayersPanel(QWidget):
         l = QVBoxLayout(self)
         self.list = QListWidget()
         l.addWidget(self.list)
-        btn = QPushButton("Add Layer")
+        btn = QPushButton(loc("designer_layer_btn_add", "Add Layer"))
         btn.clicked.connect(self.add_layer)
         l.addWidget(btn)
         self.refresh()
@@ -282,7 +288,8 @@ class LayersPanel(QWidget):
             self.list.addItem(f"{layer.name} ({layer.layer_type.name})")
 
     def add_layer(self):
-        name, ok = QInputDialog.getText(self, "New Layer", "Name:")
+        name, ok = QInputDialog.getText(self, loc("designer_layer_dlg_title", "New Layer"),
+                                       loc("designer_layer_dlg_label", "Name:"))
         if ok and name:
             self.design.add_layer(DesignerLayer(name, NeuronType.HIDDEN, 200))
             self.refresh()
@@ -309,11 +316,12 @@ class SensorsPanel(QWidget):
         
         # Header with refresh button for plugin sensors
         header = QHBoxLayout()
-        header.addWidget(QLabel("Input Sensors:"))
+        header.addWidget(QLabel(loc("designer_sensor_header", "Input Sensors:")))
         header.addStretch()
         
         refresh_btn = QPushButton("🔄")
-        refresh_btn.setToolTip("Refresh sensor list (includes plugin-registered sensors)")
+        refresh_btn.setToolTip(loc("designer_sensor_tooltip_refresh",
+                                   "Refresh sensor list (includes plugin-registered sensors)"))
         refresh_btn.setMaximumWidth(30)
         refresh_btn.clicked.connect(self.rebuild_sensor_list)
         header.addWidget(refresh_btn)
@@ -359,7 +367,8 @@ class SensorsPanel(QWidget):
             
             # Add category label if there are multiple categories
             if len(categories) > 1:
-                cat_label = QLabel(f"── {cat_name.title()} ──")
+                cat_label = QLabel(loc("designer_sensor_cat_label", "── {name} ──",
+                                       name=loc("desc_" + str(cat_name), cat_name.title())))
                 cat_label.setStyleSheet("color: #888; font-size: 10px;")
                 self._scroll_layout.addWidget(cat_label)
             
@@ -378,9 +387,10 @@ class SensorsPanel(QWidget):
                 # Add tooltip with description
                 tooltip = info.get('description', '')
                 if info.get('plugin'):
-                    tooltip += f"\n[From plugin: {info['plugin']}]"
+                    tooltip += "\n" + loc("designer_tooltip_from_plugin", "[From plugin: {plugin}]",
+                                          plugin=info['plugin'])
                 if info.get('is_binary'):
-                    tooltip += "\n[Binary: 0 or 100]"
+                    tooltip += "\n" + loc("designer_tooltip_binary", "[Binary: 0 or 100]")
                 if tooltip:
                     cb.setToolTip(tooltip.strip())
                 
@@ -419,7 +429,11 @@ class ConnectionsTable(QWidget):
         l = QVBoxLayout(self)
         self.table = QTableWidget()
         self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(["Source", "Target", "Weight"])
+        self.table.setHorizontalHeaderLabels([
+            loc("designer_conn_header_source", "Source"),
+            loc("designer_conn_header_target", "Target"),
+            loc("designer_conn_header_weight", "Weight"),
+        ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         l.addWidget(self.table)
         self.refresh()

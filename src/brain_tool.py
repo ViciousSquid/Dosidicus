@@ -26,7 +26,7 @@ from .brain_personality_tab import PersonalityTab
 from .brain_statistics_tab import StatisticsTab
 from .brain_knowledge_tab import KnowledgeTab
 from .task_manager import TaskManagerWindow
-from .localisation import Localisation, set_language
+from .localisation import Localisation, set_language, loc
 
 # 2.6.1.0 Robust import for Designer
 _DESIGNER_AVAILABLE = False
@@ -73,7 +73,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.is_paused = False
         self.show_decorations_callback = show_decorations_callback
 
-        self.setWindowTitle("Brain Tool")
+        self.setWindowTitle(loc("brain_tool", "Brain Tool"))
 
         # Get screen resolution and available geometry (excluding taskbars/docks)
         screen = QtWidgets.QApplication.primaryScreen()
@@ -444,7 +444,9 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         Includes extensive fixes for blank canvas and missing connection issues.
         """
         if not _DESIGNER_AVAILABLE:
-            QtWidgets.QMessageBox.warning(self, "Error", "Brain Designer module not found.")
+            QtWidgets.QMessageBox.warning(
+                self, loc("designer_msg_error_title", "Error"),
+                loc("bt_msg_designer_missing", "Brain Designer module not found."))
             return
 
         if not hasattr(self, 'brain_widget'): 
@@ -742,7 +744,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             self.network_tab.update_metrics_display()
 
     def init_inspector(self):
-        self.inspector_action = QtWidgets.QAction("Neuron Inspector", self)
+        self.inspector_action = QtWidgets.QAction(loc("inspector_title", "Neuron Inspector"), self)
         self.inspector_action.triggered.connect(self.show_inspector)
         self.debug_menu.addAction(self.inspector_action)
 
@@ -767,7 +769,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def init_tabs(self):
         # Get localisation instance
-        loc = Localisation.instance()
+        localisation = Localisation.instance()
 
         # Create tab widget
         self.tabs = QtWidgets.QTabWidget()
@@ -780,33 +782,33 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Create and add existing tabs with Localized Titles
         self.network_tab = NetworkTab(self, self.tamagotchi_logic, self.brain_widget, self.config_manager, self.debug_mode)
-        self.tabs.addTab(self.network_tab, loc.get("brain_network", "Network"))
+        self.tabs.addTab(self.network_tab, localisation.get("brain_network", "Network"))
 
         # Add our Neural Network Visualizer tab as the Learning tab
         self.nn_viz_tab = NeuralNetworkVisualizerTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.nn_viz_tab, loc.get("tab_learning", "Learning"))
+        self.tabs.addTab(self.nn_viz_tab, localisation.get("tab_learning", "Learning"))
 
         # Knowledge reads the brain's own provenance ledger - the same record
         # the organism writes as it learns. It is deliberately NOT a second
         # interpretation of the network.
         self.knowledge_tab = KnowledgeTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.knowledge_tab, loc.get("tab_knowledge", "Knowledge"))
+        self.tabs.addTab(self.knowledge_tab, localisation.get("tab_knowledge", "Knowledge"))
 
         self.memory_tab = MemoryTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.memory_tab, loc.get("memory", "Memory"))
+        self.tabs.addTab(self.memory_tab, localisation.get("memory", "Memory"))
 
         self.decisions_tab = DecisionsTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.decisions_tab, loc.get("tab_decisions", "Decisions"))
+        self.tabs.addTab(self.decisions_tab, localisation.get("tab_decisions", "Decisions"))
 
         self.personality_tab = PersonalityTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.personality_tab, loc.get("tab_personality", "Personality"))
+        self.tabs.addTab(self.personality_tab, localisation.get("tab_personality", "Personality"))
 
         # ADD THE NEW STATISTICS TAB HERE
         self.statistics_tab = StatisticsTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.statistics_tab, loc.get("statistics", "Statistics"))
+        self.tabs.addTab(self.statistics_tab, localisation.get("statistics", "Statistics"))
 
         self.about_tab = AboutTab(self, self.tamagotchi_logic, self.brain_widget, self.config, self.debug_mode)
-        self.tabs.addTab(self.about_tab, loc.get("tab_about", "About"))
+        self.tabs.addTab(self.about_tab, localisation.get("tab_about", "About"))
 
         # Make sure all tabs have correct tamagotchi_logic reference
         for tab_name in ['memory_tab', 'network_tab', 'nn_viz_tab', 'knowledge_tab', 'decisions_tab', 'personality_tab', 'statistics_tab', 'about_tab']:
@@ -1820,7 +1822,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         font = QtGui.QFont()
         font.setPointSize(self.base_font_size)
         # Add a label for decision history
-        decision_history_label = QtWidgets.QLabel("Decision History:")
+        decision_history_label = QtWidgets.QLabel(loc("bt_lbl_decision_history", "Decision History:"))
         self.decisions_tab_layout.addWidget(decision_history_label)
 
         # Add a text area to display decision history
@@ -1829,7 +1831,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.decisions_tab_layout.addWidget(self.decision_history_text)
 
         # Add a label for decision inputs
-        decision_inputs_label = QtWidgets.QLabel("Decision Inputs:")
+        decision_inputs_label = QtWidgets.QLabel(loc("bt_lbl_decision_inputs", "Decision Inputs:"))
         self.decisions_tab_layout.addWidget(decision_inputs_label)
 
         # Add a text area to display decision inputs
@@ -1839,7 +1841,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
     def update_decisions_tab(self, decision, decision_inputs):
         # Append the decision to the decision history
-        self.decision_history_text.append(f"Decision: {decision}")
+        self.decision_history_text.append(
+            loc("bt_decision_line", "Decision: {decision}", decision=decision))
 
         # Display the decision inputs
         self.decision_inputs_text.clear()
@@ -1850,7 +1853,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         font = QtGui.QFont()
         font.setPointSize(self.base_font_size)
         # Add a checkbox to toggle explanation
-        self.show_explanation_checkbox = QtWidgets.QCheckBox("Show Explanation")
+        self.show_explanation_checkbox = QtWidgets.QCheckBox(
+            loc("bt_chk_show_explanation", "Show Explanation"))
         self.show_explanation_checkbox.stateChanged.connect(self.toggle_explanation)
         self.associations_tab_layout.addWidget(self.show_explanation_checkbox)
 
@@ -1858,18 +1862,19 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.explanation_text = QtWidgets.QTextEdit()
         self.explanation_text.setReadOnly(True)
         self.explanation_text.setHidden(True)
-        self.explanation_text.setPlainText(
+        self.explanation_text.setPlainText(loc(
+            "bt_assoc_explanation",
             "This tab shows the learned associations between different neural states of the squid. "
             "These associations are formed through the Hebbian learning process, where 'neurons that fire together, wire together'. "
             "The strength of an association is determined by how often these states occur together or influence each other. "
             "Positive associations mean that as one state increases, the other tends to increase as well. "
             "Negative associations (indicated by 'reduced') mean that as one state increases, the other tends to decrease. "
             "These associations help us understand how the squid's experiences shape its behavior and decision-making processes."
-        )
+        ))
         self.associations_tab_layout.addWidget(self.explanation_text)
 
         # Add a label for the associations
-        label = QtWidgets.QLabel("Learned associations:")
+        label = QtWidgets.QLabel(loc("bt_lbl_learned_assoc", "Learned associations:"))
         self.associations_tab_layout.addWidget(label)
 
         # Add a text area to display associations
@@ -1878,7 +1883,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.associations_tab_layout.addWidget(self.associations_text)
 
         # Add export button
-        self.export_associations_button = QtWidgets.QPushButton("Export Associations")
+        self.export_associations_button = QtWidgets.QPushButton(
+            loc("bt_btn_export_assoc", "Export Associations"))
         self.export_associations_button.clicked.connect(self.export_associations)
         self.associations_tab_layout.addWidget(self.export_associations_button, alignment=QtCore.Qt.AlignRight)
 
@@ -1895,44 +1901,73 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 self.learning_tab.update_from_brain_state(self.brain_widget.state)
 
     def generate_association_summary(self, neuron1, neuron2, weight):
-        strength = "strongly" if abs(weight) > 0.8 else "moderately"
+        strength = (loc("bt_assoc_strongly", "strongly") if abs(weight) > 0.8
+                    else loc("bt_assoc_moderately", "moderately"))
         if weight > 0:
-            relation = "associated with"
+            relation = loc("bt_assoc_with", "associated with")
         else:
-            relation = "associated with reduced"
+            relation = loc("bt_assoc_with_reduced", "associated with reduced")
 
         # Correct grammar for specific neurons
         neuron1_text = self.get_neuron_display_name(neuron1)
         neuron2_text = self.get_neuron_display_name(neuron2)
 
         summaries = {
-            "hunger-satisfaction": f"{neuron1_text} is {strength} associated with satisfaction (probably from eating)",
-            "satisfaction-hunger": f"Feeling satisfied is {strength} associated with reduced hunger",
-            "cleanliness-anxiety": f"{neuron1_text} is {strength} {relation} anxiety",
-            "anxiety-cleanliness": f"Feeling anxious is {strength} associated with reduced cleanliness",
-            "curiosity-happiness": f"{neuron1_text} is {strength} associated with happiness",
-            "happiness-curiosity": f"Being happy is {strength} associated with increased curiosity",
-            "hunger-anxiety": f"{neuron1_text} is {strength} associated with increased anxiety",
-            "sleepiness-satisfaction": f"{neuron1_text} is {strength} {relation} satisfaction",
-            "happiness-cleanliness": f"Being happy is {strength} associated with cleanliness",
+            "hunger-satisfaction": loc(
+                "bt_assoc_hunger_satisfaction",
+                "{name} is {strength} associated with satisfaction (probably from eating)",
+                name=neuron1_text, strength=strength),
+            "satisfaction-hunger": loc(
+                "bt_assoc_satisfaction_hunger",
+                "Feeling satisfied is {strength} associated with reduced hunger",
+                strength=strength),
+            "cleanliness-anxiety": loc(
+                "bt_assoc_generic", "{name} is {strength} {relation} {other}",
+                name=neuron1_text, strength=strength, relation=relation,
+                other=loc("anxiety", "anxiety")),
+            "anxiety-cleanliness": loc(
+                "bt_assoc_anxiety_cleanliness",
+                "Feeling anxious is {strength} associated with reduced cleanliness",
+                strength=strength),
+            "curiosity-happiness": loc(
+                "bt_assoc_curiosity_happiness",
+                "{name} is {strength} associated with happiness",
+                name=neuron1_text, strength=strength),
+            "happiness-curiosity": loc(
+                "bt_assoc_happiness_curiosity",
+                "Being happy is {strength} associated with increased curiosity",
+                strength=strength),
+            "hunger-anxiety": loc(
+                "bt_assoc_hunger_anxiety",
+                "{name} is {strength} associated with increased anxiety",
+                name=neuron1_text, strength=strength),
+            "sleepiness-satisfaction": loc(
+                "bt_assoc_generic", "{name} is {strength} {relation} {other}",
+                name=neuron1_text, strength=strength, relation=relation,
+                other=loc("satisfaction", "satisfaction")),
+            "happiness-cleanliness": loc(
+                "bt_assoc_happiness_cleanliness",
+                "Being happy is {strength} associated with cleanliness",
+                strength=strength),
         }
 
         key = f"{neuron1}-{neuron2}"
         if key in summaries:
             return summaries[key]
-        else:
-            return f"{neuron1_text} is {strength} {relation} {neuron2_text}"
+        return loc("bt_assoc_generic", "{name} is {strength} {relation} {other}",
+                   name=neuron1_text, strength=strength, relation=relation,
+                   other=neuron2_text)
 
     def get_neuron_display_name(self, neuron):
         display_names = {
-            "cleanliness": "Being clean",
-            "sleepiness": "Being sleepy",
-            "happiness": "Being happy",
-            "hunger": "Being hungry",
-            "satisfaction": "Satisfaction",
-            "anxiety": "Being anxious",
-            "curiosity": "Curiosity",
-            "direction": "Direction"
+            "cleanliness": loc("bt_being_clean", "Being clean"),
+            "sleepiness": loc("bt_being_sleepy", "Being sleepy"),
+            "happiness": loc("bt_being_happy", "Being happy"),
+            "hunger": loc("bt_being_hungry", "Being hungry"),
+            "satisfaction": loc("satisfaction", "Satisfaction"),
+            "anxiety": loc("bt_being_anxious", "Being anxious"),
+            "curiosity": loc("curiosity", "Curiosity"),
+            "direction": loc("bt_direction", "Direction"),
         }
         return display_names.get(neuron, f"{neuron}")
 
@@ -1964,9 +1999,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         if hasattr(self, 'nn_viz_tab') and hasattr(self.nn_viz_tab, 'countdown_label') and self.nn_viz_tab.countdown_label is not None:
             # Update the formatted display
             if is_paused:
-                self.nn_viz_tab.countdown_label.setText("PAUSED")
+                self.nn_viz_tab.countdown_label.setText(loc("bt_paused", "PAUSED"))
             else:
-                self.nn_viz_tab.countdown_label.setText(f"{self.brain_widget.hebbian_countdown_seconds} seconds")
+                self.nn_viz_tab.countdown_label.setText(loc(
+                    "bt_seconds", "{seconds} seconds",
+                    seconds=self.brain_widget.hebbian_countdown_seconds))
         
         # If countdown reached zero and not paused, trigger learning
         # (moved outside nn_viz_tab check so learning always fires)
@@ -2153,10 +2190,15 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                     row_data.append(item.text() if item else "")
                 writer.writerow(row_data)
 
-        QtWidgets.QMessageBox.information(self, "Export Successful", "Learning data exported to 'weight_changes.txt' and 'learning_data.csv'")
+        QtWidgets.QMessageBox.information(
+            self, loc("bt_msg_export_ok_title", "Export Successful"),
+            loc("bt_msg_export_default_files",
+                "Learning data exported to 'weight_changes.txt' and 'learning_data.csv'"))
 
     def export_learning_tab_contents(self):
-        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export Learning Tab Contents", "", "Text Files (*.txt)")
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, loc("bt_export_tab_title", "Export Learning Tab Contents"), "",
+            loc("knowledge_export_filter", "Text files (*.txt)"))
         if file_name:
             with open(file_name, 'w') as file:
                 file.write("Learning Data Table:\n")
@@ -2170,21 +2212,30 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 file.write("\nWeight Changes Text:\n")
                 file.write(self.weight_changes_text.toPlainText())
 
-            QtWidgets.QMessageBox.information(self, "Export Successful", f"Learning tab contents exported to {file_name}")
+            QtWidgets.QMessageBox.information(
+                self, loc("bt_msg_export_ok_title", "Export Successful"),
+                loc("bt_msg_export_tab", "Learning tab contents exported to {path}",
+                    path=file_name))
 
     def export_associations(self):
-        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export Associations", "", "Text Files (*.txt)")
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, loc("bt_btn_export_assoc", "Export Associations"), "",
+            loc("knowledge_export_filter", "Text files (*.txt)"))
         if file_name:
             with open(file_name, 'w') as file:
                 file.write(self.associations_text.toPlainText())
-            QtWidgets.QMessageBox.information(self, "Export Successful", f"Associations exported to {file_name}")
+            QtWidgets.QMessageBox.information(
+                self, loc("bt_msg_export_ok_title", "Export Successful"),
+                loc("bt_msg_export_assoc", "Associations exported to {path}", path=file_name))
 
     def update_personality_effects(self, personality, weights, adjusted_weights):
         """Update the personality modifier display in the thinking tab"""
         # Convert enum to string if needed
         personality_str = getattr(personality, 'value', str(personality))
         
-        self.personality_label.setText(f"Personality: {personality_str.capitalize()}")
+        self.personality_label.setText(loc(
+            "bt_lbl_personality", "Personality: {personality}",
+            personality=personality_str.capitalize()))
         
         # Generate effect text based on weight differences
         effects_text = []
@@ -2236,18 +2287,20 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                     print(f"{neuron1} - {neuron2}: {strength:.2f}")
 
     def init_training_data_tab(self):
-        self.show_overview_checkbox = QtWidgets.QCheckBox("Show Training Process Overview")
+        self.show_overview_checkbox = QtWidgets.QCheckBox(
+            loc("bt_chk_training_overview", "Show Training Process Overview"))
         self.show_overview_checkbox.stateChanged.connect(self.toggle_overview)
         self.training_data_tab_layout.addWidget(self.show_overview_checkbox)
 
-        self.overview_label = QtWidgets.QLabel(
+        self.overview_label = QtWidgets.QLabel(loc(
+            "bt_training_overview",
             "Training Process Overview:\n\n"
             "1. Data Capture: When 'Capture training data' is checked, the current state of all neurons is recorded each time the brain is stimulated.\n\n"
             "2. Hebbian Learning: The 'Train Hebbian' button applies the Hebbian learning rule to the captured data.\n\n"
             "3. Association Strength: The learning process strengthens connections between neurons that are frequently active together.\n\n"
             "4. Weight Updates: After training, the weights between neurons are updated based on their co-activation patterns.\n\n"
             "5. Adaptive Behavior: Over time, this process allows the brain to adapt its behavior based on input patterns."
-        )
+        ))
         self.overview_label.setWordWrap(True)
         self.overview_label.hide()  # Hide by default
         self.training_data_tab_layout.addWidget(self.overview_label)
@@ -2262,11 +2315,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         self.training_data_timer.timeout.connect(self.update_training_data_table)
         self.training_data_timer.start(1000)  # Update every second
 
-        self.checkbox_capture_training_data = QtWidgets.QCheckBox("Capture training data")
+        self.checkbox_capture_training_data = QtWidgets.QCheckBox(
+            loc("bt_chk_capture_training", "Capture training data"))
         self.checkbox_capture_training_data.stateChanged.connect(self.toggle_capture_training_data)
         self.training_data_tab_layout.addWidget(self.checkbox_capture_training_data)
 
-        self.train_button = self.create_button("Train Hebbian", self.train_hebbian, "#ADD8E6")
+        self.train_button = self.create_button(
+            loc("bt_btn_train_hebbian", "Train Hebbian"), self.train_hebbian, "#ADD8E6")
         self.train_button.setEnabled(False)  # Initially grey out the train button
         self.training_data_tab_layout.addWidget(self.train_button)
 
@@ -2296,13 +2351,17 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 json.dump(self.brain_widget.training_data, f)
 
     def save_brain_state(self):
-        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Brain State", "", "JSON Files (*.json)")
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, loc("nt_save_brain_state", "Save Brain State"), "",
+            loc("designer_filter_json", "JSON (*.json)"))
         if file_name:
             with open(file_name, 'w') as f:
                 json.dump(self.brain_widget.state, f)
 
     def load_brain_state(self):
-        file_name, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Load Brain State", "", "JSON Files (*.json)")
+        file_name, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, loc("nt_load_brain_state", "Load Brain State"), "",
+            loc("designer_filter_json", "JSON (*.json)"))
         if file_name:
             with open(file_name, 'r') as f:
                 state = json.load(f)
@@ -2462,7 +2521,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         processing_time = decision_data.get('processing_time', 1000)
         
         # Display processing text
-        self.processing_text.setText(f"Processing decision ({processing_time}ms)...")
+        self.processing_text.setText(loc(
+            "bt_processing_decision", "Processing decision ({ms}ms)...", ms=processing_time))
         
         # Start the animation with a brief delay to show processing
         QtCore.QTimer.singleShot(300, lambda: self.highlight_decision_in_ui(decision))
@@ -2481,12 +2541,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         QtCore.QTimer.singleShot(500, lambda: self.decision_output.setStyleSheet(original_style))
         
         # Update processing text
-        self.processing_text.setText(f"Decision made: {decision.capitalize()}")
+        self.processing_text.setText(loc(
+            "bt_decision_made", "Decision made: {decision}", decision=decision.capitalize()))
 
     def update_learning_status(self, is_active):
         """Update the learning status indicator"""
         if is_active:
-            self.learning_status.setText("Learning Status: Active")
+            self.learning_status.setText(loc("bt_learning_active", "Learning Status: Active"))
             self.learning_status.setStyleSheet("""
                 font-size: 14px;
                 padding: 5px;
@@ -2497,7 +2558,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 font-weight: bold;
             """)
         else:
-            self.learning_status.setText("Learning Status: Inactive")
+            self.learning_status.setText(loc("bt_learning_inactive", "Learning Status: Inactive"))
             self.learning_status.setStyleSheet("""
                 font-size: 14px;
                 padding: 5px;
@@ -2790,15 +2851,16 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         
         # Show confirmation message
         QtWidgets.QMessageBox.information(
-            self, "Settings Applied", 
-            "Neurogenesis settings have been updated successfully."
+            self, loc("bt_msg_settings_title", "Settings Applied"),
+            loc("bt_msg_settings_applied",
+                "Neurogenesis settings have been updated successfully.")
         )
 
     def trigger_neurogenesis(self):
         """Trigger neurogenesis by boosting natural trigger values"""
         try:
             if not hasattr(self, 'squid_brain_window') or not self.squid_brain_window:
-                self.show_message("Brain window not initialized")
+                self.show_message(loc("bt_msg_no_brain_window", "Brain window not initialized"))
                 print("Error: Brain window not initialized")
                 return
                 
@@ -2870,7 +2932,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                         print("Triggering hebbian learning cycle to integrate new neuron")
                         brain.perform_hebbian_learning()
             else:
-                self.show_message("No new neurons created - check console for details")
+                self.show_message(loc("bt_msg_no_neurons",
+                                      "No new neurons created - check console for details"))
                 print("WARNING: Neurogenesis was triggered but no new neurons were created")
                 print(f"State submitted: {state}")
                 print(f"Neurogenesis config: {brain.neurogenesis_config}")
@@ -2881,7 +2944,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 print("Neurogenesis cooldown restored")
                 
         except Exception as e:
-            self.show_message(f"Neurogenesis Error: {str(e)}")
+            self.show_message(loc("bt_msg_neurogenesis_err",
+                                  "Neurogenesis Error: {error}", error=str(e)))
             import traceback
             traceback.print_exc()
 
@@ -3219,10 +3283,13 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 
             # Show success message
             QtWidgets.QMessageBox.information(
-                self, "Export Successful", f"Learning data exported to {file_name}")
+                self, loc("bt_msg_export_ok_title", "Export Successful"),
+                loc("bt_msg_export_learning", "Learning data exported to {path}",
+                    path=file_name))
         except Exception as e:
             QtWidgets.QMessageBox.critical(
-                self, "Export Error", f"Error exporting data: {str(e)}")
+                self, loc("bt_msg_export_err_title", "Export Error"),
+                loc("bt_msg_export_err", "Error exporting data: {error}", error=str(e)))
 
     def export_learning_data_html(self, file_name):
         """Export learning data as rich HTML report"""
@@ -3466,8 +3533,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
     def clear_learning_log(self):
         """Clear the activity log"""
         reply = QtWidgets.QMessageBox.question(
-            self, "Clear Log", 
-            "Are you sure you want to clear the learning activity log?",
+            self, loc("bt_msg_clear_log_title", "Clear Log"),
+            loc("bt_msg_clear_log", "Are you sure you want to clear the learning activity log?"),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
         )
         
@@ -3490,7 +3557,7 @@ class NeuronInspector(QtWidgets.QDialog):
         self.brain_tool_window = brain_tool_window 
         self.brain_widget = brain_widget_ref 
 
-        self.setWindowTitle("Neuron Inspector")
+        self.setWindowTitle(loc("inspector_title", "Neuron Inspector"))
         # Portrait orientation, larger size
         self.setFixedSize(450, 700) # Width, Height
 
@@ -3499,7 +3566,8 @@ class NeuronInspector(QtWidgets.QDialog):
 
         # Neuron selector
         self.neuron_combo = QtWidgets.QComboBox()
-        self.neuron_combo.setToolTip("Select a neuron to inspect or click one in the visualizer.")
+        self.neuron_combo.setToolTip(loc(
+            "inspector_tip_combo", "Select a neuron to inspect or click one in the visualizer."))
         self.main_layout.addWidget(self.neuron_combo)
 
         # Tab widget
@@ -3510,20 +3578,23 @@ class NeuronInspector(QtWidgets.QDialog):
         self.overview_tab = QtWidgets.QWidget()
         self.overview_layout = QtWidgets.QFormLayout(self.overview_tab) 
         self.overview_tab.setLayout(self.overview_layout)
-        self.tabs.addTab(self.overview_tab, "Overview")
+        self.tabs.addTab(self.overview_tab, loc("inspector_tab_overview", "Overview"))
 
         self.name_label = QtWidgets.QLabel()
         self.value_label = QtWidgets.QLabel()
         self.position_label = QtWidgets.QLabel()
         self.type_label = QtWidgets.QLabel() # Core or Neurogenesis
 
-        self.overview_layout.addRow("<b>Name:</b>", self.name_label)
-        self.overview_layout.addRow("<b>Current Value:</b>", self.value_label)
-        self.overview_layout.addRow("<b>Position (X,Y):</b>", self.position_label)
-        self.overview_layout.addRow("<b>Type:</b>", self.type_label)
+        self.overview_layout.addRow("<b>%s</b>" % loc("lbl_name", "Name:"), self.name_label)
+        self.overview_layout.addRow("<b>%s</b>" % loc("lbl_value", "Current Value:"),
+                                    self.value_label)
+        self.overview_layout.addRow("<b>%s</b>" % loc("lbl_position", "Position:"),
+                                    self.position_label)
+        self.overview_layout.addRow("<b>%s</b>" % loc("lbl_type", "Type:"), self.type_label)
 
         # Placeholder for neurogenesis info
-        self.neurogenesis_group = QtWidgets.QGroupBox("Neurogenesis Details") 
+        self.neurogenesis_group = QtWidgets.QGroupBox(
+            loc("grp_neurogenesis", "Neurogenesis Details"))
         self.neurogenesis_layout = QtWidgets.QFormLayout() 
         self.neurogenesis_group.setLayout(self.neurogenesis_layout)
         self.neurogenesis_group.setVisible(False) # Hidden by default
@@ -3534,21 +3605,29 @@ class NeuronInspector(QtWidgets.QDialog):
         self.associated_state_label = QtWidgets.QLabel()
         self.associated_state_label.setWordWrap(True)
 
-        self.neurogenesis_layout.addRow("<b>Created At:</b>", self.created_at_label)
-        self.neurogenesis_layout.addRow("<b>Trigger Type:</b>", self.trigger_type_label)
-        self.neurogenesis_layout.addRow("<b>Trigger Value:</b>", self.trigger_value_label)
-        self.neurogenesis_layout.addRow("<b>Associated State:</b>", self.associated_state_label)
+        self.neurogenesis_layout.addRow("<b>%s</b>" % loc("lbl_created", "Created At:"),
+                                        self.created_at_label)
+        self.neurogenesis_layout.addRow("<b>%s</b>" % loc("lbl_trigger", "Trigger Type:"),
+                                        self.trigger_type_label)
+        self.neurogenesis_layout.addRow("<b>%s</b>" % loc("lbl_trigger_val", "Trigger Value:"),
+                                        self.trigger_value_label)
+        self.neurogenesis_layout.addRow("<b>%s</b>" % loc("lbl_state", "Associated State:"),
+                                        self.associated_state_label)
         self.overview_layout.addWidget(self.neurogenesis_group)
 
 
         # --- Tab 2: Connections ---
         self.connections_tab = QtWidgets.QWidget()
         self.connections_layout = QtWidgets.QVBoxLayout(self.connections_tab)
-        self.tabs.addTab(self.connections_tab, "Connections")
+        self.tabs.addTab(self.connections_tab, loc("designer_tab_connections", "Connections"))
 
         self.connections_table = QtWidgets.QTableWidget() 
         self.connections_table.setColumnCount(3)
-        self.connections_table.setHorizontalHeaderLabels(["Connected To", "Weight", "Direction"])
+        self.connections_table.setHorizontalHeaderLabels([
+            loc("col_connected", "Connected To"),
+            loc("col_weight", "Weight"),
+            loc("col_direction", "Direction"),
+        ])
         self.connections_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
         self.connections_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.connections_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
@@ -3557,13 +3636,14 @@ class NeuronInspector(QtWidgets.QDialog):
         # --- Tab 3: Activity (Placeholder) ---
         self.activity_tab = QtWidgets.QWidget()
         self.activity_layout = QtWidgets.QVBoxLayout(self.activity_tab)
-        self.activity_info_label = QtWidgets.QLabel("Detailed activity logging and graphing coming soon.")
+        self.activity_info_label = QtWidgets.QLabel(loc(
+            "inspector_activity_soon", "Detailed activity logging and graphing coming soon."))
         self.activity_info_label.setAlignment(QtCore.Qt.AlignCenter)
         self.activity_layout.addWidget(self.activity_info_label)
-        self.tabs.addTab(self.activity_tab, "Activity")
+        self.tabs.addTab(self.activity_tab, loc("inspector_tab_activity", "Activity"))
 
         # --- Refresh Button (optional, as it updates on click) ---
-        self.refresh_btn = QtWidgets.QPushButton("Refresh Data")
+        self.refresh_btn = QtWidgets.QPushButton(loc("btn_refresh_data", "Refresh Data"))
         self.refresh_btn.clicked.connect(self.update_info)
         self.main_layout.addWidget(self.refresh_btn)
 
@@ -3611,7 +3691,7 @@ class NeuronInspector(QtWidgets.QDialog):
     def update_info(self):
         """Update all display elements for the currently selected neuron."""
         if not self.brain_widget:
-            self.name_label.setText("<N/A>")
+            self.name_label.setText("&lt;%s&gt;" % loc("inspector_na", "N/A"))
             # Clear other fields
             self.value_label.setText("")
             self.position_label.setText("")
@@ -3623,7 +3703,8 @@ class NeuronInspector(QtWidgets.QDialog):
         neuron_name = self.neuron_combo.currentText()
         if not neuron_name or neuron_name not in self.brain_widget.neuron_positions:
             # Clear all fields if no valid neuron is selected
-            self.name_label.setText("<No Neuron Selected>")
+            self.name_label.setText("&lt;%s&gt;" % loc(
+                "inspector_no_neuron", "No Neuron Selected"))
             self.value_label.setText("")
             self.position_label.setText("")
             self.type_label.setText("")
@@ -3634,11 +3715,16 @@ class NeuronInspector(QtWidgets.QDialog):
         # --- Overview Tab Data ---
         self.name_label.setText(f"<b>{neuron_name}</b>")
 
-        value = self.brain_widget.state.get(neuron_name, "N/A")
+        value = self.brain_widget.state.get(neuron_name, loc("inspector_na", "N/A"))
         self.value_label.setText(str(round(value, 2) if isinstance(value, (float, int)) else value))
 
-        pos = self.brain_widget.neuron_positions.get(neuron_name, ("N/A", "N/A"))
-        self.position_label.setText(f"({pos[0]:.1f}, {pos[1]:.1f})" if isinstance(pos, tuple) and len(pos) == 2 and all(isinstance(p, (int,float)) for p in pos) else "N/A")
+        na = loc("inspector_na", "N/A")
+        pos = self.brain_widget.neuron_positions.get(neuron_name, (na, na))
+        self.position_label.setText(
+            f"({pos[0]:.1f}, {pos[1]:.1f})"
+            if isinstance(pos, tuple) and len(pos) == 2
+            and all(isinstance(p, (int, float)) for p in pos)
+            else na)
 
 
         # Check if new_neurons_details exists and then if neuron_name is in it
@@ -3648,9 +3734,10 @@ class NeuronInspector(QtWidgets.QDialog):
            neuron_name in self.brain_widget.neurogenesis_data.get('new_neurons_details', {}):
             is_neurogenesis = True
 
-        neuron_kind = "Neurogenesis" if is_neurogenesis else "Core"
-        if neuron_name in self.brain_widget.excluded_neurons: 
-            neuron_kind = "System Status"
+        neuron_kind = (loc("type_neuro", "Neurogenesis") if is_neurogenesis
+                       else loc("type_core", "Core"))
+        if neuron_name in self.brain_widget.excluded_neurons:
+            neuron_kind = loc("type_system", "System Status")
         self.type_label.setText(neuron_kind)
 
         if is_neurogenesis:
@@ -3661,16 +3748,19 @@ class NeuronInspector(QtWidgets.QDialog):
                 from datetime import datetime # Local import for safety
                 self.created_at_label.setText(datetime.fromtimestamp(created_timestamp).strftime('%Y-%m-%d %H:%M:%S'))
             else:
-                self.created_at_label.setText("Unknown")
-            self.trigger_type_label.setText(str(details.get('trigger_type', "N/A")).capitalize())
+                self.created_at_label.setText(loc("inspector_unknown", "Unknown"))
+            self.trigger_type_label.setText(
+                str(details.get('trigger_type', na)).capitalize())
             
-            trigger_val = details.get('trigger_value_at_creation', "N/A")
+            trigger_val = details.get('trigger_value_at_creation', na)
             self.trigger_value_label.setText(f"{trigger_val:.2f}" if isinstance(trigger_val, float) else str(trigger_val))
 
 
             snapshot = details.get('associated_state_snapshot', {})
             snapshot_text = ", ".join([f"{k.capitalize()}: {v}" for k, v in snapshot.items() if v is not None])
-            self.associated_state_label.setText(snapshot_text if snapshot_text else "No specific state captured.")
+            self.associated_state_label.setText(
+                snapshot_text if snapshot_text
+                else loc("inspector_no_state", "No specific state captured."))
             self.neurogenesis_group.setVisible(True)
         else:
             self.neurogenesis_group.setVisible(False)
@@ -3685,9 +3775,13 @@ class NeuronInspector(QtWidgets.QDialog):
                 if isinstance(conn_key, tuple) and len(conn_key) == 2:
                     src, dst = conn_key
                     if src == neuron_name:
-                        connections_data.append({'target': dst, 'weight': weight_val, 'direction': "Outgoing"})
+                        connections_data.append({
+                            'target': dst, 'weight': weight_val,
+                            'direction': loc("direction_outgoing", "Outgoing")})
                     elif dst == neuron_name:
-                        connections_data.append({'target': src, 'weight': weight_val, 'direction': "Incoming"})
+                        connections_data.append({
+                            'target': src, 'weight': weight_val,
+                            'direction': loc("direction_incoming", "Incoming")})
                 # else:
                     # print(f"Skipping malformed weight key: {conn_key}")
 

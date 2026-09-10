@@ -5,6 +5,8 @@ import time
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QPixmap, QFont
 
+from .localisation import loc
+
 class StimulateDialog(QtWidgets.QDialog):
     def __init__(self, brain_widget, parent=None):
         super().__init__(parent)
@@ -13,7 +15,7 @@ class StimulateDialog(QtWidgets.QDialog):
         
         from .display_scaling import DisplayScaling
         
-        self.setWindowTitle("Neuron Inspector")
+        self.setWindowTitle(loc("inspector_title", "Neuron Inspector"))
         self.setFixedSize(DisplayScaling.scale(600), DisplayScaling.scale(500))
         
         # Main layout
@@ -32,7 +34,7 @@ class StimulateDialog(QtWidgets.QDialog):
         """)
         
         # Neuron info section
-        self.info_group = QtWidgets.QGroupBox("Neuron Information")
+        self.info_group = QtWidgets.QGroupBox(loc("dlg_grp_neuron_info", "Neuron Information"))
         self.info_layout = QtWidgets.QFormLayout()
         self.info_group.setLayout(self.info_layout)
         layout.addWidget(self.info_group)
@@ -43,13 +45,14 @@ class StimulateDialog(QtWidgets.QDialog):
         self.position_label = QtWidgets.QLabel()
         self.type_label = QtWidgets.QLabel()
         
-        self.info_layout.addRow("Name:", self.name_label)
-        self.info_layout.addRow("Current State:", self.state_label)
-        self.info_layout.addRow("Position:", self.position_label)
-        self.info_layout.addRow("Type:", self.type_label)
+        self.info_layout.addRow(loc("lbl_name", "Name:"), self.name_label)
+        self.info_layout.addRow(loc("dlg_lbl_current_state", "Current State:"), self.state_label)
+        self.info_layout.addRow(loc("lbl_position", "Position:"), self.position_label)
+        self.info_layout.addRow(loc("lbl_type", "Type:"), self.type_label)
         
         # Connections table
-        self.connections_group = QtWidgets.QGroupBox("Connections")
+        self.connections_group = QtWidgets.QGroupBox(
+            loc("designer_tab_connections", "Connections"))
         self.connections_layout = QtWidgets.QVBoxLayout()
         self.connections_group.setLayout(self.connections_layout)
         layout.addWidget(self.connections_group)
@@ -57,7 +60,11 @@ class StimulateDialog(QtWidgets.QDialog):
         self.connections_table = QtWidgets.QTableWidget()
         self.connections_table.setColumnCount(5)
         self.connections_table.setHorizontalHeaderLabels([
-            "Neuron", "Direction", "Weight", "Strength", "State"
+            loc("designer_output_col_neuron", "Neuron"),
+            loc("col_direction", "Direction"),
+            loc("col_weight", "Weight"),
+            loc("dlg_col_strength", "Strength"),
+            loc("dlg_col_state", "State"),
         ])
         self.connections_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
         self.connections_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
@@ -65,7 +72,7 @@ class StimulateDialog(QtWidgets.QDialog):
         self.connections_layout.addWidget(self.connections_table)
         
         # Activity graph
-        self.activity_group = QtWidgets.QGroupBox("Activity History")
+        self.activity_group = QtWidgets.QGroupBox(loc("dlg_grp_activity", "Activity History"))
         self.activity_layout = QtWidgets.QVBoxLayout()
         self.activity_group.setLayout(self.activity_layout)
         layout.addWidget(self.activity_group)
@@ -76,7 +83,7 @@ class StimulateDialog(QtWidgets.QDialog):
         self.activity_layout.addWidget(self.activity_plot)
         
         # Close button
-        self.close_button = QtWidgets.QPushButton("Close")
+        self.close_button = QtWidgets.QPushButton(loc("close", "Close"))
         self.close_button.clicked.connect(self.close)
         layout.addWidget(self.close_button)
         
@@ -100,8 +107,9 @@ class StimulateDialog(QtWidgets.QDialog):
                     value = widget.value()
                     if value < 0 or value > 100:
                         QtWidgets.QMessageBox.warning(
-                            self, "Invalid Value", 
-                            f"{neuron} must be between 0 and 100"
+                            self, loc("dlg_invalid_value", "Invalid Value"),
+                            loc("dlg_invalid_range", "{neuron} must be between 0 and 100",
+                                neuron=neuron)
                         )
                         return
                         
@@ -109,8 +117,9 @@ class StimulateDialog(QtWidgets.QDialog):
             self.accept()
         except Exception as e:
             QtWidgets.QMessageBox.critical(
-                self, "Validation Error", 
-                f"An error occurred during validation: {str(e)}"
+                self, loc("dlg_validation_error", "Validation Error"),
+                loc("dlg_validation_error_msg",
+                    "An error occurred during validation: {error}", error=str(e))
             )
 
     def get_stimulation_values(self):
@@ -132,7 +141,7 @@ class StimulateDialog(QtWidgets.QDialog):
 class RecentThoughtsDialog(QtWidgets.QDialog):
     def __init__(self, thought_log, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Recent Decisions")
+        self.setWindowTitle(loc("dlg_recent_decisions", "Recent Decisions"))
         self.thought_log = thought_log
 
         layout = QtWidgets.QVBoxLayout()
@@ -145,19 +154,22 @@ class RecentThoughtsDialog(QtWidgets.QDialog):
 
         # Populate the list with summarized thought logs
         for log in self.thought_log:
-            summary = f"Time: {log.get('timestamp', 'Unknown')} - Decision: {log.get('decision', 'Unknown')}"
+            unknown = loc("inspector_unknown", "Unknown")
+            summary = loc("dlg_thought_summary", "Time: {time} - Decision: {decision}",
+                          time=log.get('timestamp', unknown),
+                          decision=log.get('decision', unknown))
             self.thought_list.addItem(summary)
 
         # Button layout
         button_layout = QtWidgets.QHBoxLayout()
 
         # Save button
-        self.save_button = QtWidgets.QPushButton("Save Selected")
+        self.save_button = QtWidgets.QPushButton(loc("dlg_btn_save_selected", "Save Selected"))
         self.save_button.clicked.connect(self.save_selected_thoughts)
         button_layout.addWidget(self.save_button)
 
         # Clear button
-        self.clear_button = QtWidgets.QPushButton("Clear")
+        self.clear_button = QtWidgets.QPushButton(loc("clear", "Clear"))
         self.clear_button.clicked.connect(self.clear_all_logs)
         button_layout.addWidget(self.clear_button)
 
@@ -166,22 +178,28 @@ class RecentThoughtsDialog(QtWidgets.QDialog):
     def save_selected_thoughts(self):
         selected_items = self.thought_list.selectedItems()
         if not selected_items:
-            QtWidgets.QMessageBox.information(self, "No Selection", "No decisions selected to save.")
+            QtWidgets.QMessageBox.information(
+                self, loc("designer_prop_no_selection_disabled", "No Selection"),
+                loc("dlg_no_decisions_selected", "No decisions selected to save."))
             return
 
         # Get the file name to save the selected thoughts
-        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Selected decisions", "", "Text Files (*.txt)")
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, loc("dlg_save_decisions_title", "Save Selected decisions"), "",
+            loc("knowledge_export_filter", "Text files (*.txt)"))
         if file_name:
             with open(file_name, 'w') as file:
                 for item in selected_items:
                     file.write(item.text() + "\n")
-            QtWidgets.QMessageBox.information(self, "Save Successful", f"Selected decisions saved to {file_name}")
+            QtWidgets.QMessageBox.information(
+                self, loc("dlg_save_ok_title", "Save Successful"),
+                loc("dlg_save_ok", "Selected decisions saved to {path}", path=file_name))
 
     def clear_all_logs(self):
         # Confirm before clearing
         reply = QtWidgets.QMessageBox.question(
-            self, 'Clear Logs', 
-            "Are you sure you want to clear all decision logs?", 
+            self, loc("dlg_clear_logs_title", "Clear Logs"),
+            loc("dlg_clear_logs", "Are you sure you want to clear all decision logs?"),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
         )
 
@@ -190,12 +208,14 @@ class RecentThoughtsDialog(QtWidgets.QDialog):
             if hasattr(self.parent(), 'thought_log'):
                 self.parent().thought_log.clear()
                 self.thought_list.clear()
-                QtWidgets.QMessageBox.information(self, "Logs Cleared", "All decision logs have been cleared.")
+                QtWidgets.QMessageBox.information(
+                    self, loc("dlg_logs_cleared_title", "Logs Cleared"),
+                    loc("dlg_logs_cleared", "All decision logs have been cleared."))
 
 class LogWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Learning Log")
+        self.setWindowTitle(loc("dlg_learning_log", "Learning Log"))
         self.resize(640, 480)
 
         layout = QtWidgets.QVBoxLayout()
@@ -205,7 +225,7 @@ class LogWindow(QtWidgets.QWidget):
         self.log_text.setReadOnly(True)
         layout.addWidget(self.log_text)
 
-        self.export_button = QtWidgets.QPushButton("Export Log")
+        self.export_button = QtWidgets.QPushButton(loc("dlg_btn_export_log", "Export Log"))
         self.export_button.clicked.connect(self.export_log)
         layout.addWidget(self.export_button)
 
@@ -213,16 +233,20 @@ class LogWindow(QtWidgets.QWidget):
         self.log_text.append(text)
 
     def export_log(self):
-        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export Log", "", "Text Files (*.txt)")
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, loc("dlg_btn_export_log", "Export Log"), "",
+            loc("knowledge_export_filter", "Text files (*.txt)"))
         if file_name:
             with open(file_name, 'w') as f:
                 f.write(self.log_text.toPlainText())
-            QtWidgets.QMessageBox.information(self, "Export Successful", f"Log exported to {file_name}")
+            QtWidgets.QMessageBox.information(
+                self, loc("bt_msg_export_ok_title", "Export Successful"),
+                loc("dlg_log_exported", "Log exported to {path}", path=file_name))
 
 class DiagnosticReportDialog(QtWidgets.QDialog):
     def __init__(self, brain_widget, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Network Health Diagnosis")
+        self.setWindowTitle(loc("dlg_health_title", "Network Health Diagnosis"))
         self.setMinimumSize(640, 800)
         
         self.brain_widget = brain_widget
@@ -244,7 +268,7 @@ class DiagnosticReportDialog(QtWidgets.QDialog):
         self.create_history_section()
         
         # Add close button
-        self.close_button = QtWidgets.QPushButton("Close")
+        self.close_button = QtWidgets.QPushButton(loc("close", "Close"))
         self.close_button.clicked.connect(self.close)
         self.layout.addWidget(self.close_button)
     
@@ -256,13 +280,18 @@ class DiagnosticReportDialog(QtWidgets.QDialog):
         weakest = self.brain_widget.get_weakest_connections()
         
         # Connections group
-        connections_group = QtWidgets.QGroupBox("Weakest Connections")
+        connections_group = QtWidgets.QGroupBox(
+            loc("dlg_grp_weakest", "Weakest Connections"))
         connections_layout = QtWidgets.QVBoxLayout()
         
         # Create the table
         table = QtWidgets.QTableWidget()
         table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["Source", "Target", "Weight"])
+        table.setHorizontalHeaderLabels([
+            loc("designer_conn_header_source", "Source"),
+            loc("designer_conn_header_target", "Target"),
+            loc("designer_conn_header_weight", "Weight"),
+        ])
         
         # Populate table with weakest connections
         table.setRowCount(len(weakest))
@@ -296,21 +325,22 @@ class DiagnosticReportDialog(QtWidgets.QDialog):
         layout.addWidget(connections_group)
         
         # Add to tabs
-        self.tabs.addTab(tab, "Connections")
+        self.tabs.addTab(tab, loc("designer_tab_connections", "Connections"))
     
     def create_neurons_tab(self):
         tab = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout()
         
-        label = QtWidgets.QLabel("<h3>Neuron Activity Report</h3>")
+        label = QtWidgets.QLabel("<h3>%s</h3>" % loc(
+            "dlg_neuron_activity_report", "Neuron Activity Report"))
         layout.addWidget(label)
         
         extremes = self.brain_widget.get_extreme_neurons(3)
-        report_text = "OVERACTIVE NEURONS:\n"
+        report_text = loc("dlg_overactive", "OVERACTIVE NEURONS:") + "\n"
         for name, val in extremes['overactive']:
             report_text += f"{name}: {val:.0f}%\n"
         
-        report_text += "\nUNDERACTIVE NEURONS:\n"
+        report_text += "\n" + loc("dlg_underactive", "UNDERACTIVE NEURONS:") + "\n"
         for name, val in extremes['underactive']:
             report_text += f"{name}: {val:.0f}%\n"
         
@@ -320,17 +350,18 @@ class DiagnosticReportDialog(QtWidgets.QDialog):
         layout.addWidget(text_edit)
         
         tab.setLayout(layout)
-        self.tabs.addTab(tab, "Neurons")
+        self.tabs.addTab(tab, loc("neurons", "Neurons"))
     
     def create_balance_tab(self):
         tab = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout()
         
-        label = QtWidgets.QLabel("<h3>Connection Balance Report</h3>")
+        label = QtWidgets.QLabel("<h3>%s</h3>" % loc(
+            "dlg_balance_report", "Connection Balance Report"))
         layout.addWidget(label)
         
         unbalanced = self.brain_widget.get_unbalanced_connections(5)
-        report_text = "UNBALANCED CONNECTIONS:\n\n"
+        report_text = loc("dlg_unbalanced", "UNBALANCED CONNECTIONS:") + "\n\n"
         for (a, b), (w1, w2), diff in unbalanced:
             report_text += f"{a}→{b}: {w1:.2f}\n"
             report_text += f"{b}→{a}: {w2:.2f} (Δ{diff:.2f})\n\n"
@@ -341,10 +372,10 @@ class DiagnosticReportDialog(QtWidgets.QDialog):
         layout.addWidget(text_edit)
         
         tab.setLayout(layout)
-        self.tabs.addTab(tab, "Balance")
+        self.tabs.addTab(tab, loc("dlg_tab_balance", "Balance"))
     
     def create_history_section(self):
-        group = QtWidgets.QGroupBox("Health History")
+        group = QtWidgets.QGroupBox(loc("dlg_grp_health_history", "Health History"))
         layout = QtWidgets.QVBoxLayout()
         
         # Add toggle checkbox
@@ -368,7 +399,7 @@ class DiagnosticReportDialog(QtWidgets.QDialog):
             values = [x[1] for x in self.history_data]
             
             # This is placeholder - you'd use matplotlib or similar in practice
-            graph_text = "HEALTH TREND:\n\n"
+            graph_text = loc("dlg_health_trend", "HEALTH TREND:") + "\n\n"
             for t, v in zip(timestamps[-10:], values[-10:]):
                 graph_text += f"{t}: {'='*int(v/10)}{v:.0f}%\n"
             

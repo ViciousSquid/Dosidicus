@@ -1,7 +1,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .brain_ui_utils import UiUtils
-from .localisation import Localisation  # Import Localisation
+from .localisation import Localisation, loc  # Import Localisation
 from datetime import datetime
 
 
@@ -48,7 +48,8 @@ class MemoryTab(BrainBaseTab):
         self.stm_layout.addWidget(self.stm_scroll)
         
         # Configure LTM tab
-        self.ltm_header_label = QtWidgets.QLabel("it happened often...")
+        self.ltm_header_label = QtWidgets.QLabel(
+            loc("mem_ltm_header", "it happened often..."))
         ltm_header_font = self.ltm_header_label.font()
         ltm_header_font.setItalic(True)
         ltm_header_font.setPointSize(11)
@@ -380,9 +381,9 @@ class MemoryTab(BrainBaseTab):
             effects     = value.get('effects', {})
             item_file   = value.get('item', '')   # filename stored at throw time
             _TITLES = {
-                'rock_throwing':   'Rock Throwing',
-                'urchin_throwing': 'Urchin Throwing',
-                'poop_throwing':   'Poop Throwing',
+                'rock_throwing':   loc('mem_rock_throwing', 'Rock Throwing'),
+                'urchin_throwing': loc('mem_urchin_throwing', 'Urchin Throwing'),
+                'poop_throwing':   loc('mem_poop_throwing', 'Poop Throwing'),
             }
             _DEFAULT_THUMBS = {
                 'rock_throwing':   'images/decoration/rock01.png',
@@ -392,7 +393,7 @@ class MemoryTab(BrainBaseTab):
             # Prefer the actual item filename if it exists on disk
             thumb = (item_file if item_file and _os.path.exists(item_file)
                      else _DEFAULT_THUMBS.get(activity))
-            return (_TITLES.get(activity, 'Play'),
+            return (_TITLES.get(activity, loc('play', 'Play')),
                     thumb,
                     description,
                     effects)
@@ -400,7 +401,7 @@ class MemoryTab(BrainBaseTab):
         # ---- food -------------------------------------------------------
         if cat == 'food':
             thumb = f'images/{key}.png'
-            return ('Eating', thumb, str(value), None)
+            return (loc('mem_eating', 'Eating'), thumb, str(value), None)
 
         # ---- favourite_plant (long-term) --------------------------------
         if cat == 'favourite_plant':
@@ -410,51 +411,59 @@ class MemoryTab(BrainBaseTab):
                 if value.get('reason'):
                     lines.append(value['reason'])
                 if value.get('anxiety_reduction'):
-                    lines.append('Reduces anxiety')
-            return ('Favourite Plant', key, '\n'.join(lines), None)
+                    lines.append(loc('mem_reduces_anxiety', 'Reduces anxiety'))
+            return (loc('mem_favourite_plant', 'Favourite Plant'), key,
+                    '\n'.join(lines), None)
 
         # ---- interaction ------------------------------------------------
         if cat == 'interaction':
             if key == 'plant_contact' and isinstance(value, dict):
                 plant_path = value.get('plant_key', '')
                 plant_name = _os.path.splitext(_os.path.basename(plant_path))[0]
-                return ('Plant Contact', plant_path,
-                        f'Touched {plant_name} – feeling calmer', None)
+                return (loc('mem_plant_contact', 'Plant Contact'), plant_path,
+                        loc('mem_plant_touched', 'Touched {plant} – feeling calmer',
+                            plant=plant_name), None)
             if 'rock' in key:
                 item_path = value.get('item', '') if isinstance(value, dict) else ''
-                return ('Picked Up Rock', item_path or 'images/decoration/rock01.png',
-                        'Picked up a rock', None)
+                return (loc('mem_picked_rock', 'Picked Up Rock'),
+                        item_path or 'images/decoration/rock01.png',
+                        loc('mem_picked_rock_desc', 'Picked up a rock'), None)
             if 'poop' in key:
                 item_path = value.get('item', '') if isinstance(value, dict) else ''
-                return ('Picked Up Poop', item_path or 'images/poop1.png',
-                        'Picked up some poop…', None)
-            return ('Interaction', None, str(value), None)
+                return (loc('mem_picked_poop', 'Picked Up Poop'),
+                        item_path or 'images/poop1.png',
+                        loc('mem_picked_poop_desc', 'Picked up some poop…'), None)
+            return (loc('mem_interaction', 'Interaction'), None, str(value), None)
 
         # ---- mental_state -----------------------------------------------
         if cat == 'mental_state':
             if key == 'startled':
-                return ('Startled!', 'images/startled.png', str(value), None)
-            return ('Mental State', None, str(value), None)
+                return (loc('mem_startled', 'Startled!'), 'images/startled.png',
+                        str(value), None)
+            return (loc('mem_mental_state', 'Mental State'), None, str(value), None)
 
         # ---- behaviour / behavior ---------------------------------------
         if cat in ('behaviour', 'behavior'):
             if key == 'ink_cloud':
-                return ('Ink Cloud!', 'images/inkcloud.png', str(value), None)
+                return (loc('mem_ink_cloud', 'Ink Cloud!'), 'images/inkcloud.png',
+                        str(value), None)
             if key == 'startle_response':
-                return ('Startle Response', 'images/startled.png', str(value), None)
+                return (loc('mem_startle_response', 'Startle Response'),
+                        'images/startled.png', str(value), None)
             if key == 'calm_after_startle':
-                return ('Calmed Down', None, str(value), None)
-            return ('Behaviour', None, str(value), None)
+                return (loc('mem_calmed_down', 'Calmed Down'), None, str(value), None)
+            return (loc('mem_behaviour', 'Behaviour'), None, str(value), None)
 
         # ---- environment ------------------------------------------------
         if cat == 'environment':
             if key == 'plant_calming_effect':
-                return ('Plant Calming', 'images/plant.png', str(value), None)
+                return (loc('mem_plant_calming', 'Plant Calming'), 'images/plant.png',
+                        str(value), None)
             if key == 'window_enlarged':
-                return ('More Space!', None, str(value), None)
+                return (loc('mem_more_space', 'More Space!'), None, str(value), None)
             if key == 'window_reduced':
-                return ('Less Space', None, str(value), None)
-            return ('Environment', None, str(value), None)
+                return (loc('mem_less_space', 'Less Space'), None, str(value), None)
+            return (loc('mem_environment', 'Environment'), None, str(value), None)
 
         # ---- decorations ------------------------------------------------
         if cat == 'decorations':
@@ -472,47 +481,48 @@ class MemoryTab(BrainBaseTab):
         # ---- social -----------------------------------------------------
         if cat == 'social':
             _SOCIAL = {
-                'squid_meeting':        'Met Another Squid',
-                'squid_detection':      'Spotted a Squid',
-                'squid_lost':           'Lost Sight of Squid',
-                'decoration_exchange':  'Decoration Exchange',
-                'targeted':             'Targeted by Rock',
+                'squid_meeting':        loc('mem_squid_meeting', 'Met Another Squid'),
+                'squid_detection':      loc('mem_squid_detection', 'Spotted a Squid'),
+                'squid_lost':           loc('mem_squid_lost', 'Lost Sight of Squid'),
+                'decoration_exchange':  loc('mem_decoration_exchange', 'Decoration Exchange'),
+                'targeted':             loc('mem_targeted', 'Targeted by Rock'),
             }
-            return (_SOCIAL.get(key, 'Social'), None, str(value), None)
+            return (_SOCIAL.get(key, loc('mem_social', 'Social')), None, str(value), None)
 
         # ---- observation ------------------------------------------------
         if cat == 'observation':
             if 'rock' in key:
-                return ('Saw Rock Thrown', 'images/decoration/rock01.png',
-                        str(value), None)
-            return ('Observation', None, str(value), None)
+                return (loc('mem_saw_rock_thrown', 'Saw Rock Thrown'),
+                        'images/decoration/rock01.png', str(value), None)
+            return (loc('mem_observation', 'Observation'), None, str(value), None)
 
         # ---- travel -----------------------------------------------------
         if cat == 'travel':
             _TRAVEL = {
-                'ate_on_trip':        'Ate on Trip',
-                'played_on_trip':     'Played on Trip',
-                'completed_journey':  'Journey Complete',
+                'ate_on_trip':        loc('mem_ate_on_trip', 'Ate on Trip'),
+                'played_on_trip':     loc('mem_played_on_trip', 'Played on Trip'),
+                'completed_journey':  loc('mem_journey_complete', 'Journey Complete'),
             }
-            return (_TRAVEL.get(key, 'Travel'), None, str(value), None)
+            return (_TRAVEL.get(key, loc('mem_travel', 'Travel')), None, str(value), None)
 
         # ---- cleanliness ------------------------------------------------
         if cat == 'cleanliness':
-            return ('Washed Clean', 'images/icons/clean.png', str(value), None)
+            return (loc('mem_washed_clean', 'Washed Clean'), 'images/icons/clean.png',
+                    str(value), None)
 
         # ---- emotion ----------------------------------------------------
         if cat == 'emotion':
             _EMO = {
-                'happy_return':     'Happy Return',
-                'calm_return':      'Calm Return',
-                'intense_curiosity': 'Intense Curiosity',
-                'fear':             'Fear',
+                'happy_return':      loc('mem_happy_return', 'Happy Return'),
+                'calm_return':       loc('mem_calm_return', 'Calm Return'),
+                'intense_curiosity': loc('mem_intense_curiosity', 'Intense Curiosity'),
+                'fear':              loc('mem_fear', 'Fear'),
             }
             _EMO_THUMBS = {
                 'intense_curiosity': 'images/curious.png',
                 'fear':              'images/startled.png',
             }
-            return (_EMO.get(key, 'Emotion'),
+            return (_EMO.get(key, loc('mem_emotion', 'Emotion')),
                     _EMO_THUMBS.get(key),
                     str(value), None)
 
@@ -522,7 +532,7 @@ class MemoryTab(BrainBaseTab):
 
         # ---- neurogenesis -----------------------------------------------
         if cat == 'neurogenesis':
-            return ('Neurogenesis', None, str(value), None)
+            return (loc('cat_neurogenesis', 'Neurogenesis'), None, str(value), None)
 
         # ---- fallback ---------------------------------------------------
         content = memory.get('formatted_value', str(value))
@@ -793,7 +803,8 @@ class MemoryTab(BrainBaseTab):
         
         if 'importance' in memory:
             # Reusing 'important_label' but as a header, or 'Importance' if added to loc
-            tooltip += f"<b>Importance:</b> {memory.get('importance')}\n"
+            tooltip += ("<b>%s</b> " % loc("mem_importance_label", "Importance:")
+                        + f"{memory.get('importance')}\n")
         
         if 'access_count' in memory:
             tooltip += f"<b>{self.loc.get('access_count')}</b> {memory.get('access_count')}\n"

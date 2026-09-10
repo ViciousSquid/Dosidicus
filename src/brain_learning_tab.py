@@ -2,7 +2,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 import random
 import time
-from .localisation import Localisation
+from .localisation import Localisation, loc
 
 try:
     from display_scaling import DisplayScaling
@@ -460,12 +460,12 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
                     ltp_ltd_color  = "#00897b"
                     ltp_ltd_bg     = "#e0f2f1"
                     ltp_ltd_border = "#80cbc4"
-                    ltp_ltd_text   = "⚡ LTP"
+                    ltp_ltd_text   = loc("learn_ltp", "⚡ LTP")
                 else:
                     ltp_ltd_color  = "#c62828"
                     ltp_ltd_bg     = "#ffebee"
                     ltp_ltd_border = "#ef9a9a"
-                    ltp_ltd_text   = "⚡ LTD"
+                    ltp_ltd_text   = loc("learn_ltd", "⚡ LTD")
 
                 badge = QtWidgets.QLabel(ltp_ltd_text)
                 badge.setStyleSheet(f"""
@@ -483,8 +483,11 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
                 sign = "+" if stdp_delta >= 0 else ""
                 delta_label = QtWidgets.QLabel(
                     f"<span style='font-size: {DisplayScaling.font_size(14)}px; color: #546e7a;'>"
-                    f"STDP Δ {sign}{stdp_delta:.4f} &nbsp;·&nbsp; "
-                    f"blend {int(stdp_weight * 100)}% spike-timing</span>"
+                    + loc("learn_stdp_delta",
+                          "STDP Δ {delta} &nbsp;·&nbsp; blend {blend}% spike-timing",
+                          delta=f"{sign}{stdp_delta:.4f}",
+                          blend=int(stdp_weight * 100))
+                    + "</span>"
                 )
                 badge_row.addWidget(delta_label)
                 badge_row.addStretch()

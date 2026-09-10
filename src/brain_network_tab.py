@@ -9,7 +9,7 @@ from .brain_dialogs import StimulateDialog, DiagnosticReportDialog
 from .display_scaling import DisplayScaling
 from .laboratory import NeuronLaboratory
 from .animation_styles import get_available_styles, get_style_info
-from .localisation import Localisation
+from .localisation import Localisation, loc as _t
 from .compute_backend import get_backend
 
 class NetworkTab(BrainBaseTab):
@@ -262,7 +262,9 @@ class NetworkTab(BrainBaseTab):
                 from .brain_designer_launcher import launch_brain_designer_process
                 launch_brain_designer_process()
             except ImportError:
-                QtWidgets.QMessageBox.warning(self, "Error", "Cannot launch Brain Designer.")
+                QtWidgets.QMessageBox.warning(
+                    self, _t("designer_msg_error_title", "Error"),
+                    _t("nt_msg_designer_launch_fail", "Cannot launch Brain Designer."))
 
     def _change_animation_style(self, index):
         """
@@ -385,21 +387,27 @@ class NetworkTab(BrainBaseTab):
             # Network health calculation
             if hasattr(self.brain_widget, 'calculate_network_health'):
                 health_value = self.brain_widget.calculate_network_health()
-                health_percentage_str = f"{health_value:.1f}%" if isinstance(health_value, (int, float)) else "N/A"
+                health_percentage_str = (f"{health_value:.1f}%"
+                                         if isinstance(health_value, (int, float))
+                                         else _t("stat_na", "N/A"))
             else:
                 # Fallback health calculation based on connections per neuron
                 if total_neurons > 0:
                     connections_per_neuron = connection_count / total_neurons if total_neurons > 0 else 0
                     if connections_per_neuron < 1.5 and total_neurons > 7:
-                        health_percentage_str = "Low Density"
+                        health_state = 'low_density'
                     else:
-                        health_percentage_str = "Optimal"
+                        health_state = 'optimal'
+                    health_percentage_str = (
+                        _t("health_low_density", "Low Density")
+                        if health_state == 'low_density'
+                        else _t("health_optimal", "Optimal"))
                 else:
-                    health_percentage_str = "N/A"
+                    health_percentage_str = _t("stat_na", "N/A")
         else:
             total_neurons = 0
             connection_count = 0
-            health_percentage_str = "N/A"
+            health_percentage_str = _t("stat_na", "N/A")
 
         # Update labels with consistent data
         if hasattr(self, 'neurons_label'):
@@ -409,9 +417,9 @@ class NetworkTab(BrainBaseTab):
         if hasattr(self, 'health_label'):
             self.health_label.setText(f"{loc.get('stats_health')}: {health_percentage_str}")
             # Set color based on health status
-            if health_percentage_str == "Optimal":
+            if health_percentage_str == _t("health_optimal", "Optimal"):
                 self.health_label.setStyleSheet("font-weight: bold; color: green;")
-            elif health_percentage_str == "Low Density":
+            elif health_percentage_str == _t("health_low_density", "Low Density"):
                 self.health_label.setStyleSheet("font-weight: bold; color: orange;")
             else:
                 self.health_label.setStyleSheet("font-weight: bold; color: gray;")
@@ -433,7 +441,8 @@ class NetworkTab(BrainBaseTab):
         """Update the global cooldown label with the remaining time."""
         loc = Localisation.instance()
         if not self.brain_widget:
-            self.global_cooldown_label.setText(f"{loc.get('global_cooldown')}: N/A")
+            self.global_cooldown_label.setText(
+                f"{loc.get('global_cooldown')}: " + _t("stat_na", "N/A"))
             return
 
         eng = getattr(self.brain_widget, 'enhanced_neurogenesis', None)
@@ -596,9 +605,9 @@ class NetworkTab(BrainBaseTab):
         else:
             text = f"<b>🧬 {loc.get('func_neurons_title')}:</b><br>"
             text += f"<b>{loc.get('count_label')}:</b> 0 | "
-            text += f"<b>{loc.get('avg_utility_label')}:</b> N/A | "
+            text += f"<b>{loc.get('avg_utility_label')}:</b> " + _t("stat_na", "N/A") + " | "
             text += f"<b>{loc.get('total_activations_label')}:</b> 0<br>"
-            text += f"<b>{loc.get('specialisations_label')}:</b> None"
+            text += f"<b>{loc.get('specialisations_label')}:</b> " + _t("stat_none", "None")
 
         self.functional_stats_label.setText(text)
         self.functional_stats_area.show()
@@ -635,7 +644,9 @@ class NetworkTab(BrainBaseTab):
     def save_brain_state(self):
         if not self.brain_widget:
             return
-        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Brain State", "", "JSON Files (*.json)")
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, _t("nt_save_brain_state", "Save Brain State"), "",
+            _t("designer_filter_json", "JSON (*.json)"))
         if file_name:
             state_to_save = {}
             if hasattr(self.brain_widget, 'get_brain_state'):
@@ -651,7 +662,9 @@ class NetworkTab(BrainBaseTab):
     def load_brain_state(self):
         if not self.brain_widget:
             return
-        file_name, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Load Brain State", "", "JSON Files (*.json)")
+        file_name, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, _t("nt_load_brain_state", "Load Brain State"), "",
+            _t("designer_filter_json", "JSON (*.json)"))
         if file_name:
             try:
                 with open(file_name, 'r') as f:
@@ -814,7 +827,7 @@ class ExperienceBufferDialog(QtWidgets.QDialog):
         eng = self.brain_widget.enhanced_neurogenesis
         
         if not hasattr(eng, 'experience_buffer'):
-            self.info_label.setText("⚠️ Experience buffer not available")
+            self.info_label.setText(_t("nt_no_buffer", "⚠️ Experience buffer not available"))
             return
             
         buffer = eng.experience_buffer
@@ -849,11 +862,11 @@ class ExperienceBufferDialog(QtWidgets.QDialog):
             # Time column (relative)
             time_ago = int(time.time() - exp.timestamp)
             if time_ago < 60:
-                time_str = f"{time_ago}s ago"
+                time_str = _t("ago_seconds", "{n}s ago", n=time_ago)
             elif time_ago < 3600:
-                time_str = f"{time_ago // 60}m ago"
+                time_str = _t("ago_minutes", "{n}m ago", n=time_ago // 60)
             else:
-                time_str = f"{time_ago // 3600}h ago"
+                time_str = _t("ago_hours", "{n}h ago", n=time_ago // 3600)
             time_item = QtWidgets.QTableWidgetItem(time_str)
             time_item.setForeground(QtGui.QColor('#757575'))
             self.table.setItem(i, 3, time_item)
