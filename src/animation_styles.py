@@ -361,6 +361,14 @@ ANIMATION_STYLES = {
     'designer': DesignerStyle,
 }
 
+#: The style a brain opens in when nothing else says otherwise. 'none' is the
+#: one whose display name is "Thin": plain lines, no pulses or glows. It is the
+#: default because it is the one that shows the NETWORK rather than the
+#: animation - a thick breathing line is harder to trace from one neuron to the
+#: next, and tracing them is the point.
+DEFAULT_ANIMATION_STYLE = 'none'
+
+
 def get_animation_style(name: str) -> AnimationStyle:
     """
     Get an animation style by name.

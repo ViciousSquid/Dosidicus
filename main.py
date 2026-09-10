@@ -429,9 +429,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     for name in brain_widget.neurogenesis_data.get('new_neurons_details', {}):
                         brain_widget.visible_neurons.add(name)
 
-                core = brain_widget.original_neurons
-                for idx, name in enumerate(core):
-                    QtCore.QTimer.singleShot(idx * 500, lambda n=name: brain_widget.reveal_neuron(n))
+                brain_widget.play_birth_sequence()
 
                 self.brain_window.show()
                 self.user_interface.brain_action.setChecked(True)
@@ -795,24 +793,25 @@ class MainWindow(QtWidgets.QMainWindow):
             return
             
         brain_widget = self.brain_window.brain_widget
-        core_neurons = brain_widget.original_neurons
-        
-        # Distribution: 1-2 neurons per frame. Now revised for 8 core neurons (indices 0-7)
-        reveal_map = {
-            0: [0],       # First frame
-            1: [1],       # Second frame
-            2: [2],       # Third frame
-            3: [3],       # Fourth frame
-            4: [4, 5],    # Fifth frame
-            5: [6, 7]     # Sixth frame
-        }
-        
-        # Reveal mapped neurons for this frame
-        for neuron_idx in reveal_map.get(frame_index, []):
-            if neuron_idx < len(core_neurons):
-                neuron_name = core_neurons[neuron_idx]
-                brain_widget.reveal_neuron(neuron_name)
-                #print(f"🧠 Revealed neuron: {neuron_name} (frame {frame_index})")
+        sequence = list(brain_widget.original_neurons)
+        if not sequence:
+            return
+
+        # Share the birth sequence out across the hatching frames, rather than
+        # from a hand-written frame-to-index table. That table listed indices
+        # 0-7 because the sequence was eight neurons long; everything past the
+        # eighth - the whole motor bank - was simply never revealed, and a
+        # neuron that is never revealed is never drawn.
+        frames = max(1, len(getattr(self.splash, 'frames', ())) or 6)
+        start = round(frame_index * len(sequence) / frames)
+        end = round((frame_index + 1) * len(sequence) / frames)
+        batch = sequence[start:end]
+
+        # Frames are one second apart, so spread this frame's share across
+        # that second and the reveals stay in step with the egg.
+        step = 1.0 / max(1, len(batch))
+        for offset, neuron_name in enumerate(batch):
+            brain_widget.reveal_neuron(neuron_name, delay=offset * step)
 
     def show_hatching_notification(self):
         """Display hatching message"""

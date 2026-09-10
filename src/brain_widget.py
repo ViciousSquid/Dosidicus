@@ -59,7 +59,7 @@ except ImportError:
 from .animation_styles import (
     AnimationStyle, VibrantStyle, SubtleStyle,
     get_animation_style, get_available_styles, get_style_info,
-    ANIMATION_STYLES
+    ANIMATION_STYLES, DEFAULT_ANIMATION_STYLE
 )
 
 # Performance tracking for Task Manager
@@ -76,15 +76,27 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
     neuronCreated = QtCore.pyqtSignal(str)  # Emitted when neurogenesis creates a new neuron
 
     def __init__(self, config=None, debug_mode=False, tamagotchi_logic=None,
-                 animation_style: str = "vibrant"):
+                 animation_style: str = None):
         self.resolution_scale = 1.0  # Default resolution scale
         self.config = config if config else LearningConfig()
         self._laboratory = None
         self._last_lang = Localisation.instance().current_language
-        
+
         # ===== ANIMATION STYLE INITIALIZATION =====
+        # No style named: take the one saved in config.ini, and DEFAULT_
+        # ANIMATION_STYLE if there is none. The style the player picks in the
+        # Network tab has always been written to the config, but nothing ever
+        # read it back - the widget was constructed with a hardcoded 'vibrant'
+        # every time - so the setting silently reverted on every launch.
+        if animation_style is None:
+            getter = getattr(self.config, 'get_animation_style', None)
+            animation_style = getter() if callable(getter) else DEFAULT_ANIMATION_STYLE
+        try:
+            self._animation_style: AnimationStyle = get_animation_style(animation_style)
+        except KeyError:
+            animation_style = DEFAULT_ANIMATION_STYLE
+            self._animation_style = get_animation_style(animation_style)
         self._animation_style_name = animation_style
-        self._animation_style: AnimationStyle = get_animation_style(animation_style)
         self.layers = []
 
         # State update batching
@@ -242,6 +254,15 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self.original_neuron_positions = newborn_neurons()
         self.neuron_positions = self.original_neuron_positions.copy()
 
+        # Every neuron the squid was BORN with - the eight, the innate sensors
+        # and the motor bank - as a set, for asking "was this grown?".
+        # self.original_neurons below holds the same names as an ORDERED list,
+        # because the birth animation needs an order and this does not.
+        # Several renderers used to ask "was this grown?" against a hardcoded
+        # list of the eight, so the motor bank and the innate sensors were
+        # captioned as if the squid had grown them in its first second of life.
+        self.innate_neurons = frozenset(self.original_neuron_positions)
+
         # Action neurons are network-driven like any other: propagation writes
         # them, and the decision engine reads them to see what the squid wants
         # to do. They start at rest, not at the 50 baseline a core stat uses -
@@ -262,9 +283,16 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         # Track which neurons are visible (for animated reveal on new game)
         self.visible_neurons = set()
-        # List of core neurons in reveal order
-        self.original_neurons = ["can_see_food", "hunger", "happiness", "cleanliness", "sleepiness", 
-                                 "satisfaction", "anxiety", "curiosity"]
+        # Every neuron the squid hatches with, in the order the birth
+        # animation reveals them: the CORE row, then ACTIONS, then SENSES.
+        #
+        # This was the eight required neurons alone, and that is why a newly
+        # hatched brain had an empty ACTIONS row. A neuron that is never
+        # revealed is never added to visible_neurons, and a neuron that is not
+        # in visible_neurons is never drawn - so the motor bank, which the
+        # squid is every bit as born with as its hunger, simply was not there.
+        from .brain_constants import birth_sequence
+        self.original_neurons = list(birth_sequence())
         # Animation state for neuron reveals
         self.neuron_reveal_animations = {}  # {neuron_name: {'start_time': float, 'progress': float}}
         # --- link fade animation ---
@@ -384,7 +412,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         # Timer for periodic render requests (catches animation updates)
         self._render_timer = QtCore.QTimer(self)
         self._render_timer.timeout.connect(self._request_render_if_dirty)
-        self._render_timer.start(100)  # 10 FPS
+        self._render_timer.start(int(1000 / self.IDLE_RENDER_FPS))
 
     def set_brain_worker(self, worker):
         """Accept an external BrainWorker instance."""
@@ -1474,6 +1502,21 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
     # =========================================================================
 
         
+    #: Normal render rate. Ten frames a second is plenty for a brain whose
+    #: state changes on a game tick.
+    IDLE_RENDER_FPS = 10
+
+    #: Rate while neurons are hatching. A 0.45s expand-and-settle rendered at
+    #: ten frames a second is four frames, which reads as a stutter rather than
+    #: as a pulse; the burst lasts only as long as the birth sequence does.
+    REVEAL_RENDER_FPS = 40
+
+    def _set_render_fps(self, fps: int):
+        """Retune the offscreen render timer."""
+        timer = getattr(self, '_render_timer', None)
+        if timer is not None:
+            timer.setInterval(max(1, int(1000 / max(1, fps))))
+
     def is_neuron_revealed(self, name):
         """Return True if the neuron has finished its reveal animation.
         Only checks revealed tracking during tutorial mode."""
@@ -1484,9 +1527,10 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         # During tutorial, check if neuron has completed its animation
         if name not in self.neuron_reveal_animations:
             return name in self.visible_neurons  # never animated = already visible
+        from .brain_constants import NEURON_REVEAL_DURATION
         anim = self.neuron_reveal_animations[name]
         elapsed = time.time() - anim['start_time']
-        return elapsed >= 0.4  # same duration used in draw_neurons
+        return elapsed >= NEURON_REVEAL_DURATION
     
 
     def _advance_link_fades(self):
@@ -1570,20 +1614,35 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         # 2. Neuron reveal animations - only if we have any
         if self.neuron_reveal_animations:
+            from .brain_constants import (NEURON_REVEAL_DURATION,
+                                          reveal_progress)
+
             completed_reveals = []
             for neuron_name, anim_data in self.neuron_reveal_animations.items():
                 elapsed = current_time - anim_data['start_time']
-                if elapsed >= 0.4:
+                if elapsed >= NEURON_REVEAL_DURATION:
                     anim_data['progress'] = 1.0
                     completed_reveals.append(neuron_name)
                 else:
-                    anim_data['progress'] = 1 - (1 - elapsed / 0.4) ** 3
+                    # Linear 0..1. The SIZE curve (which overshoots past 1) is
+                    # applied by the renderer from the same elapsed time, so
+                    # the two cannot disagree about where the reveal is up to.
+                    anim_data['progress'] = reveal_progress(elapsed)
 
             for neuron_name in completed_reveals:
                 del self.neuron_reveal_animations[neuron_name]
-            
+
             needs_repaint = True
-            
+            # The reveal is drawn INSIDE the cached frame, so a repaint alone
+            # re-blits the same picture. Without this the neurons' sizes only
+            # ever changed on a frame something else happened to dirty, which
+            # is why the expand animation reveal_neuron() has always claimed
+            # to do was never visible.
+            self.mark_render_dirty()
+
+            if not self.neuron_reveal_animations:
+                self._set_render_fps(self.IDLE_RENDER_FPS)
+
             # Enable links after last reveal
             if (len(self.visible_neurons) == len(self.original_neurons) and
                 not self.neuron_reveal_animations and not self.show_links):
@@ -1650,11 +1709,17 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             self._cached_pens[key] = QtGui.QPen(color, width)
         return self._cached_pens[key]
 
-    def reveal_neuron(self, neuron_name):
-        """Reveal a neuron with an expand animation – forces links OFF during reveal."""
+    def reveal_neuron(self, neuron_name, delay: float = None):
+        """Reveal a neuron with an expand animation - forces links OFF during reveal.
+
+        `delay` is seconds to wait before the expand starts. The caller sets
+        the pace because the caller is the one synchronising with something -
+        the hatching splash's frames, or a fixed run for a loaded game. Left
+        unset it falls back to staggering by how many neurons are already up.
+        """
         import time
-        
-        if neuron_name not in self.original_neurons:
+
+        if neuron_name not in self.innate_neurons:
             return
         if neuron_name in self.visible_neurons:
             return
@@ -1670,9 +1735,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 nt.checkbox_links.setChecked(False)
                 nt.checkbox_links.setEnabled(False)
 
-        # Staggered start
-        stagger = 0.4
-        delay = len(self.visible_neurons) * stagger
+        if delay is None:
+            delay = len(self.visible_neurons) * 0.4
 
         self.visible_neurons.add(neuron_name)
 
@@ -1689,7 +1753,38 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             'progress': 0.0
         }
 
-        pos = self.neuron_positions[neuron_name]
+        self._set_render_fps(self.REVEAL_RENDER_FPS)
+        self.mark_render_dirty()
+
+    def play_birth_sequence(self, duration: float = 5.0):
+        """Reveal every neuron the squid is born with, spread over `duration`.
+
+        For callers that are not synchronised to anything - a loaded game, or
+        a brain window opened after the fact. The splash-driven hatch paces
+        itself against its own frames instead.
+        """
+        sequence = list(self.original_neurons)
+        if not sequence:
+            return
+        step = duration / len(sequence)
+        for index, name in enumerate(sequence):
+            self.reveal_neuron(name, delay=index * step)
+
+    def relayout_grown_neurons(self):
+        """Spread every grown neuron evenly along the growth rows.
+
+        Run after each birth, so the arrangement is a property of HOW MANY
+        neurons the squid has grown rather than of the order chance happened
+        to place them in. Neurons the squid was born with are never moved -
+        their rows are structure.
+        """
+        from .brain_constants import growth_positions
+
+        grown = [name for name in self.neuron_positions
+                 if name not in self.innate_neurons]
+        if not grown:
+            return
+        self.neuron_positions.update(growth_positions(grown))
         self.mark_render_dirty()
 
     def _enable_links_after_reveal(self):
@@ -2350,6 +2445,15 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self.neuron_shapes = state.get('neuron_shapes', {})  # Load shapes
         self.state_colors = state.get('state_colors', {})    # Load colors
         print(f"📦 Loaded {len(self.neuron_shapes)} neuron shapes")  # Debug print
+
+        # A save written before the layout became rows carries the old
+        # scattered positions for neurons the squid was born with. Snap those
+        # back onto their rows: the rows are structure, not the player's
+        # arrangement, and a loaded squid should look like a newborn that has
+        # been alive a while rather than like the layout this replaced.
+        for neuron, pos in self.original_neuron_positions.items():
+            if neuron in self.neuron_positions:
+                self.neuron_positions[neuron] = pos
 
         # Ensure all neurons in neuron_positions exist in state
         for neuron in self.neuron_positions:
@@ -3928,7 +4032,10 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 if name in self.state_colors:
                     color = QtGui.QColor(*self.state_colors[name])
                 else:
-                    color = QtGui.QColor(220, 220, 220)  # Grey
+                    # The colour of the row it sits on - see
+                    # brain_constants.ROW_COLORS.
+                    from .brain_constants import neuron_row_color
+                    color = QtGui.QColor(*neuron_row_color(name))
 
                 # Draw Circle
                 painter.setBrush(QtGui.QBrush(color))
@@ -3946,9 +4053,9 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         if font_size is None:
             font_size = self.neuron_label_font_size
 
-        # [NEW] Scale font for neurogenesis neurons
-        # If the neuron is NOT in the original list, it is a neurogenesis neuron.
-        is_neurogenesis = name not in self.original_neurons
+        # Scale font for neurogenesis neurons. Asked against every neuron the
+        # squid was born with, not just the eight the birth animation reveals.
+        is_neurogenesis = name not in self.innate_neurons
         
         # Apply scaling if it's a neurogenesis neuron (0.75x)
         effective_font_size = font_size * 0.75 if is_neurogenesis else font_size
@@ -4008,9 +4115,9 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         from .localisation import Localisation
         loc = Localisation.instance()
         
-        # [NEW] Scale font for neurogenesis neurons
+        # Scale font for neurogenesis neurons - see _draw_standard_label.
         base_size = self.neuron_label_font_size
-        is_neurogenesis = name not in self.original_neurons
+        is_neurogenesis = name not in self.innate_neurons
         effective_size = base_size * 0.75 if is_neurogenesis else base_size
 
         font = QtGui.QFont("Arial", int(effective_size * scale))
@@ -4038,9 +4145,9 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         from .localisation import Localisation
         loc = Localisation.instance()
         
-        # [NEW] Scale font for neurogenesis neurons
+        # Scale font for neurogenesis neurons - see _draw_standard_label.
         base_size = self.neuron_label_font_size
-        is_neurogenesis = name not in self.original_neurons
+        is_neurogenesis = name not in self.innate_neurons
         effective_size = base_size * 0.75 if is_neurogenesis else base_size
 
         font = QtGui.QFont("Arial", int(effective_size * scale))
@@ -4615,21 +4722,32 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self.update()
 
     def _randomize_all_positions(self):
-        """Randomize positions of all neurons within safe bounds."""
+        """Randomize positions of GROWN neurons within the growth zone.
+
+        Neurons the squid was born with are never moved. They are laid out in
+        labelled rows - CORE, ACTIONS, SENSES - and the rows are the whole
+        point: scattering them destroys the one thing in the picture that says
+        which neurons are the same kind of thing.
+        """
         import random
         from .brain_constants import layout_bounds
 
-        # Scattered across the DEFAULT layout's box (plus its margin), not the
-        # whole logical canvas - a randomised start that puts neurons where the
-        # Brain Tool cannot show them is not a start the player can read.
+        # Confined to the growth zone below the rows, not the whole logical
+        # canvas - a randomised start that puts neurons where the Brain Tool
+        # cannot show them is not a start the player can read.
         min_x, min_y, max_x, max_y = layout_bounds(self.original_neuron_positions)
 
+        moved = 0
         for name in self.neuron_positions:
+            if name in self.innate_neurons:
+                continue                      # the rows stay where they are
             rx = random.randint(int(min_x), int(max_x))
             ry = random.randint(int(min_y), int(max_y))
             self.neuron_positions[name] = (rx, ry)
+            moved += 1
 
-        print("🎲 Randomized neuron positions")
+        print(f"🎲 Randomized {moved} grown neuron positions "
+              f"({len(self.innate_neurons)} born neurons held in their rows)")
         
     def start_tutorial_glow(self, duration_ms=5000):
         """Start a glowing, pulsing border effect for tutorial purposes"""

@@ -470,9 +470,11 @@ class ConfigManager:
         
         Returns one of: 'vibrant', 'subtle', 'neural', 'none', 'electric', 'zen', 'neon'
         """
+        from .animation_styles import DEFAULT_ANIMATION_STYLE
         if not self.config.has_section('Animation'):
-            return 'vibrant'  # Default style
-        return self.config.get('Animation', 'style', fallback='vibrant').lower()
+            return DEFAULT_ANIMATION_STYLE
+        return self.config.get('Animation', 'style',
+                               fallback=DEFAULT_ANIMATION_STYLE).lower()
     
     def set_animation_style(self, style_name: str) -> bool:
         """

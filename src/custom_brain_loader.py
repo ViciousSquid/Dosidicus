@@ -617,6 +617,13 @@ class BrainLoader:
         if hasattr(bw, 'original_neurons') and hasattr(bw, 'neuron_positions'):
             status = {'is_sick', 'is_eating', 'is_sleeping', 'pursuing_food', 'direction'}
             bw.original_neurons = [n for n in bw.neuron_positions if n not in status]
+        if hasattr(bw, 'innate_neurons') and hasattr(bw, 'neuron_positions'):
+            # A custom brain's neurons are ALL born with, whatever the default
+            # layout says. Without this the widget went on believing the stock
+            # newborn set was innate, so a custom neuron could not be revealed
+            # (reveal_neuron only reveals what the squid was born with) and was
+            # captioned as though the squid had grown it.
+            bw.innate_neurons = frozenset(bw.neuron_positions)
         if hasattr(bw, 'communication_events') and hasattr(bw, 'neuron_positions'):
             bw.communication_events = {n: 0 for n in bw.neuron_positions}
     

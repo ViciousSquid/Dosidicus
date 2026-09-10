@@ -3146,11 +3146,20 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         add_stat_box("Connection Statistics", connection_stats, "#e3f2fd")
         
         # 2. Neuron Statistics
+        from .brain_constants import neuron_row
+
         all_neurons = self.brain_widget.neuron_positions.keys()
         neurons = [n for n in all_neurons if n not in excluded_neurons]
-        original_neurons = [n for n in neurons if n in getattr(self.brain_widget, 'original_neuron_positions', {})]
         new_neurons = [n for n in neurons if n in self.brain_widget.neurogenesis_data.get('new_neurons', [])]
-        
+
+        # Counted by ROW, not as one lump. "Original Core Neurons" used to
+        # report every neuron in the newborn layout, which since the motor
+        # bank landed there meant a newborn was described as having nineteen
+        # core neurons - and the whole design claim is eight.
+        by_row = {'core': [], 'motor': [], 'sensor': [], None: []}
+        for n in neurons:
+            by_row[neuron_row(n)].append(n)
+
         neuron_stats = f"""
         <table style='width:100%; margin-top:5px;'>
             <tr>
@@ -3158,8 +3167,16 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 <td style='padding:3px;'>{len(neurons)}</td>
             </tr>
             <tr>
-                <td style='padding:3px;'><b>Original Core Neurons:</b></td>
-                <td style='padding:3px;'>{len(original_neurons)}</td>
+                <td style='padding:3px;'><b>Core Neurons (the original eight):</b></td>
+                <td style='padding:3px;'>{len(by_row['core'])}</td>
+            </tr>
+            <tr>
+                <td style='padding:3px;'><b>Motor Bank (actions):</b></td>
+                <td style='padding:3px;'>{len(by_row['motor'])}</td>
+            </tr>
+            <tr>
+                <td style='padding:3px;'><b>Sense Neurons:</b></td>
+                <td style='padding:3px;'>{len(by_row['sensor'])}</td>
             </tr>
             <tr>
                 <td style='padding:3px;'><b>Neurons from Neurogenesis:</b></td>
