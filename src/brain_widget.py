@@ -241,6 +241,14 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self.original_neuron_positions = newborn_neurons()
         self.neuron_positions = self.original_neuron_positions.copy()
 
+        # Every neuron the squid was BORN with - the eight, the innate sensors
+        # and the motor bank. Distinct from self.original_neurons below, which
+        # is only the eight, and only for the birth animation. Several
+        # renderers used to ask "was this grown?" against that eight-name list,
+        # so the motor bank and the innate sensors were captioned as if the
+        # squid had grown them within its first second of life.
+        self.innate_neurons = frozenset(self.original_neuron_positions)
+
         # Action neurons are network-driven like any other: propagation writes
         # them, and the decision engine reads them to see what the squid wants
         # to do. They start at rest, not at the 50 baseline a core stat uses -
@@ -261,9 +269,12 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         # Track which neurons are visible (for animated reveal on new game)
         self.visible_neurons = set()
-        # List of core neurons in reveal order
-        self.original_neurons = ["can_see_food", "hunger", "happiness", "cleanliness", "sleepiness", 
-                                 "satisfaction", "anxiety", "curiosity"]
+        # The eight, in the order the birth animation reveals them - which is
+        # also the order they sit in along the CORE row, so the reveal runs
+        # left to right across the screen. Ask self.innate_neurons, not this,
+        # if the question is "was this neuron grown?".
+        from .brain_constants import CORE_ROW_ORDER
+        self.original_neurons = list(CORE_ROW_ORDER)
         # Animation state for neuron reveals
         self.neuron_reveal_animations = {}  # {neuron_name: {'start_time': float, 'progress': float}}
         # --- link fade animation ---
@@ -2350,6 +2361,15 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self.state_colors = state.get('state_colors', {})    # Load colors
         print(f"📦 Loaded {len(self.neuron_shapes)} neuron shapes")  # Debug print
 
+        # A save written before the layout became rows carries the old
+        # scattered positions for neurons the squid was born with. Snap those
+        # back onto their rows: the rows are structure, not the player's
+        # arrangement, and a loaded squid should look like a newborn that has
+        # been alive a while rather than like the layout this replaced.
+        for neuron, pos in self.original_neuron_positions.items():
+            if neuron in self.neuron_positions:
+                self.neuron_positions[neuron] = pos
+
         # Ensure all neurons in neuron_positions exist in state
         for neuron in self.neuron_positions:
             if neuron not in self.state:
@@ -3913,7 +3933,10 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 if name in self.state_colors:
                     color = QtGui.QColor(*self.state_colors[name])
                 else:
-                    color = QtGui.QColor(220, 220, 220)  # Grey
+                    # The colour of the row it sits on - see
+                    # brain_constants.ROW_COLORS.
+                    from .brain_constants import neuron_row_color
+                    color = QtGui.QColor(*neuron_row_color(name))
 
                 # Draw Circle
                 painter.setBrush(QtGui.QBrush(color))
@@ -3931,9 +3954,9 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         if font_size is None:
             font_size = self.neuron_label_font_size
 
-        # [NEW] Scale font for neurogenesis neurons
-        # If the neuron is NOT in the original list, it is a neurogenesis neuron.
-        is_neurogenesis = name not in self.original_neurons
+        # Scale font for neurogenesis neurons. Asked against every neuron the
+        # squid was born with, not just the eight the birth animation reveals.
+        is_neurogenesis = name not in self.innate_neurons
         
         # Apply scaling if it's a neurogenesis neuron (0.75x)
         effective_font_size = font_size * 0.75 if is_neurogenesis else font_size
@@ -3993,9 +4016,9 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         from .localisation import Localisation
         loc = Localisation.instance()
         
-        # [NEW] Scale font for neurogenesis neurons
+        # Scale font for neurogenesis neurons - see _draw_standard_label.
         base_size = self.neuron_label_font_size
-        is_neurogenesis = name not in self.original_neurons
+        is_neurogenesis = name not in self.innate_neurons
         effective_size = base_size * 0.75 if is_neurogenesis else base_size
 
         font = QtGui.QFont("Arial", int(effective_size * scale))
@@ -4023,9 +4046,9 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         from .localisation import Localisation
         loc = Localisation.instance()
         
-        # [NEW] Scale font for neurogenesis neurons
+        # Scale font for neurogenesis neurons - see _draw_standard_label.
         base_size = self.neuron_label_font_size
-        is_neurogenesis = name not in self.original_neurons
+        is_neurogenesis = name not in self.innate_neurons
         effective_size = base_size * 0.75 if is_neurogenesis else base_size
 
         font = QtGui.QFont("Arial", int(effective_size * scale))
@@ -4600,21 +4623,32 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self.update()
 
     def _randomize_all_positions(self):
-        """Randomize positions of all neurons within safe bounds."""
+        """Randomize positions of GROWN neurons within the growth zone.
+
+        Neurons the squid was born with are never moved. They are laid out in
+        labelled rows - CORE, ACTIONS, SENSES - and the rows are the whole
+        point: scattering them destroys the one thing in the picture that says
+        which neurons are the same kind of thing.
+        """
         import random
         from .brain_constants import layout_bounds
 
-        # Scattered across the DEFAULT layout's box (plus its margin), not the
-        # whole logical canvas - a randomised start that puts neurons where the
-        # Brain Tool cannot show them is not a start the player can read.
+        # Confined to the growth zone below the rows, not the whole logical
+        # canvas - a randomised start that puts neurons where the Brain Tool
+        # cannot show them is not a start the player can read.
         min_x, min_y, max_x, max_y = layout_bounds(self.original_neuron_positions)
 
+        moved = 0
         for name in self.neuron_positions:
+            if name in self.innate_neurons:
+                continue                      # the rows stay where they are
             rx = random.randint(int(min_x), int(max_x))
             ry = random.randint(int(min_y), int(max_y))
             self.neuron_positions[name] = (rx, ry)
+            moved += 1
 
-        print("🎲 Randomized neuron positions")
+        print(f"🎲 Randomized {moved} grown neuron positions "
+              f"({len(self.innate_neurons)} born neurons held in their rows)")
         
     def start_tutorial_glow(self, duration_ms=5000):
         """Start a glowing, pulsing border effect for tutorial purposes"""

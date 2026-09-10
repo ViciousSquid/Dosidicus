@@ -44,7 +44,7 @@ What if you could understand every neuron inside a learning creature?
 
 The project is designed to make artificial cognition visible.
 
-Instead of hiding intelligence inside millions of parameters, Dosidicus starts with just eight neurons. Every connection can be inspected. Every activation can be visualised. Every learned behaviour can be traced back to experience.
+Instead of hiding intelligence inside millions of parameters, Dosidicus starts with just eight neurons — seven drives and the one sense a squid cannot live without — laid out in a single labelled row. Underneath them sits the motor bank: one neuron per thing the squid can do, driven by ordinary synapses rather than by a rule, and below that the senses. Every connection can be inspected. Every activation can be visualised. Every learned behaviour can be traced back to experience.
 
 As the squid lives, its brain rewires itself through Hebbian learning, strengthens useful pathways using [STDP](https://github.com/ViciousSquid/Dosidicus/wiki/Spike%E2%80%90Timing%E2%80%90Dependent-Plasticity-(STDP)), works out which of its own actions cause which consequences, and grows entirely new neurons when its existing structure cannot cope.
 

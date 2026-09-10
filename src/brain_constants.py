@@ -11,35 +11,109 @@ Import from here to ensure consistency.
 """
 
 # =============================================================================
-# REQUIRED NEURONS - Mandatory for all brain designs
-# These 8 neurons MUST exist in any valid Dosidicus brain.
+# LAYOUT - the newborn brain is drawn as labelled rows, not a scatter
 # =============================================================================
+# Three straight rows, each holding one population, each labelled on screen:
+#
+#   CORE     the eight neurons a squid is born being - seven drives and the
+#            one sense it cannot live without
+#   ACTIONS  the motor bank: everything the squid can do about any of that
+#   SENSES   the rest of what it can notice
+#
+# Positions used to be hand-picked one neuron at a time, which put core stats
+# at two different heights, sensors in a column down the left edge, and the
+# motor bank in a band that overlapped both - so nothing in the picture told
+# you which neurons were the same KIND of thing, and the motor bank read as
+# eight more core neurons. Rows are generated from one span here instead, so a
+# row is straight and evenly spaced whatever its length, and adding a neuron to
+# one cannot nudge another out of line.
+#
+# Rows are also why grown neurons have their own zone (GROWTH_ZONE, below):
+# neurogenesis used to place new neurons anywhere inside the bounding box of
+# the default layout, which is now exactly the space the rows occupy.
 
-# Core stat neurons - positions match brain_widget.py's original_neuron_positions
-CORE_NEURONS = {
-    "hunger": (127, 81),
-    "happiness": (361, 81),
-    "cleanliness": (627, 81),
-    "sleepiness": (840, 81),
-    "satisfaction": (271, 380),
-    "anxiety": (491, 389),
-    "curiosity": (701, 386),
+#: The coordinate space every position on this page is expressed in.
+LOGICAL_CANVAS = (1024.0, 768.0)
+
+#: The horizontal span a row is distributed across. Every row shares it, so
+#: the rows line up at both ends and read as layers rather than as three
+#: unrelated scatters.
+ROW_X_FIRST = 96.0
+ROW_X_LAST = 928.0
+
+#: Each row's centre line, the band drawn behind it, and its on-screen label.
+NEURON_ROWS = {
+    'core':   {'y': 100.0, 'band': (38.0, 152.0),  'label': 'CORE'},
+    'motor':  {'y': 258.0, 'band': (196.0, 310.0), 'label': 'ACTIONS'},
+    'sensor': {'y': 406.0, 'band': (344.0, 458.0), 'label': 'SENSES'},
 }
 
-# can_see_food is MANDATORY - the squid must be able to see food
-# This is separate from optional sensors because it's required for basic functionality
+#: Where neurogenesis is allowed to put a neuron: below every row, so a grown
+#: neuron can never land on top of one the squid was born with.
+GROWTH_ZONE = (70.0, 500.0, 954.0, 716.0)
+
+
+def row_positions(names, row: str) -> dict:
+    """Lay `names` out evenly along row `row`, as {name: (x, y)}.
+
+    A single neuron is centred rather than pinned to the left edge, so a row
+    that happens to hold one thing still looks deliberate.
+    """
+    names = tuple(names)
+    y = NEURON_ROWS[row]['y']
+    if not names:
+        return {}
+    if len(names) == 1:
+        return {names[0]: ((ROW_X_FIRST + ROW_X_LAST) / 2.0, y)}
+    step = (ROW_X_LAST - ROW_X_FIRST) / (len(names) - 1)
+    return {name: (ROW_X_FIRST + i * step, y) for i, name in enumerate(names)}
+
+
+# =============================================================================
+# REQUIRED NEURONS - Mandatory for all brain designs
+# These 8 neurons MUST exist in any valid Dosidicus brain.
+#
+# "Eight neurons" is a statement about the STATE the squid is born knowing how
+# to represent - seven drives plus the one sense it cannot live without - and
+# it is these eight that the birth animation reveals one at a time. It is NOT
+# the size of a newborn network: a newborn also carries the sensors its
+# reflexes read (INNATE_SENSORS) and the motor bank (ACTION_NEURONS), because
+# a brain with no way to act is a brain that never generates the experience it
+# would need in order to learn. newborn_neurons() is the honest total, and
+# innate_neuron_names() is what "the squid was born with this" means anywhere
+# that has to tell a born neuron from a grown one.
+# =============================================================================
+
+# The order the eight sit in along the CORE row, and the order the birth
+# animation reveals them in. Sight comes first because it is the one thing on
+# this row that is about the world rather than about the squid.
+CORE_ROW_ORDER = (
+    "can_see_food",
+    "hunger", "happiness", "cleanliness", "sleepiness",
+    "satisfaction", "anxiety", "curiosity",
+)
+
+_CORE_ROW = row_positions(CORE_ROW_ORDER, 'core')
+
+# Core stat neurons - the seven drives, laid out along the CORE row.
+CORE_NEURONS = {
+    name: _CORE_ROW[name] for name in CORE_ROW_ORDER if name != "can_see_food"
+}
+
+# can_see_food is MANDATORY - the squid must be able to see food.
+# It is a sensor by behaviour (the world writes it every tick) but it is one of
+# the original eight, so it sits on the CORE row with them rather than down
+# among the senses.
 MANDATORY_SENSOR = {
-    "can_see_food": (50, 200),
+    "can_see_food": _CORE_ROW["can_see_food"],
 }
 
 # All required neurons combined (7 core + 1 mandatory sensor)
 REQUIRED_NEURONS = {**CORE_NEURONS, **MANDATORY_SENSOR}
 
-# Ordered list for consistent iteration
-CORE_NEURON_NAMES = [
-    "hunger", "happiness", "cleanliness", "sleepiness",
-    "satisfaction", "anxiety", "curiosity"
-]
+# Ordered list for consistent iteration - derived from the row so it cannot
+# drift out of step with the layout the player actually sees.
+CORE_NEURON_NAMES = list(CORE_NEURONS)
 
 REQUIRED_NEURON_NAMES = CORE_NEURON_NAMES + ["can_see_food"]
 
@@ -49,17 +123,19 @@ REQUIRED_NEURON_NAMES = CORE_NEURON_NAMES + ["can_see_food"]
 # neural propagation. They represent environmental/state observations.
 # NOTE: can_see_food is NOT here - it's in REQUIRED_NEURONS
 # =============================================================================
-INPUT_SENSORS = {
-    "external_stimulus": (50, 50),      # Environmental changes (resize, interactions)
-    "plant_proximity": (50, 250),       # Distance to nearest plant decoration
-    "threat_level": (50, 350),          # Computed from anxiety + startle state
-    "pursuing_food": (150, 50),         # Currently chasing food
-    "is_sick": (150, 150),              # Sickness state
-    "is_fleeing": (150, 250),           # Currently fleeing
-    "is_eating": (150, 350),            # Currently eating
-    "is_sleeping": (250, 50),           # Currently sleeping
-    "is_startled": (250, 150),          # Startled state
-}
+SENSOR_ROW_ORDER = (
+    "external_stimulus",   # Environmental changes (resize, interactions)
+    "plant_proximity",     # Distance to nearest plant decoration
+    "threat_level",        # Computed from anxiety + startle state
+    "pursuing_food",       # Currently chasing food
+    "is_sick",             # Sickness state
+    "is_fleeing",          # Currently fleeing
+    "is_eating",           # Currently eating
+    "is_sleeping",         # Currently sleeping
+    "is_startled",         # Startled state
+)
+
+INPUT_SENSORS = row_positions(SENSOR_ROW_ORDER, 'sensor')
 
 # Tuple for compatibility with brain_neuron_hooks.py (includes can_see_food)
 DEFAULT_INPUT_SENSORS = (
@@ -288,7 +364,31 @@ EXCLUDED_NEURONS = [
 # Ring colors for neuron types
 CORE_NEURON_RING_COLOR = (255, 215, 0)      # Gold
 INPUT_SENSOR_RING_COLOR = (100, 149, 237)   # Cornflower blue
+MOTOR_NEURON_RING_COLOR = (205, 120, 90)    # Terracotta - the motor bank
 CUSTOM_NEURON_RING_COLOR = (180, 180, 180)  # Gray
+
+# -----------------------------------------------------------------------------
+# ROW COLOURS - one hue per population, so the picture is self-explanatory
+# -----------------------------------------------------------------------------
+# Every neuron a squid is born with is drawn in the colour of the row it sits
+# on, and grown neurons in a neutral grey that belongs to no row. Previously
+# every non-binary neuron rendered in that same grey, so a core drive and an
+# action neuron were visually the same object in different places.
+ROW_COLORS = {
+    'core':   (150, 150, 220),   # Soft indigo  - what the squid is
+    'motor':  (216, 138, 106),   # Terracotta   - what it can do
+    'sensor': (118, 190, 214),   # Pale cyan    - what it can notice
+}
+
+#: A neuron the squid grew for itself belongs to no row, and is drawn as such.
+GROWN_NEURON_COLOR = (198, 198, 198)
+
+#: The band drawn behind each row, and the colour of its label.
+ROW_BAND_COLORS = {
+    'core':   ((150, 150, 220, 28), (150, 150, 220, 150)),
+    'motor':  ((216, 138, 106, 28), (216, 138, 106, 150)),
+    'sensor': ((118, 190, 214, 28), (118, 190, 214, 150)),
+}
 
 # Ring widths
 PROTECTED_RING_WIDTH = 3
@@ -425,21 +525,29 @@ INNATE_CONNECTIONS = (
 # squid would still act on the same arithmetic. Now the arithmetic IS the
 # network, and every one of these numbers is a synapse that learning can move.
 #
-# Positions sit in the band between the sensor column and the core stats, and
-# inside layout_bounds() like everything else.
-ACTION_NEURONS = {
-    "act_move":     (170, 250),
-    "act_eat":      (330, 250),
-    "act_flee":     (470, 250),
-    "act_ink":      (610, 250),
-    "act_play":     (750, 250),
-    "act_shelter":  (250, 160),
-    "act_rest":     (620, 160),
+# They occupy the ACTIONS row, directly under the core eight and drawn in the
+# motor colour, so that "these are what the squid DOES" is something you can
+# see rather than something you have to be told. They were previously split
+# across two half-rows tucked between the sensors and the core stats, which is
+# what made a newborn look like a nineteen-neuron brain instead of eight
+# neurons and a motor bank.
+#
+# Ordered voluntary-first, with the two reflexes last.
+MOTOR_ROW_ORDER = (
+    "act_move",
+    "act_eat",
+    "act_flee",
+    "act_play",
+    "act_shelter",
+    "act_rest",
+    "act_ink",
     # Involuntary. Not the same neuron as act_rest: choosing to rest before
     # you are exhausted is a thing a squid can learn, and collapsing when you
     # are is a thing that happens to it. See the homeostatic drives below.
-    "act_collapse": (440, 160),
-}
+    "act_collapse",
+)
+
+ACTION_NEURONS = row_positions(MOTOR_ROW_ORDER, 'motor')
 
 ACTION_NEURON_NAMES = tuple(ACTION_NEURONS.keys())
 
@@ -731,8 +839,31 @@ def newborn_neurons() -> dict:
     Eight required neurons, the sensors the innate pathways read, and the
     action neurons that are the motor end of behaviour. Neurogenesis adds to
     this over the squid's life; nothing else is there at birth.
+
+    Three populations, and they are not interchangeable. The eight required
+    neurons are what the squid is; the innate sensors are what it can notice;
+    the motor bank is what it can do. Counting them as one number is what made
+    a newborn look like a nineteen-neuron brain when the thing the design
+    actually claims is eight.
     """
     return {**REQUIRED_NEURONS, **INNATE_SENSORS, **ACTION_NEURONS}
+
+
+def innate_neuron_names() -> frozenset:
+    """Every neuron name a squid is born with.
+
+    THE definition of "born with", so that "was this grown?" is one question
+    with one answer. Several renderers used to ask it against the eight-name
+    reveal list instead, which meant the motor bank and the innate sensors -
+    present from the first tick of the squid's life - were drawn in the small
+    italic style reserved for neurons the squid had grown for itself.
+    """
+    return frozenset(newborn_neurons())
+
+
+def is_grown_neuron(name: str) -> bool:
+    """True if this neuron arrived through neurogenesis rather than at birth."""
+    return name not in innate_neuron_names()
 
 
 # ---------------------------------------------------------------------------
@@ -785,45 +916,70 @@ def is_action_neuron(name: str) -> bool:
     return name in ACTION_NEURONS
 
 
+def neuron_row(name: str):
+    """Which layout row this neuron belongs to, or None if it grew.
+
+    THE one answer to "what kind of neuron is this?", so the renderers stop
+    each keeping their own hardcoded list of core neuron names - there were
+    three such lists, and they had already drifted apart.
+    """
+    if name in REQUIRED_NEURONS:
+        return 'core'
+    if name in ACTION_NEURONS:
+        return 'motor'
+    if name in INPUT_SENSORS or name in PLUGIN_INPUT_SENSORS:
+        return 'sensor'
+    return None
+
+
+def neuron_row_color(name: str) -> tuple:
+    """The fill colour for this neuron: its row's, or the grown-neuron grey."""
+    return ROW_COLORS.get(neuron_row(name), GROWN_NEURON_COLOR)
+
+
+def row_label_anchor(row: str) -> tuple:
+    """Top-left corner for a row's label, in logical coordinates.
+
+    Above the neurons rather than beside them: the rows span nearly the whole
+    canvas width, so there is no room at the left end for a word.
+    """
+    top, _bottom = NEURON_ROWS[row]['band']
+    return (ROW_X_FIRST - 24.0, top + 4.0)
+
+
 # ---------------------------------------------------------------------------
-# Where a neuron is allowed to sit
+# Where a GROWN neuron is allowed to sit
 # ---------------------------------------------------------------------------
-# Every neuron the brain grows has to stay inside the area the Brain Tool shows
-# without being resized, so the whole network is visible at the size the window
-# opens at. That area is defined RELATIVE TO THE DEFAULT LAYOUT rather than to
-# the logical canvas: a neuron may sit at most LAYOUT_MARGIN pixels outside the
-# box the eight default neurons occupy.
+# Neurogenesis places its neurons in GROWTH_ZONE - the open area below the
+# three rows - and never inside a row. The rows are the squid's given
+# structure and they stay straight; what it grows for itself accumulates
+# underneath, where you can see at a glance how much of the brain is earned.
 #
-# Placement used to run against the full 1024x768 logical canvas with a
-# centering force pulling everything toward (512, 384), which put grown neurons
-# in a clump in the middle of a canvas far taller than the default layout - so
-# the interesting part of the network was both bunched up and partly below the
-# visible area.
+# This used to be the bounding box of the default layout grown by a margin,
+# which was fine while the default layout was eight scattered neurons and
+# became wrong the moment the layout became rows: "inside the bounding box of
+# the rows" is the one place a grown neuron must not go, because that is where
+# the rows are.
+#
+# Placement before THAT ran against the full 1024x768 logical canvas with a
+# centering force pulling everything toward (512, 384), which put grown
+# neurons in a clump in the middle of a canvas far taller than the visible
+# area.
 LAYOUT_MARGIN = 50
 
 # Never let a neuron sit so close to the canvas edge that its circle and label
-# are clipped, even if the margin above would allow it.
+# are clipped.
 LAYOUT_EDGE_GUARD = 25
 
 
 def layout_bounds(default_positions=None, margin=LAYOUT_MARGIN):
-    """Return (min_x, min_y, max_x, max_y) that any neuron must stay inside.
+    """Return (min_x, min_y, max_x, max_y) a grown neuron must stay inside.
 
-    This is the bounding box of `default_positions` (the eight neurons a squid
-    is born with, by default) grown by `margin` on every side, then held off
-    the canvas edge by LAYOUT_EDGE_GUARD.
+    GROWTH_ZONE, always. `default_positions` and `margin` are accepted and
+    ignored: callers pass the newborn layout, and deriving the zone from it is
+    exactly the mistake this replaced - it would hand back the rows.
     """
-    positions = default_positions or REQUIRED_NEURONS
-    xs = [p[0] for p in positions.values()]
-    ys = [p[1] for p in positions.values()]
-    if not xs or not ys:
-        xs, ys = [50, 840], [81, 389]
-    return (
-        max(LAYOUT_EDGE_GUARD, min(xs) - margin),
-        max(LAYOUT_EDGE_GUARD, min(ys) - margin),
-        max(xs) + margin,
-        max(ys) + margin,
-    )
+    return GROWTH_ZONE
 
 
 def clamp_to_layout(x, y, default_positions=None, margin=LAYOUT_MARGIN):

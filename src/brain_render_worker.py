@@ -262,6 +262,12 @@ class BrainRenderWorker(QThread):
             painter.translate(offset_x, indicator_space)
             painter.scale(scale, scale)
             
+            # Draw the row bands first, so everything else sits on top of
+            # them. These are what make the three populations - what the squid
+            # is, what it can do, what it can notice - legible as populations
+            # rather than as nineteen circles in a heap.
+            self._draw_rows(painter, state)
+
             # Draw layers
             self._draw_layers(painter, state, 1.0)
             
@@ -276,6 +282,34 @@ class BrainRenderWorker(QThread):
         
         return image
     
+    def _draw_rows(self, painter: QPainter, state: RenderState):
+        """Draw the labelled band behind each row of the newborn layout.
+
+        Drawn in logical coordinates - the painter is already scaled - and
+        deliberately faint: the bands are there to group the neurons, not to
+        compete with them.
+        """
+        from .brain_constants import (NEURON_ROWS, ROW_BAND_COLORS,
+                                      row_label_anchor, LOGICAL_CANVAS)
+
+        canvas_w = LOGICAL_CANVAS[0]
+        for row, spec in NEURON_ROWS.items():
+            top, bottom = spec['band']
+            fill, border = ROW_BAND_COLORS[row]
+
+            painter.setBrush(QBrush(QColor(*fill)))
+            painter.setPen(QPen(QColor(*border), 1, Qt.DashLine))
+            painter.drawRoundedRect(
+                QRectF(24.0, top, canvas_w - 48.0, bottom - top), 8, 8)
+
+            label_x, label_y = row_label_anchor(row)
+            label_font = QFont("Arial", 11)
+            label_font.setBold(True)
+            label_font.setLetterSpacing(QFont.PercentageSpacing, 130)
+            painter.setFont(label_font)
+            painter.setPen(QColor(*border))
+            painter.drawText(QPointF(label_x, label_y + 11.0), spec['label'])
+
     def _draw_layers(self, painter: QPainter, state: RenderState, scale: float):
         """Draw layer background rectangles"""
         if not state.layers:
@@ -551,11 +585,7 @@ class BrainRenderWorker(QThread):
     
     def _draw_neurons(self, painter: QPainter, state: RenderState, scale: float):
         """Draw all neurons with localized labels, connector relay animations, and Hebbian pulse effects"""
-        from .brain_constants import BINARY_NEURONS
-        
-        # Hardcoded list of core neurons to determine font sizing
-        CORE_NEURONS = {"hunger", "happiness", "cleanliness", "sleepiness", 
-                        "satisfaction", "anxiety", "curiosity", "can_see_food"}
+        from .brain_constants import BINARY_NEURONS, neuron_row_color
 
         # Set up default font
         font = QFont("Arial", state.neuron_label_font_size)
@@ -611,8 +641,12 @@ class BrainRenderWorker(QThread):
                 else:
                     color = QColor(0, 255, 0) if is_active else QColor(255, 0, 0)
 
+                # Green/red is the neuron's VALUE; the border is which row it
+                # belongs to. can_see_food is a sense but one of the original
+                # eight, so it is bordered in core indigo up on the CORE row.
                 painter.setBrush(QBrush(color))
-                painter.setPen(QPen(QColor(0, 0, 0), max(1, int(2 * scale))))
+                painter.setPen(QPen(QColor(*neuron_row_color(name)),
+                                    max(2, int(3 * scale))))
                 size = radius * 1.8
                 rect = QRectF(x - size/2, y - size/2, size, size)
                 painter.drawRect(rect)
@@ -627,40 +661,13 @@ class BrainRenderWorker(QThread):
                 painter.drawText(rect, Qt.AlignCenter, symbol)
                 painter.restore()
 
-                if name == 'can_see_food':
-                    display_name = state.neuron_labels.get(name, name)
-                    
-                    # Smaller Font
-                    small_font = QFont(font)
-                    small_font.setPointSize(max(4, int(state.neuron_label_font_size * 0.75 * scale)))
-                    painter.setFont(small_font)
-                    sfm = painter.fontMetrics()
-
-                    # Calculate Dimensions
-                    text_width = sfm.horizontalAdvance(display_name)
-                    padding = 4 * scale
-                    rect_width = text_width + padding * 2
-                    rect_height = sfm.height() + 2
-
-                    text_rect = QRectF(
-                        x - rect_width / 2,
-                        y + size/2 + 3 * scale,
-                        rect_width,
-                        rect_height
-                    )
-
-                    # Draw Black Background
-                    painter.setBrush(QBrush(QColor(0, 0, 0)))
-                    painter.setPen(Qt.NoPen)
-                    painter.drawRoundedRect(text_rect, 2, 2)
-
-                    # Draw White Text
-                    painter.setPen(QColor(255, 255, 255))
-                    painter.drawText(text_rect, Qt.AlignCenter, display_name)
-                    
-                    # Restore standard font
-                    painter.setFont(font)
-
+                # Every binary neuron is captioned. Only can_see_food used to
+                # be, which left is_startled and the rest as unlabelled red
+                # squares - readable when they sat in a column at the edge of
+                # the canvas and their positions identified them, and not
+                # readable at all once they moved into a shared row.
+                self._draw_caption(painter, state, name, x, y, size / 2, scale)
+                painter.setFont(font)
                 continue
 
             # ---------- DIAMOND ----------
@@ -741,48 +748,64 @@ class BrainRenderWorker(QThread):
                 elif name in state.state_colors:
                     color = QColor(*state.state_colors[name])
                 else:
-                    color = QColor(64, 64, 64)
+                    # The colour of the row it sits on - indigo for a core
+                    # drive, terracotta for an action, cyan for a sense, grey
+                    # for a neuron the squid grew. Every one of these used to
+                    # be the same dark grey, which made a core drive and an
+                    # action neuron the same object in two places.
+                    color = QColor(*neuron_row_color(name))
 
                 painter.setBrush(QBrush(color))
                 painter.setPen(QPen(QColor(0, 0, 0), max(1, int(2 * scale))))
                 painter.drawEllipse(QPointF(x, y), radius, radius)
 
             # ---------- LABEL ----------
-            display_name = state.neuron_labels.get(
-                name, name.replace("_", " ").title()
-            )
+            self._draw_caption(painter, state, name, x, y, radius, scale)
+            painter.setFont(font)      # restore base font for the next neuron
 
-            # [NEW] Font Scaling Logic
-            is_neurogenesis = name not in CORE_NEURONS
-            effective_size = state.neuron_label_font_size * 0.75 if is_neurogenesis else state.neuron_label_font_size
-            
-            # Apply font size for this label
-            label_font = QFont("Arial", int(effective_size * scale))
-            label_font.setBold(True)
-            painter.setFont(label_font)
-            local_fm = painter.fontMetrics()
+    def _draw_caption(self, painter: QPainter, state: RenderState, name: str,
+                      x: float, y: float, clearance: float, scale: float):
+        """Draw a neuron's name in a pill under it.
 
-            text_width = local_fm.horizontalAdvance(display_name)
-            padding = 10 * scale
-            rect_width = text_width + padding * 2
-            rect_height = local_fm.height() + 4
+        `clearance` is the half-height of whatever was just drawn, so a square
+        neuron's caption clears the square rather than sitting on top of it.
+        """
+        from .brain_constants import is_grown_neuron
 
-            text_rect = QRectF(
-                x - rect_width / 2,
-                y + radius + 5 * scale,
-                rect_width,
-                rect_height
-            )
+        display_name = state.neuron_labels.get(
+            name, name.replace("_", " ").title()
+        )
 
-            painter.setBrush(QBrush(QColor(26, 26, 26, 200)))
-            painter.setPen(Qt.NoPen)
-            painter.drawRoundedRect(text_rect, 4, 4)
+        # Grown neurons get the smaller label. This used to be decided against
+        # a hardcoded list of the seven core stats plus can_see_food, so the
+        # motor bank and the innate sensors - both present from the squid's
+        # first tick - were captioned as if the squid had grown them.
+        base = state.neuron_label_font_size
+        effective_size = base * 0.75 if is_grown_neuron(name) else base
 
-            painter.setPen(QColor(224, 224, 224))
-            painter.drawText(text_rect, Qt.AlignCenter, display_name)
-            
-            # Restore base font for next iteration
-            painter.setFont(font)
+        label_font = QFont("Arial", int(effective_size * scale))
+        label_font.setBold(True)
+        painter.setFont(label_font)
+        local_fm = painter.fontMetrics()
+
+        text_width = local_fm.horizontalAdvance(display_name)
+        padding = 10 * scale
+        rect_width = text_width + padding * 2
+        rect_height = local_fm.height() + 4
+
+        text_rect = QRectF(
+            x - rect_width / 2,
+            y + clearance + 5 * scale,
+            rect_width,
+            rect_height
+        )
+
+        painter.setBrush(QBrush(QColor(26, 26, 26, 200)))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(text_rect, 4, 4)
+
+        painter.setPen(QColor(224, 224, 224))
+        painter.drawText(text_rect, Qt.AlignCenter, display_name)
 
     
     def _draw_polygon(self, painter: QPainter, x: float, y: float, 
