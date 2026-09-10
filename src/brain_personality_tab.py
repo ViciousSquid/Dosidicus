@@ -1,6 +1,7 @@
 # brain_personality_tab.py
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
+from .brain_ui_utils import set_plain_text
 from .personality import Personality
 from .localisation import Localisation
 
@@ -127,13 +128,13 @@ class PersonalityTab(BrainBaseTab):
         self.personality_modifier_label.setText(f"{self.loc.get('personality_modifier')}: {self.get_personality_modifier(personality)}")
         
         # Set description text
-        self.personality_description.setPlainText(self.get_personality_description(personality))
+        set_plain_text(self.personality_description, self.get_personality_description(personality))
         
         # Set modifiers text
-        self.modifiers_text.setPlainText(self.get_personality_modifiers(personality))
+        set_plain_text(self.modifiers_text, self.get_personality_modifiers(personality))
         
         # Set care tips text
-        self.care_tips.setPlainText(self.get_care_tips(personality))
+        set_plain_text(self.care_tips, self.get_care_tips(personality))
         
     def get_personality_description(self, personality):
         """Get translated personality description"""

@@ -42,10 +42,14 @@ ROW_X_FIRST = 96.0
 ROW_X_LAST = 928.0
 
 #: Each row's centre line, the band drawn behind it, and its on-screen label.
+#:
+#: Ordered CORE, SENSES, ACTIONS down the screen. The senses sit between what
+#: the squid is and what it does because that is the order the signal travels
+#: in: a drive and a sense meet, and an action comes out of the meeting.
 NEURON_ROWS = {
     'core':   {'y': 100.0, 'band': (38.0, 152.0),  'label': 'CORE'},
-    'motor':  {'y': 258.0, 'band': (196.0, 310.0), 'label': 'ACTIONS'},
-    'sensor': {'y': 406.0, 'band': (344.0, 458.0), 'label': 'SENSES'},
+    'sensor': {'y': 258.0, 'band': (196.0, 310.0), 'label': 'SENSES'},
+    'motor':  {'y': 406.0, 'band': (344.0, 458.0), 'label': 'ACTIONS'},
 }
 
 #: Where neurogenesis is allowed to put a neuron: below every row, so a grown
@@ -446,6 +450,37 @@ PROTECTED_RING_WIDTH = 3
 NORMAL_RING_WIDTH = 2
 
 # -----------------------------------------------------------------------------
+# HOW BIG A NEURON IS DRAWN
+# -----------------------------------------------------------------------------
+# In logical canvas units, before the view's scale is applied. Every renderer
+# reads this rather than writing its own 20: the radius was hardcoded at six
+# separate sites, three of which drew the neuron and three of which drew rings
+# and hit targets AROUND it, so a change to one silently stopped matching the
+# others.
+#
+# Small on purpose. A neuron is a dot in a diagram whose subject is the
+# CONNECTIONS between them; drawn large, the circles crowd their own rows and
+# the synapses disappear behind them.
+NEURON_RADIUS = 14.0
+
+#: config.ini's [Display] neuron_radius overrides it per player. That key has
+#: existed, and been returned by get_display_config(), the whole time - but
+#: every renderer drew a hardcoded 20 instead of reading it, so setting it did
+#: nothing at all.
+
+#: Rings drawn around a neuron to call attention to it (neurogenesis, tutorial
+#: highlights), as a MULTIPLE of its radius - so they stay a ring around the
+#: neuron rather than a circle that happens to be near it, whatever size the
+#: player has set.
+NEURON_HIGHLIGHT_FACTOR = 2.0
+
+#: How close a click has to land, as a multiple of the radius. Deliberately
+#: more generous than the drawn circle - a neuron is a small target and the
+#: mouse is not precise - but below half the gap between neighbours in a row,
+#: or one click would land on two neurons at once.
+NEURON_HIT_FACTOR = 2.6
+
+# -----------------------------------------------------------------------------
 # BIRTH REVEAL - how a neuron arrives
 # -----------------------------------------------------------------------------
 # Each of the eight swells past full size and settles back onto it, so a neuron
@@ -621,9 +656,9 @@ INNATE_CONNECTIONS = (
 # squid would still act on the same arithmetic. Now the arithmetic IS the
 # network, and every one of these numbers is a synapse that learning can move.
 #
-# They occupy the ACTIONS row, directly under the core eight and drawn in the
-# motor colour, so that "these are what the squid DOES" is something you can
-# see rather than something you have to be told. They were previously split
+# They occupy the ACTIONS row, at the bottom, drawn in the motor colour, so
+# that "these are what the squid DOES" is something you can see rather than
+# something you have to be told. They were previously split
 # across two half-rows tucked between the sensors and the core stats, which is
 # what made a newborn look like a nineteen-neuron brain instead of eight
 # neurons and a motor bank.
@@ -934,7 +969,7 @@ def newborn_neurons() -> dict:
 def birth_sequence() -> tuple:
     """Every neuron a squid hatches with, in the order it is revealed.
 
-    Row by row down the screen - CORE, then ACTIONS, then SENSES - and left to
+    Row by row down the screen - CORE, then SENSES, then ACTIONS - and left to
     right within each row, so the hatching sequence builds the picture the
     player is about to be looking at.
 
@@ -946,7 +981,7 @@ def birth_sequence() -> tuple:
     """
     innate = newborn_neurons()
     ordered = []
-    for names in (CORE_ROW_ORDER, MOTOR_ROW_ORDER, SENSOR_ROW_ORDER):
+    for names in (CORE_ROW_ORDER, SENSOR_ROW_ORDER, MOTOR_ROW_ORDER):
         ordered.extend(name for name in names if name in innate)
     # Anything a custom brain added that is not on a known row still hatches.
     ordered.extend(name for name in innate if name not in ordered)

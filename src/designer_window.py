@@ -19,7 +19,6 @@ from PyQt5.QtGui import (
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QRectF, QSizeF, pyqtSignal
 
 from .designer_logging import get_logger, log_exceptions, safe_call, OperationLogger
-from .localisation import loc
 from .designer_core import BrainDesign
 from .designer_canvas import BrainCanvas
 
@@ -157,7 +156,7 @@ class BrainDesignerWindow(QMainWindow):
             self.design = BrainDesign()
             self.design.add_missing_required_neurons()
 
-            self.setWindowTitle(loc("designer_window_title", "Brain Designer - Dosidicus-2"))
+            self.setWindowTitle("Brain Designer - Dosidicus-2")
             self.setMinimumSize(1280, 900)
 
             with OperationLogger("Setting up UI", self.logger):
@@ -236,27 +235,27 @@ class BrainDesignerWindow(QMainWindow):
         # 1. Layers Panel
         self.layers_panel = LayersPanel(self.design)
         self.layers_panel.layersChanged.connect(self.on_design_changed)
-        self.right_panel.addTab(self.layers_panel, loc("designer_tab_layers", "Layers"))
+        self.right_panel.addTab(self.layers_panel, "Layers")
 
         # 2. Sensors Panel (Input neurons)
         self.sensors_panel = SensorsPanel(self.design)
         self.sensors_panel.sensorsChanged.connect(self.on_design_changed)
-        self.right_panel.addTab(self.sensors_panel, loc("designer_tab_sensors", "Sensors"))
+        self.right_panel.addTab(self.sensors_panel, "Sensors")
 
         # 3. Properties Panel
         self.props_panel = NeuronPropertiesPanel(self.design)
         self.props_panel.neuronChanged.connect(self.on_design_changed)
-        self.right_panel.addTab(self.props_panel, loc("designer_tab_props", "Properties"))
+        self.right_panel.addTab(self.props_panel, "Properties")
 
         # 4. Connections Table
         self.connections_table = ConnectionsTable(self.design)
-        self.right_panel.addTab(self.connections_table, loc("designer_tab_connections", "Connections"))
+        self.right_panel.addTab(self.connections_table, "Connections")
 
         # 5. Outputs Panel (Actuator neurons) - NEW!
         if _HAS_OUTPUTS_PANEL:
             self.outputs_panel = NeuronOutputsPanel(self.design)
             self.outputs_panel.outputsChanged.connect(self.on_design_changed)
-            self.right_panel.addTab(self.outputs_panel, loc("designer_tab_outputs", "Outputs"))
+            self.right_panel.addTab(self.outputs_panel, "Outputs")
         else:
             self.outputs_panel = None
 
@@ -287,8 +286,8 @@ class BrainDesignerWindow(QMainWindow):
         layout.setContentsMargins(8, 4, 8, 4)
 
         # Generate button (prominent)
-        generate_btn = QPushButton(loc("designer_btn_generate", "🎲 Generate"))
-        generate_btn.setToolTip(loc("designer_tooltip_generate", "Generate random connections between core neurons"))
+        generate_btn = QPushButton("🎲 Generate")
+        generate_btn.setToolTip("Generate random connections between core neurons")
         generate_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
@@ -312,9 +311,7 @@ class BrainDesignerWindow(QMainWindow):
 
         generator = SparseNetworkGenerator()
         for key, info in generator.get_preset_styles().items():
-            action = quick_menu.addAction(loc(
-                "designer_preset_item", "{name} - {description}",
-                name=info['name'], description=info['description']))
+            action = quick_menu.addAction(f"{info['name']} - {info['description']}")
             action.setData(key)
             action.triggered.connect(lambda checked, k=key: self.quick_generate(k))
 
@@ -323,7 +320,7 @@ class BrainDesignerWindow(QMainWindow):
         
         # Quick dice button - instant random generation
         dice_btn = QPushButton("🎲")
-        dice_btn.setToolTip(loc("designer_tooltip_dice", "Instantly shuffle positions and generate a chaotic network (no dialog)"))
+        dice_btn.setToolTip("Instantly shuffle positions and generate a chaotic network (no dialog)")
         dice_btn.setFixedWidth(40)
         dice_btn.setStyleSheet("""
             QPushButton {
@@ -351,8 +348,8 @@ class BrainDesignerWindow(QMainWindow):
         layout.addSpacing(10)
 
         # + Neuron button (colorful, prominent)
-        add_neuron_btn = QPushButton(loc("designer_btn_neuron", "➕ Neuron"))
-        add_neuron_btn.setToolTip(loc("designer_tooltip_neuron", "Add a new neuron (Shift+N)"))
+        add_neuron_btn = QPushButton("➕ Neuron")
+        add_neuron_btn.setToolTip("Add a new neuron (Shift+N)")
         add_neuron_btn.setShortcut("Shift+N")
         add_neuron_btn.setStyleSheet("""
             QPushButton {
@@ -372,15 +369,14 @@ class BrainDesignerWindow(QMainWindow):
         layout.addSpacing(10)
 
         # Auto-fix button
-        fix_btn = QPushButton(loc("designer_btn_fix", "🔧 Auto-Fix"))
-        fix_btn.setToolTip(loc("designer_tooltip_fix",
-                               "Automatically fix orphan neurons and connectivity issues"))
+        fix_btn = QPushButton("🔧 Auto-Fix")
+        fix_btn.setToolTip("Automatically fix orphan neurons and connectivity issues")
         fix_btn.clicked.connect(self.run_auto_fix)
         #layout.addWidget(fix_btn)
 
         # Validate button
-        validate_btn = QPushButton(loc("designer_btn_validate", "✓ Validate"))
-        validate_btn.setToolTip(loc("designer_tooltip_validate", "Check design for issues"))
+        validate_btn = QPushButton("✓ Validate")
+        validate_btn.setToolTip("Check design for issues")
         validate_btn.clicked.connect(self.check_status)
         #layout.addWidget(validate_btn)
 
@@ -394,8 +390,8 @@ class BrainDesignerWindow(QMainWindow):
         # Add RETURN button if embedded
         if self.embedded_mode:
             layout.addSpacing(20)
-            return_btn = QPushButton(loc("designer_btn_return", "💾 Save & Return to Game"))
-            return_btn.setToolTip(loc("designer_tooltip_return", "Save changes and return to game view"))
+            return_btn = QPushButton("💾 Save & Return to Game")
+            return_btn.setToolTip("Save changes and return to game view")
             return_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #673AB7;
@@ -414,8 +410,8 @@ class BrainDesignerWindow(QMainWindow):
         layout.addStretch()
 
         # Clear connections button
-        clear_btn = QPushButton(loc("designer_btn_clear_conn", "🗑 Clear Connections"))
-        clear_btn.setToolTip(loc("designer_tooltip_clear_conn", "Remove all connections (keeps neurons)"))
+        clear_btn = QPushButton("🗑 Clear Connections")
+        clear_btn.setToolTip("Remove all connections (keeps neurons)")
         clear_btn.setStyleSheet("color: #d32f2f;")
         clear_btn.clicked.connect(self.clear_all_connections)
         layout.addWidget(clear_btn)
@@ -431,31 +427,25 @@ class BrainDesignerWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
 
         # Create scrolling ticker with comprehensive shortcuts
-        help_keys = [
-            ("designer_help_drag_connect", "💡 <b> Left-Drag</b> from neuron to create connection"),
-            ("designer_help_ctrl_move", "<b> Ctrl+Drag</b> neuron to move it"),
-            ("designer_help_pan", "<b> Right-Drag</b> to pan canvas"),
-            ("designer_help_zoom", "<b> Scroll Wheel</b> to zoom (or adjust weight on connection)"),
-            ("designer_help_edit_weight", "<b> Double-Click</b> connection to edit weight"),
-            ("designer_help_select", "<b> Click</b> neuron/connection to select"),
-            ("designer_help_delete", "<b> Del</b> to delete selected"),
-            ("designer_help_reverse", "<b> Space</b> to reverse connection direction"),
-            ("designer_help_keys_weight", "<b> +/-</b> keys to adjust weight (Shift for larger steps)"),
-            ("designer_help_page_weight", "<b> Page Up/Down</b> to adjust weight (large steps)"),
-            ("designer_help_add_neuron", "<b> Shift+N</b> to add neuron"),
-            ("designer_help_save", "<b> Ctrl+S</b> to save"),
-            ("designer_help_open", "<b> Ctrl+O</b> to open"),
-            ("designer_help_export", "<b> Ctrl+E</b> to export"),
-            ("designer_help_new", "<b> Ctrl+N</b> for new design"),
-            ("designer_help_gen", "<b> Ctrl+G</b> to generate network"),
-            ("designer_help_dice", "🎲 <b>Dice button</b> for instant chaotic shuffle & generation"),
-            ("designer_help_outputs", "<b>Outputs tab</b> to bind neurons to squid behaviors"),
-        ]
         self.help_ticker = ScrollingTicker(
-            "".join(
-                "<span style='color:#333'>%s </span>" % loc(key, default)
-                for key, default in help_keys
-            )
+            "<span style='color:#333'>💡 <b> Left-Drag</b> from neuron to create connection </span>"
+            "<span style='color:#333'><b> Ctrl+Drag</b> neuron to move it </span>"
+            "<span style='color:#333'><b> Right-Drag</b> to pan canvas </span>"
+            "<span style='color:#333'><b> Scroll Wheel</b> to zoom (or adjust weight on connection) </span>"
+            "<span style='color:#333'><b> Double-Click</b> connection to edit weight </span>"
+            "<span style='color:#333'><b> Click</b> neuron/connection to select </span>"
+            "<span style='color:#333'><b> Del</b> to delete selected </span>"
+            "<span style='color:#333'><b> Space</b> to reverse connection direction </span>"
+            "<span style='color:#333'><b> +/-</b> keys to adjust weight (Shift for larger steps) </span>"
+            "<span style='color:#333'><b> Page Up/Down</b> to adjust weight (large steps) </span>"
+            "<span style='color:#333'><b> Shift+N</b> to add neuron </span>"
+            "<span style='color:#333'><b> Ctrl+S</b> to save </span>"
+            "<span style='color:#333'><b> Ctrl+O</b> to open </span>"
+            "<span style='color:#333'><b> Ctrl+E</b> to export </span>"
+            "<span style='color:#333'><b> Ctrl+N</b> for new design </span>"
+            "<span style='color:#333'><b> Ctrl+G</b> to generate network </span>"
+            "<span style='color:#333'>🎲 <b>Dice button</b> for instant chaotic shuffle & generation </span>"
+            "<span style='color:#333'><b>Outputs tab</b> to bind neurons to squid behaviors </span>"
         )
         layout.addWidget(self.help_ticker)
 
@@ -468,71 +458,71 @@ class BrainDesignerWindow(QMainWindow):
         menu = self.menuBar()
 
         # File menu
-        file_menu = menu.addMenu(loc("designer_menu_file", "File"))
+        file_menu = menu.addMenu("File")
         
         if self.embedded_mode:
-            return_action = QAction(loc("designer_action_return", "Save & Return to Game"), self)
+            return_action = QAction("Save & Return to Game", self)
             return_action.setShortcut("Ctrl+Return")
             return_action.triggered.connect(self.exitRequested.emit)
             file_menu.addAction(return_action)
             file_menu.addSeparator()
 
-        new_action = QAction(loc("designer_action_new", "New Design"), self)
+        new_action = QAction("New Design", self)
         new_action.setShortcut("Ctrl+N")
         new_action.triggered.connect(self.new_design)
         file_menu.addAction(new_action)
 
         file_menu.addSeparator()
 
-        save_action = QAction(loc("designer_action_save", "Save..."), self)
+        save_action = QAction("Save...", self)
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_design)
         #file_menu.addAction(save_action)
 
-        export_action = QAction(loc("designer_action_export", "Export for Dosidicus..."), self)
+        export_action = QAction("Export for Dosidicus...", self)
         export_action.setShortcut("Ctrl+E")
         export_action.triggered.connect(self.export_design)
         file_menu.addAction(export_action)
 
         file_menu.addSeparator()
 
-        open_action = QAction(loc("designer_action_open", "Open..."), self)
+        open_action = QAction("Open...", self)
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_design)
         file_menu.addAction(open_action)
 
         # Edit menu
-        edit_menu = menu.addMenu(loc("designer_menu_edit", "Edit"))
+        edit_menu = menu.addMenu("Edit")
 
-        generate_action = QAction(loc("designer_action_gen_sparse", "Generate Network..."), self)
+        generate_action = QAction("Generate Network...", self)
         generate_action.setShortcut("Ctrl+G")
         generate_action.triggered.connect(self.show_sparse_network_dialog)
         edit_menu.addAction(generate_action)
 
         edit_menu.addSeparator()
 
-        auto_fix = QAction(loc("designer_action_autofix", "Auto-Fix Connectivity"), self)
+        auto_fix = QAction("Auto-Fix Connectivity", self)
         auto_fix.triggered.connect(self.run_auto_fix)
         edit_menu.addAction(auto_fix)
 
-        validate_action = QAction(loc("designer_action_validate", "Validate Design"), self)
+        validate_action = QAction("Validate Design", self)
         validate_action.triggered.connect(self.check_status)
         #edit_menu.addAction(validate_action)
 
         edit_menu.addSeparator()
 
-        clear_conn_action = QAction(loc("designer_action_clear_conn", "Clear All"), self)
+        clear_conn_action = QAction("Clear All", self)
         clear_conn_action.triggered.connect(self.clear_all_connections)
         edit_menu.addAction(clear_conn_action)
         
         # Clear outputs action
         if _HAS_OUTPUTS_PANEL:
-            clear_outputs_action = QAction(loc("designer_action_clear_outputs", "Clear all Bindings"), self)
+            clear_outputs_action = QAction("Clear all Bindings", self)
             clear_outputs_action.triggered.connect(self.clear_all_outputs)
             edit_menu.addAction(clear_outputs_action)
 
         # Templates menu
-        tpl_menu = menu.addMenu(loc("designer_menu_templates", "Templates"))
+        tpl_menu = menu.addMenu("Templates")
         for key, info in TemplateManager.get_templates().items():
             a = QAction(info['name'], self)
             a.setData(key)
@@ -540,9 +530,9 @@ class BrainDesignerWindow(QMainWindow):
             tpl_menu.addAction(a)
 
         # Network generation presets
-        gen_menu = menu.addMenu(loc("designer_menu_generate", "Generate"))
+        gen_menu = menu.addMenu("Generate")
 
-        gen_dialog_action = QAction(loc("designer_action_gen_dialog", "🎲 Generate..."), self)
+        gen_dialog_action = QAction("🎲 Generate...", self)
         gen_dialog_action.setShortcut("Ctrl+G")
         gen_dialog_action.triggered.connect(self.show_sparse_network_dialog)
         gen_menu.addAction(gen_dialog_action)
@@ -564,20 +554,20 @@ class BrainDesignerWindow(QMainWindow):
         self.addToolBar(toolbar)
 
         # File actions
-        toolbar.addAction(loc("designer_tb_open", "📂 Open"), self.open_design)
-        toolbar.addAction(loc("designer_tb_save", "💾 Save"), self.save_design)
+        toolbar.addAction("📂 Open", self.open_design)
+        toolbar.addAction("💾 Save", self.save_design)
 
         toolbar.addSeparator()
 
         if _HAS_BRAIN_BRIDGE:
-            push_action = QAction(loc("designer_tb_push", "🚀 Push to Game"), self)
-            push_action.setToolTip(loc("designer_tooltip_push", "Export current design directly to the running Dosidicus game"))
+            push_action = QAction("🚀 Push to Game", self)
+            push_action.setToolTip("Export current design directly to the running Dosidicus game")
             push_action.triggered.connect(self.push_to_game)
             toolbar.addAction(push_action)
             toolbar.addSeparator()
 
         # Template dropdown
-        toolbar.addAction(loc("designer_tb_templates", "📋 Templates"), self.show_template_menu)
+        toolbar.addAction("📋 Templates", self.show_template_menu)
 
     def push_to_game(self):
         """Export current design, state, and bindings directly to the running game."""
@@ -585,11 +575,8 @@ class BrainDesignerWindow(QMainWindow):
             return
 
         if not is_game_running():
-            QMessageBox.warning(
-                self,
-                loc("designer_msg_game_not_found_title", "Game Not Found"),
-                loc("designer_msg_game_not_found",
-                    "Dosidicus does not appear to be running.\nStart the game to push designs."))
+            QMessageBox.warning(self, "Game Not Found", 
+                              "Dosidicus does not appear to be running.\nStart the game to push designs.")
             return
 
         try:
@@ -602,25 +589,19 @@ class BrainDesignerWindow(QMainWindow):
             
             # 3. Push via bridge
             if export_design_to_game(data):
-                self.status_bar.showMessage(loc("designer_status_pushed", "Design pushed to running game"), 3000)
+                self.status_bar.showMessage("Design pushed to running game", 3000)
                 # self.tamagotchi_logic is never assigned on DesignerWindow, so
                 # this raised AttributeError AFTER a successful push and the
                 # user was shown "Failed to push design" for a push that worked.
                 logic = getattr(self, 'tamagotchi_logic', None)
                 if logic is not None and hasattr(logic, 'show_message'):
-                    logic.show_message(loc("designer_msg_pushed_brain", "Custom Brain was pushed from Designer"))
+                    logic.show_message("Custom Brain was pushed from Designer")
             else:
-                QMessageBox.warning(
-                    self,
-                    loc("designer_msg_export_failed_title", "Export Failed"),
-                    loc("designer_msg_bridge_write_fail", "Could not write bridge file."))
+                QMessageBox.warning(self, "Export Failed", "Could not write bridge file.")
                 
         except Exception as e:
             self.logger.error(f"Push to game failed: {e}", exc_info=True)
-            QMessageBox.critical(
-                self,
-                loc("designer_msg_error_title", "Error"),
-                loc("designer_msg_push_fail", "Failed to push design:\n{error}", error=e))
+            QMessageBox.critical(self, "Error", f"Failed to push design:\n{e}")
 
     # ==========================================================================
     # DATA LOADING AND CONVERSION
@@ -711,18 +692,16 @@ class BrainDesignerWindow(QMainWindow):
         
         # Build status message
         status_parts = [
-            loc("designer_status_neurons", "Neurons: {count}", count=stats['total_neurons']),
-            loc("designer_status_connections", "Connections: {count}", count=stats['connections']),
-            loc("designer_status_required", "Required: {ok}",
-                ok='✓' if stats['has_all_required'] else '✗')
+            f"Neurons: {stats['total_neurons']}",
+            f"Connections: {stats['connections']}",
+            f"Required: {'✓' if stats['has_all_required'] else '✗'}"
         ]
         
         # Add output bindings count if available
         if self.outputs_panel:
             binding_count = len(self.outputs_panel.bindings)
             if binding_count > 0:
-                status_parts.append(
-                    loc("designer_status_outputs", "Outputs: {count}", count=binding_count))
+                status_parts.append(f"Outputs: {binding_count}")
         
         self.status_bar.showMessage(" | ".join(status_parts))
 
@@ -818,18 +797,15 @@ class BrainDesignerWindow(QMainWindow):
         # Create a non-modal notification
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Information)
-        msg.setWindowTitle(loc("designer_msg_live_import_title", "Live Brain Import"))
-        msg.setText(loc("designer_msg_live_import_header", "🧠 Active brain imported from running game"))
-        msg.setInformativeText(loc(
-            "designer_msg_live_import_body",
-            "The designer is now showing the exact neural network "
-            "from your running Dosidicus game.\n\n"
-            "• {neurons} neurons\n"
-            "• {connections} connections\n\n"
-            "Changes made here will NOT affect the running game.",
-            neurons=len(self.design.neurons),
-            connections=len(self.design.connections)
-        ))
+        msg.setWindowTitle("Live Brain Import")
+        msg.setText("🧠 Active brain imported from running game")
+        msg.setInformativeText(
+            f"The designer is now showing the exact neural network "
+            f"from your running Dosidicus game.\n\n"
+            f"• {len(self.design.neurons)} neurons\n"
+            f"• {len(self.design.connections)} connections\n\n"
+            f"Changes made here will NOT affect the running game."
+        )
         msg.setStandardButtons(QMessageBox.Ok)
         
         # Show and auto-close after 5 seconds
@@ -837,12 +813,11 @@ class BrainDesignerWindow(QMainWindow):
         QTimer.singleShot(5000, msg.close)
         
         # Update window title to indicate imported state
-        self.setWindowTitle(loc("designer_window_title_imported",
-                                "Brain Designer - Dosidicus-2 [Imported from Game]"))
+        self.setWindowTitle("Brain Designer - Dosidicus-2 [Imported from Game]")
         
         # Update status bar
         self.status_bar.showMessage(
-            loc("designer_status_imported", "✨ Active brain imported from running game"), 10000
+            "✨ Active brain imported from running game", 10000
         )
 
     def _show_sync_button(self):
@@ -863,8 +838,8 @@ class BrainDesignerWindow(QMainWindow):
         self._sync_btn_layout.addWidget(divider)
         
         # Add sync button
-        sync_btn = QPushButton(loc("designer_btn_sync", "🔄 Sync from Game"))
-        sync_btn.setToolTip(loc("designer_tooltip_sync", "Refresh brain state from running Dosidicus game"))
+        sync_btn = QPushButton("🔄 Sync from Game")
+        sync_btn.setToolTip("Refresh brain state from running Dosidicus game")
         sync_btn.setStyleSheet("""
             QPushButton {
                 background-color: #9C27B0;
@@ -891,21 +866,19 @@ class BrainDesignerWindow(QMainWindow):
         # Check if game is still running
         if not is_game_running():
             QMessageBox.information(
-                self, loc("designer_msg_game_not_running_title", "Game Not Running"),
-                loc("designer_msg_game_not_running",
-                    "The Dosidicus game is no longer running.\n\n"
-                    "Start the game again to sync.")
+                self, "Game Not Running",
+                "The Dosidicus game is no longer running.\n\n"
+                "Start the game again to sync."
             )
             # Hide the sync button since game is gone
             self._sync_btn_container.hide()
-            self.setWindowTitle(loc("designer_window_title", "Brain Designer - Dosidicus-2"))
+            self.setWindowTitle("Brain Designer - Dosidicus-2")
             return
         
         # Confirm before replacing current design
         reply = QMessageBox.question(
-            self, loc("designer_msg_sync_confirm_title", "Sync from Game"),
-            loc("designer_msg_sync_confirm",
-                "Replace current design with the latest brain state from the game?"),
+            self, "Sync from Game",
+            "Replace current design with the latest brain state from the game?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -917,15 +890,13 @@ class BrainDesignerWindow(QMainWindow):
         if self._try_import_from_game():
             self.refresh_all()
             self.status_bar.showMessage(
-                loc("designer_status_synced",
-                    "✨ Synced: {neurons} neurons, {connections} connections",
-                    neurons=len(self.design.neurons),
-                    connections=len(self.design.connections)), 5000
+                f"✨ Synced: {len(self.design.neurons)} neurons, "
+                f"{len(self.design.connections)} connections", 5000
             )
         else:
             QMessageBox.warning(
-                self, loc("designer_msg_sync_failed_title", "Sync Failed"),
-                loc("designer_msg_sync_failed", "Could not import brain state from game.")
+                self, "Sync Failed",
+                "Could not import brain state from game."
             )
 
     def show_sparse_network_dialog(self):
@@ -968,16 +939,11 @@ class BrainDesignerWindow(QMainWindow):
             
             self.on_design_changed()
             self.status_bar.showMessage(
-                loc("designer_status_generated",
-                    "Generated {count} connections using '{style}' preset",
-                    count=count, style=preset['name']), 3000
+                f"Generated {count} connections using '{preset['name']}' preset", 3000
             )
         except Exception as e:
             self.logger.error(f"Error in quick_generate: {e}", exc_info=True)
-            QMessageBox.warning(
-                self,
-                loc("designer_msg_error_title", "Error"),
-                loc("designer_msg_generate_fail", "Generation failed: {error}", error=e))
+            QMessageBox.warning(self, "Error", f"Generation failed: {e}")
 
     def instant_random_generate(self):
         """Instantly generate a random network without any dialog, shuffling positions."""
@@ -1028,9 +994,7 @@ class BrainDesignerWindow(QMainWindow):
                 self.canvas.center_on_neurons()
                 
             self.status_bar.showMessage(
-                loc("designer_status_random_gen",
-                    "🎲 Chaos! Shuffled positions & made {count} connections ({style} style)",
-                    count=count, style=preset['name']), 3000
+                f"🎲 Chaos! Shuffled positions & made {count} connections ({preset['name']} style)", 3000
             )
         except Exception as e:
             self.logger.error(f"Error in instant_random_generate: {e}", exc_info=True)
@@ -1038,10 +1002,9 @@ class BrainDesignerWindow(QMainWindow):
     def clear_all_connections(self):
         """Clear all connections from the design."""
         reply = QMessageBox.question(
-            self, loc("designer_msg_clear_conn_title", "Clear Connections"),
-            loc("designer_msg_clear_conn_confirm",
-                "Remove all {count} connections?\n\nNeurons will be kept.",
-                count=len(self.design.connections)),
+            self, "Clear Connections",
+            f"Remove all {len(self.design.connections)} connections?\n\n"
+            "Neurons will be kept.",
             QMessageBox.Yes | QMessageBox.No
         )
 
@@ -1049,8 +1012,7 @@ class BrainDesignerWindow(QMainWindow):
             count = len(self.design.connections)
             self.design.connections.clear()
             self.on_design_changed()
-            self.status_bar.showMessage(
-                loc("designer_status_cleared_conn", "Cleared {count} connections", count=count), 3000)
+            self.status_bar.showMessage(f"Cleared {count} connections", 3000)
 
     def clear_all_outputs(self):
         """Clear all output bindings from the design."""
@@ -1058,17 +1020,12 @@ class BrainDesignerWindow(QMainWindow):
             return
         
         if not self.outputs_panel.bindings:
-            QMessageBox.information(
-                self,
-                loc("designer_msg_clear_out_title", "Clear Outputs"),
-                loc("designer_msg_clear_out_empty", "No output bindings to clear."))
+            QMessageBox.information(self, "Clear Outputs", "No output bindings to clear.")
             return
         
         reply = QMessageBox.question(
-            self, loc("designer_msg_clear_out_confirm_title", "Clear Output Bindings"),
-            loc("designer_msg_clear_out_confirm",
-                "Remove all {count} output bindings?",
-                count=len(self.outputs_panel.bindings)),
+            self, "Clear Output Bindings",
+            f"Remove all {len(self.outputs_panel.bindings)} output bindings?",
             QMessageBox.Yes | QMessageBox.No
         )
         
@@ -1078,8 +1035,7 @@ class BrainDesignerWindow(QMainWindow):
             self.outputs_panel.refresh()
             self.design.output_bindings = []
             self.on_design_changed()
-            self.status_bar.showMessage(
-                loc("designer_status_cleared_out", "Cleared {count} output bindings", count=count), 3000)
+            self.status_bar.showMessage(f"Cleared {count} output bindings", 3000)
 
     # ==========================================================================
     # EVENT HANDLERS / CALLBACKS
@@ -1118,9 +1074,8 @@ class BrainDesignerWindow(QMainWindow):
     def on_connection_created(self, source, target):
         """Called when a new connection is created via drag."""
         weight, ok = QInputDialog.getDouble(
-            self, loc("designer_input_weight_title", "Connection Weight"),
-            loc("designer_input_weight_label", "Set weight for {source} → {target}:",
-                source=source, target=target),
+            self, "Connection Weight",
+            f"Set weight for {source} → {target}:",
             0.5, -1.0, 1.0, 2
         )
         if ok:
@@ -1138,26 +1093,20 @@ class BrainDesignerWindow(QMainWindow):
         conn = self.design.get_connection(source, target)
         if conn:
             self.status_bar.showMessage(
-                loc("designer_status_selected",
-                    "Selected: {source} → {target} (weight: {weight})",
-                    source=source, target=target, weight=f"{conn.weight:+.3f}")
+                f"Selected: {source} → {target} (weight: {conn.weight:+.3f})"
             )
 
     def on_weight_changed(self, source, target, new_weight):
         """Called when a connection weight is changed."""
         self.connections_table.refresh()
         self.status_bar.showMessage(
-            loc("designer_status_weight_updated",
-                "Weight updated: {source} → {target} = {weight}",
-                source=source, target=target, weight=f"{new_weight:+.3f}"), 2000
+            f"Weight updated: {source} → {target} = {new_weight:+.3f}", 2000
         )
 
     def on_connection_deleted(self, source, target):
         """Called when a connection is deleted."""
         self.on_design_changed()
-        self.status_bar.showMessage(
-            loc("designer_status_deleted", "Deleted connection: {source} → {target}",
-                source=source, target=target), 2000)
+        self.status_bar.showMessage(f"Deleted connection: {source} → {target}", 2000)
 
     # ==========================================================================
     # FILE AND UTILITY OPERATIONS
@@ -1166,9 +1115,8 @@ class BrainDesignerWindow(QMainWindow):
     def new_design(self):
         """Create a new empty design."""
         reply = QMessageBox.question(
-            self, loc("designer_msg_new_design_title", "New Design"),
-            loc("designer_msg_new_design_confirm",
-                "Start a new design? Unsaved changes will be lost."),
+            self, "New Design",
+            "Start a new design? Unsaved changes will be lost.",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
@@ -1186,15 +1134,11 @@ class BrainDesignerWindow(QMainWindow):
                 self.canvas.viewport().repaint()
             
             QMessageBox.information(
-                self, loc("designer_msg_autofix_title", "Auto-Fix"),
-                loc("designer_msg_autofix_result", "Created {count} connections:\n\n{details}",
-                    count=count, details="\n".join(actions[:10]))
+                self, "Auto-Fix",
+                f"Created {count} connections:\n\n" + "\n".join(actions[:10])
             )
         else:
-            QMessageBox.information(
-                self,
-                loc("designer_msg_autofix_title", "Auto-Fix"),
-                loc("designer_msg_autofix_none", "No issues found."))
+            QMessageBox.information(self, "Auto-Fix", "No issues found.")
 
     def save_design(self):
         """Save the design to file."""
@@ -1204,8 +1148,7 @@ class BrainDesignerWindow(QMainWindow):
                 self.design.output_bindings = self.outputs_panel.export_bindings()
             
             path, _ = QFileDialog.getSaveFileName(
-                self, loc("designer_msg_save_title", "Save Design"), "brain.json",
-                loc("designer_filter_json", "JSON (*.json)")
+                self, "Save Design", "brain.json", "JSON (*.json)"
             )
             if path:
                 self.logger.info(f"Saving design to: {path}")
@@ -1215,20 +1158,15 @@ class BrainDesignerWindow(QMainWindow):
                     
                     # Add output binding info to message
                     if self.outputs_panel and self.outputs_panel.bindings:
-                        msg += loc("designer_msg_save_bindings",
-                                   "\n({count} output bindings included)",
-                                   count=len(self.outputs_panel.bindings))
+                        msg += f"\n({len(self.outputs_panel.bindings)} output bindings included)"
                     
-                    QMessageBox.information(self, loc("designer_msg_saved_title", "Saved"), msg)
+                    QMessageBox.information(self, "Saved", msg)
                 else:
                     self.logger.warning(f"Save failed: {msg}")
-                    QMessageBox.warning(self, loc("designer_msg_error_title", "Error"), msg)
+                    QMessageBox.warning(self, "Error", msg)
         except Exception as e:
             self.logger.error(f"Error saving design: {e}", exc_info=True)
-            QMessageBox.warning(
-                self,
-                loc("designer_msg_error_title", "Error"),
-                loc("designer_msg_save_fail", "Failed to save design:\n\n{error}", error=e))
+            QMessageBox.warning(self, "Error", f"Failed to save design:\n\n{e}")
 
     def export_design(self):
         """Export in Dosidicus format."""
@@ -1238,8 +1176,7 @@ class BrainDesignerWindow(QMainWindow):
                 self.design.output_bindings = self.outputs_panel.export_bindings()
             
             path, _ = QFileDialog.getSaveFileName(
-                self, loc("designer_msg_export_title", "Export"), "dosidicus_brain.json",
-                loc("designer_filter_json", "JSON (*.json)")
+                self, "Export", "dosidicus_brain.json", "JSON (*.json)"
             )
             if path:
                 self.logger.info(f"Exporting design to: {path}")
@@ -1249,27 +1186,21 @@ class BrainDesignerWindow(QMainWindow):
                     
                     # Add output binding info to message
                     if self.outputs_panel and self.outputs_panel.bindings:
-                        msg += loc("designer_msg_save_bindings",
-                                   "\n({count} output bindings included)",
-                                   count=len(self.outputs_panel.bindings))
+                        msg += f"\n({len(self.outputs_panel.bindings)} output bindings included)"
                     
-                    QMessageBox.information(self, loc("designer_msg_exported_title", "Exported"), msg)
+                    QMessageBox.information(self, "Exported", msg)
                 else:
                     self.logger.warning(f"Export failed: {msg}")
-                    QMessageBox.warning(self, loc("designer_msg_error_title", "Error"), msg)
+                    QMessageBox.warning(self, "Error", msg)
         except Exception as e:
             self.logger.error(f"Error exporting design: {e}", exc_info=True)
-            QMessageBox.warning(
-                self,
-                loc("designer_msg_error_title", "Error"),
-                loc("designer_msg_export_fail", "Failed to export design:\n\n{error}", error=e))
+            QMessageBox.warning(self, "Error", f"Failed to export design:\n\n{e}")
 
     def open_design(self):
         """Open a design file."""
         try:
             path, _ = QFileDialog.getOpenFileName(
-                self, loc("designer_msg_open_title", "Open Design"), "",
-                loc("designer_filter_json", "JSON (*.json)")
+                self, "Open Design", "", "JSON (*.json)"
             )
             if path:
                 self.logger.info(f"Opening design from: {path}")
@@ -1288,31 +1219,22 @@ class BrainDesignerWindow(QMainWindow):
                 self.refresh_all()
         except Exception as e:
             self.logger.error(f"Error opening design: {e}", exc_info=True)
-            QMessageBox.warning(
-                self,
-                loc("designer_msg_error_title", "Error"),
-                loc("designer_msg_open_fail", "Could not load design:\n\n{error}", error=e))
+            QMessageBox.warning(self, "Error", f"Could not load design:\n\n{e}")
 
     def show_template_menu(self):
         """Show templates as a popup."""
         templates = TemplateManager.get_templates()
-        items = [
-            loc("designer_preset_item", "{name} - {description}",
-                name=info['name'], description=info['description'])
-            for info in templates.values()
-        ]
+        items = [f"{info['name']} - {info['description']}" for info in templates.values()]
         keys = list(templates.keys())
 
         item, ok = QInputDialog.getItem(
-            self, loc("designer_msg_load_template_title", "Load Template"),
-            loc("designer_msg_select_template", "Select a template:"), items, 0, False
+            self, "Load Template", "Select a template:", items, 0, False
         )
         if ok and item:
             idx = items.index(item)
             key = keys[idx]
             if QMessageBox.question(
-                self, loc("designer_msg_load_template_title", "Load Template"),
-                loc("designer_msg_replace_design", "Replace current design?"),
+                self, "Load Template", "Replace current design?",
                 QMessageBox.Yes | QMessageBox.No
             ) == QMessageBox.Yes:
                 self.design = TemplateManager.create_template(key)
@@ -1322,8 +1244,7 @@ class BrainDesignerWindow(QMainWindow):
         """Load a template from menu action."""
         key = self.sender().data()
         if QMessageBox.question(
-            self, loc("designer_msg_load_template_title", "Load Template"),
-            loc("designer_msg_replace_design", "Replace current design?"),
+            self, "Load Template", "Replace current design?",
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             self.design = TemplateManager.create_template(key)
@@ -1335,29 +1256,20 @@ class BrainDesignerWindow(QMainWindow):
         stats = self.design.get_stats()
         _, issues, _ = self.design.validate(auto_fix=False)
 
-        msg = loc(
-            "designer_status_report",
-            "Neurons: {total}\n"
-            "  • Required: {required}\n"
-            "  • Sensors: {sensors}\n"
-            "  • Custom: {custom}\n\n"
-            "Connections: {connections}\n"
-            "Layers: {layers}\n",
-            total=stats['total_neurons'],
-            required=stats['required_neurons'],
-            sensors=stats['sensor_neurons'],
-            custom=stats['custom_neurons'],
-            connections=stats['connections'],
-            layers=stats['layers'],
+        msg = (
+            f"Neurons: {stats['total_neurons']}\n"
+            f"  • Required: {stats['required_neurons']}\n"
+            f"  • Sensors: {stats['sensor_neurons']}\n"
+            f"  • Custom: {stats['custom_neurons']}\n\n"
+            f"Connections: {stats['connections']}\n"
+            f"Layers: {stats['layers']}\n"
         )
         
         # Add output binding info
         if self.outputs_panel:
             binding_count = len(self.outputs_panel.bindings)
             enabled_count = sum(1 for b in self.outputs_panel.bindings if b.enabled)
-            msg += loc("designer_status_report_outputs",
-                       "Output Bindings: {count} ({enabled} enabled)\n",
-                       count=binding_count, enabled=enabled_count)
+            msg += f"Output Bindings: {binding_count} ({enabled_count} enabled)\n"
             
             # Validate bindings
             binding_warnings = self.outputs_panel.validate_bindings()
@@ -1365,12 +1277,11 @@ class BrainDesignerWindow(QMainWindow):
                 issues.extend(binding_warnings)
 
         if issues:
-            msg += loc("designer_msg_status_issues", "\n⚠️ ISSUES:\n") + \
-                "\n".join(f"  • {i}" for i in issues)
+            msg += "\n⚠️ ISSUES:\n" + "\n".join(f"  • {i}" for i in issues)
         else:
-            msg += loc("designer_msg_status_ok", "\n✅ Status: OK")
+            msg += "\n✅ Status: OK"
 
-        QMessageBox.information(self, loc("designer_msg_status_title", "Design Status"), msg)
+        QMessageBox.information(self, "Design Status", msg)
 
 
 # =============================================================================

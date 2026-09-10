@@ -26,7 +26,7 @@ from collections import deque
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .display_scaling import DisplayScaling
-from .localisation import Localisation, loc
+from .localisation import Localisation
 
 
 # --------------------------------------------------------------------------- #
@@ -59,9 +59,7 @@ ACTION_META = {
     "organizing":        ("🧹", (20, 184, 166)),
 }
 
-# Drives shown as meters:  key -> (English label, RGB). The label is only the
-# fallback: _drive_label() translates the key each time it is painted, so a
-# language change is picked up without rebuilding the tab.
+# Drives shown as meters:  key -> (label, RGB)
 DRIVE_META = [
     ("hunger",       ("Hunger",       (245, 130, 32))),
     ("sleepiness",   ("Sleepiness",   (99, 102, 241))),
@@ -71,10 +69,6 @@ DRIVE_META = [
     ("happiness",    ("Happiness",    (250, 190, 40))),
     ("cleanliness",  ("Cleanliness",  (20, 184, 166))),
 ]
-
-
-def _drive_label(key, fallback):
-    return loc(key, fallback)
 
 
 def _action_color(name):
@@ -105,11 +99,7 @@ def _action_emoji(name):
 
 
 def _pretty(name):
-    """Display name for an action. A translation keyed on the raw action name
-    wins; otherwise the underscored key is prettified as before."""
-    key = str(name).strip()
-    fallback = key.replace("_", " ").strip().capitalize()
-    return loc(key.lower(), fallback)
+    return str(name).replace("_", " ").strip().capitalize()
 
 
 def _lerp(a, b, t):
@@ -134,14 +124,14 @@ def _confidence_color(conf):
 
 def _confidence_label(conf):
     if conf < 0.12:
-        return loc("conf_torn", "Torn")
+        return "Torn"
     if conf < 0.32:
-        return loc("conf_leaning", "Leaning")
+        return "Leaning"
     if conf < 0.6:
-        return loc("conf_fairly_sure", "Fairly sure")
+        return "Fairly sure"
     if conf < 0.85:
-        return loc("conf_confident", "Confident")
-    return loc("conf_decisive", "Decisive")
+        return "Confident"
+    return "Decisive"
 
 
 def _card(painter, rect, radius=None):
@@ -303,8 +293,7 @@ class ActionRanksWidget(QtWidgets.QWidget):
         if not self._rows:
             p.setPen(TEXT_MUTED)
             f = self.font(); f.setPixelSize(DisplayScaling.font_size(14)); p.setFont(f)
-            p.drawText(self.rect(), QtCore.Qt.AlignCenter,
-                       loc("dec_awaiting", "Awaiting the first decision…"))
+            p.drawText(self.rect(), QtCore.Qt.AlignCenter, "Awaiting the first decision…")
             p.end()
             return
 
@@ -424,16 +413,16 @@ class PipelineWidget(QtWidgets.QWidget):
         except (TypeError, ValueError):
             memory_mult = 1.0
 
-        stages = [("value", loc("dec_base_drive", "Base drive"), base)]
+        stages = [("value", "Base drive", base)]
         if abs(memory_mult - 1.0) > 0.02:
-            stages.append(("mult", loc("memory", "Memory"), memory_mult))
+            stages.append(("mult", "Memory", memory_mult))
         # Everything else (personality + random jitter) folded into a residual
         residual = 1.0
         if base > 0:
             residual = final / (base * memory_mult) if (base * memory_mult) else 1.0
         if abs(residual - 1.0) > 0.02:
-            stages.append(("mult", loc("dec_personality_chance", "Personality & chance"), residual))
-        stages.append(("value", loc("dec_final_score", "Final score"), final))
+            stages.append(("mult", "Personality & chance", residual))
+        stages.append(("value", "Final score", final))
         self._stages = stages
         self.update()
 
@@ -443,8 +432,7 @@ class PipelineWidget(QtWidgets.QWidget):
         if not self._stages:
             p.setPen(TEXT_MUTED)
             f = self.font(); f.setPixelSize(DisplayScaling.font_size(13)); p.setFont(f)
-            p.drawText(self.rect(), QtCore.Qt.AlignCenter,
-                       loc("dec_no_winner", "No scored winner to break down."))
+            p.drawText(self.rect(), QtCore.Qt.AlignCenter, "No scored winner to break down.")
             p.end()
             return
 
@@ -578,8 +566,7 @@ class DriveMetersWidget(QtWidgets.QWidget):
             cy = y + row_h / 2.0
             p.setPen(TEXT_MAIN)
             p.drawText(QtCore.QRectF(left, y, label_w - DisplayScaling.scale(6), row_h),
-                       QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft,
-                       _drive_label(key, label))
+                       QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, label)
 
             track = QtCore.QRectF(bar_x, cy - bar_h / 2.0, bar_w, bar_h)
             p.setPen(QtCore.Qt.NoPen); p.setBrush(TRACK_BG)
@@ -603,8 +590,7 @@ class DriveMetersWidget(QtWidgets.QWidget):
         p.setPen(TEXT_MUTED)
         fh = self.font(); fh.setPixelSize(DisplayScaling.font_size(11)); fh.setBold(True); p.setFont(fh)
         p.drawText(QtCore.QRectF(left, y, self.width(), DisplayScaling.scale(16)),
-                   QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter,
-                   loc("dec_can_see", "CAN SEE"))
+                   QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, "CAN SEE")
         y += DisplayScaling.scale(20)
 
         chip_x = left
@@ -661,8 +647,7 @@ class DecisionHistoryWidget(QtWidgets.QWidget):
         if not self._items:
             p.setPen(TEXT_MUTED)
             f = self.font(); f.setPixelSize(DisplayScaling.font_size(12)); p.setFont(f)
-            p.drawText(self.rect(), QtCore.Qt.AlignCenter,
-                       loc("dec_no_history", "No decisions recorded yet."))
+            p.drawText(self.rect(), QtCore.Qt.AlignCenter, "No decisions recorded yet.")
             p.end()
             return
 
@@ -696,8 +681,7 @@ class DecisionHistoryWidget(QtWidgets.QWidget):
         latest = self._items[-1][0]
         p.drawText(QtCore.QRectF(left, self.height() - bottom, avail_w, bottom),
                    QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter,
-                   loc("dec_latest_caption", "latest → {action}   (oldest … newest)",
-                       action=_pretty(latest)))
+                   f"latest → {_pretty(latest)}   (oldest … newest)")
         p.end()
 
 
@@ -787,8 +771,7 @@ class DecisionsTab(BrainBaseTab):
         self.winner_action.setStyleSheet(
             f"font-size: {DisplayScaling.font_size(26)}px; font-weight: bold; color: #2f6bff;"
         )
-        self.winner_behaviour = QtWidgets.QLabel(
-            loc("dec_awaiting", "Awaiting the first decision…"))
+        self.winner_behaviour = QtWidgets.QLabel("Awaiting the first decision…")
         self.winner_behaviour.setWordWrap(True)
         self.winner_behaviour.setStyleSheet(
             f"font-size: {DisplayScaling.font_size(13)}px; color: #7a8794;"
@@ -811,10 +794,9 @@ class DecisionsTab(BrainBaseTab):
 
         # ---- Candidate action bars ----
         bars_card, bars_lay = self._section(
-            loc("dec_sec_candidates", "Candidate actions"),
-            loc("dec_sec_candidates_desc",
-                "Every action the engine scored this tick. Bar = final score; the faint "
-                "tick shows the base score before memory / urgency / personality.")
+            "Candidate actions",
+            "Every action the engine scored this tick. Bar = final score; the faint "
+            "tick shows the base score before memory / urgency / personality."
         )
         self.action_bars = ActionRanksWidget()
         bars_lay.addWidget(self.action_bars)
@@ -822,9 +804,8 @@ class DecisionsTab(BrainBaseTab):
 
         # ---- Winner pipeline ----
         pipe_card, pipe_lay = self._section(
-            loc("dec_sec_pipeline", "How the winner was scored"),
-            loc("dec_sec_pipeline_desc",
-                "The winning action's score, from base drive to final.")
+            "How the winner was scored",
+            "The winning action's score, from base drive to final."
         )
         self.pipeline = PipelineWidget()
         pipe_lay.addWidget(self.pipeline)
@@ -832,9 +813,8 @@ class DecisionsTab(BrainBaseTab):
 
         # ---- Drives + perception ----
         drive_card, drive_lay = self._section(
-            loc("dec_sec_drives", "Current drives & perception"),
-            loc("dec_sec_drives_desc",
-                "The internal needs feeding the scores above, and what the squid can see.")
+            "Current drives & perception",
+            "The internal needs feeding the scores above, and what the squid can see."
         )
         self.drives = DriveMetersWidget()
         drive_lay.addWidget(self.drives)
@@ -842,9 +822,8 @@ class DecisionsTab(BrainBaseTab):
 
         # ---- History ----
         hist_card, hist_lay = self._section(
-            loc("dec_sec_history", "Recent decisions"),
-            loc("dec_sec_history_desc",
-                "One block per recent choice — colour = action, height = confidence.")
+            "Recent decisions",
+            "One block per recent choice — colour = action, height = confidence."
         )
         self.history = DecisionHistoryWidget()
         hist_lay.addWidget(self.history)
@@ -852,9 +831,8 @@ class DecisionsTab(BrainBaseTab):
 
         # ---- Squid's thoughts (live narration) ----
         thoughts_card, thoughts_lay = self._section(
-            loc("dec_sec_thoughts", "Squid's thoughts"),
-            loc("dec_sec_thoughts_desc",
-                "Live narration emitted as the squid perceives and reacts.")
+            "Squid's thoughts",
+            "Live narration emitted as the squid perceives and reacts."
         )
         self.thought_log_text = QtWidgets.QTextEdit()
         self.thought_log_text.setReadOnly(True)
@@ -938,20 +916,16 @@ class DecisionsTab(BrainBaseTab):
             return any(bool(c) for c in conds)
 
         perception = {
-            loc("food", "Food"): _seen(
-                inputs.get('has_food_visible'),
-                (brain_state.get('can_see_food', 0) or 0) > 50,
-                (inputs.get('can_see_food', 0) or 0) > 50),
-            loc("plant", "Plant"): _seen(
-                inputs.get('has_plant_visible'),
-                (brain_state.get('plant_proximity', 0) or 0) > 40,
-                (inputs.get('plant_proximity', 0) or 0) > 40),
-            loc("rock", "Rock"): _seen(
-                inputs.get('has_rock_visible'), inputs.get('carrying_rock'),
-                getattr(squid, 'carrying_rock', False) if squid else False),
-            loc("poop", "Poop"): _seen(
-                inputs.get('has_poop_visible'),
-                getattr(squid, 'carrying_poop', False) if squid else False),
+            "Food": _seen(inputs.get('has_food_visible'),
+                          (brain_state.get('can_see_food', 0) or 0) > 50,
+                          (inputs.get('can_see_food', 0) or 0) > 50),
+            "Plant": _seen(inputs.get('has_plant_visible'),
+                           (brain_state.get('plant_proximity', 0) or 0) > 40,
+                           (inputs.get('plant_proximity', 0) or 0) > 40),
+            "Rock": _seen(inputs.get('has_rock_visible'), inputs.get('carrying_rock'),
+                          getattr(squid, 'carrying_rock', False) if squid else False),
+            "Poop": _seen(inputs.get('has_poop_visible'),
+                          getattr(squid, 'carrying_poop', False) if squid else False),
         }
 
         personality = raw.get('personality') or raw.get('personality_influence')
@@ -994,8 +968,7 @@ class DecisionsTab(BrainBaseTab):
             f" color: {col.name()};"
         )
         behaviour = vm['final_decision']
-        self.winner_behaviour.setText(loc("dec_behaviour", "Behaviour: “{behaviour}”",
-                                          behaviour=_pretty(behaviour)))
+        self.winner_behaviour.setText(f"Behaviour: “{behaviour}”")
 
         # Personality badge
         if vm['personality']:

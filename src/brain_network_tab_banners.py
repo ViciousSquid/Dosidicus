@@ -1,7 +1,5 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 
-from .localisation import loc
-
 class BindingOverlay(QtWidgets.QWidget):
     """
     Overlay banners that attach to the NetworkTab's functional stats area.
@@ -39,7 +37,7 @@ class BindingOverlay(QtWidgets.QWidget):
         self.content_layout.setSpacing(2)
         
         # Header
-        self.header_label = QtWidgets.QLabel(loc("banner_bindings_loaded", "🔗 Bindings Loaded:"))
+        self.header_label = QtWidgets.QLabel("🔗 Bindings Loaded:")
         self.header_label.setStyleSheet("font-weight: bold; font-size: 10pt; color: #1b5e20;")
         self.content_layout.addWidget(self.header_label)
         
@@ -309,7 +307,7 @@ class PlaceholderBanner(QtWidgets.QWidget):
         self.content_layout = QtWidgets.QVBoxLayout(self.content_widget)
         self.content_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.label = QtWidgets.QLabel(loc("banner_system_notification", "⚠️ System Notification"))
+        self.label = QtWidgets.QLabel("⚠️ System Notification")
         self.label.setWordWrap(True)
         self.label.setAlignment(QtCore.Qt.AlignCenter)
         self.content_layout.addWidget(self.label)

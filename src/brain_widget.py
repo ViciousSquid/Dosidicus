@@ -23,9 +23,9 @@ from .brain_worker import BrainWorker
 from .compute_backend import get_backend
 from .neurogenesis import EnhancedNeurogenesis, ExperienceBuffer
 from .brain_tooltips import EnhancedBrainTooltips
-from .localisation import loc
 from .brain_constants import (
     CORE_NEURONS, INPUT_SENSORS, is_core_neuron,
+    NEURON_RADIUS, NEURON_HIGHLIGHT_FACTOR, NEURON_HIT_FACTOR,
     BINARY_NEURONS, PURE_INPUT_NEURONS, NON_PROPAGATED_NEURONS,
     is_network_driven, normalise_activation,
 )
@@ -131,6 +131,12 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         # Get neuron label font size from config (single source of truth)
         display_config = self.config.get_display_config()
         self.neuron_label_font_size = display_config['neuron_label_font_size']
+
+        # How big a neuron is drawn, in logical canvas units. config.ini has
+        # carried a [Display] neuron_radius the whole time and every renderer
+        # ignored it in favour of a hardcoded 20, so the setting did nothing.
+        self.neuron_radius = float(
+            display_config.get('neuron_radius') or NEURON_RADIUS)
 
         # Tutorial glow effect properties
         self.tutorial_glow_active = False
@@ -2567,7 +2573,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 continue
             self.apply_weight_change(
                 (source, target), value=float(weight), mechanism='innate',
-                detail={'note': loc("prov_note_innate", "this squid was born with it")},
+                detail={'note': "this squid was born with it"},
                 create=True, animate=False)
         self.sync_connections_from_weights()
         if LEARNED_ACTIONS:
@@ -2678,27 +2684,17 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 return # Cannot log without a neuron type
 
             # General creation message
-            log_entry += loc(
-                "log_created",
-                "{time} - a {type} neuron ({name}) was created because "
-                "{type} counter was {value}",
-                time=timestamp, type=neuron_type.upper(), name=neuron_name,
-                value=f"{trigger_value:.2f}") + "\n"
+            log_entry += f"{timestamp} - a {neuron_type.upper()} neuron ({neuron_name}) was created because {neuron_type} counter was {trigger_value:.2f}\n"
 
             # Specific details for stress neurons
             if neuron_type == "stress":
-                log_entry += loc(
-                    "log_stress_detail",
-                    "An inhibitory connection was made to ANXIETY\n"
-                    "Maximum anxiety value has been permanently reduced by 10") + "\n"
+                log_entry += "An inhibitory connection was made to ANXIETY\n"
+                log_entry += "Maximum anxiety value has been permanently reduced by 10\n"
 
         elif event_type == "pruned":
             # A more consistent format for pruned events
             timestamp_full = datetime.now().strftime("%H:%M:%S")
-            log_entry = loc(
-                "log_pruned", "{time} - a neuron ({name}) was PRUNED due to {reason}",
-                time=timestamp_full, name=neuron_name,
-                reason=reason or loc("log_unknown_reason", "unknown reason")) + "\n"
+            log_entry = f"{timestamp_full} - a neuron ({neuron_name}) was PRUNED due to {reason if reason else 'unknown reason'}\n"
 
         if log_entry:
             try:
@@ -2869,8 +2865,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             return 0
 
         applied = 0
-        note = reason or (loc("prov_note_good", "something good happened") if signal > 0
-                          else loc("prov_note_bad", "something bad happened"))
+        note = reason or ("something good happened" if signal > 0
+                          else "something bad happened")
         for edge, delta in (deltas or {}).items():
             if not delta:
                 continue
@@ -2878,10 +2874,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             if self.apply_weight_change(
                     edge, delta=delta, mechanism='causal_reward',
                     detail={'reward_signal': round(float(signal), 3),
-                            'note': loc(
-                                "prov_note_reward",
-                                "{note}, and this synapse was firing in the "
-                                "right order just before it", note=note)},
+                            'note': f"{note}, and this synapse was firing in the "
+                                    f"right order just before it"},
                     create=False, directed=False):
                 applied += 1
         if applied:
@@ -3029,15 +3023,13 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 if isinstance(conn, tuple) and (conn[0] == neuron_to_remove or conn[1] == neuron_to_remove):
                     self.remove_weight(
                         conn, mechanism='prune',
-                        reason=loc(
-                            "prov_note_pruned",
-                            "{name} was pruned for weak connections and inactivity, "
-                            "so its synapses went with it", name=neuron_to_remove))
+                        reason=f"{neuron_to_remove} was pruned for weak connections "
+                               f"and inactivity, so its synapses went with it")
                     
             if neuron_to_remove in self.neurogenesis_data.get('new_neurons', []):
                 self.neurogenesis_data['new_neurons'].remove(neuron_to_remove)
                 
-            reason = loc("log_reason_weak", "weak connections/activity")
+            reason = "weak connections/activity"
             self.log_neurogenesis_event(neuron_to_remove, "pruned", reason)
             
             self.mark_render_dirty()
@@ -3685,7 +3677,11 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
     def get_neuron_at_pos(self, widget_pos):
         """Finds a neuron at the given QPoint widget coordinates."""
         logical_pos = self._get_logical_coords(widget_pos)
-        neuron_radius = 50  # Increased to 50 for better click detection on all neurons
+        # Generous next to the drawn circle, because a neuron is a small
+        # target - but derived from the neuron's size rather than a flat 50,
+        # which is wider than half the gap between neighbours in a row and so
+        # claimed clicks belonging to the neuron next door.
+        neuron_radius = self.neuron_radius * NEURON_HIT_FACTOR
         for name, pos in self.neuron_positions.items():
             dist_sq = (logical_pos.x() - pos[0])**2 + (logical_pos.y() - pos[1])**2
             if dist_sq <= neuron_radius**2:
@@ -3805,7 +3801,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             elapsed = time.time() - nh.get('start_time', 0)
             pulse = 0.5 + 0.5 * math.sin(elapsed * 4)
             
-            radius = 40 * scale * (1 + pulse * 0.2)
+            radius = self.neuron_radius * NEURON_HIGHLIGHT_FACTOR * scale * (1 + pulse * 0.2)
             alpha = int(200 * (1 - elapsed / nh.get('duration', 1)))
             
             painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0, alpha), 3))
@@ -3843,7 +3839,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         
         x = pos[0] * scale
         y = pos[1] * scale
-        radius = 20 * scale
+        radius = self.neuron_radius * scale
         
         # Temporarily set painter to high quality
         painter.save()
@@ -3865,7 +3861,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 painter, temp_positions, temp_states,
                 visible_neurons={name}, 
                 scale=scale, 
-                base_font_size=self.neuron_label_font_size
+                base_font_size=self.neuron_label_font_size,
+                neuron_radius=self.neuron_radius
             )
             
         painter.restore()
@@ -3896,7 +3893,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             x_logical, y_logical = pos
             x = x_logical * scale
             y = y_logical * scale
-            radius = 20 * scale
+            radius = self.neuron_radius * scale
 
             # Check shape early
             shape = self.neuron_shapes.get(name, 'circle')
@@ -4098,7 +4095,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         text_rect = QtCore.QRectF(
             x - rect_width / 2,
-            y + (20 * scale) + 5 * scale,
+            y + (self.neuron_radius * scale) + 4 * scale,
             rect_width,
             rect_height,
         )
@@ -4252,7 +4249,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
         text_rect = QtCore.QRectF(
             x - rect_width / 2,
-            y + (20 * scale) + 5 * scale,
+            y + (self.neuron_radius * scale) + 4 * scale,
             rect_width,
             rect_height,
         )
@@ -4291,7 +4288,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         NetworkRenderingMixin.draw_neurons_static(
             painter, temp_positions, temp_states,
             visible_neurons={name}, excluded_neurons=excluded_neurons,
-            scale=scale, base_font_size=self.neuron_label_font_size
+            scale=scale, base_font_size=self.neuron_label_font_size,
+            neuron_radius=self.neuron_radius
         )
 
     def draw_triangular_neuron(self, painter, x, y, radius, label, scale=1.0, alpha=255):
@@ -4437,7 +4435,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         if (self.neurogenesis_highlight['neuron'] and time.time() - self.neurogenesis_highlight['start_time'] < self.neurogenesis_highlight['duration']):
             pos = self.neuron_positions.get(self.neurogenesis_highlight['neuron'])
             if pos:
-                painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), int(3 * scale))); painter.setBrush(QtCore.Qt.NoBrush); radius = int(40 * scale)
+                painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 0), int(3 * scale))); painter.setBrush(QtCore.Qt.NoBrush); radius = int(self.neuron_radius * NEURON_HIGHLIGHT_FACTOR * scale)
                 x, y, width, height = int(pos[0] - radius), int(pos[1] - radius), int(radius * 2), int(radius * 2)
                 painter.drawEllipse(x, y, width, height)
 
@@ -4691,8 +4689,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             
             # Optional: Add star indicator
             star_radius = 8 * scale
-            star_x = x + 20 * scale
-            star_y = y - 20 * scale
+            star_x = x + self.neuron_radius * scale
+            star_y = y - self.neuron_radius * scale
             
             painter.setBrush(QtGui.QBrush(QtGui.QColor(255, 215, 0, 200)))
             painter.setPen(QtGui.QPen(QtGui.QColor(255, 165, 0), max(1, int(2 * scale))))
@@ -5095,7 +5093,7 @@ class NetworkRenderingMixin:
     def draw_neurons_static(
         painter, neuron_positions, neuron_states,
         visible_neurons=None, excluded_neurons=None,
-        scale=1.0, base_font_size=6):
+        scale=1.0, base_font_size=6, neuron_radius=NEURON_RADIUS):
         """
         Static neuron drawing with full localisation fallback support.
         """
@@ -5137,7 +5135,7 @@ class NetworkRenderingMixin:
 
             x = pos[0] * scale
             y = pos[1] * scale
-            radius = 20 * scale
+            radius = neuron_radius * scale
 
             painter.setBrush(QtGui.QBrush(color))
             painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0), max(1, int(2 * scale))))

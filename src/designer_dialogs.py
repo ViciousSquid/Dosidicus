@@ -13,7 +13,6 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont
 
 from .designer_network_generator import SparseNetworkGenerator
-from .localisation import loc
 
 
 class SparseNetworkDialog(QDialog):
@@ -26,7 +25,7 @@ class SparseNetworkDialog(QDialog):
         self.result_connections = []
         self.result_actions = []
         
-        self.setWindowTitle(loc("designer_gen_dlg_title", "🎲 Generate Sparse Network"))
+        self.setWindowTitle("🎲 Generate Sparse Network")
         self.setMinimumWidth(500)
         self.setMinimumHeight(550)
         
@@ -37,16 +36,15 @@ class SparseNetworkDialog(QDialog):
         layout = QVBoxLayout(self)
         
         # Header
-        header = QLabel(loc("designer_gen_dlg_header", "Generate Random Neural Connections"))
+        header = QLabel("Generate Random Neural Connections")
         header.setFont(QFont("Arial", 12, QFont.Bold))
         header.setAlignment(Qt.AlignCenter)
         layout.addWidget(header)
         
-        desc = QLabel(loc(
-            "designer_gen_dlg_desc",
+        desc = QLabel(
             "Creates biologically-inspired connections between the 8 required neurons.\n"
             "Each generation is unique due to random noise."
-        ))
+        )
         desc.setStyleSheet("color: #666; font-size: 10pt;")
         desc.setAlignment(Qt.AlignCenter)
         desc.setWordWrap(True)
@@ -55,7 +53,7 @@ class SparseNetworkDialog(QDialog):
         layout.addSpacing(10)
         
         # Preset selection
-        preset_group = QGroupBox(loc("designer_gen_grp_preset", "Style Preset"))
+        preset_group = QGroupBox("Style Preset")
         preset_layout = QHBoxLayout(preset_group)
         
         self.preset_combo = QComboBox()
@@ -72,72 +70,66 @@ class SparseNetworkDialog(QDialog):
         layout.addWidget(preset_group)
         
         # Advanced options
-        advanced_group = QGroupBox(loc("designer_gen_grp_tuning", "Fine Tuning"))
+        advanced_group = QGroupBox("Fine Tuning")
         advanced_layout = QVBoxLayout(advanced_group)
         
         # Density & Noise
         row1 = QHBoxLayout()
-        row1.addWidget(QLabel(loc("designer_gen_lbl_density", "Density:")))
+        row1.addWidget(QLabel("Density:"))
         self.density_spin = QDoubleSpinBox()
         self.density_spin.setRange(0.2, 2.0)
         self.density_spin.setSingleStep(0.1)
         self.density_spin.setDecimals(1)
         self.density_spin.setValue(1.0)
-        self.density_spin.setToolTip(loc("designer_gen_tip_density",
-                                         "Lower = fewer connections, Higher = more connections"))
+        self.density_spin.setToolTip("Lower = fewer connections, Higher = more connections")
         row1.addWidget(self.density_spin)
         
         row1.addSpacing(20)
         
-        row1.addWidget(QLabel(loc("designer_gen_lbl_noise", "Weight Noise:")))
+        row1.addWidget(QLabel("Weight Noise:"))
         self.noise_spin = QDoubleSpinBox()
         self.noise_spin.setRange(0.1, 3.0)
         self.noise_spin.setSingleStep(0.1)
         self.noise_spin.setDecimals(1)
         self.noise_spin.setValue(1.0)
-        self.noise_spin.setToolTip(loc("designer_gen_tip_noise",
-                                       "How much randomness in connection weights"))
+        self.noise_spin.setToolTip("How much randomness in connection weights")
         row1.addWidget(self.noise_spin)
         advanced_layout.addLayout(row1)
 
         # Variance & Sensors (NEW)
         row2 = QHBoxLayout()
-        row2.addWidget(QLabel(loc("designer_gen_lbl_variance", "Pos Variance:")))
+        row2.addWidget(QLabel("Pos Variance:"))
         self.variance_spin = QDoubleSpinBox()
         self.variance_spin.setRange(0.0, 1.0)
         self.variance_spin.setSingleStep(0.1)
         self.variance_spin.setDecimals(2)
         self.variance_spin.setValue(0.0)
-        self.variance_spin.setToolTip(loc("designer_gen_tip_variance",
-                                          "Jitter neuron positions (0.0 = fixed, 0.5 = chaotic)"))
+        self.variance_spin.setToolTip("Jitter neuron positions (0.0 = fixed, 0.5 = chaotic)")
         row2.addWidget(self.variance_spin)
         
         row2.addSpacing(20)
         
-        row2.addWidget(QLabel(loc("designer_gen_lbl_sensor_prob", "Sensor Prob:")))
+        row2.addWidget(QLabel("Sensor Prob:"))
         self.sensor_prob_spin = QDoubleSpinBox()
         self.sensor_prob_spin.setRange(0.0, 1.0)
         self.sensor_prob_spin.setSingleStep(0.1)
         self.sensor_prob_spin.setDecimals(2)
         self.sensor_prob_spin.setValue(0.0)
-        self.sensor_prob_spin.setToolTip(loc("designer_gen_tip_sensor_prob",
-                                             "Probability of adding random extra sensors"))
+        self.sensor_prob_spin.setToolTip("Probability of adding random extra sensors")
         row2.addWidget(self.sensor_prob_spin)
         advanced_layout.addLayout(row2)
         
         # Options row
         options_row = QHBoxLayout()
         
-        self.feedback_check = QCheckBox(loc("designer_gen_chk_feedback", "Include feedback loops"))
+        self.feedback_check = QCheckBox("Include feedback loops")
         self.feedback_check.setChecked(True)
-        self.feedback_check.setToolTip(loc("designer_gen_tip_feedback",
-                                           "Allow bidirectional connections where biologically plausible"))
+        self.feedback_check.setToolTip("Allow bidirectional connections where biologically plausible")
         options_row.addWidget(self.feedback_check)
         
-        self.clear_check = QCheckBox(loc("designer_gen_chk_clear", "Clear existing connections"))
+        self.clear_check = QCheckBox("Clear existing connections")
         self.clear_check.setChecked(True)
-        self.clear_check.setToolTip(loc("designer_gen_tip_clear",
-                                        "Remove all existing connections before generating"))
+        self.clear_check.setToolTip("Remove all existing connections before generating")
         options_row.addWidget(self.clear_check)
         
         options_row.addStretch()
@@ -146,7 +138,7 @@ class SparseNetworkDialog(QDialog):
         layout.addWidget(advanced_group)
         
         # Preview area
-        preview_group = QGroupBox(loc("designer_gen_grp_preview", "Preview"))
+        preview_group = QGroupBox("Preview")
         preview_layout = QVBoxLayout(preview_group)
         
         self.preview_text = QTextEdit()
@@ -162,7 +154,7 @@ class SparseNetworkDialog(QDialog):
         preview_layout.addWidget(self.preview_text)
         
         preview_btn_row = QHBoxLayout()
-        self.preview_btn = QPushButton(loc("designer_gen_btn_preview", "🔄 Preview Generation"))
+        self.preview_btn = QPushButton("🔄 Preview Generation")
         self.preview_btn.clicked.connect(self.generate_preview)
         preview_btn_row.addWidget(self.preview_btn)
         preview_btn_row.addStretch()
@@ -183,13 +175,13 @@ class SparseNetworkDialog(QDialog):
         # Buttons
         btn_layout = QHBoxLayout()
         
-        self.cancel_btn = QPushButton(loc("designer_cnv_btn_cancel", "Cancel"))
+        self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(self.cancel_btn)
         
         btn_layout.addStretch()
         
-        self.apply_btn = QPushButton(loc("designer_gen_btn_apply", "✨ Generate && Apply"))
+        self.apply_btn = QPushButton("✨ Generate && Apply")
         self.apply_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -272,28 +264,20 @@ class SparseNetworkDialog(QDialog):
         
         # Add note about sensors/variance if active
         if self.sensor_prob_spin.value() > 0:
-            lines.insert(0, loc("designer_gen_note_sensors",
-                                "NOTE: Will attempt to add random sensors (Prob: {value})",
-                                value=self.sensor_prob_spin.value()))
+            lines.insert(0, f"NOTE: Will attempt to add random sensors (Prob: {self.sensor_prob_spin.value()})")
         if self.variance_spin.value() > 0:
-            lines.insert(0, loc("designer_gen_note_variance",
-                                "NOTE: Will randomly perturb positions (Var: {value})",
-                                value=self.variance_spin.value()))
+            lines.insert(0, f"NOTE: Will randomly perturb positions (Var: {self.variance_spin.value()})")
         
         if lines:
             self.preview_text.setPlainText("\n".join(lines))
         else:
-            self.preview_text.setPlainText(loc(
-                "designer_gen_preview_empty",
-                "No connections would be created with these settings."))
+            self.preview_text.setPlainText("No connections would be created with these settings.")
         
         # Update count
         total = len(connections)
-        self.count_label.setText(loc(
-            "designer_gen_count",
-            "{total} connections ({excitatory} excitatory, {inhibitory} inhibitory)",
-            total=total, excitatory=excitatory, inhibitory=inhibitory
-        ))
+        self.count_label.setText(
+            f"{total} connections ({excitatory} excitatory, {inhibitory} inhibitory)"
+        )
     
     def apply_generation(self):
         """Apply the generated network to the design."""
@@ -328,7 +312,7 @@ class ActivationEditorDialog(QDialog):
         self.is_binary = is_binary
         self.result_value = current_activation
         
-        self.setWindowTitle(loc("designer_act_title", "Activation: {name}", name=neuron_name))
+        self.setWindowTitle(f"Activation: {neuron_name}")
         self.setMinimumWidth(300)
         
         self.setup_ui(current_activation)
@@ -344,20 +328,20 @@ class ActivationEditorDialog(QDialog):
         
         if self.is_binary:
             # Binary neuron: on/off toggle
-            info = QLabel(loc("designer_act_binary", "Binary neuron (On/Off)"))
+            info = QLabel("Binary neuron (On/Off)")
             info.setStyleSheet("color: #666;")
             info.setAlignment(Qt.AlignCenter)
             layout.addWidget(info)
             
             btn_row = QHBoxLayout()
             
-            self.off_btn = QPushButton(loc("designer_act_off", "OFF (0)"))
+            self.off_btn = QPushButton("OFF (0)")
             self.off_btn.setCheckable(True)
             self.off_btn.setChecked(current_value < 50)
             self.off_btn.clicked.connect(lambda: self.set_binary(False))
             btn_row.addWidget(self.off_btn)
             
-            self.on_btn = QPushButton(loc("designer_act_on", "ON (100)"))
+            self.on_btn = QPushButton("ON (100)")
             self.on_btn.setCheckable(True)
             self.on_btn.setChecked(current_value >= 50)
             self.on_btn.clicked.connect(lambda: self.set_binary(True))
@@ -367,7 +351,7 @@ class ActivationEditorDialog(QDialog):
             
         else:
             # Continuous neuron: spinner
-            info = QLabel(loc("designer_act_continuous", "Activation (0-100)"))
+            info = QLabel("Activation (0-100)")
             info.setStyleSheet("color: #666;")
             info.setAlignment(Qt.AlignCenter)
             layout.addWidget(info)
@@ -388,14 +372,7 @@ class ActivationEditorDialog(QDialog):
             
             # Quick buttons
             quick_row = QHBoxLayout()
-            quick_levels = [
-                (0, loc("designer_act_min", "Min")),
-                (25, loc("designer_act_low", "Low")),
-                (50, loc("designer_act_mid", "Mid")),
-                (75, loc("designer_act_high", "High")),
-                (100, loc("designer_act_max", "Max")),
-            ]
-            for val, label in quick_levels:
+            for val, label in [(0, "Min"), (25, "Low"), (50, "Mid"), (75, "High"), (100, "Max")]:
                 btn = QPushButton(label)
                 btn.setMaximumWidth(50)
                 btn.clicked.connect(lambda checked, v=val: self.value_spin.setValue(v))
@@ -407,13 +384,13 @@ class ActivationEditorDialog(QDialog):
         # Buttons
         btn_layout = QHBoxLayout()
         
-        cancel_btn = QPushButton(loc("designer_cnv_btn_cancel", "Cancel"))
+        cancel_btn = QPushButton("Cancel")
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
         
         btn_layout.addStretch()
         
-        ok_btn = QPushButton(loc("designer_cnv_btn_ok", "OK"))
+        ok_btn = QPushButton("OK")
         ok_btn.clicked.connect(self.accept_value)
         ok_btn.setDefault(True)
         btn_layout.addWidget(ok_btn)

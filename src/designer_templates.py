@@ -1,36 +1,19 @@
 from .designer_core import BrainDesign, DesignerLayer, DesignerNeuron
 from .designer_constants import NeuronType, REQUIRED_NEURONS, CORE_NEURONS, INPUT_SENSORS, DEFAULT_LAYER_SPACING
-from .localisation import loc
 import random
 
 class TemplateManager:
     @staticmethod
     def get_templates() -> dict:
         return {
-            'core_only': {
-                'name': loc('tmpl_core_name', '🟡 Required Only'),
-                'description': loc('tmpl_core_desc', '8 required neurons')},
-            'dosidicus_default': {
-                'name': loc('tmpl_dosidicus_name', '🟡 Dosidicus Default'),
-                'description': loc('tmpl_dosidicus_desc', 'Standard layout')},
-            'full_sensors': {
-                'name': loc('tmpl_full_sensors_name', '🟡 Full Sensor Suite'),
-                'description': loc('tmpl_full_sensors_desc', 'All sensors')},
-            'insomniac': {
-                'name': loc('tmpl_insomniac_name', '🔴 The Insomniac'),
-                'description': loc('tmpl_insomniac_desc', 'Anxiety & Curiosity block sleep')},
-            'hyperactive': {
-                'name': loc('tmpl_hyperactive_name', '🔴 The Hyperactive'),
-                'description': loc('tmpl_hyperactive_desc', 'Noise neurons overwhelm sleepiness')},
-            'hangry': {
-                'name': loc('tmpl_hangry_name', '🔴 The Hangry'),
-                'description': loc('tmpl_hangry_desc', 'Hunger causes extreme rage')},
-            'depressive': {
-                'name': loc('tmpl_depressive_name', '🔴 The Depressive'),
-                'description': loc('tmpl_depressive_desc', 'Resistant to happiness')},
-            'obsessive': {
-                'name': loc('tmpl_obsessive_name', '🔴 The Obsessive'),
-                'description': loc('tmpl_obsessive_desc', 'Anxiety/Curiosity feedback loop')},
+            'core_only': {'name': '🟡 Required Only', 'description': '8 required neurons'},
+            'dosidicus_default': {'name': '🟡 Dosidicus Default', 'description': 'Standard layout'},
+            'full_sensors': {'name': '🟡 Full Sensor Suite', 'description': 'All sensors'},
+            'insomniac': {'name': '🔴 The Insomniac', 'description': 'Anxiety & Curiosity block sleep'},
+            'hyperactive': {'name': '🔴 The Hyperactive', 'description': 'Noise neurons overwhelm sleepiness'},
+            'hangry': {'name': '🔴 The Hangry', 'description': 'Hunger causes extreme rage'},
+            'depressive': {'name': '🔴 The Depressive', 'description': 'Resistant to happiness'},
+            'obsessive': {'name': '🔴 The Obsessive', 'description': 'Anxiety/Curiosity feedback loop'},
         }
     
     @staticmethod
@@ -41,11 +24,11 @@ class TemplateManager:
         # STANDARD TEMPLATES
         # ==========================================
         if key == 'core_only':
-            design.layers = [DesignerLayer(loc("layer_sensors", "Sensors"), NeuronType.INPUT, 100), DesignerLayer(loc("layer_core", "Core"), NeuronType.HIDDEN, 250)]
+            design.layers = [DesignerLayer("Sensors", NeuronType.INPUT, 100), DesignerLayer("Core", NeuronType.HIDDEN, 250)]
             design.add_missing_required_neurons()
             
         elif key == 'full_sensors':
-            design.layers = [DesignerLayer(loc("layer_input", "Input"), NeuronType.INPUT, 50), DesignerLayer(loc("layer_core", "Core"), NeuronType.HIDDEN, 200), DesignerLayer(loc("layer_out", "Out"), NeuronType.OUTPUT, 350)]
+            design.layers = [DesignerLayer("Input", NeuronType.INPUT, 50), DesignerLayer("Core", NeuronType.HIDDEN, 200), DesignerLayer("Out", NeuronType.OUTPUT, 350)]
             design.add_missing_required_neurons()
             design.add_all_sensors()
 
@@ -54,7 +37,7 @@ class TemplateManager:
         # ==========================================
         elif key == 'insomniac':
             # A brain where active states aggressively inhibit sleep
-            design.layers = [DesignerLayer(loc("layer_sensors", "Sensors"), NeuronType.INPUT, 150), DesignerLayer(loc("layer_racing_mind", "Racing Mind"), NeuronType.HIDDEN, 200), DesignerLayer(loc("layer_state", "State"), NeuronType.OUTPUT, 350)]
+            design.layers = [DesignerLayer("Sensors", NeuronType.INPUT, 150), DesignerLayer("Racing Mind", NeuronType.HIDDEN, 200), DesignerLayer("State", NeuronType.OUTPUT, 350)]
             design.add_missing_required_neurons()
             
             # The Insomniac Logic:
@@ -70,10 +53,10 @@ class TemplateManager:
         elif key == 'hyperactive':
             # A brain with a "Noise" layer that floods the system
             design.layers = [
-                DesignerLayer(loc("layer_vision", "Vision"), NeuronType.INPUT, 150), 
-                DesignerLayer(loc("layer_core", "Core"), NeuronType.HIDDEN, 200), 
-                DesignerLayer(loc("layer_noise", "Noise"), NeuronType.HIDDEN, 300), # Extra space for noise neurons
-                DesignerLayer(loc("layer_output", "Output"), NeuronType.OUTPUT, 400)
+                DesignerLayer("Vision", NeuronType.INPUT, 150), 
+                DesignerLayer("Core", NeuronType.HIDDEN, 200), 
+                DesignerLayer("Noise", NeuronType.HIDDEN, 300), # Extra space for noise neurons
+                DesignerLayer("Output", NeuronType.OUTPUT, 400)
             ]
             design.add_missing_required_neurons()
 
@@ -98,7 +81,7 @@ class TemplateManager:
 
         elif key == 'hangry':
             # Metabolic mood disorder
-            design.layers = [DesignerLayer(loc("layer_sensors", "Sensors"), NeuronType.INPUT, 100), DesignerLayer(loc("layer_gut_brain", "Gut-Brain"), NeuronType.HIDDEN, 200)]
+            design.layers = [DesignerLayer("Sensors", NeuronType.INPUT, 100), DesignerLayer("Gut-Brain", NeuronType.HIDDEN, 200)]
             design.add_missing_required_neurons()
             
             # Hunger overrides all positive emotions and triggers anxiety/stress
@@ -109,7 +92,7 @@ class TemplateManager:
 
         elif key == 'depressive':
             # Anhedonia model: High resistance to positive weights
-            design.layers = [DesignerLayer(loc("layer_input", "Input"), NeuronType.INPUT, 150), DesignerLayer(loc("layer_gray", "Gray"), NeuronType.HIDDEN, 200)]
+            design.layers = [DesignerLayer("Input", NeuronType.INPUT, 150), DesignerLayer("Gray", NeuronType.HIDDEN, 200)]
             design.add_missing_required_neurons()
             
             # Hard to get happy, easy to get sad
@@ -120,7 +103,7 @@ class TemplateManager:
 
         elif key == 'obsessive':
             # Feedback loop central
-            design.layers = [DesignerLayer(loc("layer_input", "Input"), NeuronType.INPUT, 150), DesignerLayer(loc("layer_loop", "Loop"), NeuronType.HIDDEN, 200)]
+            design.layers = [DesignerLayer("Input", NeuronType.INPUT, 150), DesignerLayer("Loop", NeuronType.HIDDEN, 200)]
             design.add_missing_required_neurons()
             
             # Tight feedback loop between anxiety and curiosity (Worrying/Checking)
@@ -129,7 +112,7 @@ class TemplateManager:
             design.add_connection("sleepiness", "anxiety", 0.4) # Being tired makes the loops worse
 
         else: # Default Dosidicus
-            design.layers = [DesignerLayer(loc("layer_vision", "Vision"), NeuronType.INPUT, 200), DesignerLayer(loc("layer_stats", "Stats"), NeuronType.HIDDEN, 81), DesignerLayer(loc("layer_emotions", "Emotions"), NeuronType.OUTPUT, 385)]
+            design.layers = [DesignerLayer("Vision", NeuronType.INPUT, 200), DesignerLayer("Stats", NeuronType.HIDDEN, 81), DesignerLayer("Emotions", NeuronType.OUTPUT, 385)]
             design.add_missing_required_neurons()
             # Default connections
             design.add_connection("can_see_food", "hunger", 0.3)

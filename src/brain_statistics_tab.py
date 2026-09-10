@@ -1,7 +1,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
 from .display_scaling import DisplayScaling
-from .localisation import Localisation, loc as _t
+from .localisation import Localisation
 from .squid_statistics import DEFAULT_NEURON_COUNT
 import time
 
@@ -150,7 +150,7 @@ class StatisticsTab(BrainBaseTab):
             ('novelty_neurons_created', loc.get('stat_novelty_neurons')),
             ('stress_neurons_created', loc.get('stat_stress_neurons')),
             ('reward_neurons_created', loc.get('stat_reward_neurons')),
-            ('current_neurons', _t('stat_max_neurons', 'Max neurons')),
+            ('current_neurons', "Max neurons"),
         ]
 
         if not hasattr(self, 'stat_labels'):
@@ -265,7 +265,7 @@ class StatisticsTab(BrainBaseTab):
                     f.write(f"{loc.get('stat_sickness')}: {self.statistics['sickness_episodes']}\n")
                     f.write(f"{loc.get('stat_squid_age')}: {int(self.statistics['squid_age_minutes'])}\n")
                     f.write(
-                        f"{_t('stat_max_neurons', 'Max neurons')}: "
+                        "Max Neurons: "
                         f"{self.statistics.get('current_neurons', DEFAULT_NEURON_COUNT)}\n"
                     )
                     f.write("\n" + "=" * 30 + "\n")
