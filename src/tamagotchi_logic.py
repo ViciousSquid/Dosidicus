@@ -1506,13 +1506,22 @@ class TamagotchiLogic:
                 except Exception as e:
                     print(f"Sleep animation error: {e}")
 
-                # CONFIGURABLE RECOVERY (from original)
-                recovery_rate = 28.0 * (1 / 60.0)   # ~28 points per second at 60 FPS
+                # Sleep physiology is driven by elapsed simulation time.
+                # update_simulation() normally runs once per second at 1x speed.
+                elapsed_seconds = self.simulation_timer.interval() / 1000.0
+
+                recovery_rate = 28.0 * elapsed_seconds
                 self.squid.sleepiness = max(0.0, self.squid.sleepiness - recovery_rate)
 
-                # Nice side bonuses while sleeping (from original)
-                self.squid.happiness = min(100.0, self.squid.happiness + 0.45 * (1 / 60.0))
-                self.squid.satisfaction = min(100.0, self.squid.satisfaction + 0.30 * (1 / 60.0))
+                # Small restorative effects while sleeping.
+                self.squid.happiness = min(
+                    100.0,
+                    self.squid.happiness + 0.45 * elapsed_seconds
+                )
+                self.squid.satisfaction = min(
+                    100.0,
+                    self.squid.satisfaction + 0.30 * elapsed_seconds
+                )
 
                 # Auto-wake when sufficiently rested (from original)
                 if self.squid.sleepiness <= 25.0:
