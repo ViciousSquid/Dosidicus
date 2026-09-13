@@ -8,7 +8,7 @@ _"What if a Tamagotchi had a neural network and could learn stuff?"_ - [Gigazine
     <a href="https://buymeacoffee.com/vicioussquid"><img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" height="20" alt="Buy Me A Coffee"></a>
 </p>
 
-> ### The #1 weird project on GitHub — and the #2 simulation game.
+> ### #1 `weird` topic project on GitHub — and #2 `simulation-game`.
 
 # _Dosidicus electronicus_
 ### Learn neuroscience by **raising a neural network as a pet**
