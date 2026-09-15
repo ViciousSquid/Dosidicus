@@ -389,6 +389,33 @@ class RecordedSynapses:
 
     weights: Dict[Pair, float]
 
+    #: While true, every synaptic write is refused. This is what "learning is
+    #: frozen" means in this project, and it is enforced HERE rather than at
+    #: each call site because this method is the one way a synapse is allowed
+    #: to change - so a freeze applied here covers Hebbian commits, STDP,
+    #: the innate reflexes, sleep consolidation, pruning and the wiring of a
+    #: grown neuron alike, and nothing can route around it.
+    #:
+    #: An evaluation block that measures what a brain has already learned
+    #: needs exactly this guarantee: whatever the brain does during the block,
+    #: it cannot be adapting while it is being measured.
+    learning_frozen: bool = False
+
+    def set_learning_frozen(self, frozen: bool) -> bool:
+        """Freeze or thaw plasticity. Returns the previous setting.
+
+        Freezing also switches off structural growth, because a network that
+        can still grow a neuron mid-measurement is still adapting. The flag
+        lives on the state dict where check_neurogenesis_triggers already
+        looks for it, so there is no second gate to keep in step.
+        """
+        previous = bool(getattr(self, 'learning_frozen', False))
+        self.learning_frozen = bool(frozen)
+        state = getattr(self, 'state', None)
+        if isinstance(state, dict):
+            state['neurogenesis_active'] = not self.learning_frozen
+        return previous
+
     def apply_weight_change(self, edge, delta: Optional[float] = None,
                             value: Optional[float] = None,
                             mechanism: str = 'manual',
@@ -410,6 +437,8 @@ class RecordedSynapses:
         directed=False and get the existing synapse in whichever direction it
         already runs.
         """
+        if getattr(self, 'learning_frozen', False):
+            return False
         if not (isinstance(edge, tuple) and len(edge) == 2):
             return False
         src, dst = edge
@@ -452,6 +481,8 @@ class RecordedSynapses:
     def remove_weight(self, edge, mechanism: str = 'prune',
                       reason: str = "") -> bool:
         """Delete one synapse, recording why it went."""
+        if getattr(self, 'learning_frozen', False):
+            return False
         if edge not in self.weights:
             return False
         old = float(self.weights.pop(edge))
