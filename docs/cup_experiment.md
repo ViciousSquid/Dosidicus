@@ -21,8 +21,10 @@ Two things were measured, and they came out differently.
 
 | | measure | result |
 |---|---|---|
-| **Which cup** | does it go to the baited one more than the frozen control does? | **No.** Null in all ten seeds run; pooled +5.0 pp, p = 0.33. |
-| **Drive under occlusion** | does it still *want* to eat once the food vanishes? | **Yes.** Pooled +19 pp, p < 0.001, measured in a frozen block. |
+| **Which cup** | does it go to the baited one more than the frozen control does? | **No.** −1.1 pp over ten seeds, p = 0.76. |
+| **Drive under occlusion** | does it still *want* to eat once the food vanishes? | **Yes.** +7 pp and +19 pp in two replications, both p < 0.001, in a frozen block. |
+
+Full figures and raw logs: [`experiment findings/`](../experiment%20findings/).
 
 The squid does not learn *where* the food went. It does learn to go on wanting
 it once it is gone.
@@ -66,9 +68,9 @@ How hard `act_eat` is driven while the food is hidden **is** an activation on an
 existing neuron, reached through synapses the existing plasticity engine moves.
 So this is where training can show — and it does.
 
-Pooled over five seeds, in the **frozen** evaluation block, the learning arm's
-food-seeking drive survives occlusion at **59%** of its with-food-in-sight level
-against the learning-disabled control's **40%** (+19 pp, p < 0.001).
+Pooled in the **frozen** evaluation block, the learning arm's food-seeking drive
+survives occlusion better than the learning-disabled control's in both
+replications: 48% vs 40% (+7 pp) and 59% vs 40% (+19 pp), each p < 0.001.
 
 Note the control arm's own drive also rises from its no-information baseline
 (26% → 40%, p < 0.001). Part of the effect is simply the protocol — a squid that
@@ -195,50 +197,36 @@ averaging p-values — a mean of p-values is not a p-value).
 
 ### The replication
 
-```
+```bash
 python headless/cup_experiment_runner.py --seed 200 --seeds 5 --naive 30 --train 50 --eval 50 --no-growth
 ```
 
-Five seeds, paired arms, trials pooled (pooling trials, not averaging p-values —
-a mean of p-values is not a p-value). Eval block, learning arm vs frozen control:
+Two independent five-seed replications were run. **The numbers, per seed and
+pooled, live in [`experiment findings/03-results.md`](../experiment%20findings/03-results.md)**
+and the raw logs are beside them — they are not repeated here, so there is only
+one copy to keep true.
 
-| seed | which cup | drive under occlusion |
-|---:|---|---|
-| 200 | +3.5 pp (p=0.75) | +4 pp (p=0.17) |
-| 201 | +16.2 pp (p=0.18) | **+15 pp (p<0.001)** |
-| 202 | −11.3 pp (p=0.31) | **+29 pp (p<0.001)** |
-| 203 | +9.1 pp (p=0.42) | **+26 pp (p<0.001)** |
-| 204 | +9.9 pp (p=0.40) | **+22 pp (p<0.001)** |
-| **pooled** | **+5.0 pp (p=0.33)** | **+19 pp (p<0.001)** |
-
-An earlier, independent five-seed set (2, 7, 17, 43, 101) gave the same picture:
-which cup never significant and negative in four of five; drive significant and
-positive in three of five, never negative.
-
-So: **which cup** is a solid null across ten seeds. **Drive** is positive in
-seven of ten seeds individually, never negative in any, and strongly significant
-pooled.
+The short version: which cup is a solid null across ten seeds; drive under
+occlusion is positive in seven of ten and strongly significant pooled.
 
 ### A caution that was earned the hard way
-
-Watch the per-seed column. Seed 200 shows +4 pp at p = 0.17 and seed 202 shows
-+29 pp at p < 0.001 — same code, same settings.
 
 While this experiment was being built, **seed 7** produced a drive effect of +22
 pp at p < 0.001 and was nearly written up on its own. **Seed 2**, run next,
 produced −1 pp at p = 0.68. Had the seeds come up in the other order, the
 conclusion drawn from a single run would have been the opposite one.
 
-One run of this experiment is one animal, and one animal is not a result. The
-same caution applies in the other direction: the drive effect here is believable
-because it pools over ten seeds, not because any one of them was convincing.
+One run of this experiment is one animal, and one animal is not a result. That
+is what `--seeds` and `--seed-list` are for. The full account, along with five
+other artefacts that produced convincing wrong answers, is in
+[`experiment findings/04-what-went-wrong.md`](../experiment%20findings/04-what-went-wrong.md).
 
-Watch the **pooled accuracy rows** too. The learning arm's eval block scores
-41.5%, which is "above chance" against the 33.3% arithmetic at p = 0.015 — and
-the *frozen control's* train block scores 40.9% at p = 0.021. Neither squid
+Watch the **pooled accuracy rows** in the results too. The learning arm's eval
+block scores 41.5%, "above chance" against the 33.3% arithmetic at p = 0.015 —
+and the *frozen control's* train block scores 40.9% at p = 0.021. Neither squid
 learned anything about cups. That is the apparatus, and it is why every
-conclusion here is drawn from learning-vs-control rather than from a distance
-above 1/3.
+conclusion is drawn from learning-vs-control rather than from a distance above
+1/3.
 
 ---
 
@@ -251,6 +239,7 @@ above 1/3.
 | `src/cup_game_ui.py` | The game in the tank, and the observability panels. |
 | `tests/test_cup_experiment.py` | Every control listed below. |
 | `tests/test_cup_game_ui.py` | The claims that are only true if the game path is wired correctly. |
+| [`experiment findings/`](../experiment%20findings/) | **The findings themselves** — the architectural audit, all the numbers, the raw run logs, the artefacts that produced wrong answers along the way, and the limitations. |
 
 ### The controls, as tests
 

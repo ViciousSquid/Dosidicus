@@ -1,0 +1,30 @@
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+SEED 2
+  CUP   eval: learning vs frozen control: 30.8% vs 44.1% (-13.3%), p=0.239 - no detectable difference
+  DRIVE eval: learning vs frozen control: 37% vs 39% (-1%), p=0.678 - no detectable difference
+  CTRL  control arm: eval vs its own no-information baseline: 39% vs 37% (+2%), p=0.853 - no detectable difference
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+SEED 7
+  CUP   eval: learning vs frozen control: 43.8% vs 27.8% (+16.0%), p=0.169 - no detectable difference
+  DRIVE eval: learning vs frozen control: 54% vs 44% (+10%), p=0.000 - a real difference
+  CTRL  control arm: eval vs its own no-information baseline: 44% vs 45% (-1%), p=0.885 - no detectable difference
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+SEED 17
+  CUP   eval: learning vs frozen control: 38.1% vs 50.0% (-11.9%), p=0.278 - no detectable difference
+  DRIVE eval: learning vs frozen control: 55% vs 39% (+16%), p=0.000 - a real difference
+  CTRL  control arm: eval vs its own no-information baseline: 39% vs 47% (-8%), p=0.434 - no detectable difference
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+SEED 43
+  CUP   eval: learning vs frozen control: 29.7% vs 37.1% (-7.4%), p=0.505 - no detectable difference
+  DRIVE eval: learning vs frozen control: 52% vs 41% (+11%), p=0.000 - a real difference
+  CTRL  control arm: eval vs its own no-information baseline: 41% vs 28% (+12%), p=0.023 - a real difference
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+SEED 101
+  CUP   eval: learning vs frozen control: 29.4% vs 47.1% (-17.6%), p=0.134 - no detectable difference
+  DRIVE eval: learning vs frozen control: 40% vs 40% (-0%), p=0.940 - no detectable difference
+  CTRL  control arm: eval vs its own no-information baseline: 40% vs 29% (+11%), p=0.123 - no detectable difference

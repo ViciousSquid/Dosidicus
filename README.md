@@ -1,214 +1,87 @@
+# Dosidicus — cup & food experiment
 
-_"What if a Tamagotchi had a neural network and could learn stuff?"_ - [Gigazine](https://gigazine.net/gsc_news/en/20250505-dosidicus-electronicae/) , [Hackaday](https://hackaday.com/2025/04/26/digital-squids-behavior-shaped-by-neural-network/)
+> **Experimental branch.** This branch exists to run one experiment and write
+> down what it found. For the project itself, see
+> [`main`](https://github.com/ViciousSquid/Dosidicus).
 
-<p align="left">
-  <img src="https://img.shields.io/badge/AI-Neural_Network-9C27B0?style=flat&logo=mindmeister&logoColor=white" height="20" alt="AI">
-  <img src="https://img.shields.io/badge/License-GPL_v2-blue.svg?style=flat" height="20" alt="GPL-2.0">
-  <img src="https://img.shields.io/badge/Translations-7-228B22?style=flat&logo=google-translate&logoColor=white&labelColor=333333" height="20" alt="Translations">
-    <a href="https://buymeacoffee.com/vicioussquid"><img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" height="20" alt="Buy Me A Coffee"></a>
-</p>
+---
 
-> ### #1 `weird` topic project on GitHub — and #2 `simulation-game`.
+## The question
 
-# _Dosidicus electronicus_
-### Learn neuroscience by **raising a neural network as a pet**
-_A transparent cognitive sandbox disguised as a digital pet squid with a neural network you can **see thinking**_
+**Can an unchanged [Dosidicus](https://github.com/ViciousSquid/Dosidicus) brain
+learn to follow food it can no longer see?**
 
+A three-cup shell game. Bait a cup where the squid can see it, shuffle the cups,
+hide the food, and let the squid pick one. Three cups means a known chance rate
+of 1/3, so "did it learn anything?" gets a number with an error bar instead of an
+impression.
 
-- Part **educational neuro tool**, part **sim game**, part **fever dream**
-- Combining 1990s virtual pet nostalgia with modern computational neuroscience.
+The constraint that shapes everything: **no new neurons and no new sensors.** The
+squid gets no concept of a cup and no concept of a choice. It swims where its own
+network sends it, and the experiment layer watches its ordinary position and
+interprets. `can_see_food` keeps its existing meaning throughout — while the food
+is under a cup it simply is not among the objects the vision worker is given.
 
-### [Download for Windows, macOS, Linux and Android](https://github.com/ViciousSquid/Dosidicus/releases)
+## What it found
+
+| measure | result |
+|---|---|
+| **Which cup does it go to?** | **No learning.** −1.1 pp against a learning-disabled control over ten seeds and 720 scored trials (p = 0.76). Never significant in any individual seed. |
+| **Does it still want to eat once the food is hidden?** | **Real learning.** +7 pp and +19 pp in two independent replications, both p < 0.001, measured with plasticity frozen. |
+
+**The squid does not learn *where* the food went. It does learn to go on
+wanting it once it is gone.**
+
+The first result was **predicted in advance** from a reading of the code rather
+than discovered by trying and failing. Nothing the world writes into this network
+distinguishes one cup from another — every sensor is a scalar with no spatial
+content, and no action neuron is directional — so "the food is under the left
+cup" is not a proposition this brain can represent, and experience cannot teach a
+representation the architecture cannot form.
+
+## → [Read the findings](experiment%20findings/)
+
+| | |
+|---|---|
+| [**Architectural audit**](experiment%20findings/01-architectural-audit.md) | The capability analysis done before anything was built, and why it made one result a prediction. |
+| [**Method and controls**](experiment%20findings/02-method-and-controls.md) | The protocol and every control, with the reasoning for each. |
+| [**Results**](experiment%20findings/03-results.md) | All the numbers — per-seed, pooled, both replications. |
+| [**What went wrong**](experiment%20findings/04-what-went-wrong.md) | Six artefacts that produced convincing wrong answers, including a false positive that was nearly published. |
+| [**Limitations**](experiment%20findings/05-limitations.md) | What this does not show, and what would change the conclusion. |
+
+## Running it
+
+Play it — **Actions → Play: Cup & Food**:
 
 ```bash
-git clone https://github.com/ViciousSquid/Dosidicus.git
-cd Dosidicus
-python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate (Windows)
 pip install -r requirements.txt
 python main.py
 ```
 
-<img src="https://github.com/user-attachments/assets/02119926-47f7-4bfb-96b9-457d470064e4" width="900">
-<img src="https://github.com/user-attachments/assets/496cec0d-0810-4f47-8618-11165e0dd50d" width="380">
-
----
-
-## [Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems) | [Changelog](https://github.com/ViciousSquid/Dosidicus/wiki/changelog) | [Wiki](https://github.com/ViciousSquid/Dosidicus/wiki) (57 pages)
-
----
-
-## **Why this exists**
-
-What if you could understand every neuron inside a learning creature?
-
-The project is designed to make artificial cognition visible.
-
-Instead of hiding intelligence inside millions of parameters, Dosidicus starts with just eight core neurons: seven drives and the one sense a squid cannot live without. The brain is drawn in labelled rows — the drives across the top, the motor bank underneath them (one neuron per thing the squid can do, driven by ordinary synapses rather than by a rule), and the senses below that. Every connection can be inspected. Every activation can be visualised. Every learned behaviour can be traced back to experience.
-
-As the squid lives, its brain rewires itself through Hebbian learning, strengthens useful pathways using [STDP](https://github.com/ViciousSquid/Dosidicus/wiki/Spike%E2%80%90Timing%E2%80%90Dependent-Plasticity-(STDP)), works out which of its own actions cause which consequences, and grows entirely new neurons when its existing structure cannot cope.
-
-And it can tell you all of it. Every synaptic change and every grown neuron records **why** — the mechanism, the evidence, the experience, the action, the consequence — and the brain tools read that record rather than reconstructing an approximation of it:
-
-> *"Why did this weight change from 0.31 to 0.47?"*
-> *"Why does this neuron exist?"*
-> *"What does the squid know about food?"*
-
-No two brains ever develop the same way.
-
-Every save file becomes a permanent cognitive history — the provenance is saved with the squid.
-
-## As the caretaker you will
-
-- Feed, clean and care for your squid.
-- Introduce it to new experiences.
-- Watch neurons fire in real time.
-- Read, in plain English, everything it has learned and what taught it.
-- Trace any synapse back to the experience that changed it.
-- Watch memories form and influence future behaviour.
-- Observe fears, habits and preferences emerge.
-- Raise a brain unlike anyone else's.
-
-#### Under the hood runs [**STRINg** simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview):
-
-* Built from scratch in NumPy
-* No TensorFlow. No PyTorch.
-* [Wire your own](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) squid brain, add or erase entire behaviours
-* Fully visible neuron activations
-* Full provenance: every weight change and every new neuron records its cause
-* Capability-driven structural growth — new neurons appear when the network genuinely cannot cope, not because an event happened
-* Action → consequence learning with temporal credit assignment
-* Dual memory system
-* Headless training mode, running the identical engine
-
-Most AI is a black box: Dosidicus lets you see the mind forming - every neuron is visible & understandable.
-
-The squid isn't driven by scripted behaviours — it develops through experience. By watching its brain change over time, you can explore how simple learning rules give rise to increasingly complex behaviour.
-
-Want the full conceptual philosophy behind Dosidicus? Read the [Cognitive Sandbox Manifesto](https://github.com/ViciousSquid/Dosidicus/wiki/Cognitive-Sandbox-Manifesto-%7C-Artificial-Life-and-Transparent-Neural-Systems)
-
----
-
-## Experiments you can run
-
-The brain is meant to be an object of study, not only a pet. **Actions → Play:
-Cup & Food** is a three-cup shell game: bait a cup where the squid can see it,
-shuffle, and see whether it picks the right one. Underneath the game is a
-controlled experiment with a known 1/3 chance rate, a no-information baseline, a
-frozen evaluation block and a learning-disabled control arm.
-
-What it found, pooled over five seeds:
-
-- **the squid does not learn which cup** — and the reason is architectural, not
-  a failure of training. Nothing the world writes into the network distinguishes
-  one cup from another, and no action it can take is directional;
-- **it does learn to go on wanting food it can no longer see** — +19 points of
-  food-seeking drive under occlusion over the frozen control, p < 0.001,
-  measured with plasticity switched off so it cannot be adapting while it is
-  measured.
-
-No neurons or sensors were added for it. Reproduce it headlessly:
+Or reproduce the measurements headlessly:
 
 ```bash
-python headless/cup_experiment_runner.py --seed 200 --seeds 5 --no-growth
+python headless/cup_experiment_runner.py --seed 200 --seeds 5 --naive 30 --train 50 --eval 50 --no-growth
+python -m pytest tests/test_cup_experiment.py tests/test_cup_game_ui.py -q
 ```
 
-[Full write-up, controls and replication →](docs/cup_experiment.md)
+The instrument is the real engine, not a model of it: a real `HeadlessBrain`, the
+real `decision_engine.select_action`, and `can_see_food` computed by calling the
+shipping `VisionWorker` directly.
 
-## [Share Your Squid](https://github.com/ViciousSquid/Dosidicus/tree/SQUID-EXCHANGE)
+## What's on this branch
 
-No two squids are wired the same.
+| path | |
+|---|---|
+| `experiment findings/` | The findings, and the raw run logs behind them. |
+| `src/cup_experiment.py` | Trial logic, records, scoring. Qt-free. |
+| `headless/cup_experiment_runner.py` | The reproducible instrument. |
+| `src/cup_game_ui.py` | The game in the tank. |
+| `tests/test_cup_experiment.py` | 44 controls. |
+| `tests/test_cup_game_ui.py` | 12 game-path tests. |
+| `docs/cup_experiment.md` | How the thing works, for someone using it. |
 
-- Early interactions permanently alter their structure (good or bad!).
-- Tiny differences amplify.
-- Habits form. Fears emerge. Personalities drift.
-
-Your squid's brain is a cognitive history - shaped by you.
-
-So [share it](https://github.com/ViciousSquid/Dosidicus/tree/SQUID-EXCHANGE).
-
-- Export save files and let others explore your squid's neural structure.
-- Post screenshots of strange activation patterns and unexpected growth.
-- Show bizarre learned behaviors (Why is yours afraid of poop?)
-- Compare cognitive histories and trace how experience shaped structure.
-
-- Did yours grow 40 neurons?
-- Did it develop a persistent avoidance loop?
-- Did you accidentally create a neurotic reward spiral?
-
-Every squid is an experiment.
-
----
-
-## Docker
-
-Two targets are provided: `headless` (CLI trainer) and `gui` (PyQt5 app with X11).
-
-Headless (recommended for containers):
-```bash
-docker build -t dosidicus:headless --target headless .
-docker run --rm -v ${PWD}/headless_output:/app/output dosidicus:headless --ticks 10000 --output /app/output/trained_brain.json
-```
-
-GUI (Linux host with X11 or WSLg):
-```bash
-docker build -t dosidicus:gui --target gui .
-docker run --rm \
-  -e DISPLAY=$DISPLAY \
-  -e QT_X11_NO_MITSHM=1 \
-  -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
-  -v ${PWD}/saves:/app/saves \
-  -v ${PWD}/logs:/app/logs \
-  dosidicus:gui
-```
-
-Compose:
-```bash
-docker compose up --build
-docker compose --profile gui up --build
-```
-
-WSLg note: If the GUI fails to start with a Qt platform plugin error, try:
-```bash
-export QT_QPA_PLATFORM=wayland
-docker compose --profile gui up --build
-```
-
-Note: On Windows without WSLg, you will need an X server and a valid `DISPLAY` value to run the GUI container.
-
-Note: Attempting to build the Docker container on Windows ARM64 will fail because there is no pyqt5 wheel [[32]](https://github.com/ViciousSquid/Dosidicus/pull/32) -  Use the prebuilt binary from [releases](https://github.com/ViciousSquid/Dosidicus/releases/) instead
-
-Troubleshooting (quick):
-- If `DISPLAY` is empty in WSL: WSLg is not active. Use WSLg or run an X server on Windows.
-- If Docker errors mention `docker_engine`/pipe not found: start Docker Desktop and ensure WSL integration is enabled.
-- If GUI still exits with Qt plugin errors: rebuild the image (`docker compose --profile gui build --no-cache`) and retry.
-
----
-
-## Technical Overview
-
-- **Dependencies:**
-  - Python ^3.9
-  - PyQt5 ^5.15 (GUI framework)
-  - numpy ^1.21 (neural network computations)
-  - **OPTIONAL** onnxruntime or onnxruntime-directml ([more info](https://github.com/ViciousSquid/Dosidicus/wiki/AI-accelerator-support))
-- **Core Structure:** Modular codebase in `src/` including brain designer, decision engine, learning algorithms, personality traits, memory management, UI components, and interaction systems. Entry point via `main.py`.
-
-### Key Project Components
-- **Plugin System:** Extensible architecture with built-in plugins for achievements (tracking milestones) and multiplayer (networked interactions).
-- **Save System:** Persistent saves in `saves/` for pet states, autosaves, and achievement logs.
-- **Headless Mode:** Standalone training and simulation in `headless/` for GUI-less operation, ideal for background training or server environments (experimental)
-- **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
-- **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
-- **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
-- **Experiments:** Controlled, reproducible studies of the brain that ship with the game — see [`docs/cup_experiment.md`](docs/cup_experiment.md) and `tests/README.md`.
-
----
-
-### A year ago I got a **tattoo of this project** to celebrate its first development milestone!
-
-<img src="https://github.com/user-attachments/assets/fe50e8d8-cb76-4b20-830a-ea6af28bb608" width="250">
-
----
-
-![Visitors](https://api.visitorbadge.io/api/visitors?path=ViciousSquid&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+One change outside the experiment: `RecordedSynapses.learning_frozen` in
+`src/neural_provenance.py`, enforced inside the single method every synaptic
+write passes through, so a frozen evaluation block genuinely cannot adapt while
+it is being measured.

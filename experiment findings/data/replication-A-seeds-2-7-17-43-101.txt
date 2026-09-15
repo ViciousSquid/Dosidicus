@@ -1,0 +1,43 @@
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+========================================================================
+REPLICATION over 5 seeds: [2, 7, 17, 43, 101]
+========================================================================
+
+-- per seed, so you can see the spread --------------------------------
+  seed    2  cup   eval: learning vs frozen control: 30.8% vs 44.1% (-13.3%), p=0.239 - no detectable difference
+            drive eval: learning vs frozen control: 37% vs 39% (-1%), p=0.678 - no detectable difference
+  seed    7  cup   eval: learning vs frozen control: 43.8% vs 27.8% (+16.0%), p=0.169 - no detectable difference
+            drive eval: learning vs frozen control: 54% vs 44% (+10%), p=0.000 - a real difference
+  seed   17  cup   eval: learning vs frozen control: 38.1% vs 50.0% (-11.9%), p=0.278 - no detectable difference
+            drive eval: learning vs frozen control: 55% vs 39% (+16%), p=0.000 - a real difference
+  seed   43  cup   eval: learning vs frozen control: 29.7% vs 37.1% (-7.4%), p=0.505 - no detectable difference
+            drive eval: learning vs frozen control: 52% vs 41% (+11%), p=0.000 - a real difference
+  seed  101  cup   eval: learning vs frozen control: 29.4% vs 47.1% (-17.6%), p=0.134 - no detectable difference
+            drive eval: learning vs frozen control: 40% vs 40% (-0%), p=0.940 - no detectable difference
+
+-- pooled over every trial ---------------------------------------------
+  learning  naive (learning frozen): 35/99 correct = 35.4% [95% CI 26.6%-45.2%], chance 33.3%, p=0.371 - not distinguishable from chance  (51 omitted of 150)
+  learning  train: 61/164 correct = 37.2% [95% CI 30.2%-44.8%], chance 33.3%, p=0.167 - not distinguishable from chance  (86 omitted of 250)
+  learning  eval (learning frozen): 63/184 correct = 34.2% [95% CI 27.8%-41.4%], chance 33.3%, p=0.424 - not distinguishable from chance  (66 omitted of 250)
+  control   naive (learning frozen): 35/99 correct = 35.4% [95% CI 26.6%-45.2%], chance 33.3%, p=0.371 - not distinguishable from chance  (51 omitted of 150)
+  control   train (learning frozen): 64/175 correct = 36.6% [95% CI 29.8%-43.9%], chance 33.3%, p=0.203 - not distinguishable from chance  (75 omitted of 250)
+  control   eval (learning frozen): 74/179 correct = 41.3% [95% CI 34.4%-48.7%], chance 33.3%, p=0.015 - above chance  (71 omitted of 250)
+
+-- the verdict, on the pooled data -------------------------------------
+  WHICH CUP:
+    eval: learning vs frozen control: 34.2% vs 41.3% (-7.1%), p=0.163 - no detectable difference
+    eval vs no-information baseline: 34.2% vs 35.4% (-1.1%), p=0.851 - no detectable difference
+  DRIVE UNDER OCCLUSION:
+    eval: learning vs frozen control: 48% vs 40% (+7%), p=0.000 - a real difference
+    learning arm: eval vs no-information baseline: 48% vs 36% (+12%), p=0.000 - a real difference
+    control arm: eval vs no-information baseline: 40% vs 36% (+5%), p=0.122 - no detectable difference
+========================================================================

@@ -1,0 +1,21 @@
+................................................................ [ 11%]
+....................................... [ 18%]
+........................................................................................ [ 34%]
+................. [ 37%]
+.......s.................................................. [ 47%]
+..................................................................... [ 60%]
+................................................ [ 68%]
+................................................................................. [ 83%]
+......................... [ 87%]
+...................................... [ 94%]
+............ [ 96%]
+.................                                                        [100%]
+=============================== warnings summary ===============================
+tests/test_peer_discovery.py::TwoNodesOnOneMachineTests::test_a_node_that_is_listening_hears_its_peer
+tests/test_peer_discovery.py::TwoNodesOnOneMachineTests::test_a_node_that_is_listening_hears_its_peer
+tests/test_peer_discovery.py::TwoNodesOnOneMachineTests::test_a_node_that_never_listens_hears_nothing
+  /home/user/Dosidicus/plugins/multiplayer/mp_network_node.py:401: DeprecationWarning: setName() is deprecated, set the name attribute instead
+    self.listener_thread.setName(f"MPNodeListener-{self.node_id[:4]}") # Helpful for debugging threads
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+555 passed, 1 skipped, 3 warnings, 613 subtests passed in 152.39s (0:02:32)

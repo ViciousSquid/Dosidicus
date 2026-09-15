@@ -877,6 +877,12 @@ def main() -> int:
                     help="replicate the paired design over N seeds starting at "
                          "--seed and pool the trials. One seed is one animal, "
                          "and one animal is not a result.")
+    ap.add_argument("--seed-list", type=str, default=None, dest="seed_list",
+                    metavar="A,B,C",
+                    help="replicate over exactly these seeds instead of a "
+                         "consecutive run. Exists so a published result can be "
+                         "reproduced by the command that produced it, whatever "
+                         "seeds it happened to use.")
     ap.add_argument("--single", action="store_true",
                     help="run one arm instead of the paired learning-vs-control "
                          "design")
@@ -891,8 +897,12 @@ def main() -> int:
     settings = TrialSettings()
     if args.delay is not None:
         settings.hidden_ticks = max(0, args.delay)
-    if args.seeds:
-        result = replicate(range(args.seed, args.seed + args.seeds),
+    if args.seeds or args.seed_list:
+        if args.seed_list:
+            seeds = [int(part) for part in args.seed_list.split(",") if part.strip()]
+        else:
+            seeds = list(range(args.seed, args.seed + args.seeds))
+        result = replicate(seeds,
                            naive=args.naive, train=args.train,
                            evaluate=args.evaluate, settings=settings,
                            growth=not args.no_growth)
