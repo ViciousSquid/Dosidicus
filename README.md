@@ -1,4 +1,9 @@
-# Dosidicus — cup & food experiment
+# Experiment: Cups and food
+
+> Tested with Dodisicus version **3.0.0.0** on 15/09/2026
+
+
+<img src="https://github.com/user-attachments/assets/4937d2b3-3d01-4833-9fba-cfd960ee0b63" width="250">
 
 > **Experimental branch.** This branch exists to run one experiment and write
 > down what it found. For the project itself, see
