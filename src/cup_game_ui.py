@@ -31,7 +31,6 @@ this module watches its ordinary position and calls the first cup it reaches its
 selection.
 """
 
-import math
 import os
 import time
 
@@ -282,8 +281,7 @@ class CupGameController(QtCore.QObject):
         self._enter(Phase.BAIT, self.BAIT_LIMIT)
 
     def _enter(self, phase, seconds):
-        self.experiment.phase = phase
-        self.experiment._phase_started = time.time()
+        self.experiment.enter_phase(phase)
         self._phase_started = time.time()
         self._deadline = time.time() + float(seconds)
         self.phase_changed.emit(phase.value)

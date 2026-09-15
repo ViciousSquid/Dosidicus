@@ -46,7 +46,7 @@ QtWidgets.QDialog.exec_ = lambda self: 0
 
 import main as main_module  # noqa: E402
 from src.cup_experiment import Phase  # noqa: E402
-from src.cup_game_ui import CupGameController, CupItem, GhostItem  # noqa: E402
+from src.cup_game_ui import CupGameController, GhostItem  # noqa: E402
 from src.vision_worker import extract_scene_objects  # noqa: E402
 
 

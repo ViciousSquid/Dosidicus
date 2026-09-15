@@ -858,6 +858,16 @@ class CupExperiment:
         self._enter(Phase.SETTLED)
         return record
 
+    def enter_phase(self, phase: Phase) -> None:
+        """Move the open trial to `phase` and restart the phase clock.
+
+        The headless runner walks the phases through the named steps below;
+        the game UI drives them on a wall clock instead, and needs to say
+        "we are in the choice phase now" without reaching into this object's
+        internals to do it.
+        """
+        self._enter(phase)
+
     def _enter(self, phase: Phase) -> None:
         self.phase = phase
         self._phase_started = time.time()

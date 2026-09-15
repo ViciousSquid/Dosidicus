@@ -49,8 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from headless_trainer import HeadlessBrain, HeadlessSquid, TrainingConfig  # noqa: E402
 from src.cup_experiment import (  # noqa: E402
     CUP_IDENTITIES, Comparison, CupExperiment, CupLayout, DriveComparison,
-    Phase, TrialRecord, DEFAULT_SELECT_RADIUS, persistence_values, score_block,
-    two_proportion_p,
+    TrialRecord, DEFAULT_SELECT_RADIUS, persistence_values, score_block,
 )
 from src.decision_engine import select_action  # noqa: E402
 from src.vision_worker import (  # noqa: E402
@@ -693,7 +692,8 @@ def replicate(seeds: Sequence[int], naive: int = 30, train: int = 50,
         pooled[arm] = {'naive': [], 'train': [], 'eval': []}
 
     for seed in seeds:
-        paired = replicate_one(seed, naive, train, evaluate, settings, growth)
+        paired = run_paired(seed=seed, naive=naive, train=train,
+                            evaluate=evaluate, settings=settings, growth=growth)
         per_seed.append(paired)
         for arm, world in (('learning', paired['worlds'][0]),
                            ('control', paired['worlds'][1])):
@@ -729,11 +729,6 @@ def replicate(seeds: Sequence[int], naive: int = 30, train: int = 50,
         'comparisons': comparisons,
         'drive_comparisons': drive_comparisons,
     }
-
-
-def replicate_one(seed, naive, train, evaluate, settings, growth):
-    return run_paired(seed=seed, naive=naive, train=train, evaluate=evaluate,
-                      settings=settings, growth=growth)
 
 
 def format_replication(result: Dict) -> str:

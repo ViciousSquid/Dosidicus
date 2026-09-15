@@ -35,7 +35,7 @@ for path in (_REPO_ROOT, os.path.join(_REPO_ROOT, 'headless')):
 from src.brain_neuron_hooks import DEFAULT_INPUT_SENSORS  # noqa: E402
 from src.brain_constants import newborn_neurons  # noqa: E402
 from src.cup_experiment import (  # noqa: E402
-    CUP_IDENTITIES, Comparison, CupExperiment, CupLayout, DriveComparison,
+    CUP_IDENTITIES, Comparison, CupLayout, DriveComparison,
     Perception, Phase, TrialRecord, binomial_tail, chance_rate,
     fixed_strategy_scores, omission_bias, permutation_p, persistence_values,
     score_block, two_proportion_p, wilson_interval,
