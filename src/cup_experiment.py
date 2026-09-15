@@ -191,6 +191,12 @@ class TrialRecord:
     ate: bool = False
     committed: bool = False          # did it reach a cup at all?
     choice_latency: float = 0.0
+    #: Did the choice open from a fair starting place - the squid clear of
+    #: every cup - or did the apparatus run out of patience and start it
+    #: sitting next to one? A trial that did not start clear is still scored,
+    #: and `started_clear` is what lets anyone check whether those trials are
+    #: carrying the result.
+    started_clear: bool = True
 
     # --- what the squid perceived -------------------------------------
     perceptions: List[Perception] = field(default_factory=list)
@@ -326,6 +332,83 @@ def two_proportion_p(hits_a: int, n_a: int, hits_b: int, n_b: int) -> float:
     return math.erfc(z / math.sqrt(2.0))
 
 
+def permutation_p(a: Sequence[float], b: Sequence[float],
+                  iterations: int = 5000,
+                  rng: Optional[random.Random] = None) -> float:
+    """Two-sided p for "these two samples have different means".
+
+    A permutation test, because the measure it is used on - how hard the squid
+    wanted to eat with the food out of sight - is a bounded activation with no
+    reason to be normally distributed, and because a permutation test needs no
+    table, no library and no distributional assumption. Seeded, so a run is
+    reproducible like everything else here.
+    """
+    a, b = [float(x) for x in a], [float(x) for x in b]
+    if not a or not b:
+        return 1.0
+    observed = abs(sum(a) / len(a) - sum(b) / len(b))
+    pool = a + b
+    n = len(a)
+    rng = rng or random.Random(0)
+    hits = 0
+    for _ in range(iterations):
+        rng.shuffle(pool)
+        diff = abs(sum(pool[:n]) / n - sum(pool[n:]) / (len(pool) - n))
+        if diff >= observed - 1e-12:
+            hits += 1
+    return (hits + 1) / (iterations + 1)
+
+
+@dataclass
+class DriveComparison:
+    """Food-seeking drive under occlusion, one block against another.
+
+    The other half of the result. Which cup the squid goes to is a spatial
+    question the network cannot represent, but HOW MUCH IT STILL WANTS TO EAT
+    once the food is out of sight is an activation on a neuron it already has,
+    reached through synapses the existing plasticity engine moves. If training
+    teaches the squid anything about food it cannot see, it shows up here.
+    """
+    label: str
+    a_values: List[float]
+    b_values: List[float]
+
+    @staticmethod
+    def _mean(values):
+        return (sum(values) / len(values)) if values else None
+
+    @property
+    def a_mean(self) -> Optional[float]:
+        return self._mean(self.a_values)
+
+    @property
+    def b_mean(self) -> Optional[float]:
+        return self._mean(self.b_values)
+
+    @property
+    def p_value(self) -> float:
+        return permutation_p(self.a_values, self.b_values)
+
+    @property
+    def significant(self) -> bool:
+        return self.p_value < 0.05
+
+    def describe(self) -> str:
+        if self.a_mean is None or self.b_mean is None:
+            return f"{self.label}: not enough trials"
+        verdict = ("a real difference" if self.significant
+                   else "no detectable difference")
+        return (f"{self.label}: {self.a_mean:.0%} vs {self.b_mean:.0%} "
+                f"({self.a_mean - self.b_mean:+.0%}), "
+                f"p={self.p_value:.3f} - {verdict}")
+
+
+def persistence_values(records: Sequence[TrialRecord]) -> List[float]:
+    """Per-trial occlusion persistence, for the trials that have one."""
+    return [v for v in (r.occlusion_persistence() for r in records)
+            if v is not None]
+
+
 @dataclass
 class Comparison:
     """One block measured against another, with the verdict spelled out."""
@@ -386,6 +469,19 @@ class BlockStats:
     mean_act_eat_hidden: Optional[float]
     mean_persistence: Optional[float]
     learning_frozen: bool
+    #: The same block, restricted to trials that began with the squid clear of
+    #: every cup. The rest began with it standing on or beside the cup it had
+    #: last seen the food at, where picking the nearest one is worth points
+    #: that have nothing to do with knowing anything. Splitting them is the
+    #: experiment's sharpest internal control: a squid that had LEARNED where
+    #: the food was would score alike in both strata, and a squid that is
+    #: merely still standing there would not.
+    clear_committed: int = 0
+    clear_hits: int = 0
+    clear_rate: float = 0.0
+    near_committed: int = 0
+    near_hits: int = 0
+    near_rate: float = 0.0
 
     @property
     def above_chance(self) -> bool:
@@ -403,6 +499,18 @@ class BlockStats:
                 f"chance {self.chance:.1%}, p={self.p_above_chance:.3f} "
                 f"- {verdict}"
                 + (f"  ({omitted} omitted of {self.trials})" if omitted else ""))
+
+    def describe_start(self) -> str:
+        """Accuracy split by where the trial started from."""
+        def part(hits, n, label):
+            return (f"{label} {hits}/{n} = {hits / n:.1%}" if n
+                    else f"{label} no trials")
+        return (f"{self.block}: "
+                + part(self.clear_hits, self.clear_committed,
+                       "started clear of every cup:")
+                + "; "
+                + part(self.near_hits, self.near_committed,
+                       "started beside one:"))
 
     def describe_drive(self) -> str:
         """The secondary measure, stated separately so it is never read as
@@ -431,6 +539,11 @@ def score_block(records: Sequence[TrialRecord], block: str = "",
         values = [v for v in (getter(r) for r in records) if v is not None]
         return (sum(values) / len(values)) if values else None
 
+    clear = [r for r in played if r.started_clear]
+    near = [r for r in played if not r.started_clear]
+    clear_hits = sum(1 for r in clear if r.correct)
+    near_hits = sum(1 for r in near if r.correct)
+
     return BlockStats(
         block=block or (records[0].block if records else ""),
         trials=total,
@@ -447,6 +560,12 @@ def score_block(records: Sequence[TrialRecord], block: str = "",
         mean_act_eat_hidden=mean_of(TrialRecord.act_eat_while_hidden),
         mean_persistence=mean_of(TrialRecord.occlusion_persistence),
         learning_frozen=bool(records and records[-1].learning_frozen),
+        clear_committed=len(clear),
+        clear_hits=clear_hits,
+        clear_rate=(clear_hits / len(clear)) if clear else 0.0,
+        near_committed=len(near),
+        near_hits=near_hits,
+        near_rate=(near_hits / len(near)) if near else 0.0,
     )
 
 

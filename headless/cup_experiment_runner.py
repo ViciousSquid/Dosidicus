@@ -48,8 +48,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from headless_trainer import HeadlessBrain, HeadlessSquid, TrainingConfig  # noqa: E402
 from src.cup_experiment import (  # noqa: E402
-    CUP_IDENTITIES, Comparison, CupExperiment, CupLayout, Phase, TrialRecord,
-    DEFAULT_SELECT_RADIUS, score_block,
+    CUP_IDENTITIES, Comparison, CupExperiment, CupLayout, DriveComparison,
+    Phase, TrialRecord, DEFAULT_SELECT_RADIUS, persistence_values, score_block,
 )
 from src.decision_engine import select_action  # noqa: E402
 from src.vision_worker import (  # noqa: E402
@@ -140,9 +140,14 @@ class CupSquidBody(HeadlessSquid):
         else:
             self.squid_direction = "down" if dy > 0 else "up"
 
+    DIRECTIONS = ("left", "right", "up", "down")
+
     def move_randomly(self) -> None:
-        if self.rng.random() < 0.25:
-            self.squid_direction = self.rng.choice(["left", "right", "up", "down"])
+        """`Squid.move_randomly`: a one-in-five chance of turning, and never
+        back onto the heading it already had."""
+        if self.rng.random() < 0.20:
+            choices = [d for d in self.DIRECTIONS if d != self.squid_direction]
+            self.squid_direction = self.rng.choice(choices)
 
     def step(self, visible_food: Sequence[Tuple[float, float]],
              drive_target: Optional[Tuple[float, float]]) -> None:
@@ -259,16 +264,24 @@ class TrialSettings:
     #: won by coasting. Vary it with --delay: at delay 0 a good score means
     #: ballistic continuation, not memory, and the report says so.
     hidden_ticks: int = 20
-    #: The squid must be clear of every cup when the choice window opens, or it
-    #: would "choose" the cup it happened to be resting on at zero latency.
-    #: Waiting for it to leave is the same rule for all three cups.
-    clearance_ticks: int = 60
+    #: The start position, and the single most important control in the
+    #: apparatus. The squid spends the bait and shuffle phases swimming TO the
+    #: baited cup, so when the food vanishes it is standing on the answer - and
+    #: a squid that simply picks the nearest cup then scores far above 1/3
+    #: while knowing nothing whatever. Requiring it to be this far from EVERY
+    #: cup before the choice opens breaks the correlation between where it
+    #: happens to be and where the food is. Same rule for all three cups, so it
+    #: introduces no preference of its own.
+    #:
+    #: The cups are ~500px apart, so this is most of the way to the next one.
+    start_clearance: float = 330.0
+    clearance_ticks: int = 220
 
     #: How long the squid gets to reach a cup. Generous, because a trial it
     #: never plays is an omission rather than an error and the fewer of those
     #: the better - but capped, because waiting indefinitely would turn every
     #: trial into "eventually it bumped into something".
-    choice_ticks: int = 260
+    choice_ticks: int = 320
     outcome_ticks: int = 10
     hebbian_interval: int = 10
     select_radius: float = DEFAULT_SELECT_RADIUS
@@ -313,6 +326,12 @@ class CupWorld:
 
     def __init__(self, seed: int = 0, settings: Optional[TrialSettings] = None,
                  config: Optional[TrainingConfig] = None):
+        # Seed the global module too, not just this world's own stream.
+        # `decision_engine.select_action` draws its tie-breaking jitter from
+        # `random` directly, so a run is only reproducible if that is seeded as
+        # well - the same reason `HeadlessSimulation` seeds it in ITS
+        # constructor, and the same place to do it.
+        random.seed(seed)
         self.rng = random.Random(seed)
         self.settings = settings or TrialSettings()
         self.brain = HeadlessBrain(config or TrainingConfig(seed=seed))
@@ -436,8 +455,9 @@ class CupWorld:
 
     # -- one trial ------------------------------------------------------
     def _clear_of_cups(self) -> bool:
+        """Is the squid far enough from every cup to start from a fair place?"""
         return self.layout.slot_nearest(
-            *self.body.centre, radius=self.settings.select_radius) < 0
+            *self.body.centre, radius=self.settings.start_clearance) < 0
 
     def run_trial(self, block: str = "train", learn: bool = True,
                   show_bait: bool = True) -> TrialRecord:
@@ -481,6 +501,7 @@ class CupWorld:
         while not self._clear_of_cups() and waited < s.clearance_ticks:
             self._run(1, learn)
             waited += 1
+        record.started_clear = self._clear_of_cups()
 
         # 5. The squid swims. Whichever cup it reaches first is its selection.
         self.experiment.open_choice()
@@ -617,10 +638,30 @@ def run_paired(seed: int = 1, naive: int = 30, train: int = 40,
         comparisons.insert(0, Comparison(
             "eval vs no-information baseline", eval_block, naive_block))
 
+    # The other measure: food-seeking drive with the food out of sight. Read
+    # per trial rather than off the block means, so the test has samples to
+    # permute.
+    def drive(world, name):
+        return persistence_values(
+            [r for r in world.experiment.trials if r.block == name])
+
+    drive_comparisons = [
+        DriveComparison("eval: learning vs frozen control",
+                        drive(learning_world, "eval"),
+                        drive(control_world, "eval")),
+        DriveComparison("learning arm: eval vs its own no-information baseline",
+                        drive(learning_world, "eval"),
+                        drive(learning_world, "naive")),
+        DriveComparison("control arm: eval vs its own no-information baseline",
+                        drive(control_world, "eval"),
+                        drive(control_world, "naive")),
+    ]
+
     return {
         'learning': learning,
         'control': control,
         'comparisons': comparisons,
+        'drive_comparisons': drive_comparisons,
         'worlds': (learning_world, control_world),
         'growth': bool(growth),
     }
@@ -643,6 +684,10 @@ def format_report(report: Dict) -> str:
     lines.append("-- accuracy: which cup did it go to? " + "-" * 35)
     for stats in report['blocks']:
         lines.append("  " + stats.describe())
+    lines.append("")
+    lines.append("-- where the trial started from " + "-" * 40)
+    for stats in report['blocks']:
+        lines.append("  " + stats.describe_start())
     lines.append("")
     lines.append("-- drive: did it still want to eat once the food vanished? " + "-" * 13)
     for stats in report['blocks']:
@@ -688,21 +733,37 @@ def format_paired(paired: Dict) -> str:
     lines.append("=" * 72)
     lines.append("DID IT LEARN?")
     lines.append("=" * 72)
+    lines.append("  WHICH CUP - a spatial fact:")
     for comparison in paired['comparisons']:
-        lines.append("  " + comparison.describe())
+        lines.append("    " + comparison.describe())
     lines.append("")
-    verdict = next((c for c in paired['comparisons']
-                    if c.label.startswith("eval: ")), None)
-    if verdict is not None and not verdict.significant:
-        lines.append("  The learning arm and the frozen arm score the same, so")
-        lines.append("  whatever either scores above the no-information")
-        lines.append("  baseline is the apparatus, not the squid: it ends a")
-        lines.append("  trial near the cup it last saw the food at, and the")
-        lines.append("  nearest cup is the one it swims to. Learning moved the")
-        lines.append("  network - the ledger above counts every change - but it")
-        lines.append("  did not move THIS. See the module docstring of")
-        lines.append("  src/cup_experiment.py for why: nothing the world writes")
-        lines.append("  into this network distinguishes one cup from another.")
+    lines.append("  HOW MUCH IT STILL WANTED TO EAT once the food vanished -")
+    lines.append("  an activation on a neuron it already had:")
+    for comparison in paired.get('drive_comparisons', []):
+        lines.append("    " + comparison.describe())
+    lines.append("")
+
+    cup_verdict = next((c for c in paired['comparisons']
+                        if c.label.startswith("eval: ")), None)
+    drive_verdict = next((c for c in paired.get('drive_comparisons', [])
+                          if c.label.startswith("eval: ")), None)
+    if cup_verdict is not None and not cup_verdict.significant:
+        lines.append("  WHICH CUP: no. The learning arm and the frozen arm")
+        lines.append("  score alike, and alike with a squid that was never")
+        lines.append("  shown the bait at all. Nothing the world writes into")
+        lines.append("  this network distinguishes one cup from another and no")
+        lines.append("  action it can take is directional, so 'the food is")
+        lines.append("  under the left one' is not a thought this brain can")
+        lines.append("  have - and experience cannot teach a representation")
+        lines.append("  the architecture cannot form. See the module docstring")
+        lines.append("  of src/cup_experiment.py.")
+    if drive_verdict is not None and drive_verdict.significant:
+        lines.append("")
+        lines.append("  DRIVE: yes. Food-seeking survives occlusion better")
+        lines.append("  after training than it does with plasticity switched")
+        lines.append("  off, measured in a block where learning was frozen, so")
+        lines.append("  it is not adaptation happening during the measurement.")
+        lines.append("  Every weight behind it is in the ledger above.")
     lines.append("=" * 72)
     return "\n".join(lines)
 
