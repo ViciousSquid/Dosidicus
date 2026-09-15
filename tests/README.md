@@ -18,6 +18,8 @@ No display is needed. If a Qt-backed test complains about a display, set
 | `test_organism.py` | Whole-life behavioural experiments — two squid raised differently, and whether the brain can explain the difference. |
 | `test_transparency.py` | Whether the brain can account for itself: provenance of every weight and neuron. |
 | `test_learning.py` | Plasticity rules in isolation. |
+| `test_cup_experiment.py` | The cup-and-food experiment — randomisation, leakage, the chance baseline, frozen evaluation and the learning-disabled control. See `docs/cup_experiment.md`. |
+| `test_cup_game_ui.py` | The same experiment as the game in the tank: cups are scenery the squid cannot see, hiding really hides, eating goes through `Squid.eat`. |
 | `test_squid_statistics.py`, `test_statistics_*.py` | The lifetime statistics model, its persistence and its wiring to the UI. |
 
 ## Studying the brain
@@ -84,6 +86,21 @@ running code rather than the documentation, among them:
 
 If one of those fails, the mechanism it names has changed — that is the point
 of stating them as tests.
+
+## A worked example: the cup-and-food experiment
+
+`docs/cup_experiment.md` walks through one experiment end to end — the question,
+the architectural check that decided what it was allowed to claim, the blocks,
+the controls, and the result, which is mostly a null.
+
+It is also where the project's cautionary tale lives. One seed of that
+experiment produced an effect at p < 0.001; the next seed produced nothing. If
+you write an experiment here, replicate it across seeds and pool the trials
+before believing it.
+
+```
+python headless/cup_experiment_runner.py --seed 200 --seeds 5 --no-growth
+```
 
 ## Writing a new experiment
 

@@ -50,6 +50,7 @@ from headless_trainer import HeadlessBrain, HeadlessSquid, TrainingConfig  # noq
 from src.cup_experiment import (  # noqa: E402
     CUP_IDENTITIES, Comparison, CupExperiment, CupLayout, DriveComparison,
     Phase, TrialRecord, DEFAULT_SELECT_RADIUS, persistence_values, score_block,
+    two_proportion_p,
 )
 from src.decision_engine import select_action  # noqa: E402
 from src.vision_worker import (  # noqa: E402
@@ -668,6 +669,103 @@ def run_paired(seed: int = 1, naive: int = 30, train: int = 40,
 
 
 # ---------------------------------------------------------------------------
+# Replication
+# ---------------------------------------------------------------------------
+def replicate(seeds: Sequence[int], naive: int = 30, train: int = 50,
+              evaluate: int = 50, settings: Optional[TrialSettings] = None,
+              growth: bool = False) -> Dict:
+    """Run the paired design over several seeds and POOL the trials.
+
+    This exists because of a real mistake made while building this experiment.
+    Seed 7 produced a rise in occlusion persistence of +22 percentage points at
+    p < 0.001 - a clean, significant, entirely convincing effect. Seed 2
+    produced -1 point at p = 0.68. One run of this experiment is one animal, and
+    one animal is not a result; a single seed will hand you a significant effect
+    roughly as often as the significance level says it will.
+
+    Pooling the trials rather than averaging the per-seed p-values, because a
+    mean of p-values is not a p-value.
+    """
+    seeds = list(seeds)
+    per_seed = []
+    pooled = {'learning': {}, 'control': {}}
+    for arm in pooled:
+        pooled[arm] = {'naive': [], 'train': [], 'eval': []}
+
+    for seed in seeds:
+        paired = replicate_one(seed, naive, train, evaluate, settings, growth)
+        per_seed.append(paired)
+        for arm, world in (('learning', paired['worlds'][0]),
+                           ('control', paired['worlds'][1])):
+            for name in pooled[arm]:
+                pooled[arm][name].extend(
+                    r for r in world.experiment.trials if r.block == name)
+
+    blocks = {arm: {name: score_block(records, name)
+                    for name, records in by_block.items()}
+              for arm, by_block in pooled.items()}
+
+    comparisons = [
+        Comparison("eval: learning vs frozen control",
+                   blocks['learning']['eval'], blocks['control']['eval']),
+        Comparison("eval vs no-information baseline",
+                   blocks['learning']['eval'], blocks['learning']['naive']),
+    ]
+    drive_comparisons = [
+        DriveComparison("eval: learning vs frozen control",
+                        persistence_values(pooled['learning']['eval']),
+                        persistence_values(pooled['control']['eval'])),
+        DriveComparison("learning arm: eval vs no-information baseline",
+                        persistence_values(pooled['learning']['eval']),
+                        persistence_values(pooled['learning']['naive'])),
+        DriveComparison("control arm: eval vs no-information baseline",
+                        persistence_values(pooled['control']['eval']),
+                        persistence_values(pooled['control']['naive'])),
+    ]
+    return {
+        'seeds': seeds,
+        'per_seed': per_seed,
+        'blocks': blocks,
+        'comparisons': comparisons,
+        'drive_comparisons': drive_comparisons,
+    }
+
+
+def replicate_one(seed, naive, train, evaluate, settings, growth):
+    return run_paired(seed=seed, naive=naive, train=train, evaluate=evaluate,
+                      settings=settings, growth=growth)
+
+
+def format_replication(result: Dict) -> str:
+    lines = ["=" * 72,
+             f"REPLICATION over {len(result['seeds'])} seeds: "
+             f"{result['seeds']}",
+             "=" * 72,
+             "",
+             "-- per seed, so you can see the spread " + "-" * 32]
+    for seed, paired in zip(result['seeds'], result['per_seed']):
+        cup = next(c for c in paired['comparisons']
+                   if c.label.startswith("eval: "))
+        drive = next(c for c in paired['drive_comparisons']
+                     if c.label.startswith("eval: "))
+        lines.append(f"  seed {seed:>4}  cup   {cup.describe()}")
+        lines.append(f"            drive {drive.describe()}")
+    lines += ["", "-- pooled over every trial " + "-" * 45]
+    for arm in ('learning', 'control'):
+        for name in ('naive', 'train', 'eval'):
+            lines.append(f"  {arm:<9} " + result['blocks'][arm][name].describe())
+    lines += ["", "-- the verdict, on the pooled data " + "-" * 37,
+              "  WHICH CUP:"]
+    for comparison in result['comparisons']:
+        lines.append("    " + comparison.describe())
+    lines.append("  DRIVE UNDER OCCLUSION:")
+    for comparison in result['drive_comparisons']:
+        lines.append("    " + comparison.describe())
+    lines.append("=" * 72)
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
 def format_report(report: Dict) -> str:
@@ -780,6 +878,10 @@ def main() -> int:
                     help="switch off neurogenesis, isolating plasticity")
     ap.add_argument("--control", action="store_true",
                     help="run ONLY the learning-disabled control arm")
+    ap.add_argument("--seeds", type=int, default=0, metavar="N",
+                    help="replicate the paired design over N seeds starting at "
+                         "--seed and pool the trials. One seed is one animal, "
+                         "and one animal is not a result.")
     ap.add_argument("--single", action="store_true",
                     help="run one arm instead of the paired learning-vs-control "
                          "design")
@@ -794,6 +896,14 @@ def main() -> int:
     settings = TrialSettings()
     if args.delay is not None:
         settings.hidden_ticks = max(0, args.delay)
+    if args.seeds:
+        result = replicate(range(args.seed, args.seed + args.seeds),
+                           naive=args.naive, train=args.train,
+                           evaluate=args.evaluate, settings=settings,
+                           growth=not args.no_growth)
+        print(format_replication(result))
+        return 0
+
     if args.single or args.control:
         config = TrainingConfig(seed=args.seed)
         config.neurogenesis_enabled = not args.no_growth

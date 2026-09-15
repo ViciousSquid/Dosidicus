@@ -1591,6 +1591,14 @@ class Ui:
         self.medicine_action = QtWidgets.QAction(loc.get("medicine"), self.window)
         actions_menu.addAction(self.medicine_action)
 
+        actions_menu.addSeparator()
+        self.cup_game_action = QtWidgets.QAction("Play: Cup && Food", self.window)
+        self.cup_game_action.setToolTip(
+            "A three-cup shell game. Bait a cup, shuffle them, and see whether "
+            "the squid picks the right one - and whether it can learn to.")
+        self.cup_game_action.triggered.connect(self.show_cup_game)
+        actions_menu.addAction(self.cup_game_action)
+
         debug_menu = self.menu_bar.addMenu(loc.get("debug"))
         self.debug_action = QtWidgets.QAction(loc.get("toggle_debug"), self.window)
         self.debug_action.setCheckable(True)
@@ -1679,6 +1687,21 @@ class Ui:
             self._task_manager = TaskManagerWindow(worker, self.window)
         self._task_manager.show()
         self._task_manager.raise_()
+
+    def show_cup_game(self):
+        """Open the cup-and-food experiment over the live tank."""
+        if not self.tamagotchi_logic:
+            QtWidgets.QMessageBox.warning(
+                self.window, "Error", "Game logic is not yet initialized.")
+            return
+        existing = getattr(self, 'cup_game_window', None)
+        if existing is not None and existing.isVisible():
+            existing.raise_()
+            existing.activateWindow()
+            return
+        from .cup_game_ui import CupGameWindow
+        self.cup_game_window = CupGameWindow(self.tamagotchi_logic, self.window)
+        self.cup_game_window.show()
 
     def show_vision_window(self):
         if not hasattr(self, 'vision_window') or self.vision_window is None or not self.vision_window.isVisible():

@@ -35,9 +35,10 @@ for path in (_REPO_ROOT, os.path.join(_REPO_ROOT, 'headless')):
 from src.brain_neuron_hooks import DEFAULT_INPUT_SENSORS  # noqa: E402
 from src.brain_constants import newborn_neurons  # noqa: E402
 from src.cup_experiment import (  # noqa: E402
-    CUP_IDENTITIES, Comparison, CupExperiment, CupLayout, Perception, Phase,
-    TrialRecord, binomial_tail, chance_rate, fixed_strategy_scores,
-    omission_bias, score_block, two_proportion_p, wilson_interval,
+    CUP_IDENTITIES, Comparison, CupExperiment, CupLayout, DriveComparison,
+    Perception, Phase, TrialRecord, binomial_tail, chance_rate,
+    fixed_strategy_scores, omission_bias, permutation_p, persistence_values,
+    score_block, two_proportion_p, wilson_interval,
 )
 from src.vision_worker import SceneObject, SquidVisionState, VisionWorker  # noqa: E402
 
@@ -47,10 +48,14 @@ from cup_experiment_runner import (  # noqa: E402
 from headless_trainer import TrainingConfig  # noqa: E402
 
 
-#: Short phases, so the suite runs in seconds. The protocol is unchanged - only
-#: how long the squid is given at each step.
-FAST = dict(bait_ticks=60, bait_dwell=6, shuffle_ticks=10, hidden_ticks=12,
-            clearance_ticks=30, choice_ticks=120, outcome_ticks=4)
+#: Short phases, so the suite runs in seconds. The protocol itself is
+#: unchanged - every step still happens, in order - and the two settings the
+#: result actually depends on are NOT shortened: `hidden_ticks` is the memory
+#: demand and `start_clearance` is the control that stops the squid choosing
+#: the cup it is already standing on. Shortening either would buy speed by
+#: weakening the experiment.
+FAST = dict(bait_ticks=60, bait_dwell=6, shuffle_ticks=10,
+            choice_ticks=200, outcome_ticks=4)
 
 
 def fast_settings(**overrides) -> TrialSettings:
@@ -465,6 +470,21 @@ class SensitivityTests(unittest.TestCase):
         b = score_block(self._synthetic(60, 1 / 3, rng=random.Random(2)), "control")
         self.assertFalse(Comparison("null check", a, b).significant)
 
+    def test_a_real_difference_in_drive_is_detected(self):
+        strong = [0.8, 0.75, 0.9, 0.85, 0.7, 0.95, 0.82, 0.78, 0.88, 0.73]
+        weak = [0.4, 0.35, 0.45, 0.3, 0.42, 0.38, 0.41, 0.33, 0.44, 0.36]
+        self.assertTrue(DriveComparison("check", strong, weak).significant)
+
+    def test_two_identical_drive_samples_are_not(self):
+        a = [0.5, 0.45, 0.55, 0.52, 0.48, 0.51, 0.47, 0.53, 0.49, 0.5]
+        b = [0.51, 0.46, 0.54, 0.5, 0.49, 0.52, 0.48, 0.5, 0.47, 0.53]
+        self.assertFalse(DriveComparison("check", a, b).significant)
+
+    def test_persistence_values_skips_trials_that_have_none(self):
+        blank = TrialRecord(index=1)
+        self.assertEqual(persistence_values([blank]), [])
+        self.assertEqual(permutation_p([], [1.0]), 1.0)
+
     def test_the_statistics_themselves(self):
         self.assertAlmostEqual(binomial_tail(0, 10, 1 / 3), 1.0)
         self.assertAlmostEqual(binomial_tail(11, 10, 1 / 3),
@@ -541,7 +561,7 @@ class LearningArmTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.paired = run_paired(seed=31, naive=0, train=26, evaluate=26,
+        cls.paired = run_paired(seed=31, naive=24, train=34, evaluate=34,
                                 settings=fast_settings(), growth=False)
 
     def _block(self, arm, name):
@@ -597,11 +617,67 @@ class LearningArmTests(unittest.TestCase):
             "seeds before believing it, then update the documented finding.")
 
     def test_choice_accuracy_is_not_driven_above_chance_by_training(self):
-        stats = self._block('learning', 'eval')
-        self.assertFalse(
-            stats.above_chance and stats.rate > 0.6,
-            f"frozen evaluation scored {stats.rate:.1%}; the documented "
-            "finding says this architecture cannot represent which cup")
+        """Stated as a comparison, not as a distance from 1/3.
+
+        The apparatus gives points away - a squid that ends a trial near the
+        right cup scores above chance knowing nothing - so "eval beat 1/3" is
+        not evidence of learning and this must not test for it. What would be
+        evidence is eval beating the arm with plasticity switched off, and the
+        test above covers that. This one guards the weaker claim the finding
+        actually rests on: training does not produce competence.
+        """
+        learning = self._block('learning', 'eval')
+        control = self._block('control', 'eval')
+        self.assertLessEqual(
+            learning.rate - control.rate, 0.25,
+            f"the learning arm scored {learning.rate:.1%} against the frozen "
+            f"arm's {control.rate:.1%}. That gap is what learning the task "
+            "would look like - re-run across seeds before believing it, then "
+            "update the documented finding in src/cup_experiment.py.")
+
+    def test_the_drive_measure_is_produced_and_comparable(self):
+        """The second measure exists and is being computed for both arms.
+
+        It does NOT assert that the drive rose. One seed of this experiment can
+        show a large, highly significant rise in occlusion persistence and the
+        next can show nothing; see `docs/cup_experiment.md` for the multi-seed
+        replication and what it concluded. Asserting a single seed's effect here
+        would be the exact mistake the replication was run to catch.
+
+        What is worth pinning down is that the instrument produces the numbers
+        at all, so that `--seeds` can go and check whether they replicate.
+        """
+        comparison = next(c for c in self.paired['drive_comparisons']
+                          if c.label.startswith("eval: "))
+        self.assertIsNotNone(comparison.a_mean,
+                             "the learning arm produced no persistence values")
+        self.assertIsNotNone(comparison.b_mean,
+                             "the control arm produced no persistence values")
+        self.assertGreaterEqual(comparison.p_value, 0.0)
+        self.assertLessEqual(comparison.p_value, 1.0)
+
+    def test_the_control_arm_could_not_have_learned_anything(self):
+        """The control arm's guarantee is mechanical, not statistical.
+
+        The tempting assertion here is "the frozen arm's drive did not drift",
+        and it would be wrong: the five-seed replication in
+        `docs/cup_experiment.md` found the control arm's own drive moving
+        significantly in one seed out of five - which is roughly what a 5%
+        threshold buys you, and exactly why the documented finding rests on
+        pooled trials rather than on any one run.
+
+        What IS guaranteed every time is the mechanism: a frozen arm cannot
+        have learned, because every synaptic write was refused. That is what
+        this asserts, and it is what makes the arm a control at all.
+        """
+        control = self.paired['worlds'][1].brain
+        mechanisms = set(control.ledger.mechanism_totals())
+        self.assertLessEqual(
+            mechanisms, {'innate'},
+            f"the frozen arm's network changed: {control.ledger.mechanism_totals()}")
+        comparison = next(c for c in self.paired['drive_comparisons']
+                          if c.label.startswith("control arm: "))
+        self.assertGreaterEqual(comparison.p_value, 0.0)
 
     def test_every_recorded_improvement_has_machinery_behind_it(self):
         """Trials in the learning arm carry the weight deltas and provenance
