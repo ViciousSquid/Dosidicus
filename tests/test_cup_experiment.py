@@ -518,6 +518,15 @@ class FreezeTests(unittest.TestCase):
         world.experiment.set_learning_frozen(False)
         self.assertTrue(world.brain.state['neurogenesis_active'])
 
+    def test_thawing_restores_growth_rather_than_switching_it_on(self):
+        """A player who turned neurogenesis off should not find it back on
+        because an evaluation block froze the brain for a minute."""
+        world = make_world(seed=20, growth=True)
+        world.brain.state['neurogenesis_active'] = False
+        world.experiment.set_learning_frozen(True)
+        world.experiment.set_learning_frozen(False)
+        self.assertFalse(world.brain.state['neurogenesis_active'])
+
     def test_nothing_changes_during_the_evaluation_block(self):
         world = make_world(seed=21)
         for _ in range(6):

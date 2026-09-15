@@ -408,12 +408,23 @@ class RecordedSynapses:
         can still grow a neuron mid-measurement is still adapting. The flag
         lives on the state dict where check_neurogenesis_triggers already
         looks for it, so there is no second gate to keep in step.
+
+        Thawing RESTORES whatever growth setting was in force before, rather
+        than switching it on: a player who had turned neurogenesis off should
+        not find it back on because something froze the brain for a moment.
         """
         previous = bool(getattr(self, 'learning_frozen', False))
         self.learning_frozen = bool(frozen)
         state = getattr(self, 'state', None)
         if isinstance(state, dict):
-            state['neurogenesis_active'] = not self.learning_frozen
+            if self.learning_frozen:
+                if not previous:
+                    self._growth_before_freeze = bool(
+                        state.get('neurogenesis_active', True))
+                state['neurogenesis_active'] = False
+            else:
+                state['neurogenesis_active'] = bool(
+                    getattr(self, '_growth_before_freeze', True))
         return previous
 
     def apply_weight_change(self, edge, delta: Optional[float] = None,

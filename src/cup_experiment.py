@@ -62,18 +62,33 @@ fix would be a positional sense and a directed action - which is exactly the
 thing this experiment is forbidden to add, and exactly the finding worth
 reporting.
 
-What can still move is the secondary measure: how hard `act_eat` is driven while
-the food is hidden. That is ordinary food-seeking persistence under occlusion,
-it runs on synapses the existing plasticity engine can and does change, and it
-is reported alongside accuracy - separately, so neither is mistaken for the
-other.
+What CAN move is the secondary measure: how hard `act_eat` is driven while the
+food is hidden. That is ordinary food-seeking persistence under occlusion, it
+runs on synapses the existing plasticity engine can and does change, and it is
+reported alongside accuracy - separately, so neither is mistaken for the other.
+
+What the runs found, pooled over five seeds (docs/cup_experiment.md):
+
+    which cup   +5.0 points over the learning-disabled control, p = 0.33
+                -> no. As predicted, and for the reason above.
+    drive      +19   points over the same control, p < 0.001, in a block
+                where learning was frozen -> yes.
+
+The squid does not learn WHERE the food went. It does learn to go on wanting it
+once it is gone.
 
 HOW A RUN IS STRUCTURED
 -----------------------
-Training trials, then EVALUATION trials with learning frozen
+A no-information baseline (the squid is never shown the bait, so nothing it does
+can beat 1/3), then training trials, then EVALUATION trials with learning frozen
 (`RecordedSynapses.set_learning_frozen`), so nothing measured during evaluation
 can be the product of adaptation happening during evaluation. A learning-disabled
-control arm runs the same protocol with the freeze on throughout.
+control arm runs the same protocol with the freeze on throughout, and the
+comparison that counts is evaluation against THAT rather than against 1/3 - the
+apparatus gives points away, and both arms get the same gift.
+
+One seed is one animal. `cup_experiment_runner --seeds N` pools several, and
+docs/cup_experiment.md records why that matters here.
 """
 
 from __future__ import annotations

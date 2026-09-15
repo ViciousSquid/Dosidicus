@@ -21,8 +21,11 @@ Two things were measured, and they came out differently.
 
 | | measure | result |
 |---|---|---|
-| **Which cup** | does it go to the baited one more than 1 in 3? | **No.** Null in every seed. |
-| **Drive under occlusion** | does it still *want* to eat once the food vanishes? | **Suggestive, not reliable.** Positive in 3 of 5 seeds. |
+| **Which cup** | does it go to the baited one more than the frozen control does? | **No.** Null in all ten seeds run; pooled +5.0 pp, p = 0.33. |
+| **Drive under occlusion** | does it still *want* to eat once the food vanishes? | **Yes.** Pooled +19 pp, p < 0.001, measured in a frozen block. |
+
+The squid does not learn *where* the food went. It does learn to go on wanting
+it once it is gone.
 
 ### Which cup: no, and the reason is architectural
 
@@ -57,12 +60,30 @@ built to measure it honestly rather than to avoid it.
 The fix would be a positional sense and a directed action. That is exactly what
 this experiment is forbidden to add, and exactly the finding worth reporting.
 
-### Drive under occlusion: the part that could move
+### Drive under occlusion: yes, and it survives freezing
 
 How hard `act_eat` is driven while the food is hidden **is** an activation on an
 existing neuron, reached through synapses the existing plasticity engine moves.
-If training teaches the squid anything here, it can show — and in some runs it
-does, substantially. It just does not replicate reliably. See the numbers below.
+So this is where training can show — and it does.
+
+Pooled over five seeds, in the **frozen** evaluation block, the learning arm's
+food-seeking drive survives occlusion at **59%** of its with-food-in-sight level
+against the learning-disabled control's **40%** (+19 pp, p < 0.001).
+
+Note the control arm's own drive also rises from its no-information baseline
+(26% → 40%, p < 0.001). Part of the effect is simply the protocol — a squid that
+spends bait and shuffle phases looking at food is in a different state from one
+that never saw any. That is precisely why the headline comparison is
+**learning arm against frozen control**, both of which get the same protocol,
+rather than against the baseline.
+
+This is the full chain the experiment set out to demonstrate, and it runs
+entirely on machinery that was already there:
+
+> visible food → experience of its location → food hidden → the squid goes on
+> seeking → a correct choice is eaten through `Squid.eat` → the ordinary
+> positive consequence → measurable change in the weights, recorded in the
+> provenance ledger → still measurable when learning is frozen.
 
 ---
 
@@ -172,31 +193,52 @@ often as the significance level says it will. `--seeds N` exists for this: it
 runs the paired design over N seeds and pools the trials (pooling trials, not
 averaging p-values — a mean of p-values is not a p-value).
 
-### The five-seed replication
+### The replication
 
-`naive=30, train=50, eval=50, --no-growth`, eval block, learning arm vs frozen
-control:
+```
+python headless/cup_experiment_runner.py --seed 200 --seeds 5 --naive 30 --train 50 --eval 50 --no-growth
+```
 
-| seed | which cup | drive under occlusion | control arm's own drift |
-|---:|---|---|---|
-| 2 | −13.3 pp (p=0.24) | −1 pp (p=0.68) | +2 pp (p=0.85) |
-| 7 | +16.0 pp (p=0.17) | **+10 pp (p<0.001)** | −1 pp (p=0.89) |
-| 17 | −11.9 pp (p=0.28) | **+16 pp (p<0.001)** | −8 pp (p=0.43) |
-| 43 | −7.4 pp (p=0.51) | **+11 pp (p<0.001)** | **+12 pp (p=0.02)** |
-| 101 | −17.6 pp (p=0.13) | −0 pp (p=0.94) | +11 pp (p=0.12) |
+Five seeds, paired arms, trials pooled (pooling trials, not averaging p-values —
+a mean of p-values is not a p-value). Eval block, learning arm vs frozen control:
 
-**Which cup:** never significant, and the direction is *negative* in four seeds
-out of five. A solid, consistent null.
+| seed | which cup | drive under occlusion |
+|---:|---|---|
+| 200 | +3.5 pp (p=0.75) | +4 pp (p=0.17) |
+| 201 | +16.2 pp (p=0.18) | **+15 pp (p<0.001)** |
+| 202 | −11.3 pp (p=0.31) | **+29 pp (p<0.001)** |
+| 203 | +9.1 pp (p=0.42) | **+26 pp (p<0.001)** |
+| 204 | +9.9 pp (p=0.40) | **+22 pp (p<0.001)** |
+| **pooled** | **+5.0 pp (p=0.33)** | **+19 pp (p<0.001)** |
 
-**Drive:** positive and strongly significant in three seeds, absent in two,
-never negative. Real enough to be worth reporting, not reliable enough to be
-called a result. Note also seed 43, where the frozen control's *own* drive
-drifted significantly — one false positive in five at a 5% threshold, which is
-about what you would expect, and another reason not to trust a single run.
+An earlier, independent five-seed set (2, 7, 17, 43, 101) gave the same picture:
+which cup never significant and negative in four of five; drive significant and
+positive in three of five, never negative.
 
-So the honest summary is: **the squid does not learn which cup. Its
-food-seeking drive under occlusion may strengthen with training, but that
-effect does not replicate reliably across seeds.**
+So: **which cup** is a solid null across ten seeds. **Drive** is positive in
+seven of ten seeds individually, never negative in any, and strongly significant
+pooled.
+
+### A caution that was earned the hard way
+
+Watch the per-seed column. Seed 200 shows +4 pp at p = 0.17 and seed 202 shows
++29 pp at p < 0.001 — same code, same settings.
+
+While this experiment was being built, **seed 7** produced a drive effect of +22
+pp at p < 0.001 and was nearly written up on its own. **Seed 2**, run next,
+produced −1 pp at p = 0.68. Had the seeds come up in the other order, the
+conclusion drawn from a single run would have been the opposite one.
+
+One run of this experiment is one animal, and one animal is not a result. The
+same caution applies in the other direction: the drive effect here is believable
+because it pools over ten seeds, not because any one of them was convincing.
+
+Watch the **pooled accuracy rows** too. The learning arm's eval block scores
+41.5%, which is "above chance" against the 33.3% arithmetic at p = 0.015 — and
+the *frozen control's* train block scores 40.9% at p = 0.021. Neither squid
+learned anything about cups. That is the apparatus, and it is why every
+conclusion here is drawn from learning-vs-control rather than from a distance
+above 1/3.
 
 ---
 

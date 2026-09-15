@@ -89,6 +89,32 @@ Want the full conceptual philosophy behind Dosidicus? Read the [Cognitive Sandbo
 
 ---
 
+## Experiments you can run
+
+The brain is meant to be an object of study, not only a pet. **Actions → Play:
+Cup & Food** is a three-cup shell game: bait a cup where the squid can see it,
+shuffle, and see whether it picks the right one. Underneath the game is a
+controlled experiment with a known 1/3 chance rate, a no-information baseline, a
+frozen evaluation block and a learning-disabled control arm.
+
+What it found, pooled over five seeds:
+
+- **the squid does not learn which cup** — and the reason is architectural, not
+  a failure of training. Nothing the world writes into the network distinguishes
+  one cup from another, and no action it can take is directional;
+- **it does learn to go on wanting food it can no longer see** — +19 points of
+  food-seeking drive under occlusion over the frozen control, p < 0.001,
+  measured with plasticity switched off so it cannot be adapting while it is
+  measured.
+
+No neurons or sensors were added for it. Reproduce it headlessly:
+
+```bash
+python headless/cup_experiment_runner.py --seed 200 --seeds 5 --no-growth
+```
+
+[Full write-up, controls and replication →](docs/cup_experiment.md)
+
 ## [Share Your Squid](https://github.com/ViciousSquid/Dosidicus/tree/SQUID-EXCHANGE)
 
 No two squids are wired the same.
@@ -175,6 +201,7 @@ Troubleshooting (quick):
 - **Custom Brains:** Library of pre-configured neural networks in `custom_brains/` (e.g., "Plant-Seeker", "Insomniac") for quick behavior setup.
 - **Memory Management:** Dual memory system (`_memory/`) with long-term and short-term storage for learning persistence.
 - **Examples and Tools:** Example squids, configuration files (`config.ini`), and version tracking.
+- **Experiments:** Controlled, reproducible studies of the brain that ship with the game — see [`docs/cup_experiment.md`](docs/cup_experiment.md) and `tests/README.md`.
 
 ---
 

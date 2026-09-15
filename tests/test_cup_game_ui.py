@@ -50,14 +50,55 @@ from src.cup_game_ui import CupGameController, CupItem, GhostItem  # noqa: E402
 from src.vision_worker import extract_scene_objects  # noqa: E402
 
 
+#: Module-level so tearDownModule can reach them. A MainWindow owns background
+#: threads, and Qt aborts the process when a running QThread is collected -
+#: which happens after unittest has already printed OK, so a green run still
+#: exits 134 and any CI watching the exit code calls it a failure. Same reason
+#: and same remedy as tearDownModule in test_neural_pipeline.py.
+WINDOW = None
+LOGIC = None
+BRAIN = None
+
+
+def tearDownModule():
+    for stop in (lambda: BRAIN.stop_worker(),
+                 lambda: BRAIN._cleanup_render_worker()):
+        try:
+            if BRAIN is not None:
+                stop()
+        except Exception:
+            pass
+    try:
+        worker = getattr(LOGIC, 'vision_worker', None)
+        if worker is not None:
+            worker.stop()
+            worker.wait(2000)
+    except Exception:
+        pass
+    for owner, names in ((BRAIN, ('neurogenesis_timer', 'animation_timer',
+                                  '_render_timer', '_brain_export_timer',
+                                  '_link_fade_timer')),
+                         (LOGIC, ('simulation_timer', 'hebbian_timer',
+                                  'autosave_timer'))):
+        for name in names:
+            timer = getattr(owner, name, None) if owner is not None else None
+            try:
+                if timer is not None:
+                    timer.stop()
+            except Exception:
+                pass
+    _TMPDIR.cleanup()
+
+
 class CupGameUITests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.window = main_module.MainWindow(specified_personality=None,
-                                            debug_mode=False)
-        cls.logic = cls.window.tamagotchi_logic
-        cls.brain = cls.window.brain_window.brain_widget
+        global WINDOW, LOGIC, BRAIN
+        cls.window = WINDOW = main_module.MainWindow(specified_personality=None,
+                                                     debug_mode=False)
+        cls.logic = LOGIC = cls.window.tamagotchi_logic
+        cls.brain = BRAIN = cls.window.brain_window.brain_widget
         cls.squid = cls.logic.squid
         # The game's own timers would step the simulation underneath the
         # assertions; this file drives everything explicitly.
