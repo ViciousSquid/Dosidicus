@@ -51,9 +51,26 @@ class KnowledgeTab(BrainBaseTab):
         self._build_ui()
 
         self._refresh_timer = QtCore.QTimer(self)
-        self._refresh_timer.timeout.connect(self.refresh)
+        self._refresh_timer.timeout.connect(self._refresh_if_visible)
         self._refresh_timer.start(2500)
+        self._stale = False
         self.refresh()
+
+    def _refresh_if_visible(self):
+        """The timer's refresh. Rewriting the knowledge view means re-parsing
+        and re-laying-out a long rich-text document - tens of milliseconds on
+        the UI thread - so it is only done while someone can see it. A hidden
+        tab is marked stale and catches up the moment it is shown."""
+        if self.isVisible():
+            self.refresh()
+        else:
+            self._stale = True
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._stale:
+            self._stale = False
+            QtCore.QTimer.singleShot(0, self.refresh)
 
     # ------------------------------------------------------------------
     # Access to the authoritative objects. Never cached, never copied.
@@ -233,6 +250,10 @@ class KnowledgeTab(BrainBaseTab):
 
         edges = sorted(weights.keys(), key=lambda e: (-abs(weights[e]), e))
         current = self.edge_combo.currentData()
+        # Refilling a dropdown someone has open and is scrolling through
+        # throws them back to the top of it; it can wait for the next refresh.
+        if self.edge_combo.view().isVisible() or self.neuron_combo.view().isVisible():
+            return
         if len(edges) != self.edge_combo.count() or current not in edges:
             self.edge_combo.blockSignals(True)
             self.edge_combo.clear()

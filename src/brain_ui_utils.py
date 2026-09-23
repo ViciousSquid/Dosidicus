@@ -256,18 +256,29 @@ def _apply_until_range_settles(vbar, apply_fn, timeout_ms=400):
     inside the timeout would otherwise leave the FIRST one still listening,
     and it would happily undo the second one's work using a position measured
     before either of them ran.
+
+    It stops the moment the reader touches the scrollbar - a wheel turn, a
+    key, a drag. The position being restored is the one they were at when the
+    refresh began; once they have moved on from it, putting them back there is
+    exactly the "jumps back" this is meant to prevent. A long rich-text
+    document lays itself out in chunks for a while after it is replaced, and
+    every chunk changes the range, so without this a scroll made in that
+    window was undone the next time a chunk landed.
     """
     previous = getattr(vbar, _ACTIVE_RESTORE, None)
     if callable(previous):
         previous()
 
-    def stop():
+    def stop(*_args):
         if getattr(vbar, _ACTIVE_RESTORE, None) is stop:
             setattr(vbar, _ACTIVE_RESTORE, None)
-        try:
-            vbar.rangeChanged.disconnect(on_range)
-        except (TypeError, RuntimeError):
-            pass
+        for signal, slot in ((vbar.rangeChanged, on_range),
+                             (vbar.actionTriggered, stop),
+                             (vbar.sliderPressed, stop)):
+            try:
+                signal.disconnect(slot)
+            except (TypeError, RuntimeError):
+                pass
 
     def on_range(_minimum, _maximum):
         try:
@@ -278,6 +289,9 @@ def _apply_until_range_settles(vbar, apply_fn, timeout_ms=400):
     try:
         apply_fn()
         vbar.rangeChanged.connect(on_range)
+        # Wheel, keyboard and drag all arrive as slider actions.
+        vbar.actionTriggered.connect(stop)
+        vbar.sliderPressed.connect(stop)
         setattr(vbar, _ACTIVE_RESTORE, stop)
         QtCore.QTimer.singleShot(timeout_ms, stop)
     except RuntimeError:
@@ -347,9 +361,52 @@ def hold_position_on_prepend(scroll_area):
         _apply_until_range_settles(vbar, restore)
 
 
+def _being_dragged(view) -> bool:
+    """Is the reader holding this view's scrollbar right now?"""
+    vbar, hbar = _scrollbars(view)
+    try:
+        return any(bar is not None and bar.isSliderDown() for bar in (vbar, hbar))
+    except RuntimeError:
+        return False
+
+
+def reader_is_busy(view) -> bool:
+    """Is someone reading or scrolling this view right now?
+
+    True while they hold its scrollbar, or while the pointer is over it and
+    it is scrolled away from the top. A panel in that state is not rebuilt:
+    it waits and catches up when they move on, rather than being torn down
+    and restored underneath them. Restoring a position after a rebuild works
+    most of the time, but it depends on layout timing that differs from one
+    platform to the next, and each miss throws the reader back to the top of
+    a list they were halfway down. Not rebuilding cannot miss.
+
+    A panel scrolled to the top keeps updating under the pointer - that is
+    where new entries arrive, and a reader there is watching for them.
+    """
+    if view is None:
+        return False
+    try:
+        if _being_dragged(view):
+            return True
+        vbar, _hbar = _scrollbars(view)
+        if vbar is None or vbar.value() <= 0:
+            return False
+        viewport = view.viewport() if callable(getattr(view, 'viewport', None)) else None
+        return view.underMouse() or (viewport is not None and viewport.underMouse())
+    except RuntimeError:          # underlying C++ widget already gone
+        return False
+
+
 def set_html(view, html, follow_tail=False):
-    """setHtml() that leaves the reader where they were. True if it rewrote."""
+    """setHtml() that leaves the reader where they were. True if it rewrote.
+
+    While the reader is busy with the view (see reader_is_busy) the rewrite
+    is skipped, and the next refresh after they move on brings it up to date.
+    """
     if getattr(view, _LAST_SOURCE, None) == html:
+        return False
+    if reader_is_busy(view):
         return False
     setattr(view, _LAST_SOURCE, html)
     with preserve_scroll(view, follow_tail):
@@ -360,6 +417,8 @@ def set_html(view, html, follow_tail=False):
 def set_plain_text(view, text, follow_tail=False):
     """setPlainText() that leaves the reader where they were."""
     if getattr(view, _LAST_SOURCE, None) == text:
+        return False
+    if reader_is_busy(view):
         return False
     setattr(view, _LAST_SOURCE, text)
     with preserve_scroll(view, follow_tail):

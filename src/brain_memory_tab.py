@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
-from .brain_ui_utils import UiUtils, set_html, preserve_scroll
+from .brain_ui_utils import UiUtils, set_html, preserve_scroll, reader_is_busy
 from .localisation import Localisation  # Import Localisation
 from datetime import datetime
 
@@ -82,8 +82,21 @@ class MemoryTab(BrainBaseTab):
         if self.tamagotchi_logic is None:
             print("Warning: tamagotchi_logic is None in update_from_brain_state - memory tab will not update")
             return
-            
+
+        # This arrives on every simulation tick. The cards are a view of the
+        # squid's memory manager, which keeps the memories whether or not
+        # anyone is looking, so a hidden tab only notes that it is behind and
+        # rebuilds when it is shown.
+        if not self.isVisible():
+            self._stale = True
+            return
         self.update_memory_display()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, '_stale', False):
+            self._stale = False
+            QtCore.QTimer.singleShot(0, self.update_memory_display)
 
     def set_tamagotchi_logic(self, tamagotchi_logic):
         """Update the tamagotchi_logic reference and refresh memory display"""
@@ -137,6 +150,20 @@ class MemoryTab(BrainBaseTab):
                         seen_keys.add(key)
                         ltm_deduped.append(m)
                 
+                # Nothing to show that is not already showing. This runs on
+                # every simulation tick, and tearing down and rebuilding every
+                # card - thumbnails, style sheets, layout - was the single
+                # biggest stall on the UI thread; it also re-rolled each
+                # thumbnail's random tilt, so unchanged cards jittered.
+                signature = (getattr(Localisation.instance(), 'current_language', None),
+                             repr(stm_deduped), repr(ltm_deduped))
+                if signature == getattr(self, '_shown_signature', None):
+                    return
+                # Someone is partway down one of the lists: leave it alone and
+                # rebuild on a later tick, once they have moved on.
+                if reader_is_busy(self.stm_scroll) or reader_is_busy(self.ltm_scroll):
+                    return
+
                 # Rebuilding the cards throws both lists back to the top, so
                 # both rebuilds happen inside preserve_scroll.
                 #
@@ -163,6 +190,7 @@ class MemoryTab(BrainBaseTab):
 
                     self.stm_content.update()
                     self.ltm_content.update()
+                self._shown_signature = signature
                 
         except Exception as e:
             print(f"Error updating memory tab: {e}")
