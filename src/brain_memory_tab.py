@@ -137,6 +137,16 @@ class MemoryTab(BrainBaseTab):
                         seen_keys.add(key)
                         ltm_deduped.append(m)
                 
+                # Nothing to show that is not already showing. This runs on
+                # every simulation tick, and tearing down and rebuilding every
+                # card - thumbnails, style sheets, layout - was the single
+                # biggest stall on the UI thread; it also re-rolled each
+                # thumbnail's random tilt, so unchanged cards jittered.
+                signature = (getattr(Localisation.instance(), 'current_language', None),
+                             repr(stm_deduped), repr(ltm_deduped))
+                if signature == getattr(self, '_shown_signature', None):
+                    return
+
                 # Rebuilding the cards throws both lists back to the top, so
                 # both rebuilds happen inside preserve_scroll.
                 #
@@ -163,6 +173,7 @@ class MemoryTab(BrainBaseTab):
 
                     self.stm_content.update()
                     self.ltm_content.update()
+                self._shown_signature = signature
                 
         except Exception as e:
             print(f"Error updating memory tab: {e}")

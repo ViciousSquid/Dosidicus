@@ -144,6 +144,11 @@ class BrainRenderWorker(QThread):
         
         # Cached image
         self._cached_image: Optional[QImage] = None
+
+        # Background, bands, layers and connections of the last frame, and
+        # the inputs they were drawn from. Touched only by the render thread.
+        self._backdrop: Optional[QImage] = None
+        self._backdrop_signature = None
         self._last_render_time = 0.0
         
         # Rendering frequency control
@@ -242,46 +247,71 @@ class BrainRenderWorker(QThread):
         print("🧠 BrainRenderWorker stopped")
     
     def _render_frame(self, state: RenderState) -> QImage:
-        """Render a complete frame to QImage"""
-        # Create image with proper size
-        image = QImage(state.width, state.height, QImage.Format_ARGB32)
-        image.fill(QColor(*state.anim_background_colour))
-        
-        painter = QPainter(image)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setRenderHint(QPainter.TextAntialiasing)
-        
-        try:
-            # Calculate scaling (same logic as brain_widget)
-            indicator_space = 0  # No indicator pills
-            base_width = 1024
-            base_height = 768 - indicator_space
-            
-            scale_x = state.width / base_width
-            scale_y = (state.height - indicator_space) / max(1, base_height)
-            scale = max(0.01, min(scale_x, scale_y))
-            
-            # Center horizontally
-            offset_x = 0
-            if scale_x > scale_y:
-                content_width = base_width * scale
-                offset_x = (state.width - content_width) / 2
-            
-            painter.translate(offset_x, indicator_space)
-            painter.scale(scale, scale)
-            
-            # The row bands go down first, so everything else sits on top of
-            # them. These are what make the three populations - what the squid
-            # is, what it can do, what it can notice - legible as populations
-            # rather than as nineteen circles in a heap.
-            self._draw_row_bands(painter, state)
+        """Render a complete frame to QImage.
 
-            # Draw layers
-            self._draw_layers(painter, state, 1.0)
-            
-            # Draw connections
-            self._draw_connections(painter, state, scale)
-            
+        A frame is drawn in two passes. The backdrop - background, row bands,
+        layers and every connection - only changes when the network's shape,
+        its weights or the display settings do, which is a few percent of
+        frames; the neurons on top of it change colour every frame. The
+        backdrop is therefore rendered once, kept, and each frame starts from
+        a copy of it. Antialiased connection strokes were ~90% of the cost of
+        a frame, and QPainter holds the GIL while it draws, so every frame
+        spent redrawing unchanged lines was time taken from the UI thread.
+
+        Both passes draw what a single pass did, in the same order, onto the
+        same pixels, so the frame is identical - with one exception: a link a
+        learning animation is playing on is drawn in the second pass, on top
+        of the other links rather than among them.
+        """
+        # Calculate scaling (same logic as brain_widget)
+        indicator_space = 0  # No indicator pills
+        base_width = 1024
+        base_height = 768 - indicator_space
+
+        scale_x = state.width / base_width
+        scale_y = (state.height - indicator_space) / max(1, base_height)
+        scale = max(0.01, min(scale_x, scale_y))
+
+        # Center horizontally
+        offset_x = 0
+        if scale_x > scale_y:
+            content_width = base_width * scale
+            offset_x = (state.width - content_width) / 2
+
+        animated = self._animated_links(state)
+        key = self._backdrop_key(state, animated)
+        if self._backdrop is not None and key == self._backdrop_signature:
+            image = self._backdrop.copy()
+        else:
+            # Create image with proper size
+            image = QImage(state.width, state.height, QImage.Format_ARGB32)
+            image.fill(QColor(*state.anim_background_colour))
+
+            painter = self._begin_painter(image, offset_x, indicator_space, scale)
+            try:
+                # The row bands go down first, so everything else sits on top
+                # of them. These are what make the three populations - what
+                # the squid is, what it can do, what it can notice - legible
+                # as populations rather than as nineteen circles in a heap.
+                self._draw_row_bands(painter, state)
+
+                # Draw layers
+                self._draw_layers(painter, state, 1.0)
+
+                # Draw connections - all but the ones mid-animation, which
+                # change every frame and go on top in the second pass
+                self._draw_connections(painter, state, scale, skip=animated)
+            finally:
+                painter.end()
+
+            self._backdrop = image.copy()
+            self._backdrop_signature = key
+
+        painter = self._begin_painter(image, offset_x, indicator_space, scale)
+        try:
+            if animated:
+                self._draw_connections(painter, state, scale, only=animated)
+
             # Draw neurons
             self._draw_neurons(painter, state, scale)
 
@@ -290,12 +320,60 @@ class BrainRenderWorker(QThread):
             # the label out - and a label a line can cross out is a label that
             # cannot be relied on to say which row you are looking at.
             self._draw_row_labels(painter, state)
-            
         finally:
             painter.end()
-        
+
         return image
-    
+
+    @staticmethod
+    def _begin_painter(image: QImage, offset_x: float, offset_y: float,
+                       scale: float) -> QPainter:
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.TextAntialiasing)
+        painter.translate(offset_x, offset_y)
+        painter.scale(scale, scale)
+        return painter
+
+    @staticmethod
+    def _animated_links(state: RenderState) -> frozenset:
+        """Connections a learning animation is playing on right now.
+
+        These pulse and carry moving arrows, so they are drawn fresh every
+        frame, on top of the cached backdrop rather than inside it. Matching
+        is undirected, as in _draw_connections.
+        """
+        now = state.animation_time
+        playing = set()
+        for anim in state.weight_animations:
+            try:
+                if 0 <= now - anim['start_time'] < anim['duration']:
+                    playing.add(tuple(anim['pair']))
+            except (KeyError, TypeError):
+                continue
+        if not playing:
+            return frozenset()
+        return frozenset(link for link in state.weights
+                         if link in playing or (link[1], link[0]) in playing)
+
+    @staticmethod
+    def _backdrop_key(state: RenderState, animated: frozenset):
+        """Everything the backdrop pass reads."""
+        from .brain_constants import NEURON_ROWS, ROW_BAND_COLORS, LOGICAL_CANVAS
+        return (animated,
+            state.width, state.height, tuple(state.anim_background_colour),
+            tuple(state.weights.items()),
+            tuple(state.neuron_positions.items()),
+            frozenset(state.visible_neurons), frozenset(state.excluded_neurons),
+            tuple(state.link_opacities.items()),
+            state.show_weights, state.weight_thickness_enabled,
+            state.weight_thickness_max, state.anim_line_base_width,
+            tuple(state.anim_line_col_pos), tuple(state.anim_line_col_neg),
+            state.anim_line_alpha,
+            repr(state.layers), repr(NEURON_ROWS), repr(ROW_BAND_COLORS),
+            repr(LOGICAL_CANVAS),
+        )
+
     def _draw_row_bands(self, painter: QPainter, state: RenderState):
         """Draw the band behind each row of the newborn layout.
 
@@ -402,7 +480,9 @@ class BrainRenderWorker(QThread):
         
         return None
     
-    def _draw_connections(self, painter: QPainter, state: RenderState, scale: float):
+    def _draw_connections(self, painter: QPainter, state: RenderState, scale: float,
+                          skip: frozenset = frozenset(),
+                          only: Optional[frozenset] = None):
         """
         Draw all neural connections with scrolling arrow animations for Hebbian learning.
         Includes specific coloring for excitatory (green) vs inhibitory (red) weights
@@ -411,6 +491,8 @@ class BrainRenderWorker(QThread):
         current_time = state.animation_time
         
         for (src, dst), weight in state.weights.items():
+            if (src, dst) in skip or (only is not None and (src, dst) not in only):
+                continue
             # Skip if neurons not visible or excluded
             if src not in state.visible_neurons or dst not in state.visible_neurons:
                 continue

@@ -857,10 +857,17 @@ class CapabilityMonitor:
                 continue
             incoming.setdefault(dst, []).append((src, float(weight)))
 
+        # Which drivers of each target were grown to differentiate it. Asked
+        # once here rather than once per driver pair: the answer depends only
+        # on (target, driver), and re-deriving it inside the pair loop made
+        # this detector the most expensive thing the brain did each tick.
+        separated = self._differentiated_drivers()
+
         out: List[Deficit] = []
         for target, drivers in incoming.items():
             if len(drivers) < 2 or not is_learning_target(target):
                 continue
+            already = separated.get(target, ())
             worst = 0.0
             pair: Optional[Tuple[str, str]] = None
             for i, (a, wa) in enumerate(drivers):
@@ -878,7 +885,7 @@ class CapabilityMonitor:
                     # to make it mean THEIR one.
                     if wa * wb <= 0:
                         continue
-                    if self._already_differentiated(target, a, b):
+                    if a in already or b in already:
                         continue
                     r = self.correlation(a, b)
                     if r < worst:
@@ -995,6 +1002,21 @@ class CapabilityMonitor:
                           'confidence': row['confidence']},
                 suggested_type='novelty',
                 specialization='causal_attribution'))
+        return out
+
+    def _differentiated_drivers(self) -> Dict[str, Set[str]]:
+        """target -> the neurons grown to take a driver off it.
+
+        The per-pair question `_already_differentiated` answers, precomputed
+        for every target at once.
+        """
+        engine = getattr(self.brain, 'enhanced_neurogenesis', None)
+        functional = getattr(engine, 'functional_neurons', {}) or {}
+        out: Dict[str, Set[str]] = {}
+        for name, neuron in functional.items():
+            origin = getattr(neuron, 'origin_deficit', None) or {}
+            if origin.get('kind') == 'differentiation':
+                out.setdefault(origin.get('target'), set()).add(name)
         return out
 
     def _already_differentiated(self, target: str, a: str, b: str) -> bool:

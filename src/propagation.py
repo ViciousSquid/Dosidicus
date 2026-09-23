@@ -47,7 +47,9 @@ Contract
 from __future__ import annotations
 
 import random
-from typing import Dict, Iterable, Mapping, Optional, Tuple
+from typing import Dict, Iterable, List, Mapping, Optional, Tuple
+
+import numpy as np
 
 Pair = Tuple[str, str]
 
@@ -129,6 +131,84 @@ def activation_of(raw) -> Optional[float]:
     return None
 
 
+class _Topology:
+    """Which synapses feed which targets, as index arrays.
+
+    Rebuilt only when the synapse set or the target list changes (growth,
+    pruning, loading a brain) - not when a weight's value changes, which is
+    every learning cycle. The weight values themselves are read fresh on
+    every call.
+    """
+
+    __slots__ = ('keys', 'targets', 'edges', 'sources', 'src_idx', 'dst_idx',
+                 'dst_names')
+
+    def __init__(self, keys: List, targets: List[str]):
+        self.keys = keys
+        self.targets = targets
+        dst_names = list(dict.fromkeys(targets))
+        dst_index = {name: i for i, name in enumerate(dst_names)}
+        src_index: Dict[str, int] = {}
+        edges, src_idx, dst_idx = [], [], []
+        for k, edge in enumerate(keys):
+            if not (isinstance(edge, tuple) and len(edge) == 2):
+                continue
+            src, dst = edge
+            d = dst_index.get(dst)
+            if d is None:
+                continue
+            edges.append(k)
+            src_idx.append(src_index.setdefault(src, len(src_index)))
+            dst_idx.append(d)
+        self.edges = np.array(edges, dtype=np.intp)
+        self.sources = list(src_index)
+        self.src_idx = np.array(src_idx, dtype=np.intp)
+        self.dst_idx = np.array(dst_idx, dtype=np.intp)
+        self.dst_names = dst_names
+
+
+_topology: Optional[_Topology] = None
+
+
+def _net_input(state: Mapping[str, object], weights: Mapping[Pair, float],
+               targets: List[str]) -> Dict[str, float]:
+    """sum(signal(src) * weight) for every target, vectorised.
+
+    Bit-for-bit the same as walking weights.items() and accumulating: each
+    source's signal is computed once instead of once per outgoing synapse,
+    and np.bincount adds the contributions into each target in exactly the
+    order the synapses appear in the dict.
+    """
+    global _topology
+    keys = list(weights)
+    topo = _topology
+    if topo is None or topo.targets != targets or topo.keys != keys:
+        topo = _topology = _Topology(keys, targets)
+
+    net_input = {name: 0.0 for name in targets}
+    if not len(topo.edges):
+        return net_input
+
+    signal = np.empty(len(topo.sources))
+    live = np.empty(len(topo.sources), dtype=bool)
+    for i, src in enumerate(topo.sources):
+        value = activation_of(state.get(src))
+        live[i] = value is not None
+        signal[i] = signal_of(src, value) if value is not None else 0.0
+
+    values = np.fromiter(weights.values(), dtype=float, count=len(keys))
+    contrib = signal[topo.src_idx] * values[topo.edges]
+    used = live[topo.src_idx]
+    if not used.all():
+        contrib, dst_idx = contrib[used], topo.dst_idx[used]
+    else:
+        dst_idx = topo.dst_idx
+    sums = np.bincount(dst_idx, weights=contrib, minlength=len(topo.dst_names))
+    for name, total in zip(topo.dst_names, sums.tolist()):
+        net_input[name] = total
+    return net_input
+
+
 def propagate(state: Dict[str, object],
               weights: Mapping[Pair, float],
               targets: Iterable[str],
@@ -142,23 +222,12 @@ def propagate(state: Dict[str, object],
     targets = [t for t in targets]
     if not targets:
         return {}
-    target_set = set(targets)
     strengths = strengths or {}
     noise = noise or {}
 
     # 1. Sum weighted input from a single consistent snapshot, so all neurons
     #    step together rather than the result depending on dict order.
-    net_input = {name: 0.0 for name in targets}
-    for edge, weight in weights.items():
-        if not (isinstance(edge, tuple) and len(edge) == 2):
-            continue
-        src, dst = edge
-        if dst not in target_set:
-            continue
-        src_val = activation_of(state.get(src))
-        if src_val is None:
-            continue
-        net_input[dst] += signal_of(src, src_val) * float(weight)
+    net_input = _net_input(state, weights, targets)
 
     # 2. Transfer function + per-neuron strength multiplier.
     changed: Dict[str, float] = {}

@@ -28,6 +28,8 @@ import math
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Set
+
+import numpy as np
 # STDP is a core neural mechanism, so it must be usable everywhere the brain
 # is - including the headless trainer, which deliberately has no Qt. Qt's mutex
 # is used when Qt is present (the game runs the learner from a worker thread);
@@ -274,6 +276,14 @@ class SpikeTracker:
                 return self._spike_history[neuron_name][-1].timestamp
             return None
     
+    def last_spike_times(self, names: List[str]) -> List[Optional[float]]:
+        """get_last_spike_time for many neurons under a single lock."""
+        with QMutexLocker(self._mutex):
+            history = self._spike_history
+            return [history[name][-1].timestamp
+                    if name in history and len(history[name]) > 0 else None
+                    for name in names]
+
     def get_recent_spikes(self, neuron_name: str, window: Optional[float] = None) -> List[SpikeEvent]:
         """Get all spikes within a time window for a neuron."""
         if window is None:
@@ -451,22 +461,82 @@ class STDPLearner:
             return 0
 
         names = sorted(active)
-        laid = 0
-        for i, pre in enumerate(names):
-            for post in names[i + 1:]:
-                joint = active[pre] * active[post]
-                if abs(joint) < 1e-3:
-                    continue
-                for a, b in ((pre, post), (post, pre)):
-                    ordered = self.compute_stdp_delta(a, b)
-                    if ordered:
-                        # Spike timing has an opinion about this direction.
-                        magnitude = abs(joint) * (1.0 if ordered > 0 else -1.0)
-                    else:
-                        magnitude = joint
-                    self.update_eligibility_trace(
-                        a, b, magnitude * self.config.eligibility_gain, timestamp)
-                    laid += 1
+        n = len(names)
+
+        # Every pair of participating neurons, i < j, in the order the pairs
+        # were always visited - row by row through the upper triangle - so the
+        # trace table fills in the same order and prunes the same way.
+        dev = np.fromiter((active[name] for name in names), dtype=float, count=n)
+        rows, cols = np.triu_indices(n, k=1)
+        joint = dev[rows] * dev[cols]
+        keep = np.abs(joint) >= 1e-3
+        rows, cols, joint = rows[keep], cols[keep], joint[keep]
+        if not len(joint):
+            self._prune_eligibility(timestamp)
+            return 0
+
+        # Spike ordering. Only pairs where both neurons spiked, on different
+        # samples, within the timing window, have an opinion about direction;
+        # for everyone else the trace is the plain co-activation. The last
+        # spike of each neuron is read once, instead of twice per pair.
+        spikes = self.spike_tracker.last_spike_times(names)
+        times = np.array([np.nan if t is None else t for t in spikes], dtype=float)
+        timing = self.timing_window()
+        window = timing[0]
+        with np.errstate(invalid='ignore'):
+            dt = times[cols] - times[rows]          # > 0: row neuron fired first
+            timed = np.abs(dt) <= window            # False wherever a time is NaN
+        timed &= dt != 0
+
+        gain = self.config.eligibility_gain
+        forward = (joint * gain).tolist()   # co-activation magnitude, both ways
+        backward = list(forward)
+        timed_at = np.flatnonzero(timed)
+        if len(timed_at):
+            magnitude = np.abs(joint) * gain
+            bursting: Dict[str, bool] = {}
+            for k in timed_at.tolist():
+                i, j = rows[k], cols[k]
+                a, b = names[i], names[j]
+                ta, tb = spikes[i], spikes[j]
+                # The same rule compute_stdp_delta applies, in the same order
+                # as always, so the LTP/LTD statistics the inspector shows are
+                # unchanged.
+                for delta, out in ((self._stdp_from_times(a, b, ta, tb, timing, _bursting=bursting), forward),
+                                   (self._stdp_from_times(b, a, tb, ta, timing, _bursting=bursting), backward)):
+                    if delta:
+                        out[k] = magnitude[k] if delta > 0 else -magnitude[k]
+            forward = [float(v) for v in forward]
+            backward = [float(v) for v in backward]
+
+        # Interleave the two directions of each pair - (pre, post) then
+        # (post, pre) - which is the order the table has always been written.
+        rows_l, cols_l = rows.tolist(), cols.tolist()
+        keys = []
+        for i, j in zip(rows_l, cols_l):
+            keys.append((names[i], names[j]))
+            keys.append((names[j], names[i]))
+        adds = np.empty(len(keys))
+        adds[0::2] = forward
+        adds[1::2] = backward
+
+        decay = self.config.eligibility_decay
+        with QMutexLocker(self._mutex):
+            traces = self._eligibility_traces
+            olds = list(map(traces.get, keys))
+            old_trace = np.array([0.0 if o is None else o[0] for o in olds])
+            old_time = [timestamp if o is None else o[1] for o in olds]
+            # A trace decays by how long ago it was last touched. Traces are
+            # touched in batches, so there are only a handful of distinct
+            # ages; the factor is worked out once for each, with the same
+            # scalar arithmetic update_eligibility_trace uses.
+            factor_of = {t: decay ** ((timestamp - t) / 0.1) for t in set(old_time)}
+            factor = np.array([factor_of[t] for t in old_time])
+            fresh = np.array([o is None for o in olds])
+            factor[fresh] = 1.0            # 0.0 * 1.0 + add == add, as before
+            new_trace = np.clip(old_trace * factor + adds, -1.0, 1.0).tolist()
+            traces.update(zip(keys, ((v, timestamp) for v in new_trace)))
+        laid = len(keys)
         self._prune_eligibility(timestamp)
         return laid
 
@@ -538,7 +608,22 @@ class STDPLearner:
         """
         pre_time = self.spike_tracker.get_last_spike_time(pre_neuron)
         post_time = self.spike_tracker.get_last_spike_time(post_neuron)
-        
+        return self._stdp_from_times(pre_neuron, post_neuron, pre_time, post_time,
+                                     self.timing_window(), connection_age,
+                                     is_custom_neuron)
+
+    def _stdp_from_times(self, pre_neuron: str, post_neuron: str,
+                         pre_time: Optional[float], post_time: Optional[float],
+                         timing: Tuple[float, float, float],
+                         connection_age: float = 1.0,
+                         is_custom_neuron: bool = False,
+                         _bursting: Optional[Dict[str, bool]] = None) -> float:
+        """The STDP rule itself, given the two spike times and timing_window().
+
+        Split out so a batch - lay_eligibility_traces - can read every spike
+        time once instead of twice per pair; compute_stdp_delta is this plus
+        the lookups.
+        """
         # Need both neurons to have spiked recently
         if pre_time is None or post_time is None:
             return 0.0
@@ -546,7 +631,7 @@ class STDPLearner:
         # Compute time difference: positive means pre fired first
         dt = post_time - pre_time
 
-        window, tau_plus, tau_minus = self.timing_window()
+        window, tau_plus, tau_minus = timing
 
         # Check if within learning window
         if abs(dt) > window:
@@ -577,12 +662,21 @@ class STDPLearner:
             delta *= self.config.custom_neuron_boost
         
         # 3. Burst bonus (if either neuron is bursting)
-        if self.spike_tracker.is_bursting(pre_neuron) or self.spike_tracker.is_bursting(post_neuron):
+        if self._bursting(pre_neuron, _bursting) or self._bursting(post_neuron, _bursting):
             delta *= self.config.burst_bonus
         
         self._total_delta += abs(delta)
         return delta
     
+    def _bursting(self, name: str, cache: Optional[Dict[str, bool]]) -> bool:
+        """is_bursting, remembered for the length of one batch when asked to."""
+        if cache is None:
+            return self.spike_tracker.is_bursting(name)
+        hit = cache.get(name)
+        if hit is None:
+            hit = cache[name] = self.spike_tracker.is_bursting(name)
+        return hit
+
     def compute_symmetric_stdp(self, neuron1: str, neuron2: str,
                                 connection_age: float = 1.0,
                                 is_custom: bool = False) -> Tuple[float, str]:
