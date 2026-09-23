@@ -82,8 +82,21 @@ class MemoryTab(BrainBaseTab):
         if self.tamagotchi_logic is None:
             print("Warning: tamagotchi_logic is None in update_from_brain_state - memory tab will not update")
             return
-            
+
+        # This arrives on every simulation tick. The cards are a view of the
+        # squid's memory manager, which keeps the memories whether or not
+        # anyone is looking, so a hidden tab only notes that it is behind and
+        # rebuilds when it is shown.
+        if not self.isVisible():
+            self._stale = True
+            return
         self.update_memory_display()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, '_stale', False):
+            self._stale = False
+            QtCore.QTimer.singleShot(0, self.update_memory_display)
 
     def set_tamagotchi_logic(self, tamagotchi_logic):
         """Update the tamagotchi_logic reference and refresh memory display"""

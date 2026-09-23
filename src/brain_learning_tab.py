@@ -3,6 +3,7 @@ from .brain_base_tab import BrainBaseTab
 from .brain_ui_utils import hold_position_on_prepend
 import random
 import time
+from collections import deque
 from .localisation import Localisation
 
 try:
@@ -15,6 +16,8 @@ except ImportError:
         def scale_css(cls, css): return css
 
 class NeuralNetworkVisualizerTab(BrainBaseTab):
+    MAX_CARDS = 20      # learning cards kept on screen, newest first
+
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
 
         # Ensure brain_widget is not None
@@ -553,8 +556,13 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         b = max(0, int(b * (100 - percent) / 100))
         return f'#{r:02x}{g:02x}{b:02x}'
 
-    def add_log_entry(self, message, pair=None, weight_change=None, stdp_meta=None):
-        """Add a new learning pair card to the display"""
+    def add_log_entry(self, message, pair=None, weight_change=None, stdp_meta=None,
+                      record=True):
+        """Add a new learning pair card to the display.
+
+        `record=False` builds the card only: the pair was already entered in
+        the history when its event arrived (see _render_ledger_events).
+        """
         if pair and hasattr(self, 'learning_content_layout'):
             # Cards go in at the TOP, which pushes whatever the reader was
             # looking at down the page. hold_position_on_prepend scrolls down
@@ -578,15 +586,19 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
                 self.learning_content_layout.insertWidget(0, card)
 
                 # Keep only last 20 cards
-                while self.learning_content_layout.count() > 21:  # 20 cards + 1 stretch
-                    item = self.learning_content_layout.takeAt(20)
+                while self.learning_content_layout.count() > self.MAX_CARDS + 1:  # cards + stretch
+                    item = self.learning_content_layout.takeAt(self.MAX_CARDS)
                     if item and item.widget():
                         item.widget().deleteLater()
 
             # Update history
-            if pair not in self.learning_history:
-                self.learning_history.append(pair)
-            self.recent_pairs.append(pair)
+            if record:
+                self._record_pair(pair)
+
+    def _record_pair(self, pair):
+        if pair not in self.learning_history:
+            self.learning_history.append(pair)
+        self.recent_pairs.append(pair)
 
     def clear_log(self):
         """Clear all learning pair cards"""
@@ -599,6 +611,8 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
 
         self.recent_pairs = []
         self.learning_history = []
+        if hasattr(self, '_card_queue'):
+            self._card_queue.clear()
 
         # Add info card
         placeholder = self._create_info_card(
@@ -647,6 +661,7 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         except Exception:
             return
 
+        fresh = []
         for event in events:
             key = (round(event.timestamp, 4), event.edge, round(event.new_weight, 6))
             if key in self._seen_event_keys:
@@ -655,26 +670,60 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
             self._seen_event_order.append(key)
             if len(self._seen_event_order) > 400:
                 self._seen_event_keys.discard(self._seen_event_order.pop(0))
+            fresh.append(event)
 
-            direction = "increase" if event.delta > 0 else (
-                "decrease" if event.delta < 0 else None)
+        # Every new event goes into the history at once. Its card is queued:
+        # building one is a stack of styled widgets, several milliseconds on
+        # the UI thread, and a burst of learning used to build twenty or thirty
+        # in a single call - a visible freeze, and all of it for a tab that
+        # was usually not on screen. The queue keeps only the newest cards
+        # (the list shows no more than that anyway) and is drained one card
+        # per pass of the event loop, and only while the tab can be seen.
+        if not hasattr(self, '_card_queue'):
+            self._card_queue = deque(maxlen=self.MAX_CARDS)
+        for event in fresh:
+            if not (event.edge and hasattr(self, 'learning_content_layout')):
+                continue    # add_log_entry would not have recorded it either
+            self._record_pair(event.edge)
+            self._card_queue.append(event)
+        self._schedule_card_drain()
 
-            # The card's STDP badge is fed from the ledger's own detail, so
-            # LTP/LTD is shown when spike timing genuinely contributed and not
-            # otherwise. Nothing here re-derives it.
-            meta = {
-                'stdp_direction': event.detail.get('stdp_direction', 'none'),
-                'is_ltp': bool(event.detail.get('is_ltp')),
-                'is_ltd': bool(event.detail.get('is_ltd')),
-                'stdp_delta': float(event.detail.get('stdp_delta') or 0.0),
-                'stdp_weight': float(event.detail.get('stdp_weight') or 0.0),
-                'mechanism': event.mechanism,
-                'explanation': event.describe(),
-            }
-            if not meta['stdp_delta']:
-                meta['stdp_direction'] = 'none'
+    def _schedule_card_drain(self):
+        if getattr(self, '_card_queue', None) and not getattr(self, '_draining', False):
+            self._draining = True
+            QtCore.QTimer.singleShot(0, self._drain_card_queue)
 
-            self.add_log_entry("", event.edge, direction, stdp_meta=meta)
+    def _drain_card_queue(self):
+        self._draining = False
+        if not self._card_queue or not self.isVisible():
+            return      # showEvent picks the queue up again
+        self._build_card(self._card_queue.popleft())
+        self._schedule_card_drain()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._schedule_card_drain()
+
+    def _build_card(self, event):
+        direction = "increase" if event.delta > 0 else (
+            "decrease" if event.delta < 0 else None)
+
+        # The card's STDP badge is fed from the ledger's own detail, so
+        # LTP/LTD is shown when spike timing genuinely contributed and not
+        # otherwise. Nothing here re-derives it.
+        meta = {
+            'stdp_direction': event.detail.get('stdp_direction', 'none'),
+            'is_ltp': bool(event.detail.get('is_ltp')),
+            'is_ltd': bool(event.detail.get('is_ltd')),
+            'stdp_delta': float(event.detail.get('stdp_delta') or 0.0),
+            'stdp_weight': float(event.detail.get('stdp_weight') or 0.0),
+            'mechanism': event.mechanism,
+            'explanation': event.describe(),
+        }
+        if not meta['stdp_delta']:
+            meta['stdp_direction'] = 'none'
+
+        self.add_log_entry("", event.edge, direction, stdp_meta=meta, record=False)
 
     def update_hebbian_label_learning(self, value):
         """Update the Hebbian countdown label and handle blinking when <5s"""

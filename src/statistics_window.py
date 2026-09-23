@@ -47,8 +47,15 @@ class StatBox(QtWidgets.QWidget):
         self.setFixedSize(box_width, box_height)
 
     def set_value(self, value):
-        self.value_label.setText(str(int(value)))
-        self.value_edit.setText(str(int(value)))
+        # Called sixty times a second. Only a changed value is written, which
+        # also stops a value typed into the debug editor being overwritten
+        # before it can be applied.
+        text = str(int(value))
+        if text == getattr(self, '_shown', None):
+            return
+        self._shown = text
+        self.value_label.setText(text)
+        self.value_edit.setText(text)
 
     def get_value(self):
         return int(self.value_edit.text())
@@ -227,8 +234,11 @@ class StatisticsWindow(QtWidgets.QWidget):
         else:
             self.combo_level = 1
 
-        # Continuously update all statistics from squid
-        self.update_statistics()
+        # Continuously update all statistics from squid - while there is a
+        # window to show them in. The score roll and the combo timer above are
+        # game state and keep running either way.
+        if self.isVisible():
+            self.update_statistics()
 
     # -------------- external award -----------------------------------
     def award(self, base):
@@ -313,6 +323,12 @@ class StatisticsWindow(QtWidgets.QWidget):
         
         # Display up to 3 states
         states_to_show = active_states[:3]
+
+        # setStyleSheet re-polishes the widget, and this runs sixty times a
+        # second; touch the pills only when what they say has changed.
+        if states_to_show == getattr(self, '_shown_states', None):
+            return
+        self._shown_states = states_to_show
         
         # Update each pill
         for i, pill in enumerate(self.state_pills):

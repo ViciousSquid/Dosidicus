@@ -149,12 +149,16 @@ class BrainRenderWorker(QThread):
         # the inputs they were drawn from. Touched only by the render thread.
         self._backdrop: Optional[QImage] = None
         self._backdrop_signature = None
+        self._backdrop_weights: tuple = ()
         self._last_render_time = 0.0
         
         # Rendering frequency control
         self._min_render_interval = 1.0 / 10.0  # 10 FPS max
         self._last_render_request = 0.0
         
+        # Frames slower than this are followed by a rest (see run())
+        self._budget_threshold_ms = 20.0
+
         # Performance stats
         self._render_count = 0
         self._total_render_time = 0.0
@@ -238,6 +242,18 @@ class BrainRenderWorker(QThread):
                     
                     # Emit signal with rendered image
                     self.render_complete.emit(image, render_time)
+
+                    # A frame that had to redraw a lot - the backdrop after a
+                    # structural change, or a learning cycle animating most of
+                    # the network at once - holds the interpreter lock for
+                    # much of its duration, and the UI thread cannot run
+                    # Python meanwhile. Rest for twice as long as it took, so
+                    # the render thread never takes more than about a third of
+                    # the lock and the interface stays responsive; cheap
+                    # frames are unaffected. Newer requests simply replace the
+                    # state waiting to be drawn.
+                    if render_time > self._budget_threshold_ms:
+                        time.sleep(min(render_time * 2.0, 250.0) / 1000.0)
                     
                 except Exception as e:
                     print(f"🧠 Render error: {e}")
@@ -259,9 +275,10 @@ class BrainRenderWorker(QThread):
         spent redrawing unchanged lines was time taken from the UI thread.
 
         Both passes draw what a single pass did, in the same order, onto the
-        same pixels, so the frame is identical - with one exception: a link a
-        learning animation is playing on is drawn in the second pass, on top
-        of the other links rather than among them.
+        same pixels, so the frame is identical - with one exception: a link
+        that is changing every frame (a learning animation playing on it, or
+        part-way through a fade) is drawn in the second pass, on top of the
+        other links rather than among them.
         """
         # Calculate scaling (same logic as brain_widget)
         indicator_space = 0  # No indicator pills
@@ -278,10 +295,27 @@ class BrainRenderWorker(QThread):
             content_width = base_width * scale
             offset_x = (state.width - content_width) / 2
 
-        animated = self._animated_links(state)
-        key = self._backdrop_key(state, animated)
-        if self._backdrop is not None and key == self._backdrop_signature:
+        live = self._live_links(state)
+        key = self._backdrop_key(state, live)
+        weights = tuple(state.weights.items())
+        cached = self._backdrop is not None and key == self._backdrop_signature
+        old = self._backdrop_weights
+        if cached and weights == old:
             image = self._backdrop.copy()
+        elif cached and len(weights) > len(old) and weights[:len(old)] == old:
+            # Only new synapses. They are appended to the weights dict, so a
+            # full redraw would draw them last anyway: drawing just them onto
+            # the kept backdrop gives the same pixels for a fraction of the
+            # cost.
+            image = self._backdrop.copy()
+            added = frozenset(link for link, _ in weights[len(old):]) - live
+            painter = self._begin_painter(image, offset_x, indicator_space, scale)
+            try:
+                self._draw_connections(painter, state, scale, only=added)
+            finally:
+                painter.end()
+            self._backdrop = image.copy()
+            self._backdrop_weights = weights
         else:
             # Create image with proper size
             image = QImage(state.width, state.height, QImage.Format_ARGB32)
@@ -298,19 +332,20 @@ class BrainRenderWorker(QThread):
                 # Draw layers
                 self._draw_layers(painter, state, 1.0)
 
-                # Draw connections - all but the ones mid-animation, which
-                # change every frame and go on top in the second pass
-                self._draw_connections(painter, state, scale, skip=animated)
+                # Draw connections - all but the live ones, which change
+                # every frame and go on top in the second pass
+                self._draw_connections(painter, state, scale, skip=live)
             finally:
                 painter.end()
 
             self._backdrop = image.copy()
             self._backdrop_signature = key
+            self._backdrop_weights = weights
 
         painter = self._begin_painter(image, offset_x, indicator_space, scale)
         try:
-            if animated:
-                self._draw_connections(painter, state, scale, only=animated)
+            if live:
+                self._draw_connections(painter, state, scale, only=live)
 
             # Draw neurons
             self._draw_neurons(painter, state, scale)
@@ -336,12 +371,15 @@ class BrainRenderWorker(QThread):
         return painter
 
     @staticmethod
-    def _animated_links(state: RenderState) -> frozenset:
-        """Connections a learning animation is playing on right now.
+    def _live_links(state: RenderState) -> frozenset:
+        """Connections that look different from one frame to the next.
 
-        These pulse and carry moving arrows, so they are drawn fresh every
-        frame, on top of the cached backdrop rather than inside it. Matching
-        is undirected, as in _draw_connections.
+        A link a learning animation is playing on pulses and carries moving
+        arrows; a link part-way through fading in or out changes alpha every
+        frame. These are drawn fresh every frame, on top of the cached
+        backdrop rather than inside it, so that a fade or a learning pulse
+        does not force the whole backdrop to be redrawn for its duration.
+        Animation matching is undirected, as in _draw_connections.
         """
         now = state.animation_time
         playing = set()
@@ -351,21 +389,25 @@ class BrainRenderWorker(QThread):
                     playing.add(tuple(anim['pair']))
             except (KeyError, TypeError):
                 continue
-        if not playing:
-            return frozenset()
-        return frozenset(link for link in state.weights
-                         if link in playing or (link[1], link[0]) in playing)
+        opacities = state.link_opacities
+        live = set()
+        for link in state.weights:
+            if link in playing or (link[1], link[0]) in playing:
+                live.add(link)
+            elif 0.01 <= opacities.get(link, 1.0) < 1.0:
+                live.add(link)
+        return frozenset(live)
 
     @staticmethod
-    def _backdrop_key(state: RenderState, animated: frozenset):
-        """Everything the backdrop pass reads."""
+    def _backdrop_key(state: RenderState, live: frozenset):
+        """Everything the backdrop pass reads, apart from the weights."""
         from .brain_constants import NEURON_ROWS, ROW_BAND_COLORS, LOGICAL_CANVAS
-        return (animated,
+        return (live,
             state.width, state.height, tuple(state.anim_background_colour),
-            tuple(state.weights.items()),
             tuple(state.neuron_positions.items()),
             frozenset(state.visible_neurons), frozenset(state.excluded_neurons),
-            tuple(state.link_opacities.items()),
+            tuple(item for item in state.link_opacities.items()
+                  if item[0] not in live),
             state.show_weights, state.weight_thickness_enabled,
             state.weight_thickness_max, state.anim_line_base_width,
             tuple(state.anim_line_col_pos), tuple(state.anim_line_col_neg),
@@ -452,12 +494,37 @@ class BrainRenderWorker(QThread):
             painter.setPen(QPen(border, 1, Qt.DashLine))
             painter.drawRect(QRectF(rect_left, rect_top, rect_width, rect_height))
     
-    def _get_neuron_animation_color(self, state: RenderState, neuron_name: str, current_time: float):
+    @staticmethod
+    def _neuron_animations(state: RenderState, current_time: float) -> Dict[str, Dict]:
+        """neuron -> the first animation, in list order, playing on it now."""
+        first = {}
+        for anim in state.weight_animations:
+            try:
+                elapsed = current_time - anim['start_time']
+                playing = 0 <= elapsed < anim['duration']
+            except (KeyError, TypeError):
+                continue
+            if playing:
+                for end in (anim.get('neuron1'), anim.get('neuron2')):
+                    if end is not None:
+                        first.setdefault(end, anim)
+        return first
+
+    def _get_neuron_animation_color(self, state: RenderState, neuron_name: str,
+                                    current_time: float, first_anim=None):
         """
         Check if a neuron is currently involved in an active weight animation.
         Returns a QColor with pulsing alpha if active, None otherwise.
+
+        `first_anim` is _neuron_animations() for this frame, if the caller has
+        it; otherwise the animations are scanned.
         """
-        for anim in state.weight_animations:
+        if first_anim is not None:
+            anim = first_anim.get(neuron_name)
+            anims = (anim,) if anim is not None else ()
+        else:
+            anims = state.weight_animations
+        for anim in anims:
             # Check if this neuron is part of the animation pair
             if (anim.get('neuron1') == neuron_name or anim.get('neuron2') == neuron_name):
                 elapsed = current_time - anim['start_time']
@@ -489,7 +556,24 @@ class BrainRenderWorker(QThread):
         and weight-based thickness clamping (max 15px or style-defined).
         """
         current_time = state.animation_time
-        
+
+        # The first animation, in list order, that is playing on each link
+        # (either direction). Found once per frame; scanning every animation
+        # for every link was tens of thousands of Python steps per frame
+        # during a learning cycle, all of it holding the GIL.
+        playing = {}
+        for anim in state.weight_animations:
+            try:
+                pair = anim['pair']
+                elapsed = current_time - anim['start_time']
+                duration = anim['duration']
+            except (KeyError, TypeError):
+                continue
+            if isinstance(pair, tuple) and len(pair) == 2 and 0 <= elapsed < duration:
+                found = (anim, elapsed / duration)
+                playing.setdefault(pair, found)
+                playing.setdefault((pair[1], pair[0]), found)
+
         for (src, dst), weight in state.weights.items():
             if (src, dst) in skip or (only is not None and (src, dst) not in only):
                 continue
@@ -515,19 +599,7 @@ class BrainRenderWorker(QThread):
                 continue
             
             # ===== CHECK FOR ACTIVE HEBBIAN ANIMATION =====
-            active_anim = None
-            active_anim_progress = 0.0
-            
-            for anim in state.weight_animations:
-                # Check match (undirected)
-                if anim['pair'] == (src, dst) or anim['pair'] == (dst, src):
-                    elapsed = current_time - anim['start_time']
-                    duration = anim['duration']
-                    
-                    if 0 <= elapsed < duration:
-                        active_anim = anim
-                        active_anim_progress = elapsed / duration
-                        break
+            active_anim, active_anim_progress = playing.get(key, (None, 0.0))
             
             # ===== WEIGHT-BASED THICKNESS & COLOR =====
             abs_weight = abs(weight)
@@ -712,6 +784,9 @@ class BrainRenderWorker(QThread):
 
         scale_base = scale
         current_time = state.animation_time
+        neuron_anims = self._neuron_animations(state, current_time)
+        relay_anims = [anim for anim in state.weight_animations
+                       if anim.get('is_segment') and anim.get('final_target')]
 
         for name, pos in state.neuron_positions.items():
             if name in state.excluded_neurons:
@@ -743,14 +818,15 @@ class BrainRenderWorker(QThread):
             scale = scale_base * birth
             
             # ========== CHECK FOR ACTIVE HEBBIAN ANIMATION ==========
-            animation_color = self._get_neuron_animation_color(state, name, current_time)
+            animation_color = self._get_neuron_animation_color(
+                state, name, current_time, first_anim=neuron_anims)
             
             # Check if this neuron is currently being used as a relay in any animation
             is_active_connector = False
             connector_pulse_alpha = 0
             pulse_size_multiplier = 1.0
 
-            for anim in state.weight_animations:
+            for anim in relay_anims:
                 if anim.get('is_segment') and anim.get('final_target'):
                     # Check if this neuron is the connector in a staggered animation
                     connector_in_anim = (anim['neuron1'] == name or anim['neuron2'] == name)

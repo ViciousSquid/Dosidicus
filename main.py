@@ -1002,6 +1002,15 @@ def main():
     print(f"    Debug mode: {args.debug}")
     print(f"    Cooldown {args.neurocooldown or 'will be loaded from config'}")
 
+    # The brain runs Python on background threads (rendering, vision) as well
+    # as on the UI thread, and only one of them can hold the interpreter lock
+    # at a time. Every time Qt calls back into Python - a timer, a paint, a
+    # click - the UI thread has to win the lock back, and by default a busy
+    # background thread keeps it for up to 5 ms before it is made to let go.
+    # Those waits add up into visible hitches. 1 ms keeps the UI thread's
+    # wait short at a negligible cost in switching.
+    sys.setswitchinterval(0.001)
+
     app = QtWidgets.QApplication(sys.argv)
     
     try:
