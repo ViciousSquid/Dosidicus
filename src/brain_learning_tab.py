@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
-from .brain_ui_utils import hold_position_on_prepend
+from .brain_ui_utils import hold_position_on_prepend, reader_is_busy
 import random
 import time
 from collections import deque
@@ -697,6 +697,12 @@ class NeuralNetworkVisualizerTab(BrainBaseTab):
         self._draining = False
         if not self._card_queue or not self.isVisible():
             return      # showEvent picks the queue up again
+        if reader_is_busy(getattr(self, 'learning_scroll', None)):
+            # Someone is reading down the list: new cards wait until they
+            # move on, rather than being slotted in above what they read.
+            self._draining = True
+            QtCore.QTimer.singleShot(500, self._drain_card_queue)
+            return
         self._build_card(self._card_queue.popleft())
         self._schedule_card_drain()
 

@@ -250,6 +250,10 @@ class KnowledgeTab(BrainBaseTab):
 
         edges = sorted(weights.keys(), key=lambda e: (-abs(weights[e]), e))
         current = self.edge_combo.currentData()
+        # Refilling a dropdown someone has open and is scrolling through
+        # throws them back to the top of it; it can wait for the next refresh.
+        if self.edge_combo.view().isVisible() or self.neuron_combo.view().isVisible():
+            return
         if len(edges) != self.edge_combo.count() or current not in edges:
             self.edge_combo.blockSignals(True)
             self.edge_combo.clear()

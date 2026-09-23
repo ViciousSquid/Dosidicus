@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
 
 import json, math, time, random, datetime as dt
 from .localisation import loc  # Import localisation
+from .brain_ui_utils import preserve_scroll, reader_is_busy
 
 # ------------------------------------------------------------------
 #  Helper: coloured connection badge
@@ -115,6 +116,8 @@ class NeuronLaboratory(QDialog):
         lay.addWidget(self.tabs)
         lay.addWidget(self.status_lbl)
 
+        self.tabs.currentChanged.connect(self._paint_current_page)
+
         # ---- refresh timer ----
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._refresh)
@@ -153,6 +156,7 @@ class NeuronLaboratory(QDialog):
         self.inspector_scroll.setWidgetResizable(True)
         lay.addWidget(self.inspector_scroll, 1)
         self.tabs.addTab(w, loc("lab_tab_inspector", "🔍  Deep Inspector"))
+        self._inspector_page = w
 
     def _build_edit_tab(self):
         w = QWidget()
@@ -168,6 +172,7 @@ class NeuronLaboratory(QDialog):
         self.edit_scroll.setWidgetResizable(True)
         lay.addWidget(self.edit_scroll, 1)
         self.tabs.addTab(w, loc("lab_tab_edit", "🔧  Edit Sandbox"))
+        self._edit_page = w
 
     # ================================================================
     #  Live refresh
@@ -175,20 +180,52 @@ class NeuronLaboratory(QDialog):
     def _refresh(self):
         if not self.live_check.isChecked():
             return
+        self._sync_neuron_picker()
+        # The live tick leaves a page alone while someone is reading down it;
+        # it catches up on the first tick after they move on.
+        page = self.tabs.currentWidget()
+        scroll = {self.ov_scroll: self.ov_scroll,
+                  getattr(self, '_inspector_page', None): self.inspector_scroll,
+                  getattr(self, '_edit_page', None): self.edit_scroll}.get(page)
+        if reader_is_busy(scroll):
+            return
+        self._paint_current_page()
+
+    def _sync_neuron_picker(self):
+        """Keep the picker's list in step with the network.
+
+        Only touched when the set of neurons actually changes. Clearing and
+        refilling it every second closed the dropdown under the reader's
+        cursor, and each refill fired currentTextChanged, which rebuilt the
+        Deep Inspector - three times a second, back at the top every time.
+        """
+        # Keys, not localised names, for consistency with the other tools.
+        names = sorted(self.bw.neuron_positions.keys())
+        if names == [self.pick_neuron.itemText(i)
+                     for i in range(self.pick_neuron.count())]:
+            return
+        if self.pick_neuron.view().isVisible():
+            return      # the dropdown is open; refill it on a later tick
         current = self.pick_neuron.currentText()
+        self.pick_neuron.blockSignals(True)
         self.pick_neuron.clear()
-        
-        # Translate neuron names if needed, or use raw keys? 
-        # Usually keys are used internally, but displayed names might be localized.
-        # For this tool, we usually show keys, but let's stick to keys for consistency with other tools.
-        self.pick_neuron.addItems(sorted(self.bw.neuron_positions.keys()))
-        
+        self.pick_neuron.addItems(names)
         idx = self.pick_neuron.findText(current)
         if idx >= 0:
             self.pick_neuron.setCurrentIndex(idx)
-        self._paint_overview()
-        self._inspect_neuron(self.pick_neuron.currentText())
-        self._paint_edit()
+        self.pick_neuron.blockSignals(False)
+        if self.pick_neuron.currentText() != current:
+            self._inspect_neuron(self.pick_neuron.currentText())
+
+    def _paint_current_page(self, *_args):
+        """Rebuild the page on screen. The others catch up when shown."""
+        page = self.tabs.currentWidget()
+        if page is self.ov_scroll:
+            self._paint_overview()
+        elif page is getattr(self, '_inspector_page', None):
+            self._inspect_neuron(self.pick_neuron.currentText())
+        elif page is getattr(self, '_edit_page', None):
+            self._paint_edit()
 
     def select_neuron_by_name(self, neuron_name: str):
         """
@@ -218,6 +255,11 @@ class NeuronLaboratory(QDialog):
     #  Overview / Inspector / Edit
     # ================================================================
     def _paint_overview(self):
+        # Rebuilt every second while live; the reader stays where they were.
+        with preserve_scroll(self.ov_scroll):
+            self._paint_overview_cards()
+
+    def _paint_overview_cards(self):
         while self.ov_grid.count():
             item = self.ov_grid.takeAt(0)
             if item and item.widget():
@@ -341,6 +383,17 @@ class NeuronLaboratory(QDialog):
         """
         if not name:
             return
+        if name == getattr(self, '_inspected', None):
+            # The live refresh of the neuron being read: stay where they were.
+            with preserve_scroll(self.inspector_scroll):
+                self._build_inspector_cards(name)
+        else:
+            # A different neuron starts at the top of its own page.
+            self._inspected = name
+            self._build_inspector_cards(name)
+            self.inspector_scroll.verticalScrollBar().setValue(0)
+
+    def _build_inspector_cards(self, name):
         while self.inspector_lay.count():
             item = self.inspector_lay.takeAt(0)
             if item and item.widget():
@@ -765,6 +818,44 @@ class NeuronLaboratory(QDialog):
     #  EDIT tab
     # ================================================================
     def _paint_edit(self):
+        """The sliders, rebuilt only when the set of neurons changes.
+
+        Rebuilding them every second deleted the slider the reader was
+        dragging out from under the mouse. Between structural changes the
+        existing controls just follow the live values, except the one being
+        dragged or typed into.
+        """
+        rows = self._edit_rows() if self.lock_check.isChecked() else None
+        if rows is not None and rows == getattr(self, '_edit_rows_shown', None):
+            self._update_edit_values()
+            return
+        self._edit_rows_shown = rows
+        with preserve_scroll(self.edit_scroll):
+            self._build_edit_cards()
+
+    def _edit_rows(self):
+        return tuple(name for name in sorted(self.bw.neuron_positions.keys())
+                     if not isinstance(self.forced_neurons.get(
+                         name, self.bw.state.get(name, 50)), bool))
+
+    def _update_edit_values(self):
+        for name, row in self.locked_neurons.items():
+            slider, spin = row.get("slider"), row.get("spin")
+            if slider is None or spin is None:
+                continue
+            try:
+                if slider.isSliderDown() or spin.hasFocus():
+                    continue
+                val = int(self.forced_neurons.get(name, self.bw.state.get(name, 50)))
+                for control in (slider, spin):
+                    if control.value() != val:
+                        control.blockSignals(True)
+                        control.setValue(val)
+                        control.blockSignals(False)
+            except (RuntimeError, TypeError, ValueError):
+                continue
+
+    def _build_edit_cards(self):
         while self.edit_lay.count():
             item = self.edit_lay.takeAt(0)
             if item and item.widget():

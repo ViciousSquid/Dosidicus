@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from .brain_base_tab import BrainBaseTab
-from .brain_ui_utils import UiUtils, set_html, preserve_scroll
+from .brain_ui_utils import UiUtils, set_html, preserve_scroll, reader_is_busy
 from .localisation import Localisation  # Import Localisation
 from datetime import datetime
 
@@ -158,6 +158,10 @@ class MemoryTab(BrainBaseTab):
                 signature = (getattr(Localisation.instance(), 'current_language', None),
                              repr(stm_deduped), repr(ltm_deduped))
                 if signature == getattr(self, '_shown_signature', None):
+                    return
+                # Someone is partway down one of the lists: leave it alone and
+                # rebuild on a later tick, once they have moved on.
+                if reader_is_busy(self.stm_scroll) or reader_is_busy(self.ltm_scroll):
                     return
 
                 # Rebuilding the cards throws both lists back to the top, so
