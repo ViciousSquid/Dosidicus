@@ -74,7 +74,7 @@ No two brains ever develop the same way.
 #### Under the hood runs [**STRINg** simulation engine](https://github.com/ViciousSquid/Dosidicus/wiki/Engine-overview):
 
 * Built from scratch in NumPy
-* No TensorFlow. No PyTorch.
+* No TensorFlow. No PyTorch - [Read the actual learning engine](https://github.com/ViciousSquid/Dosidicus/blob/3.1_LatestVersion/src/plasticity.py)
 * [Wire your own](https://github.com/ViciousSquid/Dosidicus/wiki/Brain-Designer) squid brain, add or erase entire behaviours
 * Fully visible neuron activations
 * Full provenance: every weight change and every new neuron records its cause
