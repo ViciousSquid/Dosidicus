@@ -56,7 +56,9 @@ And it can tell you all of it. Every synaptic change and every grown neuron reco
 
 No two brains ever develop the same way.
 
-Every save file becomes a permanent cognitive history — the provenance is saved with the squid.
+## "Why believe it?"
+
+**Not faked:** there is one learning engine shared by the GUI, the headless trainer, and the test suite — the squid cannot learn differently depending on which interface watches it. Every weight change records its mechanism, evidence, and triggering experience.
 
 ## As the caretaker you will
 
