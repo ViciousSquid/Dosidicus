@@ -58,7 +58,7 @@ No two brains ever develop the same way.
 
 ## "Why believe it?"
 
-**Not faked:** there is one learning engine shared by the GUI, the headless trainer, and the test suite — the squid cannot learn differently depending on which interface watches it. Every weight change records its mechanism, evidence, and triggering experience.
+**Not faked:** there is [one learning engine](https://github.com/ViciousSquid/Dosidicus/blob/3.1_LatestVersion/src/plasticity.py) shared by the GUI, the headless trainer, and the test suite — the squid cannot learn differently depending on which interface watches it. Every weight change records its mechanism, evidence, and triggering experience.
 
 ## As the caretaker you will
 
