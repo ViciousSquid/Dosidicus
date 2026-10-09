@@ -23,11 +23,11 @@ from .remote_entity_manager import RemoteEntityManager # Ensure this is imported
 from .squid_multiplayer_autopilot import RemoteSquidController # Ensure this for autopilot logic
 from .asset_paths import resolve_local_asset, is_inside_assets
 from .identity import SquidIdentity
-from .consent import ConsentPolicy, MODE_OPEN
+from .consent import ConsentPolicy, ConsentDecision, MODE_OPEN, REASON_CLOSED
 from .peer_ledger import PeerLedger
 from .encounter import EncounterSession, drive_snapshot
 from .encounter_sensors import ConspecificView, EncounterSensors
-from .host_body import HostBody
+from .host_body import HostBody, DEFAULT_MATING_CHANCE, DEFAULT_MATING_CONTACT_SECONDS
 from .visitor_mind import VisitorMind
 from .remote_protocol import (
     ActionIntent, PerceptionFrame, ProtocolError, VisitEnd,
@@ -593,10 +593,20 @@ class MultiplayerPlugin:
             tamagotchi_logic=self.tamagotchi_logic,
             peer_ledger=self.peer_ledger,
             send=self._send, logger=self.logger)
-        # This tank, for when it is hosting someone else's squid.
-        self.host_body = HostBody(tamagotchi_logic=self.tamagotchi_logic,
-                                  conspecific_view=self.conspecific_view,
-                                  logger=self.logger)
+        # This tank, for when it is hosting someone else's squid. It is the
+        # authority on matings in this tank and records them through the
+        # core lifecycle before the visitor is told.
+        lifecycle_config = getattr(self.tamagotchi_logic, 'lifecycle_config', None) or {}
+        self.host_body = HostBody(
+            tamagotchi_logic=self.tamagotchi_logic,
+            conspecific_view=self.conspecific_view,
+            logger=self.logger,
+            mating_chance=lifecycle_config.get('mating_chance', DEFAULT_MATING_CHANCE),
+            mating_contact_seconds=lifecycle_config.get(
+                'mating_contact_seconds', DEFAULT_MATING_CONTACT_SECONDS),
+            on_mating=self.record_mating)
+        # One fight cloud when a contest breaks out between two squid here.
+        self.conspecific_view.on_contest = self.show_fight_cloud
 
         self.encounter_sensors = EncounterSensors(self.conspecific_view,
                                                   self.peer_ledger,
@@ -782,6 +792,93 @@ class MultiplayerPlugin:
                 self.logger.error(f"Could not remove a departed visitor: {exc}")
         self.close_encounter(actor.uuid)
         self.logger.info(f"Visit by {actor.identity} ended: {reason}")
+
+    # ------------------------------------------------------------------
+    # Reproduction, and what a resident's death means for visits
+    # ------------------------------------------------------------------
+    def record_mating(self, actor, mating_id: str) -> bool:
+        """HostBody has resolved a mating with this tank's resident.
+
+        Recorded in the core lifecycle - which lays the egg and saves, as one
+        record - and only then in the encounter. HostBody tells the visitor
+        afterwards, and only if this returned True, so the visitor can never
+        hear about a mating this tank did not keep.
+        """
+        logic = self.tamagotchi_logic
+        if logic is None or not hasattr(logic, 'record_reproduction'):
+            return False
+        if not logic.record_reproduction(mating_id, actor.identity.uuid,
+                                         actor.identity.name):
+            return False
+        session = self.open_encounters.get(actor.uuid)
+        if session is None:
+            squid = getattr(logic, 'squid', None)
+            summary = self.peer_ledger.summary(actor.uuid) if self.peer_ledger else None
+            session = EncounterSession(
+                actor.identity, drive_snapshot(squid),
+                first_meeting=(summary is None or summary.encounters == 0))
+            self.open_encounters[actor.uuid] = session
+        session.note_mated(mating_id)
+        self.logger.info(f"Mating {mating_id} with {actor.identity} recorded")
+        return True
+
+    def handle_resident_died(self, **kwargs) -> None:
+        """This tank's resident has died. End every visit to it.
+
+        Visitors go home with an ordinary visit_end, their encounters are
+        written down, and nothing is left pointing at a squid that is about
+        to be replaced by its hatchling.
+        """
+        if self.host_body is not None:
+            for actor in list(self.host_body.visitors.values()):
+                self.end_visit_as_host(actor, reason=END_EJECTED)
+        for peer_uuid in list(self.open_encounters):
+            self.close_encounter(peer_uuid)
+        self.conspecific_view.clear()
+
+    def _resident_is_dead(self) -> bool:
+        squid = getattr(self.tamagotchi_logic, 'squid', None)
+        lifecycle = getattr(squid, 'lifecycle', None)
+        return bool(lifecycle is not None and lifecycle.is_dead)
+
+    #: Two squid this close, with a contest between them, are about to fight.
+    FIGHT_CLOUD_RANGE = 250.0
+
+    def show_fight_cloud(self, peer_uuid: str) -> bool:
+        """A contest has broken out here: draw ONE cloud over the pair.
+
+        Called by ConspecificView.on_contest, on the thread that resolved the
+        contest - the visitor's intent being applied, or the resident's own
+        actuator - so the drawing happens on Qt's thread. Only when the two
+        squid are both in this tank and close; a contest over an object from
+        across the tank is not a fight.
+        """
+        if not peer_uuid or self.entity_manager is None:
+            return False
+        squid = getattr(self.tamagotchi_logic, 'squid', None)
+        presence = self.conspecific_view.presences.get(peer_uuid)
+        if squid is None or presence is None:
+            return False
+        if getattr(squid, 'is_transitioning', False):
+            return False            # the resident is away; nobody to fight here
+        rx = float(getattr(squid, 'squid_x', 0.0)) + float(getattr(squid, 'squid_width', 0.0)) / 2
+        ry = float(getattr(squid, 'squid_y', 0.0)) + float(getattr(squid, 'squid_height', 0.0)) / 2
+        if math.hypot(presence.x - rx, presence.y - ry) > self.FIGHT_CLOUD_RANGE:
+            return False
+        return self.entity_manager.show_fight_cloud(
+            peer_uuid, (rx + presence.x) / 2, (ry + presence.y) / 2)
+
+    def shutdown(self) -> None:
+        """Called by PluginManager.unload_plugin, e.g. on New Game.
+
+        There was no shutdown, so unloading the plugin left its socket open,
+        its listener and sync threads running, and any visit in progress
+        pointing at a squid that had been replaced. Disabling is the one path
+        that already ends visits on both sides and closes the node.
+        """
+        if self.logger is None or not self.is_setup:
+            return
+        self.disable()
 
     def update_encounters(self) -> None:
         """Open, feed and close encounters. Called on the sync tick.
@@ -1409,8 +1506,14 @@ class MultiplayerPlugin:
             visitor_identity = SquidIdentity.from_payload(
                 exit_payload_inner.get('identity') or {})
             current = len(self.host_body.visitors) if self.host_body else 0
-            decision = self.consent_policy.evaluate(
-                visitor_identity, current_visitors=current)
+            if self._resident_is_dead():
+                # Nobody to visit: the tank is waiting for its egg to hatch.
+                decision = ConsentDecision(
+                    False, REASON_CLOSED,
+                    getattr(visitor_identity, 'uuid', '') or '')
+            else:
+                decision = self.consent_policy.evaluate(
+                    visitor_identity, current_visitors=current)
             if not decision.accepted:
                 self.logger.info(
                     f"Refused entry to {visitor_identity or source_node_id}: {decision.reason}")
@@ -1452,6 +1555,13 @@ class MultiplayerPlugin:
                     actor = self.host_body.admit(visitor_identity, visit_id,
                                                  entry_x, entry_y)
                     self.visit_node_ids[visitor_identity.uuid] = source_node_id
+                    # The squid this resident mated with is back. Tell it
+                    # again, in case it never heard; it files the mating once.
+                    lifecycle = getattr(getattr(self.tamagotchi_logic, 'squid', None),
+                                        'lifecycle', None)
+                    if (lifecycle is not None and lifecycle.mating_id
+                            and lifecycle.mate_uuid == visitor_identity.uuid):
+                        self.host_body.announce_mating(actor, lifecycle.mating_id)
                     # First frame straight away, so the visitor's brain has
                     # something to decide from without waiting a cadence.
                     self._send('perception_frame',
@@ -2209,6 +2319,8 @@ class MultiplayerPlugin:
             "on_network_consequence": self.handle_consequence,
             "on_network_visit_end": self.handle_visit_end,
             "on_network_visit_response": self.handle_visit_response,
+            # Not a network message: the core tells plugins its squid died.
+            "on_squid_died": self.handle_resident_died,
         }
 
         for hook_name_to_register, handler_method_to_call in hook_handlers.items():

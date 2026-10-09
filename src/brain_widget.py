@@ -2580,6 +2580,54 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             print(f"🥚 Born knowing how to move, eat and flee. "
                   f"Must learn: {', '.join(a[4:] for a in LEARNED_ACTIONS)}")
 
+    def reset_to_newborn(self):
+        """Return this widget to the brain a squid hatches with.
+
+        For a new squid taking over the tank. Resetting only the activations
+        (create_initial_state) left every learned weight, every grown neuron
+        and the whole cognitive history in place, so a "new" squid silently
+        inherited the previous one's mind. Each subsystem is reset through its
+        own reset method; the innate synapses are then laid down by the same
+        initialize_weights() a freshly built widget uses, so they are recorded
+        in the reset ledger as innate.
+        """
+        from .brain_constants import ACTION_NEURONS, action_resting_level
+
+        self.ledger.reset()
+        self.capability.reset()
+        self.causal_learning.reset()
+        self.plasticity.reset()
+        self.consolidation.from_dict({})
+        self.consolidation.clear_buffer()
+        self.enhanced_neurogenesis.reset_state()
+        self.experience_buffer = self.enhanced_neurogenesis.experience_buffer
+        self.neurogenesis_data = {
+            'new_neurons': [],
+            'last_neuron_time': time.time(),
+            'new_neurons_details': {},
+        }
+        self.action_representations = {}
+        self.externally_driven = set()
+        self.neuron_shapes = {}
+        self.layers = []
+        self._personality_bias_applied = False
+
+        self.neuron_positions = self.original_neuron_positions.copy()
+        self.state = self.create_initial_state()
+        for action_name in ACTION_NEURONS:
+            self.state.setdefault(action_name, action_resting_level(action_name))
+        for sensor_name in self.original_neuron_positions:
+            self.state.setdefault(sensor_name, 0.0)
+        self.communication_events = {name: 0 for name in self.neuron_positions}
+        self.visible_neurons = set()
+
+        self.weights = {}
+        self.initialize_weights()
+        self.associations = self.compute_backend.zeros(
+            (len(self.neuron_positions), len(self.neuron_positions)))
+        self.mark_render_dirty()
+        self.update()
+
     def apply_personality_bias(self, personality):
         """Tilt this squid's innate reflexes toward its personality.
 

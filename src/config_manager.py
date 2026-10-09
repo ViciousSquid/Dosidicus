@@ -255,6 +255,25 @@ class ConfigManager:
         return self.config.getboolean('Neurogenesis', 'showmanship', fallback=True)
 
 
+    def get_lifecycle_config(self):
+        """Reproduction and parental starvation. See src/lifecycle.py.
+
+        Every value falls back to lifecycle.DEFAULT_CONFIG, so a config.ini
+        written before the section existed behaves exactly as the defaults.
+        """
+        from .lifecycle import DEFAULT_CONFIG
+        values = dict(DEFAULT_CONFIG)
+        if self.config.has_section('Lifecycle'):
+            for key, default in DEFAULT_CONFIG.items():
+                try:
+                    values[key] = self.config.getfloat('Lifecycle', key, fallback=default)
+                except ValueError:
+                    values[key] = default
+        values['mating_chance'] = max(0.0, min(1.0, values['mating_chance']))
+        values['mating_contact_seconds'] = max(0.0, values['mating_contact_seconds'])
+        values['starvation_hunger'] = max(0.0, min(100.0, values['starvation_hunger']))
+        return values
+
     def get_facts_enabled(self):
         return self.config.getboolean('Facts', 'enabled', fallback=True)
 

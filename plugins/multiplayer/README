@@ -37,7 +37,7 @@ actually observe**, and **private cognitive state never leaves home**.
 |-----------|---------|---------|
 | host → visitor | `perception_frame` | position, tank bounds, facing, nine observable sensor values, the resident's identity, host-issued item ids |
 | visitor → host | `action_intent` | an action **neuron name**, its activation, confidence, heading, target id, lease |
-| host → visitor | `consequence` | what happened: a contest resolved, food eaten, an action blocked |
+| host → visitor | `consequence` | what happened: a contest resolved, food eaten, an action blocked, a mating (its id only) |
 | either | `visit_request` / `visit_response` / `visit_end` | consent, and the end of a visit |
 
 **Never crosses:** weights, neuron activations, drives, memories, the capability
@@ -104,6 +104,47 @@ store. Long-term memory already persists, already promotes what matters, and
 already raises the importance of a repeated experience; a parallel database
 would drift from it. What gets recorded is objective — an object changed hands,
 food was eaten, how the squid's drives moved — never a verdict about the peer.
+
+## Reproduction
+
+Reproduction happens only here, during a visit, and only the **host** decides
+it - the same way it resolves a contest. There is no mating action, here or in
+either brain: the visitor's own decisions move its body, the resident's move
+its own, and the host works out what that means in its tank.
+
+1. If the visitor's body stays within reach of the resident
+   (`MATING_CONTACT_RANGE`) for `mating_contact_seconds`, the host makes **one
+   roll for the whole visit** at `mating_chance` (2% by default). Brief
+   contact never rolls, so reproduction is rare and never routine.
+2. Only a resident that is at home, alive and has never reproduced can mate.
+   The visitor's state is not consulted - the host does not have it.
+3. On success the host records it in the **core** lifecycle
+   (`src/lifecycle.py`, via `TamagotchiLogic.record_reproduction`): the
+   resident becomes a parent and its egg is laid in its own tank, as **one
+   record in one atomic save**. Only then is the visitor told.
+4. The visitor is sent `consequence` `mated` with the mating id
+   (`<visit id>-mate`) and nothing else, on three round trips in a row (UDP),
+   and again whenever that same individual visits later. It files the mating
+   once, by id, as an ordinary encounter memory
+   (`peer:<uuid>:mating:<id>`) - its body and lifecycle are untouched.
+
+What follows is not a multiplayer concern and keeps happening with the plugin
+off: the parent stops eating, starves on the ordinary metabolism, dies once,
+and its egg hatches into a new game (see `src/lifecycle.py`). A dead resident
+ends every visit (`on_squid_died`) and refuses new ones.
+
+| Setting (`config.ini` `[Lifecycle]`) | Default | Meaning |
+|---|---|---|
+| `mating_chance` | 0.02 | chance of the one roll a visit gets |
+| `mating_contact_seconds` | 5.0 | sustained contact before that roll |
+| `starvation_hunger` | 90 | hunger at which a parent starts losing health |
+
+## The fight cloud
+
+When a contest breaks out between two squid that are both in the tank and
+within `FIGHT_CLOUD_RANGE` of each other, **one** animated cloud
+(`images/fight_cloud.gif`) is drawn between them for a couple of seconds. It
+is a drawing and nothing else. If the GIF is not installed, nothing is drawn.
 
 ## Consent
 
@@ -199,6 +240,8 @@ at all.
 | `tests/test_encounter_stage0.py` | the sensor seam, identity, encounter memory, safe asset paths, consent |
 | `tests/test_remote_mind_stage1.py` | the round trip, and that the plugin does not choose the visitor's behaviour |
 | `tests/test_social_consequences_stage2a.py` | that a memory of one individual can change what the squid does |
+| `tests/test_reproduction_lifecycle.py` | mating authority, rarity, one egg, retransmission and disconnects, starvation, save/load, the fight cloud |
+| `tests/test_new_game_and_hatch.py` | New Game and the hatch, through the real main window |
 
 The load-bearing one is `PluginDoesNotChooseBehaviourTests` in the Stage 1 file.
 Every other test could pass while this plugin quietly decided what a visitor did;
@@ -207,4 +250,5 @@ that one fails if it does.
 ## Not built yet
 
 Signalling, gossip, asynchronous visits to offline tanks, internet transport,
-and any social behaviour beyond individual-specific memory.
+and any social behaviour beyond individual-specific memory and the
+host-resolved consequences above.

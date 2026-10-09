@@ -15,6 +15,7 @@ from .learning import HebbianLearning
 from .interactions import RockInteractionManager
 from .interactions2 import PoopInteractionManager
 from .config_manager import ConfigManager
+from .lifecycle import Lifecycle, EGG_HATCHING
 from .plugin_manager import PluginManager
 from .brain_neuron_hooks import BrainNeuronHooks
 from .brain_neuron_outputs import NeuronOutputMonitor
@@ -71,6 +72,11 @@ class TamagotchiLogic:
 
         self.last_save_hash = None
         self.save_count = 0
+
+        # Reproduction, parental starvation and the egg. The state itself is
+        # the squid's (squid.lifecycle); this is the tank's side of it.
+        self.lifecycle_config = self.config_manager.get_lifecycle_config()
+        self.egg_item = None
         
         self.window_resize_cooldown = 0
         self.window_resize_cooldown_max = 20  # 20 updates before another resize can startle
@@ -2402,10 +2408,9 @@ class TamagotchiLogic:
 
         # Directly check collision without redundant checks
         if self.squid and cheese_item.collidesWithItem(self.squid.squid_item):
-            self.squid.eat(cheese_item)
-            
-            # Reset status after a short delay
-            QtCore.QTimer.singleShot(2000, self.reset_squid_status)
+            if self.squid.eat(cheese_item):
+                # Reset status after a short delay
+                QtCore.QTimer.singleShot(2000, self.reset_squid_status)
 
     def move_sushi(self, sushi_item):
         sushi_x = sushi_item.pos().x()
@@ -2417,11 +2422,12 @@ class TamagotchiLogic:
         sushi_item.setPos(sushi_x, sushi_y)
 
         if self.squid is not None and sushi_item.collidesWithItem(self.squid.squid_item):
-            self.squid.eat(sushi_item)  # Pass the sushi_item as an argument
-            self.remove_food(sushi_item)
-            
-            # Reset status after a short delay (matching cheese behavior)
-            QtCore.QTimer.singleShot(2000, self.reset_squid_status)
+            # A squid that does not eat leaves the sushi where it is.
+            if self.squid.eat(sushi_item):
+                self.remove_food(sushi_item)
+
+                # Reset status after a short delay (matching cheese behavior)
+                QtCore.QTimer.singleShot(2000, self.reset_squid_status)
 
     def is_sushi(self, food_item):
         return getattr(food_item, 'is_sushi', False)     
@@ -2455,6 +2461,11 @@ class TamagotchiLogic:
         # -----------------------------------------------------------------------
 
         self.update_cleanliness_overlay()
+
+        # A dead squid has no metabolism. Its egg is about to take over.
+        lifecycle = getattr(self.squid, 'lifecycle', None)
+        if lifecycle is not None and lifecycle.is_dead:
+            return
 
         if self.squid is not None:
             # Update squid needs
@@ -2515,6 +2526,14 @@ class TamagotchiLogic:
                     health_decrease = 0.2 * self.simulation_speed  # Rapid decrease
                 else:
                     health_decrease = 0.1 * self.simulation_speed 
+
+                # Only a parent, which no longer eats, actually loses this
+                # health - and only once it is starving. Every other squid's
+                # health is untouched here, exactly as before.
+                starvation_hunger = self._lifecycle_setting('starvation_hunger')
+                if lifecycle is not None and lifecycle.starve(
+                        self.squid, health_decrease, starvation_hunger):
+                    self.on_parent_died()
 
     def handle_window_resize(self, event):
         new_width = event.size().width()
@@ -2917,6 +2936,166 @@ class TamagotchiLogic:
                 current_frame = index % 2
                 poop_item.setPixmap(self.squid.poop_images[current_frame])
 
+    # ------------------------------------------------------------------
+    # Reproduction, parental starvation and the egg (see src/lifecycle.py)
+    # ------------------------------------------------------------------
+    #: Pause between the parent dying and its egg starting to hatch, so the
+    #: player sees the one happen before the other.
+    HATCH_DELAY_MS = 3000
+
+    def _lifecycle_setting(self, key):
+        config = getattr(self, 'lifecycle_config', None)
+        if not config:
+            from .lifecycle import DEFAULT_CONFIG
+            config = DEFAULT_CONFIG
+        return config[key]
+
+    def record_reproduction(self, mating_id, mate_uuid, mate_name="Squid"):
+        """The host has resolved a mating with this tank's resident.
+
+        One state change and one save: the resident becomes a parent and its
+        egg is laid in the same Lifecycle record, which is written in a single
+        atomic save before this returns. The caller only tells the visiting
+        squid afterwards, so a crash can lose the visitor's news of the event
+        but never the event itself, and can never write half of it.
+
+        Returns True only the first time; a repeat lays nothing.
+        """
+        squid = self.squid
+        if squid is None:
+            return False
+        x, y = self._egg_position()
+        if not squid.lifecycle.record_reproduction(mating_id, mate_uuid,
+                                                   mate_name, x, y):
+            return False
+        self._place_egg()
+        try:
+            self.save_game()
+        except Exception as e:
+            # The record is still held in memory and goes out with the next
+            # save; the event is not undone because a write failed.
+            print(f"[Lifecycle] could not save the mating immediately: {e}")
+        self.show_message(f"{squid.name} and {mate_name} produced an egg. "
+                          f"{squid.name} has stopped eating.")
+        return True
+
+    def _egg_position(self):
+        """On the tank floor, below where the parent is."""
+        ui = self.user_interface
+        width = float(getattr(ui, 'window_width', 1280))
+        height = float(getattr(ui, 'window_height', 900))
+        squid = self.squid
+        x = float(getattr(squid, 'squid_x', width / 2))
+        x = max(50.0, min(width - 120.0, x))
+        y = max(50.0, height - 120.0 - 92.0)
+        return x, y
+
+    def _place_egg(self):
+        """Put the egg in the tank. Safe to call repeatedly."""
+        egg = self.squid.lifecycle.egg if self.squid else None
+        if not egg:
+            return None
+        existing = getattr(self, 'egg_item', None)
+        if existing is not None and getattr(existing, 'egg_id', None) == egg['egg_id']:
+            try:
+                if existing.scene() is not None:
+                    return existing
+            except RuntimeError:
+                pass
+        self._remove_egg_item()
+        item = QtWidgets.QGraphicsPixmapItem(
+            QtGui.QPixmap(os.path.join("images", "egg.png")))
+        # A category nothing else recognises: it is not food, a rock or a
+        # decoration, so it is not eaten, carried, contested or saved twice.
+        item.category = 'egg'
+        item.egg_id = egg['egg_id']
+        item.setPos(egg['x'], egg['y'])
+        self.user_interface.scene.addItem(item)
+        self.egg_item = item
+        if hasattr(self.squid, 'mark_scene_objects_dirty'):
+            self.squid.mark_scene_objects_dirty()
+        return item
+
+    def _remove_egg_item(self):
+        item = getattr(self, 'egg_item', None)
+        self.egg_item = None
+        if item is None:
+            return
+        try:
+            scene = item.scene()
+            if scene is not None:
+                scene.removeItem(item)
+        except RuntimeError:
+            pass
+
+    def _restore_lifecycle(self, data):
+        """Bring the lifecycle back from a save, and resume where it was."""
+        squid = self.squid
+        squid.lifecycle = Lifecycle.from_dict(data)
+        self._remove_egg_item()
+        if squid.lifecycle.egg:
+            self._place_egg()
+        if squid.lifecycle.is_dead:
+            # Closed while the parent was dead or its egg was hatching. The
+            # hatch picks up from the saved state, and only once.
+            self._lay_parent_to_rest()
+            QtCore.QTimer.singleShot(self.HATCH_DELAY_MS, self.begin_egg_hatching)
+
+    def _lay_parent_to_rest(self):
+        squid = self.squid
+        squid.can_move = False
+        squid.is_fleeing = False
+        squid.pursuing_food = False
+        squid.status = "dead"
+        if hasattr(squid, 'clear_neural_drive'):
+            squid.clear_neural_drive()
+
+    def on_parent_died(self):
+        """The starving parent has died. Called once, by the transition."""
+        squid = self.squid
+        self._lay_parent_to_rest()
+        self.show_message(f"{squid.name} has died.")
+        # The multiplayer plugin, if it is running, ends visits to a tank
+        # whose resident is gone, so nothing is left pointing at it.
+        plugin_manager = getattr(self, 'plugin_manager', None)
+        if plugin_manager is not None:
+            try:
+                plugin_manager.register_hook("on_squid_died")
+                plugin_manager.trigger_hook("on_squid_died", tamagotchi_logic=self,
+                                            squid=squid)
+            except Exception as e:
+                print(f"[Lifecycle] on_squid_died hook failed: {e}")
+        try:
+            self.save_game()
+        except Exception as e:
+            print(f"[Lifecycle] could not save the death: {e}")
+        QtCore.QTimer.singleShot(self.HATCH_DELAY_MS, self.begin_egg_hatching)
+
+    def begin_egg_hatching(self):
+        """The dead parent's egg hatches into a new game. No cancel.
+
+        The egg is marked hatching and saved before anything else, so a crash
+        from here on resumes this hatch rather than starting a second one.
+        The new game itself is the main window's, the same sequence as a
+        start with no save.
+        """
+        squid = self.squid
+        lifecycle = getattr(squid, 'lifecycle', None)
+        if lifecycle is None or not lifecycle.is_dead or lifecycle.egg is None:
+            return False
+        if lifecycle.begin_hatching():
+            try:
+                self.save_game()
+            except Exception as e:
+                print(f"[Lifecycle] could not save the hatching egg: {e}")
+        elif lifecycle.egg_state != EGG_HATCHING:
+            return False
+        window = getattr(self.user_interface, 'window', None)
+        hatch = getattr(window, 'hatch_egg', None)
+        if not callable(hatch):
+            return False
+        return bool(hatch(lifecycle.egg['egg_id']))
+
     def game_over(self):
         game_over_dialog = QtWidgets.QMessageBox()
         game_over_dialog.setIcon(QtWidgets.QMessageBox.Critical)
@@ -3054,6 +3233,7 @@ class TamagotchiLogic:
             )
             self.squid.statistics.load_statistics(statistics_data)
             self._set_sickness_state(getattr(self.squid, 'is_sick', False))
+            self._restore_lifecycle(game_state.get('lifecycle'))
 
             # Load custom brain (Logic patched to load output bindings)
             custom_brain_data = data.get('custom_brain', {})
@@ -3187,7 +3367,11 @@ class TamagotchiLogic:
             'game_state': {
                 'squid': squid_data,
                 'tamagotchi_logic': tamagotchi_logic_data,
-                'decorations': decorations_data
+                'decorations': decorations_data,
+                # The parent's state and its egg, as one record, in the same
+                # atomic write as everything else.
+                'lifecycle': self.squid.lifecycle.to_dict()
+                             if hasattr(self.squid, 'lifecycle') else None,
             },
             'brain_state': brain_state,
             'statistics': statistics_data,
@@ -3290,6 +3474,7 @@ class TamagotchiLogic:
             self.squid.load_state(squid_data)
             self.squid.statistics.load_statistics(save_data.get('statistics', {}))
             self._set_sickness_state(getattr(self.squid, 'is_sick', False))
+            self._restore_lifecycle(game_state.get('lifecycle'))
             
             # Load custom brain
             custom_brain_data = save_data.get('custom_brain')

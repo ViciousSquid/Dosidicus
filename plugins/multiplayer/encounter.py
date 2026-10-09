@@ -80,7 +80,7 @@ class EncounterRecord:
     __slots__ = ('peer', 'started_at', 'ended_at', 'actions', 'peer_actions',
                  'drive_deltas', 'valence', 'outcome', 'items_taken',
                  'items_lost', 'closest_approach', 'first_meeting',
-                 'related_neurons')
+                 'related_neurons', 'mating_id')
 
     def __init__(self, peer: SquidIdentity, started_at: float):
         self.peer = peer
@@ -96,6 +96,9 @@ class EncounterRecord:
         self.closest_approach = 0.0
         self.first_meeting = True
         self.related_neurons: List[str] = []
+        #: The mating this encounter produced, if it produced one. An id, not
+        #: an opinion: the host decided it happened and named it.
+        self.mating_id = ''
 
     @property
     def duration(self) -> float:
@@ -116,6 +119,8 @@ class EncounterRecord:
         weight = _BASE_IMPORTANCE + abs(self.valence) * _IMPORTANCE_PER_VALENCE
         if self.items_taken or self.items_lost:
             weight += 2.0
+        if self.mating_id:
+            weight += 3.0
         if self.first_meeting:
             weight += 1.0
         return round(min(_MAX_IMPORTANCE, weight), 2)
@@ -148,6 +153,7 @@ class EncounterRecord:
                 'closest_approach': round(self.closest_approach, 1),
                 'first_meeting': self.first_meeting,
                 'encounters': 1,
+                'mating_id': self.mating_id,
             },
         }
 
@@ -178,6 +184,7 @@ class EncounterSession:
         self.items_taken = 0
         self.items_lost = 0
         self.closest_approach = 0.0
+        self.mating_id = ''
         self.closed = False
         self._latest_drives: Dict[str, float] = dict(self.opening_drives)
 
@@ -206,6 +213,13 @@ class EncounterSession:
     def note_item_lost(self, count: int = 1) -> None:
         self.items_lost += max(0, int(count))
 
+    def note_mated(self, mating_id: str) -> bool:
+        """This encounter produced a mating. True the first time only."""
+        if not mating_id or self.mating_id == mating_id:
+            return False
+        self.mating_id = str(mating_id)
+        return True
+
     # -- closing --------------------------------------------------------
     def should_close(self, now: Optional[float] = None) -> bool:
         stamp = now if now is not None else self.clock()
@@ -221,7 +235,7 @@ class EncounterSession:
         squid drifted past each other may not be.
         """
         stamp = now if now is not None else self.clock()
-        if self.items_taken or self.items_lost:
+        if self.items_taken or self.items_lost or self.mating_id:
             return True
         return (self.last_seen_at - self.started_at) >= MIN_ENCOUNTER_DURATION
 
@@ -239,6 +253,7 @@ class EncounterSession:
         record.closest_approach = self.closest_approach
         record.first_meeting = self.first_meeting
         record.related_neurons = list(related_neurons or [])
+        record.mating_id = self.mating_id
 
         closing = dict(drives or getattr(self, '_latest_drives', {}) or {})
         deltas, valence = self._measure(closing)
@@ -282,6 +297,8 @@ class EncounterSession:
         This names what the record already contains; nothing downstream reads
         it to decide anything.
         """
+        if record.mating_id:
+            return "mated"
         if record.items_lost:
             return "robbed"
         if record.items_taken:

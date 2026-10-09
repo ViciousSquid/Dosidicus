@@ -41,11 +41,27 @@ def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
     return max(low, min(high, float(value)))
 
 
+def memory_key_for_record(record) -> str:
+    """The memory key an encounter is filed under.
+
+    Ordinarily 'peer:<uuid>', so repeat encounters with one individual
+    reinforce one memory. An encounter that produced a mating is a different
+    experience and gets its own key, 'peer:<uuid>:mating:<id>': MemoryManager
+    keeps the first value written under a key, so filed under the plain key a
+    mating with a squid already met would be dropped - and because the id is
+    in the key, the same mating can never be stored twice.
+    """
+    mating_id = getattr(record, 'mating_id', '')
+    if mating_id:
+        return f"{record.memory_key}:mating:{mating_id}"
+    return record.memory_key
+
+
 class PeerSummary:
     """Everything this squid knows about one individual, at a glance."""
 
     __slots__ = ('uuid', 'name', 'encounters', 'good', 'bad', 'last_seen',
-                 'last_outcome')
+                 'last_outcome', 'matings')
 
     def __init__(self, uuid: str, name: str = "Squid"):
         self.uuid = uuid
@@ -55,6 +71,7 @@ class PeerSummary:
         self.bad = 0.0           # summed negative valence, as a positive number
         self.last_seen = 0.0
         self.last_outcome = ""
+        self.matings = set()     # mating ids remembered with this individual
 
     @property
     def familiarity(self) -> float:
@@ -85,6 +102,7 @@ class PeerSummary:
             'recalled_bad': round(self.recalled_bad, 1),
             'last_seen': self.last_seen,
             'last_outcome': self.last_outcome,
+            'matings': len(self.matings),
         }
 
 
@@ -120,6 +138,13 @@ class PeerLedger:
     def recalled_bad(self, peer_uuid: str) -> float:
         return self.summary(peer_uuid).recalled_bad
 
+    def has_mated(self, mating_id: str) -> bool:
+        """Is this mating already in memory? Keeps a retold one from counting."""
+        if not mating_id:
+            return False
+        self._ensure_loaded()
+        return any(mating_id in s.matings for s in self._summaries.values())
+
     def known_peers(self) -> List[Dict[str, Any]]:
         self._ensure_loaded()
         return [s.to_dict() for s in self._summaries.values() if s.encounters > 0]
@@ -139,13 +164,16 @@ class PeerLedger:
             summary.bad += abs(float(record.valence))
         summary.last_seen = record.ended_at or time.time()
         summary.last_outcome = record.outcome
+        if getattr(record, 'mating_id', ''):
+            summary.matings.add(record.mating_id)
 
         manager = self.memory_manager
         if manager is None or not hasattr(manager, 'add_short_term_memory'):
             return False
+        key = memory_key_for_record(record)
         manager.add_short_term_memory(
             category=MEMORY_CATEGORY,
-            key=record.memory_key,
+            key=key,
             value=record.to_memory_value(),
             importance=record.importance,
             related_neurons=list(record.related_neurons),
@@ -166,8 +194,7 @@ class PeerLedger:
         if hasattr(manager, 'should_transfer_to_long_term'):
             candidate = {'importance': record.importance, 'access_count': 1}
             if manager.should_transfer_to_long_term(candidate):
-                manager.transfer_to_long_term_memory(MEMORY_CATEGORY,
-                                                     record.memory_key)
+                manager.transfer_to_long_term_memory(MEMORY_CATEGORY, key)
         return True
 
     # -- cache ----------------------------------------------------------
@@ -196,7 +223,7 @@ class PeerLedger:
         key = memory.get('key') or ''
         if not key.startswith('peer:'):
             return
-        peer_uuid = key[len('peer:'):]
+        peer_uuid = key[len('peer:'):].split(':', 1)[0]
         if not peer_uuid:
             return
         summary = self._summaries.get(peer_uuid)
@@ -224,10 +251,14 @@ class PeerLedger:
         else:
             summary.bad += abs(valence)
         summary.last_outcome = str(value.get('outcome') or summary.last_outcome)
+        mating_id = detail.get('mating_id')
+        if isinstance(mating_id, str) and mating_id:
+            summary.matings.add(mating_id)
         timestamp = memory.get('timestamp')
         if isinstance(timestamp, (int, float)):
             summary.last_seen = max(summary.last_seen, float(timestamp))
 
 
 __all__ = ['PeerLedger', 'PeerSummary', 'MEMORY_CATEGORY', 'memory_key_for',
+           'memory_key_for_record',
            'SquidIdentity']

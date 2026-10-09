@@ -127,6 +127,9 @@ class ConspecificView:
         self.clock = clock
         self.presences: Dict[str, ConspecificPresence] = {}
         self._contest_log: List[Dict[str, Any]] = []
+        #: Told the rival's uuid the moment a contest happens, on the thread
+        #: that resolved it. Used to draw the scuffle; it decides nothing.
+        self.on_contest: Optional[Callable[[str], None]] = None
 
     # -- feeding it -----------------------------------------------------
     def observe_peer(self, identity: SquidIdentity, x: float, y: float,
@@ -231,6 +234,12 @@ class ConspecificView:
         })
         if len(self._contest_log) > 50:
             del self._contest_log[:-50]
+        listener = self.on_contest
+        if listener is not None:
+            try:
+                listener(getattr(rival, 'uuid', ''))
+            except Exception:
+                pass
 
     def drain_contests(self) -> List[Dict[str, Any]]:
         """Contests since the last call, for the encounter session to file."""
