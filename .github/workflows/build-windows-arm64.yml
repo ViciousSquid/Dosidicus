@@ -142,7 +142,8 @@ jobs:
             --mode=standalone ^
             --output-filename=Dosidicus ^
             --assume-yes-for-downloads ^
-            --enable-plugin=pyqt5 ^
+            --plugin-enable=pyqt5 ^
+            --include-qt-plugins=sensible,platforms,styles,imageformats ^
             --disable-plugin=options-nanny ^
             --include-package=src ^
             --include-package=plugins ^
