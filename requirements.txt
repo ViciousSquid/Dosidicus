@@ -1,2 +1,3 @@
-PyQt5>=5.15
+PyQt5>=5.15; platform_machine != "ARM64"
+PyQt5-WinARM64==5.15.11.post1; sys_platform == "win32" and platform_machine == "ARM64"
 numpy>=1.21
