@@ -1,0 +1,257 @@
+name: Native Windows ARM64 Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 3.1_LatestVersion
+    paths:
+      - .github/workflows/build-windows-arm64.yml
+      - requirements.txt
+      - main.py
+      - src/**
+      - plugins/**
+      - images/**
+      - config.ini
+      - custom_brains/**
+      - example_squids/**
+      - translations/**
+      - version
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-arm64:
+    name: Windows ARM64 / Python 3.14 / PyQt5-WinARM64 / Nuitka
+    runs-on: windows-11-vs2026-arm
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up native ARM64 Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+          architecture: 'arm64'
+          cache: pip
+
+      - name: Verify native architecture
+        shell: pwsh
+        run: |
+          $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+          $proc = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
+          $machine = python -c "import platform; print(platform.machine())"
+          $bits = python -c "import struct; print(struct.calcsize('P') * 8)"
+          Write-Host "OS architecture: $arch"
+          Write-Host "Process architecture: $proc"
+          Write-Host "Python machine: $machine"
+          Write-Host "Python bits: $bits"
+          if ($arch -ne 'Arm64' -or $proc -ne 'Arm64') {
+            throw "This job is not running natively on Windows ARM64."
+          }
+          if ($machine -ne 'ARM64' -or $bits -ne '64') {
+            throw "Python is not a native 64-bit ARM64 build."
+          }
+
+      - name: Locate Visual Studio ARM64 toolchain
+        shell: pwsh
+        run: |
+          $vswhere = (Get-Command 'vswhere.exe' -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+          if (-not $vswhere) {
+            $candidates = @()
+            foreach ($base in @([Environment]::GetEnvironmentVariable('ProgramFiles(x86)'), $env:ProgramFiles)) {
+              if ($base) {
+                $candidates += (Join-Path $base 'Microsoft Visual Studio\Installer\vswhere.exe')
+              }
+            }
+            $vswhere = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          }
+          if (-not $vswhere) {
+            throw "vswhere.exe was not found."
+          }
+
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
+          if (-not $vs) {
+            throw "Visual Studio ARM64 C++ toolchain was not found."
+          }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+          if (-not (Test-Path -LiteralPath $vcvars)) {
+            throw "vcvarsall.bat not found at $vcvars"
+          }
+          "VCVARS=$vcvars" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Visual Studio: $vs"
+          Write-Host "ARM64 environment script: $vcvars"
+
+      - name: Install ARM64 Python dependencies
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -m pip install --upgrade pip
+          # requirements.txt selects the published native PyQt5-WinARM64 wheel.
+          # Refuse source distributions instead of attempting to compile Qt/PyQt.
+          python -m pip install --only-binary=:all: -r requirements.txt
+          python -m pip install "nuitka==4.2.2" zstandard
+          python -m pip check
+          python -m pip list
+
+      - name: Verify PyQt5 loads its own bundled Qt
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          foreach ($dir in $env:PATH.Split([IO.Path]::PathSeparator)) {
+            if ($dir -and (Test-Path (Join-Path $dir "Qt5Core.dll"))) {
+              throw "Qt5Core.dll is reachable on PATH via $dir; the check would not be meaningful."
+            }
+          }
+          @'
+          import ctypes
+          from ctypes import wintypes
+          from pathlib import Path
+
+          import PyQt5
+          from PyQt5.QtCore import PYQT_VERSION_STR, QT_VERSION_STR, QLibraryInfo
+          from PyQt5.QtWidgets import QApplication
+
+          app = QApplication([])
+          bundled = (Path(PyQt5.__file__).parent / "Qt5").resolve()
+          kernel32 = ctypes.WinDLL("kernel32")
+          kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+          kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+          kernel32.GetModuleFileNameW.argtypes = [wintypes.HMODULE, wintypes.LPWSTR, wintypes.DWORD]
+          buffer = ctypes.create_unicode_buffer(32768)
+          handle = kernel32.GetModuleHandleW("Qt5Core.dll")
+          assert handle, "Qt5Core.dll is not loaded after QApplication initialisation"
+          kernel32.GetModuleFileNameW(handle, buffer, len(buffer))
+          qtcore = Path(buffer.value).resolve()
+          assert bundled in qtcore.parents, f"Qt5Core.dll loaded from {qtcore}, not {bundled}"
+          print("PyQt5", PYQT_VERSION_STR, "Qt", QT_VERSION_STR)
+          print("Qt5Core.dll:", qtcore)
+          print("Qt plugins:", QLibraryInfo.location(QLibraryInfo.PluginsPath))
+          print("Platform:", app.platformName())
+          '@ | Set-Content qt_check.py -Encoding utf8
+          python qt_check.py
+
+      - name: Build Dosidicus with Nuitka
+        shell: cmd
+        run: |
+          call "%VCVARS%" arm64
+          python -m nuitka ^
+            --mode=standalone ^
+            --output-filename=Dosidicus ^
+            --assume-yes-for-downloads ^
+            --enable-plugin=pyqt5 ^
+            --disable-plugin=options-nanny ^
+            --include-package=src ^
+            --include-package=plugins ^
+            --include-module=uuid ^
+            --include-module=src.brain_designer ^
+            --include-module=src.brain_designer_launcher ^
+            --include-module=src.brain_state_bridge ^
+            --include-module=src.designer_canvas ^
+            --include-module=src.designer_canvas_utils ^
+            --include-module=src.designer_constants ^
+            --include-module=src.designer_core ^
+            --include-module=src.designer_dialogs ^
+            --include-module=src.designer_logging ^
+            --include-module=src.designer_network_generator ^
+            --include-module=src.designer_outputs_panel ^
+            --include-module=src.designer_panels ^
+            --include-module=src.designer_sensor_discovery ^
+            --include-module=src.designer_templates ^
+            --include-module=src.designer_window ^
+            --windows-icon-from-ico=images/icons/squidblack.ico ^
+            --windows-console-mode=force ^
+            --output-dir=build ^
+            main.py
+          if errorlevel 1 exit /b 1
+
+      - name: Smoke test compiled application
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD "build\main.dist\Dosidicus.exe"
+          if (-not (Test-Path -LiteralPath $exe)) {
+            throw "Nuitka output not found: $exe"
+          }
+          & $exe --help
+          if ($LASTEXITCODE -ne 0) {
+            throw "Dosidicus.exe --help failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Validate ARM64 executable and bundled Qt
+        shell: pwsh
+        run: |
+          $dist = Join-Path $PWD "build\main.dist"
+          $exe = Join-Path $dist "Dosidicus.exe"
+          if (-not (Test-Path -LiteralPath $exe)) {
+            throw "Dosidicus.exe not found."
+          }
+
+          $qtcore = @(Get-ChildItem $dist -Recurse -File -Filter "Qt5Core.dll")
+          $qwindows = @(Get-ChildItem $dist -Recurse -File -Filter "qwindows.dll")
+          if (-not $qtcore) { throw "Qt5Core.dll was not included in the Nuitka output." }
+          if (-not $qwindows) { throw "The qwindows platform plugin was not included in the Nuitka output." }
+
+          $binaries = @(Get-Item $exe) + @(Get-ChildItem $dist -Recurse -File | Where-Object { $_.Extension -in ".dll", ".pyd" })
+          foreach ($binary in $binaries) {
+            $dump = cmd /c ('call "' + $env:VCVARS + '" arm64 >nul && dumpbin /headers "' + $binary.FullName + '"')
+            if (-not ($dump -join [Environment]::NewLine).Contains("AA64 machine (ARM64)")) {
+              throw "$($binary.FullName) is not an ARM64 PE image."
+            }
+          }
+          Write-Host "Dosidicus.exe: $((Get-Item $exe).Length) bytes"
+          Write-Host "Native binaries checked: $($binaries.Count)"
+          Write-Host "Qt5Core.dll: $($qtcore[0].FullName)"
+          Write-Host "qwindows.dll: $($qwindows[0].FullName)"
+
+      - name: Assemble runtime data
+        shell: pwsh
+        run: |
+          $dist = Join-Path $PWD "build\main.dist"
+          $release = Join-Path $PWD "release"
+          New-Item -ItemType Directory -Path $release -Force | Out-Null
+          Copy-Item -Path (Join-Path $dist "*") -Destination $release -Recurse -Force
+
+          # Match the existing cross-platform Nuitka workflow: ship repository
+          # data alongside the standalone distribution for runtime-loaded assets,
+          # configuration, translations and dynamically loaded plugins.
+          $exclude = @("main.py", "build", "dist", "release", "__pycache__", "venv", "env", "qt_check.py")
+          Get-ChildItem -Path $PWD | Where-Object {
+            $_.Name -notin $exclude -and $_.Name -notlike "*.spec"
+          } | ForEach-Object {
+            $destination = Join-Path $release $_.Name
+            Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force
+          }
+
+          $required = @(
+            "Dosidicus.exe",
+            "config.ini",
+            "images",
+            "plugins",
+            "src",
+            "custom_brains"
+          )
+          foreach ($item in $required) {
+            if (-not (Test-Path -LiteralPath (Join-Path $release $item))) {
+              throw "Required runtime item missing from release directory: $item"
+            }
+          }
+          Write-Host "Runtime data assembled in $release"
+
+      - name: Create Windows ARM64 archive
+        shell: pwsh
+        run: |
+          python -c "import shutil; shutil.make_archive('Dosidicus-windows-arm64', 'zip', 'release')"
+          if (-not (Test-Path "Dosidicus-windows-arm64.zip")) {
+            throw "Windows ARM64 archive was not created."
+          }
+          Write-Host "Archive size: $((Get-Item Dosidicus-windows-arm64.zip).Length) bytes"
+
+      - name: Upload ARM64 build
+        uses: actions/upload-artifact@v7
+        with:
+          name: dosidicus-windows-arm64
+          path: Dosidicus-windows-arm64.zip
+          if-no-files-found: error
