@@ -97,6 +97,48 @@ jobs:
           python -m pip check
           python -m pip list
 
+      - name: Patch Nuitka QtNetwork architecture handling for ARM64
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $patchScript = Join-Path $env:RUNNER_TEMP "patch_nuitka_qt_arm64.py"
+          @'
+          from pathlib import Path
+          import py_compile
+
+          import nuitka.plugins.standard.PySidePyQtPlugin as plugin
+
+          path = Path(plugin.__file__)
+          source = path.read_text(encoding="utf-8")
+          old = '''        if arch_name == "x86":
+              return ""
+          elif arch_name == "x86_64":
+              return "-x64"
+          else:
+          '''
+          new = '''        if arch_name == "x86":
+              return ""
+          elif arch_name == "x86_64":
+              return "-x64"
+          elif arch_name == "arm64":
+              return "-arm64"
+          else:
+          '''
+
+          if source.count(old) != 1:
+              raise SystemExit(
+                  f"Expected one known Nuitka architecture block in {path}; found {source.count(old)}"
+              )
+
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          py_compile.compile(str(path), doraise=True)
+          patched = path.read_text(encoding="utf-8")
+          if 'elif arch_name == "arm64":\\n              return "-arm64"' not in patched:
+              raise SystemExit("Nuitka ARM64 architecture patch verification failed")
+          print(f"Patched and syntax-checked {path}")
+          '@ | Set-Content -LiteralPath $patchScript -Encoding utf8
+          python $patchScript
+
       - name: Verify PyQt5 loads its own bundled Qt
         shell: pwsh
         run: |
