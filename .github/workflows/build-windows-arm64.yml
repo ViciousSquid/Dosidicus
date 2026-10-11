@@ -110,20 +110,22 @@ jobs:
 
           path = Path(plugin.__file__)
           source = path.read_text(encoding="utf-8")
-          old = '''        if arch_name == "x86":
-              return ""
-          elif arch_name == "x86_64":
-              return "-x64"
-          else:
-          '''
-          new = '''        if arch_name == "x86":
-              return ""
-          elif arch_name == "x86_64":
-              return "-x64"
-          elif arch_name == "arm64":
-              return "-arm64"
-          else:
-          '''
+          old = (
+              '        if arch_name == "x86":\\n'
+              '            return ""\\n'
+              '        elif arch_name == "x86_64":\\n'
+              '            return "-x64"\\n'
+              '        else:'
+          )
+          new = (
+              '        if arch_name == "x86":\\n'
+              '            return ""\\n'
+              '        elif arch_name == "x86_64":\\n'
+              '            return "-x64"\\n'
+              '        elif arch_name == "arm64":\\n'
+              '            return "-arm64"\\n'
+              '        else:'
+          )
 
           if source.count(old) != 1:
               raise SystemExit(
@@ -133,7 +135,7 @@ jobs:
           path.write_text(source.replace(old, new, 1), encoding="utf-8")
           py_compile.compile(str(path), doraise=True)
           patched = path.read_text(encoding="utf-8")
-          if 'elif arch_name == "arm64":\\n              return "-arm64"' not in patched:
+          if 'elif arch_name == "arm64":\\n            return "-arm64"' not in patched:
               raise SystemExit("Nuitka ARM64 architecture patch verification failed")
           print(f"Patched and syntax-checked {path}")
           '@ | Set-Content -LiteralPath $patchScript -Encoding utf8
