@@ -1,0 +1,6 @@
+{
+  "name": "encounter",
+  "at": 12.53,
+  "reason": "Other squid encountered!",
+  "description": "Encounter was grown 0s ago because the brain had no neuron that could tell this situation apart from any other.\nSpecifically: Other squid encountered!\nIt was wired to Represent another squid and initially excite anxiety; adjust the association through learning.\nConnections made at birth: conspecific visible \u2192 encounter at +0.90, encounter \u2192 curiosity at +0.00, encounter \u2192 anxiety at +0.30."
+}

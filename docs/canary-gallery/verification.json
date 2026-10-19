@@ -1,9 +1,9 @@
 {
   "host": {
     "role": "host",
-    "elapsed": 43.07,
-    "initial_uuid": "6109e3f4-9b84-4409-90b7-cb3f9d1de72e",
-    "uuid": "63478535-e3bd-4c48-b42d-d5ed8f6eba4f",
+    "elapsed": 43.03,
+    "initial_uuid": "cddb2939-d147-4d61-81f9-0fe9e18126b7",
+    "uuid": "7562927e-733e-43c5-be1c-f8568e8b1618",
     "stage": "living",
     "egg": null,
     "peers": 0,
@@ -13,89 +13,113 @@
     "handoff_identical": true,
     "events": [
       {
-        "at": 2.83,
+        "at": 3.04,
         "message": "Squid is hatching!"
       },
       {
-        "at": 9.38,
-        "message": "Multiplayer active! Node ID: squid_8a5645"
+        "at": 9.64,
+        "message": "Multiplayer active! Node ID: squid_8763ec"
       },
       {
-        "at": 12.27,
+        "at": 12.53,
         "message": "Press D to open the Decorations window"
       },
       {
-        "at": 13.07,
+        "at": 13.04,
         "message": "Coral and Indigo are fighting!"
       },
       {
-        "at": 23.33,
+        "at": 16.19,
+        "message": "Coral won the fight with Indigo."
+      },
+      {
+        "at": 22.62,
         "message": "Coral and Indigo produced an egg. Coral has stopped eating."
       },
       {
-        "at": 26.07,
+        "at": 26.03,
         "message": "Coral has died."
       },
       {
-        "at": 26.08,
+        "at": 26.03,
         "message": "Your squid remembers a mated encounter with Indigo."
       },
       {
-        "at": 32.36,
+        "at": 32.53,
         "message": "An egg is hatching!"
       },
       {
-        "at": 38.79,
+        "at": 39.06,
         "message": "A squid has hatched and you must look after him."
       },
       {
-        "at": 41.77,
+        "at": 42.03,
         "message": "Press D to open the Decorations window"
       }
     ],
+    "social": {
+      "name": "encounter",
+      "at": 12.53,
+      "reason": "Other squid encountered!",
+      "description": "Encounter was grown 0s ago because the brain had no neuron that could tell this situation apart from any other.\nSpecifically: Other squid encountered!\nIt was wired to Represent another squid and initially excite anxiety; adjust the association through learning.\nConnections made at birth: conspecific visible \u2192 encounter at +0.90, encounter \u2192 curiosity at +0.00, encounter \u2192 anxiety at +0.30."
+    },
+    "fight_outcomes": {
+      "won": 1,
+      "lost": 0
+    },
     "can_move": true,
     "host_actors": [],
     "motors": {
-      "act_move": 51.7097198486328,
+      "act_move": 51.43971710205079,
       "act_eat": 0.0,
       "act_flee": 0.0,
       "act_play": 0.0,
       "act_shelter": 0.0,
       "act_rest": 0.0,
-      "act_ink": 1.9339978018573027,
+      "act_ink": 1.9938587526907683,
       "act_collapse": 0.0
     }
   },
   "guest": {
     "role": "guest",
-    "elapsed": 43.09,
-    "initial_uuid": "3909c270-416f-4cc2-bdb4-faf2e6f21f8d",
-    "uuid": "3909c270-416f-4cc2-bdb4-faf2e6f21f8d",
+    "elapsed": 43.02,
+    "initial_uuid": "dd81bd46-ee65-4b55-bc07-df55a51b1089",
+    "uuid": "dd81bd46-ee65-4b55-bc07-df55a51b1089",
     "stage": "living",
     "egg": null,
-    "peers": 1,
+    "peers": 4,
     "visitors": 0,
     "away": false,
     "max_clouds": 0,
     "handoff_identical": null,
     "events": [
       {
-        "at": 2.82,
+        "at": 3.03,
         "message": "Squid is hatching!"
       },
       {
-        "at": 9.4,
-        "message": "Multiplayer active! Node ID: squid_0cf49d"
+        "at": 9.63,
+        "message": "Multiplayer active! Node ID: squid_760d94"
       },
       {
-        "at": 12.09,
+        "at": 12.02,
         "message": "Indigo is visiting Coral\u2019s tank."
       },
       {
-        "at": 12.29,
+        "at": 12.52,
         "message": "Press D to open the Decorations window"
       }
     ],
+    "social": {
+      "name": "encounter",
+      "at": 14.02,
+      "reason": "Other squid encountered!",
+      "description": "Encounter was grown 0s ago because the brain had no neuron that could tell this situation apart from any other.\nSpecifically: Other squid encountered!\nIt was wired to Represent another squid and initially excite anxiety; adjust the association through learning.\nConnections made at birth: conspecific visible \u2192 encounter at +0.90, encounter \u2192 curiosity at +0.00, encounter \u2192 anxiety at +0.30."
+    },
+    "fight_outcomes": {
+      "won": 0,
+      "lost": 1
+    },
     "can_move": true,
     "host_actors": [],
     "motors": {
@@ -115,6 +139,9 @@
     "maximum_fight_clouds": 1,
     "identical_reset_cover": true,
     "new_squid_identity": true,
-    "workers_exited_successfully": true
+    "workers_exited_successfully": true,
+    "concept_only_after_encounter": true,
+    "exact_birth_reason": true,
+    "complementary_fight_outcomes": true
   }
 }
