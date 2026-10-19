@@ -878,8 +878,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 print(f"Warning: could not serialize {attr}: {e}")
                 return {}
 
-        return {
+        from .brain_io import desktop_brain_state
+        return desktop_brain_state({
+            **getattr(self.brain_widget, '_brain_document', {}),
             'weights_list': weights_list,
+            'clock': {'kind': 'wall', 'now': time.time()},
             'neuron_positions': {str(k): v for k, v in self.brain_widget.neuron_positions.items()},
             'neuron_states': non_core_states,  # Only non-core states
             'neurogenesis_data': self.brain_widget.neurogenesis_data,
@@ -899,7 +902,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             'consolidation': _dump('consolidation'),
             # Legacy key for backward compatibility (subset of enhanced_neurogenesis)
             'functional_neurons': enhanced_neurogenesis_data.get('functional_neurons', {})
-        }
+        })
 
     def set_brain_state(self, state):
         """
@@ -909,6 +912,18 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         IMPORTANT: Core neuron values (hunger, happiness, etc.) are NOT loaded here.
         Call sync_state_from_squid() after this method to populate them from the squid.
         """
+        from .brain_io import desktop_brain_state, normalise_brain
+        from .brain_clock import rebase_cognitive_state
+        if any(key in state for key in ('neurons', 'positions', 'neuron_positions')):
+            state = rebase_cognitive_state(desktop_brain_state(state), time.time(), kind='wall')
+            self.brain_widget._brain_document = normalise_brain(state)
+            self.brain_widget.neuron_shapes = dict(state.get('neuron_shapes', {}))
+            self.brain_widget.output_bindings = state.get('output_bindings', [])
+            growth = self.brain_widget.enhanced_neurogenesis
+            for key, attr in (('last_growth_at', '_last_growth_at'), ('first_real_tick', '_first_real_tick')):
+                if key in state.get('growth_clock', {}):
+                    setattr(growth, attr, state['growth_clock'][key])
+
         # Load weights (handle new list format and potentially old dict format)
         if 'weights_list' in state:
             weights = {}
@@ -1047,7 +1062,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 self.brain_widget.state_colors[neuron] = color
 
         # Ensure all core neurons have their original positions if missing
-        for name, pos in self.brain_widget.original_neuron_positions.items():
+        from .brain_constants import REQUIRED_NEURONS
+        for name, pos in REQUIRED_NEURONS.items():
             if name not in self.brain_widget.neuron_positions:
                 self.brain_widget.neuron_positions[name] = pos
 

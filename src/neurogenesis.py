@@ -667,7 +667,7 @@ class EnhancedNeurogenesis:
         if happiness > 60: outcome = 'positive'
         elif anxiety > 70: outcome = 'negative'
         else: outcome = 'neutral'
-        return ExperienceContext(trigger_type=trigger_type, active_neurons=clean_neurons, recent_actions=list(self.recent_actions)[-5:], environmental_state=environment, outcome=outcome, timestamp=time.time())
+        return ExperienceContext(trigger_type=trigger_type, active_neurons=clean_neurons, recent_actions=list(self.recent_actions)[-5:], environmental_state=environment, outcome=outcome, timestamp=self.clock())
     
     def _create_neuron_internal(self, ctx: ExperienceContext,
                                 trigger_value_for_log: Optional[float] = None,
@@ -757,7 +757,7 @@ class EnhancedNeurogenesis:
         func_neuron.specialization = spec
         self.functional_neurons[neuron_name] = func_neuron
         if trigger_type == 'novelty': self.novelty_neuron_count += 1
-        self.last_creation_by_type[trigger_type] = time.time()
+        self.last_creation_by_type[trigger_type] = self.clock()
         self._last_growth_at = self.clock()
         self.neurons_created_this_session += 1
 
@@ -1369,8 +1369,9 @@ class EnhancedNeurogenesis:
         # list named the 7 core stats but not the sensors, so after a save/load
         # can_see_food was promoted into functional_neurons and would have had
         # its live sensor reading overwritten by a computed value.
-        from .brain_constants import NON_PROPAGATED_NEURONS, CORE_STAT_NEURONS
-        core_neurons = NON_PROPAGATED_NEURONS
+        from .brain_constants import NON_PROPAGATED_NEURONS, CORE_STAT_NEURONS, ACTION_NEURONS
+        # The innate motor bank is network-driven, but is not grown tissue.
+        core_neurons = set(NON_PROPAGATED_NEURONS) | set(ACTION_NEURONS)
         excluded = getattr(self.brain_widget, 'excluded_neurons', [])
         for name in list(self.brain_widget.neuron_positions.keys()):
             if name in core_neurons or name in excluded: continue

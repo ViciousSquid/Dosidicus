@@ -21,7 +21,6 @@ record.
 """
 
 import random
-from PyQt5 import QtCore
 import csv
 import time
 import json
@@ -640,6 +639,7 @@ class HebbianLearning:
         if name:
             self.neurogenesis_active = True
             self.last_neurogenesis_time = time.time()
+            from PyQt5 import QtCore
             QtCore.QTimer.singleShot(10000, self.end_neurogenesis_boost)
         return name
 

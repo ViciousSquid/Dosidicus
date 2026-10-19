@@ -2300,54 +2300,9 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 if getattr(fn, 'neuron_type', '') == 'connector'}
 
     def compute_neural_modulation(self, gain: float = 0.30):
-        """How the learned network nudges the squid's core statistics.
-
-        Propagation deliberately never overwrites a core stat - the squid model
-        owns those, and two writers would fight. But a brain that cannot touch
-        its own physiology cannot express what it has learned, and a default
-        eight-neuron brain contains nothing BUT sensors and core stats.
-
-        So learned synapses pointing at a core stat act as a modulation: for
-        each such stat, sum (source_activation - 50)/100 * weight and return a
-        small per-tick delta. A squid whose experience taught it
-        can_see_food -> anxiety becomes anxious at the sight of food; one that
-        learned can_see_food -> happiness brightens instead. Same stimulus,
-        opposite response, because they lived different lives.
-
-        Returns {stat_name: delta}. Bounded by design: a saturated source
-        through a maximal synapse contributes gain/2 per tick.
-        """
-        from .brain_constants import CORE_STAT_NEURONS
-
-        deltas = {}
-        contributions = []
-        for (src, dst), weight in self.weights.items():
-            if dst not in CORE_STAT_NEURONS:
-                continue
-            raw = self.state.get(src)
-            if isinstance(raw, bool):
-                value = 100.0 if raw else 0.0
-            elif isinstance(raw, (int, float)):
-                value = float(raw)
-            else:
-                continue
-            # Same reading of "how much is this neuron contributing" that
-            # propagation uses, from the same function - a sensor with nothing
-            # to report contributes nothing here too.
-            push = (signal_of(src, value) / 50.0) * float(weight)
-            deltas[dst] = deltas.get(dst, 0.0) + push
-            if abs(push) > 1e-4:
-                contributions.append(((src, dst), push * gain, dst))
-
-        # Record what each synapse actually did to the squid. This is the
-        # channel through which learning becomes behaviour, so it is also the
-        # honest answer to "how did this knowledge affect what it does?".
-        ledger = getattr(self, 'ledger', None)
-        if ledger is not None:
-            for edge, amount, target in contributions:
-                ledger.record_influence(edge, amount, 'modulation', target)
-
-        return {k: v * gain for k, v in deltas.items()}
+        from .propagation import compute_neural_modulation
+        return compute_neural_modulation(self.state, self.weights, gain,
+                                         getattr(self, 'ledger', None))
 
     def observe_for_learning(self):
         """Feed one tick of evidence to every learning mechanism.

@@ -25,3 +25,8 @@ learning_events.json
 neurogenesis_log.txt
 network_evolution_*.json
 training_data/
+
+# Android build outputs
+android/.buildozer/
+android/bin/
+android/build.log

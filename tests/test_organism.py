@@ -1358,7 +1358,7 @@ class OneImplementationTests(unittest.TestCase):
                          f"{offenders}")
 
     def test_everything_that_steps_a_network_calls_it(self):
-        for path in ('src/brain_widget.py', 'headless/headless_trainer.py'):
+        for path in ('src/brain_widget.py', 'src/portable_brain.py'):
             self.assertIn('propagate(', self.sources[path],
                           f"{path} steps a network without the shared rule")
 
@@ -1371,7 +1371,7 @@ class OneImplementationTests(unittest.TestCase):
                         r'self\.brain)\.weights\s*\[[^\]]+\]\s*=')
         allowed = {
             'src/neural_provenance.py',      # the write path itself
-            'headless/headless_trainer.py',  # innate defaults at birth + load
+            'src/portable_brain.py',         # shared adapter: birth + deserialization only
             'src/brain_widget.py',           # innate defaults at birth + load
         }
         for path, text in self.sources.items():
@@ -1397,7 +1397,7 @@ class OneImplementationTests(unittest.TestCase):
         """Only PlasticityEngine.commit decides what a weight becomes."""
         implementers = self._files_matching(r'def commit\s*\(self, weights')
         self.assertEqual(implementers, ['src/plasticity.py'], str(implementers))
-        for path in ('src/brain_widget.py', 'headless/headless_trainer.py'):
+        for path in ('src/brain_widget.py', 'src/portable_brain.py'):
             body = re.search(r'def perform_hebbian_learning[\s\S]*?'
                              r'(?=\n    def )', self.sources[path])
             self.assertIsNotNone(body)
@@ -1440,7 +1440,7 @@ class OneImplementationTests(unittest.TestCase):
                                         f"capability monitor: {offenders}")
 
     def test_the_deficit_diagnosis_is_passed_through_not_repeated(self):
-        for path in ('src/brain_widget.py', 'headless/headless_trainer.py'):
+        for path in ('src/brain_widget.py', 'src/portable_brain.py'):
             self.assertIn('deficit=deficit', self.sources[path],
                           f"{path} re-runs the diagnosis instead of passing "
                           f"through the one that justified the growth")

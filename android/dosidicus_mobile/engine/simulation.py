@@ -62,6 +62,7 @@ class Simulation:
         # Visiting squids received from nearby players (local peer-to-peer). Each
         # is a transient guest that wanders the tank and then leaves; not saved.
         self.visitors = []
+        self._visitor_minds = {}
         self._visitor_id = 0
         self.visitor_event = None   # set for one tick when a visitor does something
         # Territorial fight between the resident and a visitor (transient).
@@ -233,8 +234,6 @@ class Simulation:
         squid.remember("mental_state", "startled", "Startled!",
                        {"anxiety": 30, "happiness": -8}, importance=2.0,
                        related=["anxiety"])
-        if random.random() < 0.25:
-            self._create_ink_cloud()
 
     def _create_ink_cloud(self):
         squid = self.squid
@@ -252,13 +251,9 @@ class Simulation:
             self._startle_cooldown -= dt
 
         # End a flee once its timer runs out.
-        if squid.is_fleeing and now >= squid._startle_until:
-            squid.is_fleeing = False
+        if squid.is_startled and now >= squid._startle_until:
             squid.is_startled = False
-            squid.status = "recovering"
-        if squid.is_fleeing:
-            squid.flee_step()
-            return  # fleeing overrides normal movement
+        # Flight is selected from act_flee, never forced by the startle flag.
 
         # Ambient chance of a fright, more likely when anxious (desktop rule).
         if self._startle_cooldown <= 0 and not squid.is_sleeping and self.fight is None:
@@ -292,9 +287,9 @@ class Simulation:
     def add_visitor(self, snapshot, name="a friend", seconds=None):
         """Spawn a guest squid from a received snapshot (a squid or sim dict).
 
-        The visitor is pure kinematics — it wanders, steals food, occasionally
-        puffs an ink cloud, then swims out again — so it costs nothing to run and
-        never touches the resident squid's brain. Returns the visitor dict.
+        The visitor runs its imported neural network against the host tank's
+        sensory inputs. Its learned actions drive its body without modifying
+        the resident squid's brain. Returns the visitor dict.
         """
         sq = snapshot.get("squid", snapshot) if isinstance(snapshot, dict) else {}
         tint = sq.get("color_tint")
@@ -322,6 +317,9 @@ class Simulation:
             "carried_rock": None,
             "fighting": False,
         }
+        # Visitors keep their own imported neural network. Host world state
+        # becomes sensory input; their learned motor neurons choose behaviour.
+        self._visitor_minds[v['id']] = Squid.from_dict(sq, self.tank_size) if sq.get('brain') else Squid(Personality.from_value(v['personality']), self.tank_size)
         self.visitors.append(v)
         self.squid.brain.register_novelty(2.0)   # a newcomer is exciting
         self.squid.curiosity = min(100.0, self.squid.curiosity + 6.0)
@@ -360,7 +358,19 @@ class Simulation:
                 continue
 
             v["ink_cd"] = max(0.0, v["ink_cd"] - dt)
+            mind = self._visitor_minds[v['id']]
+            mind._last_dt = dt
+            mind.x, mind.y = v['x'], v['y']
+            mind.update_needs(dt)
+            mind.plant_targets = [d for d in self.decorations if d.get('category') == 'plant']
+            mind.brain.advance(dt, mind.sync_stats_to_brain(bool(self.food_items)), mind.is_sleeping)
+            if getattr(mind, '_visit_decision_at', -1) < mind.brain.sim_time:
+                mind.decide(mind.brain.state, self.food_items)
+                mind._visit_decision_at = mind.brain.sim_time
+            action = mind.last_decision.get('chosen', 'idle')
+            v['wants_rock'] = action == 'playing'
 
+            # The chosen action drives the visitor's body, not loot priorities.
             # Priority 1: loot a rock (and carry it), if this guest wants one.
             rock = None
             if v["carried_rock"] is None and v["wants_rock"]:
@@ -381,7 +391,7 @@ class Simulation:
                 # Priority 2: steal food; else wander.
                 target = min(self.food_items,
                              key=lambda f: (f["x"] - v["x"]) ** 2 + (f["y"] - v["y"]) ** 2,
-                             default=None)
+                             default=None) if action == 'eating' else None
                 if target is not None:
                     if self._steer(v, target["x"], target["y"], dt) < 42:
                         self.food_items.remove(target)
@@ -394,13 +404,18 @@ class Simulation:
                                    importance=1.5, related=["anxiety"])
                         if random.random() < 0.2:
                             self.startle("visitor")
-                else:
+                elif action == 'approaching_plant' and mind.plant_targets:
+                    plant = min(mind.plant_targets, key=lambda p: (p['x']-v['x'])**2 + (p['y']-v['y'])**2)
+                    self._steer(v, plant['x'], plant['y'], dt)
+                elif action in ('exploring', 'playing', 'fleeing'):
                     self._wander(v, dt)
 
             self._clamp_visitor(v, w, h, ceil, floor)
             self._carry_rock(v)     # keep a held rock glued to the visitor
 
-            if v["ink_cd"] <= 0 and random.random() < 0.03 * dt:
+            from src.brain_constants import ACTION_THRESHOLDS
+            if (v["ink_cd"] <= 0 and mind.brain.state.get('act_ink', 0) >= ACTION_THRESHOLDS['act_ink']
+                    and random.random() < .35):
                 self.ink_clouds.append({"x": v["x"], "y": v["y"], "t": now, "ttl": 3.0})
                 v["ink_cd"] = 12.0
                 self.visitor_event = f"{v['name']} puffed an ink cloud!"
@@ -410,6 +425,7 @@ class Simulation:
 
         for v in gone:
             self.visitors.remove(v)
+            self._visitor_minds.pop(v['id'], None)
 
     # ---- visitor movement helpers -------------------------------------
     def _steer(self, v, tx, ty, dt):
@@ -610,6 +626,10 @@ class Simulation:
 
     def _try_eat(self):
         eaten = []
+        from src.brain_constants import ACTION_THRESHOLDS
+        driven_to_eat = self.squid._bound_action == 'eating' and self.squid.brain.sim_time < self.squid._bound_until
+        if self.squid.is_sleeping or (not driven_to_eat and self.squid.brain.state.get('act_eat', 0) < ACTION_THRESHOLDS['act_eat']):
+            return False
         for f in self.food_items:
             if math.hypot(self.squid.x - f["x"], self.squid.y - f["y"]) < 45:
                 self.squid.feed(f["type"])
@@ -619,6 +639,78 @@ class Simulation:
         for f in eaten:
             self.food_items.remove(f)
         return bool(eaten)
+
+    def _process_neural_outputs(self):
+        from src.brain_constants import ACTION_NEURONS, innate_bindings
+        defaults = {n: hook for n, hook, *_ in innate_bindings()}
+        brain = self.squid.brain
+        for binding in brain._bindings:
+            activation = brain.state.get(binding.neuron_name, 0.0)
+            if binding.should_fire(activation, brain.sim_time):
+                binding.last_fire_time = brain.sim_time
+                binding.last_activation = activation
+                if random.random() <= binding.probability:
+                    # Ordinary innate movement competes via select_action;
+                    # parallel reflexes and custom actuators fire here.
+                    if (binding.neuron_name not in ACTION_NEURONS or binding.neuron_name in ('act_ink', 'act_collapse')
+                            or binding.output_hook != defaults.get(binding.neuron_name)):
+                        self._fire_output(binding.output_hook, activation, binding.hook_params)
+            elif not binding.is_edge_pending(activation):
+                binding.last_activation = activation
+
+    def _fire_output(self, hook, activation, params):
+        squid = self.squid
+        behaviours = {
+            'neuron_output_seek_food': 'eating', 'neuron_output_eat': 'eating',
+            'neuron_output_flee': 'fleeing', 'neuron_output_approach_rock': 'playing',
+            'neuron_output_seek_plant': 'approaching_plant', 'neuron_output_sleep': 'sleeping',
+            'neuron_output_wander': 'exploring', 'neuron_output_explore': 'exploring',
+        }
+        if hook in behaviours:
+            action = behaviours[hook]
+            squid.wants_to_play = action == 'playing'
+            squid._movement_action = action
+            squid._bound_action = action
+            squid._bound_until = squid.brain.sim_time + float(params.get('duration', 3.0))
+            squid.brain.causal_learning.on_action(action, squid.brain.state)
+            self.last_status = squid._execute(action, self.food_items)
+        elif hook == 'neuron_output_ink_cloud':
+            self._create_ink_cloud()
+        elif hook == 'neuron_output_wake':
+            squid.is_sleeping = False
+        elif hook == 'neuron_output_startle':
+            self.startle('neural output')
+        elif hook in ('neuron_output_boost_happiness', 'neuron_output_boost_curiosity',
+                      'neuron_output_reduce_anxiety'):
+            stat = {'neuron_output_boost_happiness': 'happiness',
+                    'neuron_output_boost_curiosity': 'curiosity',
+                    'neuron_output_reduce_anxiety': 'anxiety'}[hook]
+            delta = activation / 100.0 * 5.0 * (-1 if stat == 'anxiety' else 1)
+            setattr(squid, stat, min(100.0, max(0.0, getattr(squid, stat) + delta)))
+        elif hook == 'neuron_output_calm':
+            squid.anxiety = max(0.0, squid.anxiety - 10.0)
+            squid.is_fleeing = squid.is_startled = False
+            squid._bound_action = None
+            squid._bound_until = squid.brain.sim_time
+            squid._movement_action = 'exploring'
+        elif hook == 'neuron_output_change_color':
+            channels = [params.get(channel, -1) for channel in ('red', 'green', 'blue')]
+            if not all(isinstance(value, (int, float)) and value >= 0 for value in channels):
+                channels = random.choice([(255, 100, 100), (100, 255, 100), (100, 100, 255),
+                                          (255, 255, 100), (255, 100, 255), (100, 255, 255)])
+            squid.color_tint = tuple(min(255, value) / 255.0 for value in channels)
+        elif hook == 'neuron_output_throw_rock':
+            if squid.carrying_rock:
+                squid._carry_until = squid.brain.sim_time
+                self._update_rock_play(0)
+        elif hook == 'neuron_output_pick_up_rock':
+            carried = self._visitor_carried_rocks()
+            nearby = any(squid._dist(rock['x'], rock['y']) < 45
+                         and rock['id'] not in self._rock_velocities
+                         and rock['id'] not in carried for rock in self._rock_decorations())
+            if nearby and not squid.is_sleeping and not squid.carrying_rock:
+                squid.wants_to_play = True
+                self._update_rock_play(0)
 
     # ---------------------------------------------------------------- update
     def start_hatching(self):
@@ -663,47 +755,36 @@ class Simulation:
             self.last_status = "Your squid has died of hunger."
             return self.last_status
 
-        # 2) Perception + brain forward pass.
+        # Perception drives the same fixed-rate neural pipeline as desktop.
         can_see = self.food_visible()
-        # Rising edge = a genuinely novel stimulus entered perception.
         if can_see and not self._prev_can_see_food:
             squid.brain.register_novelty(2.0)
         self._prev_can_see_food = can_see
-        # Sustained distress feeds the stress trigger, weighted by how anxious.
-        if squid.anxiety > 60:
-            squid.brain.register_stress((squid.anxiety - 60) / 40.0 * dt)
         if squid.is_sick and not self._was_sick:
             self.stats.on_sickness()
+            squid.brain._reflexes.learn_from_sickness()
         self._was_sick = squid.is_sick
+        squid.plant_targets = [d for d in self.decorations if d.get('category') == 'plant']
         clamped = squid.sync_stats_to_brain(can_see_food=can_see)
-        squid.brain.propagate(clamped)
-        # keep brain's core neurons in lock-step with the authoritative stats
-        for name in squid.CORE_STATS:
-            squid.brain.state[name] = getattr(squid, name)
-
-        # 3) Learning: continuous Hebbian + STDP + neurogenesis housekeeping.
-        squid.brain.hebbian_step(dt)
-        squid.brain.stdp_step()
-        squid.brain.decay_neurogenesis_counters(dt)
-        born = squid.brain.check_neurogenesis()
-        if born:
+        from types import SimpleNamespace
+        squid.memory_manager = squid.memory
+        self.brain_window = SimpleNamespace(brain_widget=squid.brain)
+        squid.brain.tamagotchi_logic = self
+        births = squid.brain.advance(dt, clamped, sleeping=squid.is_sleeping)
+        for stat, delta in squid.brain.last_modulation.items():
+            setattr(squid, stat, max(0.0, min(100.0, getattr(squid, stat) + delta)))
+            squid.brain.state[stat] = getattr(squid, stat)
+        for born in births:
             self.newborn_neuron = born
-            kind = born.rsplit("_", 1)[0]
-            squid.remember("neurogenesis", born, f"Grew a {kind} neuron",
-                           None, importance=3.0)
+            fn = squid.brain.enhanced_neurogenesis.functional_neurons.get(born)
+            kind = fn.neuron_type if fn else 'novelty'
+            squid.remember("neurogenesis", born, f"Grew a {kind} neuron", None, importance=3.0)
             self.stats.on_neuron_born(kind)
             self.achievements.on_neuron_born()
+        squid.brain.enhanced_neurogenesis.set_achievement_callbacks(
+            on_leveled=lambda name, strength: self.achievements.on_neuron_levelled(strength))
         squid.memory.periodic(squid.brain.sim_time)
-
-        # 4) Let rewired/grown neurons nudge mood, then decide + move.
-        squid.pull_core_from_brain()
-        # While awake, log which neurons are firing together for later replay,
-        # biased toward whatever recent memories reference (what it's dwelling on).
-        if not squid.is_sleeping:
-            bias = set()
-            for m in squid.memory.short_term[-8:]:
-                bias.update(m.get("related_neurons") or [])
-            squid.brain.record_coactivation(dt, bias_neurons=bias)
+        self._process_neural_outputs()
         self._decision_timer += dt
         if self.fight is not None:
             self.last_status = "Aggression! FIGHTING!"   # a fight overrides normal behaviour
@@ -711,17 +792,16 @@ class Simulation:
             self._decision_timer = 0.0
             self.last_status = squid.decide(squid.brain.state, self.food_items)
         else:
-            # keep drifting on the current decision
+            # Cognitive decisions are 1 Hz; the body follows the selected
+            # neural drive every render frame, as on desktop.
             if not squid.is_sleeping:
-                if squid.status.startswith(("approaching", "eyeing")) and self.food_items:
-                    target = min(self.food_items, key=lambda f: squid._dist(f["x"], f["y"]))
-                    squid.move_towards(target["x"], target["y"])
+                self.last_status = squid._execute(squid._movement_action, self.food_items)
 
         # Falling asleep triggers consolidation: replay the strongest recent
         # co-activations to cement them, and promote meaningful memories to
         # long-term storage (the mobile analogue of the desktop sleep replay).
         if squid.is_sleeping and not self._was_sleeping:
-            replay = squid.brain.sleep_replay()
+            replay = squid.brain.last_consolidation or {}
             promoted = squid.memory.consolidate_sleep(squid.brain.sim_time)
             self.sleep_consolidation = dict(replay, promoted=promoted)
             self.last_status = "drifting to sleep — consolidating memories"
@@ -791,6 +871,7 @@ class Simulation:
     def to_dict(self) -> dict:
         return {
             "version": 1,
+            "desktop_sections": getattr(self, "_desktop_sections", {}),
             "saved_at": time.time(),
             "tank_size": list(self.tank_size),
             "squid": self.squid.to_dict(),
@@ -808,6 +889,7 @@ class Simulation:
         tank = tuple(data.get("tank_size", (900, 500)))
         squid = Squid.from_dict(data["squid"], tank)
         sim = cls(tank, squid)
+        sim._desktop_sections = data.get("desktop_sections", {})
         sim.food_items = data.get("food_items", [])
         sim.poop_items = data.get("poop_items", [])
         sim.decorations = data.get("decorations", [])
@@ -822,13 +904,15 @@ class Simulation:
         return sim
 
     def save(self, path: str):
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        tmp = path + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(self.to_dict(), f, indent=2)
-        os.replace(tmp, path)  # atomic write so a crash can't corrupt the save
+        from .portability import export_squid
+        export_squid(self, path)
 
     @classmethod
     def load(cls, path: str) -> "Simulation":
-        with open(path) as f:
-            return cls.from_dict(json.load(f))
+        import zipfile
+        if zipfile.is_zipfile(path):
+            from .portability import import_squid
+            return import_squid(path)
+        # Read old Android JSON saves once; future saves use the desktop ZIP.
+        with open(path) as stream:
+            return cls.from_dict(json.load(stream))

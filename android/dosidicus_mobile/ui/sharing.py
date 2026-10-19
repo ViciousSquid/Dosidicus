@@ -9,11 +9,8 @@ import os
 
 
 def is_android():
-    try:
-        import android  # noqa: F401  (only importable on-device)
-        return True
-    except ImportError:
-        return False
+    from kivy.utils import platform
+    return platform == 'android'
 
 
 def export_dir(app):
@@ -176,19 +173,76 @@ def open_url(url):
         return False
 
 
-def pick_file(on_choice):
-    """Open a file picker for a .zip. Calls on_choice(path) or on_choice(None).
-    Returns True if a native/plyer picker was launched, False if the caller
-    should fall back to its own chooser (desktop)."""
-    if is_android():
-        try:
-            from plyer import filechooser
+_active_picker = None
 
-            def _cb(selection):
-                on_choice(selection[0] if selection else None)
-            filechooser.open_file(on_selection=_cb,
-                                  filters=[("Squid zip", "*.zip")])
-            return True
-        except Exception as e:
-            print(f"[Dosidicus] plyer filechooser failed: {e}")
-    return False
+
+def pick_file(on_choice, extensions=('*.zip',)):
+    """Use the Storage Access Framework; read URIs through ContentResolver.
+
+    Never assume a document picker URI is an on-disk /storage path. This also
+    works for Downloads, cloud providers and scoped storage on Android 10+.
+    """
+    global _active_picker
+    if not is_android():
+        return False
+    try:
+        from android import activity
+        from jnius import autoclass
+        from kivy.clock import Clock
+        import tempfile
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        Intent = autoclass('android.content.Intent')
+        request_code = 21931
+
+        def result(request, response, intent):
+            global _active_picker
+            if request != request_code:
+                return
+            activity.unbind(on_activity_result=result)
+            _active_picker = None
+            if response != -1 or intent is None:
+                Clock.schedule_once(lambda dt: on_choice(None), 0)
+                return
+            stream = None
+            path = None
+            try:
+                resolver = PythonActivity.mActivity.getContentResolver()
+                stream = resolver.openInputStream(intent.getData())
+                fd, path = tempfile.mkstemp(suffix=extensions[0].replace('*', ''))
+                size = 0
+                with os.fdopen(fd, 'wb') as output:
+                    buffer = bytearray(65536)
+                    while True:
+                        count = stream.read(buffer)
+                        if count < 0:
+                            break
+                        size += count
+                        if size > 32 * 1024 * 1024:
+                            raise ValueError('Import exceeds 32 MiB')
+                        output.write(buffer[:count])
+                def complete(dt, selected=path):
+                    try:
+                        on_choice(selected)
+                    finally:
+                        os.unlink(selected)
+                Clock.schedule_once(complete, 0)
+            except Exception as exc:
+                print(f'[Dosidicus] Document import failed: {exc}')
+                if path and os.path.exists(path):
+                    os.unlink(path)
+                Clock.schedule_once(lambda dt: on_choice(None), 0)
+            finally:
+                if stream is not None:
+                    stream.close()
+
+        _active_picker = result
+        activity.bind(on_activity_result=result)
+        intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        intent.addCategory(Intent.CATEGORY_OPENABLE)
+        intent.setType('*/*')
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        PythonActivity.mActivity.startActivityForResult(intent, request_code)
+        return True
+    except Exception as exc:
+        print(f'[Dosidicus] Could not open document picker: {exc}')
+        return False

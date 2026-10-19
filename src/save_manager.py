@@ -5,13 +5,7 @@ import shutil
 from datetime import datetime
 from uuid import UUID
 
-class DateTimeEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        if isinstance(obj, UUID):
-            return str(obj)
-        return super().default(obj)
+from .save_archive import DateTimeEncoder, write_save_archive
 
 class SaveManager:
     def __init__(self, save_directory="saves"):
@@ -131,10 +125,7 @@ class SaveManager:
 
             # Write to temp file
             temp_path = target_path + ".tmp"
-            with zipfile.ZipFile(temp_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
-                for key, data in save_data.items():
-                    zf.writestr(f"{key}.json", json.dumps(data, indent=4, cls=DateTimeEncoder))
-                zf.writestr("uuid.txt", f"SquidSignature    {squid_uuid}")
+            write_save_archive(temp_path, save_data, squid_uuid)
 
             # Atomic replace
             if os.path.exists(target_path):

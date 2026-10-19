@@ -2,7 +2,6 @@ import configparser
 import os
 import random
 import sys
-from PyQt5 import QtCore
 from ast import literal_eval
 
 class ConfigManager:

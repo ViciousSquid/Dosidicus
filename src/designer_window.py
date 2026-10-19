@@ -1200,7 +1200,7 @@ class BrainDesignerWindow(QMainWindow):
         """Open a design file."""
         try:
             path, _ = QFileDialog.getOpenFileName(
-                self, "Open Design", "", "JSON (*.json)"
+                self, "Open Design", "", "Brains and saves (*.json *.zip)"
             )
             if path:
                 self.logger.info(f"Opening design from: {path}")

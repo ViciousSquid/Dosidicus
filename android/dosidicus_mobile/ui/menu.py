@@ -11,6 +11,8 @@ from kivy.uix.filechooser import FileChooserListView
 from kivy.metrics import dp, sp
 
 from ..engine.portability import export_squid, import_squid
+from ..engine.brain_io import export_brain, import_brain
+from kivy.uix.scrollview import ScrollView
 from .achievements_screen import open_achievements
 from .nearby_screen import open_nearby
 from . import sharing
@@ -25,10 +27,13 @@ def _btn(text, cb, color=(0.2, 0.3, 0.42, 1)):
 
 def _message(title, msg):
     box = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(12))
-    lbl = Label(text=msg, markup=True, halign="left", valign="top", font_size=sp(15))
-    lbl.bind(size=lambda *_: setattr(lbl, "text_size", lbl.size))
-    box.add_widget(lbl)
-    p = Popup(title=title, content=box, size_hint=(0.9, 0.5), title_size=sp(17))
+    scroll = ScrollView()
+    lbl = Label(text=msg, markup=True, halign="left", valign="top", font_size=sp(15), size_hint_y=None)
+    lbl.bind(width=lambda *_: setattr(lbl, "text_size", (lbl.width, None)),
+             texture_size=lambda *_: setattr(lbl, 'height', lbl.texture_size[1] + dp(12)))
+    scroll.add_widget(lbl)
+    box.add_widget(scroll)
+    p = Popup(title=title, content=box, size_hint=(0.9, 0.75), title_size=sp(17))
     close = _btn("OK", lambda *_: p.dismiss(), color=(0.3, 0.4, 0.5, 1))
     box.add_widget(close)
     p.open()
@@ -37,13 +42,19 @@ def _message(title, msg):
 
 def open_menu(app):
     box = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(12))
-    popup = Popup(title="Menu", content=box, size_hint=(0.86, 0.82), title_size=sp(18))
+    scroll = ScrollView()
+    box.size_hint_y = None
+    box.bind(minimum_height=box.setter('height'))
+    scroll.add_widget(box)
+    popup = Popup(title="Menu", content=scroll, size_hint=(0.90, 0.94), title_size=sp(18))
 
     def close(*_):
         popup.dismiss()
 
     box.add_widget(_btn("New game", lambda *_: (close(), _confirm_new_game(app)),
                         color=(0.5, 0.28, 0.72, 1)))
+    box.add_widget(_btn("Give medicine", lambda *_: (close(), _give_medicine(app)),
+                        color=(.45, .26, .35, 1)))
     box.add_widget(_btn("Achievements", lambda *_: (close(), open_achievements(app)),
                         color=(0.42, 0.34, 0.14, 1)))
     box.add_widget(_btn("Nearby squids", lambda *_: (close(), open_nearby(app)),
@@ -52,6 +63,13 @@ def open_menu(app):
                         color=(0.13, 0.42, 0.18, 1)))
     box.add_widget(_btn("Import squid", lambda *_: (close(), _import(app)),
                         color=(0.15, 0.45, 0.6, 1)))
+    box.add_widget(_btn("Export brain (.json)", lambda *_: (close(), _export(app, brain_only=True)),
+                        color=(0.13, 0.42, 0.18, 1)))
+    box.add_widget(_btn("Import brain (.json)", lambda *_: (close(), _import_brain(app)),
+                        color=(0.15, 0.45, 0.6, 1)))
+    from .brain_editor import open_brain_editor
+    box.add_widget(_btn("Brain designer", lambda *_: (close(), open_brain_editor(app)),
+                        color=(0.42, 0.28, 0.65, 1)))
     box.add_widget(Label(size_hint_y=None, height=dp(4)))
     box.add_widget(_btn("Cancel", close, color=(0.3, 0.3, 0.34, 1)))
     popup.open()
@@ -75,20 +93,26 @@ def _confirm_new_game(app):
 
 
 # --------------------------------------------------------------- export
-def _export(app):
+def _export(app, brain_only=False):
     name = f"squid-{app.sim.squid.personality.value}-{time.strftime('%Y%m%d-%H%M%S')}.zip"
+    if brain_only:
+        name = f"brain-{time.strftime('%Y%m%d-%H%M%S')}.json"
+    mime = 'application/json' if brain_only else 'application/zip'
     # Build the archive to a private temp file first, then publish it somewhere
     # the user can actually reach (the Downloads folder) and offer to share it.
     tmp = os.path.join(app.user_data_dir, name)
     try:
-        export_squid(app.sim, tmp)
+        if brain_only:
+            export_brain(app.sim.squid.brain, tmp)
+        else:
+            export_squid(app.sim, tmp)
     except Exception as e:
         _message("Export failed", f"[color=ff8888]{e}[/color]")
         return
 
     location, uri, fallback = None, None, None
     try:
-        location, uri = sharing.save_to_downloads(tmp, name)
+        location, uri = sharing.save_to_downloads(tmp, name, mime=mime)
         if sharing.is_android():
             try:
                 os.remove(tmp)  # the Downloads copy is the keeper
@@ -99,10 +123,10 @@ def _export(app):
         print(f"[Dosidicus] save_to_downloads failed: {e}")
         fallback = tmp
 
-    _export_result(app, name, location, uri, fallback)
+    _export_result(app, name, location, uri, fallback, mime=mime)
 
 
-def _export_result(app, name, location, uri, fallback):
+def _export_result(app, name, location, uri, fallback, mime="application/zip"):
     box = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(12))
     if location:
         msg = (f"[b]{name}[/b]\n\nSaved to [b]{location}[/b].\n\n"
@@ -113,10 +137,10 @@ def _export_result(app, name, location, uri, fallback):
     lbl = Label(text=msg, markup=True, halign="left", valign="top", font_size=sp(15))
     lbl.bind(size=lambda *_: setattr(lbl, "text_size", lbl.size))
     box.add_widget(lbl)
-    p = Popup(title="Squid exported", content=box, size_hint=(0.9, 0.55), title_size=sp(17))
+    p = Popup(title="Brain exported" if mime == "application/json" else "Squid exported", content=box, size_hint=(0.9, 0.55), title_size=sp(17))
     row = BoxLayout(size_hint_y=None, height=dp(56), spacing=dp(8))
     if uri is not None:
-        row.add_widget(_btn("Share", lambda *_: sharing.share_uri(uri, "Share your squid"),
+        row.add_widget(_btn("Share", lambda *_: sharing.share_uri(uri, "Share your brain" if mime == "application/json" else "Share your squid", mime=mime),
                             color=(0.13, 0.42, 0.18, 1)))
     row.add_widget(_btn("OK", lambda *_: p.dismiss(), color=(0.3, 0.4, 0.5, 1)))
     box.add_widget(row)
@@ -144,13 +168,13 @@ def _import(app):
     _desktop_chooser(app, do_import)
 
 
-def _desktop_chooser(app, on_choice):
+def _desktop_chooser(app, on_choice, filters=None, title="Import squid (.zip)"):
     start = sharing.export_dir(app)
     box = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(8))
     chooser = FileChooserListView(path=start if os.path.isdir(start) else os.path.expanduser("~"),
-                                  filters=["*.zip"])
+                                  filters=filters or ["*.zip"])
     box.add_widget(chooser)
-    p = Popup(title="Import squid (.zip)", content=box, size_hint=(0.95, 0.9),
+    p = Popup(title=title, content=box, size_hint=(0.95, 0.9),
               title_size=sp(17))
     row = BoxLayout(size_hint_y=None, height=dp(56), spacing=dp(8))
     row.add_widget(_btn("Cancel", lambda *_: p.dismiss(), color=(0.3, 0.3, 0.34, 1)))
@@ -162,3 +186,31 @@ def _desktop_chooser(app, on_choice):
     row.add_widget(_btn("Import", _load, color=(0.15, 0.45, 0.6, 1)))
     box.add_widget(row)
     p.open()
+
+
+def _import_brain(app):
+    def load(path):
+        if not path:
+            return
+        try:
+            brain = import_brain(path, personality=app.sim.squid.personality, sim_time=app.sim.squid.brain.sim_time)
+        except Exception as exc:
+            _message('Import failed', f'Could not read that brain: {exc}')
+            return
+        # Parse completely before replacing anything. Keep the current pet,
+        # memories, statistics and tank when changing only its brain.
+        app.save_now()
+        app.sim.squid.brain = brain
+        brain.update_state(app.sim.squid.sync_stats_to_brain(app.sim.food_visible()))
+        app.set_simulation(app.sim)
+        app.save_now()
+        _message('Brain imported', f'Loaded {len(brain.neuron_names)} neurons and {len(brain.weights)} directed connections.')
+    if not sharing.pick_file(load, extensions=('*.json', '*.zip')):
+        _desktop_chooser(app, load, filters=['*.json', '*.zip'], title='Import brain (.json or save .zip)')
+
+
+def _give_medicine(app):
+    app.sim.squid.give_medicine()
+    app.sim.achievements.on_medicine()
+    app.save_now()
+    _message('Medicine', 'Your squid is recovering.')

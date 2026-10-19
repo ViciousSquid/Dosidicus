@@ -61,7 +61,7 @@ class DosidicusApp(App):
 
     def build(self):
         Window.clearcolor = (0.04, 0.05, 0.08, 1)
-        self.save_path = os.path.join(self.user_data_dir, "squid_save.json")
+        self.save_path = os.path.join(self.user_data_dir, "squid_save.zip")
         self.sim = self._load_or_new()
         self._since_save = 0.0
         self._banner_until = 0.0
@@ -157,15 +157,20 @@ class DosidicusApp(App):
 
     # ---------------------------------------------------------- persistence
     def _load_or_new(self):
-        if os.path.exists(self.save_path):
+        legacy_path = os.path.join(self.user_data_dir, 'squid_save.json')
+        for candidate in (self.save_path, legacy_path):
+            if not os.path.exists(candidate):
+                continue
             try:
-                sim = Simulation.load(self.save_path)
+                sim = Simulation.load(candidate)
                 sim.tank_size = TANK_SIZE
                 sim.squid.tank_size = TANK_SIZE
+                if candidate == legacy_path:
+                    sim.save(self.save_path)
                 self._is_first_launch = False
                 return sim
             except Exception as e:
-                print(f"[Dosidicus] Failed to load save ({e}); hatching a new squid.")
+                print(f"[Dosidicus] Failed to load save ({e}); trying available backups.")
         self._is_first_launch = True  # no save yet -> offer the tutorial
         return Simulation(tank_size=TANK_SIZE, squid=Squid(tank_size=TANK_SIZE))
 
@@ -348,6 +353,8 @@ class DosidicusApp(App):
 
     # ------------------------------------------------------------- main loop
     def tick(self, dt):
+        if getattr(self, 'editing_brain', False):
+            return
         dt = min(dt, 0.1)  # clamp after backgrounding so needs don't jump
         status = self.sim.update(dt)
 

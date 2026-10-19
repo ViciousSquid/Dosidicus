@@ -358,3 +358,37 @@ class ExternallyDriven:
                 changed[neuron] = new
             state[neuron] = new
         return changed
+
+
+def compute_neural_modulation(state, weights, gain=0.30, ledger=None):
+    """Read learned physiological influences without overwriting core inputs."""
+    from .brain_constants import CORE_STAT_NEURONS
+
+    deltas = {}
+    contributions = []
+    for (src, dst), weight in weights.items():
+        if dst not in CORE_STAT_NEURONS:
+            continue
+        raw = state.get(src)
+        if isinstance(raw, bool):
+            value = 100.0 if raw else 0.0
+        elif isinstance(raw, (int, float)):
+            value = float(raw)
+        else:
+            continue
+        # Same reading of "how much is this neuron contributing" that
+        # propagation uses, from the same function - a sensor with nothing
+        # to report contributes nothing here too.
+        push = (signal_of(src, value) / 50.0) * float(weight)
+        deltas[dst] = deltas.get(dst, 0.0) + push
+        if abs(push) > 1e-4:
+            contributions.append(((src, dst), push * gain, dst))
+
+    # Record what each synapse actually did to the squid. This is the
+    # channel through which learning becomes behaviour, so it is also the
+    # honest answer to "how did this knowledge affect what it does?".
+    if ledger is not None:
+        for edge, amount, target in contributions:
+            ledger.record_influence(edge, amount, 'modulation', target)
+
+    return {k: v * gain for k, v in deltas.items()}

@@ -1,520 +1,196 @@
-"""NeuralBrain - the portable STRINg cognitive core.
+"""Kivy data adapter over the desktop 3.1 neural engine.
 
-A faithful, GUI-free port of the learning + neurogenesis logic that lives in
-``src/learning.py``, ``src/neurogenesis.py`` and ``src/brain_widget.py`` in the
-desktop project, distilled to what the mobile MVP needs:
-
-* an explicit set of neurons with 2-D positions (for the live brain view),
-* a symmetric weight map between every pair of neurons, bounded to [-1, 1],
-* a continuous **Hebbian** update ("neurons that fire together, wire together")
-  plus the original event-driven reinforcement hooks (learn_from_eating, ...),
-* **neurogenesis**: sustained novelty / stress / reward grows brand-new neurons
-  that wire themselves into the existing network,
-* a light NumPy propagation pass so grown neurons develop emergent activation.
-
-Everything is JSON-serialisable so a squid's whole cognitive history persists.
+Propagation, signed/directed plasticity, causal credit, capability-driven
+neurogenesis, provenance and sleep consolidation all execute shared src code.
 """
-
 from __future__ import annotations
 
 import math
 import time
-from typing import Dict, Tuple
+from types import SimpleNamespace
 
-import numpy as np
+from .shared import HeadlessBrain, TrainingConfig
+from .personality import Personality
+from src.brain_constants import ACTION_NEURONS, REQUIRED_NEURONS, innate_bindings
+from src.learning import HebbianLearning, LearningConfig
+from src.personality import Personality as CorePersonality
+from src.neuron_binding import NeuronOutputBinding, OutputTriggerMode
 
-from . import constants
-from .personality import Personality, PERSONALITY_LEARNING_MODIFIERS
 
-# Neurons that never form learned connections (status flags, not drives).
-EXCLUDED_NEURONS = {"is_sick", "is_eating", "is_sleeping", "pursuing_food"}
-
-
-class NeuralBrain:
-    def __init__(self, personality: Personality = Personality.ADVENTUROUS, config: dict = None):
+class NeuralBrain(HeadlessBrain):
+    def __init__(self, personality=Personality.ADVENTUROUS, config=None):
         self.personality = Personality.from_value(personality)
-        self.config = {
-            "base_learning_rate": 0.1,         # per second (scaled by dt)
-            "co_activation_threshold": 0.6,    # both neurons must fire above this
-            "weight_decay": 0.02,              # per-second relaxation of idle links
-            "min_weight": -1.0,
-            "max_weight": 1.0,
-            # neurogenesis
-            "novelty_threshold": 6.0,
-            "stress_threshold": 5.0,
-            "reward_threshold": 5.0,
-            "cooldown": 30.0,                  # minimum REAL seconds between neuron births
-            "decay_rate": 0.98,                # per-second counter decay (slow burn)
-            "new_neuron_connection_strength": 0.5,
-            "max_new_neurons": 8,
-            # STDP (spike-timing-dependent plasticity)
-            "stdp_lr": 0.06,                   # potentiation per spike pairing
-            "stdp_tau": 2.0,                   # timing sensitivity (sim seconds)
-            "stdp_window": 3.0,                # max pre->post gap that still wires
-            # Sleep consolidation / replay (ported from the sleep_replay plugin)
-            "coactivation_threshold": 0.55,    # min activation to log a co-firing
-            "coactivation_decay": 0.985,       # per-second decay of the traces
-            "replay_memory_bias": 0.6,         # extra weight for memory-linked pairs
-            "replay_top_k": 8,                 # strongest pairs replayed on sleep
-            "replay_cycles": 5,                # replay bursts per pair
-            "replay_strength": 0.05,           # strengthening on the first burst
-            "replay_falloff": 0.78,            # per-burst falloff
-            "prune_threshold": 0.06,           # weak, unused synapses pruned to 0
-        }
-        if config:
-            self.config.update(config)
-
-        # Neuron activations on a 0-100 scale.
-        self.state: Dict[str, float] = {}
-        # Virtual-canvas positions for rendering.
-        self.neuron_positions: Dict[str, Tuple[float, float]] = {}
-        # Symmetric weights, keyed by ordered pair (a, b) with a < b canonical,
-        # but stored both ways for O(1) lookup like the desktop app does.
-        self.weights: Dict[Tuple[str, str], float] = {}
-
-        # Neurogenesis bookkeeping.
-        self.neurogenesis = {
-            "new_neurons": [],
-            "novelty_counter": 0.0,
-            "stress_counter": 0.0,
-            "reward_counter": 0.0,
-        }
+        settings = LearningConfig()
+        overrides = config or {}
+        training = TrainingConfig(
+            learning_rate=overrides.get('base_learning_rate', settings.hebbian['base_learning_rate']),
+            weight_decay=overrides.get('weight_decay', settings.hebbian['weight_decay']),
+            hebbian_interval=max(1, int(settings.hebbian['learning_interval'] / 1000)),
+            neurogenesis_cooldown=overrides.get('cooldown', settings.neurogenesis['cooldown']),
+            max_neurons=overrides.get('max_neurons', settings.neurogenesis.get('max_neurons', 32)),
+        )
+        super().__init__(training)
+        self.last_modulation = {}
+        self._tick_remainder = 0.0
+        self._learning_elapsed = 0.0
+        self.last_consolidation = None
         self.neurogenesis_active = False
-        # Neurogenesis timing runs on an internal simulation clock (seconds of
-        # simulated life), not wall-clock, so fast-forward and tests behave the
-        # same as real-time play.
-        self.sim_time = 0.0
-        self._neurogenesis_boost_until = 0.0
-        self.last_neurogenesis_time = 0.0
-        # Wall-clock time of the last birth, so births are capped to at most one
-        # per ``cooldown`` real seconds regardless of framerate / sim speed.
-        self._last_birth_wall = 0.0
+        self._bindings = []
+        self.install_bindings()
+        self._reflexes = HebbianLearning(
+            SimpleNamespace(personality=CorePersonality(self.personality.value)),
+            SimpleNamespace(brain_widget=self), self.learning_config)
 
-        # STDP bookkeeping: when each neuron last "spiked" (crossed the
-        # co-activation threshold on a rising edge) in simulation seconds.
-        self.last_spike = {}
-        self._prev_spike = {}
-        self.stdp_potentiations = 0  # count of STDP weight strengthenings (lifetime)
+    @property
+    def sim_time(self):
+        return self.sim_seconds
 
-        # Sleep-consolidation bookkeeping: recency-weighted co-activation traces
-        # accumulated while awake, replayed to strengthen connections on sleep.
-        self.coactivation: Dict[Tuple[str, str], float] = {}
-        self.last_consolidation = None   # summary of the most recent sleep replay
-
-        # A trace of the most recent learning events for the UI to surface.
-        self.recent_events = []
-
-        self._init_default_neurons()
-
-    # ------------------------------------------------------------------ setup
-    def _init_default_neurons(self):
-        for name, pos in constants.REQUIRED_NEURONS.items():
-            self.neuron_positions[name] = tuple(pos)
-            self.state[name] = constants.DEFAULT_STATE.get(name, 0.0)
-        for name, pos in constants.INPUT_SENSORS.items():
-            self.neuron_positions[name] = tuple(pos)
-            self.state[name] = 0.0
-        # Seed a few weak innate connections so the graph isn't empty at birth.
-        seeds = [
-            ("hunger", "satisfaction", 0.15),
-            ("cleanliness", "happiness", 0.1),
-            ("curiosity", "happiness", 0.12),
-            ("anxiety", "cleanliness", -0.1),
-            ("sleepiness", "happiness", -0.1),
-            ("can_see_food", "hunger", 0.2),
-        ]
-        for a, b, w in seeds:
-            self.set_weight(a, b, w)
-
-    # ---------------------------------------------------------------- weights
-    def set_weight(self, a: str, b: str, value: float):
-        value = max(self.config["min_weight"], min(self.config["max_weight"], value))
-        self.weights[(a, b)] = value
-        self.weights[(b, a)] = value
-
-    def get_weight(self, a: str, b: str) -> float:
-        return self.weights.get((a, b), 0.0)
+    @sim_time.setter
+    def sim_time(self, value):
+        self.sim_seconds = float(value)
 
     @property
     def neuron_names(self):
-        return list(self.neuron_positions.keys())
+        return list(self.positions)
 
-    # ------------------------------------------------------------ propagation
-    def propagate(self, clamped: dict):
-        """One NumPy forward pass.
+    @property
+    def neurogenesis(self):
+        return self.neurogenesis_data
 
-        ``clamped`` maps neuron name -> activation for neurons whose value is
-        dictated by the outside world (the 7 core stats + sensors). Every other
-        neuron (grown by neurogenesis) settles to a sigmoid of its weighted
-        input, giving emergent activation that the brain view can display.
-        """
-        names = self.neuron_names
-        idx = {n: i for i, n in enumerate(names)}
-        n = len(names)
+    @property
+    def recent_events(self):
+        return [dict(a=e.edge[0], b=e.edge[1], dw=e.delta, weight=e.new_weight,
+                     t=e.timestamp, stdp=e.mechanism == 'stdp',
+                     replay=e.mechanism == 'consolidation', mechanism=e.mechanism)
+                for e in self.ledger.recent_events(limit=40)]
 
-        v = np.array([self.state.get(name, 0.0) for name in names], dtype=float) / 100.0
-        for name, val in clamped.items():
-            if name in idx:
-                v[idx[name]] = max(0.0, min(1.0, val / 100.0))
+    @property
+    def stdp_potentiations(self):
+        learner = self.plasticity.stdp
+        return int(learner.get_stats()['ltp_events']) if learner is not None else 0
 
-        # Weight matrix.
-        W = np.zeros((n, n), dtype=float)
-        for (a, b), w in self.weights.items():
-            if a in idx and b in idx:
-                W[idx[a], idx[b]] = w
+    def set_weight(self, a, b, value):
+        # A -> B and B -> A are different synapses, including after import.
+        return self.apply_weight_change((a, b), value=value,
+                                        mechanism='manual', create=True)
 
-        clamped_mask = np.array(
-            [name in clamped or constants.is_sensor(name) for name in names]
-        )
-        # Settle free neurons with a couple of relaxation steps.
-        for _ in range(2):
-            net = W.dot(v)
-            settled = 1.0 / (1.0 + np.exp(-4.0 * (net - 0.0)))
-            v = np.where(clamped_mask, v, settled)
+    def get_weight(self, a, b):
+        return self.weights.get((a, b), 0.0)
 
-        for name in names:
-            self.state[name] = float(np.clip(v[idx[name]] * 100.0, 0.0, 100.0))
-        return v, idx
+    def strengthen_connection(self, a, b, amount, mechanism="reflex", reason=None):
+        if (a, b) not in self.weights and (b, a) not in self.weights:
+            if any(self.is_connector_neuron(name) and self.get_neuron_degree(name) >= 3
+                   for name in (a, b)):
+                return
+        return self.apply_weight_change((a, b), delta=amount,
+                                        mechanism=mechanism,
+                                        detail={'note': reason or 'an innate response to what just happened'},
+                                        create=True, directed=False)
 
-    # -------------------------------------------------------------- learning
-    def _personality_lr(self, a: str, b: str, lr: float) -> float:
-        mods = PERSONALITY_LEARNING_MODIFIERS.get(self.personality, {})
-        if self.personality == Personality.TIMID:
-            lr *= mods.get("learning_rate_reduction", 1.0)
-        elif self.personality == Personality.ADVENTUROUS:
-            lr *= mods.get("learning_rate_boost", 1.0)
-        if self.personality == Personality.GREEDY:
-            priority = mods.get("connection_prioritization", [])
-            if a in priority or b in priority:
-                lr *= 1.3
-        if self.personality == Personality.STUBBORN:
-            lr *= mods.get("unlearning_resistance", 1.0)
-        return lr
+    def propagate(self, clamped=None):
+        if clamped is not None:
+            self.update_state(clamped)
+        return super().propagate()
 
-    def strengthen_connection(self, a: str, b: str, amount: float):
-        """Event-driven reinforcement, ported from learning.strengthen_connection."""
-        if a in EXCLUDED_NEURONS or b in EXCLUDED_NEURONS or a == b:
-            return
-        if a not in self.state or b not in self.state:
-            return
-        amount = self._personality_lr(a, b, amount)
-        if self.neurogenesis_active:
-            amount *= 1.5
-        prev = self.get_weight(a, b)
-        self.set_weight(a, b, prev + amount)
-        self._log_event(a, b, self.get_weight(a, b) - prev)
+    def advance(self, dt, clamped, sleeping=False):
+        """One cognitive tick per simulated second, independent of render FPS."""
+        if not math.isfinite(dt) or dt < 0:
+            raise ValueError('Simulation dt must be finite and nonnegative')
+        self._tick_remainder += dt
+        born = []
+        self.last_modulation = {}
+        while self._tick_remainder >= 1.0 - 1e-9:
+            self._tick_remainder = max(0.0, self._tick_remainder - 1.0)
+            self.advance_clock()
+            self.propagate(clamped)
+            for stat, delta in self.compute_neural_modulation().items():
+                self.last_modulation[stat] = self.last_modulation.get(stat, 0.0) + delta
+            self._learning_elapsed += 1.0
+            if self._learning_elapsed >= self.config.hebbian_interval:
+                self.perform_hebbian_learning()
+                self._learning_elapsed = 0.0
+            if 'external_stimulus' in self.state:
+                self.state['external_stimulus'] *= 0.8
+            name = self.check_neurogenesis(clamped, int(self.sim_time))
+            if name:
+                born.append(name)
+            summary = self.consolidate(sleeping)
+            if summary:
+                self.last_consolidation = summary
+        return born
 
-    def hebbian_step(self, dt: float = 1.0):
-        """Continuous Hebbian learning across all eligible neuron pairs.
-
-        dw = lr * (vi - t) * (vj - t) * dt when both neurons fire above the
-        threshold, otherwise the weight relaxes toward zero. Scaling by ``dt``
-        keeps learning framerate-independent and gradual, so you actually watch
-        connections strengthen over tens of seconds rather than snapping to 1.0.
-        """
-        self.sim_time += dt
-        lr = self.config["base_learning_rate"]
-        t = self.config["co_activation_threshold"]
-        decay = self.config["weight_decay"] * dt
-        names = [n for n in self.neuron_names if n not in EXCLUDED_NEURONS]
-
-        for i, a in enumerate(names):
-            va = self.state.get(a, 0.0) / 100.0
-            for b in names[i + 1:]:
-                vb = self.state.get(b, 0.0) / 100.0
-                prev = self.get_weight(a, b)
-                if va > t and vb > t:
-                    rate = self._personality_lr(a, b, lr)
-                    if self.neurogenesis_active:
-                        rate *= 1.5
-                    dw = rate * (va - t) * (vb - t) * dt
-                    self.set_weight(a, b, prev + dw)
-                    if abs(dw) > 1e-4:
-                        self._log_event(a, b, self.get_weight(a, b) - prev)
-                elif prev != 0.0:
-                    # Relax unused connections toward zero.
-                    self.set_weight(a, b, prev * (1.0 - decay))
-
-    def stdp_step(self):
-        """Spike-timing-dependent plasticity.
-
-        A neuron "spikes" when its activation crosses the co-activation
-        threshold on a rising edge. When neuron B spikes shortly after A, the
-        A-B connection is potentiated by the STDP kernel lr * exp(-Δt/tau)
-        (pre-before-post causal strengthening). Because the network stores
-        undirected weights, this reinforces the pair; the closer in time two
-        neurons fire, the more they wire together.
-        """
-        t = self.config["co_activation_threshold"]
-        lr = self.config["stdp_lr"]
-        tau = self.config["stdp_tau"]
-        window = self.config["stdp_window"]
-        now = self.sim_time
-
-        # A neuron "spikes" on a burst of activity: it crosses the threshold on
-        # a rising edge, OR its activation jumps sharply while already active
-        # (e.g. satisfaction leaping when the squid eats). Bursts are what create
-        # the temporally-clustered firing STDP keys off.
-        spiked = []
-        for name in self.neuron_names:
-            if name in EXCLUDED_NEURONS:
-                continue
-            v = self.state.get(name, 0.0) / 100.0
-            prev = self._prev_spike.get(name, v)
-            rising_cross = v > t and prev <= t
-            burst = v > 0.5 and (v - prev) > 0.05
-            if rising_cross or burst:
-                spiked.append(name)
-            self._prev_spike[name] = v
-
-        for b in spiked:
-            for a, ts in list(self.last_spike.items()):
-                if a == b or a in EXCLUDED_NEURONS or a not in self.state:
-                    continue
-                dt_spike = now - ts
-                if 0.0 <= dt_spike <= window:
-                    dw = lr * math.exp(-dt_spike / tau)
-                    if dw > 0.004:
-                        prev = self.get_weight(a, b)
-                        self.set_weight(a, b, prev + dw)
-                        self.stdp_potentiations += 1
-                        self._log_event(a, b, self.get_weight(a, b) - prev, stdp=True)
-            self.last_spike[b] = now
-
-    def _log_event(self, a: str, b: str, dw: float, stdp: bool = False,
-                   replay: bool = False):
-        self.recent_events.append({
-            "a": a, "b": b, "dw": round(dw, 4),
-            "weight": round(self.get_weight(a, b), 4),
-            "t": time.time(), "stdp": stdp, "replay": replay,
-        })
-        if len(self.recent_events) > 40:
-            self.recent_events = self.recent_events[-40:]
-
-    # ------------------------------------------------- sleep consolidation
-    def record_coactivation(self, dt: float, bias_neurons=None):
-        """Accumulate recency-weighted co-activation traces while awake.
-
-        Ported from the desktop sleep_replay ``CoactivationTracker``: every pair
-        of neurons firing together above threshold builds a trace (weighted by
-        how strongly they co-fire), while all traces decay over time so recent
-        experience dominates. Pairs touching a neuron referenced by an active
-        memory are boosted, so what the squid is thinking about gets rehearsed.
-        """
-        thr = self.config["coactivation_threshold"]
-        decay = self.config["coactivation_decay"] ** dt
-        for key in list(self.coactivation.keys()):
-            self.coactivation[key] *= decay
-            if self.coactivation[key] < 1e-4:
-                del self.coactivation[key]
-
-        bias = set(bias_neurons or [])
-        mb = self.config["replay_memory_bias"]
-        active = [(n, self.state.get(n, 0.0) / 100.0)
-                  for n in self.neuron_names if n not in EXCLUDED_NEURONS]
-        active = [(n, v) for n, v in active if v > thr]
-        for i, (a, va) in enumerate(active):
-            for b, vb in active[i + 1:]:
-                key = (a, b) if a < b else (b, a)
-                w = min(va, vb) * dt
-                if a in bias or b in bias:
-                    w *= (1.0 + mb)
-                self.coactivation[key] = self.coactivation.get(key, 0.0) + w
-
-    def sleep_replay(self):
-        """Consolidate on sleep: replay the strongest recent co-activation pairs
-        in decaying bursts to strengthen those connections, then prune weak,
-        unused synapses. Mirrors the desktop sleep_replay plugin.
-
-        Returns a summary dict {strengthened, pruned} for the UI.
-        """
-        strengthened = pruned = 0
-        if self.coactivation:
-            top = sorted(self.coactivation.items(), key=lambda kv: kv[1],
-                         reverse=True)[:self.config["replay_top_k"]]
-            cycles = self.config["replay_cycles"]
-            falloff = self.config["replay_falloff"]
-            for (a, b), _trace in top:
-                if a in EXCLUDED_NEURONS or b in EXCLUDED_NEURONS:
-                    continue
-                if a not in self.state or b not in self.state:
-                    continue
-                prev = self.get_weight(a, b)
-                amt = self.config["replay_strength"]
-                for _ in range(cycles):
-                    self.set_weight(a, b, self.get_weight(a, b) + amt)
-                    amt *= falloff
-                self._log_event(a, b, self.get_weight(a, b) - prev, replay=True)
-                strengthened += 1
-
-        # Prune weak connections that aren't being reinforced by experience.
-        prune_thr = self.config["prune_threshold"]
-        for (a, b), w in list(self.weights.items()):
-            if a >= b:  # visit each undirected pair once (canonical a < b)
-                continue
-            key = (a, b)
-            if 0.0 < abs(w) < prune_thr and self.coactivation.get(key, 0.0) < 1e-3:
-                self.set_weight(a, b, 0.0)
-                pruned += 1
-
-        # Spent traces fade after a consolidation pass.
-        for key in self.coactivation:
-            self.coactivation[key] *= 0.5
-
-        self.last_consolidation = {"strengthened": strengthened, "pruned": pruned}
-        return self.last_consolidation
-
-    # Ported behavioural learning hooks -----------------------------------
-    def learn_from_eating(self, food_type: str = None):
-        lr = self.config["base_learning_rate"]
-        self.strengthen_connection("hunger", "satisfaction", lr * 2.0)
-        self.strengthen_connection("hunger", "happiness", lr * 1.5)
-        p = self.personality
-        if p == Personality.GREEDY:
-            self.strengthen_connection("hunger", "satisfaction", lr * 3.0)
-            self.strengthen_connection("satisfaction", "happiness", lr * 2.0)
-        elif p == Personality.TIMID:
-            self.strengthen_connection("hunger", "anxiety", lr * 0.5)
-        elif p == Personality.ADVENTUROUS:
-            self.strengthen_connection("hunger", "curiosity", lr * 1.8)
-        self.neurogenesis["reward_counter"] += 1.0
+    def learn_from_eating(self, food_type=None):
+        self._reflexes.learn_from_eating()
 
     def learn_from_playing(self):
-        lr = self.config["base_learning_rate"]
-        self.strengthen_connection("curiosity", "satisfaction", lr * 1.5)
-        self.strengthen_connection("curiosity", "happiness", lr)
-        if self.personality == Personality.ENERGETIC:
-            self.strengthen_connection("curiosity", "happiness", lr * 2.0)
-        self.neurogenesis["reward_counter"] += 0.6
+        self._reflexes.learn_from_decoration_interaction('rock')
 
     def learn_from_cleaning(self):
-        lr = self.config["base_learning_rate"]
-        self.strengthen_connection("cleanliness", "happiness", lr * 1.5)
-        self.strengthen_connection("cleanliness", "satisfaction", lr)
+        self._reflexes.learn_from_organization()
 
     def learn_from_curiosity(self):
-        # Routine exploration strengthens links but is NOT treated as novelty;
-        # only genuinely new stimuli (see register_novelty) drive neurogenesis,
-        # so an idle wanderer's brain grows differently from an engaged one.
-        lr = self.config["base_learning_rate"]
-        self.strengthen_connection("curiosity", "happiness", lr)
-        self.strengthen_connection("curiosity", "satisfaction", lr)
-
-    def register_novelty(self, amount: float = 2.0):
-        """A genuinely new stimulus appeared (e.g. fresh food dropped in)."""
-        self.neurogenesis["novelty_counter"] += amount
-
-    def register_stress(self, amount: float):
-        """Sustained distress accumulates toward a defensive neuron."""
-        self.neurogenesis["stress_counter"] += amount
+        self._reflexes.learn_from_curiosity()
 
     def learn_from_anxiety(self):
-        lr = self.config["base_learning_rate"]
-        self.strengthen_connection("anxiety", "cleanliness", lr)
-        if self.personality == Personality.TIMID:
-            self.strengthen_connection("anxiety", "happiness", -lr * 0.5)
+        self._reflexes.learn_from_anxiety()
 
-    # ------------------------------------------------------------ neurogenesis
-    def decay_neurogenesis_counters(self, dt: float = 1.0):
-        # decay_rate is expressed per-second; raise to dt for framerate independence.
-        r = self.config["decay_rate"] ** dt
-        for key in ("novelty_counter", "stress_counter", "reward_counter"):
-            self.neurogenesis[key] *= r
+    def register_novelty(self, amount=2.0):
+        from src.brain_constants import INPUT_SENSORS
+        self.positions.setdefault('external_stimulus', INPUT_SENSORS['external_stimulus'])
+        self.state['external_stimulus'] = min(100.0, amount * 30.0)
 
-    def check_neurogenesis(self):
-        """Grow a neuron if a sustained trigger crosses threshold. Ported from
-        HebbianLearning.check_neurogenesis_conditions + create_new_neuron."""
-        now = self.sim_time
-        if now >= self._neurogenesis_boost_until:
-            self.neurogenesis_active = False
-        # Hard cap: never grow a neuron more often than once per cooldown real
-        # seconds (a fresh brain waits one full cooldown before its first birth).
-        if time.time() - self._last_birth_wall < self.config["cooldown"]:
-            return None
-        if len(self.neurogenesis["new_neurons"]) >= self.config["max_new_neurons"]:
-            return None
+    def register_stress(self, amount):
+        self.state['threat_level'] = min(100.0,
+            self.state.get('threat_level', 0.0) + amount * 20.0)
 
-        triggers = [
-            ("novelty", self.neurogenesis["novelty_counter"], self.config["novelty_threshold"]),
-            ("stress", self.neurogenesis["stress_counter"], self.config["stress_threshold"]),
-            ("reward", self.neurogenesis["reward_counter"], self.config["reward_threshold"]),
-        ]
-        for kind, value, threshold in triggers:
-            if value > threshold:
-                return self._grow_neuron(kind)
-        return None
+    def install_bindings(self):
+        self._bindings = [NeuronOutputBinding.from_dict(d) for d in self.output_bindings]
+        for neuron, hook, threshold, cooldown, probability in innate_bindings():
+            if neuron in self.positions and not any(b.neuron_name == neuron for b in self._bindings):
+                self._bindings.append(NeuronOutputBinding(neuron, hook,
+                    threshold=threshold, trigger_mode=OutputTriggerMode.THRESHOLD_RISING,
+                    cooldown=cooldown, probability=probability))
+        self.output_bindings = [b.to_dict() for b in self._bindings]
 
-    def _grow_neuron(self, kind: str):
-        base = {"novelty": "novel", "stress": "defense", "reward": "reward"}.get(kind, "new")
-        name = f"{base}_{len(self.neurogenesis['new_neurons'])}"
-
-        # Place it near the neuron it is most associated with.
-        anchor = {"novelty": "curiosity", "stress": "anxiety", "reward": "satisfaction"}[kind]
-        ax, ay = self.neuron_positions.get(anchor, (450, 250))
-        # Golden-angle spiral so successive grown neurons fan out rather than pile up.
-        i = len(self.neurogenesis["new_neurons"])
-        angle = i * 2.399963  # golden angle in radians
-        radius = 70 + 16 * i
-        self.neuron_positions[name] = (
-            max(20, min(880, ax + radius * math.cos(angle))),
-            max(20, min(480, ay + radius * math.sin(angle))),
-        )
-        self.state[name] = 50.0
-        self.neurogenesis["new_neurons"].append(name)
-
-        strength = self.config["new_neuron_connection_strength"]
-        for other in list(self.neuron_positions.keys()):
-            if other == name:
-                continue
-            w = strength * (1.5 if other == anchor else 1.0)
-            self.set_weight(name, other, w)
-
-        # Reset the trigger that fired and start a learning boost.
-        self.neurogenesis[f"{kind}_counter"] = 0.0
-        self.neurogenesis_active = True
-        self._neurogenesis_boost_until = self.sim_time + 10.0
-        self.last_neurogenesis_time = self.sim_time
-        self._last_birth_wall = time.time()
-        self.recent_events.append({
-            "a": name, "b": anchor, "dw": strength,
-            "weight": strength, "t": time.time(), "born": kind,
-        })
-        return name
-
-    # ---------------------------------------------------------- persistence
-    def to_dict(self) -> dict:
-        return {
-            "personality": self.personality.value,
-            "state": self.state,
-            "neuron_positions": {k: list(v) for k, v in self.neuron_positions.items()},
-            "weights": {f"{a}|{b}": w for (a, b), w in self.weights.items()},
-            "neurogenesis": self.neurogenesis,
-            "sim_time": self.sim_time,
-            "last_neurogenesis_time": self.last_neurogenesis_time,
-            "last_spike": self.last_spike,
-            "coactivation": {f"{a}|{b}": v for (a, b), v in self.coactivation.items()},
-            "config": self.config,
-        }
+    def to_dict(self):
+        data = self.export_brain()
+        data.update(engine_version='3.1', personality=self.personality.value,
+                    sim_time=self.sim_time, tick_remainder=self._tick_remainder,
+                    clock={'kind': 'simulation', 'now': self.sim_time},
+                    last_neurogenesis_tick=self.last_neurogenesis_tick,
+                    growth_clock={'last_growth_at': self.enhanced_neurogenesis._last_growth_at,
+                                  'first_real_tick': self.enhanced_neurogenesis._first_real_tick},
+                    learning_elapsed=self._learning_elapsed,
+                    config=dict(base_learning_rate=self.config.learning_rate,
+                        weight_decay=self.config.weight_decay,
+                        cooldown=self.config.neurogenesis_cooldown,
+                        max_neurons=self.config.max_neurons),
+                    neurogenesis_data=self.neurogenesis_data,
+                    enhanced_neurogenesis=self.enhanced_neurogenesis.to_dict(),
+                    functional_neurons={n: fn.to_dict() for n, fn in
+                        self.enhanced_neurogenesis.functional_neurons.items()})
+        return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> "NeuralBrain":
-        brain = cls(Personality.from_value(data.get("personality", "adventurous")),
-                    config=data.get("config"))
-        brain.state = {k: float(v) for k, v in data.get("state", {}).items()}
-        brain.neuron_positions = {
-            k: tuple(v) for k, v in data.get("neuron_positions", {}).items()
-        }
-        brain.weights = {}
-        for key, w in data.get("weights", {}).items():
-            a, b = key.split("|", 1)
-            brain.weights[(a, b)] = float(w)
-        ng = data.get("neurogenesis")
-        if ng:
-            brain.neurogenesis.update(ng)
-        brain.sim_time = float(data.get("sim_time", 0.0))
-        brain.last_neurogenesis_time = float(data.get("last_neurogenesis_time", 0.0))
-        brain.last_spike = {k: float(v) for k, v in data.get("last_spike", {}).items()}
-        for key, v in data.get("coactivation", {}).items():
-            a, b = key.split("|", 1)
-            brain.coactivation[(a, b)] = float(v)
+    def from_dict(cls, data):
+        from .brain_io import normalise_brain
+        from src.brain_clock import rebase_cognitive_state
+        target_time = float(data.get('sim_time', 0.0))
+        payload = rebase_cognitive_state(normalise_brain(data), target_time, kind='simulation')
+        brain = cls(data.get('personality', 'adventurous'), data.get('config'))
+        if not brain.load_brain(payload):
+            raise ValueError('Cannot load brain')
+        brain.state.update(payload.get('state', {}))
+        brain.sim_time = target_time
+        brain.capability._decay_last = target_time
+        brain.last_neurogenesis_tick = int(payload.get('last_neurogenesis_tick', 0))
+        brain._tick_remainder = float(data.get('tick_remainder', 0.0))
+        brain._learning_elapsed = float(data.get('learning_elapsed', 0.0))
+        brain.install_bindings()
+        growth = data.get('enhanced_neurogenesis') or {'functional_neurons': data.get('functional_neurons', {})}
+        brain.enhanced_neurogenesis.from_dict(payload.get('enhanced_neurogenesis') or growth)
+        brain.new_neurons = set(brain.neurogenesis_data.get('new_neurons', []))
+        for key, attribute in (('last_growth_at', '_last_growth_at'), ('first_real_tick', '_first_real_tick')):
+            if key in payload.get('growth_clock', {}):
+                setattr(brain.enhanced_neurogenesis, attribute, payload['growth_clock'][key])
         return brain

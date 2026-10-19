@@ -1,17 +1,7 @@
-"""Achievements - a faithful mobile port of the desktop achievements plugin.
+"""Shared desktop achievement definitions with a mobile event adapter.
 
-The definitions (id, name, description, icon, category, tier, points,
-target_count, hidden) mirror ``plugins/achievements/achievements_data.py`` so a
-mobile squid earns the same 56 trophies a desktop one does. The
-``AchievementManager`` is the GUI-free analogue of ``AchievementsPlugin``: the
-Simulation calls event methods (feed, clean, neuron_born, rock_throw, ...) and a
-periodic ``evaluate`` inspects the squid's live stats and age for the
-threshold/time-based ones. State is JSON-serialisable and rides along in the
-save (and the exported achievements.json).
-
-A few desktop achievements depend on mechanics the mobile MVP doesn't have
-(medicine, neuron level-ups, poop-throwing, a variable simulation speed); those
-stay locked, exactly as they would on desktop with those hooks absent.
+Definitions, localization keys and targets come from the actual desktop data.
+Mobile lifecycle events update the same achievement IDs for save interchange.
 """
 
 from __future__ import annotations
@@ -34,100 +24,15 @@ CATEGORY_LABELS = {
     "memory": "Memory", "emotional": "Emotional", "secret": "Secret", "meta": "Meta",
 }
 
-# (id, name, description, icon, category, points, tier, target_count, hidden)
-_DEFS = [
-    # Feeding
-    ("first_feeding", "First Bite", "Feed the squid for the first time", "🍽️", "feeding", 10, 1, 1, False),
-    ("fed_10_times", "Regular Meals", "Feed the squid 10 times", "🥄", "feeding", 15, 1, 10, False),
-    ("fed_50_times", "Dedicated Caretaker", "Feed the squid 50 times", "🍴", "feeding", 25, 2, 50, False),
-    ("fed_100_times", "Master Chef", "Feed the squid 100 times", "👨‍🍳", "feeding", 50, 3, 100, False),
-    ("fed_500_times", "Culinary Legend", "Feed the squid 500 times", "🌟", "feeding", 100, 4, 500, True),
-    # Neurogenesis
-    ("first_neuron", "Brain Spark", "Create the first neurogenesis neuron", "🧠", "neurogenesis", 20, 1, 1, False),
-    ("neurons_10", "Neural Network", "Create 10 neurons through neurogenesis", "🔮", "neurogenesis", 30, 2, 10, False),
-    ("neurons_50", "Expanding Mind", "Create 50 neurons through neurogenesis", "💫", "neurogenesis", 50, 3, 50, False),
-    ("neurons_100", "Cerebral Powerhouse", "Create 100 neurons through neurogenesis", "🌌", "neurogenesis", 75, 4, 100, True),
-    ("first_neuron_levelup", "Strengthened Synapse", "Level up a neuron for the first time", "⚡", "neurogenesis", 15, 1, 1, False),
-    ("neuron_max_level", "Peak Performance", "Level a neuron to maximum strength", "🌠", "neurogenesis", 40, 3, 1, False),
-    # Sleep
-    ("first_sleep", "Sweet Dreams", "The squid wakes from its first sleep", "😴", "sleep", 10, 1, 1, False),
-    ("slept_10_times", "Well Rested", "The squid has slept 10 times", "🛏️", "sleep", 20, 2, 10, False),
-    ("dream_state", "Deep Dreamer", "Squid entered REM sleep", "💭", "sleep", 25, 2, 1, True),
-    # Milestones
-    ("age_1_hour", "One Hour Old", "Squid reached 1 hour old", "⏰", "milestones", 15, 1, 1, False),
-    ("age_10_hours", "Growing Up", "Squid reached 10 hours old", "📅", "milestones", 30, 2, 1, False),
-    ("age_24_hours", "One Day Wonder", "Squid survived for 24 hours", "🎂", "milestones", 50, 3, 1, False),
-    ("age_1_week", "Week Veteran", "Squid has lived for one week", "🏅", "milestones", 100, 4, 1, True),
-    ("age_1_month", "Month Veteran", "Squid has lived for one month", "🎖️", "milestones", 150, 5, 1, True),
-    ("happiness_100", "Pure Bliss", "Reach 100% happiness", "😄", "milestones", 20, 2, 1, False),
-    ("all_stats_high", "Perfect Balance", "All stats above 80% simultaneously", "⚖️", "milestones", 40, 3, 1, False),
-    # Cleaning
-    ("first_clean", "First Scrub", "Clean the tank for the first time", "🧼", "cleaning", 10, 1, 1, False),
-    ("cleaned_25_times", "Spotless Environment", "Clean the tank 25 times", "✨", "cleaning", 25, 2, 25, False),
-    ("germaphobe", "Germaphobe", "Keep cleanliness above 90% for 1 hour straight", "🧹", "cleaning", 30, 2, 1, False),
-    # Health
-    ("first_medicine", "First Aid", "Give medicine for the first time", "💊", "health", 10, 1, 1, False),
-    ("medicine_10_times", "Doctor Squid", "Give medicine 10 times", "🩺", "health", 20, 2, 10, False),
-    ("comeback_kid", "Comeback Kid", "Recover from critically low health (<20%) to full", "💪", "health", 40, 3, 1, True),
-    # Interaction - rocks
-    ("first_rock_pickup", "Rock Collector", "Pick up a rock for the first time", "🪨", "interaction", 10, 1, 1, False),
-    ("rocks_picked_10", "Stone Gatherer", "Pick up 10 rocks", "⛰️", "interaction", 15, 1, 10, False),
-    ("rocks_picked_50", "Boulder Hoarder", "Pick up 50 rocks", "🏔️", "interaction", 30, 2, 50, False),
-    ("first_rock_throw", "Skipping Stones", "Throw a rock for the first time", "🎯", "interaction", 10, 1, 1, False),
-    ("rocks_thrown_25", "Rock Launcher", "Throw 25 rocks", "🚀", "interaction", 20, 2, 25, False),
-    ("rocks_thrown_100", "Catapult Master", "Throw 100 rocks", "💨", "interaction", 40, 3, 100, True),
-    # Interaction - plants & decorations
-    ("first_decoration_push", "Interior Decorator", "Push a decoration for the first time", "🪴", "interaction", 10, 1, 1, False),
-    ("decorations_pushed_10", "Furniture Mover", "Push decorations 10 times", "🏠", "interaction", 15, 1, 10, False),
-    ("decorations_pushed_50", "Feng Shui Master", "Push decorations 50 times", "🎨", "interaction", 30, 2, 50, False),
-    ("first_plant_interact", "Green Thumb", "Interact with a plant for the first time", "🌱", "interaction", 10, 1, 1, False),
-    ("plants_interacted_10", "Garden Explorer", "Interact with plants 10 times", "🌿", "interaction", 15, 1, 10, False),
-    ("plants_interacted_50", "Botanist", "Interact with plants 50 times", "🌳", "interaction", 30, 2, 50, False),
-    ("objects_investigated_25", "Curious Inspector", "Investigate 25 different objects", "🔍", "interaction", 25, 2, 25, False),
-    ("objects_investigated_100", "Master Detective", "Investigate 100 different objects", "🕵️", "interaction", 50, 3, 100, False),
-    # Exploration - poop
-    ("first_poop_throw", "Mischief Maker", "Squid threw a poop for the first time", "💩", "exploration", 10, 1, 1, False),
-    # Ink
-    ("first_ink_cloud", "Smoke Screen", "Squid releases ink cloud for the first time", "🖤", "ink", 15, 1, 1, False),
-    ("ink_clouds_20", "Ink Master", "Release 20 ink clouds", "🌫️", "ink", 25, 2, 20, False),
-    # Memory
-    ("first_memory", "First Memory", "Form the first memory", "💾", "memory", 15, 1, 1, False),
-    ("memory_long_term", "Long Term Thinking", "Promote a memory to long-term storage", "🗄️", "memory", 25, 2, 1, False),
-    ("memories_50", "Photographic Memory", "Have 50 memories stored", "📚", "memory", 40, 3, 50, False),
-    # Emotional
-    ("curiosity_100", "Curious George", "Curiosity reaches 100%", "🤔", "emotional", 15, 1, 1, False),
-    ("zen_master", "Zen Master", "Keep anxiety below 10% for 30 minutes", "🧘", "emotional", 30, 2, 1, False),
-    ("first_startle", "Startled!", "Startle the squid for the first time", "😱", "emotional", 10, 1, 1, False),
-    ("nervous_wreck", "Nervous Wreck", "Anxiety reaches 100%", "😰", "emotional", 15, 2, 1, True),
-    # Secret
-    ("night_owl", "Night Owl", "Play between midnight and 4 AM", "🦉", "secret", 15, 2, 1, True),
-    ("early_bird", "Early Bird", "Play between 5 AM and 7 AM", "🐦", "secret", 15, 2, 1, True),
-    ("weekend_warrior", "Weekend Warrior", "Play on both Saturday and Sunday", "🗓️", "secret", 20, 2, 1, True),
-    # Meta
-    ("brain_surgeon", "Brain Surgeon", "Open the brain visualization tool", "🔬", "meta", 10, 1, 1, False),
-    ("speed_demon", "Speed Demon", "Run simulation at max speed for 10 minutes", "⏩", "meta", 15, 2, 1, False),
-    ("completionist", "Completionist", "Unlock 30 other achievements", "🏆", "meta", 100, 4, 1, True),
-]
+# Share the actual desktop definitions, including future additions and targets.
+from . import shared
+from plugins.achievements.achievements_data import ACHIEVEMENT_DEFINITIONS, Achievement
+from src.localisation import loc
 
-
-class Achievement:
-    __slots__ = ("id", "name", "description", "icon", "category", "points",
-                 "tier", "target_count", "hidden")
-
-    def __init__(self, id, name, description, icon, category, points, tier,
-                 target_count, hidden):
-        self.id = id
-        self.name = name
-        self.description = description
-        self.icon = icon
-        self.category = category
-        self.points = points
-        self.tier = tier
-        self.target_count = target_count
-        self.hidden = hidden
-
-
-ACHIEVEMENTS = {d[0]: Achievement(*d) for d in _DEFS}
+ACHIEVEMENTS = {key: Achievement(**dict(definition.to_dict(),
+    name=loc(definition.name, default=definition.name),
+    description=loc(definition.description, default=definition.description)))
+    for key, definition in ACHIEVEMENT_DEFINITIONS.items()}
 TOTAL_ACHIEVEMENTS = len(ACHIEVEMENTS)
 TOTAL_VISIBLE = sum(1 for a in ACHIEVEMENTS.values() if not a.hidden)
 MAX_POINTS = sum(a.points for a in ACHIEVEMENTS.values())
@@ -181,6 +86,14 @@ class AchievementManager:
         self._tiered(self._count("times_fed"), [
             (1, "first_feeding"), (10, "fed_10_times"), (50, "fed_50_times"),
             (100, "fed_100_times"), (500, "fed_500_times")])
+
+    def on_medicine(self):
+        self._tiered(self._count('times_medicine'), [(1, 'first_medicine'), (10, 'medicine_10_times')])
+
+    def on_neuron_levelled(self, strength):
+        self._unlock('first_neuron_levelup')
+        if strength >= 4:
+            self._unlock('neuron_max_level')
 
     def on_clean(self):
         self._tiered(self._count("times_cleaned"),

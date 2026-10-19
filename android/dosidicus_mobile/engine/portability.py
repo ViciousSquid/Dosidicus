@@ -3,16 +3,17 @@
 The archive contains the same files the desktop app produces so squids can be
 shared through the Squid-Exchange ecosystem:
 
-    game_state.json    - the authoritative mobile save (full fidelity)
+    game_state.json    - desktop-shaped pet data
+    mobile_state.json  - the authoritative mobile save (full fidelity)
     brain_state.json   - desktop-shaped brain (weights_list, neuron_positions...)
     statistics.json    - lifetime stats (identical field names to desktop)
     ShortTerm.json     - short-term memories
     LongTerm.json      - long-term memories
-    custom_brain.json  - null (no custom brain designer on mobile yet)
-    achievements.json  - {}
+    custom_brain.json  - null (the full network is in brain_state.json)
+    achievements.json  - achievement progress
     uuid.txt           - "SquidSignature\\t<uuid>"
 
-Import reads game_state.json when it's a mobile save (perfect round-trip), and
+Import reads mobile_state.json for an exact round-trip, and
 falls back to a best-effort reconstruction from a desktop archive (squid stats,
 brain weights/positions and memories).
 """
@@ -34,19 +35,8 @@ from .memory import MemoryManager
 # --------------------------------------------------------------------- export
 def _brain_state_desktop(brain):
     """Desktop-shaped brain_state.json from our NeuralBrain."""
-    seen, weights_list = set(), []
-    for (a, b), w in brain.weights.items():
-        key = tuple(sorted((a, b)))
-        if key in seen:
-            continue
-        seen.add(key)
-        weights_list.append([a, b, w])
-    return {
-        "weights_list": weights_list,
-        "neuron_positions": {n: list(p) for n, p in brain.neuron_positions.items()},
-        "neuron_states": {n: brain.state.get(n, 0.0) for n in brain.neuron_names},
-        "neurogenesis_data": {"new_neurons": list(brain.neurogenesis.get("new_neurons", []))},
-    }
+    from src.brain_io import desktop_brain_state
+    return desktop_brain_state(brain.to_dict())
 
 
 def _memories_desktop(mem_list):
@@ -67,19 +57,27 @@ def _memories_desktop(mem_list):
 def export_squid(sim: Simulation, path: str):
     """Write ``sim`` to a shareable .zip at ``path``."""
     squid = sim.squid
-    files = {
-        "game_state.json": sim.to_dict(),
-        "brain_state.json": _brain_state_desktop(squid.brain),
-        "statistics.json": sim.stats.to_dict(),
-        "ShortTerm.json": _memories_desktop(squid.memory.short_term),
-        "LongTerm.json": _memories_desktop(squid.memory.long_term),
-        "custom_brain.json": None,
-        "achievements.json": sim.achievements.to_dict(),
-    }
-    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
-        for name, data in files.items():
-            z.writestr(name, json.dumps(data, indent=2))
-        z.writestr("uuid.txt", f"SquidSignature\t{squid.uuid}")
+    from copy import deepcopy
+    from src.save_archive import write_save_archive
+    files = deepcopy(getattr(sim, '_desktop_sections', {}))
+    previous_game = files.get('game_state') or {}
+    pet = {key: value for key, value in squid.to_dict().items() if key not in ('brain', 'memory', 'stats')}
+    pet.update({name: getattr(squid, name) for name in squid.CORE_STATS})
+    pet.update(squid_x=squid.x, squid_y=squid.y)
+    files.update({
+        'game_state': dict(previous_game,
+            squid=dict(previous_game.get('squid', {}), **pet),
+            tamagotchi_logic=previous_game.get('tamagotchi_logic', {}),
+            decorations=previous_game.get('decorations', [])),
+        'mobile_state': sim.to_dict(),
+        'brain_state': _brain_state_desktop(squid.brain),
+        'statistics': sim.stats.to_dict(),
+        'ShortTerm': _memories_desktop(squid.memory.short_term),
+        'LongTerm': _memories_desktop(squid.memory.long_term),
+        'custom_brain': files.get('custom_brain'),
+        'achievements': sim.achievements.to_dict(),
+    })
+    write_save_archive(path, files, squid.uuid)
     return path
 
 
@@ -109,81 +107,63 @@ def sim_from_snapshot(data: bytes, tank_size=(900, 500)) -> Simulation:
 # --------------------------------------------------------------------- import
 def _read_json(z, name, default=None):
     try:
+        if z.getinfo(name).file_size > 16 * 1024 * 1024:
+            raise ValueError('Archive member exceeds 16 MiB: ' + name)
         return json.loads(z.read(name).decode("utf-8"))
-    except (KeyError, ValueError):
+    except KeyError:
         return default
 
 
 def import_squid(path: str, tank_size=(900, 500)) -> Simulation:
     """Load a squid .zip. Mobile archives round-trip exactly; desktop archives
     are reconstructed best-effort."""
-    with zipfile.ZipFile(path, "r") as z:
-        game_state = _read_json(z, "game_state.json")
-
-        # Mobile save? (our to_dict has version + tank_size). Use it directly.
-        if isinstance(game_state, dict) and "version" in game_state and "tank_size" in game_state:
-            sim = Simulation.from_dict(game_state)
-            sim.tank_size = tank_size
-            sim.squid.tank_size = tank_size
-            return sim
-
-        # Otherwise reconstruct from a desktop archive.
-        return _import_desktop(z, game_state, tank_size)
-
-
-def _import_desktop(z, game_state, tank_size):
-    sq = (game_state or {}).get("squid", {}) if isinstance(game_state, dict) else {}
-    personality = Personality.from_value(sq.get("personality", "adventurous"))
-    squid = Squid(personality, tank_size=tank_size)
-
-    stat_map = {"hunger": "hunger", "happiness": "happiness", "cleanliness": "cleanliness",
-                "sleepiness": "sleepiness", "satisfaction": "satisfaction",
-                "anxiety": "anxiety", "curiosity": "curiosity"}
-    for src, dst in stat_map.items():
-        if isinstance(sq.get(src), (int, float)):
-            setattr(squid, dst, float(sq[src]))
-    if sq.get("uuid"):
-        squid.uuid = sq["uuid"]
-    squid.is_sick = bool(sq.get("is_sick", False))
-
-    # Brain: import neuron positions + weights from brain_state.json.
-    bs = _read_json(z, "brain_state.json", {}) or {}
-    positions = bs.get("neuron_positions") or {}
-    for name, pos in positions.items():
-        squid.brain.neuron_positions[name] = tuple(pos)
-        squid.brain.state.setdefault(name, 50.0)
-    for grown in bs.get("neurogenesis_data", {}).get("new_neurons", []):
-        if grown not in squid.brain.neurogenesis["new_neurons"]:
-            squid.brain.neurogenesis["new_neurons"].append(grown)
-    squid.brain.weights = {}
-    for entry in bs.get("weights_list", []):
-        try:
-            a, b, w = entry[0], entry[1], float(entry[2])
-        except (ValueError, IndexError, TypeError):
-            continue
-        if a in squid.brain.neuron_positions and b in squid.brain.neuron_positions:
-            squid.brain.set_weight(a, b, w)
-
-    # Memories.
-    def _load_mem(name, target):
-        for m in (_read_json(z, name, []) or []):
-            target.append({
-                "timestamp": 0.0, "wall": m.get("timestamp", 0) or 0,
-                "category": m.get("category"), "key": m.get("key"),
-                "value": m.get("value"), "raw_value": None,
-                "importance": m.get("importance", 1.0),
-                "related_neurons": m.get("related_neurons", []),
-                "access_count": m.get("access_count", 1),
-            })
-    squid.memory = MemoryManager()
-    _load_mem("ShortTerm.json", squid.memory.short_term)
-    _load_mem("LongTerm.json", squid.memory.long_term)
-
-    sim = Simulation(tank_size=tank_size, squid=squid)
-    # Desktop decorations embed base64 pixmaps and don't map to our bundled
-    # assets, so they're skipped; everything else is reconstructed.
+    from copy import deepcopy
+    from src.brain_io import read_brain_file
+    from .brain import NeuralBrain
     from .statistics import Statistics
     from .achievements import AchievementManager
-    sim.stats = Statistics.from_dict(_read_json(z, "statistics.json", {}))
-    sim.achievements = AchievementManager.from_dict(_read_json(z, "achievements.json", {}))
+    with zipfile.ZipFile(path, 'r') as archive:
+        sections = {name[:-5]: _read_json(archive, name)
+                    for name in archive.namelist() if name.endswith('.json') and '/' not in name}
+    game = sections.get('game_state') or {}
+    mobile = sections.get('mobile_state')
+    if mobile is None and 'version' in game and 'tank_size' in game:
+        mobile = game  # pre-3.1 mobile export
+    sim = Simulation.from_dict(mobile) if mobile is not None else Simulation(tank_size=tank_size)
+    sim.tank_size = sim.squid.tank_size = tank_size
+    squid = sim.squid
+    pet = game.get('squid') or {}
+    squid.personality = Personality.from_value(pet.get('personality', squid.personality.value))
+    for name in squid.CORE_STATS:
+        if name in pet:
+            setattr(squid, name, float(pet[name]))
+    for name in ('uuid', 'is_sick', 'is_sleeping', 'is_dead', 'age_seconds', 'direction'):
+        if name in pet:
+            setattr(squid, name, pet[name])
+    squid.x = pet.get('squid_x', pet.get('x', squid.x))
+    squid.y = pet.get('squid_y', pet.get('y', squid.y))
+    if pet.get('tint_color'):
+        squid.color_tint = tuple(channel / 255.0 for channel in pet['tint_color'])
+    if sections.get('brain_state') or (sections.get('custom_brain') or {}).get('is_custom_brain'):
+        payload = read_brain_file(path)
+        payload.update(personality=squid.personality.value, sim_time=squid.brain.sim_time)
+        squid.brain = NeuralBrain.from_dict(payload)
+    elif mobile is None:
+        raise ValueError('Save contains no brain')
+    # Preserve exact mobile memory timing if the desktop view has not changed.
+    for key, attribute in (('ShortTerm', 'short_term'), ('LongTerm', 'long_term')):
+        memories = sections.get(key)
+        if memories is not None and memories != _memories_desktop(getattr(squid.memory, attribute)):
+            converted = []
+            for memory in memories:
+                item = deepcopy(memory)
+                item['wall'] = item.get('timestamp', 0)
+                item['timestamp'] = squid.brain.sim_time
+                converted.append(item)
+            setattr(squid.memory, attribute, converted)
+    if 'statistics' in sections:
+        sim.stats = Statistics.from_dict(sections['statistics'])
+    if 'achievements' in sections:
+        sim.achievements = AchievementManager.from_dict(sections['achievements'])
+    sim._desktop_sections = {key: value for key, value in sections.items() if key != 'mobile_state'}
     return sim

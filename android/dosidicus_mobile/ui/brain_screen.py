@@ -42,7 +42,7 @@ from ..engine.personality import (
     describe, PERSONALITY_STAT_MODIFIERS, PERSONALITY_LEARNING_MODIFIERS,
 )
 
-TABS = ["Network", "Learning", "Memory", "Decisions", "Personality", "Stats", "About"]
+TABS = ["Network", "Knowledge", "Growth", "Learning", "Memory", "Decisions", "Personality", "Stats", "About"]
 
 ACCENT = (0.5, 0.3, 0.6, 1)
 ACCENT_OFF = (0.22, 0.18, 0.28, 1)
@@ -228,6 +228,10 @@ class BrainScreen(BoxLayout):
     def refresh(self):
         """Called each tick while the brain screen is visible."""
         if self.active == "Network":
+            now = time.time()
+            if now - getattr(self, '_last_network_refresh', 0) < 1 / 15:
+                return
+            self._last_network_refresh = now
             self.network.set_brain(self.sim.squid.brain)
             return
         now = time.time()
@@ -250,6 +254,8 @@ class BrainScreen(BoxLayout):
             return
         builder = {
             "Personality": self._personality_text,
+            "Knowledge": self._knowledge_text,
+            "Growth": self._growth_text,
             "Stats": self._stats_text,
         }.get(self.active)
         if builder:
@@ -259,6 +265,32 @@ class BrainScreen(BoxLayout):
     def _h(self, title):
         return f"[b][color=b39ddb]{title}[/color][/b]\n"
 
+
+    def _knowledge_text(self):
+        brain = self.sim.squid.brain
+        rows = [self._h('What this squid has learned')]
+        rows.append('The same causal and provenance records used by desktop 3.1.\n')
+        for item in brain.causal_learning.knowledge_items():
+            rows.append(item.describe())
+        events = brain.ledger.recent_events(limit=12)
+        if not events:
+            rows.append('No recorded learning yet. Try feeding or introducing a decoration.')
+        for event in events:
+            rows.append(f'{event.edge[0]} -> {event.edge[1]}: {event.delta:+.3f} ({event.mechanism})')
+        return '\n'.join(rows)
+
+    def _growth_text(self):
+        brain = self.sim.squid.brain
+        rows = [self._h('Capability-driven growth')]
+        rows.append('New neurons grow when an unresolved deficit persists. Events alone do not force growth.\n')
+        for name, fn in brain.enhanced_neurogenesis.functional_neurons.items():
+            rows.append(f'[b]{name}[/b] · {fn.neuron_type}\n{fn.specialization} · strength {fn.strength_multiplier:.2f}')
+            origin = getattr(fn, 'origin_deficit', {})
+            if origin:
+                rows.append(str(origin.get('reason', origin.get('kind', ''))))
+        if not brain.enhanced_neurogenesis.functional_neurons:
+            rows.append('No grown neurons yet. The current network is still developing experience.')
+        return '\n'.join(rows)
 
     def _personality_text(self):
         s = self.sim.squid
@@ -284,7 +316,7 @@ class BrainScreen(BoxLayout):
     def _stats_text(self):
         s = self.sim.squid
         b = s.brain
-        conns = sum(1 for (x, y) in b.weights if x < y)
+        conns = len(b.weights)
         out = [self._h("Lifetime statistics")]
         # The same labelled figures the desktop Statistics tab shows.
         for label, value in self.sim.stats.display_items():
@@ -298,9 +330,9 @@ class BrainScreen(BoxLayout):
         return "\n".join(out)
 
     def _about_text(self):
-        out = [self._h("Dosidicus brain — STRINg engine")]
+        out = [self._h("Dosidicus brain — shared STRINg 3.1")]
         out.append("A tiny, fully visible neural network you raise like a pet. "
-                   "It starts with 8 neurons and rewires itself from experience.\n")
+                   "Its drives, senses and action neurons rewire through experience.\n")
         out.append(self._h("Reading the Network tab"))
         out.append("[color=aaddff][b]O[/b][/color]  core stat neuron (hunger, mood, ...)")
         out.append("[color=6fa8dc][b]O[/b][/color]  blue ring = input sensor (what it perceives)")

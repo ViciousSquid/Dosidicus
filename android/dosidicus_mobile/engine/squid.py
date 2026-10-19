@@ -4,8 +4,8 @@ Distilled from ``src/squid.py``, ``src/tamagotchi_logic.py`` and
 ``src/decision_engine.py`` with all PyQt5 (QGraphicsItem, QTimer, scene) removed.
 The squid lives in an abstract tank of ``tank_size`` pixels; the Kivy layer maps
 that onto the actual screen. Stats drift over time and are steered by the
-neural-first decision engine, which reads the brain state exactly like the
-desktop DecisionEngine v4.0 does.
+shared neural decision engine, which reads the brain state exactly like the
+desktop DecisionEngine v5.0 does.
 """
 
 from __future__ import annotations
@@ -49,6 +49,11 @@ class Squid:
         self.color_tint = None     # (r,g,b) floats 0-1, or None for natural colour
         self.status = "just hatched"
         self.age_seconds = 0.0
+        self._movement_action = 'idle'
+        self._wander_until = 0.0
+        self._wander_vector = (1.0, .1)
+        self._bound_action = None
+        self._bound_until = 0.0
         self.last_decision = {}  # trace of the most recent decision (for the UI)
 
         # Rock play: the squid can pick up a rock decoration, carry it, then
@@ -63,6 +68,8 @@ class Squid:
         self.is_fleeing = False
         self.fighting = False        # transient: in a fight with a visitor (drawn red)
         self._startle_until = 0.0
+        self._last_dt = 0.0
+        self.plant_targets = []
         self._flee_dir = (1.0, 0.0)
 
     # ----------------------------------------------------------------- stats
@@ -133,7 +140,9 @@ class Squid:
         clamped["is_eating"] = 100.0 if self.is_eating else 0.0
         clamped["is_startled"] = 100.0 if self.is_startled else 0.0
         clamped["pursuing_food"] = 100.0 if self.status.startswith(("approaching", "eyeing")) else 0.0
-        clamped["anxiety_stimulus"] = min(100.0, self.anxiety)
+        clamped["threat_level"] = 100.0 if self.is_startled else 0.0
+        clamped["plant_proximity"] = max((max(0.0, 100.0 - self._dist(p['x'], p['y']) / 3)
+                                          for p in self.plant_targets), default=0.0)
         return clamped
 
     def pull_core_from_brain(self):
@@ -156,6 +165,7 @@ class Squid:
     def feed(self, food_type: str = "sushi"):
         if self.is_sleeping:
             return "zzz... too sleepy to eat"
+        self.brain.causal_learning.on_action('eating', self.sync_stats_to_brain(True))
         self.is_eating = True
         # Two foods, like the desktop: sushi is the healthy staple; cheese is a
         # richer treat — tastier (more satisfaction/happiness) but greasier, so
@@ -212,7 +222,6 @@ class Squid:
         desktop startle_squid — a woken squid is startled awake."""
         self.is_sleeping = False
         self.is_startled = True
-        self.is_fleeing = True
         self._startle_until = self.brain.sim_time + random.uniform(2.5, 4.0)
         self.anxiety = min(100.0, self.anxiety + 30.0)
         self.happiness = max(0.0, self.happiness - 8.0)
@@ -235,133 +244,54 @@ class Squid:
 
     # ------------------------------------------------------ decision engine
     def decide(self, brain_state: dict, food_items):
-        """Neural-first decision, ported from DecisionEngine.make_decision.
-        Returns a human-readable status string and steers movement."""
-        if self.sleepiness >= 95 and not self.is_sleeping:
-            self.is_sleeping = True
-            self.status = "exhausted, collapsing to sleep"
-            return self.status
-        if self.is_sleeping:
-            self.status = "sleeping peacefully"
-            return self.status
-
-        hunger = brain_state.get("hunger", 50)
-        sleepiness = brain_state.get("sleepiness", 50)
-        can_see_food = brain_state.get("can_see_food", 0)
-        threat = brain_state.get("anxiety", 50)
-
-        weights = {}
-        weights["exploring"] = brain_state.get("curiosity", 50) * max(0.1, 1.0 - threat / 140.0)
-        weights["eating"] = hunger * (3.0 if can_see_food > 80 else 0.3) * math.pow(1.6, hunger / 25.0)
-        weights["comfort"] = (brain_state.get("anxiety", 50) / 40.0) * (4.0 if self.personality == Personality.TIMID else 1.5)
-        weights["playing"] = brain_state.get("satisfaction", 50) * brain_state.get("curiosity", 50) / 50.0
-        weights["sleeping"] = sleepiness * math.pow(1.7, sleepiness / 25.0) * 0.5
-
-        # Snapshot the base scores before memory/personality modifiers so the
-        # Decisions tab can show how much those influences shifted things.
-        base_weights = dict(weights)
-
-        # Memory influence (ported from DecisionEngine): recent lived experience
-        # tilts the odds. Positive food memories make eating more attractive,
-        # decoration memories invite exploring/comfort, distress makes the squid
-        # seek comfort and explore less.
-        memory_mod = {"eating": 1.0, "playing": 1.0, "exploring": 1.0, "comfort": 1.0}
-        for mem in self.memory.get_active_memories_data(self.brain.sim_time, 6):
-            cat = mem.get("category")
-            if cat == "food":                    # eating was rewarding
-                memory_mod["eating"] *= 1.2
-            elif cat == "play":                  # play was fun
-                memory_mod["playing"] *= 1.2
-            elif cat == "decoration":            # something new to investigate
-                memory_mod["exploring"] *= 1.1
-                memory_mod["comfort"] *= 1.15
-            elif cat == "mental_state":          # remembered distress
-                memory_mod["comfort"] *= 1.3
-                memory_mod["exploring"] *= 0.8
-        for action, mod in memory_mod.items():
-            if action in weights:
-                weights[action] *= mod
-
-        # Personality flavour (ported subset).
-        p = self.personality
-        if p == Personality.ADVENTUROUS:
-            weights["exploring"] *= 1.4; weights["playing"] *= 1.3
-        elif p == Personality.TIMID:
-            weights["exploring"] *= 0.6; weights["comfort"] *= 1.5
-        elif p == Personality.GREEDY:
-            weights["eating"] *= 1.6
-        elif p == Personality.LAZY:
-            weights["playing"] *= 0.5; weights["exploring"] *= 0.7
-        elif p == Personality.ENERGETIC:
-            weights["playing"] *= 1.5; weights["exploring"] *= 1.2
-
-        for k in weights:
-            weights[k] *= random.uniform(0.88, 1.12)
-
-        decision = max(weights, key=weights.get) if any(weights.values()) else "exploring"
-
-        # While carrying a rock, stay in play mode so the squid follows through
-        # and throws it. Expose the play intent for the Simulation's rock physics.
-        if self.carrying_rock:
-            decision = "playing"
-        self.wants_to_play = (decision == "playing")
-
-        # Store a trace for the Decisions tab: sorted candidate weights +
-        # confidence (how decisively the winner beat the runner-up).
-        ordered = sorted(weights.values(), reverse=True)
-        confidence = 1.0 if len(ordered) < 2 or ordered[0] == 0 else (ordered[0] - ordered[1]) / ordered[0]
+        """Read action neurons with the desktop's exact threshold/ranking rule."""
+        from src.decision_engine import select_action, action_activations, wants
+        from src.brain_constants import FALLBACK_ACTION
+        decision, confidence, urgency = select_action(brain_state)
+        if self._bound_action and self.brain.sim_time < self._bound_until:
+            decision = self._bound_action
+        if decision is None:
+            decision = "exploring" if wants(FALLBACK_ACTION, brain_state.get(FALLBACK_ACTION, 0)) else "idle"
+        self._movement_action = decision
+        self.wants_to_play = decision == "playing"
         self.last_decision = {
-            "weights": dict(weights),
-            "base_weights": base_weights,
-            "chosen": decision,
-            "confidence": confidence,
-            "memory_mod": memory_mod,
+            "weights": action_activations(brain_state),
+            "base_weights": action_activations(brain_state),
+            "chosen": decision, "confidence": confidence,
+            "urgency": urgency, "engine": "3.1 neural actions",
         }
-        return self._execute(decision, food_items, can_see_food)
+        self.brain.causal_learning.on_action(decision, brain_state)
+        self.brain.current_action = decision
+        return self._execute(decision, food_items)
 
-    def _execute(self, decision, food_items, can_see_food):
-        if decision == "eating" and can_see_food and food_items:
+    def _execute(self, decision, food_items, can_see_food=None):
+        self.is_fleeing = decision == 'fleeing'
+        if decision == "eating" and food_items:
             target = min(food_items, key=lambda f: self._dist(f["x"], f["y"]))
             self.move_towards(target["x"], target["y"])
-            d = self._dist(target["x"], target["y"])
-            if d < 45:
-                self.status = "eyeing food"
-            else:
-                self.status = "approaching food"
-            return self.status
-        if decision == "sleeping":
+            self.status = "eyeing food" if self._dist(target["x"], target["y"]) < 45 else "approaching food"
+        elif decision in ("sleeping", "exhausted"):
             self.is_sleeping = True
             self.status = "settling down to sleep"
-            return self.status
-        if decision == "comfort":
-            self.move_slowly()
-            self.status = "seeking comfort"
-            self.brain.learn_from_anxiety()
-            return self.status
-        if decision == "playing":
+        elif decision == "fleeing":
+            self.is_fleeing = True
+            self.flee_step()
+        elif decision == "approaching_plant":
+            plants = getattr(self, 'plant_targets', [])
+            if plants:
+                target = min(plants, key=lambda d: self._dist(d['x'], d['y']))
+                self.move_towards(target['x'], target['y'])
+            else:
+                self.move_slowly()
+            self.status = "seeking shelter"
+        elif decision == "playing":
             self.move_erratically()
-            self.status = random.choice(["frolicking", "chasing bubbles", "doing loops"])
-            self.brain.learn_from_playing()
-            return self.status
-        # explore
-        self.curiosity = min(100.0, self.curiosity + 3.0)  # activity feeds curiosity
-        self.brain.learn_from_curiosity()
-        flavours = {
-            Personality.TIMID: ["cautiously peeking", "nervously watching"],
-            Personality.ADVENTUROUS: ["boldly exploring", "seeking adventure"],
-            Personality.GREEDY: ["hunting for food", "scouting"],
-            Personality.LAZY: ["lounging", "drifting lazily"],
-            Personality.ENERGETIC: ["zooming around", "bouncing about"],
-            Personality.STUBBORN: ["patrolling territory", "standing ground"],
-        }.get(self.personality, ["wandering", "exploring curiously"])
-        style = random.choice(flavours)
-        if "zoom" in style or "bounc" in style:
-            self.move_erratically()
-        elif "loung" in style or "drift" in style:
-            self.move_slowly()
-        else:
+            self.status = "playing"
+        elif decision == "exploring":
             self.move_randomly()
-        self.status = style
+            self.status = "exploring"
+        else:
+            self.status = "sleeping peacefully" if self.is_sleeping else "resting"
         return self.status
 
     # -------------------------------------------------------------- movement
@@ -383,7 +313,16 @@ class Squid:
         self._step(x - self.x, y - self.y, 1.2)
 
     def move_randomly(self):
-        self._step(random.uniform(-1, 1), random.uniform(-0.4, 0.4), 1.0)
+        if self.brain.sim_time >= self._wander_until:
+            self._wander_vector = (random.uniform(-1, 1), random.uniform(-.4, .4))
+            self._wander_until = self.brain.sim_time + random.uniform(1.5, 4)
+        dx, dy = self._wander_vector
+        if self.x <= 31 or self.x >= self.tank_size[0] - 31:
+            dx = -dx
+        if self.y <= 31 or self.y >= self.tank_size[1] - 31:
+            dy = -dy
+        self._wander_vector = (dx, dy)
+        self._step(dx, dy, 1.0)
 
     def move_slowly(self):
         self._step(random.uniform(-1, 1), random.uniform(-0.3, 0.3), 0.4)
