@@ -15,6 +15,7 @@ from .decision_engine import DecisionEngine
 from .image_cache import ImageCache
 from .statistics_window import StatisticsWindow
 from .squid_statistics import SquidStatistics
+from .lifecycle import Lifecycle
 from .vision_worker import (
     VisionWorker, 
     VisionResult, 
@@ -39,6 +40,9 @@ class Squid:
         self.tint_color = None
         self.name = random.choice(SQUID_NAMES)
         self.statistics = SquidStatistics(self)
+        # Whether this squid has reproduced, is starving for it, or has died.
+        # Every squid is born living; see src/lifecycle.py.
+        self._lifecycle = Lifecycle()
 
         # Set neurogenesis cooldown (default to 180 seconds if not specified)
         self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 180
@@ -161,6 +165,18 @@ class Squid:
             self.personality = personality
             
         self.uuid = uuid.uuid4()
+
+    @property
+    def lifecycle(self) -> Lifecycle:
+        """Created on first use too, for a squid built without __init__."""
+        lifecycle = self.__dict__.get('_lifecycle')
+        if lifecycle is None:
+            lifecycle = self._lifecycle = Lifecycle()
+        return lifecycle
+
+    @lifecycle.setter
+    def lifecycle(self, value: Lifecycle):
+        self._lifecycle = value
 
     @property
     def carrying_rock(self):
@@ -895,6 +911,10 @@ class Squid:
             if not hasattr(self, 'tamagotchi_logic') or not self.tamagotchi_logic:
                 return False
             
+            # A parent stays with its egg, and a dead squid goes nowhere.
+            if not self.lifecycle.can_visit:
+                return False
+
             # Check plugin manager and multiplayer status
             pm = self.tamagotchi_logic.plugin_manager
             multiplayer_enabled = 'multiplayer' in pm.get_enabled_plugins()
@@ -1498,6 +1518,23 @@ class Squid:
     def change_view_cone_direction(self):
         self.current_view_angle = random.uniform(0, 2 * math.pi)
 
+    def retire(self):
+        """Stop everything this squid runs on its own, before it is replaced.
+
+        A squid owns several timers and a vision thread. When a new squid
+        takes over the tank, the old one's timers would otherwise keep firing
+        against a body that is no longer in the scene.
+        """
+        for name in ('rock_interaction_timer', 'rock_animation_timer',
+                     'view_cone_timer', 'anxiety_cooldown_timer', 'poop_timer'):
+            timer = getattr(self, name, None)
+            if timer is not None:
+                try:
+                    timer.stop()
+                except RuntimeError:
+                    pass
+        self.cleanup_vision_worker()
+
     def cleanup_vision_worker(self):
         """Clean up vision worker - call before squid destruction"""
         if hasattr(self, '_vision_update_timer') and self._vision_update_timer:
@@ -1849,6 +1886,16 @@ class Squid:
         self.move_squid()
 
     def eat(self, food_item):
+        """Eat a food item. Returns True if it was eaten.
+
+        A squid that has reproduced does not eat. The food stays where it is
+        and the squid's own hunger keeps rising by the ordinary rule - the
+        refusal is a fact about its body, not a decision taken for its brain,
+        which may well go on wanting the food.
+        """
+        if not self.lifecycle.can_eat:
+            return False
+
         # FIX: Force synchronous vision for a short time to prevent "ghost" food
         # This prevents the vision worker from reporting the just-eaten food as visible
         # before it has processed the scene update.
@@ -1959,6 +2006,7 @@ class Squid:
                 self.react_stubborn_eating()
             else:
                 self.tamagotchi_logic.show_message("Stubborn squid happily accepts sushi")
+        return True
 
     def eat_greedily(self, food_item):
         # Update status to show greedy eating (lowercase for consistency)
@@ -2173,6 +2221,8 @@ class Squid:
         self.status = "I don't like that food"
 
     def consume_food(self, food_item):
+        if not self.lifecycle.can_eat:
+            return
         self.status = "Ate food"
         self.hunger = max(0, self.hunger - 20)
         self.happiness = min(100, self.happiness + 10)

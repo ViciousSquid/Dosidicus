@@ -113,9 +113,15 @@ CONSEQUENCE_CONTEST = 'contest_resolved'
 CONSEQUENCE_ATE = 'ate'
 CONSEQUENCE_BLOCKED = 'blocked'
 CONSEQUENCE_EJECTED = 'ejected'
+#: The two bodies' contact during this visit was a mating, and the egg is in
+#: the host's tank. The host decided it and has already recorded it; this only
+#: tells the visitor, carrying the mating id and nothing else, so the visitor
+#: can remember it once however many times it is told.
+CONSEQUENCE_MATED = 'mated'
 
 CONSEQUENCE_KINDS = (CONSEQUENCE_CONTEST, CONSEQUENCE_ATE,
-                     CONSEQUENCE_BLOCKED, CONSEQUENCE_EJECTED)
+                     CONSEQUENCE_BLOCKED, CONSEQUENCE_EJECTED,
+                     CONSEQUENCE_MATED)
 
 _MAX_ITEM_ID = 40
 _MAX_ITEMS_IN_FRAME = 8
@@ -437,6 +443,16 @@ def new_visit_id(local_uuid: str, peer_uuid: str, now: Optional[float] = None) -
     return f"{str(local_uuid)[:8]}-{str(peer_uuid)[:8]}-{stamp:x}"
 
 
+def mating_id_for(visit_id: str) -> str:
+    """The name of the one mating a visit can produce.
+
+    Derived from the visit, which the host named, so the same event always has
+    the same id however often it is reported, and a visit can never produce
+    two.
+    """
+    return f"{str(visit_id)[:58]}-mate"
+
+
 __all__ = [
     'PerceptionFrame', 'ActionIntent', 'Consequence', 'VisitEnd',
     'ProtocolError', 'new_visit_id',
@@ -446,7 +462,8 @@ __all__ = [
     'VISIT_ABANDON_TIMEOUT',
     'OBSERVABLE_SENSORS', 'PRIVATE_SENSORS', 'FORBIDDEN_KEYS', 'HEADINGS',
     'CONSEQUENCE_CONTEST', 'CONSEQUENCE_ATE', 'CONSEQUENCE_BLOCKED',
-    'CONSEQUENCE_EJECTED', 'CONSEQUENCE_KINDS',
+    'CONSEQUENCE_EJECTED', 'CONSEQUENCE_MATED', 'CONSEQUENCE_KINDS',
+    'mating_id_for',
     'END_DEPARTED', 'END_EJECTED', 'END_LINK_LOST', 'END_REASONS',
     'ENCOUNTER_PROTOCOL_VERSION',
 ]

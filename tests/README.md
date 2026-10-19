@@ -19,6 +19,8 @@ No display is needed. If a Qt-backed test complains about a display, set
 | `test_transparency.py` | Whether the brain can account for itself: provenance of every weight and neuron. |
 | `test_learning.py` | Plasticity rules in isolation. |
 | `test_squid_statistics.py`, `test_statistics_*.py` | The lifetime statistics model, its persistence and its wiring to the UI. |
+| `test_reproduction_lifecycle.py` | Multiplayer reproduction: host authority, rarity, exactly one egg, no duplicates on retransmission or disconnect, parental starvation, save/load. |
+| `test_new_game_and_hatch.py` | New Game and egg hatching through the real main window: saves, memories, plugins and the brain all start fresh. |
 
 ## Studying the brain
 

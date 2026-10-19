@@ -84,6 +84,10 @@ class RemoteEntityManager:
         self.project_root = os.path.join(self.script_dir, '..', '..')
         self.images_folder_root_path = os.path.join(self.project_root, 'images')
 
+        #: Fight clouds on screen, one per pair of squid, keyed by the
+        #: other squid's uuid.
+        self._fight_clouds = {}
+
         self.position_update_timer = QtCore.QTimer()
         self.position_update_timer.timeout.connect(self._update_visuals_once_per_second)
         self.MOVEMENT_INTERVAL_MS = 1000  # Update once per second
@@ -524,6 +528,57 @@ class RemoteEntityManager:
         if icon is not None and icon.scene() is self.scene:
             self.scene.removeItem(icon)
 
+    #: The animated cloud drawn over a scuffle, from the game's images folder.
+    FIGHT_CLOUD_FILE = "fight_cloud.gif"
+    FIGHT_CLOUD_MS = 2500
+
+    def show_fight_cloud(self, key: str, x: float, y: float,
+                         duration_ms: int = FIGHT_CLOUD_MS) -> bool:
+        """One animated cloud over two squid that are about to scuffle.
+
+        One cloud for the pair, centred between them - not one per squid. A
+        cloud already showing for this pair is moved rather than doubled.
+        Purely a drawing: it changes nothing about either squid. Returns False
+        and draws nothing if the GIF is not installed.
+        """
+        entry = self._fight_clouds.get(key)
+        if entry is not None:
+            entry['x'], entry['y'] = float(x), float(y)
+            return True
+        path = os.path.join(self.images_folder_root_path, self.FIGHT_CLOUD_FILE)
+        if not os.path.exists(path):
+            if self.debug_mode:
+                self.logger.debug(f"No fight cloud: {path} is missing")
+            return False
+        movie = QtGui.QMovie(path)
+        if not movie.isValid():
+            return False
+        item = QtWidgets.QGraphicsPixmapItem()
+        item.setZValue(600)
+        entry = {'movie': movie, 'item': item, 'x': float(x), 'y': float(y)}
+
+        def show_frame(_frame_number):
+            pixmap = movie.currentPixmap()
+            item.setPixmap(pixmap)
+            item.setPos(entry['x'] - pixmap.width() / 2,
+                        entry['y'] - pixmap.height() / 2)
+
+        movie.frameChanged.connect(show_frame)
+        self.scene.addItem(item)
+        self._fight_clouds[key] = entry
+        movie.start()
+        QtCore.QTimer.singleShot(duration_ms, lambda: self.hide_fight_cloud(key))
+        return True
+
+    def hide_fight_cloud(self, key: str) -> None:
+        entry = self._fight_clouds.pop(key, None)
+        if entry is None:
+            return
+        entry['movie'].stop()
+        item = entry['item']
+        if item.scene() is self.scene:
+            self.scene.removeItem(item)
+
     def _create_arrival_animation(self, visual_item):
         if hasattr(visual_item, 'setOpacity'): visual_item.setOpacity(self.remote_opacity)
         if hasattr(visual_item, 'setScale'): visual_item.setScale(1.0)
@@ -570,6 +625,7 @@ class RemoteEntityManager:
         if visual and visual.scene():visual.scene().removeItem(visual)
         if self.debug_mode:self.logger.debug(f"Removed remote object {obj_id}")
     def cleanup_all(self): # Full method
+        for key in list(self._fight_clouds.keys()):self.hide_fight_cloud(key)
         for nid in list(self.remote_squids.keys()):self.remove_remote_squid(nid)
         for oid in list(self.remote_objects.keys()):self.remove_remote_object(oid)
         for line_id in list(self.connection_lines.keys()):

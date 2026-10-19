@@ -466,7 +466,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # Just open initial windows if no tutorial
             QtCore.QTimer.singleShot(500, self.open_initial_windows)
 
-    def create_new_game(self, specified_personality=None):
+    def create_new_game(self, specified_personality=None, egg_born=False):
         """Create a new game instance"""
         # Delete any existing save to ensure clean start
         if self.save_manager.save_exists():
@@ -493,7 +493,7 @@ class MainWindow(QtWidgets.QMainWindow):
             print(f"\x1b[43m Neurogenesis cooldown:\033[0m {self.neuro_cooldown}")
         
         self.squid.memory_manager.clear_all_memories()
-        self.show_splash_screen()
+        self.show_splash_screen(egg_born=egg_born)
 
     def check_tutorial_preference(self):
         """Show a dialog asking if the user wants to see the tutorial with 5-second timeout"""
@@ -556,54 +556,83 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         tutorial_dialog.exec_()
         self.show_tutorial = (tutorial_dialog.get_result() == QtWidgets.QMessageBox.Yes)
-        
+
+        self._begin_new_life()
+        print("New game created successfully!")
+
+    def hatch_egg(self, egg_id):
+        """A dead parent's egg hatches: the same new game, with no way out.
+
+        Called by TamagotchiLogic.begin_egg_hatching once the egg has been
+        saved as hatching. There is no confirmation and no tutorial question,
+        because the player cannot decline a hatch. The parent's saves are
+        deleted inside _begin_new_life - which is the egg completing, since
+        the egg lived in them - and the hatchling is saved straight away, so
+        from here on there is no egg anywhere to hatch a second time.
+        """
+        if not egg_id or getattr(self, '_hatched_egg_id', None) == egg_id:
+            return False
+        self._hatched_egg_id = egg_id
+        print(f"🥚 Egg {egg_id} is hatching")
+        self.show_tutorial = False
+        self._begin_new_life(egg_born=True)
+        try:
+            self.tamagotchi_logic.save_game()
+        except Exception as e:
+            print(f"[Hatch] could not save the hatchling yet: {e}")
+        return True
+
+    def _begin_new_life(self, egg_born=False):
+        """Replace the squid in this tank with a newborn. Shared by New Game
+        and by an egg hatching, so the two are the same sequence.
+
+        Order matters: plugins come down first, while the squid they refer to
+        still exists, so the multiplayer plugin can end its visits on both
+        sides and close its socket instead of carrying on against a squid that
+        has been replaced.
+        """
+        old_logic = getattr(self, 'tamagotchi_logic', None)
+        old_squid = getattr(self, 'squid', None)
+
+        # Plugins down. unload_plugin() calls each plugin's shutdown(), which
+        # for multiplayer ends every visit and closes the network node.
+        self.plugin_manager.unload_all_plugins()
+
         # Stop current simulation if running
-        if hasattr(self, 'tamagotchi_logic'):
-            self.tamagotchi_logic.stop()
+        if old_logic is not None:
+            old_logic.stop()
             # Stop autosave timer if it exists
-            if hasattr(self.tamagotchi_logic, 'autosave_timer'):
-                self.tamagotchi_logic.autosave_timer.stop()
-        
-        # Delete all save files (both autosave and manual save)
-        if self.save_manager.save_exists():
-            self.save_manager.delete_save(is_autosave=True)  # Delete autosave
-            self.save_manager.delete_save(is_autosave=False)  # Delete manual save
-            print("All save files deleted")
-        
-        # Clear memory files
-        memory_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '_memory')
-        if os.path.exists(memory_dir):
+            if hasattr(old_logic, 'autosave_timer'):
+                old_logic.autosave_timer.stop()
+            if hasattr(old_logic, '_remove_egg_item'):
+                old_logic._remove_egg_item()
+        if old_squid is not None and hasattr(old_squid, 'retire'):
+            old_squid.retire()
+
+        # Delete this squid's save files: the manual save AND its autosave.
+        # delete_save() only removed the newest manual save, so the autosave
+        # survived and the replaced squid could come back on the next start.
+        if old_squid is not None:
+            removed = self.save_manager.delete_saves_for(str(old_squid.uuid))
+            print(f"Deleted {removed} save file(s)")
+        elif self.save_manager.save_exists():
+            self.save_manager.delete_save(is_autosave=True)
+            self.save_manager.delete_save(is_autosave=False)
+
+        # Clear the squid's own memory files, where its MemoryManager keeps
+        # them. This used to be computed from this file's parent directory,
+        # which is the folder ABOVE the game - so it never cleared the game's
+        # memories and could have removed an unrelated _memory folder.
+        memory_manager = getattr(old_squid, 'memory_manager', None)
+        memory_dir = os.path.abspath(getattr(memory_manager, 'memory_dir', '_memory'))
+        if os.path.isdir(memory_dir):
             import shutil
             shutil.rmtree(memory_dir)
             print("Memory directory cleared")
         
-        # Clear all neurons and state from brain window
+        # A newborn brain: innate synapses only, nothing grown, no history.
         if hasattr(self, 'brain_window') and hasattr(self.brain_window, 'brain_widget'):
-            brain_widget = self.brain_window.brain_widget
-            
-            # Clear visible neurons
-            brain_widget.visible_neurons = set()
-            
-            # Clear neurogenesis data
-            if hasattr(brain_widget, 'neurogenesis_data'):
-                brain_widget.neurogenesis_data = {
-                    'new_neurons': [],
-                    'new_neurons_details': {},
-                    'new_synapses': []
-                }
-            
-            # Clear enhanced neurogenesis tracking
-            if hasattr(brain_widget, 'enhanced_neurogenesis'):
-                brain_widget.enhanced_neurogenesis.reset_state()
-            
-            # Reset brain widget state
-            if hasattr(brain_widget, 'state'):
-                brain_widget.state = brain_widget.create_initial_state()
-            
-            # Clear hebbian learning state
-            if hasattr(brain_widget, 'hebbian'):
-                brain_widget.hebbian.reset()
-            
+            self.brain_window.brain_widget.reset_to_newborn()
             print("Brain state cleared")
         
         # Clear all decorations and items from the scene
@@ -627,7 +656,7 @@ class MainWindow(QtWidgets.QMainWindow):
             print("Scene cleared")
         
         # Create new game (creates squid but not tamagotchi_logic)
-        self.create_new_game(self.specified_personality)
+        self.create_new_game(self.specified_personality, egg_born=egg_born)
         
         # Create TamagotchiLogic
         self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
@@ -655,10 +684,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 if neuron:
                     print(f"🧬 Personality starter neuron created: {neuron}")
         
-        # Reload plugins to ensure they get the new tamagotchi_logic
-        self.plugin_manager.reload_all_plugins()
-        
-        print("New game created successfully!")
+        # Plugins back up against the new squid. Multiplayer stays off until
+        # the player turns it on again, as it does at startup.
+        self.plugin_manager.load_all_plugins()
 
     def load_game(self):
         """Delegate to tamagotchi_logic"""
@@ -714,12 +742,21 @@ class MainWindow(QtWidgets.QMainWindow):
         
         event.accept()
 
-    def show_splash_screen(self):
-        """Display splash screen animation with synchronized neuron reveal"""
+    def show_splash_screen(self, egg_born=False):
+        """Display splash screen animation with synchronized neuron reveal
+
+        egg_born: the squid is hatching from an egg its parent laid after a
+        multiplayer mating. The sequence is the same as any new game; only
+        the two messages differ, and the starter egg keeps its own.
+        """
         self.splash = SplashScreen(self)
         self.splash.finished.connect(self.start_simulation)
         self.splash.finished.connect(lambda: self.tamagotchi_logic.statistics_window.award(1000))
-        self.splash.second_frame.connect(self.show_hatching_notification)
+        if egg_born:
+            self.splash.second_frame.connect(self.show_egg_hatching_notification)
+            self.splash.finished.connect(self.show_egg_hatched_notification)
+        else:
+            self.splash.second_frame.connect(self.show_hatching_notification)
 
         # NEW: award 1000 points the instant the splash ends
         self.splash.finished.connect(
@@ -816,6 +853,17 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_hatching_notification(self):
         """Display hatching message"""
         self.user_interface.show_message("Squid is hatching!")
+
+    EGG_HATCHING_MESSAGE = "An egg is hatching!"
+    EGG_HATCHED_MESSAGE = "A squid has hatched and you must look after him."
+
+    def show_egg_hatching_notification(self):
+        """An egg laid by a parent squid has started to hatch."""
+        self.user_interface.show_message(self.EGG_HATCHING_MESSAGE)
+
+    def show_egg_hatched_notification(self):
+        """The squid from that egg is ready."""
+        self.user_interface.show_message(self.EGG_HATCHED_MESSAGE)
 
     def start_simulation(self):
         """Begin the simulation - brain window is already visible for new games"""

@@ -24,15 +24,16 @@ brain; it stops, and is eventually sent home.
 """
 
 import math
+import random
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .identity import SquidIdentity
 from .remote_protocol import (
     ActionIntent, Consequence, PerceptionFrame, ProtocolError,
     CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
-    CONSEQUENCE_EJECTED, HEADINGS, INTENT_LEASE, LINK_TIMEOUT,
-    OBSERVABLE_SENSORS, VISIT_ABANDON_TIMEOUT,
+    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, HEADINGS, INTENT_LEASE,
+    LINK_TIMEOUT, OBSERVABLE_SENSORS, VISIT_ABANDON_TIMEOUT, mating_id_for,
 )
 
 #: How far a visitor moves per applied intent, in pixels. The visitor asks for
@@ -47,6 +48,20 @@ SIGHT_RANGE = 400.0
 
 #: A contest is over an object nearer the resident than the visitor.
 CONTEST_RANGE = 400.0
+
+#: Two bodies within this distance are in contact. The same reach as taking
+#: or eating something: it is the distance at which one body can act on
+#: another.
+MATING_CONTACT_RANGE = GRASP_RANGE
+
+#: Defaults for the mating roll; the plugin passes config.ini [Lifecycle].
+DEFAULT_MATING_CHANCE = 0.02
+DEFAULT_MATING_CONTACT_SECONDS = 5.0
+
+#: How many round trips in a row a mating is reported to the visitor. The
+#: link is UDP and a single consequence can be lost; the visitor remembers the
+#: mating id, so hearing it again changes nothing.
+MATED_ANNOUNCEMENTS = 3
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -65,7 +80,8 @@ class VisitorActor:
     __slots__ = ('identity', 'visit_id', 'x', 'y', 'facing', 'carrying',
                  'arrived_at', 'last_intent', 'last_intent_at', 'action',
                  'items_taken', 'pending_consequences', 'seq_seen',
-                 'has_seen_resident')
+                 'has_seen_resident', 'contact_since', 'mating_rolled',
+                 'mated_id', 'mating_announcements')
 
     def __init__(self, identity: SquidIdentity, visit_id: str,
                  x: float, y: float, now: float):
@@ -85,6 +101,14 @@ class VisitorActor:
         #: Whether this visitor has yet been in a position to see the
         #: resident. Observable, and the host is the only party that knows it.
         self.has_seen_resident = False
+        #: When the two bodies came into contact, if they are in contact now.
+        self.contact_since: Optional[float] = None
+        #: A visit gets one chance at a mating, however long it lasts.
+        self.mating_rolled = False
+        #: The mating this visitor is being told about, and how many more
+        #: times to tell it.
+        self.mated_id = ''
+        self.mating_announcements = 0
 
     @property
     def uuid(self) -> str:
@@ -108,11 +132,22 @@ class HostBody:
     """
 
     def __init__(self, tamagotchi_logic=None, conspecific_view=None,
-                 clock=time.time, logger=None):
+                 clock=time.time, logger=None,
+                 mating_chance: float = DEFAULT_MATING_CHANCE,
+                 mating_contact_seconds: float = DEFAULT_MATING_CONTACT_SECONDS,
+                 rng: Callable[[], float] = random.random,
+                 on_mating: Optional[Callable[[VisitorActor, str], bool]] = None):
         self.logic = tamagotchi_logic
         self.conspecific_view = conspecific_view
         self.clock = clock
         self.logger = logger
+        self.mating_chance = float(mating_chance)
+        self.mating_contact_seconds = float(mating_contact_seconds)
+        self.rng = rng
+        #: Records a mating in this tank. Returns True if it was recorded -
+        #: and only then is the visitor told. The host's own world is the
+        #: authority; a mating this tank did not record did not happen.
+        self.on_mating = on_mating
         self.visitors: Dict[str, VisitorActor] = {}     # peer uuid -> actor
         self._item_ids: Dict[str, Any] = {}             # host-issued id -> item
         self._frame_seq = 0
@@ -307,13 +342,86 @@ class HostBody:
         actor.action = intent.action
 
         handler = self._ACTIONS.get(intent.action)
-        if handler is None:
-            # A real action neuron with no bodily effect in someone else's
-            # tank (resting, collapsing, inking). Recorded as what the visitor
-            # is doing - the resident can see it - and otherwise inert.
-            return True
-        handler(self, actor, intent)
+        if handler is not None:
+            handler(self, actor, intent)
+        # else: a real action neuron with no bodily effect in someone else's
+        # tank (resting, collapsing, inking). Recorded as what the visitor is
+        # doing - the resident can see it - and otherwise inert.
+
+        # Wherever the visitor's own decision has left its body, the host
+        # works out what that means in this tank - including being in
+        # contact with the resident.
+        self._resolve_contact(actor, now)
         return True
+
+    # ------------------------------------------------------------------
+    # Reproduction: a fact about two bodies in this tank
+    # ------------------------------------------------------------------
+    def _resolve_contact(self, actor: VisitorActor, now: float) -> None:
+        """Is the visitor in sustained contact with the resident, and is it
+        a mating?
+
+        Like the contest, this is the host resolving what happened to bodies
+        its own tank contains. Neither squid chose to mate - there is no
+        action for it, here or in either brain. The visitor's network moved
+        its body; the resident's moved its own; if the two stay within reach
+        for long enough, one roll is made for the whole visit, and it is
+        rarely a mating.
+
+        No branch here reads the visitor's state, because the host has none
+        of it. Eligibility is about the RESIDENT, whose world this is: at
+        home, alive, and not already a parent.
+        """
+        if actor.mating_rolled:
+            return
+        resident = self._resident()
+        if resident is None or not self._resident_can_mate(resident):
+            actor.contact_since = None
+            return
+        distance = math.hypot(float(getattr(resident, 'squid_x', 0.0)) - actor.x,
+                              float(getattr(resident, 'squid_y', 0.0)) - actor.y)
+        if distance > MATING_CONTACT_RANGE:
+            actor.contact_since = None
+            return
+        if actor.contact_since is None:
+            actor.contact_since = now
+            return
+        if now - actor.contact_since < self.mating_contact_seconds:
+            return
+
+        actor.mating_rolled = True
+        if self.rng() >= self.mating_chance:
+            return
+        mating_id = mating_id_for(actor.visit_id)
+        recorded = False
+        if self.on_mating is not None:
+            try:
+                recorded = bool(self.on_mating(actor, mating_id))
+            except Exception as exc:
+                self._log(f"could not record a mating: {exc}")
+        if recorded:
+            self.announce_mating(actor, mating_id)
+
+    @staticmethod
+    def _resident_can_mate(resident) -> bool:
+        lifecycle = getattr(resident, 'lifecycle', None)
+        if lifecycle is None or not getattr(lifecycle, 'can_reproduce', False):
+            return False
+        # A resident that is itself away visiting is not in this tank.
+        if getattr(resident, 'is_transitioning', False):
+            return False
+        return bool(getattr(resident, 'can_move', True))
+
+    def announce_mating(self, actor: VisitorActor, mating_id: str) -> None:
+        """Tell this visitor about a mating, over the next few round trips.
+
+        Used when the mating happens, and again when the same individual
+        comes back later - which is how a visitor that never heard about it
+        (a lost packet, a crash on either side) still finds out.
+        """
+        actor.mated_id = mating_id
+        actor.mating_rolled = True
+        actor.mating_announcements = MATED_ANNOUNCEMENTS
 
     def _do_move(self, actor: VisitorActor, intent: ActionIntent) -> None:
         self._step(actor, intent.heading or actor.facing)
@@ -433,6 +541,10 @@ class HostBody:
         now = self.clock()
         ending = []
         for actor in list(self.visitors.values()):
+            if actor.mated_id and actor.mating_announcements > 0:
+                actor.mating_announcements -= 1
+                self._report(actor, CONSEQUENCE_MATED,
+                             {'mating_id': actor.mated_id})
             silence = actor.silence(now)
             if silence >= VISIT_ABANDON_TIMEOUT:
                 self._report(actor, CONSEQUENCE_EJECTED, {'reason': 'link_lost'})
@@ -613,4 +725,6 @@ class HostBody:
 
 
 __all__ = ['HostBody', 'VisitorActor', 'VISITOR_STEP', 'GRASP_RANGE',
-           'SIGHT_RANGE', 'CONTEST_RANGE']
+           'SIGHT_RANGE', 'CONTEST_RANGE', 'MATING_CONTACT_RANGE',
+           'DEFAULT_MATING_CHANCE', 'DEFAULT_MATING_CONTACT_SECONDS',
+           'MATED_ANNOUNCEMENTS']

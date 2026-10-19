@@ -35,7 +35,7 @@ from .identity import SquidIdentity
 from .remote_protocol import (
     ActionIntent, Consequence, PerceptionFrame, ProtocolError, VisitEnd,
     CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
-    CONSEQUENCE_EJECTED, END_DEPARTED, END_LINK_LOST, HEADINGS,
+    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, END_DEPARTED, END_LINK_LOST, HEADINGS,
     INTENT_LEASE, LINK_TIMEOUT, OBSERVABLE_SENSORS, new_visit_id,
 )
 
@@ -370,6 +370,10 @@ class VisitorMind:
 
         kind, detail = consequence.kind, consequence.detail
 
+        if kind == CONSEQUENCE_MATED:
+            self._note_mated(detail.get('mating_id'))
+            return consequence
+
         # File the objective fact against this individual. What went into the
         # tank's ledger is what HAPPENED - an object changed hands, food was
         # eaten, an action found nothing - never a verdict about the resident.
@@ -380,7 +384,9 @@ class VisitorMind:
                 self.session.observe(action='contesting', now=self.clock())
             elif kind == CONSEQUENCE_ATE and detail.get('ok'):
                 self.session.observe(action='eating', now=self.clock())
-        if kind == CONSEQUENCE_ATE and detail.get('ok'):
+        lifecycle = getattr(squid, 'lifecycle', None)
+        can_eat = lifecycle is None or lifecycle.can_eat
+        if kind == CONSEQUENCE_ATE and detail.get('ok') and can_eat:
             squid.hunger = max(0.0, float(getattr(squid, 'hunger', 50.0))
                                - _ATE_HUNGER_RELIEF)
         elif kind == CONSEQUENCE_CONTEST:
@@ -394,6 +400,29 @@ class VisitorMind:
             squid.satisfaction = max(0.0, float(getattr(squid, 'satisfaction', 50.0))
                                      - _BLOCKED_SATISFACTION)
         return consequence
+
+    def _note_mated(self, mating_id) -> bool:
+        """The host says this visit's contact was a mating.
+
+        Only remembered. The egg is in the host's tank and the parent that
+        starves for it is the host's resident; nothing in this squid's body
+        or lifecycle changes, and no drive is nudged to say how it should feel.
+        The host repeats the news, so it is filed once by its id: a mating
+        already in this visit's record, or already in memory, is ignored.
+        """
+        from src.lifecycle import is_valid_mating_id
+        if not is_valid_mating_id(mating_id):
+            return False
+        if self.peer_ledger is not None and self.peer_ledger.has_mated(mating_id):
+            return False
+        if self.session is None:
+            self._open_session()
+        if self.session is None:
+            return False
+        if self.session.note_mated(mating_id):
+            self._log(f"Mating {mating_id} with {self.session.peer} noted")
+            return True
+        return False
 
     # ==================================================================
     # The visit
