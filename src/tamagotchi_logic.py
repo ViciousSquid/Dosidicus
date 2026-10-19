@@ -2796,6 +2796,11 @@ class TamagotchiLogic:
         self.user_interface.scene.update()
 
     def show_message(self, message):
+        display = getattr(getattr(self, 'user_interface', None), 'show_message', None)
+        if callable(display):
+            # The UI removes only its own message, preserving name badges and
+            # multiplayer labels. The old path deleted every text item.
+            return display(message)
         # Call hook if available
         if hasattr(self, 'plugin_manager'):
             # Get modified message from plugins

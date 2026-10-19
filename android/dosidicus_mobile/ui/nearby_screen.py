@@ -41,7 +41,7 @@ class NearbyView(Popup):
         self.peer_names = {}          # endpoint_id -> display name
         self.peer_buttons = {}        # endpoint_id -> Button
         self.pending_bytes = {}       # endpoint_id -> received bytes (for import)
-        self.my_name = f"{app.sim.squid.personality.value} squid"
+        self.my_name = app.sim.squid.name
 
         root = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(10))
         super().__init__(title="Nearby squids", content=root, size_hint=(0.94, 0.9),

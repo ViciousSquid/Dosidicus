@@ -169,6 +169,7 @@ class TimedMessageBox(QtWidgets.QDialog):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, specified_personality=None, debug_mode=False, neuro_cooldown=None):
         super().__init__()
+        self._game_timers = []
         
         # Apply configured language from config.ini
         config_manager = ConfigManager()
@@ -201,7 +202,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._brain_window_ref = self.brain_window
         
         # Explicitly force creation of all tab contents
-        QtCore.QTimer.singleShot(100, self.preload_brain_window_tabs)
+        self._schedule_for_game(100, self.preload_brain_window_tabs)
         
         # Continue with normal initialization
         self.brain_window.set_tamagotchi_logic(None)  # Placeholder to ensure initialization
@@ -446,7 +447,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
 
             if not self.save_manager.save_exists():
-                QtCore.QTimer.singleShot(500, self.delayed_tutorial_check)
+                self._schedule_for_game(500, self.delayed_tutorial_check)
 
         self._initialization_complete = True
 
@@ -464,7 +465,25 @@ class MainWindow(QtWidgets.QMainWindow):
             pass
         else:
             # Just open initial windows if no tutorial
-            QtCore.QTimer.singleShot(500, self.open_initial_windows)
+            self._schedule_for_game(500, self.open_initial_windows)
+
+    def _schedule_for_game(self, delay_ms, callback):
+        timer = QtCore.QTimer(self)
+        timer.setSingleShot(True)
+        def run():
+            if timer in self._game_timers:
+                self._game_timers.remove(timer)
+            timer.deleteLater()
+            callback()
+        timer.timeout.connect(run)
+        self._game_timers.append(timer)
+        timer.start(delay_ms)
+
+    def _cancel_game_callbacks(self):
+        for timer in self._game_timers:
+            timer.stop()
+            timer.deleteLater()
+        self._game_timers.clear()
 
     def create_new_game(self, specified_personality=None, egg_born=False):
         """Create a new game instance"""
@@ -575,6 +594,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._hatched_egg_id = egg_id
         print(f"🥚 Egg {egg_id} is hatching")
         self.show_tutorial = False
+        # Paint the exact first frame of a new game before retiring the parent.
+        # The same cover survives the reset, so no empty tank or newborn flashes.
+        self._hatch_cover = SplashScreen(self)
+        self._hatch_cover.show()
+        self._hatch_cover.raise_()
+        self._hatch_cover.repaint()
+        QtWidgets.QApplication.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
         self._begin_new_life(egg_born=True)
         try:
             self.tamagotchi_logic.save_game()
@@ -591,6 +617,7 @@ class MainWindow(QtWidgets.QMainWindow):
         sides and close its socket instead of carrying on against a squid that
         has been replaced.
         """
+        self._cancel_game_callbacks()
         old_logic = getattr(self, 'tamagotchi_logic', None)
         old_squid = getattr(self, 'squid', None)
 
@@ -633,6 +660,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # A newborn brain: innate synapses only, nothing grown, no history.
         if hasattr(self, 'brain_window') and hasattr(self.brain_window, 'brain_widget'):
             self.brain_window.brain_widget.reset_to_newborn()
+            from src.custom_brain_loader import clear_custom_brain_tracking
+            clear_custom_brain_tracking()
             print("Brain state cleared")
         
         # Clear all decorations and items from the scene
@@ -718,6 +747,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event):
         """Handle window close event"""
+        self._cancel_game_callbacks()
+        self.plugin_manager.unload_all_plugins()
         # Save game before closing
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
             self.save_game()
@@ -749,9 +780,11 @@ class MainWindow(QtWidgets.QMainWindow):
         multiplayer mating. The sequence is the same as any new game; only
         the two messages differ, and the starter egg keeps its own.
         """
-        self.splash = SplashScreen(self)
+        cover = getattr(self, '_hatch_cover', None) if egg_born else None
+        self.splash = cover if cover is not None else SplashScreen(self)
+        self._hatch_cover = None
+        splash = self.splash
         self.splash.finished.connect(self.start_simulation)
-        self.splash.finished.connect(lambda: self.tamagotchi_logic.statistics_window.award(1000))
         if egg_born:
             self.splash.second_frame.connect(self.show_egg_hatching_notification)
             self.splash.finished.connect(self.show_egg_hatched_notification)
@@ -764,7 +797,9 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
        # After splash ends, wait 3 s then show the normal feeding hint
-        self.splash.finished.connect(lambda: QtCore.QTimer.singleShot(3000, self.show_feeding_hint))
+        self.splash.finished.connect(lambda: self._schedule_for_game(3000, self.show_feeding_hint))
+        self.splash.show()
+        self.splash.raise_()
 
         # Check if this is a brand new game (no save exists)
         is_new_game = not self.save_manager.save_exists()
@@ -783,7 +818,8 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QApplication.processEvents()
             
             # Give the brain window time to fully render (longer delay)
-            QtCore.QTimer.singleShot(1500, lambda: self._start_splash_with_reveals())
+            self._schedule_for_game(1500, lambda: self._start_splash_with_reveals(splash)
+                                    if self.splash is splash else None)
         else:
             # For loaded games, show brain window with all neurons visible
             if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'visible_neurons'):
@@ -806,15 +842,19 @@ class MainWindow(QtWidgets.QMainWindow):
             
             # Show splash normally (no animated reveals needed for loaded games)
             self.splash.show()
-            QtCore.QTimer.singleShot(1000, self.splash.start_animation)
+            self._schedule_for_game(1000, lambda: splash.start_animation()
+                                    if self.splash is splash else None)
 
 
     def show_feeding_hint(self):
         """Use the same strip as every other message."""
         self.user_interface.show_message("Press D to open the Decorations window")
     
-    def _start_splash_with_reveals(self):
+    def _start_splash_with_reveals(self, splash=None):
         """Start splash screen with neuron reveal synchronization (called after brain window is ready)"""
+        if splash is not None and self.splash is not splash:
+            return
+        splash = self.splash
         print("     🥚 A squid is hatching...")
         
         # Connect frame changes to neuron reveals
@@ -822,7 +862,8 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Show and start the splash screen animation
         self.splash.show()
-        QtCore.QTimer.singleShot(500, self.splash.start_animation)  # Small delay for splash to show
+        self._schedule_for_game(500, lambda: splash.start_animation()
+                                if self.splash is splash else None)
 
     def _reveal_neuron_for_frame(self, frame_index):
         """Reveal core neurons in sequence with animation frames"""
@@ -852,6 +893,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def show_hatching_notification(self):
         """Display hatching message"""
+        self.splash.set_caption('Hatching!')
         self.user_interface.show_message("Squid is hatching!")
 
     EGG_HATCHING_MESSAGE = "An egg is hatching!"
@@ -859,6 +901,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def show_egg_hatching_notification(self):
         """An egg laid by a parent squid has started to hatch."""
+        self.splash.set_caption('Hatching!')
         self.user_interface.show_message(self.EGG_HATCHING_MESSAGE)
 
     def show_egg_hatched_notification(self):
@@ -876,7 +919,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Show tutorial if enabled
         if self.show_tutorial:
-            QtCore.QTimer.singleShot(1000, self.user_interface.show_tutorial_overlay)
+            self._schedule_for_game(1000, self.user_interface.show_tutorial_overlay)
         else:
             # === FIX START: Manual cleanup if tutorial is skipped ===
             if hasattr(brain_widget, 'is_tutorial_mode'):
@@ -890,7 +933,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # === FIX END ===
 
             # Only open decoration window automatically (brain window already visible for new games)
-            QtCore.QTimer.singleShot(500, self.position_and_show_decoration_window)
+            self._schedule_for_game(500, self.position_and_show_decoration_window)
 
     def show_tutorial_overlay(self):
         """Delegate to UI layer and ensure no duplicates remain"""

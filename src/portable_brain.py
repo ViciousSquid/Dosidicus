@@ -360,6 +360,7 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
                 growth = {'functional_neurons': brain_data['functional_neurons']}
             if growth is not None:
                 self.enhanced_neurogenesis.from_dict(growth)
+                self.experience_buffer = self.enhanced_neurogenesis.experience_buffer
             for key, attr in (('last_growth_at', '_last_growth_at'), ('first_real_tick', '_first_real_tick')):
                 if key in brain_data.get('growth_clock', {}):
                     setattr(self.enhanced_neurogenesis, attr, brain_data['growth_clock'][key])
@@ -393,7 +394,6 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
         neurons = {}
         for name, pos in self.positions.items():
             neurons[name] = {
-                'position': [pos[0], pos[1]],
                 **getattr(self, '_brain_document', {}).get('neurons', {}).get(name, {}),
                 'position': [pos[0], pos[1]],
                 'is_custom': name in self.custom_neurons,

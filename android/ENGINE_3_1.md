@@ -30,7 +30,7 @@ imported networks rather than a scripted food/rock priority list.
 
 ## Brain interchange
 
-The menu has **Export brain (.json)** and **Import brain (.json)** separately
+The menu has **Export brain (.json)** and **Import brain (.json / .zip)** separately
 from exporting/importing the whole squid. JSON imports accept Desktop Designer
 `neurons`/`connections`, trainer `positions`/`weights`, and game brain-state data.
 They preserve directed inhibitory/excitatory synapses, positions, activations,
@@ -44,6 +44,20 @@ structure. Export the desktop Designer brain to JSON to load it on Android.
 Whole-squid ZIP exports include desktop-shaped `game_state.json` and
 `brain_state.json`, plus a separate `mobile_state.json` for exact mobile round trips.
 Old Android saves are migrated to the motor bank without erasing learned weights.
+
+All four applications use `src/brain_io.py` to read brain JSON and the authoritative
+`brain_state.json` inside save ZIPs. Designer Save and Export preserve cognitive
+history and do not silently wire orphan neurons. Mobile autosaves now use the same
+ZIP writer as desktop SaveManager (`src/save_archive.py`); old `squid_save.json`
+files are read and migrated to `squid_save.zip`. Desktop edits to the public save
+sections override any older mobile extension. The interoperability matrix exercises
+the real desktop save/get/set APIs, Designer save/load, and trainer file API.
+
+Use **Name & colour** in the mobile menu to name the squid and preview a tint.
+Cancel restores its previous tint; Natural restores the original artwork. The
+resident has a name badge, and names/tints survive desktop/mobile save interchange.
+Nearby advertisements use the chosen name. A single animated fight cloud covers
+the two nearby squids after they approach each other.
 
 Android reads selected document URIs through ContentResolver, supporting scoped
 storage and cloud file providers. Exports use Downloads and the Android share

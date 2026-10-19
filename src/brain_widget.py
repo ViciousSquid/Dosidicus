@@ -2548,6 +2548,11 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         """
         from .brain_constants import ACTION_NEURONS, action_resting_level
 
+        from .brain_constants import newborn_neurons
+        self._brain_document = {}
+        self.original_neuron_positions = dict(newborn_neurons())
+        self.original_neurons = list(self.original_neuron_positions)
+        self.innate_neurons = frozenset(self.original_neurons)
         self.ledger.reset()
         self.capability.reset()
         self.causal_learning.reset()

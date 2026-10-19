@@ -53,6 +53,8 @@ def open_menu(app):
 
     box.add_widget(_btn("New game", lambda *_: (close(), _confirm_new_game(app)),
                         color=(0.5, 0.28, 0.72, 1)))
+    box.add_widget(_btn("Name & colour", lambda *_: (close(), _customise_squid(app)),
+                        color=(.22, .40, .48, 1)))
     box.add_widget(_btn("Give medicine", lambda *_: (close(), _give_medicine(app)),
                         color=(.45, .26, .35, 1)))
     box.add_widget(_btn("Achievements", lambda *_: (close(), open_achievements(app)),
@@ -65,7 +67,7 @@ def open_menu(app):
                         color=(0.15, 0.45, 0.6, 1)))
     box.add_widget(_btn("Export brain (.json)", lambda *_: (close(), _export(app, brain_only=True)),
                         color=(0.13, 0.42, 0.18, 1)))
-    box.add_widget(_btn("Import brain (.json)", lambda *_: (close(), _import_brain(app)),
+    box.add_widget(_btn("Import brain (.json / .zip)", lambda *_: (close(), _import_brain(app)),
                         color=(0.15, 0.45, 0.6, 1)))
     from .brain_editor import open_brain_editor
     box.add_widget(_btn("Brain designer", lambda *_: (close(), open_brain_editor(app)),
@@ -207,6 +209,44 @@ def _import_brain(app):
         _message('Brain imported', f'Loaded {len(brain.neuron_names)} neurons and {len(brain.weights)} directed connections.')
     if not sharing.pick_file(load, extensions=('*.json', '*.zip')):
         _desktop_chooser(app, load, filters=['*.json', '*.zip'], title='Import brain (.json or save .zip)')
+
+
+def _customise_squid(app):
+    from kivy.uix.colorpicker import ColorPicker
+    from kivy.uix.textinput import TextInput
+    squid = app.sim.squid
+    original = squid.color_tint
+    box = BoxLayout(orientation='vertical', spacing=dp(8), padding=dp(10))
+    box.add_widget(Label(text='Name badge', size_hint_y=None, height=dp(28)))
+    name = TextInput(text=squid.name, multiline=False, size_hint_y=None,
+                     height=dp(48), font_size=sp(18))
+    box.add_widget(name)
+    picker = ColorPicker(color=(*(original or (.45, .75, .9)), 1))
+    box.add_widget(picker)
+    box.add_widget(Label(text='Pick a tint, or choose Natural.', size_hint_y=None, height=dp(28)))
+    row = BoxLayout(size_hint_y=None, height=dp(52), spacing=dp(6))
+    box.add_widget(row)
+    popup = Popup(title='Name & colour', content=box, size_hint=(.96, .94))
+    state = {'saved': False}
+    def preview(*_):
+        squid.color_tint = tuple(picker.color[:3])
+    picker.bind(color=preview)
+    def natural(*_):
+        squid.color_tint = None
+    def save(*_):
+        squid.name = name.text.strip()[:32] or 'Squid'
+        state['saved'] = True
+        app.save_now()
+        popup.dismiss()
+    def dismissed(*_):
+        if not state['saved']:
+            squid.color_tint = original
+    popup.bind(on_dismiss=dismissed)
+    row.add_widget(_btn('Natural', natural))
+    row.add_widget(_btn('Cancel', lambda *_: popup.dismiss()))
+    row.add_widget(_btn('Save', save, color=(.15, .45, .35, 1)))
+    popup.open()
+    return popup
 
 
 def _give_medicine(app):

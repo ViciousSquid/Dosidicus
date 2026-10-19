@@ -36,7 +36,7 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from PyQt5 import QtWidgets                                  # noqa: E402
+from PyQt5 import QtWidgets, QtCore, QtGui                                  # noqa: E402
 
 from src.lifecycle import (                                  # noqa: E402
     DEFAULT_CONFIG, EGG_HATCHING, EGG_INCUBATING, Lifecycle,
@@ -244,6 +244,10 @@ class FakeNode:
         self.is_connected = False
         self.socket = None
         self.node_id = 'squid_host01'
+
+    def close(self):
+        self.is_connected = False
+        self.socket = None
 
     def send_message(self, message_type, payload):
         self.sent.append((message_type, payload))
@@ -948,6 +952,43 @@ class FightCloudTests(unittest.TestCase):
         plugin.conspecific_view.note_contest(presence, None, taken=False)
         self.assertEqual(self._clouds(), [])
         self.assertEqual(len(plugin.conspecific_view.drain_contests()), 1)
+
+    def test_bodies_approach_before_one_shared_cloud_and_repeated_events_reuse_it(self):
+        from PyQt5.QtTest import QTest
+        self._install_gif()
+        pixmap = QtGui.QPixmap(253, 147)
+        pixmap.fill(QtCore.Qt.blue)
+        resident = SimpleNamespace(squid_x=400., squid_y=350., can_move=True,
+                                  squid_item=self.scene.addPixmap(pixmap), lifecycle=Lifecycle())
+        actor = SimpleNamespace(x=620., y=350.)
+        self.entities.remote_squids['guest'] = {'visual': self.scene.addPixmap(pixmap)}
+        self.assertTrue(self.entities.start_fight_sequence(VISITOR_UUID, 'guest', resident, actor))
+        self.assertEqual(self._clouds(), [])
+        QTest.qWait(750)
+        self.assertLessEqual(abs(resident.squid_x-actor.x), 41)
+        self.assertEqual(len(self._clouds()), 1)
+        self.entities.start_fight_sequence(VISITOR_UUID, 'guest', resident, actor)
+        self.assertEqual(len(self._clouds()), 1)
+        self.entities._end_scuffle(VISITOR_UUID)
+        self.assertTrue(resident.can_move)
+        self.assertEqual(self._clouds(), [])
+
+
+class RoundTripTimerTests(unittest.TestCase):
+    def test_sync_timer_actually_runs_on_the_qt_thread_and_can_be_stopped(self):
+        from PyQt5.QtTest import QTest
+        plugin = MultiplayerPlugin()
+        calls = []
+        plugin.sync_game_state = lambda: calls.append(QtCore.QThread.currentThread())
+        plugin.start_sync_timer()
+        timer = plugin.sync_timer
+        self.addCleanup(timer.stop)
+        plugin.start_sync_timer()
+        self.assertIs(plugin.sync_timer, timer)
+        QTest.qWait(650)
+        self.assertTrue(calls, 'a live timer must drive perception and action intents')
+        self.assertTrue(all(thread == QtWidgets.QApplication.instance().thread() for thread in calls))
+        timer.stop()
 
 
 if __name__ == '__main__':

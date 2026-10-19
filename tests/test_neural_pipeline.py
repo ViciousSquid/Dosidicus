@@ -96,6 +96,11 @@ def tearDownModule():
                 timer.stop()
             except Exception:
                 pass
+    if WINDOW is not None:
+        WINDOW._cancel_game_callbacks()
+        WINDOW.tamagotchi_logic.stop()
+        WINDOW.squid.retire()
+        WINDOW.splash.timer.stop()
     if _PREV_CWD:
         os.chdir(_PREV_CWD)
     if _TMPDIR is not None:

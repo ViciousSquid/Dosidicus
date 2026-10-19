@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from dosidicus_mobile.engine import Simulation, Squid, NeuralBrain, Personality
 from dosidicus_mobile.engine.brain_io import normalise_brain, import_brain, export_brain
 from dosidicus_mobile.engine.portability import export_squid, import_squid, _brain_state_desktop
@@ -429,3 +429,20 @@ def test_imported_desktop_actuators_control_the_mobile_body():
     sim._fire_output('neuron_output_throw_rock', 100, {})
     assert not squid.carrying_rock
     assert carried_id in sim._rock_velocities
+
+
+def test_mobile_fight_brings_the_pair_together_before_the_shared_cloud_phase():
+    sim = Simulation()
+    visitor = sim.add_visitor(Simulation().to_dict(), name='Guest')
+    visitor['x'], visitor['y'] = sim.squid.x+110, sim.squid.y
+    sim._start_fight(visitor)
+    fight = sim.fight
+    sim._start_fight(visitor)
+    assert sim.fight is fight
+    assert fight['phase'] == 'approaching'
+    for _ in range(30):
+        sim._update_fight(1/30)
+        if fight['phase'] == 'fighting':
+            break
+    assert fight['phase'] == 'fighting'
+    assert abs(sim.squid.x-visitor['x']) <= 40

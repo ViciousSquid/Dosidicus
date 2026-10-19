@@ -9,7 +9,7 @@ import os
 import time
 
 from kivy.uix.widget import Widget
-from kivy.graphics import Color, Rectangle, Ellipse
+from kivy.graphics import Color, Rectangle, Ellipse, RoundedRectangle
 from kivy.core.image import Image as CoreImage
 from kivy.core.text import Label as CoreLabel
 from kivy.metrics import dp
@@ -102,6 +102,7 @@ class TankView(Widget):
                             if f is not None] or [_load("egg.png")]
         self._zzz_tex = self._text_texture("Zzz")
         self._name_texs = {}
+        self._fight_animation = CoreImage(asset('fight_cloud.gif'), anim_delay=.04)
         self.bind(pos=lambda *a: self.redraw(), size=lambda *a: self.redraw())
 
     def _name_texture(self, name):
@@ -264,6 +265,18 @@ class TankView(Widget):
                 Color(0.9, 0.5, 0.8, 1)
                 Rectangle(pos=sq_pos, size=(squid_w, squid_h))
 
+            tag = self._name_texture(squid.name)
+            if tag:
+                th = dp(18)
+                tw = min(self.width-dp(20), dp(210), th * tag.width / max(1, tag.height))
+                left = max(self.x+dp(6), min(sx-tw/2, self.right-tw-dp(6)))
+                bottom = max(self.y+dp(8), sy-squid_h/2-th-dp(12))
+                Color(.04, .07, .13, .85)
+                RoundedRectangle(pos=(left-dp(6), bottom-dp(4)),
+                                 size=(tw+dp(12), th+dp(8)), radius=[dp(7)])
+                Color(1, 1, 1, 1)
+                Rectangle(texture=tag, pos=(left, bottom), size=(tw, th))
+
             # Above the head: while asleep show a "Zzz"; otherwise a mental-state
             # icon mirroring the desktop set — startled "!" (takes priority — a
             # fright is salient), then sick skull, then curious "?".
@@ -286,6 +299,17 @@ class TankView(Widget):
                 if overlay:
                     Color(1, 1, 1, 1)
                     Rectangle(texture=overlay, pos=icon_pos, size=(icon_sz, icon_sz))
+
+            fight = getattr(sim, 'fight', None)
+            if fight and fight.get('phase') == 'fighting':
+                visitor = sim._visitor_by_id(fight['visitor_id'])
+                if visitor:
+                    cx, cy = self._map((squid.x+visitor['x'])/2, (squid.y+visitor['y'])/2)
+                    texture = self._fight_animation.texture
+                    height = squid_w * 4.2
+                    width = height * texture.width / texture.height
+                    Color(1, 1, 1, 1)
+                    Rectangle(texture=texture, pos=(cx-width/2, cy-height/2), size=(width, height))
 
             # Ink clouds (drawn over the squid, fading out with age).
             now = sim.squid.brain.sim_time

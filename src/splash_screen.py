@@ -12,8 +12,14 @@ class SplashScreen(QtWidgets.QWidget):
         super().__init__(parent)
         self.loc = Localisation.instance()
         
-        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.FramelessWindowHint)
-        self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+        # One opaque child cover is shared by the last parental frame and
+        # the first newborn frame. Resetting the simulation happens behind it.
+        self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+        self.setAutoFillBackground(True)
+        palette = self.palette()
+        palette.setColor(QtGui.QPalette.Window, QtCore.Qt.white)
+        self.setPalette(palette)
+        self._ended = False
         
         self.frame_index = 0
         self.frames = []
@@ -39,18 +45,30 @@ class SplashScreen(QtWidgets.QWidget):
         if not self.frames:
             print("No frames were loaded successfully.")
             self.label = QtWidgets.QLabel("No images loaded", self)
-            self.setFixedSize(256, 256)
+            self.resize(256, 256)
         else:
             self.label = QtWidgets.QLabel(self)
             self.label.setPixmap(self.frames[0])
-            self.setFixedSize(self.frames[0].size())
+            self.resize(self.frames[0].size())
         
+        self.caption = QtWidgets.QLabel('', self)
+        self.caption.setAlignment(QtCore.Qt.AlignCenter)
+        self.caption.setStyleSheet('color: #182130; background: transparent; font-size: 18px; font-weight: bold;')
+        self.label.setAlignment(QtCore.Qt.AlignCenter)
+        if parent is not None:
+            self.setGeometry(parent.rect())
+            parent.installEventFilter(self)
+        self.label.setGeometry(self.rect())
+        self.caption.setGeometry(0, self.height()-70, self.width(), 50)
+
         # Create timer but don't start it yet
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.next_frame)
 
     def start_animation(self):
         """Start the animation sequence after window is ready"""
+        if self._ended or self.timer.isActive():
+            return
         self.frame_changed.emit(self.frame_index)
         self.timer.start(1000)
 
@@ -67,6 +85,10 @@ class SplashScreen(QtWidgets.QWidget):
             self.timer.stop()
 
     def end_animation(self):
+        if self._ended:
+            return
+        self._ended = True
+        self.timer.stop()
         # Use localised messages
         hatched_msg = self.loc.get("squid_hatched")
         look_after_msg = self.loc.get("look_after")
@@ -80,5 +102,20 @@ class SplashScreen(QtWidgets.QWidget):
         self.finished.emit()
 
     def showEvent(self, event):
-        self.move(self.parent().rect().center() - self.rect().center())
+        if self.parent() is not None:
+            self.setGeometry(self.parent().rect())
+        self.label.setGeometry(self.rect())
+        self.caption.setGeometry(0, self.height()-70, self.width(), 50)
+        self.raise_()
         super().showEvent(event)
+
+    def set_caption(self, text):
+        self.caption.setText(text)
+        self.caption.raise_()
+
+    def eventFilter(self, watched, event):
+        if watched is self.parent() and event.type() == QtCore.QEvent.Resize:
+            self.setGeometry(watched.rect())
+            self.label.setGeometry(self.rect())
+            self.caption.setGeometry(0, self.height()-70, self.width(), 50)
+        return super().eventFilter(watched, event)

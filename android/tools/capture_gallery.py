@@ -18,7 +18,7 @@ from kivy.core.window import Window
 from dosidicus_mobile.ui.app import DosidicusApp
 from dosidicus_mobile.engine import Simulation, Squid, Personality
 from dosidicus_mobile.ui.brain_editor import open_brain_editor
-from dosidicus_mobile.ui.menu import open_menu
+from dosidicus_mobile.ui.menu import open_menu, _customise_squid
 
 OUTPUT = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/dosidicus-gallery').resolve()
 OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -35,6 +35,8 @@ class GalleryApp(DosidicusApp):
         self._is_first_launch = False
         random.seed(31)
         sim = Simulation(squid=Squid(Personality.ADVENTUROUS))
+        sim.squid.name = 'Coral'
+        sim.squid.color_tint = (.9, .58, .42)
         sim.add_decoration('plant03.png', 'plant', 160, 400)
         sim.add_decoration('rock01.png', 'rock', 690, 440)
         sim.drop_food(x=450, y=250)
@@ -48,6 +50,7 @@ class GalleryApp(DosidicusApp):
             ('03-learning', 'Learning'), ('04-decisions', 'Decisions'),
             ('05-knowledge', 'Knowledge'), ('06-growth', 'Growth'),
             ('07-brain-designer', 'designer'), ('08-menu', 'menu'),
+            ('09-name-colour', 'identity'),
         ])
         Clock.schedule_once(self.next_view, 1)
 
@@ -59,7 +62,9 @@ class GalleryApp(DosidicusApp):
             return
         if getattr(self, 'popup', None):
             self.popup.dismiss(); self.popup = None
-        if view in ('designer', 'menu'):
+        if view == 'identity':
+            self.popup = _customise_squid(self)
+        elif view in ('designer', 'menu'):
             self.popup = open_brain_editor(self) if view == 'designer' else open_menu(self)
         elif view:
             if not self.showing_brain:

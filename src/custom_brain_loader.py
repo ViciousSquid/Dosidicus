@@ -14,6 +14,12 @@ _current_custom_brain_name: Optional[str] = None
 _current_custom_brain_file: Optional[str] = None
 
 
+def clear_custom_brain_tracking():
+    """A new life must not save the previous squid's custom architecture."""
+    global _current_custom_brain, _current_custom_brain_name, _current_custom_brain_file
+    _current_custom_brain = _current_custom_brain_name = _current_custom_brain_file = None
+
+
 def add_load_brain_button(network_tab, checkbox_layout):
     """
     Add a Load Brain button to the NetworkTab.
@@ -581,6 +587,7 @@ class BrainLoader:
             bw.neuron_shapes = dict(cognitive['neuron_shapes'])
         growth = getattr(bw, 'enhanced_neurogenesis', None)
         if growth is not None:
+            bw.experience_buffer = growth.experience_buffer
             for key, attribute in (('last_growth_at', '_last_growth_at'),
                                    ('first_real_tick', '_first_real_tick')):
                 if key in cognitive.get('growth_clock', {}):

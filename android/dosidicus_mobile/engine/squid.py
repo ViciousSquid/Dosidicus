@@ -47,6 +47,7 @@ class Squid:
         self.is_eating = False
         self.is_dead = False       # set when the squid starves (game over)
         self.color_tint = None     # (r,g,b) floats 0-1, or None for natural colour
+        self.name = 'Squid'
         self.status = "just hatched"
         self.age_seconds = 0.0
         self._movement_action = 'idle'
@@ -335,6 +336,7 @@ class Squid:
         return {
             "personality": self.personality.value,
             "uuid": self.uuid,
+            "name": self.name,
             "stats": {name: getattr(self, name) for name in self.CORE_STATS},
             "x": self.x, "y": self.y, "direction": self.direction,
             "is_sleeping": self.is_sleeping, "is_sick": self.is_sick,
@@ -355,6 +357,7 @@ class Squid:
         squid = cls(Personality.from_value(data.get("personality")), tank_size, brain)
         if data.get("uuid"):
             squid.uuid = data["uuid"]
+        squid.name = str(data.get('name') or 'Squid').strip()[:32] or 'Squid'
         if "memory" in data:
             squid.memory = MemoryManager.from_dict(data["memory"])
         for name, val in data.get("stats", {}).items():

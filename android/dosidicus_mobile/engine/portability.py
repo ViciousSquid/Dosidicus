@@ -137,7 +137,7 @@ def import_squid(path: str, tank_size=(900, 500)) -> Simulation:
     for name in squid.CORE_STATS:
         if name in pet:
             setattr(squid, name, float(pet[name]))
-    for name in ('uuid', 'is_sick', 'is_sleeping', 'is_dead', 'age_seconds', 'direction'):
+    for name in ('uuid', 'name', 'is_sick', 'is_sleeping', 'is_dead', 'age_seconds', 'direction'):
         if name in pet:
             setattr(squid, name, pet[name])
     squid.x = pet.get('squid_x', pet.get('x', squid.x))

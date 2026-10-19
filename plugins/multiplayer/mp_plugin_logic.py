@@ -59,6 +59,8 @@ class MultiplayerPlugin:
 
         # --- Timers and Threads ---
         self.sync_thread: threading.Thread | None = None
+        self.sync_timer = None
+        self._last_world_sync = 0.0
         self.message_process_timer: QtCore.QTimer | None = None
         self.controller_update_timer: QtCore.QTimer | None = None
         self.controller_creation_timer: QtCore.QTimer | None = None
@@ -267,12 +269,7 @@ class MultiplayerPlugin:
         else:
             self.logger.warning("message_process_timer is None in enable(). Skipping.")
 
-        if hasattr(self, 'sync_timer') and self.sync_timer:
-            if not self.sync_timer.isActive():
-                self.logger.info("Sync timer not active, starting/restarting it.")
-                self.start_sync_timer()
-        else:
-            self.logger.warning("sync_timer not found or is None. Skipping.")
+        self.start_sync_timer()
 
         # Update status widget if applicable
         if self.status_widget:
@@ -294,6 +291,8 @@ class MultiplayerPlugin:
 
     def disable(self):
         """Disables the multiplayer plugin and cleans up resources."""
+        if self.sync_timer is not None:
+            self.sync_timer.stop()
         if not self.logger: # Should be set by now
              print("Multiplayer ERRA: Logger not set in disable()") # Fallback to print if logger is broken
              return
@@ -501,6 +500,7 @@ class MultiplayerPlugin:
         node_port = self.MULTICAST_PORT # Use the constant
         self.logger.info(f"Setup complete. Node: {node_id_val} on IP: {node_ip}. Listening for multicast on port: {node_port}")
         self.is_setup = True
+        self.start_sync_timer()
         return True
 
     def _network_health_check(self):
@@ -865,6 +865,14 @@ class MultiplayerPlugin:
         ry = float(getattr(squid, 'squid_y', 0.0)) + float(getattr(squid, 'squid_height', 0.0)) / 2
         if math.hypot(presence.x - rx, presence.y - ry) > self.FIGHT_CLOUD_RANGE:
             return False
+        sequence = getattr(self.entity_manager, 'start_fight_sequence', None)
+        actor = self.host_body.visitor(peer_uuid) if self.host_body is not None else None
+        if callable(sequence) and actor is not None:
+            already_busy = actor.body_busy_until > self.host_body.clock()
+            started = sequence(peer_uuid, self.visit_node_ids.get(peer_uuid), squid, actor)
+            if started and not already_busy:
+                actor.body_busy_until = self.host_body.clock() + 3.2
+            return started
         return self.entity_manager.show_fight_cloud(
             peer_uuid, (rx + presence.x) / 2, (ry + presence.y) / 2)
 
@@ -2353,46 +2361,18 @@ class MultiplayerPlugin:
 
 
     def start_sync_timer(self):
-        """Starts a daemon thread for periodic game state synchronization."""
-        if not self.logger: return
-        if self.sync_thread and self.sync_thread.is_alive():
-            if self.debug_mode: self.logger.debug("Sync thread already running.")
-            return
+        """Drive the real remote-mind round trip on Qt's owning thread.
 
-        def game_state_sync_loop():
-            while True:
-                if not self.is_setup: # Check if plugin is still supposed to be running
-                    if self.debug_mode: self.logger.debug("SyncLoop: Plugin not setup or disabled, loop exiting.")
-                    break
-                try:
-                    if self.network_node and self.network_node.is_connected and \
-                       self.tamagotchi_logic and self.tamagotchi_logic.squid:
-                        
-                        # Dynamic sync interval based on local squid activity and peer count
-                        is_local_squid_moving = getattr(self.tamagotchi_logic.squid, 'is_moving', False)
-                        sync_delay_seconds = 0.3 if is_local_squid_moving else self.SYNC_INTERVAL # More frequent if moving
-                        
-                        num_peers = len(getattr(self.network_node, 'known_nodes', {}))
-                        if num_peers > 8: sync_delay_seconds *= 1.5 # Reduce load with many peers
-                        elif num_peers > 15: sync_delay_seconds *= 2.0
-                        sync_delay_seconds = max(0.2, min(sync_delay_seconds, 3.0)) # Clamp interval
-
-                        self.sync_game_state() # Send current state
-                        time.sleep(sync_delay_seconds)
-                    else:
-                        # If not connected or prerequisites missing, wait longer before retrying
-                        time.sleep(2.5) 
-                except ReferenceError: # Can happen during interpreter shutdown
-                    if self.debug_mode: self.logger.debug("SyncLoop: ReferenceError (likely app shutting down), loop exiting.")
-                    break
-                except Exception as e_sync:
-                    if self.debug_mode: self.logger.error(f"Error in game_state_sync_loop: {e_sync}", exc_info=True)
-                    time.sleep(3.0) # Wait a bit longer after an error
-        
-        self.sync_thread = threading.Thread(target=game_state_sync_loop, daemon=True)
-        self.sync_thread.start()
-        if self.debug_mode: self.logger.info("Game state synchronization thread started.")
-
+        No sync timer was ever constructed, so enable() skipped this path and
+        admitted visitors never received another frame or sent an intent.
+        Reading bodies/scenes and resolving contacts also belongs on this thread.
+        """
+        if self.sync_timer is None:
+            self.sync_timer = QtCore.QTimer()
+            self.sync_timer.setInterval(max(50, int(ROUND_TRIP_INTERVAL * 1000)))
+            self.sync_timer.timeout.connect(self.sync_game_state)
+        if not self.sync_timer.isActive():
+            self.sync_timer.start()
 
     def sync_game_state(self):
         """Collects and sends current local game state."""
@@ -2415,6 +2395,10 @@ class MultiplayerPlugin:
             except Exception as exc:
                 self.logger.error(f"Remote-mind round trip failed: {exc}", exc_info=True)
 
+            now = time.time()
+            if now - self._last_world_sync < self.SYNC_INTERVAL:
+                return
+            self._last_world_sync = now
             squid_current_state = self._get_squid_state()
             objects_current_state = self._get_objects_state() # Get state of syncable objects
 
@@ -3233,7 +3217,7 @@ class MultiplayerPlugin:
         # Stop all QTimers
         timers_to_manage = [
             'message_process_timer', 'controller_update_timer', 'controller_creation_timer',
-            'cleanup_timer_basic', 'connection_timer_basic'
+            'cleanup_timer_basic', 'connection_timer_basic', 'sync_timer'
         ]
         for timer_attr_name in timers_to_manage:
             timer_instance = getattr(self, timer_attr_name, None)
@@ -3261,25 +3245,10 @@ class MultiplayerPlugin:
                 except Exception as e_leave: # Socket might already be closed
                     if self.debug_mode: self.logger.error(f"Error sending player_leave message (socket may be closed): {e_leave}", exc_info=False) # No exc_info if expected
             
-            # Close socket and leave multicast group
-            if nn_ref.socket: 
-                try:
-                    if nn_ref.is_connected and hasattr(nn_ref, 'local_ip') and nn_ref.local_ip and \
-                       hasattr(mp_constants, 'MULTICAST_GROUP') and mp_constants.MULTICAST_GROUP:
-                        import socket as sock_module # Local import for cleanup
-                        mreq_leave = sock_module.inet_aton(mp_constants.MULTICAST_GROUP) + sock_module.inet_aton(nn_ref.local_ip)
-                        nn_ref.socket.setsockopt(sock_module.IPPROTO_IP, sock_module.IP_DROP_MEMBERSHIP, mreq_leave)
-                except AttributeError as e_attr: 
-                     if self.debug_mode: self.logger.warning(f"Attribute error during multicast group leave: {e_attr}")
-                except Exception as e_mcast_leave:
-                     if self.debug_mode: self.logger.warning(f"Error leaving multicast group: {e_mcast_leave}", exc_info=True)
-                finally:
-                    try:
-                        nn_ref.socket.close()
-                    except Exception: pass # Ignore errors on closing already closed socket
-            nn_ref.is_connected = False
-            nn_ref.socket = None
-        
+            # Stop and join the listener before closing its socket. Closing
+            # only the socket left the reconnect loop running through New Game.
+            nn_ref.close()
+
         # Cleanup visuals if entity_manager is not handling it or as a final sweep
         if self.entity_manager:
             self.entity_manager.cleanup_all() # Tell entity_manager to clean its own entities

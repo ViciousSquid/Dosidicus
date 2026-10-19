@@ -521,6 +521,17 @@ class Simulation:
             self._end_fight(None)
             return
 
+        if f['phase'] == 'approaching':
+            distance = math.hypot(squid.x-v['x'], squid.y-v['y'])
+            if distance > 38:
+                step = min(distance/2, 100 * dt)
+                dx, dy = (v['x']-squid.x)/distance*step, (v['y']-squid.y)/distance*step
+                squid.x += dx; squid.y += dy
+                v['x'] -= dx; v['y'] -= dy
+                return
+            f['phase'] = 'fighting'
+            f['until'] = now + 3.5
+
         # Grapple: jitter around the midpoint between the two combatants.
         mx, my = (squid.x + v["x"]) / 2, (squid.y + v["y"]) / 2
         squid.x += (mx - squid.x) * min(1.0, 3 * dt) + random.uniform(-9, 9)
@@ -542,9 +553,11 @@ class Simulation:
             self._end_fight(v)
 
     def _start_fight(self, v, instigator="visitor"):
+        if self.fight is not None:
+            return
         squid = self.squid
         now = squid.brain.sim_time
-        self.fight = {"visitor_id": v["id"], "phase": "fighting", "until": now + 3.5,
+        self.fight = {"visitor_id": v["id"], "phase": "approaching", "until": now + 3.5,
                       "instigator": instigator}
         squid.fighting = True
         v["fighting"] = True
@@ -555,10 +568,7 @@ class Simulation:
         squid.anxiety = min(100.0, squid.anxiety + 20.0)
         if instigator == "resident":
             self.stats.on_fight_instigated()
-        # both squids puff an ink cloud
-        for (ix, iy) in ((squid.x, squid.y), (v["x"], v["y"])):
-            self.ink_clouds.append({"x": ix, "y": iy, "t": now, "ttl": 3.0})
-        self.stats.on_ink_cloud()
+        # The renderer draws one shared fight cloud after the approach.
         who = "Your squid" if instigator == "resident" else v["name"]
         squid.remember("mental_state", "fight",
                        f"{who} started a fight!", {"anxiety": 20, "happiness": -12},

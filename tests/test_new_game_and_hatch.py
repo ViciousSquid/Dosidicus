@@ -66,7 +66,11 @@ def setUpModule():
         setattr(QtWidgets.QMessageBox, name, staticmethod(lambda *a, **k: 0))
     QtWidgets.QDialog.exec_ = lambda self: 0
 
-    import main as main_module
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('dosidicus_desktop_main_test',
+                                                os.path.join(_REPO_ROOT, 'main.py'))
+    main_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(main_module)
     MAIN = main_module
     main_module.TimedMessageBox = YesBox
     WINDOW = main_module.MainWindow(specified_personality=None, debug_mode=False)
@@ -92,6 +96,13 @@ def tearDownModule():
                 timer.stop()
             except Exception:
                 pass
+    if WINDOW is not None:
+        WINDOW._cancel_game_callbacks()
+        WINDOW.plugin_manager.unload_all_plugins()
+        WINDOW.squid.retire()
+        WINDOW.splash.timer.stop()
+        WINDOW.brain_window.deleteLater()
+        WINDOW.deleteLater()
     os.chdir(_PREV_CWD)
     _TMPDIR.cleanup()
 
@@ -229,16 +240,32 @@ class HatchTests(unittest.TestCase):
         self.assertTrue(parent.lifecycle.is_dead)
 
         recorder = Recorder()
+        transition_frames = []
+        begin_new_life = WINDOW._begin_new_life
+        def observe_reset(*args, **kwargs):
+            cover = WINDOW._hatch_cover
+            before = cover.grab().toImage()
+            starter = MAIN.SplashScreen(WINDOW)
+            self.assertEqual(before, starter.grab().toImage(),
+                             'handoff must use the exact first frame of a new game')
+            starter.deleteLater()
+            begin_new_life(*args, **kwargs)
+            self.assertIs(WINDOW.splash, cover)
+            after = WINDOW.splash.grab().toImage()
+            self.assertEqual(before, after, 'egg/new-game handoff must be pixel-identical')
+            transition_frames.append(after)
         with mock.patch.object(WINDOW.user_interface, 'show_message', recorder):
             # What the death's timer calls. No dialog can intervene: the
             # TimedMessageBox is never constructed on this path.
             with mock.patch.object(MAIN, 'TimedMessageBox',
-                                   side_effect=AssertionError("no dialogs")):
+                                   side_effect=AssertionError("no dialogs")), \
+                 mock.patch.object(WINDOW, '_begin_new_life', side_effect=observe_reset):
                 self.assertTrue(logic.begin_egg_hatching())
             WINDOW.splash.second_frame.emit()
             WINDOW.splash.finished.emit()
 
         self.assertIsNot(WINDOW.squid, parent)
+        self.assertEqual(len(transition_frames), 1)
         assert_newborn(self, parent_uuid, innate_pair, innate_value)
         self.assertIn("An egg is hatching!", recorder.messages)
         self.assertIn("A squid has hatched and you must look after him.",

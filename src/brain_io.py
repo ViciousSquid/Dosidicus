@@ -71,7 +71,8 @@ def normalise_brain(data, *, require_required=False):
     for name, raw in positions.items():
         if not isinstance(name, str) or not name:
             raise ValueError('Invalid neuron name')
-        original = (data.get('neurons') or {}).get(name, {})
+        original_neurons = data.get('neurons') or {}
+        original = original_neurons.get(name, {}) if isinstance(original_neurons, dict) else {}
         attributes = deepcopy(raw if isinstance(raw, dict) else original if isinstance(original, dict) else {})
         pos = attributes.get('position', [attributes.get('x', 0), attributes.get('y', 0)]) if isinstance(raw, dict) else raw
         if not isinstance(pos, (list, tuple)) or len(pos) != 2:

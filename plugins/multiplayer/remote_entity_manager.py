@@ -6,13 +6,13 @@ from typing import Dict, Any, Optional, List
 import logging
 import base64
 
-# AnimatableGraphicsItem class
-class AnimatableGraphicsItem(QtWidgets.QGraphicsPixmapItem, QtCore.QObject):
+# Keep one Qt base: combining QGraphicsPixmapItem and QObject gives the
+# same wrapper two C++ owners and can crash when a departed visitor is freed.
+class AnimatableGraphicsItem(QtWidgets.QGraphicsPixmapItem):
     def __init__(self, pixmap=None, parent=None):
         QtWidgets.QGraphicsPixmapItem.__init__(self, pixmap, parent)
-        QtCore.QObject.__init__(self)
         self._scale = 1.0
-    @QtCore.pyqtProperty(float)
+    @property
     def scale_factor(self): return self._scale
     @scale_factor.setter
     def scale_factor(self, value):
@@ -87,6 +87,7 @@ class RemoteEntityManager:
         #: Fight clouds on screen, one per pair of squid, keyed by the
         #: other squid's uuid.
         self._fight_clouds = {}
+        self._scuffles = {}
 
         self.position_update_timer = QtCore.QTimer()
         self.position_update_timer.timeout.connect(self._update_visuals_once_per_second)
@@ -532,6 +533,62 @@ class RemoteEntityManager:
     FIGHT_CLOUD_FILE = "fight_cloud.gif"
     FIGHT_CLOUD_MS = 2500
 
+    def start_fight_sequence(self, key, node_id, resident, actor):
+        """Bring both bodies together before playing one cloud over the pair."""
+        if key in self._scuffles:
+            return True
+        info = self.remote_squids.get(node_id)
+        if not info or not info.get('visual'):
+            return False
+        visual = info['visual']
+        initial = (float(resident.squid_x), float(resident.squid_y), float(actor.x), float(actor.y))
+        mx, my = (initial[0]+initial[2])/2, (initial[1]+initial[3])/2
+        moving = getattr(resident, 'can_move', True)
+        resident.can_move = False
+        clock = QtCore.QElapsedTimer()
+        clock.start()
+        timer = QtCore.QTimer()
+        entry = {'timer': timer, 'resident': resident, 'was_moving': moving}
+        self._scuffles[key] = entry
+
+        def tick():
+            if key not in self._scuffles:
+                return
+            elapsed = clock.elapsed()
+            if visual.scene() is not self.scene or getattr(getattr(resident, 'lifecycle', None), 'is_dead', False):
+                self._end_scuffle(key)
+                return
+            progress = min(1., elapsed / 650.)
+            progress = progress * progress * (3-2*progress)
+            resident.squid_x = initial[0] + (mx-20-initial[0])*progress
+            resident.squid_y = initial[1] + (my-initial[1])*progress
+            actor.x = initial[2] + (mx+20-initial[2])*progress
+            actor.y = initial[3] + (my-initial[3])*progress
+            resident.squid_item.setPos(resident.squid_x, resident.squid_y)
+            visual.setPos(actor.x, actor.y)
+            info['network_target_x'], info['network_target_y'] = actor.x, actor.y
+            self._update_dependent_items_position(info, actor.x, actor.y)
+            if elapsed >= 650 and not entry.get('cloud'):
+                entry['cloud'] = True
+                cx = mx + visual.boundingRect().width()/2
+                cy = my + visual.boundingRect().height()/2
+                self.show_fight_cloud(key, cx, cy)
+            if elapsed >= 3150:
+                self._end_scuffle(key)
+        timer.timeout.connect(tick)
+        timer.start(16)
+        tick()
+        return True
+
+    def _end_scuffle(self, key):
+        entry = self._scuffles.pop(key, None)
+        if entry:
+            entry['timer'].stop()
+            resident = entry['resident']
+            if not getattr(getattr(resident, 'lifecycle', None), 'is_dead', False):
+                resident.can_move = entry['was_moving']
+        self.hide_fight_cloud(key)
+
     def show_fight_cloud(self, key: str, x: float, y: float,
                          duration_ms: int = FIGHT_CLOUD_MS) -> bool:
         """One animated cloud over two squid that are about to scuffle.
@@ -553,6 +610,9 @@ class RemoteEntityManager:
         movie = QtGui.QMovie(path)
         if not movie.isValid():
             return False
+        # The GIF includes distant puffs. Scale its central cloud to obscure
+        # both 253px bodies, rather than fitting the entire puff canvas to one.
+        movie.setScaledSize(QtCore.QSize(904, 1056))
         item = QtWidgets.QGraphicsPixmapItem()
         item.setZValue(600)
         entry = {'movie': movie, 'item': item, 'x': float(x), 'y': float(y)}
@@ -625,6 +685,7 @@ class RemoteEntityManager:
         if visual and visual.scene():visual.scene().removeItem(visual)
         if self.debug_mode:self.logger.debug(f"Removed remote object {obj_id}")
     def cleanup_all(self): # Full method
+        for key in list(self._scuffles): self._end_scuffle(key)
         for key in list(self._fight_clouds.keys()):self.hide_fight_cloud(key)
         for nid in list(self.remote_squids.keys()):self.remove_remote_squid(nid)
         for oid in list(self.remote_objects.keys()):self.remove_remote_object(oid)

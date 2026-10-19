@@ -81,7 +81,7 @@ class VisitorActor:
                  'arrived_at', 'last_intent', 'last_intent_at', 'action',
                  'items_taken', 'pending_consequences', 'seq_seen',
                  'has_seen_resident', 'contact_since', 'mating_rolled',
-                 'mated_id', 'mating_announcements')
+                 'mated_id', 'mating_announcements', 'body_busy_until')
 
     def __init__(self, identity: SquidIdentity, visit_id: str,
                  x: float, y: float, now: float):
@@ -109,6 +109,7 @@ class VisitorActor:
         #: times to tell it.
         self.mated_id = ''
         self.mating_announcements = 0
+        self.body_busy_until = 0.0
 
     @property
     def uuid(self) -> str:
@@ -339,6 +340,9 @@ class HostBody:
         actor.seq_seen = intent.seq
         actor.last_intent = intent
         actor.last_intent_at = now
+        if now < actor.body_busy_until:
+            actor.action = 'fighting'
+            return True
         actor.action = intent.action
 
         handler = self._ACTIONS.get(intent.action)
