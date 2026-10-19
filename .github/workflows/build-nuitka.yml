@@ -1,13 +1,35 @@
 name: Build (Nuitka)
 
 on:
+  workflow_call:
+    inputs:
+      release_version:
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
 
 jobs:
   build:
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    timeout-minutes: 120
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            architecture: x64
+            asset: windows
+          - os: ubuntu-22.04
+            architecture: x64
+            asset: linux
+          - os: macos-latest
+            architecture: arm64
+            asset: macos-arm64
+          - os: macos-15-intel
+            architecture: x64
+            asset: macos-x64
 
     runs-on: ${{ matrix.os }}
 
@@ -18,28 +40,37 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          architecture: ${{ matrix.architecture }}
           cache: pip
+
+      - name: Apply release version
+        if: inputs.release_version != ''
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: python tools/release_support.py version --version "$RELEASE_VERSION"
+        shell: bash
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install nuitka pyqt5 numpy zstandard
+          pip install "nuitka==4.2.2" -r requirements.txt zstandard
 
       - name: Install macOS icon dependency
         if: runner.os == 'macOS'
         run: pip install imageio
 
-      - name: Disable Windows Defender during build
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Install Linux Qt runtime
+        if: runner.os == 'Linux'
         run: |
-          Set-MpPreference -DisableRealtimeMonitoring $true
-          Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-cursor0 patchelf
 
       - name: Build executable
         run: |
@@ -57,11 +88,13 @@ jobs:
             $PLATFORM_FLAGS \
             --assume-yes-for-downloads \
             --enable-plugin=pyqt5 \
+            --include-qt-plugins=sensible,platforms,styles,imageformats \
             --disable-plugin=options-nanny \
             --output-dir=build \
             --output-filename=Dosidicus \
             --include-package=src \
             --include-package=plugins \
+            --include-package=translations \
             --include-module=uuid \
             --include-module=src.brain_designer \
             --include-module=src.brain_designer_launcher \
@@ -112,18 +145,19 @@ jobs:
             TARGET_DIR="release"
           fi
 
-          # Copy runtime dependencies into the correct target directory
-          for item in *; do
-            case "$item" in
-              release|dist|build|__pycache__|*.spec|main.py) ;;
-              *) cp -r "$item" "$TARGET_DIR/" 2>/dev/null || true ;;
-            esac
-          done
+          python tools/release_support.py runtime --target "$TARGET_DIR"
 
       - name: Ad-hoc sign for macOS
         if: runner.os == 'macOS'
         run: |
           codesign --deep --force --sign - "release/Dosidicus.app"
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & ./release/Dosidicus.exe --help
+          if ($LASTEXITCODE -ne 0) { throw "Compiled application failed --help" }
 
       - name: Smoke test (Linux)
         if: runner.os == 'Linux'
@@ -190,19 +224,24 @@ jobs:
 
       - name: Create zip
         run: |
-          OS_NAME=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
+          OS_NAME="${{ matrix.asset }}"
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             # On macOS, zip ONLY the .app bundle itself from within the release folder
             cd release
             zip -r -y "../Dosidicus-${OS_NAME}.zip" Dosidicus.app
             cd ..
+          elif [[ "${{ runner.os }}" == "Linux" ]]; then
+            python -c "import shutil; shutil.make_archive('Dosidicus-linux', 'gztar', 'release')"
           else
-            # Windows and Linux zip the entire contents of the release directory
+            # Windows standalone distribution
             python -c "import shutil; shutil.make_archive('Dosidicus-${OS_NAME}', 'zip', 'release')"
           fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nuitka-${{ runner.os }}
-          path: Dosidicus-*.zip
+          name: nuitka-${{ matrix.asset }}
+          path: |
+            Dosidicus-*.zip
+            Dosidicus-*.tar.gz
+          if-no-files-found: error

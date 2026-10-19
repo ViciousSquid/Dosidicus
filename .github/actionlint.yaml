@@ -1,0 +1,6 @@
+# Official hosted labels added after actionlint 1.7.7's built-in runner list.
+# https://github.com/actions/runner-images#available-images
+self-hosted-runner:
+  labels:
+    - windows-11-vs2026-arm
+    - macos-15-intel

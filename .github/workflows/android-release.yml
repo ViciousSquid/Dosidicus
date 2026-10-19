@@ -22,6 +22,20 @@ name: Build Android Release APK
 #   base64 -w0 dosidicus.keystore   # paste into ANDROID_KEYSTORE_BASE64
 
 on:
+  workflow_call:
+    inputs:
+      version_override:
+        type: string
+        required: true
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASSWORD:
+        required: false
   workflow_dispatch:
     inputs:
       version_override:
@@ -36,9 +50,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # Android SDK + NDK are several GB; reclaim space the runner wastes on
       # toolchains we don't need so the download has room.
@@ -97,25 +115,14 @@ jobs:
 
       - name: Apply version override
         if: ${{ inputs.version_override != '' }}
-        working-directory: android
         env:
           VERSION_OVERRIDE: ${{ inputs.version_override }}
-        run: |
-          python - <<'PY'
-          import os, re
-          from pathlib import Path
-          version = os.environ['VERSION_OVERRIDE']
-          if not re.fullmatch(r'[0-9]+(?:\.[0-9]+){1,3}(?:[a-zA-Z0-9.-]*)?', version):
-              raise SystemExit('Invalid version name')
-          path = Path('buildozer.spec')
-          path.write_text(re.sub(r'^version = .*$', f'version = {version}', path.read_text(), flags=re.M))
-          PY
+        run: python tools/release_support.py version --version "$VERSION_OVERRIDE"
 
       - name: Decode signing keystore
         id: keystore
         if: ${{ env.HAS_KEYSTORE == 'true' }}
         env:
-          HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           umask 077
@@ -135,9 +142,11 @@ jobs:
           umask 077
           if [ -n "$DOSIDICUS_KEYSTORE" ]; then
             printf '%s' "$ANDROID_KEYSTORE_PASSWORD" > "$RUNNER_TEMP/store-password"
-            printf '%s' "$ANDROID_KEY_PASSWORD" > "$RUNNER_TEMP/key-password"
+            if [ -n "$ANDROID_KEY_PASSWORD" ]; then
+              printf '%s' "$ANDROID_KEY_PASSWORD" > "$RUNNER_TEMP/key-password"
+              export DOSIDICUS_KEYPASS_FILE="$RUNNER_TEMP/key-password"
+            fi
             export DOSIDICUS_STOREPASS_FILE="$RUNNER_TEMP/store-password"
-            export DOSIDICUS_KEYPASS_FILE="$RUNNER_TEMP/key-password"
           fi
           unset ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD
           set -o pipefail
@@ -178,3 +187,7 @@ jobs:
           name: buildozer-release-build-log
           path: android/build.log
           if-no-files-found: ignore
+
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore" "$RUNNER_TEMP/store-password" "$RUNNER_TEMP/key-password"
