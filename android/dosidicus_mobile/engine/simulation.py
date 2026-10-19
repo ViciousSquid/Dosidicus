@@ -363,7 +363,13 @@ class Simulation:
             mind.x, mind.y = v['x'], v['y']
             mind.update_needs(dt)
             mind.plant_targets = [d for d in self.decorations if d.get('category') == 'plant']
-            mind.brain.advance(dt, mind.sync_stats_to_brain(bool(self.food_items)), mind.is_sleeping)
+            signals = mind.sync_stats_to_brain(bool(self.food_items))
+            if 0 <= v['x'] <= w and 0 <= v['y'] <= h:
+                mind.brain.enhanced_neurogenesis.attach_social_sensor()
+                signals['conspecific_visible'] = 100.
+            elif 'conspecific_visible' in mind.brain.positions:
+                signals['conspecific_visible'] = 0.
+            mind.brain.advance(dt, signals, mind.is_sleeping)
             if getattr(mind, '_visit_decision_at', -1) < mind.brain.sim_time:
                 mind.decide(mind.brain.state, self.food_items)
                 mind._visit_decision_at = mind.brain.sim_time
@@ -556,6 +562,10 @@ class Simulation:
         if self.fight is not None:
             return
         squid = self.squid
+        from src.personality import can_initiate_fight
+        initiator = v.get('personality') if instigator == 'visitor' else squid.personality
+        if not can_initiate_fight(initiator):
+            return
         now = squid.brain.sim_time
         self.fight = {"visitor_id": v["id"], "phase": "approaching", "until": now + 3.5,
                       "instigator": instigator}
@@ -776,6 +786,13 @@ class Simulation:
         self._was_sick = squid.is_sick
         squid.plant_targets = [d for d in self.decorations if d.get('category') == 'plant']
         clamped = squid.sync_stats_to_brain(can_see_food=can_see)
+        w, h = self.tank_size
+        other_visible = any(0 <= v['x'] <= w and 0 <= v['y'] <= h for v in self.visitors)
+        if other_visible or 'conspecific_visible' in squid.brain.positions:
+            # The shared growth engine supplies the same sense organ and
+            # encounter concept as desktop; off-screen arrivals do not count.
+            squid.brain.enhanced_neurogenesis.attach_social_sensor()
+            clamped['conspecific_visible'] = 100. if other_visible else 0.
         from types import SimpleNamespace
         squid.memory_manager = squid.memory
         self.brain_window = SimpleNamespace(brain_widget=squid.brain)

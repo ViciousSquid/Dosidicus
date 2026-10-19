@@ -533,7 +533,7 @@ class RemoteEntityManager:
     FIGHT_CLOUD_FILE = "fight_cloud.gif"
     FIGHT_CLOUD_MS = 2500
 
-    def start_fight_sequence(self, key, node_id, resident, actor):
+    def start_fight_sequence(self, key, node_id, resident, actor, on_finished=None):
         """Bring both bodies together before playing one cloud over the pair."""
         if key in self._scuffles:
             return True
@@ -548,7 +548,8 @@ class RemoteEntityManager:
         clock = QtCore.QElapsedTimer()
         clock.start()
         timer = QtCore.QTimer()
-        entry = {'timer': timer, 'resident': resident, 'was_moving': moving}
+        entry = {'timer': timer, 'resident': resident, 'was_moving': moving,
+                 'on_finished': on_finished}
         self._scuffles[key] = entry
 
         def tick():
@@ -574,13 +575,13 @@ class RemoteEntityManager:
                 cy = my + visual.boundingRect().height()/2
                 self.show_fight_cloud(key, cx, cy)
             if elapsed >= 3150:
-                self._end_scuffle(key)
+                self._end_scuffle(key, completed=True)
         timer.timeout.connect(tick)
         timer.start(16)
         tick()
         return True
 
-    def _end_scuffle(self, key):
+    def _end_scuffle(self, key, completed=False):
         entry = self._scuffles.pop(key, None)
         if entry:
             entry['timer'].stop()
@@ -588,6 +589,8 @@ class RemoteEntityManager:
             if not getattr(getattr(resident, 'lifecycle', None), 'is_dead', False):
                 resident.can_move = entry['was_moving']
         self.hide_fight_cloud(key)
+        if entry and completed and entry.get('on_finished'):
+            entry['on_finished']()
 
     def show_fight_cloud(self, key: str, x: float, y: float,
                          duration_ms: int = FIGHT_CLOUD_MS) -> bool:
@@ -611,8 +614,8 @@ class RemoteEntityManager:
         if not movie.isValid():
             return False
         # The GIF includes distant puffs. Scale its central cloud to obscure
-        # both 253px bodies, rather than fitting the entire puff canvas to one.
-        movie.setScaledSize(QtCore.QSize(904, 1056))
+        # the pair, with room for the outer puffs without filling the tank.
+        movie.setScaledSize(QtCore.QSize(720, 840))
         item = QtWidgets.QGraphicsPixmapItem()
         item.setZValue(600)
         entry = {'movie': movie, 'item': item, 'x': float(x), 'y': float(y)}

@@ -431,15 +431,18 @@ def test_imported_desktop_actuators_control_the_mobile_body():
     assert carried_id in sim._rock_velocities
 
 
-def test_mobile_fight_brings_the_pair_together_before_the_shared_cloud_phase():
+def test_mobile_fight_brings_the_pair_together_before_the_shared_cloud_phase(monkeypatch):
     sim = Simulation()
     visitor = sim.add_visitor(Simulation().to_dict(), name='Guest')
+    visitor['personality'] = 'adventurous'
     visitor['x'], visitor['y'] = sim.squid.x+110, sim.squid.y
     sim._start_fight(visitor)
     fight = sim.fight
     sim._start_fight(visitor)
     assert sim.fight is fight
     assert fight['phase'] == 'approaching'
+    # Measure the approach without the later grapple's random jitter.
+    monkeypatch.setattr(random, 'uniform', lambda low, high: 0.)
     for _ in range(30):
         sim._update_fight(1/30)
         if fight['phase'] == 'fighting':

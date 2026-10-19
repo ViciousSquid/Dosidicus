@@ -46,7 +46,8 @@ def worker(role, output):
         def exec_(self): return 0
         def get_result(self): return QtWidgets.QMessageBox.No
     main.TimedMessageBox = NoTutorial
-    window = main.MainWindow()
+    from src.personality import Personality
+    window = main.MainWindow(specified_personality=Personality.ADVENTUROUS)
     window.setWindowTitle('Dosidicus — ' + role.capitalize())
     window.show()
     window.resize(1100, 800)
@@ -129,6 +130,16 @@ def worker(role, output):
                         actor.contact_since = None
                         plugin.host_body.mating_chance = 1.0
                         state['mating_setup'] = True
+                if 'social' not in state:
+                    brain = window.brain_window.brain_widget
+                    for name, neuron in brain.enhanced_neurogenesis.functional_neurons.items():
+                        if neuron.represents_concept == 'social':
+                            origin = brain.ledger.origins[name]
+                            state['social'] = dict(name=name, at=round(elapsed, 2), reason=origin.deficit_summary,
+                                                   description=origin.describe())
+                            (output / f'{role}-social-provenance.json').write_text(
+                                json.dumps(state['social'], indent=2))
+                            break
                 lifecycle = window.squid.lifecycle
                 if role == 'host' and lifecycle.egg:
                     snapshot('egg')
@@ -155,6 +166,18 @@ def worker(role, output):
                               away=bool(plugin.visitor_mind and plugin.visitor_mind.perception.away),
                               max_clouds=state.get('max_clouds', 0),
                               handoff_identical=state.get('handoff_identical'), events=events)
+                status['social'] = state.get('social')
+                stats = window.squid.statistics
+                if stats.fights_won + stats.fights_lost:
+                    state['fight_outcomes'] = dict(won=stats.fights_won, lost=stats.fights_lost)
+                    if not state.get('statistics_captured'):
+                        tab = window.brain_window.statistics_tab
+                        tab._sync_from_squid_statistics()
+                        tab.update_display()
+                        tab.resize(650, 900)
+                        tab.grab().save(str(output / f'{role}-statistics.png'))
+                        state['statistics_captured'] = True
+                status['fight_outcomes'] = state.get('fight_outcomes')
                 status['can_move'] = window.squid.can_move
                 status['host_actors'] = [dict(x=a.x, y=a.y, seq=a.seq_seen, action=a.action,
                     contact=a.contact_since, rolled=a.mating_rolled, busy=a.body_busy_until,
@@ -208,6 +231,14 @@ def run(output):
     assert host['handoff_identical'], 'handoff frames differ'
     assert host['max_clouds'] == 1, 'expected one shared fighting cloud'
     assert (output / 'host-egg.png').exists(), 'mating did not produce an egg'
+    for status in (host, guest):
+        assert status['social'], 'first encounter did not grow a concept neuron'
+        assert status['social']['name'] in ('social', 'encounter')
+        assert status['social']['reason'] == 'Other squid encountered!'
+        assert status['social']['at'] >= 12., 'peer discovery alone must not grow the concept'
+        assert sum(status['fight_outcomes'].values()) == 1
+    assert host['fight_outcomes']['won'] == guest['fight_outcomes']['lost']
+    assert host['fight_outcomes']['lost'] == guest['fight_outcomes']['won']
     for role in ('host', 'guest'):
         subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-framerate', '10',
                         '-i', str(output / role / 'frames/%05d.png'), '-c:v', 'libx264',

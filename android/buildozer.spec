@@ -10,8 +10,8 @@ source.dir = .buildozer/mobile-source
 source.include_exts = py,png,jpg,gif,json,ttf,txt,ini
 source.include_patterns = assets/*,dosidicus_mobile/*,src/*,plugins/*,translations/*,engine_manifest.json
 
-version = 3.1.1
-android.numeric_version = 30101
+version = 3.1.2
+android.numeric_version = 30102
 
 # Runtime requirements. numpy + pillow have python-for-android recipes.
 # plyer supplies mobile device integrations; document import uses Android SAF.

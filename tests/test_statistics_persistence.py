@@ -23,6 +23,8 @@ EXPECTED_PERSISTENCE_KEYS = {
     "lowest_happiness": "lowest_happiness",
     "highest_satisfaction": "highest_satisfaction",
     "other_squids_encountered": "other_squids_encountered",
+    "fights_won": "fights_won",
+    "fights_lost": "fights_lost",
     "rocks_thrown": "total_rocks_thrown",
     "poops_thrown": "total_poops_thrown",
     "total_env_interactions": "total_env_interactions",

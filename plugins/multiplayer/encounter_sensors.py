@@ -21,9 +21,9 @@ What is NOT here:
   * no mapping from "another squid" to any action. Nothing in this module
     knows what fleeing is. The sensors report; the action neurons compete;
     the decision engine reads the winner.
-  * no social neuron type, and no growth. If an encounter turns out to be
-    something the network cannot represent, the existing capability monitor
-    will notice on its own evidence and say so.
+  * no social neuron type. The shared growth engine creates a novelty-class
+    Social/Encounter concept on the first sighting. Later behavioural deficits
+    remain the existing capability monitor's responsibility.
 """
 
 import math
@@ -91,7 +91,7 @@ class ConspecificPresence:
     """One other squid, as currently perceived."""
 
     __slots__ = ('identity', 'x', 'y', 'distance', 'closing_rate', 'ahead',
-                 'status', 'last_update', 'contest_until', '_last_distance',
+                 'status', 'last_update', 'contest_until', 'contest_by', '_last_distance',
                  '_last_distance_at')
 
     def __init__(self, identity: SquidIdentity, now: float):
@@ -104,6 +104,7 @@ class ConspecificPresence:
         self.status = ""
         self.last_update = now
         self.contest_until = 0.0
+        self.contest_by = 'local'
         self._last_distance: Optional[float] = None
         self._last_distance_at = now
 
@@ -194,11 +195,14 @@ class ConspecificView:
             del self.presences[uuid]
 
     # -- reading it -----------------------------------------------------
-    def nearest(self, now: Optional[float] = None) -> Optional[ConspecificPresence]:
+    def nearest(self, now: Optional[float] = None, bounds=None) -> Optional[ConspecificPresence]:
         """The other squid this one would be reacting to, if any."""
         stamp = now if now is not None else self.clock()
         live = [p for p in self.presences.values()
                 if stamp - p.last_update <= PRESENCE_TIMEOUT]
+        if bounds is not None:
+            width, height = bounds
+            live = [p for p in live if 0 <= p.x <= width and 0 <= p.y <= height]
         if not live:
             return None
         return min(live, key=lambda p: p.distance)
@@ -225,6 +229,7 @@ class ConspecificView:
         presence = self.presences.get(getattr(rival, 'uuid', ''))
         if presence is not None:
             presence.contest_until = stamp + CONTEST_LINGER
+            presence.contest_by = 'peer' if by == 'peer' else 'local'
         self._contest_log.append({
             'peer_uuid': getattr(rival, 'uuid', ''),
             'taken': bool(taken),
@@ -263,13 +268,14 @@ class EncounterSensors:
     """
 
     def __init__(self, view: ConspecificView, ledger=None, clock=time.time,
-                 remote=None):
+                 remote=None, bounds=None):
         self.view = view
         self.ledger = ledger
         self.clock = clock
         #: A VisitorMind, when this squid is capable of visiting. Consulted
         #: through duck typing so the sensors work with no multiplayer at all.
         self.remote = remote
+        self.bounds = bounds
         self._registered: List[str] = []
 
     # -- where the senses currently point --------------------------------
@@ -304,7 +310,8 @@ class EncounterSensors:
         }
 
     def _nearest(self) -> Optional[ConspecificPresence]:
-        return self.view.nearest(self.clock())
+        bounds = self.bounds() if callable(self.bounds) else self.bounds
+        return self.view.nearest(self.clock(), bounds=bounds)
 
     def visible(self) -> float:
         observed = self._observed('conspecific_visible')

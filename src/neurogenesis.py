@@ -255,9 +255,12 @@ class FunctionalNeuron:
         # driving it; this is the neuron's own copy, so a birth record can say
         # what it was grown to represent.
         self.represents_action: str = ""
+        self.represents_concept = str(self.origin_deficit.get("evidence", {}).get("concept", ""))
 
     @property
     def display_name(self) -> str:
+        if self.represents_concept == "social":
+            return self.name.replace("_", " ").title()
         type_key = f"neuron_type_{self.neuron_type}"
         type_default = self.neuron_type.capitalize()
         type_str = loc(type_key, default=type_default)
@@ -292,6 +295,8 @@ class FunctionalNeuron:
         neuron.strength_multiplier = data['strength_multiplier']
         neuron.origin_deficit = dict(data.get('origin_deficit') or {})
         neuron.represents_action = str(data.get('represents_action', '') or '')
+        neuron.represents_concept = str(data.get('represents_concept') or
+                                       neuron.origin_deficit.get('evidence', {}).get('concept', ''))
         return neuron
 
     def to_dict(self):
@@ -305,6 +310,7 @@ class FunctionalNeuron:
             'strength_multiplier': self.strength_multiplier,
             'origin_deficit': dict(self.origin_deficit),
             'represents_action': self.represents_action,
+            'represents_concept': self.represents_concept,
             'creation_context': {
                 'trigger_type': self.creation_context.trigger_type,
                 'timestamp': self.creation_context.timestamp,
@@ -654,6 +660,42 @@ class EnhancedNeurogenesis:
         if created: print(f"   🔗 {loc('log_reciprocal_links', default='Reciprocal links added')}: {', '.join(created)}")
         return wiring
     
+    def observe_social(self, visible=None) -> Optional[str]:
+        """Grow the first enduring representation that another squid exists.
+
+        Sensing a peer is sufficient evidence for this one basic distinction;
+        it does not wait for a repeated behavioural failure or a growth cooldown.
+        All subsequent encounters reuse the representation. It initially excites
+        anxiety, and experience can strengthen or weaken that association.
+        """
+        bw = self.brain_widget
+        if visible is None:
+            visible = bw.state.get('conspecific_visible', 0.)
+        if not isinstance(visible, (int, float)) or visible <= 0:
+            return None
+        for name, neuron in self.functional_neurons.items():
+            if neuron.represents_concept == 'social' and name in bw.neuron_positions:
+                return None
+        self.attach_social_sensor()
+        bw.state['conspecific_visible'] = 100.
+        deficit = Deficit(
+            kind='representation', key='concept:social',
+            summary='Other squid encountered!',
+            sources=['conspecific_visible'],
+            remedy='Represent another squid and initially excite anxiety; adjust the association through learning.',
+            evidence={'concept': 'social', 'first_encounter': True,
+                      'event': 'Other squid encountered!', 'conspecific_visible': 100.},
+            suggested_type='novelty', specialization='social_presence')
+        ctx = self._build_context('novelty', bw.state, {'other_squid_visible': True})
+        return self._create_neuron_internal(ctx, deficit=deficit)
+
+    def attach_social_sensor(self):
+        from .brain_constants import register_input_sensor
+        register_input_sensor('conspecific_visible', binary=True,
+                              position=(350, 50), owner='encounter')
+        self.brain_widget.neuron_positions.setdefault('conspecific_visible', (350, 50))
+        self.brain_widget.state.setdefault('conspecific_visible', 0.)
+
     def create_functional_neuron(self, ctx: ExperienceContext, is_emergency: bool = False,
                                  deficit: Optional[Deficit] = None) -> Optional[str]:
         """Grow one neuron to remedy a deficit. The single creation entry point."""
@@ -689,6 +731,8 @@ class EnhancedNeurogenesis:
         if trigger_type not in ('stress', 'novelty', 'reward', 'connector'):
             trigger_type = 'novelty'
 
+        required_concept = bool(deficit and deficit.evidence.get('concept') == 'social')
+
         # 0. EMERGENCY: a maximum-severity deficit is an emergency by
         #    definition - the squid is in trouble the network cannot get it out
         #    of. Acute anxiety remains an emergency for backward compatibility.
@@ -714,7 +758,7 @@ class EnhancedNeurogenesis:
                 else self._preview_specialization(ctx))
 
         # IF CAP REACHED: STRENGTHEN EXISTING (Even in Emergency)
-        if current_type_count >= max_for_this_type:
+        if current_type_count >= max_for_this_type and not required_concept:
             msg = loc('log_type_cap_reached', default="Type cap reached for {type} ({count}/{max}), strengthening existing", type=trigger_type, count=current_type_count, max=max_for_this_type)
             print(f"   {msg}")
 
@@ -738,7 +782,7 @@ class EnhancedNeurogenesis:
         # 2. GLOBAL NEURON LIMIT
         current_total = self._live_neuron_count()
         max_neurons = self.config.neurogenesis.get('max_neurons', 32)
-        if current_total >= max_neurons and not is_emergency:
+        if current_total >= max_neurons and not is_emergency and not required_concept:
             print(f"   Max neurons reached ({current_total}/{max_neurons})")
             return None
         elif is_emergency and current_total >= max_neurons:
@@ -784,7 +828,8 @@ class EnhancedNeurogenesis:
         #    weight put three meaningless intermediate values in the neuron's
         #    permanent record.
         plan: Dict[Tuple[str, str], Tuple[float, str]] = {}
-        connections = func_neuron.get_functional_connections(list(self.brain_widget.neuron_positions.keys()))
+        connections = ({} if required_concept else
+                       func_neuron.get_functional_connections(list(self.brain_widget.neuron_positions.keys())))
         for target, weight in connections.items():
             if abs(weight) < 0.05: continue
             plan[(neuron_name, target)] = (float(weight), 'specialisation')
@@ -795,7 +840,8 @@ class EnhancedNeurogenesis:
         for (src, dst), (weight, purpose) in plan.items():
             if self._wire(src, dst, weight, purpose, deficit):
                 wiring.append((src, dst, weight, purpose))
-        wiring.extend(self._make_reciprocal_connections(neuron_name, deficit))
+        if not required_concept:
+            wiring.extend(self._make_reciprocal_connections(neuron_name, deficit))
 
         # A neuron that cannot be driven, or cannot drive anything, is not a
         # neuron - it is an entry in a dictionary. Growing one is worse than
@@ -875,6 +921,13 @@ class EnhancedNeurogenesis:
             return []
         plan: List[Tuple[str, str, float, str]] = []
         state = getattr(self.brain_widget, 'state', {}) or {}
+
+        if func_neuron.represents_concept == 'social':
+            # Presence drives the concept, which initially excites anxiety.
+            # Subsequent experience can adjust that directed association.
+            return [('conspecific_visible', neuron_name, .9, 'remedy'),
+                    (neuron_name, 'curiosity', 0., 'remedy'),
+                    (neuron_name, 'anxiety', .3, 'remedy')]
 
         if deficit.kind == 'regulation':
             stat = deficit.target
@@ -1035,6 +1088,8 @@ class EnhancedNeurogenesis:
         The evocative name must still describe what the neuron does, so it is
         drawn from the specialisation's pool first.
         """
+        if spec == 'social_presence':
+            return random.choice(('social', 'encounter'))
         if not self._showmanship_enabled():
             return f"{trigger_type}_{spec}"
         pool = list(EVOCATIVE_NAMES.get(spec) or []) + \
@@ -1798,7 +1853,7 @@ class EnhancedNeurogenesis:
     def intelligent_pruning(self) -> Optional[str]:
         candidates = []
         for name, func_neuron in self.functional_neurons.items():
-            if func_neuron.neuron_type == 'connector': continue
+            if func_neuron.neuron_type == 'connector' or func_neuron.represents_concept: continue
             if time.time() - func_neuron.creation_context.timestamp < 300: continue
             score = 0.0
             score += func_neuron.utility_score * 0.4
@@ -1851,6 +1906,8 @@ class EnhancedNeurogenesis:
         self.functional_neurons = {}
         for name, neuron_data in data.get('functional_neurons', {}).items():
             self.functional_neurons[name] = FunctionalNeuron.from_dict(neuron_data)
+        if any(fn.represents_concept == 'social' for fn in self.functional_neurons.values()):
+            self.attach_social_sensor()
         if 'experience_buffer' in data:
             self.experience_buffer = ExperienceBuffer.from_dict(data['experience_buffer'])
         self.novelty_neuron_count = data.get('novelty_neuron_count', 0)

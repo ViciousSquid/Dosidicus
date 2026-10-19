@@ -56,6 +56,7 @@ def specimen():
     brain.output_bindings.append(dict(neuron_name=name, output_hook='neuron_output_change_color',
                                      threshold=65, hook_params=dict(red=100, green=200, blue=255)))
     brain.install_bindings()
+    brain.enhanced_neurogenesis.observe_social(100.)
     brain._brain_document = {'future_extension': {'note': 'preserve through every editor'}}
     return brain
 

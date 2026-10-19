@@ -22,6 +22,8 @@ from .mp_network_node import NetworkNode
 from .remote_entity_manager import RemoteEntityManager # Ensure this is imported if type hinting or direct use
 from .squid_multiplayer_autopilot import RemoteSquidController # Ensure this for autopilot logic
 from .asset_paths import resolve_local_asset, is_inside_assets
+from src.personality import can_initiate_fight
+from .remote_protocol import CONSEQUENCE_FIGHT
 from .identity import SquidIdentity
 from .consent import ConsentPolicy, ConsentDecision, MODE_OPEN, REASON_CLOSED
 from .peer_ledger import PeerLedger
@@ -610,7 +612,10 @@ class MultiplayerPlugin:
 
         self.encounter_sensors = EncounterSensors(self.conspecific_view,
                                                   self.peer_ledger,
-                                                  remote=self.visitor_mind)
+                                                  remote=self.visitor_mind,
+                                                  bounds=lambda: (
+                                                      getattr(self.tamagotchi_logic.user_interface, 'window_width', 1280),
+                                                      getattr(self.tamagotchi_logic.user_interface, 'window_height', 900)))
 
         # Published the way latest_vision_result is, so the engine's own
         # actuator can consult it through getattr and run without it.
@@ -859,6 +864,10 @@ class MultiplayerPlugin:
         presence = self.conspecific_view.presences.get(peer_uuid)
         if squid is None or presence is None:
             return False
+        initiator = (presence.identity.personality if presence.contest_by == 'peer'
+                     else getattr(squid, 'personality', None))
+        if not can_initiate_fight(initiator):
+            return False
         if getattr(squid, 'is_transitioning', False):
             return False            # the resident is away; nobody to fight here
         rx = float(getattr(squid, 'squid_x', 0.0)) + float(getattr(squid, 'squid_width', 0.0)) / 2
@@ -869,12 +878,33 @@ class MultiplayerPlugin:
         actor = self.host_body.visitor(peer_uuid) if self.host_body is not None else None
         if callable(sequence) and actor is not None:
             already_busy = actor.body_busy_until > self.host_body.clock()
-            started = sequence(peer_uuid, self.visit_node_ids.get(peer_uuid), squid, actor)
+            fight_id = str(uuid.uuid4())
+            started = sequence(peer_uuid, self.visit_node_ids.get(peer_uuid), squid, actor,
+                               on_finished=lambda: self.resolve_fight(actor, fight_id))
             if started and not already_busy:
                 actor.body_busy_until = self.host_body.clock() + 3.2
             return started
         return self.entity_manager.show_fight_cloud(
             peer_uuid, (rx + presence.x) / 2, (ry + presence.y) / 2)
+
+    def resolve_fight(self, actor, fight_id):
+        """Resolve a completed scuffle once, in the host that owns its bodies."""
+        if self.host_body is None or self.host_body.visitor(actor.uuid) is not actor:
+            return False
+        squid = getattr(self.tamagotchi_logic, 'squid', None)
+        stats = getattr(squid, 'statistics', None)
+        if stats is None or self._resident_is_dead():
+            return False
+        won = random.random() < .5
+        if not stats.record_fight_result(fight_id, won):
+            return False
+        for _ in range(3):
+            self.host_body._report(actor, CONSEQUENCE_FIGHT,
+                                   {'fight_id': fight_id, 'won': not won})
+        message = f"{squid.name} {'won' if won else 'lost'} the fight with {actor.identity.name}."
+        if hasattr(self.tamagotchi_logic, 'show_message'):
+            self.tamagotchi_logic.show_message(message)
+        return True
 
     def shutdown(self) -> None:
         """Called by PluginManager.unload_plugin, e.g. on New Game.
@@ -909,6 +939,9 @@ class MultiplayerPlugin:
             widget = getattr(brain_window, 'brain_widget', None)
             if widget is not None:
                 self.encounter_sensors.attach_to_brain(widget)
+                growth = getattr(widget, 'enhanced_neurogenesis', None)
+                if growth is not None:
+                    growth.observe_social(self.encounter_sensors.visible())
 
         now = time.time()
         self.conspecific_view.prune(now)

@@ -335,6 +335,9 @@ class ExternallyDriven:
         trace after the action ends, which is what gives spike timing and the
         eligibility traces something to work with.
         """
+        growth = getattr(self, 'enhanced_neurogenesis', None)
+        if growth is not None:
+            growth.observe_social()
         actions, _external = self._external_maps()
         if not actions:
             return {}

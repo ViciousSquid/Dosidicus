@@ -59,6 +59,14 @@ resident has a name badge, and names/tints survive desktop/mobile save interchan
 Nearby advertisements use the chosen name. A single animated fight cloud covers
 the two nearby squids after they approach each other.
 
+The first on-screen encounter grows one persistent novelty-class concept named
+**Social** or **Encounter**. Its provenance records **“Other squid encountered!”**,
+the visible-peer signal and initial connections. A positive perception-to-concept
+synapse drives it, with an initial positive connection to Anxiety. Experience
+can strengthen or weaken this association. Repeated encounters reuse it, ordinary pruning retains it,
+and the name, birth record and learned weights travel through all brain formats.
+A fresh newborn brain starts without this concept.
+
 Android reads selected document URIs through ContentResolver, supporting scoped
 storage and cloud file providers. Exports use Downloads and the Android share
 sheet. On API 24–28, legacy Downloads access still requires storage permission.

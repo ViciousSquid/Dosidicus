@@ -941,6 +941,24 @@ class FightCloudTests(unittest.TestCase):
         self.entities.hide_fight_cloud(VISITOR_UUID)
         self.assertEqual(self._clouds(), [])
 
+    def test_timid_cannot_initiate_but_can_be_in_a_fight_started_by_a_peer(self):
+        from dataclasses import replace
+        self._install_gif()
+        for local, peer, by, expected in (
+                ('timid', 'adventurous', 'local', 0),
+                ('adventurous', 'timid', 'peer', 0),
+                ('timid', 'timid', 'local', 0),
+                ('timid', 'timid', 'peer', 0),
+                ('timid', 'adventurous', 'peer', 1),
+                ('adventurous', 'timid', 'local', 1)):
+            with self.subTest(local=local, peer=peer, by=by):
+                plugin, presence = self._plugin(peer_x=700.)
+                plugin.tamagotchi_logic.squid.personality = local
+                presence.identity = replace(presence.identity, personality=peer)
+                plugin.conspecific_view.note_contest(presence, by=by)
+                self.assertEqual(len(self._clouds()), expected)
+                self.entities.hide_fight_cloud(VISITOR_UUID)
+
     def test_no_cloud_for_a_contest_across_the_tank(self):
         self._install_gif()
         plugin, presence = self._plugin(peer_x=1200.0)

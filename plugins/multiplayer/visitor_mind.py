@@ -35,7 +35,7 @@ from .identity import SquidIdentity
 from .remote_protocol import (
     ActionIntent, Consequence, PerceptionFrame, ProtocolError, VisitEnd,
     CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
-    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, END_DEPARTED, END_LINK_LOST, HEADINGS,
+    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, CONSEQUENCE_FIGHT, END_DEPARTED, END_LINK_LOST, HEADINGS,
     INTENT_LEASE, LINK_TIMEOUT, OBSERVABLE_SENSORS, new_visit_id,
 )
 
@@ -369,6 +369,16 @@ class VisitorMind:
             return consequence
 
         kind, detail = consequence.kind, consequence.detail
+
+        if kind == CONSEQUENCE_FIGHT:
+            fight_id, won = detail.get('fight_id'), detail.get('won')
+            stats = getattr(squid, 'statistics', None)
+            if (isinstance(fight_id, str) and 0 < len(fight_id) <= 64
+                    and isinstance(won, bool) and stats is not None):
+                if stats.record_fight_result(fight_id, won):
+                    if self.session is not None:
+                        self.session.observe(action='fighting', now=self.clock())
+            return consequence
 
         if kind == CONSEQUENCE_MATED:
             self._note_mated(detail.get('mating_id'))

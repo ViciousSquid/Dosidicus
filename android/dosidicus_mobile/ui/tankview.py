@@ -306,7 +306,7 @@ class TankView(Widget):
                 if visitor:
                     cx, cy = self._map((squid.x+visitor['x'])/2, (squid.y+visitor['y'])/2)
                     texture = self._fight_animation.texture
-                    height = squid_w * 4.2
+                    height = squid_w * 3.35
                     width = height * texture.width / texture.height
                     Color(1, 1, 1, 1)
                     Rectangle(texture=texture, pos=(cx-width/2, cy-height/2), size=(width, height))

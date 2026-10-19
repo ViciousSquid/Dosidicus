@@ -1,8 +1,10 @@
-# Android 3.1.1 CANARY
+# Android 3.1.2 CANARY
 
-[Download the signed ARM64 release APK](dosidicus-3.1.1-arm64-release.apk?raw=true)
+[Download the signed ARM64 release APK](dosidicus-3.1.2-arm64-release.apk?raw=true)
 
-Android 7.0 or newer (API 24), ARM64. Package `org.vicioussquid.dosidicus`, version code 30101. This is a signed release build. [SHA-256 checksum](SHA256SUMS).
+Android 7.0 or newer (API 24), ARM64. Package `org.vicioussquid.dosidicus`, version code 30102. This is a signed release build. [SHA-256 checksum](SHA256SUMS).
+
+Version 3.1.2 reduces the shared fight cloud by about 20%, keeping one cloud centred over both squid. The first sighting of another squid grows a persistent Social or Encounter neuron, with the provenance reason “Other squid encountered!” and an initial positive Anxiety connection. Timid squid never initiate fights. Desktop Brain Tool Statistics now records fights won and lost; these counters use the same save keys as mobile.
 
 The app uses the shared desktop 3.1 cognitive engine, native mobile controls, editable names and tint, a name badge, and one shared animated fight cloud after the squid approach each other. Brain JSON and desktop save ZIP files can be exchanged with the desktop simulation, Brain Designer and headless trainer. Mobile autosaves use the desktop ZIP sections and retain a mobile extension for its native world.
 

@@ -102,7 +102,11 @@ class NeuralBrain(HeadlessBrain):
         while self._tick_remainder >= 1.0 - 1e-9:
             self._tick_remainder = max(0.0, self._tick_remainder - 1.0)
             self.advance_clock()
-            self.propagate(clamped)
+            self.update_state(clamped)
+            social = self.enhanced_neurogenesis.observe_social()
+            if social:
+                born.append(social)
+            self.propagate()
             for stat, delta in self.compute_neural_modulation().items():
                 self.last_modulation[stat] = self.last_modulation.get(stat, 0.0) + delta
             self._learning_elapsed += 1.0
