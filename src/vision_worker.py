@@ -20,6 +20,11 @@ from typing import Dict, List, Tuple, Optional, Set, Any
 from dataclasses import dataclass, field
 from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker, QWaitCondition, QPointF
 
+try:
+    from .vision_cone import in_view_cone  # noqa: F401 - re-exported
+except ImportError:                         # standalone layout
+    from vision_cone import in_view_cone    # noqa: F401
+
 
 @dataclass
 class SquidVisionState:
@@ -61,9 +66,12 @@ class VisionResult:
     visible_plants: List[Tuple[float, float]] = field(default_factory=list)
     visible_rocks: List[Tuple[float, float]] = field(default_factory=list)
     visible_poop: List[Tuple[float, float]] = field(default_factory=list)
+    #: Other squid in the view cone - a visitor in this tank, as it is drawn.
+    visible_squids: List[Tuple[float, float]] = field(default_factory=list)
     
     # Cached values for quick access
     can_see_food: bool = False
+    can_see_squid: bool = False
     nearest_food_distance: float = float('inf')
     nearest_food_position: Optional[Tuple[float, float]] = None
     
@@ -251,8 +259,6 @@ class VisionWorker(QThread):
         # Vision cone length (diagonal of window)
         cone_length = math.sqrt(squid.window_width**2 + squid.window_height**2)
         
-        # Half cone angle for comparison
-        half_cone = squid.view_cone_angle / 2
         
         # Process each object
         food_items = []
@@ -279,18 +285,9 @@ class VisionWorker(QThread):
             dy = obj_cy - squid_cy
             distance = math.sqrt(dx*dx + dy*dy)
             
-            # Check if in vision cone
-            in_cone = False
-            if distance <= cone_length:
-                # Calculate angle to object
-                angle_to_obj = math.atan2(dy, dx)
-                
-                # Calculate angle difference (handle wrap-around)
-                angle_diff = abs(angle_to_obj - squid.current_view_angle)
-                while angle_diff > math.pi:
-                    angle_diff = 2 * math.pi - angle_diff
-                
-                in_cone = angle_diff <= half_cone
+            in_cone = in_view_cone(squid_cx, squid_cy, squid.current_view_angle,
+                                   squid.view_cone_angle, cone_length,
+                                   obj_cx, obj_cy)
             
             # Categorize visible objects
             pos = (obj.x, obj.y)
@@ -361,10 +358,15 @@ class VisionWorker(QThread):
             elif obj.category == 'poop':
                 if in_cone:
                     result.visible_poop.append(pos)
+
+            elif obj.category == 'squid':
+                if in_cone:
+                    result.visible_squids.append(pos)
         
         # Set food results
         result.visible_food = food_items
         result.can_see_food = len(food_items) > 0
+        result.can_see_squid = len(result.visible_squids) > 0
         result.nearest_food_distance = min_food_dist
         result.nearest_food_position = nearest_food
         
@@ -483,6 +485,23 @@ def extract_scene_objects(scene, food_items: List,
             ))
             obj_id += 1
         except:
+            pass
+
+    # Other squid: whatever the scene draws as one (category 'squid'), while
+    # it is actually shown - a visitor is hidden while it is still arriving.
+    try:
+        others = [item for item in scene.items()
+                  if getattr(item, 'category', None) == 'squid' and item.isVisible()]
+    except Exception:
+        others = []
+    for item in others:
+        try:
+            rect = item.sceneBoundingRect()
+            objects.append(SceneObject(x=rect.x(), y=rect.y(), width=rect.width(),
+                                       height=rect.height(), category='squid',
+                                       obj_id=obj_id))
+            obj_id += 1
+        except Exception:
             pass
     
     return objects

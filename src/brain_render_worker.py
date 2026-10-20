@@ -773,8 +773,8 @@ class BrainRenderWorker(QThread):
     
     def _draw_neurons(self, painter: QPainter, state: RenderState, scale: float):
         """Draw all neurons with localized labels, connector relay animations, and Hebbian pulse effects"""
-        from .brain_constants import (BINARY_NEURONS, neuron_row_color,
-                                      reveal_scale)
+        from .brain_constants import (BINARY_NEURONS, is_social_neuron,
+                                      neuron_row_color, reveal_scale)
 
         # Set up default font
         font = QFont("Arial", state.neuron_label_font_size)
@@ -908,6 +908,11 @@ class BrainRenderWorker(QThread):
                 else:
                     color = QColor(*state.state_colors.get(name, (255, 255, 150)))
                 self._draw_polygon(painter, x, y, 3, radius, color)
+
+            # ---------- SOCIAL (HEXAGON, captioned) ----------
+            elif is_social_neuron(name):
+                color = animation_color or QColor(*state.state_colors.get(name, (255, 160, 200)))
+                self._draw_polygon(painter, x, y, 6, radius, color, rotation=0)
 
             # ---------- CONNECTOR (HEXAGON) ----------
             elif shape == 'hexagon' or name.startswith('connector_'):

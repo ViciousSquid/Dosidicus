@@ -308,7 +308,36 @@ class Squid:
         margin = 30
         self.x = max(margin, min(w - margin, self.x))
         self.y = max(margin, min(h - margin, self.y))
-        self.direction = "right" if dx >= 0 else "left"
+        if not self.noticing:   # a held gaze is not turned away by swimming
+            self.direction = "right" if dx >= 0 else "left"
+
+    # ------------------------------------------------------------ attention
+    #: How long something that has just appeared holds the squid's gaze.
+    NOTICE_SECONDS = 4.0
+    _gaze_until = 0.0
+
+    def notice(self, x, seconds=NOTICE_SECONDS):
+        """Something has just appeared at x: turn to look at it, and hold the gaze.
+
+        The desktop squid's view cone swings onto a newcomer (src/squid.py
+        notice); this squid sees the way it faces, so it turns to face it.
+        Asleep, it notices nothing. Returns whether it looked.
+        """
+        if self.is_sleeping:
+            return False
+        self._gaze_until = self.brain.sim_time + seconds
+        self.look_towards(x)
+        return True
+
+    @property
+    def noticing(self):
+        return self.brain.sim_time < self._gaze_until
+
+    def look_towards(self, x):
+        self.direction = "right" if x >= self.x else "left"
+
+    def stop_noticing(self):
+        self._gaze_until = 0.0
 
     def move_towards(self, x, y):
         self._step(x - self.x, y - self.y, 1.2)

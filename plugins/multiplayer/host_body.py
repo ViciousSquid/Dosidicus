@@ -28,6 +28,8 @@ import random
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from src.vision_cone import FACING_ANGLES, VIEW_CONE_ANGLE, in_view_cone, proximity
+
 from .identity import SquidIdentity
 from .remote_protocol import (
     ActionIntent, Consequence, PerceptionFrame, ProtocolError,
@@ -56,7 +58,7 @@ MATING_CONTACT_RANGE = GRASP_RANGE
 
 #: Defaults for the mating roll; the plugin passes config.ini [Lifecycle].
 DEFAULT_MATING_CHANCE = 0.02
-DEFAULT_MATING_CONTACT_SECONDS = 5.0
+DEFAULT_MATING_CONTACT_SECONDS = 2.0
 
 #: How many round trips in a row a mating is reported to the visitor. The
 #: link is UDP and a single consequence can be lost; the visitor remembers the
@@ -173,9 +175,9 @@ class HostBody:
 
         Perception has to run both ways or only one squid is in the encounter.
         The host is already telling the visitor where the resident is; this is
-        the same fact in the other direction, and it is what lets the
-        resident's own conspecific sensors - and therefore its own network -
-        respond to having a guest.
+        the same fact in the other direction: the tank's record of who is
+        present, which contests, fights and the resident's own first-sight
+        reaction are built from. (Seeing it is the resident's vision's job.)
 
         Returns True the first time this visitor is seen, which is the only
         moment a first-sight reaction makes sense.
@@ -217,10 +219,10 @@ class HostBody:
         """Everything the visiting squid can observe from where it is.
 
         Note what this does not do: it does not consult the visitor's memory,
-        because the host does not have it, and it does not compute
-        conspecific_familiarity or the recalled-valence sensors. Those are the
-        visitor's own record of this resident and are filled in at home. A
-        host asserting them would be telling a squid what it remembers.
+        because the host does not have it, and it reports nothing a memory
+        would - familiarity, how past meetings went. Those are the visitor's
+        own record of this resident and stay at home. A host asserting them
+        would be telling a squid what it remembers.
         """
         now = self.clock()
         # Keep the resident's view of this visitor current on the same tick
@@ -241,7 +243,7 @@ class HostBody:
         # The moment the visitor could first see the resident. Purely
         # observable - the host computed the sensor itself - so noting it here
         # tells us nothing about what the visitor thinks of what it saw.
-        if not actor.has_seen_resident and frame.sensors.get('conspecific_visible'):
+        if not actor.has_seen_resident and frame.sensors.get('squid_in_view'):
             actor.has_seen_resident = True
             self.first_sightings.append(actor)
         return frame
@@ -268,26 +270,34 @@ class HostBody:
             float(len(self._scene_items('food'))) * 12.0, 0.0, 60.0)
 
         if resident is not None:
-            rx = float(getattr(resident, 'squid_x', 0.0))
-            ry = float(getattr(resident, 'squid_y', 0.0))
-            dx, dy = rx - actor.x, ry - actor.y
-            distance = math.hypot(dx, dy)
-            if distance <= SIGHT_RANGE:
-                sensors['conspecific_visible'] = 100.0
-                sensors['conspecific_proximity'] = _clamp(
-                    100.0 - distance / SIGHT_RANGE * 100.0, 0.0, 100.0)
-                sensors['conspecific_ahead'] = self._ahead(dx, dy, actor.facing)
-                closing = self._resident_closing(actor, distance)
-                if closing > 0:
-                    sensors['conspecific_closing'] = _clamp(closing / 60.0 * 100.0,
-                                                            0.0, 100.0)
-                elif closing < 0:
-                    sensors['conspecific_receding'] = _clamp(-closing / 60.0 * 100.0,
-                                                             0.0, 100.0)
-            view = self.conspecific_view
-            if view is not None and view.any_contesting(self.clock()):
-                sensors['conspecific_contesting'] = 100.0
+            if self._resident_in_view(actor, resident):
+                sensors['squid_in_view'] = 100.0
+            distance = math.hypot(float(getattr(resident, 'squid_x', 0.0)) - actor.x,
+                                  float(getattr(resident, 'squid_y', 0.0)) - actor.y)
+            sensors['squid_proximity'] = proximity(distance)
+        # Being in a scuffle is something the visitor's body feels.
+        if self.clock() < actor.body_busy_until:
+            sensors['in_fight'] = 100.0
         return sensors
+
+    def _resident_in_view(self, actor: VisitorActor, resident) -> bool:
+        """Would the visitor see the resident with its own eyes?
+
+        The same view cone the squid's vision uses at home
+        (vision_worker.in_view_cone), pointed the way the visitor is facing.
+        The visitor's body is the resident's size - they are both squid. A
+        resident that is itself away is not in the tank to be seen.
+        """
+        if resident is None or getattr(resident, 'is_transitioning', False):
+            return False
+        half_w = float(getattr(resident, 'squid_width', 0.0)) / 2
+        half_h = float(getattr(resident, 'squid_height', 0.0)) / 2
+        width, height = self._tank_size()
+        return in_view_cone(actor.x + half_w, actor.y + half_h,
+                            FACING_ANGLES.get(actor.facing, 0.0), VIEW_CONE_ANGLE,
+                            math.hypot(width, height),
+                            float(getattr(resident, 'squid_x', 0.0)) + half_w,
+                            float(getattr(resident, 'squid_y', 0.0)) + half_h)
 
     def _observable_items(self, actor: VisitorActor, resident) -> List[Dict[str, Any]]:
         """Objects the visitor can see, with host-issued ids.
@@ -476,7 +486,17 @@ class HostBody:
         interpretation. The environmental change IS the learning signal, at
         both ends.
         """
+        # Play goes at the nearest thing the visitor can see: the resident,
+        # if it is in view and nearer than the object it asked for.
+        resident = self._resident()
         item = self._resolve_target(actor, intent, contested_only=False)
+        if self._resident_in_view(actor, resident):
+            to_resident = math.hypot(float(getattr(resident, 'squid_x', 0.0)) - actor.x,
+                                     float(getattr(resident, 'squid_y', 0.0)) - actor.y)
+            if item is None or to_resident < math.hypot(_centre(item)[0] - actor.x,
+                                                         _centre(item)[1] - actor.y):
+                self._go_at_resident(actor, resident)
+                return
         if item is None:
             return
         contested = self._is_contested(item, actor)
@@ -505,6 +525,23 @@ class HostBody:
         self._take_from_scene(item)
         self._report(actor, CONSEQUENCE_CONTEST, {'won': True})
         self._note_contest(actor, item, taken=True)
+
+    def _go_at_resident(self, actor: VisitorActor, resident) -> None:
+        """Play aimed at the resident, the nearest thing in view.
+
+        The visitor swims to it; on reaching it the two are face to face, and
+        that confrontation goes the way every contest here goes - through the
+        resident's senses (note_contest). What it becomes is the tank's rules,
+        not this method's: a fight if the visitor is a squid that starts them
+        (MultiplayerPlugin.show_fight_cloud), otherwise simply contact, which is
+        where a mating can happen (_resolve_contact).
+        """
+        rx = float(getattr(resident, 'squid_x', 0.0))
+        ry = float(getattr(resident, 'squid_y', 0.0))
+        if math.hypot(rx - actor.x, ry - actor.y) > GRASP_RANGE:
+            self._step_toward(actor, rx, ry)
+            return
+        self._note_contest(actor, None, taken=False)
 
     def _is_contested(self, item, actor: VisitorActor) -> bool:
         """Is this object nearer the resident than the visitor?"""
@@ -664,8 +701,8 @@ class HostBody:
         """Make the contest perceptible to the RESIDENT, through its senses.
 
         The resident learns about this the same way it learns about anything:
-        its conspecific_contesting sensor comes on, and whatever that does to
-        its drives is what its own network has to work with.
+        through what happens to it next, which its own network has to work
+        with. The contest is also what can turn into a fight.
         """
         view = self.conspecific_view
         if view is None or not hasattr(view, 'note_contest'):
@@ -704,24 +741,6 @@ class HostBody:
         consequence = Consequence(actor.visit_id, kind, self.clock(), detail)
         actor.pending_consequences.append(consequence)
         return consequence
-
-    @staticmethod
-    def _ahead(dx: float, dy: float, facing: str) -> float:
-        vectors = {'right': (1.0, 0.0), 'left': (-1.0, 0.0),
-                   'up': (0.0, -1.0), 'down': (0.0, 1.0)}
-        vector = vectors.get(facing)
-        length = math.hypot(dx, dy)
-        if vector is None or length < 1e-6:
-            return 0.0
-        cosine = (dx * vector[0] + dy * vector[1]) / length
-        return _clamp((cosine + 1.0) * 50.0, 0.0, 100.0)
-
-    def _resident_closing(self, actor: VisitorActor, distance: float) -> float:
-        view = self.conspecific_view
-        if view is None:
-            return 0.0
-        presence = view.presences.get(actor.uuid)
-        return float(getattr(presence, 'closing_rate', 0.0) or 0.0)
 
     def _log(self, message: str) -> None:
         if self.logger is not None:

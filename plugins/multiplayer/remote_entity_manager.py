@@ -224,6 +224,9 @@ class RemoteEntityManager:
         remote_visual.setZValue(5)
         remote_visual.setOpacity(self.remote_opacity)
         remote_visual.setScale(1.0)
+        # Another squid, to this tank's resident's eyes: the vision system
+        # sees it exactly as it sees food or a rock (vision_worker).
+        remote_visual.category = 'squid'
         self.scene.addItem(remote_visual)
 
         id_text = self.text_pool.acquire()

@@ -64,6 +64,7 @@ class Simulation:
         self.visitors = []
         self._visitor_minds = {}
         self._visitor_id = 0
+        self._watching = None      # the visitor whose arrival holds the gaze
         self.visitor_event = None   # set for one tick when a visitor does something
         # Territorial fight between the resident and a visitor (transient).
         self.fight = None
@@ -75,13 +76,53 @@ class Simulation:
         self.hatch_frames = 6          # anim01..anim06, one per second
 
     # ------------------------------------------------------------- world API
+    #: How far a squid perceives food.
+    PERCEPTION_RADIUS = 260
+
     def food_visible(self):
         """Squid can see food within a perception radius."""
-        radius = 260
         return any(
-            math.hypot(self.squid.x - f["x"], self.squid.y - f["y"]) <= radius
+            math.hypot(self.squid.x - f["x"], self.squid.y - f["y"]) <= self.PERCEPTION_RADIUS
             for f in self.food_items
         )
+
+    def _squid_proximity(self, x, y, others):
+        """How near the nearest of `others` is, 0-100, as on desktop."""
+        from src.vision_cone import proximity
+        w, h = self.tank_size
+        inside = [(ox, oy) for ox, oy in others if 0 <= ox <= w and 0 <= oy <= h]
+        if not inside:
+            return 0.
+        return proximity(min(math.hypot(ox - x, oy - y) for ox, oy in inside))
+
+    def _sees_squid_at(self, x, y, facing, other_x, other_y):
+        """Another squid, seen as the desktop squid sees one: by the view cone
+        (src/vision_cone.py) pointed the way this squid faces, in the tank."""
+        from src.vision_cone import FACING_ANGLES, VIEW_CONE_ANGLE, in_view_cone
+        w, h = self.tank_size
+        return (0 <= other_x <= w and 0 <= other_y <= h
+                and in_view_cone(x, y, FACING_ANGLES.get(facing, 0.0), VIEW_CONE_ANGLE,
+                                 math.hypot(w, h), other_x, other_y))
+
+    def _notice_newcomers(self, squid):
+        """A visitor coming into the tank catches the resident's eye, as on desktop.
+
+        The resident turns to it as it enters and watches it while the gaze
+        holds (Squid.notice); whether it is then seen is the view cone's call.
+        """
+        w, h = self.tank_size
+        for v in self.visitors:
+            if not v.get('noticed') and 0 <= v['x'] <= w and 0 <= v['y'] <= h:
+                v['noticed'] = True
+                if squid.notice(v['x']):
+                    self._watching = v['id']
+        if not squid.noticing:
+            return
+        watched = next((v for v in self.visitors if v['id'] == self._watching), None)
+        if watched is None:
+            squid.stop_noticing()     # it has gone; nothing to look at
+        else:
+            squid.look_towards(watched['x'])
 
     MAX_FOOD = 5  # never let the tank get more crowded than this
 
@@ -364,11 +405,14 @@ class Simulation:
             mind.update_needs(dt)
             mind.plant_targets = [d for d in self.decorations if d.get('category') == 'plant']
             signals = mind.sync_stats_to_brain(bool(self.food_items))
-            if 0 <= v['x'] <= w and 0 <= v['y'] <= h:
-                mind.brain.enhanced_neurogenesis.attach_social_sensor()
-                signals['conspecific_visible'] = 100.
-            elif 'conspecific_visible' in mind.brain.positions:
-                signals['conspecific_visible'] = 0.
+            # The resident, as percepts - not neurons. The shared engine grows
+            # the visitor's social senses from them.
+            seen = self._sees_squid_at(v['x'], v['y'], v.get('dir', 'right'),
+                                       self.squid.x, self.squid.y)
+            mind.brain.perceive('squid_in_view', 100. if seen else 0.)
+            mind.brain.perceive('squid_proximity', self._squid_proximity(
+                v['x'], v['y'], [(self.squid.x, self.squid.y)]))
+            mind.brain.perceive('in_fight', 100. if v['fighting'] else 0.)
             mind.brain.advance(dt, signals, mind.is_sleeping)
             if getattr(mind, '_visit_decision_at', -1) < mind.brain.sim_time:
                 mind.decide(mind.brain.state, self.food_items)
@@ -787,13 +831,17 @@ class Simulation:
         self._was_sick = squid.is_sick
         squid.plant_targets = [d for d in self.decorations if d.get('category') == 'plant']
         clamped = squid.sync_stats_to_brain(can_see_food=can_see)
-        w, h = self.tank_size
-        other_visible = any(0 <= v['x'] <= w and 0 <= v['y'] <= h for v in self.visitors)
-        if other_visible or 'conspecific_visible' in squid.brain.positions:
-            # The shared growth engine supplies the same sense organ and
-            # encounter concept as desktop; off-screen arrivals do not count.
-            squid.brain.enhanced_neurogenesis.attach_social_sensor()
-            clamped['conspecific_visible'] = 100. if other_visible else 0.
+        self._notice_newcomers(squid)
+        # Another squid, as on desktop, is percepts, not sense organs: the
+        # shared engine grows its social senses from them the first time they
+        # matter. Off-screen arrivals are not perceived.
+        other_visible = any(self._sees_squid_at(squid.x, squid.y, squid.direction,
+                                                v['x'], v['y'])
+                            for v in self.visitors)
+        squid.brain.perceive('squid_in_view', 100. if other_visible else 0.)
+        squid.brain.perceive('squid_proximity', self._squid_proximity(
+            squid.x, squid.y, [(v['x'], v['y']) for v in self.visitors]))
+        squid.brain.perceive('in_fight', 100. if self.fight is not None else 0.)
         from types import SimpleNamespace
         squid.memory_manager = squid.memory
         self.brain_window = SimpleNamespace(brain_widget=squid.brain)

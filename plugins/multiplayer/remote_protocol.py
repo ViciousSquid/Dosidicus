@@ -65,32 +65,25 @@ LINK_TIMEOUT = 4.0
 #: ...and this long, and the host ends the visit outright.
 VISIT_ABANDON_TIMEOUT = 12.0
 
-#: The sensors a HOST is allowed to compute for a visitor. Everything here is
+#: The values a HOST is allowed to compute for a visitor. Everything here is
 #: something the host can see from its own tank.
 #:
-#: Note what is absent: conspecific_familiarity, conspecific_recalled_good and
-#: conspecific_recalled_bad. Those are the visitor's memory of the resident,
-#: and they are computed at home from the visitor's own PeerLedger. A host
-#: cannot know them and must never assert them.
+#: The first three feed the visitor's own built-in sensors. The rest are
+#: percepts, not neurons, which reach the visitor's network only through the
+#: social senses it grows (src.brain_constants.SOCIAL_SENSORS): squid_in_view
+#: is its vision of the resident, by the same view cone its own vision uses
+#: (src.vision_cone); squid_proximity how close the resident is; in_fight that
+#: its body is in a scuffle.
+#:
+#: Nothing here is the visitor's memory of the resident: that stays at home,
+#: and a host cannot know it.
 OBSERVABLE_SENSORS = (
     'can_see_food',
     'plant_proximity',
     'external_stimulus',
-    'conspecific_visible',
-    'conspecific_proximity',
-    'conspecific_ahead',
-    'conspecific_closing',
-    'conspecific_receding',
-    'conspecific_contesting',
-)
-
-#: Sensors the host is never permitted to send, even if it somehow had them.
-#: Checked on arrival, so a hostile or buggy host cannot inject a memory the
-#: visiting squid does not have.
-PRIVATE_SENSORS = (
-    'conspecific_familiarity',
-    'conspecific_recalled_good',
-    'conspecific_recalled_bad',
+    'squid_in_view',
+    'squid_proximity',
+    'in_fight',
 )
 
 #: Keys that would carry private cognitive state. A message containing any of
@@ -240,10 +233,6 @@ class PerceptionFrame:
         sensors = payload.get('sensors')
         if not isinstance(sensors, dict):
             raise ProtocolError("perception frame has no sensors")
-        for name in PRIVATE_SENSORS:
-            if name in sensors:
-                raise ProtocolError(
-                    f"a host may not assert '{name}' - it is the visitor's own memory")
         frame.sensors = {name: _clamp(value, 0.0, 100.0)
                          for name, value in sensors.items()
                          if name in OBSERVABLE_SENSORS}
@@ -461,7 +450,7 @@ __all__ = [
     'MSG_VISIT_END', 'REMOTE_MIND_MESSAGES',
     'ROUND_TRIP_INTERVAL', 'INTENT_LEASE', 'LINK_TIMEOUT',
     'VISIT_ABANDON_TIMEOUT',
-    'OBSERVABLE_SENSORS', 'PRIVATE_SENSORS', 'FORBIDDEN_KEYS', 'HEADINGS',
+    'OBSERVABLE_SENSORS', 'FORBIDDEN_KEYS', 'HEADINGS',
     'CONSEQUENCE_CONTEST', 'CONSEQUENCE_ATE', 'CONSEQUENCE_BLOCKED',
     'CONSEQUENCE_EJECTED', 'CONSEQUENCE_MATED', 'CONSEQUENCE_FIGHT', 'CONSEQUENCE_KINDS',
     'mating_id_for',

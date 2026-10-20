@@ -1,29 +1,20 @@
 # File: encounter_sensors.py
-"""Another squid, as something the brain can sense.
+"""Where the other squid in this tank are - bookkeeping, not sense organs.
 
-These are ordinary input sensors. They go in through
-`PluginManager.register_neuron_handler` like any plugin sensor, and they are
-classified through `brain_constants.register_input_sensor` so that the four
-systems which reason about pure inputs - propagation's resting levels, the
-capability monitor's situation signatures, the causal ledger's cues, and the
-rule about what a learned synapse may point at - all see them as sense organs.
+A squid sees another squid with its ordinary vision (src/vision_worker.py: a
+visitor is drawn as category 'squid', and the view cone decides whether it is
+seen). That, how close one is, and what it remembers of the one it is looking
+at reach the brain as percepts, and touch the network only through the social
+senses neurogenesis grows the first time each matters
+(src.brain_constants.SOCIAL_SENSORS). No sensor neuron is registered here
+(those earlier versions added are dropped from a save as it loads - see
+src.brain_constants.RETIRED_NEURONS).
 
-Every one of them rests at ZERO, and zero always means "nothing to report".
-That is why there is no single signed "how do I feel about this squid"
-sensor: a neutral reading of 50 would be indistinguishable from a real
-mid-strength signal, and a squid that has never met anyone would be born with
-half a sensation of something. Anything with two directions is therefore two
-sensors in push-pull - closing and receding, recalled-good and recalled-bad -
-which is the same shape the engine's own regulators take.
-
-What is NOT here:
-
-  * no mapping from "another squid" to any action. Nothing in this module
-    knows what fleeing is. The sensors report; the action neurons compete;
-    the decision engine reads the winner.
-  * no social neuron type. The shared growth engine creates a novelty-class
-    Social/Encounter concept on the first sighting. Later behavioural deficits
-    remain the existing capability monitor's responsibility.
+What is here is the tank's own record of who is present and what passed
+between them - positions, contests - which encounters, memories, fights and
+the fight cloud are built from. Nothing here maps "another squid" to an
+action: the social neurons drive the squid's own action neurons, and the
+decision engine reads the winner.
 """
 
 import math
@@ -31,32 +22,6 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from .identity import SquidIdentity
-
-#: (name, binary, position, description). The position is where the neuron
-#: would like to sit if it is drawn; brain_constants keeps these apart from
-#: the built-in layout so the default brain is untouched.
-SENSOR_SPECS = (
-    ('conspecific_visible', True, (350, 50),
-     'Another squid is in view'),
-    ('conspecific_proximity', False, (350, 150),
-     'How close the nearest other squid is'),
-    ('conspecific_ahead', False, (350, 250),
-     'How squarely the other squid is in front of this one'),
-    ('conspecific_closing', False, (350, 350),
-     'The other squid is getting closer'),
-    ('conspecific_receding', False, (450, 50),
-     'The other squid is moving away'),
-    ('conspecific_familiarity', False, (450, 150),
-     'How well this individual is known'),
-    ('conspecific_recalled_good', False, (450, 250),
-     'Past encounters with this individual went well'),
-    ('conspecific_recalled_bad', False, (450, 350),
-     'Past encounters with this individual went badly'),
-    ('conspecific_contesting', True, (550, 50),
-     'The other squid is contesting an object with this one'),
-)
-
-SENSOR_NAMES = tuple(spec[0] for spec in SENSOR_SPECS)
 
 #: Beyond this a squid is a speck on the far side of the tank: visible,
 #: but proximity reads zero.
@@ -252,237 +217,5 @@ class ConspecificView:
         return log
 
 
-class EncounterSensors:
-    """Registers the conspecific sensors and computes their values.
-
-    One set of sense organs for the squid's whole life. Where they POINT
-    depends on where the squid is:
-
-      at home     the local ConspecificView, fed by remote squid state
-      away        the host tank's perception frame
-
-    with one deliberate exception. Familiarity and recalled valence are read
-    from this squid's own PeerLedger in BOTH cases, because they are what this
-    squid remembers and no host can be allowed to assert them. Away, they are
-    keyed on the identity of the resident the host named in the frame.
-    """
-
-    def __init__(self, view: ConspecificView, ledger=None, clock=time.time,
-                 remote=None, bounds=None):
-        self.view = view
-        self.ledger = ledger
-        self.clock = clock
-        #: A VisitorMind, when this squid is capable of visiting. Consulted
-        #: through duck typing so the sensors work with no multiplayer at all.
-        self.remote = remote
-        self.bounds = bounds
-        self._registered: List[str] = []
-
-    # -- where the senses currently point --------------------------------
-    def _away(self) -> bool:
-        remote = self.remote
-        return bool(remote is not None and remote.perception.linked)
-
-    def _observed(self, name: str) -> Optional[float]:
-        """The host's value for an observable sensor, if we are its guest."""
-        if not self._away():
-            return None
-        return _clamp(self.remote.perception.sensor(name, 0.0))
-
-    def _remembered(self, name: str) -> Optional[float]:
-        """Our own memory of whoever we are looking at, wherever we are."""
-        if not self._away():
-            return None
-        return _clamp(self.remote.recalled_sensors().get(name, 0.0))
-
-    # -- the sensors ----------------------------------------------------
-    def handlers(self) -> Dict[str, Callable[[], float]]:
-        return {
-            'conspecific_visible': self.visible,
-            'conspecific_proximity': self.proximity,
-            'conspecific_ahead': self.ahead,
-            'conspecific_closing': self.closing,
-            'conspecific_receding': self.receding,
-            'conspecific_familiarity': self.familiarity,
-            'conspecific_recalled_good': self.recalled_good,
-            'conspecific_recalled_bad': self.recalled_bad,
-            'conspecific_contesting': self.contesting,
-        }
-
-    def _nearest(self) -> Optional[ConspecificPresence]:
-        bounds = self.bounds() if callable(self.bounds) else self.bounds
-        return self.view.nearest(self.clock(), bounds=bounds)
-
-    def visible(self) -> float:
-        observed = self._observed('conspecific_visible')
-        if observed is not None:
-            return observed
-        return 100.0 if self._nearest() is not None else 0.0
-
-    def proximity(self) -> float:
-        """Closer reads higher, on the same shape as plant_proximity."""
-        observed = self._observed('conspecific_proximity')
-        if observed is not None:
-            return observed
-        nearest = self._nearest()
-        if nearest is None:
-            return 0.0
-        return _clamp(100.0 - (nearest.distance / PROXIMITY_RANGE * 100.0))
-
-    def ahead(self) -> float:
-        observed = self._observed('conspecific_ahead')
-        if observed is not None:
-            return observed
-        nearest = self._nearest()
-        return 0.0 if nearest is None else _clamp(nearest.ahead)
-
-    def closing(self) -> float:
-        observed = self._observed('conspecific_closing')
-        if observed is not None:
-            return observed
-        nearest = self._nearest()
-        if nearest is None or nearest.closing_rate <= 0:
-            return 0.0
-        return _clamp(nearest.closing_rate / FULL_CLOSING_SPEED * 100.0)
-
-    def receding(self) -> float:
-        observed = self._observed('conspecific_receding')
-        if observed is not None:
-            return observed
-        nearest = self._nearest()
-        if nearest is None or nearest.closing_rate >= 0:
-            return 0.0
-        return _clamp(-nearest.closing_rate / FULL_CLOSING_SPEED * 100.0)
-
-    def familiarity(self) -> float:
-        """Zero for a squid never met before, which is the whole point.
-
-        A stranger is not represented by a special case or a default guess -
-        it is represented by a sense organ with nothing to report, which is
-        exactly what uncertainty about an unfamiliar individual is.
-        """
-        remembered = self._remembered('conspecific_familiarity')
-        if remembered is not None:
-            return remembered
-        nearest = self._nearest()
-        if nearest is None or self.ledger is None:
-            return 0.0
-        return _clamp(self.ledger.familiarity(nearest.uuid))
-
-    def recalled_good(self) -> float:
-        remembered = self._remembered('conspecific_recalled_good')
-        if remembered is not None:
-            return remembered
-        nearest = self._nearest()
-        if nearest is None or self.ledger is None:
-            return 0.0
-        return _clamp(self.ledger.recalled_good(nearest.uuid))
-
-    def recalled_bad(self) -> float:
-        remembered = self._remembered('conspecific_recalled_bad')
-        if remembered is not None:
-            return remembered
-        nearest = self._nearest()
-        if nearest is None or self.ledger is None:
-            return 0.0
-        return _clamp(self.ledger.recalled_bad(nearest.uuid))
-
-    def contesting(self) -> float:
-        observed = self._observed('conspecific_contesting')
-        if observed is not None:
-            return observed
-        return 100.0 if self.view.any_contesting(self.clock()) else 0.0
-
-    # -- registration ---------------------------------------------------
-    def register(self, plugin_manager, brain_constants, plugin_name='Multiplayer',
-                 brain_widget=None) -> List[str]:
-        """Make these sensors real, in all three places they have to be real.
-
-        1. the plugin manager, so BrainNeuronHooks will call them;
-        2. brain_constants, so every system that reasons about pure inputs
-           treats them as sense organs;
-        3. the brain itself, because BrainNeuronHooks only reads handlers for
-           neurons that actually exist in neuron_positions.
-
-        Step 2 is the one that did not previously exist, and without it the
-        first and third are decoration: the value would reach brain_state and
-        nothing structural would ever be able to use it.
-        """
-        handlers = self.handlers()
-        for name, binary, position, description in SENSOR_SPECS:
-            brain_constants.register_input_sensor(
-                name, binary=binary, position=position, owner=plugin_name.lower())
-            plugin_manager.register_neuron_handler(
-                neuron_name=name,
-                handler=handlers[name],
-                plugin_name=plugin_name,
-                metadata={
-                    'description': description,
-                    'is_binary': binary,
-                    'category': 'conspecific',
-                    'source': 'plugin',
-                },
-            )
-            self._registered.append(name)
-        if brain_widget is not None:
-            self.attach_to_brain(brain_widget)
-        return list(self._registered)
-
-    def attach_to_brain(self, brain_widget) -> List[str]:
-        """Add the sensor neurons to a live brain that does not have them.
-
-        BrainNeuronHooks iterates the brain's own neurons and only asks for a
-        value where the neuron exists, so registration alone is not enough for
-        anything to happen.
-        """
-        added = []
-        positions = getattr(brain_widget, 'neuron_positions', None)
-        state = getattr(brain_widget, 'state', None)
-        if positions is None or state is None:
-            return added
-        for name, _binary, position, _description in SENSOR_SPECS:
-            if name not in positions:
-                positions[name] = tuple(position)
-                added.append(name)
-            # A sense organ rests at zero whether it is new or restored.
-            state.setdefault(name, 0.0)
-        return added
-
-    def unregister(self, plugin_manager, plugin_name='Multiplayer') -> None:
-        """Stop supplying values when the plugin is disabled.
-
-        Two things are deliberately NOT undone here.
-
-        The neurons stay in the brain. Removing one would throw away every
-        synapse the squid had learned onto it, and the squid did learn those -
-        switching the plugin off is not a reason to pretend it never met
-        anyone.
-
-        The sensor CLASSIFICATION also stays. Those neurons are still sense
-        organs: they still rest at zero, and forward propagation still must
-        not write them. Unregistering the classification while the neurons
-        remain would hand them straight back to propagation, which is the
-        exact bug this whole seam exists to prevent. With the handler gone
-        they simply report nothing, which is the truth.
-
-        `release_classification` exists for the case where the neurons really
-        are going away - tests, mostly, which must not leak module-level state
-        into one another.
-        """
-        for name in list(self._registered):
-            try:
-                plugin_manager.unregister_neuron_handler(name, plugin_name)
-            except Exception:
-                pass
-        self._registered = []
-
-    @staticmethod
-    def release_classification(brain_constants) -> None:
-        """Forget that these names are sensors. Only safe with no live brain."""
-        for name, _binary, _position, _description in SENSOR_SPECS:
-            brain_constants.unregister_input_sensor(name)
-
-
-__all__ = ['ConspecificView', 'ConspecificPresence', 'EncounterSensors',
-           'SENSOR_SPECS', 'SENSOR_NAMES', 'PROXIMITY_RANGE',
-           'FULL_CLOSING_SPEED', 'CONTEST_LINGER', 'PRESENCE_TIMEOUT']
+__all__ = ['ConspecificView', 'ConspecificPresence', 'PROXIMITY_RANGE', 'FULL_CLOSING_SPEED', 'CONTEST_LINGER',
+           'PRESENCE_TIMEOUT']

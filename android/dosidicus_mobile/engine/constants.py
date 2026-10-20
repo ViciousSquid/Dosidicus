@@ -10,6 +10,7 @@ from . import shared  # locate the desktop source package
 from src.brain_constants import (
     CORE_STAT_NEURONS as CORE_NEURON_NAMES, REQUIRED_NEURONS,
     INPUT_SENSORS, PURE_INPUT_NEURONS, BINARY_NEURONS, LOGICAL_CANVAS,
+    is_social_neuron,
 )
 
 CORE_NEURONS = {name: REQUIRED_NEURONS[name] for name in CORE_NEURON_NAMES}
@@ -36,7 +37,13 @@ def is_core_neuron(name: str) -> bool:
 
 
 def is_sensor(name: str) -> bool:
-    return name in SENSOR_NEURONS
+    # The live set: a squid can grow sense organs (can_see_squid and the rest).
+    return name in PURE_INPUT_NEURONS
+
+
+def is_social(name: str) -> bool:
+    """A grown social neuron - drawn as a hexagon."""
+    return is_social_neuron(name)
 
 
 def is_binary(name: str) -> bool:

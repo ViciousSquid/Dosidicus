@@ -1483,6 +1483,9 @@ class TamagotchiLogic:
             decorations = [entry[0] for entry in self._get_cached_decorations()]
             scene_objects = extract_scene_objects(self.user_interface.scene, self.food_items, decorations)
             self.vision_worker.update_scene_objects(scene_objects)
+            # Other squid drawn in the tank, for how close one is (closeness is
+            # felt whichever way the squid looks; seeing one is the cone's).
+            self.squid_objects = [o for o in scene_objects if o.category == 'squid']
 
         if self.squid:
             # === FORCE SLEEP WHEN SLEEPINESS == 100 ===
@@ -1779,6 +1782,17 @@ class TamagotchiLogic:
             self._decoration_cache_time = current_time
         return self._decoration_cache
 
+    def _squid_proximity(self) -> float:
+        """How near the nearest other squid in the tank is, 0-100."""
+        from .vision_cone import proximity
+        others = getattr(self, 'squid_objects', None) or []
+        if not others or self.squid is None:
+            return 0.0
+        cx = self.squid.squid_x + self.squid.squid_width / 2
+        cy = self.squid.squid_y + self.squid.squid_height / 2
+        return proximity(min(math.hypot(o.x + o.width / 2 - cx, o.y + o.height / 2 - cy)
+                             for o in others))
+
     def apply_input_neurons_to_brain(self):
         """
         Apply real-time sensor values to the brain's input neurons.
@@ -1788,6 +1802,17 @@ class TamagotchiLogic:
             return
 
         brain_widget = self.brain_window.brain_widget
+
+        # Another squid in view, and how close one is, are percepts, not sense
+        # organs: they reach the network only through the sensors neurogenesis
+        # grows the first time they matter (brain_constants.SOCIAL_SENSORS).
+        # While the squid is away visiting, the host's frame reports them
+        # instead (plugins/multiplayer/visitor_mind.py).
+        if hasattr(brain_widget, 'perceive') and \
+                not getattr(self.squid, 'is_transitioning', False):
+            seen = getattr(self.latest_vision_result, 'can_see_squid', False)
+            brain_widget.perceive('squid_in_view', 100.0 if seen else 0.0)
+            brain_widget.perceive('squid_proximity', self._squid_proximity())
 
         # Get fresh input neuron values (this calls calculate_can_see_food(), etc.)
         input_values = self.brain_hooks.get_input_neuron_values()

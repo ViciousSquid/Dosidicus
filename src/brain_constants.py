@@ -669,6 +669,62 @@ ACTION_NEURONS = dict(_MOTOR_ROW)
 ACTION_NEURON_NAMES = tuple(ACTION_NEURONS.keys())
 
 
+#: The sense organs neurogenesis can grow for other squid, as
+#: {name: (percept, binary)}. None is innate, unlike can_see_food: each is
+#: grown the first time its concept matters - the first sighting, the first
+#: squid close by, the first one recognised from memory - because nothing in
+#: the network can express it. A squid that never meets another never has
+#: any of them. Each is written by the world from its percept, as can_see_food
+#: is, never by a synapse, and is classified as a sensor only once a brain has
+#: grown it (ensure_grown_sensor).
+SOCIAL_SENSORS = {
+    'can_see_squid': ('squid_in_view', True),
+    'squid_nearby': ('squid_proximity', False),
+    'recognises_squid': ('squid_familiar', True),
+    'remembers_bad_encounter': ('squid_recalled_bad', False),
+    'remembers_good_encounter': ('squid_recalled_good', False),
+}
+
+#: The first of them, grown on the first sighting.
+SOCIAL_SENSOR = 'can_see_squid'
+
+#: The social neurons neurogenesis can grow once a squid knows other squid
+#: exist: the concepts for playing with, fighting or fleeing from one, each
+#: grown from having done it. One of each at most, named for what it is for,
+#: and drawn as hexagons.
+SOCIAL_NEURONS = ('social_play', 'social_fight', 'social_flee')
+
+
+def is_social_neuron(name: str) -> bool:
+    """A grown social concept neuron (not the can_see_squid sensor)."""
+    return name in SOCIAL_NEURONS
+
+
+def ensure_grown_sensor(name: str, binary: bool = True) -> bool:
+    """Classify a sense organ a brain has grown (once per process).
+
+    True if it was newly classified. Registering it again would re-notify
+    every listener each time it is asked, so an existing entry is left alone.
+    """
+    if is_registered_input_sensor(name) or name in PURE_INPUT_NEURONS:
+        return False
+    return register_input_sensor(name, binary=binary, owner='neurogenesis')
+
+
+#: Neurons earlier versions added and this one never does. A saved brain that
+#: still has them loses them, and every synapse touching them, when it is
+#: loaded (brain_io.normalise_brain). These were sensor neurons for another
+#: squid; seeing one is the vision system's now, and the neurons that stand
+#: for other squid are the ones neurogenesis grows (SOCIAL_SENSOR,
+#: SOCIAL_NEURONS).
+RETIRED_NEURONS = frozenset({
+    'conspecific_visible', 'conspecific_proximity', 'conspecific_ahead',
+    'conspecific_closing', 'conspecific_receding', 'conspecific_familiarity',
+    'conspecific_recalled_good', 'conspecific_recalled_bad',
+    'conspecific_contesting',
+})
+
+
 # What each action neuron settles to when nothing is driving it.
 #
 # Nearly all of them rest at ZERO: "I do not want to do this" has to be worth

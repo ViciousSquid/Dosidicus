@@ -61,7 +61,8 @@ class PeerSummary:
     """Everything this squid knows about one individual, at a glance."""
 
     __slots__ = ('uuid', 'name', 'encounters', 'good', 'bad', 'last_seen',
-                 'last_outcome', 'matings')
+                 'last_outcome', 'matings', 'fights_won', 'fights_lost',
+                 'personality')
 
     def __init__(self, uuid: str, name: str = "Squid"):
         self.uuid = uuid
@@ -72,6 +73,9 @@ class PeerSummary:
         self.last_seen = 0.0
         self.last_outcome = ""
         self.matings = set()     # mating ids remembered with this individual
+        self.fights_won = 0      # fights with this individual this squid won...
+        self.fights_lost = 0     # ...and lost
+        self.personality = ''    # as it introduced itself
 
     @property
     def familiarity(self) -> float:
@@ -103,6 +107,9 @@ class PeerSummary:
             'last_seen': self.last_seen,
             'last_outcome': self.last_outcome,
             'matings': len(self.matings),
+            'fights_won': self.fights_won,
+            'fights_lost': self.fights_lost,
+            'personality': self.personality,
         }
 
 
@@ -164,6 +171,9 @@ class PeerLedger:
             summary.bad += abs(float(record.valence))
         summary.last_seen = record.ended_at or time.time()
         summary.last_outcome = record.outcome
+        summary.fights_won += int(getattr(record, 'fights_won', 0) or 0)
+        summary.fights_lost += int(getattr(record, 'fights_lost', 0) or 0)
+        summary.personality = getattr(record.peer, 'personality', '') or summary.personality
         if getattr(record, 'mating_id', ''):
             summary.matings.add(record.mating_id)
 
@@ -251,6 +261,12 @@ class PeerLedger:
         else:
             summary.bad += abs(valence)
         summary.last_outcome = str(value.get('outcome') or summary.last_outcome)
+        summary.personality = str(value.get('peer_personality') or summary.personality)
+        for field in ('fights_won', 'fights_lost'):
+            try:
+                setattr(summary, field, getattr(summary, field) + int(detail.get(field, 0) or 0))
+            except (TypeError, ValueError):
+                pass
         mating_id = detail.get('mating_id')
         if isinstance(mating_id, str) and mating_id:
             summary.matings.add(mating_id)

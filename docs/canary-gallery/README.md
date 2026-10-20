@@ -18,7 +18,7 @@ Mating lays an egg. The parent refuses food, starves and dies. The egg then crac
 
 [Open egg and new-game GIF](egg-new-game.gif?raw=true) · [Watch both instances together](two-instances.mp4?raw=true) · [Download a standalone gallery](gallery.html?raw=true)
 
-These are controlled demonstrations of the real application, recorded with `tools/capture_multiplayer.py`. The demo triggers a contest, makes the host's mating roll certain and accelerates the final starvation tick. Normal gameplay keeps the 2% mating chance after five seconds of sustained contact, once per visit. The network exchange, egg creation, death, reset and hatching run through the production code.
+These are controlled demonstrations of the real application, recorded with `tools/capture_multiplayer.py`. The demo triggers a contest, makes the host's mating roll certain and accelerates the final starvation tick. Normal gameplay keeps the 2% mating chance after two seconds of sustained contact, once per visit. The network exchange, egg creation, death, reset and hatching run through the production code.
 
 ## The lifecycle, frame by frame
 

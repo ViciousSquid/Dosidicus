@@ -60,8 +60,8 @@ DEFAULT_SMOOTHING = 0.5
 # Imported lazily-ish at module level because brain_constants has no imports of
 # its own and cannot cycle.
 from .brain_constants import (BINARY_NEURONS, PURE_INPUT_NEURONS,  # noqa: E402
-                              ACTION_NEURONS, action_resting_level,
-                              on_input_sensor_change)
+                              ACTION_NEURONS, SOCIAL_SENSORS, action_resting_level,
+                              ensure_grown_sensor, on_input_sensor_change)
 
 # Action neurons rest at zero for the same reason sensors do. "I do not want to
 # do anything" is a neuron with nothing to report, and it has to be worth
@@ -88,6 +88,13 @@ def _follow_sensor_registration(name: str, _binary: bool, added: bool) -> None:
 
 
 on_input_sensor_change(_follow_sensor_registration)
+
+#: Grown sense organs, each tied to the percept that drives it. Seeing another
+#: squid is the vision system's to report (squid_in_view); the can_see_squid
+#: sensor neurogenesis grows on the first sighting is that percept in the
+#: brain, written the way can_see_food is - 100 or 0, every tick. The others
+#: (brain_constants.SOCIAL_SENSORS) are written the same way from theirs.
+CONCEPT_PERCEPTS = {name: percept for name, (percept, _binary) in SOCIAL_SENSORS.items()}
 
 
 def baseline_of(name: str) -> float:
@@ -324,9 +331,28 @@ class ExternallyDriven:
                 return action
         return ""
 
+    def perceive(self, percept: str, value: float) -> None:
+        """The world reports a percept this tick, e.g. 'squid_in_view'.
+
+        Written by whatever does the perceiving - the vision system at home,
+        the host's frame while visiting. Not a neuron: a percept only reaches
+        the network through a sense organ grown to represent it.
+        """
+        percepts = getattr(self, 'percepts', None)
+        if percepts is None:
+            percepts = self.percepts = {}
+        percepts[str(percept)] = max(0.0, min(100.0, float(value)))
+
+    def percept_neurons(self) -> Dict[str, str]:
+        """Grown sense organs the world drives, as {neuron: percept}."""
+        positions = getattr(self, 'neuron_positions', None) or {}
+        return {name: percept for name, percept in CONCEPT_PERCEPTS.items()
+                if name in positions}
+
     def drive_external_neurons(self, smoothing: float = DEFAULT_SMOOTHING
                                ) -> Dict[str, float]:
-        """Write the action neurons from what the squid is actually doing.
+        """Write the neurons the world drives: the squid's actions, from what
+        it is actually doing, and its grown percepts, from what it perceives.
 
         Called once per tick, immediately before propagation, so the rest of
         the network sees the action the same way it sees a sensor: as a fact
@@ -335,19 +361,31 @@ class ExternallyDriven:
         trace after the action ends, which is what gives spike timing and the
         eligibility traces something to work with.
         """
+        percepts = getattr(self, 'percepts', None) or {}
         growth = getattr(self, 'enhanced_neurogenesis', None)
         if growth is not None:
             growth.observe_social()
-        actions, _external = self._external_maps()
-        if not actions:
-            return {}
-        causal = getattr(self, 'causal_learning', None)
-        current = getattr(causal, 'current_action', "") if causal is not None else ""
+        actions, external = self._external_maps()
         state = getattr(self, 'state', None)
         if state is None:
             return {}
 
         changed: Dict[str, float] = {}
+        for neuron, percept in self.percept_neurons().items():
+            # A sense organ, so the world writes it outright - binary ones as
+            # can_see_food is - and no synapse may point at it.
+            binary = SOCIAL_SENSORS[neuron][1]
+            ensure_grown_sensor(neuron, binary)
+            reading = percepts.get(percept, 0.0)
+            new = (100.0 if reading > 0.0 else 0.0) if binary else reading
+            if state.get(neuron) != new:
+                changed[neuron] = new
+            state[neuron] = new
+
+        if not actions:
+            return changed
+        causal = getattr(self, 'causal_learning', None)
+        current = getattr(causal, 'current_action', "") if causal is not None else ""
         for action, neuron in actions.items():
             if neuron not in state:
                 continue

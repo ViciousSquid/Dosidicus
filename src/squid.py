@@ -557,11 +557,15 @@ class Squid:
 
         old_angle = self.current_view_angle
 
+        # === Something that has just appeared holds the gaze (notice) ===
+        attending = self._look_at_noticed()
+
         # === Normal scanning: random direction ===
-        self.current_view_angle = random.uniform(0, 2 * math.pi)
+        if not attending:
+            self.current_view_angle = random.uniform(0, 2 * math.pi)
 
         # === Hunger override: high chance to look toward nearest food ===
-        if self.hunger > 65 and self.tamagotchi_logic.food_items:
+        if not attending and self.hunger > 65 and self.tamagotchi_logic.food_items:
             nearest_food = min(
                 self.tamagotchi_logic.food_items,
                 key=lambda f: self.distance_to(f.pos().x(), f.pos().y()),
@@ -1516,7 +1520,52 @@ class Squid:
         return angle_diff <= cone_angle
     
     def change_view_cone_direction(self):
+        if self._look_at_noticed():
+            return
         self.current_view_angle = random.uniform(0, 2 * math.pi)
+
+    #: How long something that has just appeared holds the squid's gaze.
+    NOTICE_SECONDS = 4.0
+    _noticed = None          # the scene item holding the gaze, if any
+    _noticed_until = 0.0
+
+    def notice(self, item, seconds=NOTICE_SECONDS):
+        """Something has just appeared: swing the view cone onto it, and hold it there.
+
+        The orienting response - a visitor arriving in the tank is the
+        multiplayer case. The cone follows the item for ``seconds``; then
+        scanning resumes. Whether the squid then sees it is still vision's
+        call (vision_worker), from where the cone points. Asleep, it notices
+        nothing. Returns whether it looked.
+        """
+        if getattr(self, 'is_sleeping', False) or item is None:
+            return False
+        self._noticed = item
+        self._noticed_until = time.time() + seconds
+        return self._look_at_noticed()
+
+    def _look_at_noticed(self):
+        """Point the view cone at what holds the gaze, where it is now.
+
+        False once the hold is over or the thing has gone from the tank.
+        """
+        item = self._noticed
+        if item is None:
+            return False
+        try:
+            gone = (time.time() >= self._noticed_until or item.scene() is None
+                    or not item.isVisible())
+            centre = item.sceneBoundingRect().center()
+        except RuntimeError:  # its Qt object has been deleted
+            gone = True
+        if gone:
+            self._noticed = None
+            return False
+        self.current_view_angle = math.atan2(
+            centre.y() - (self.squid_y + self.squid_height / 2),
+            centre.x() - (self.squid_x + self.squid_width / 2))
+        self.update_view_cone()
+        return True
 
     def retire(self):
         """Stop everything this squid runs on its own, before it is replaced.
@@ -2110,7 +2159,7 @@ class Squid:
             logic = getattr(self, 'tamagotchi_logic', None)
             hooks = getattr(logic, 'brain_hooks', None)
             if hooks is not None and hasattr(hooks, 'on_object_spawned'):
-                hooks.on_object_spawned('conspecific')
+                hooks.on_object_spawned('squid')
 
             # Show that it has noticed. Purely a display, and separate from
             # the real curious state - see show_noticed_squid_icon.

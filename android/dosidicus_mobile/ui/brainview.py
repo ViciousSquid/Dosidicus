@@ -8,8 +8,10 @@ what reads well on a phone. Grown (neurogenesis) neurons get a gold ring so you
 can spot new structure at a glance.
 """
 
+from math import cos, radians, sin
+
 from kivy.uix.widget import Widget
-from kivy.graphics import Color, Line, Ellipse
+from kivy.graphics import Color, Line, Ellipse, Mesh
 from kivy.core.text import Label as CoreLabel
 from kivy.metrics import dp, sp
 
@@ -133,7 +135,15 @@ class BrainView(Widget):
                     Color(0.2, 0.9, 0.3, 1) if on else Color(0.35, 0.1, 0.1, 1)
                 else:
                     Color(*_heat(act), 1)
-                Ellipse(pos=(cx - r, cy - r), size=(2 * r, 2 * r))
+                if constants.is_social(name):
+                    # A social neuron is a hexagon, as on desktop.
+                    corners = [(cx + r * cos(radians(60 * i - 90)),
+                                cy + r * sin(radians(60 * i - 90))) for i in range(7)]
+                    vertices = [cx, cy, 0, 0] + [v for x, y in corners for v in (x, y, 0, 0)]
+                    Mesh(vertices=vertices, indices=list(range(len(corners) + 1)),
+                         mode='triangle_fan')
+                else:
+                    Ellipse(pos=(cx - r, cy - r), size=(2 * r, 2 * r))
 
                 # Label.
                 aliases = {'happiness':'happy', 'cleanliness':'clean', 'sleepiness':'tired',

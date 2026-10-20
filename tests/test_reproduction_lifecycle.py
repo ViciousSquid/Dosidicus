@@ -452,7 +452,8 @@ class RarityTests(unittest.TestCase):
         self.assertLess(len(matings), 45)
 
     def test_brief_contact_is_never_a_mating_even_at_certainty(self):
-        matings = self._visits(200, contact_seconds=4.0, chance=1.0)
+        brief = DEFAULT_CONFIG['mating_contact_seconds'] - 0.5
+        matings = self._visits(200, contact_seconds=brief, chance=1.0)
         self.assertEqual(matings, [])
 
     def test_one_roll_per_visit_however_long_it_lasts(self):
@@ -860,6 +861,70 @@ class DeathAndVisitsTests(unittest.TestCase):
             self.assertFalse(response['accepted'])
             self.assertEqual(response['reason'], REASON_CLOSED)
             self.assertEqual(latecomer.host.visitors, {})
+
+
+class ArrivalCatchesTheEyeTests(unittest.TestCase):
+    """A squid appearing in the tank turns the resident's view cone onto it;
+    a peer that is merely online puts nothing in the tank to look at."""
+
+    def test_an_admitted_visitor_swings_the_residents_view_cone_onto_it(self):
+        import math
+        from types import MethodType
+        from src.vision_cone import in_view_cone
+        with tempfile.TemporaryDirectory() as tmp:
+            visit = Visit(tmp)
+            resident = visit.resident
+            # The real attention code, on the test's light squid.
+            for name in ('notice', '_look_at_noticed'):
+                setattr(resident, name, MethodType(getattr(Squid, name), resident))
+            resident.update_view_cone = lambda: None
+            resident.current_view_angle = 0.0          # looking right...
+            scene = QtWidgets.QGraphicsScene()
+            body = scene.addRect(0, 0, 60, 40)
+            body.setPos(100.0, 380.0)                  # ...and it comes in on the left
+            visit.plugin.entity_manager.remote_squids = {'squid_vis001': {'visual': body}}
+
+            self.assertTrue(visit.arrive())
+            centre = body.sceneBoundingRect().center()
+            sees = lambda: in_view_cone(          # noqa: E731
+                resident.squid_x + 30, resident.squid_y + 20,
+                resident.current_view_angle, math.pi / 2.5, 2000,
+                centre.x(), centre.y())
+            self.assertTrue(sees())
+            # The cone stays on it while the gaze holds, wherever it swims.
+            body.setPos(600.0, 100.0)
+            centre = body.sceneBoundingRect().center()
+            Squid.change_view_cone_direction(resident)
+            self.assertTrue(sees())
+
+    def test_a_sleeping_resident_does_not_look(self):
+        from types import MethodType
+        with tempfile.TemporaryDirectory() as tmp:
+            visit = Visit(tmp)
+            resident = visit.resident
+            resident.is_sleeping = True
+            resident.notice = MethodType(Squid.notice, resident)
+            visit.plugin.entity_manager.remote_squids = {
+                'squid_vis001': {'visual': QtWidgets.QGraphicsRectItem(0, 0, 60, 40)}}
+            self.assertTrue(visit.arrive())
+            self.assertIsNone(getattr(resident, '_noticed', None))
+
+    def test_a_peer_that_is_only_online_is_not_drawn_in_the_tank(self):
+        scene = QtWidgets.QGraphicsScene()
+        entities = RemoteEntityManager(scene, 1280, 900)
+        self.addCleanup(entities.position_update_timer.stop)
+        plugin = MultiplayerPlugin()
+        plugin.logger = logging.getLogger("lifecycle-test")
+        plugin.entity_manager = entities
+        plugin.network_node = FakeNode()
+        plugin.network_node.known_nodes = {}
+        heartbeat = {'payload': {'node_id': 'squid_peer01', 'status': 'active',
+                                 'squid_pos': (100.0, 200.0)}}
+        for _ in range(3):
+            plugin.handle_heartbeat(plugin.network_node, heartbeat, ('lan', 0))
+        self.assertEqual(entities.remote_squids, {})
+        self.assertEqual([i for i in scene.items()
+                          if getattr(i, 'category', None) == 'squid'], [])
 
 
 # ===========================================================================

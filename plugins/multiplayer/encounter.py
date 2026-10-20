@@ -74,13 +74,46 @@ def drive_snapshot(squid) -> Dict[str, float]:
     return snapshot
 
 
+def active_social_neurons(brain_widget) -> List[str]:
+    """The neurons this squid grew for other squid that are active now.
+
+    Its social senses (src.brain_constants.SOCIAL_SENSORS) reporting
+    something, and its social neurons above rest - the structure involved in
+    having an experience, stored on the memory of it.
+    """
+    from src.brain_constants import SOCIAL_SENSORS, SOCIAL_NEURONS
+    state = getattr(brain_widget, 'state', None) or {}
+    positions = getattr(brain_widget, 'neuron_positions', None) or {}
+    active = [name for name in SOCIAL_SENSORS
+              if name in positions and float(state.get(name, 0) or 0) > 0.0]
+    return active + [name for name in SOCIAL_NEURONS
+                     if name in positions and float(state.get(name, 0) or 0) > 60.0]
+
+
+def perceive_recognition(brain_widget, ledger, peer_uuid: str = '') -> None:
+    """What this squid remembers of the squid it is looking at, as percepts.
+
+    Recall from its own memory (PeerLedger), never anything the other squid
+    or its host says. Nobody in view, or a squid it does not remember: all
+    zero. Only a brain that has grown the matching sense organs can feel
+    these (propagation.CONCEPT_PERCEPTS); the first time one reads something,
+    neurogenesis grows it.
+    """
+    if not hasattr(brain_widget, 'perceive'):
+        return
+    summary = ledger.summary(peer_uuid) if (ledger is not None and peer_uuid) else None
+    brain_widget.perceive('squid_familiar', summary.familiarity if summary else 0.0)
+    brain_widget.perceive('squid_recalled_good', summary.recalled_good if summary else 0.0)
+    brain_widget.perceive('squid_recalled_bad', summary.recalled_bad if summary else 0.0)
+
+
 class EncounterRecord:
     """The finished experience: what happened, and how it went."""
 
     __slots__ = ('peer', 'started_at', 'ended_at', 'actions', 'peer_actions',
                  'drive_deltas', 'valence', 'outcome', 'items_taken',
                  'items_lost', 'closest_approach', 'first_meeting',
-                 'related_neurons', 'mating_id')
+                 'related_neurons', 'mating_id', 'fights_won', 'fights_lost')
 
     def __init__(self, peer: SquidIdentity, started_at: float):
         self.peer = peer
@@ -99,6 +132,9 @@ class EncounterRecord:
         #: The mating this encounter produced, if it produced one. An id, not
         #: an opinion: the host decided it happened and named it.
         self.mating_id = ''
+        #: Fights with this individual, and how each went for THIS squid.
+        self.fights_won = 0
+        self.fights_lost = 0
 
     @property
     def duration(self) -> float:
@@ -121,6 +157,8 @@ class EncounterRecord:
             weight += 2.0
         if self.mating_id:
             weight += 3.0
+        # A fight is never a mild encounter: it is remembered, and who won.
+        weight += 2.5 * (self.fights_won + self.fights_lost)
         if self.first_meeting:
             weight += 1.0
         return round(min(_MAX_IMPORTANCE, weight), 2)
@@ -154,6 +192,8 @@ class EncounterRecord:
                 'first_meeting': self.first_meeting,
                 'encounters': 1,
                 'mating_id': self.mating_id,
+                'fights_won': self.fights_won,
+                'fights_lost': self.fights_lost,
             },
         }
 
@@ -185,6 +225,8 @@ class EncounterSession:
         self.items_lost = 0
         self.closest_approach = 0.0
         self.mating_id = ''
+        self.fights_won = 0
+        self.fights_lost = 0
         self.closed = False
         self._latest_drives: Dict[str, float] = dict(self.opening_drives)
 
@@ -213,6 +255,13 @@ class EncounterSession:
     def note_item_lost(self, count: int = 1) -> None:
         self.items_lost += max(0, int(count))
 
+    def note_fight(self, won: bool) -> None:
+        """A fight with this individual ended; did THIS squid win it?"""
+        if won:
+            self.fights_won += 1
+        else:
+            self.fights_lost += 1
+
     def note_mated(self, mating_id: str) -> bool:
         """This encounter produced a mating. True the first time only."""
         if not mating_id or self.mating_id == mating_id:
@@ -235,7 +284,8 @@ class EncounterSession:
         squid drifted past each other may not be.
         """
         stamp = now if now is not None else self.clock()
-        if self.items_taken or self.items_lost or self.mating_id:
+        if (self.items_taken or self.items_lost or self.mating_id
+                or self.fights_won or self.fights_lost):
             return True
         return (self.last_seen_at - self.started_at) >= MIN_ENCOUNTER_DURATION
 
@@ -254,6 +304,8 @@ class EncounterSession:
         record.first_meeting = self.first_meeting
         record.related_neurons = list(related_neurons or [])
         record.mating_id = self.mating_id
+        record.fights_won = self.fights_won
+        record.fights_lost = self.fights_lost
 
         closing = dict(drives or getattr(self, '_latest_drives', {}) or {})
         deltas, valence = self._measure(closing)
@@ -288,6 +340,9 @@ class EncounterSession:
         # drives happened to register it in the window.
         valence -= self.items_lost * 6.0
         valence += self.items_taken * 4.0
+        # So is being beaten, and so is winning.
+        valence -= self.fights_lost * 8.0
+        valence += self.fights_won * 5.0
         return deltas, round(valence, 2)
 
     @staticmethod
@@ -299,6 +354,10 @@ class EncounterSession:
         """
         if record.mating_id:
             return "mated"
+        if record.fights_lost > record.fights_won:
+            return "beaten"
+        if record.fights_won:
+            return "won a fight"
         if record.items_lost:
             return "robbed"
         if record.items_taken:
@@ -311,6 +370,7 @@ class EncounterSession:
 
 
 __all__ = ['EncounterSession', 'EncounterRecord', 'OUTCOME_DRIVES',
-           'drive_snapshot', 'SNAPSHOT_DRIVES',
+           'drive_snapshot', 'active_social_neurons', 'perceive_recognition',
+           'SNAPSHOT_DRIVES',
            'LOST_SIGHT_GRACE', 'MAX_ENCOUNTER_DURATION',
            'MIN_ENCOUNTER_DURATION']

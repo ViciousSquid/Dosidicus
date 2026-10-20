@@ -182,7 +182,9 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
                                     'details': details or {}, 'tick': time.time()})
 
     def is_connector_neuron(self, name: str) -> bool:
-        return name in self.connector_neurons or self.neuron_shapes.get(name) == 'hexagon'
+        from .brain_constants import is_social_neuron
+        return name in self.connector_neurons or (
+            self.neuron_shapes.get(name) == 'hexagon' and not is_social_neuron(name))
 
     def is_new_neuron(self, name: str, newness_duration_sec: float = 300) -> bool:
         return name in self.new_neurons

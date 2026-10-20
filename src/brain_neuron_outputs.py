@@ -649,17 +649,27 @@ class NeuronOutputMonitor:
             squid.move_randomly()
 
     def _handle_approach_rock(self, neuron_name, activation, squid, tamagotchi_logic=None, **kwargs):
-        """Swim at an object. Sometimes another squid had a claim to it.
+        """Swim at the nearest thing in view - another squid, or an object.
 
-        One action, two situations. When the object the squid is going for is
-        nearer another squid than to itself, taking it is a contest, and the
-        tank changes in a way both squid can perceive. The squid did not
-        decide to contest anything and has no capability for it: it decided to
-        go and get that object, and the situation supplied the rest.
+        When another squid in view is nearer than any object, play is aimed at
+        that squid: the squid swims to it, and on reaching it the two are face
+        to face. That goes the way any contest goes
+        (ConspecificView.note_contest), and what it becomes is the tank's
+        rules, not this handler's - a fight if this is a squid that starts
+        them, otherwise simply contact.
+
+        Otherwise one action, two situations. When the object the squid is
+        going for is nearer another squid than to itself, taking it is a
+        contest, and the tank changes in a way both squid can perceive. The
+        squid did not decide to contest anything and has no capability for
+        it: it decided to go and get that object, and the situation supplied
+        the rest.
         """
         if not squid or not tamagotchi_logic:
             return
         rocks = self._nearby_rocks(squid, tamagotchi_logic, 300)
+        if self._go_at_squid_in_view(squid, tamagotchi_logic, rocks):
+            return
         if not rocks:
             return
 
@@ -686,6 +696,32 @@ class NeuronOutputMonitor:
         view = getattr(tamagotchi_logic, 'conspecific_view', None)
         if view is not None and hasattr(view, 'note_contest'):
             view.note_contest(rival, contested, taken=taken, squid=squid)
+
+    #: Within this the two squid are face to face (host_body.GRASP_RANGE).
+    FACE_TO_FACE = 120.0
+
+    def _go_at_squid_in_view(self, squid, logic, rocks=()) -> bool:
+        """Steer at the other squid vision reports, if nothing is nearer."""
+        vision = getattr(logic, 'latest_vision_result', None)
+        view = getattr(logic, 'conspecific_view', None)
+        if not getattr(vision, 'can_see_squid', False) or view is None:
+            return False
+        rival = view.nearest()
+        if rival is None:
+            return False
+        distance = ((rival.x - squid.squid_x) ** 2 + (rival.y - squid.squid_y) ** 2) ** 0.5
+        if rocks and min(self._dist_to_squid(r, squid) for r in rocks) < distance:
+            return False
+        half_w = float(getattr(squid, 'squid_width', 0.0)) / 2
+        half_h = float(getattr(squid, 'squid_height', 0.0)) / 2
+        squid.status = "approaching squid"
+        if hasattr(squid, 'set_neural_drive'):
+            squid.set_neural_drive('approach_squid', duration=4.0,
+                                   target=(rival.x + half_w, rival.y + half_h),
+                                   priority=squid.DRIVE_URGE)
+        if distance <= self.FACE_TO_FACE and hasattr(view, 'note_contest'):
+            view.note_contest(rival, None, taken=False, squid=squid)
+        return True
 
     def _handle_throw_rock(self, neuron_name, activation, squid, **kwargs):
         if squid and getattr(squid, 'carrying_rock', False):

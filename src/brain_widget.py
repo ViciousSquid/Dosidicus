@@ -1907,8 +1907,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         # Find all connector neurons that connect to both
         for (src, dst), weight in self.weights.items():
             # Check if this is a connector neuron connection
-            is_connector = (src.startswith('connector_') or 
-                        (src in self.neuron_shapes and self.neuron_shapes[src] == 'hexagon'))
+            is_connector = self.is_connector_neuron(src)
             
             if is_connector:
                 # Check if connector connects to both neurons
@@ -2188,7 +2187,10 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         """
         if not neuron_name:
             return False
-            
+        from .brain_constants import is_social_neuron
+        if is_social_neuron(neuron_name):
+            return False          # a hexagon too, but a social neuron, not a relay
+
         # 1. Check visual shape (Primary persistence mechanism)
         if self.neuron_shapes.get(neuron_name) == 'hexagon':
             return True
@@ -2568,6 +2570,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         }
         self.action_representations = {}
         self.externally_driven = set()
+        self.percepts = {}
         self.neuron_shapes = {}
         self.layers = []
         self._personality_bias_applied = False
@@ -3860,8 +3863,12 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             self.draw_square_neuron(painter, x, y, radius, name, scale)
         elif shape == 'triangle':
             self.draw_triangular_neuron(painter, x, y, radius, name, scale)
-        elif shape == 'hexagon':
+        elif shape == 'hexagon' and self.is_connector_neuron(name):
             self.draw_hexagon_neuron(painter, x, y, radius, name, scale)
+        elif shape == 'hexagon':      # a social neuron: a named hexagon
+            self._draw_polygon_neuron(painter, x, y, 6, radius,
+                                      QtGui.QColor(*self.state_colors.get(name, (255, 160, 200))),
+                                      name, scale, rotation=0)
         else:
             # Standard/Continuous or Binary
             # Explicitly call the static method from the Mixin class
@@ -3979,6 +3986,12 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 continue
 
             # --- SHAPE-BASED NEURONS ---
+            elif shape == 'hexagon' and not self.is_connector_neuron(name):
+                # A social neuron: a hexagon with its name, not a relay.
+                color = QtGui.QColor(*self.state_colors.get(name, (255, 160, 200)))
+                self._draw_polygon_neuron(painter, x, y, 6, radius, color, name, scale, rotation=0)
+                continue
+
             elif shape == 'hexagon':
                 # --- HEXAGON LOGIC ---
                 color = QtGui.QColor(*self.state_colors.get(name, (160, 32, 240)))

@@ -208,7 +208,26 @@ class VisitorMind:
             # squid has had a chance to decide anything.
             self.visit_id = self.perception.visit_id
             self._open_session()
+            # What its senses report in the host tank, as they would at home:
+            # the resident in view or not, how close, a scuffle - and, from
+            # its own memory, whether it knows the squid it is looking at.
+            self._perceive_host_tank()
         return accepted
+
+    def _perceive_host_tank(self, away: bool = True) -> None:
+        from .encounter import perceive_recognition
+        window = getattr(self.logic, 'brain_window', None)
+        widget = getattr(window, 'brain_widget', None)
+        if not hasattr(widget, 'perceive'):
+            return
+        sense = (lambda name: self.perception.sensor(name, 0.0)) if away else (lambda name: 0.0)
+        in_view = sense('squid_in_view')
+        widget.perceive('squid_in_view', in_view)
+        widget.perceive('squid_proximity', sense('squid_proximity'))
+        widget.perceive('in_fight', sense('in_fight'))
+        resident = self.perception.resident if away and in_view > 0 else None
+        perceive_recognition(widget, self.peer_ledger,
+                             getattr(resident, 'uuid', '') if resident else '')
 
     def _open_session(self) -> None:
         """Start recording the experience, once we know whose tank this is.
@@ -279,8 +298,8 @@ class VisitorMind:
             self.session.observe(
                 drives=drive_snapshot(getattr(self.logic, 'squid', None)),
                 action=behaviour,
-                proximity=self.perception.sensor('conspecific_proximity', 0.0),
-                visible=bool(self.perception.sensor('conspecific_visible', 0.0)),
+                proximity=self.perception.sensor('squid_proximity', 0.0),
+                visible=bool(self.perception.sensor('squid_in_view', 0.0)),
                 now=self.clock())
 
         self._seq += 1
@@ -381,6 +400,7 @@ class VisitorMind:
                 if stats.record_fight_result(fight_id, won):
                     if self.session is not None:
                         self.session.observe(action='fighting', now=self.clock())
+                        self.session.note_fight(won)   # remembered against the resident
                     listener = self.on_fight
                     if listener is not None:
                         try:
@@ -477,6 +497,7 @@ class VisitorMind:
                 self._log(f"could not announce departure: {exc}")
         self.close_session()
         self.perception.end()
+        self._perceive_host_tank(away=False)   # home again: its own senses take over
         self.visit_id = ''
         self.host_uuid = ''
         self.last_intent = None
@@ -509,22 +530,21 @@ class VisitorMind:
         record = session.close(
             drives=drive_snapshot(getattr(self.logic, 'squid', None)),
             now=self.clock(),
-            related_neurons=self._active_conspecific_neurons())
+            related_neurons=self._active_social_neurons())
         if self.peer_ledger.record(record):
             self._log(f"Visit remembered: {record.describe()}")
             return record
         return None
 
-    def _active_conspecific_neurons(self) -> List[str]:
-        """Which conspecific sensors were reporting during this.
+    def _active_social_neurons(self) -> List[str]:
+        """The social senses and neurons it grew, if active during this.
 
         Stored on the memory as related_neurons, so the record points at the
         structure that was involved in having the experience.
         """
-        from .encounter_sensors import SENSOR_NAMES
-        state = self._brain_state()
-        return [name for name in SENSOR_NAMES
-                if float(state.get(name, 0) or 0) > 20.0]
+        from .encounter import active_social_neurons
+        window = getattr(self.logic, 'brain_window', None)
+        return active_social_neurons(getattr(window, 'brain_widget', None))
 
     def tick(self) -> Optional[ActionIntent]:
         """One behavioural cadence. Returns the intent sent, if any.
@@ -556,28 +576,6 @@ class VisitorMind:
         return True
 
     # ==================================================================
-    def recalled_sensors(self) -> Dict[str, float]:
-        """This squid's own memory of the resident it is looking at.
-
-        Computed HERE, never received. The host has no access to this squid's
-        PeerLedger and could not compute these if it wanted to, which is why
-        the protocol refuses to carry them: an encounter is coloured by what
-        this squid remembers, and only this machine knows that.
-        """
-        blank = {'conspecific_familiarity': 0.0,
-                 'conspecific_recalled_good': 0.0,
-                 'conspecific_recalled_bad': 0.0}
-        if not self.perception.linked or self.peer_ledger is None:
-            return blank
-        uuid = self.perception.resident_uuid()
-        if not uuid:
-            return blank
-        return {
-            'conspecific_familiarity': self.peer_ledger.familiarity(uuid),
-            'conspecific_recalled_good': self.peer_ledger.recalled_good(uuid),
-            'conspecific_recalled_bad': self.peer_ledger.recalled_bad(uuid),
-        }
-
     def _brain_state(self) -> Dict[str, float]:
         window = getattr(self.logic, 'brain_window', None)
         widget = getattr(window, 'brain_widget', None)

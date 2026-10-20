@@ -448,6 +448,14 @@ class NeuronLaboratory(QDialog):
                     loc("lab_role_action",
                         "An action the squid can notice itself performing"),
                     writer)
+        if name in PURE_INPUT_NEURONS and self._functional(name) is not None:
+            return ('sensor',
+                    loc("lab_role_grown_sensor",
+                        "A sense organ the squid grew for itself"),
+                    loc("lab_role_sensor_writer",
+                        "written each tick by the world; nothing the network "
+                        "does can change it, which is why no synapse is allowed "
+                        "to point at it"))
         if name in PURE_INPUT_NEURONS:
             return ('sensor', loc("lab_role_sensor", "A sense organ"),
                     loc("lab_role_sensor_writer",
@@ -507,7 +515,13 @@ class NeuronLaboratory(QDialog):
                          value=value, reading=self._reading(value)))
 
         fn = self._functional(name)
-        if fn is not None:
+        from .neurogenesis import SOCIAL_CONCEPTS
+        concept = SOCIAL_CONCEPTS.get(getattr(fn, 'represents_concept', ''))
+        if concept:
+            lines.insert(1, loc("lab_identity_represents",
+                                "This neuron was created to represent {concept}.",
+                                concept=concept))
+        if fn is not None and not concept:
             lines.append(loc("lab_identity_spec",
                              "It is a <b>{spec}</b> neuron, and it has been "
                              "meaningfully active {count} time(s) since it was "

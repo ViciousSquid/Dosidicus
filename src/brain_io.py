@@ -10,7 +10,8 @@ import math
 from pathlib import Path
 import zipfile
 
-from .brain_constants import REQUIRED_NEURONS, newborn_neurons, INNATE_ACTION_WIRING, action_competition_wiring
+from .brain_constants import (REQUIRED_NEURONS, RETIRED_NEURONS, newborn_neurons,
+                              INNATE_ACTION_WIRING, action_competition_wiring)
 from .propagation import baseline_of
 
 MAX_BRAIN_BYTES = 16 * 1024 * 1024
@@ -118,6 +119,11 @@ def normalise_brain(data, *, require_required=False):
         for a, b, weight in tuple(INNATE_ACTION_WIRING) + action_competition_wiring():
             if (a, b) not in present:
                 connections.append(dict(source=a, target=b, weight=weight))
+    # Neurons this version never has, with every synapse touching them.
+    for retired in RETIRED_NEURONS & set(neurons):
+        del neurons[retired]
+    connections = [edge for edge in connections
+                   if edge['source'] in neurons and edge['target'] in neurons]
     state = data.get('state', {})
     if isinstance(state, dict) and 'neuron_states' in data:
         state = dict(state, **data['neuron_states'])

@@ -71,7 +71,7 @@ DEFAULT_CONFIG = {
     # most once per visit, so a brief brush past never counts.
     'mating_chance': 0.02,
     # Seconds the two bodies must stay in reach before that roll happens.
-    'mating_contact_seconds': 5.0,
+    'mating_contact_seconds': 2.0,
     # Hunger at or above which a parent is starving and starts losing health.
     # The same line the mobile engine draws (STARVE_HUNGER).
     'starvation_hunger': 90.0,
