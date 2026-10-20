@@ -38,6 +38,9 @@ class Simulation:
         self.last_status = self.squid.status
         self.newborn_neuron = None     # set for one tick when neurogenesis fires
         self._prev_can_see_food = False
+        self._rock_throws = {}
+        self._rock_cooldowns = {}
+        self._felt_rock_hits = set()
         self._rock_velocities = {}     # deco_id -> [vx, vy] for thrown rocks
         self.sweep_x = None            # x of the cleaning sweep bar (None = idle)
         self.stats = Statistics()
@@ -62,7 +65,11 @@ class Simulation:
         # Visiting squids received from nearby players (local peer-to-peer). Each
         # is a transient guest that wanders the tank and then leaves; not saved.
         self.visitors = []
-        self._visitor_minds = {}
+        self._visitor_minds = {}  # local preview brains only
+        self.peer_visits = []
+        from types import SimpleNamespace
+        self.brain_window = SimpleNamespace(brain_widget=self.squid.brain)
+        self.squid.statistics = self.stats
         self._visitor_id = 0
         self._watching = None      # the visitor whose arrival holds the gaze
         self.visitor_event = None   # set for one tick when a visitor does something
@@ -181,7 +188,8 @@ class Simulation:
         if not seen:
             return None
         target = min(seen, key=lambda p: math.hypot(p[0] - x, p[1] - y))
-        rocks = [r for r in self._rock_decorations() if r["id"] not in self._rock_velocities]
+        rocks = [r for r in self._rock_decorations() if r["id"] not in self._rock_velocities
+                 and self._rock_cooldowns.get(r['id'], 0.) <= self.squid.brain.sim_time]
         if rocks and min(math.hypot(r["x"] - x, r["y"] - y) for r in rocks) < \
                 math.hypot(target[0] - x, target[1] - y):
             return None
@@ -199,30 +207,7 @@ class Simulation:
         squid = self.squid
         now = squid.brain.sim_time
 
-        # Fly any thrown rocks: gravity pulls them down to the sandy floor. A
-        # rock thrown hard enough can leave the play area, and is then deleted.
-        floor = self.tank_size[1] - 40
-        w = self.tank_size[0]
-        margin = 70
-        for rid, vel in list(self._rock_velocities.items()):
-            rock = self._deco_by_id(rid)
-            if rock is None:
-                self._rock_velocities.pop(rid, None)
-                continue
-            vel[1] += 520.0 * dt                       # gravity (y grows downward)
-            rock["x"] += vel[0] * dt
-            rock["y"] += vel[1] * dt
-            vel[0] *= (1.0 - 0.4 * dt)                 # light drag on x
-            if rock["x"] < -margin or rock["x"] > w + margin or rock["y"] < -margin:
-                self.remove_decoration(rock["id"])     # left the tank -> gone
-                self._rock_velocities.pop(rid, None)
-                continue
-            if rock["y"] >= floor:                     # landed
-                rock["y"] = floor
-                self._rock_velocities.pop(rid, None)
-            elif (self._startle_cooldown <= 0 and not squid.is_fleeing
-                  and math.hypot(squid.x - rock["x"], squid.y - rock["y"]) < 55):
-                self.startle("rock")           # a rock whizzed past — fright!
+        self._fly_rocks(dt)
 
         if squid.is_sleeping:
             return
@@ -237,33 +222,23 @@ class Simulation:
             rock["x"] = squid.x
             rock["y"] = squid.y - 26
             if now >= squid._carry_until:
-                direction = random.choice([-1.0, 1.0])
-                # Variable strength: gentle lobs stay in the tank, hard throws
-                # can sail out of the play area (and get cleaned up).
-                vx = direction * random.uniform(220.0, 560.0)
-                vy = -random.uniform(120.0, 340.0)
-                self._rock_velocities[rock["id"]] = [vx, vy]
+                from src.throwing import throw_or_drop
+                if throw_or_drop(squid.brain.state):
+                    self._throw_rock(rock, squid)
+                else:
+                    rock['y'] = min(self.tank_size[1] - 40, squid.y + 26)
+                    self._rock_cooldowns[rock['id']] = now + 10.
+                    self.last_status = 'dropped a rock'
                 squid.carrying_rock = False
                 squid.carried_rock_id = None
-                squid.satisfaction = min(100.0, squid.satisfaction + 18.0)
-                squid.happiness = min(100.0, squid.happiness + 15.0)
-                squid.curiosity = min(100.0, squid.curiosity + 8.0)
-                if squid.personality == Personality.GREEDY:
-                    squid.satisfaction = min(100.0, squid.satisfaction + 6.0)
-                squid.brain.learn_from_playing()
-                squid.remember("play", "rock_throw", "Threw a rock",
-                               {"satisfaction": 18, "happiness": 15},
-                               importance=2.0, related=["satisfaction", "curiosity"])
-                self.stats.on_rock_thrown()
-                self.achievements.on_rock_throw()
-                self.last_status = "playfully tossing a rock"
             return
 
         # Not carrying: if the squid wants to play and a settled rock is around,
         # go for it (ignore rocks still in flight so it doesn't re-grab its throw).
         carried = self._visitor_carried_rocks()
         rocks = [r for r in self._rock_decorations()
-                 if r["id"] not in self._rock_velocities and r["id"] not in carried]
+                 if r["id"] not in self._rock_velocities and r["id"] not in carried
+                 and self._rock_cooldowns.get(r['id'], 0.) <= now]
         if not (squid.wants_to_play and rocks) or squid.play_at is not None:
             return
         target = min(rocks, key=lambda r: squid._dist(r["x"], r["y"]))
@@ -277,6 +252,117 @@ class Simulation:
         elif dist < 320:
             squid.move_towards(target["x"], target["y"])
             self.last_status = "going for a rock"
+
+    def _throw_rock(self, rock, owner, visitor=None, cause=None):
+        """One neural actuation, using the same planner and units as desktop."""
+        import uuid
+        from src.throwing import plan_throw, describe
+        from src.vision_cone import FACING_ANGLES
+        x, y = (visitor['x'], visitor['y']) if visitor else (owner.x, owner.y)
+        direction = visitor['dir'] if visitor else owner.direction
+        others = [(v['name'], v['x'], v['y']) for v in self.visitors
+                  if v is not visitor and not v['leaving']]
+        if visitor is not None:
+            others.append((self.squid.name, self.squid.x, self.squid.y))
+        targets = [(name, tx, ty) for name, tx, ty in others
+                   if self._sees_squid_at(x, y, direction, tx, ty)]
+        state = owner.brain.state if cause is None else {'act_play': cause[1]}
+        plan = plan_throw(state, (x, y), FACING_ANGLES.get(direction, 0.), targets,
+                          slowest=6., fastest=20., gravity=.3)
+        if cause:
+            plan['driven_by'] = cause[0]
+        plan.update(throw_id=uuid.uuid4().hex, hit=None,
+                    owner=visitor['id'] if visitor else None)
+        self._rock_throws[rock['id']] = plan
+        self._rock_velocities[rock['id']] = [plan['vx'], plan['vy']]
+        rock['x'], rock['y'] = x, min(self.tank_size[1] - 40, y)
+        owner.satisfaction = min(100., owner.satisfaction + 18.)
+        owner.happiness = min(100., owner.happiness + 15.)
+        owner.brain.learn_from_playing()
+        owner.remember('play', 'rock_throw', describe(plan),
+                       {'throw': dict(plan)}, importance=2.,
+                       related=[plan['driven_by']])
+        if visitor is None:
+            self.stats.on_rock_thrown()
+            self.achievements.on_rock_throw()
+        self.last_status = describe(plan)
+        return plan
+
+    def _fly_rocks(self, dt):
+        from src.throwing import flight_step, swept_hit
+        bounds = (0., float(self.tank_size[0]), 0., float(self.tank_size[1] - 40))
+        # Subdivide slow frames; the cognitive cadence remains 1 Hz.
+        steps = max(1, math.ceil(dt / .05))
+        delta = dt / .05 / steps
+        for rid, velocity in list(self._rock_velocities.items()):
+            rock = self._deco_by_id(rid)
+            plan = self._rock_throws.get(rid)
+            if rock is None:
+                self._rock_velocities.pop(rid, None)
+                self._rock_throws.pop(rid, None)
+                continue
+            for _ in range(steps):
+                start = (rock['x'], rock['y'])
+                end, velocity, landed = flight_step(start, velocity, bounds, dt=delta)
+                rock['x'], rock['y'] = end
+                if plan is not None and plan['hit'] is None:
+                    bodies = [(v['id'], v['x'], v['y']) for v in self.visitors
+                              if v['id'] != plan['owner']]
+                    if plan['owner'] is not None:
+                        bodies.append((None, self.squid.x, self.squid.y))
+                    contacts = [(t, vid) for vid, x, y in bodies
+                                if (t := swept_hit(start, end, (x, y), 45.)) is not None]
+                    if contacts:
+                        _, vid = min(contacts, key=lambda c: c[0])
+                        plan['hit'] = vid if vid is not None else 'resident'
+                        self._rock_hit(vid, plan)
+                if landed:
+                    self._rock_velocities.pop(rid, None)
+                    self._rock_throws.pop(rid, None)
+                    self._rock_cooldowns[rid] = self.squid.brain.sim_time + 10.
+                    break
+                self._rock_velocities[rid] = list(velocity)
+
+    def _rock_hit(self, visitor_id, plan):
+        """Only physical impact reaches the recipient, never the throw's reasons."""
+        key = plan['throw_id']
+        if key in self._felt_rock_hits:
+            return
+        self._felt_rock_hits.add(key)
+        visitor = self._visitor_by_id(visitor_id)
+        owner = self._visitor_by_id(plan['owner'])
+        fact = {'throw_id': key, 'speed': plan['speed'], 'taken': True,
+                'peer_uuid': str(owner.get('uuid', '') if owner else self.squid.uuid)}
+        if visitor is not None and visitor.get('remote'):
+            visitor['report']('hit', fact)
+        else:
+            recipient = self._visitor_minds.get(visitor_id) if visitor else self.squid
+            if recipient is None:
+                return
+            if visitor:
+                recipient.startle('rock_hit')
+            else:
+                self.startle('rock_hit')
+            recipient.health = max(0., recipient.health - 2.)
+            name = owner['name'] if owner else self.squid.name
+            recipient.remember('social', 'rock:' + key,
+                f"Struck by a rock during an encounter with {name}",
+                dict(fact, hits_taken=1, health=-2), importance=3., related=['anxiety', 'is_startled'])
+        if owner is not None and owner.get('remote'):
+            owner['report']('hit', dict(fact, taken=False,
+                peer_uuid=str(visitor.get('uuid', '') if visitor else self.squid.uuid)))
+        peer = owner if visitor is None else (visitor if owner is None else None)
+        if peer is not None and peer.get('peer_visit'):
+            session = peer['peer_visit'].session
+            if session is not None:
+                session.note_hit(taken=visitor is None)
+
+    def startle_squid(self, source='unknown'):
+        self.startle(source)
+
+    def track_rock_thrown(self):
+        self.stats.on_rock_thrown()
+        self.achievements.on_rock_throw()
 
     # --------------------------------------------------------- startle / ink
     def startle(self, source="ambient"):
@@ -339,7 +425,7 @@ class Simulation:
     VISIT_SECONDS = 150.0    # how long a received guest lingers before leaving
     PREVIEW_SECONDS = 45.0   # a local preview visitor leaves promptly
 
-    def add_visitor(self, snapshot, name="a friend", seconds=None):
+    def add_visitor(self, snapshot, name="a friend", seconds=None, *, remote=False):
         """Spawn a guest squid from a received snapshot (a squid or sim dict).
 
         The visitor runs its imported neural network against the host tank's
@@ -356,6 +442,7 @@ class Simulation:
         self._visitor_id += 1
         v = {
             "id": self._visitor_id,
+            "uuid": str(sq.get('uuid', '')),
             "name": str(name)[:24],
             "personality": sq.get("personality", "adventurous"),
             "tint": tuple(tint) if tint else None,
@@ -374,7 +461,9 @@ class Simulation:
         }
         # Visitors keep their own imported neural network. Host world state
         # becomes sensory input; their learned motor neurons choose behaviour.
-        self._visitor_minds[v['id']] = Squid.from_dict(sq, self.tank_size) if sq.get('brain') else Squid(Personality.from_value(v['personality']), self.tank_size)
+        v['remote'] = remote
+        if not remote:
+            self._visitor_minds[v['id']] = Squid.from_dict(sq, self.tank_size) if sq.get('brain') else Squid(Personality.from_value(v['personality']), self.tank_size)
         self.visitors.append(v)
         self.squid.brain.register_novelty(2.0)   # a newcomer is exciting
         self.squid.curiosity = min(100.0, self.squid.curiosity + 6.0)
@@ -389,6 +478,8 @@ class Simulation:
         floor, ceil = h - 40, 40
         gone = []
         for v in self.visitors:
+            if v.get('remote'):
+                continue   # the remote intent owns this body; never run a copy
             if v["fighting"]:
                 continue    # a fight (see _update_fight) owns this visitor's motion
 
@@ -447,10 +538,16 @@ class Simulation:
                            default=None)
             if v["carried_rock"] is not None:
                 self._carry_rock(v)
-                self._wander(v, dt)                       # roam while holding it
+                if now >= v.get('carry_until', now):
+                    from src.throwing import throw_or_drop
+                    held = self._deco_by_id(v['carried_rock'])
+                    if held is not None and throw_or_drop(mind.brain.state):
+                        self._throw_rock(held, mind, visitor=v)
+                    v['carried_rock'] = None
             elif rock is not None:
                 if self._steer(v, rock["x"], rock["y"], dt) < 44:
                     v["carried_rock"] = rock["id"]
+                    v['carry_until'] = now + 3.
                     self.visitor_event = f"{v['name']} grabbed one of your rocks!"
                     self.squid.anxiety = min(100.0, self.squid.anxiety + 4.0)
             else:
@@ -574,8 +671,11 @@ class Simulation:
                 if math.hypot(squid.x - v["x"], squid.y - v["y"]) >= self.FIGHT_CONTACT:
                     continue
                 mind = self._visitor_minds.get(v["id"])
+                peer = v.get('peer_visit')
+                intent = peer.actor.last_intent if peer and peer.actor else None
                 theirs, their_why = (fighting.fight_predisposition(mind.brain.state)
-                                     if mind is not None else (0.0, {}))
+                    if mind is not None else (float(intent.aggression), {'aggression': intent.aggression})
+                    if intent is not None and intent.is_live(peer.clock()) else (0., {}))
                 if max(mine, theirs) < fighting.AGGRESSION_THRESHOLD:
                     continue        # in contact, and nobody is aggro: not a fight
                 if mine >= theirs:
@@ -658,8 +758,14 @@ class Simulation:
             theirs = fighting.side(mind.brain.state, *fighting.squid_fitness(mind),
                                    attacking=not resident_attacks)
         else:
+            peer = v.get('peer_visit')
+            intent = peer.actor.last_intent if peer and peer.actor else None
+            commit = (intent.defence if resident_attacks else intent.aggression) if intent else 0.
+            fit = intent.fitness if intent else 1.
             theirs = {'role': 'defender' if resident_attacks else 'attacker',
-                      'fitness': 1.0, 'commitment': 0.0, 'ability': 50.0}
+                      'fitness': fit, 'commitment': commit,
+                      'ability': fighting.fighting_ability(fit, commit),
+                      'committed_by': 'defence' if resident_attacks else 'aggression'}
         record = fighting.resolve_fight(mine, theirs)
         won = record["first_won"]
         record.update(fight_id=f.get("id", ""), opponent=v["name"], why=f.get("why", {}),
@@ -670,6 +776,10 @@ class Simulation:
             fighting.apply_consequences(mind, not won)
             fighting.scar(mind.brain, not won,
                           f"{'won' if not won else 'lost'} a fight with {squid.name}")
+        if v.get('remote'):
+            v['report']('fight_resolved', {'fight_id': record['fight_id'], 'won': not won,
+                'started': not resident_attacks, 'ability': theirs['ability'],
+                'other_ability': mine['ability'], 'chance': 1. - record['first_chance']})
         v["res_won" if won else "res_lost"] = v.get("res_won" if won else "res_lost", 0) + 1
         f["phase"] = "result"
         f["until"] = squid.brain.sim_time + 2.0
@@ -752,11 +862,12 @@ class Simulation:
                     # parallel reflexes and custom actuators fire here.
                     if (binding.neuron_name not in ACTION_NEURONS or binding.neuron_name in ('act_ink', 'act_collapse')
                             or binding.output_hook != defaults.get(binding.neuron_name)):
-                        self._fire_output(binding.output_hook, activation, binding.hook_params)
+                        self._fire_output(binding.output_hook, activation, binding.hook_params,
+                                          neuron_name=binding.neuron_name)
             elif not binding.is_edge_pending(activation):
                 binding.last_activation = activation
 
-    def _fire_output(self, hook, activation, params):
+    def _fire_output(self, hook, activation, params, *, neuron_name=None):
         squid = self.squid
         behaviours = {
             'neuron_output_seek_food': 'eating', 'neuron_output_eat': 'eating',
@@ -799,8 +910,11 @@ class Simulation:
             squid.color_tint = tuple(min(255, value) / 255.0 for value in channels)
         elif hook == 'neuron_output_throw_rock':
             if squid.carrying_rock:
-                squid._carry_until = squid.brain.sim_time
-                self._update_rock_play(0)
+                rock = self._deco_by_id(squid.carried_rock_id)
+                if rock is not None:
+                    self._throw_rock(rock, squid, cause=(neuron_name or 'bound output', activation))
+                squid.carrying_rock = False
+                squid.carried_rock_id = None
         elif hook == 'neuron_output_pick_up_rock':
             carried = self._visitor_carried_rocks()
             nearby = any(squid._dist(rock['x'], rock['y']) < 45
@@ -854,7 +968,8 @@ class Simulation:
             return self.last_status
 
         # Perception drives the same fixed-rate neural pipeline as desktop.
-        can_see = self.food_visible()
+        away = next((v for v in self.peer_visits if v.away), None)
+        can_see = bool(away.mind.perception.sensor('can_see_food')) if away else self.food_visible()
         if can_see and not self._prev_can_see_food:
             squid.brain.register_novelty(2.0)
         self._prev_can_see_food = can_see
@@ -864,17 +979,22 @@ class Simulation:
         self._was_sick = squid.is_sick
         squid.plant_targets = [d for d in self.decorations if d.get('category') == 'plant']
         clamped = squid.sync_stats_to_brain(can_see_food=can_see)
-        self._notice_newcomers(squid)
-        # Another squid, as on desktop, is percepts, not sense organs: the
-        # shared engine grows its social senses from them the first time they
-        # matter. Off-screen arrivals are not perceived.
-        other_visible = any(self._sees_squid_at(squid.x, squid.y, squid.direction,
-                                                v['x'], v['y'])
-                            for v in self.visitors)
-        squid.brain.perceive('squid_in_view', 100. if other_visible else 0.)
-        squid.brain.perceive('squid_proximity', self._squid_proximity(
-            squid.x, squid.y, [(v['x'], v['y']) for v in self.visitors]))
-        squid.brain.perceive('in_fight', 100. if self.fight is not None else 0.)
+        if away:
+            away.mind._perceive_host_tank()
+            for sensor in ('plant_proximity', 'external_stimulus'):
+                clamped[sensor] = away.mind.perception.sensor(sensor)
+        else:
+            self._notice_newcomers(squid)
+            # Another squid, as on desktop, is percepts, not sense organs: the
+            # shared engine grows its social senses from them the first time they
+            # matter. Off-screen arrivals are not perceived.
+            other_visible = any(self._sees_squid_at(squid.x, squid.y, squid.direction,
+                                                    v['x'], v['y'])
+                                for v in self.visitors)
+            squid.brain.perceive('squid_in_view', 100. if other_visible else 0.)
+            squid.brain.perceive('squid_proximity', self._squid_proximity(
+                squid.x, squid.y, [(v['x'], v['y']) for v in self.visitors]))
+            squid.brain.perceive('in_fight', 100. if self.fight is not None else 0.)
         from types import SimpleNamespace
         squid.memory_manager = squid.memory
         self.brain_window = SimpleNamespace(brain_widget=squid.brain)
@@ -893,6 +1013,11 @@ class Simulation:
         squid.brain.enhanced_neurogenesis.set_achievement_callbacks(
             on_leveled=lambda name, strength: self.achievements.on_neuron_levelled(strength))
         squid.memory.periodic(squid.brain.sim_time)
+        if away:
+            for visit in list(self.peer_visits):
+                visit.tick(dt)
+            self._update_startle(dt)
+            return 'visiting another tank'
         self._process_neural_outputs()
         squid.play_at = self._squid_to_play_at(
             squid.x, squid.y, squid.direction,
@@ -928,6 +1053,8 @@ class Simulation:
             self._ach_eval_timer = 0.0
             self.achievements.evaluate(squid, self.stats)
 
+        for visit in list(self.peer_visits):
+            visit.tick(dt)
         # 5) World interactions.
         self._update_startle(dt)
         self._update_ink(dt)

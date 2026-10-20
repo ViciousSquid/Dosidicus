@@ -36,6 +36,7 @@ from .remote_protocol import (
     ActionIntent, Consequence, PerceptionFrame, ProtocolError, VisitEnd,
     CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
     CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, CONSEQUENCE_FIGHT, CONSEQUENCE_HIT,
+    CONSEQUENCE_THROWN,
     END_DEPARTED, END_LINK_LOST, HEADINGS,
     INTENT_LEASE, LINK_TIMEOUT, OBSERVABLE_SENSORS, new_visit_id,
 )
@@ -165,6 +166,9 @@ class VisitorMind:
         #: Its half of a hatchling's weights, made once per mating and resent
         #: with each retelling of the news.
         self._gametes: Dict[str, Dict[str, float]] = {}
+        # Retained for this mind's lifetime: a repeated UDP consequence must
+        # never repeat an irreversible physical or remembered consequence.
+        self._rock_hits = set()
 
     # ==================================================================
     # Perception: the host's frame, through the ordinary sensor path
@@ -397,6 +401,15 @@ class VisitorMind:
         if consequence.visit_id != self.visit_id:
             return None
 
+        if consequence.kind in (CONSEQUENCE_HIT, CONSEQUENCE_THROWN):
+            throw_id = consequence.detail.get('throw_id')
+            if not isinstance(throw_id, str) or not throw_id.strip():
+                return None
+            key = (consequence.visit_id, throw_id, consequence.kind,
+                   consequence.detail.get('taken', True))
+            if key in self._rock_hits:
+                return None
+            self._rock_hits.add(key)
         self.consequences.append(consequence)
         squid = getattr(self.logic, 'squid', None)
         if squid is None:
@@ -427,7 +440,25 @@ class VisitorMind:
             return consequence
 
         if kind == CONSEQUENCE_HIT:
-            self._feel_hit(squid)
+            if detail.get('taken', True):
+                self._feel_hit(squid, detail)
+            elif self.session is not None and (not detail.get('peer_uuid')
+                    or detail['peer_uuid'] == self.session.peer.uuid):
+                self.session.note_hit(taken=False)
+            elif detail.get('peer_uuid'):
+                memory = getattr(squid, 'memory_manager', None)
+                if memory is not None:
+                    memory.add_short_term_memory('social', 'rock:' + detail['throw_id'],
+                        {'peer_uuid': detail['peer_uuid'], 'hits_given': 1}, importance=3)
+            return consequence
+
+        if kind == CONSEQUENCE_THROWN:
+            memory = getattr(squid, 'memory_manager', None)
+            if memory is not None:
+                memory.add_short_term_memory('play', 'rock_throw', dict(detail), importance=2)
+            track = getattr(self.logic, 'track_rock_thrown', None)
+            if callable(track):
+                track()
             return consequence
 
         # File the objective fact against this individual. What went into the
@@ -584,7 +615,7 @@ class VisitorMind:
     #: What a rock strike does to the body: a knock.
     HIT_HEALTH_COST = 2.0
 
-    def _feel_hit(self, squid) -> None:
+    def _feel_hit(self, squid, detail=None) -> None:
         """Struck by a rock in the host's tank. Felt, at home: a startle and a
         knock. Nothing says whether it was play or an attack; the squid's own
         network decides what to make of it."""
@@ -595,8 +626,15 @@ class VisitorMind:
                 startle(source='rock_hit')
             except Exception as exc:
                 self._log(f"could not startle on a hit: {exc}")
-        if self.session is not None:
+        peer_uuid = (detail or {}).get('peer_uuid')
+        if self.session is not None and (not peer_uuid or peer_uuid == self.session.peer.uuid):
             self.session.note_hit(taken=True)
+        elif peer_uuid:
+            memory = getattr(squid, 'memory_manager', None)
+            if memory is not None:
+                memory.add_short_term_memory('social', 'rock:' + detail['throw_id'],
+                    {'peer_uuid': peer_uuid, 'hits_taken': 1, 'health': -self.HIT_HEALTH_COST},
+                    importance=3)
 
     def _live_through_fight(self, squid, fight_id: str, won: bool,
                             detail: Dict[str, Any]) -> Dict[str, Any]:

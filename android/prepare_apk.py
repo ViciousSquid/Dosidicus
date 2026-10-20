@@ -10,7 +10,7 @@ SHARED_MODULES = (
     'causal_learning', 'neural_provenance', 'consolidation', 'sleep_consolidation',
     'neurogenesis', 'learning', 'config_manager', 'personality', 'localisation',
     'portable_brain', 'neuron_binding', 'decision_engine', 'memory_manager', 'stdp', 'brain_clock', 'brain_io', 'save_archive',
-    'vision_cone', 'lifecycle', 'fighting', 'social_learning', 'inheritance',
+    'vision_cone', 'lifecycle', 'fighting', 'social_learning', 'inheritance', 'throwing',
 )
 
 
@@ -30,7 +30,10 @@ def prepare(destination=None):
         source = root / 'src' / (name + '.py')
         shutil.copy2(source, target / 'src' / source.name)
         manifest['files']['src/' + source.name] = hashlib.sha256(source.read_bytes()).hexdigest()
-    for relative in ('plugins/achievements/__init__.py', 'plugins/achievements/achievements_data.py'):
+    multiplayer = ('__init__', 'identity', 'remote_protocol', 'host_body',
+                   'visitor_mind', 'encounter', 'peer_ledger')
+    for relative in ('plugins/achievements/__init__.py', 'plugins/achievements/achievements_data.py',
+                     *(f'plugins/multiplayer/{name}.py' for name in multiplayer)):
         source = root / relative
         destination = target / relative
         destination.parent.mkdir(parents=True, exist_ok=True)

@@ -164,6 +164,7 @@ class PluginManager:
         # Interaction hooks
         self.register_hook("on_rock_pickup")
         self.register_hook("on_rock_throw")
+        self.register_hook("on_rock_hit")
         self.register_hook("on_decoration_interaction")
         self.register_hook("on_ink_cloud")
         

@@ -20,6 +20,12 @@ from .memory import MemoryManager
 
 
 class Squid:
+    # The shared remote-mind protocol reads body coordinates and the ordinary
+    # memory manager. Mobile coordinates already denote the body's centre.
+    squid_x = property(lambda self: self.x)
+    squid_y = property(lambda self: self.y)
+    memory_manager = property(lambda self: self.memory, lambda self, value: setattr(self, 'memory', value))
+
     def __init__(self, personality: Personality = None, tank_size=(900, 500), brain: NeuralBrain = None):
         self.personality = Personality.from_value(personality) if personality else random.choice(list(Personality))
         self.uuid = str(_uuid.uuid4())
@@ -35,6 +41,7 @@ class Squid:
         self.satisfaction = self.brain.state["satisfaction"]
         self.anxiety = self.brain.state["anxiety"]
         self.curiosity = self.brain.state["curiosity"]
+        self.health = 100.0
 
         # Body / motion.
         w, h = tank_size
@@ -375,6 +382,7 @@ class Squid:
             "x": self.x, "y": self.y, "direction": self.direction,
             "is_sleeping": self.is_sleeping, "is_sick": self.is_sick,
             "is_dead": self.is_dead,
+            "health": self.health,
             "color_tint": list(self.color_tint) if self.color_tint else None,
             # desktop compatibility: it stores tint_color as 0-255 ints
             "tint_color": ([int(c * 255) for c in self.color_tint]
@@ -402,6 +410,7 @@ class Squid:
         squid.is_sleeping = data.get("is_sleeping", False)
         squid.is_sick = data.get("is_sick", False)
         squid.is_dead = data.get("is_dead", False)
+        squid.health = max(0., min(100., float(data.get('health', 100.))))
         if data.get("color_tint"):
             squid.color_tint = tuple(data["color_tint"])
         elif data.get("tint_color"):   # desktop archive (0-255 ints)

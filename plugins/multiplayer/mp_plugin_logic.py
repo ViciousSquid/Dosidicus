@@ -845,19 +845,46 @@ class MultiplayerPlugin:
         return True
 
     def handle_rock_hit(self, target_uuid='', throw=None, **_kw) -> bool:
-        """The resident's rock struck a visitor: let it feel that, at home.
-
-        Only the fact and how hard. The visitor cannot know whether it was
-        play or an attack; its own brain decides what to make of it.
-        """
-        actor = self.host_body.visitor(target_uuid) if (self.host_body and target_uuid) else None
-        if actor is None:
+        """Route a physical impact to the body that lives on each peer."""
+        if self.host_body is None:
             return False
-        speed = float((throw or {}).get('speed', 0.0) or 0.0)
-        self.host_body._report(actor, CONSEQUENCE_HIT, {'what': 'rock', 'speed': round(speed, 1)})
-        session = self.open_encounters.get(actor.uuid)
-        if session is not None:
-            session.note_hit(taken=False)
+        throw = throw or {}
+        throw_id = throw.get('throw_id')
+        if not isinstance(throw_id, str) or not throw_id:
+            return False
+        resident = self.tamagotchi_logic.squid
+        source_uuid = throw.get('source_uuid', str(resident.uuid))
+        target = self.host_body.visitor(target_uuid)
+        source = self.host_body.visitor(source_uuid)
+        if target is None and (source is None or target_uuid != str(resident.uuid)):
+            return False
+        hits = getattr(self, '_reported_rock_hits', None)
+        if hits is None:
+            self._reported_rock_hits = hits = set()
+        key = (throw_id, target_uuid)
+        if key in hits:
+            return False
+        hits.add(key)
+        fact = {'what': 'rock', 'speed': round(float(throw.get('speed', 0.) or 0.), 1),
+                'throw_id': throw_id}
+        if target is not None:
+            self.host_body._report(target, CONSEQUENCE_HIT,
+                                   dict(fact, taken=True, peer_uuid=source_uuid))
+        else:
+            resident.health = max(0., resident.health - 2.)
+            self.tamagotchi_logic.startle_squid(source='rock_hit')
+        if source is not None:
+            self.host_body._report(source, CONSEQUENCE_HIT,
+                                   dict(fact, taken=False, peer_uuid=target_uuid))
+        # Only the resident's OWN encounter is recorded here. A visitor
+        # records its experience at home, never in a surrogate host brain.
+        peer = source if target is None else (target if source is None else None)
+        if peer is not None:
+            session = self.open_encounters.get(peer.uuid)
+            if session is None:
+                session = EncounterSession(peer.identity, drive_snapshot(resident))
+                self.open_encounters[peer.uuid] = session
+            session.note_hit(taken=target is None)
         return True
 
     def handle_gamete(self, node=None, message=None, addr=None, **_kw) -> bool:

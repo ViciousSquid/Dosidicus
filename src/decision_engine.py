@@ -95,7 +95,8 @@ def select_action(brain_state, jitter=True):
         return None, 0.0, activations
     winner = max(urgency, key=urgency.get)
     ordered = sorted(urgency.values(), reverse=True)
-    confidence = 1.0 if len(ordered) < 2 else (ordered[0] - ordered[1]) / ordered[0]
+    confidence = (1.0 if len(ordered) < 2 else
+                  (ordered[0] - ordered[1]) / ordered[0] if ordered[0] > 0 else 0.0)
     return winner, confidence, urgency
 
 

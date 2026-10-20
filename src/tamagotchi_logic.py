@@ -1032,12 +1032,6 @@ class TamagotchiLogic:
         # ===== PERFORMANCE FIX: Increased interval from 100ms to 200ms =====
         if hasattr(self, 'rock_interaction'):
             self.rock_interaction.setup_timers(interval=200)
-            self.rock_interaction.rock_test_timer.timeout.connect(
-                self.rock_interaction.update_rock_test
-            )
-            self.rock_interaction.throw_animation_timer.timeout.connect(
-                self.rock_interaction.update_throw_animation
-            )
 
         # Set up poop interaction
         # ===== PERFORMANCE FIX: Increased interval from 100ms to 200ms =====
@@ -1144,6 +1138,8 @@ class TamagotchiLogic:
                 self.rock_interaction.rock_test_timer.stop()
             if hasattr(self.rock_interaction, 'throw_animation_timer') and self.rock_interaction.throw_animation_timer:
                 self.rock_interaction.throw_animation_timer.stop()
+            for flight in getattr(self.rock_interaction, '_visitor_flights', []):
+                flight.throw_animation_timer.stop()
         
         # Stop poop interaction timers
         if hasattr(self, 'poop_interaction') and self.poop_interaction:
@@ -1181,10 +1177,10 @@ class TamagotchiLogic:
             self.startle_squid()
 
     def startle_squid(self, source="unknown"):
-        if not self.mental_states_enabled:
+        if not self.mental_states_enabled and source != 'rock_hit':
             return
 
-        if not getattr(self, 'initial_startle_allowed', False):
+        if not getattr(self, 'initial_startle_allowed', False) and source != 'rock_hit':
             return
 
         try:
@@ -3050,8 +3046,19 @@ class TamagotchiLogic:
         manager = getattr(self, 'plugin_manager', None)
         if manager is not None and hasattr(manager, 'trigger_hook'):
             manager.trigger_hook('on_rock_hit',
-                                 target_uuid=str(getattr(target_item, 'peer_uuid', '') or ''),
+                                 target_uuid=(str(self.squid.uuid) if target_item is self.squid.squid_item
+                                              else str(getattr(target_item, 'peer_uuid', '') or '')),
                                  throw=throw)
+
+    def throw_visitor_rock(self, actor, rock, intent):
+        plugin = self.plugin_manager.plugins.get('multiplayer', {}).get('instance')
+        if plugin is None:
+            return None
+        node = plugin.visit_node_ids.get(actor.uuid)
+        visual = plugin.entity_manager.remote_squids.get(node, {}).get('visual')
+        if visual is None:
+            return None
+        return self.rock_interaction.throw_from_visitor(actor, rock, intent, visual)
 
     def add_mate_genes(self, mating_id, mate_name, genes):
         """The mate's half of the hatchling's weights has arrived: keep it with
@@ -3818,9 +3825,8 @@ class TamagotchiLogic:
         elif self.squid.status == "carrying_rock":
             self.squid.rock_carry_timer -= 1
             if self.squid.rock_carry_timer <= 0:
-                if self.squid.throw_rock():
-                    self.squid.status = "roaming"
-                    self.squid.current_rock_target = None
+                self.rock_interaction.decide_rock_action()
+                self.squid.current_rock_target = None
 
     def update_rock_test(self):
         """Delegate to interaction manager"""

@@ -2623,7 +2623,7 @@ class Squid:
             return False
         return self.tamagotchi_logic.rock_interaction.attach_rock_to_squid(item)
 
-    def throw_rock(self, direction=None):
+    def throw_rock(self, direction=None, *, cause=None):
         """
         Delegate to interaction manager BUT capture result for RL reward.
         Returns:  bool  True = rock landed (success), False = fell out of bounds / no effect
@@ -2632,7 +2632,7 @@ class Squid:
             return False
 
         # --- Call the existing manager ---
-        success = self.tamagotchi_logic.rock_interaction.throw_rock(direction)
+        success = self.tamagotchi_logic.rock_interaction.throw_rock(direction, cause=cause)
 
         # --- Compute RL reward ---
         reward = 0.0
@@ -2640,14 +2640,12 @@ class Squid:
             reward += 5.0                       # base success
             reward += self.happiness * 0.05     # happier squid → bigger reward
             reward += self.satisfaction * 0.05
-            if self.personality == Personality.GREEDY:
-                reward += 3.0                   # greedy squid LOVES throwing
             # memory boost
             rock_mem = self.memory_manager.get_short_term_memory('interaction', 'rock_throw')
             if rock_mem and isinstance(rock_mem, dict) and rock_mem.get('is_positive'):
                 reward += 2.0
         else:
-            reward -= 2.0                       # small penalty for miss
+            return False   # no physical action: no invented learning outcome
 
         # --- Push reward into RL ---
         if hasattr(self.tamagotchi_logic, 'give_rl_reward'):
@@ -2714,7 +2712,7 @@ class Squid:
         
         decorations = self.tamagotchi_logic.get_nearby_decorations(
             self.squid_x, self.squid_y, 150)
-        interactables = [d for d in decorations if d.category in ['rock', 'poop']]
+        interactables = [d for d in decorations if d.category == 'rock']
 
         # Whether to throw, and whether to pick one up, is the squid's play
         # neuron's - not a roll of the dice (src/throwing.py).
@@ -2724,15 +2722,17 @@ class Squid:
         playing = throw_or_drop(dict(getattr(brain, 'state', None) or {}))
         if (self.carrying_rock
                 and self.rock_throw_cooldown == 0
-                and playing):
-            if self.throw_rock():
-                return
+                and not self.rock_decision_made):
+            self.tamagotchi_logic.rock_interaction.check_rock_hold_time()
+            return
 
         if (not self.carrying_rock
                 and self.rock_throw_cooldown == 0
                 and interactables
                 and playing):
-            target_item = random.choice(interactables)
+            target_item = min(interactables, key=lambda r: math.hypot(
+                r.sceneBoundingRect().center().x() - self.squid_x,
+                r.sceneBoundingRect().center().y() - self.squid_y))
             
             if self.pick_up_rock(target_item):
                 mem_details = {

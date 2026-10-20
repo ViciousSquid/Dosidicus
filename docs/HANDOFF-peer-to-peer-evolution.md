@@ -1,9 +1,13 @@
-# Handoff: Dosidicus peer-to-peer evolution (branch `CANARY`)
+# Handoff: Dosidicus peer-to-peer evolution
 
 This document is a complete brief for continuing the work: what was asked,
 what is done, what is left, and the decisions already made about how. Read it
-end to end before changing anything. Develop on `CANARY`, commit and push
-there; do not open a pull request unless asked.
+end to end before changing anything. **Current owner instruction: develop,
+commit and push on `UNSTABLE` only. Leave `CANARY` and `main` unchanged.**
+References to `CANARY` below describe historical work, not the development
+branch for the rock-throwing review. See
+[rock throwing and validation](../plugins/multiplayer/docs/rocks.md) for the
+review of `e872044`, Android parity and protocol 4.
 
 ---
 

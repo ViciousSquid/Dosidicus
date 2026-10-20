@@ -34,7 +34,7 @@ from .identity import SquidIdentity
 from .remote_protocol import (
     ActionIntent, Consequence, PerceptionFrame, ProtocolError,
     CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
-    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, HEADINGS, INTENT_LEASE,
+    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, CONSEQUENCE_THROWN, HEADINGS, INTENT_LEASE,
     LINK_TIMEOUT, OBSERVABLE_SENSORS, VISIT_ABANDON_TIMEOUT, mating_id_for,
 )
 
@@ -83,7 +83,7 @@ class VisitorActor:
                  'arrived_at', 'last_intent', 'last_intent_at', 'action',
                  'items_taken', 'pending_consequences', 'seq_seen',
                  'has_seen_resident', 'contact_since', 'mating_rolled',
-                 'mated_id', 'mating_announcements', 'body_busy_until')
+                 'mated_id', 'mating_announcements', 'body_busy_until', 'held_item')
 
     def __init__(self, identity: SquidIdentity, visit_id: str,
                  x: float, y: float, now: float):
@@ -93,6 +93,7 @@ class VisitorActor:
         self.y = float(y)
         self.facing = 'right'
         self.carrying: Optional[str] = None      # item id, host-issued
+        self.held_item = None
         self.arrived_at = now
         self.last_intent: Optional[ActionIntent] = None
         self.last_intent_at = now
@@ -486,6 +487,17 @@ class HostBody:
         interpretation. The environmental change IS the learning signal, at
         both ends.
         """
+        if actor.held_item is not None:
+            throw = getattr(self.logic, 'throw_visitor_rock', None)
+            if callable(throw):
+                plan = throw(actor, actor.held_item, intent)
+                if plan:
+                    actor.held_item = None
+                    actor.carrying = None
+                    self._report(actor, CONSEQUENCE_THROWN,
+                        {k: plan[k] for k in ('throw_id', 'aimed_at', 'driven_by',
+                                              'drive', 'speed', 'angle') if plan.get(k) is not None})
+            return
         # Play goes at the nearest thing the visitor can see: the resident,
         # if it is in view and nearer than the object it asked for.
         resident = self._resident()
@@ -501,9 +513,6 @@ class HostBody:
             return
         contested = self._is_contested(item, actor)
         cx, cy = _centre(item)
-        if not contested:
-            self._step_toward(actor, cx, cy)
-            return
         distance = math.hypot(cx - actor.x, cy - actor.y)
         if distance > GRASP_RANGE:
             self._step_toward(actor, cx, cy)
@@ -511,7 +520,8 @@ class HostBody:
 
         resident = self._resident()
         held_by_resident = bool(getattr(resident, 'carrying_rock', False) and
-                                getattr(resident, 'current_rock', None) is item)
+                                (getattr(resident, 'carried_rock', None) is item
+                                 or getattr(resident, 'current_rock', None) is item))
         if held_by_resident:
             # It is in the resident's grasp. The resident keeps it, and both
             # squid have now been in a contest.
@@ -521,10 +531,12 @@ class HostBody:
             return
 
         actor.carrying = intent.target_id or getattr(item, 'filename', 'item')
+        actor.held_item = item
         actor.items_taken += 1
         self._take_from_scene(item)
         self._report(actor, CONSEQUENCE_CONTEST, {'won': True})
-        self._note_contest(actor, item, taken=True)
+        if contested:
+            self._note_contest(actor, item, taken=True)
 
     def _go_at_resident(self, actor: VisitorActor, resident) -> None:
         """Play aimed at the resident, the nearest thing in view.
@@ -621,7 +633,10 @@ class HostBody:
             return []
         try:
             return [i for i in scene.items()
-                    if getattr(i, 'category', '') == category]
+                    if getattr(i, 'category', '') == category
+                    and not getattr(i, 'is_projectile', False)
+                    and not getattr(i, 'carried_by_peer_uuid', '')
+                    and getattr(i, 'throw_cooldown_until', 0.) <= self.clock()]
         except Exception:
             return []
 

@@ -270,6 +270,7 @@ class RejectUI:
   if fullname.split('.')[0] in ('PyQt5', 'kivy'): raise ModuleNotFoundError(fullname)
 sys.meta_path.insert(0, RejectUI())
 from dosidicus_mobile.engine import Simulation
+from dosidicus_mobile.engine.peer_visit import PeerVisit
 s=Simulation()
 for _ in range(60): s.update(1/30)
 assert s.squid.brain.sim_time == 2
