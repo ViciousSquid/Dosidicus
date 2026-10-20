@@ -21,7 +21,7 @@ pair; the visitor is told (and remembers the mating against that individual).
 ## The parent and the egg
 
 A parent stops eating. Its hunger rises as anyone's does; once starving, it
-loses health until it dies (CIRCLE OF LIFE). Then its egg hatches - into a New
+loses health until it dies (`CIRCLE OF LIFE` achievement). Then its egg hatches - into a New
 Game, shown by the ordinary New Game egg animation, handed over from the egg
 pixel for pixel. The parent's headstone stays in the tank.
 

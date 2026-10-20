@@ -28,15 +28,16 @@ from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
 
 def _level(value) -> float:
     try:
-        return max(0.0, min(100.0, float(value)))
+        value = float(value)
+        return max(0.0, min(100.0, value)) if math.isfinite(value) else 0.0
     except (TypeError, ValueError):
         return 0.0
 
 
 def throw_or_drop(state: Dict[str, Any]) -> bool:
     """Throw if the squid's play neuron is firing; otherwise put the rock down."""
-    from .decision_engine import wants
-    return bool(wants('act_play', _level(state.get('act_play', 0.0))))
+    from .decision_engine import select_action
+    return select_action(state, jitter=False)[0] == 'playing'
 
 
 def throw_drive(state: Dict[str, Any]) -> Tuple[float, str]:
@@ -104,5 +105,63 @@ def describe(plan: Dict[str, Any]) -> str:
             f"{plan.get('driven_by', 'act_play')} at {plan.get('drive', 0):.0f}")
 
 
+def swept_hit(start, end, centre, radius):
+    """First contact along a segment, including overlap and tangency.
+
+    Return a fraction of the segment or None. Checking the whole path avoids
+    tunnelling at high speeds and lets callers choose the first body struck.
+    """
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    ox, oy = start[0] - centre[0], start[1] - centre[1]
+    c = ox * ox + oy * oy - radius * radius
+    if c <= 0:
+        return 0.0
+    a = dx * dx + dy * dy
+    if a <= 1e-12:
+        return None
+    b = ox * dx + oy * dy
+    disc = b * b - a * c
+    if disc < 0:
+        return None
+    t = (-b - math.sqrt(disc)) / a
+    return t if 0 <= t <= 1 else None
+
+
+def flight_step(position, velocity, bounds, dt=1.0, gravity=0.3):
+    """One physical step, clipped at the first tank boundary.
+
+    Coordinates are rock centres, bounds are left/right/top/floor. Return
+    (end, velocity, landed). The clipped path must be checked for hits BEFORE
+    discarding a landed projectile. Speeds and dt use 50 ms units on both
+    platforms; callers subdivide longer frames.
+    """
+    x, y = position
+    vx, vy = velocity
+    left, right, top, floor = bounds
+    # A release near the floor starts within the physical tank.
+    x, y = max(left, min(right, x)), max(top, min(floor, y))
+    dx, dy = vx * dt, vy * dt
+    contacts = [(1.0, '')]
+    if dx < 0 and x + dx <= left:
+        contacts.append(((left - x) / dx, 'wall'))
+    elif dx > 0 and x + dx >= right:
+        contacts.append(((right - x) / dx, 'wall'))
+    if dy < 0 and y + dy <= top:
+        contacts.append(((top - y) / dy, 'top'))
+    elif dy >= 0 and y + dy >= floor:
+        contacts.append(((floor - y) / dy if dy else 0.0, 'floor'))
+    fraction, contact = min(contacts, key=lambda c: (c[0], not bool(c[1])))
+    end = (x + dx * fraction, y + dy * fraction)
+    vx *= 0.98 ** dt
+    vy += gravity * dt
+    if contact == 'floor':
+        return end, (0.0, 0.0), True
+    if contact == 'wall':
+        vx *= -0.2
+    elif contact == 'top':
+        vy = abs(vy) * 0.2
+    return end, (vx, vy), False
+
+
 __all__ = ['throw_or_drop', 'throw_drive', 'throw_speed', 'flight_steps', 'aim',
-           'plan_throw', 'describe']
+           'plan_throw', 'describe', 'swept_hit', 'flight_step']

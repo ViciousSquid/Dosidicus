@@ -1,9 +1,8 @@
 """The 'Nearby squids' screen: local peer-to-peer visits via Nearby Connections.
 
-Host (be discoverable) or Find nearby players; on connect, both sides swap a
-compact squid snapshot and each spawns the other's squid as a guest visitor that
-swims around for a couple of minutes. A received squid can also be imported as a
-full copy.
+Host (be discoverable) or Find nearby players. The finding squid visits the
+host's tank through the shared perception/intent protocol; its brain and
+learning stay on its own device. ZIP export/import handles deliberate copies.
 
 Off-device (or a build without Play Services) the transport is unavailable, so
 the screen shows why and offers a "Preview a visitor" demo that spawns a guest
@@ -77,6 +76,8 @@ class NearbyView(Popup):
         self.peer_names = {}          # endpoint_id -> display name
         self.peer_buttons = {}        # endpoint_id -> Button
         self.pending_bytes = {}       # endpoint_id -> received bytes (for import)
+        self.visits = {}
+        self.hosting = False
         self.my_name = app.sim.squid.name
 
         root = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(10))
@@ -137,10 +138,12 @@ class NearbyView(Popup):
         }
 
     def _host(self):
+        self.hosting = True
         self._set_status("Hosting — waiting for a nearby squid to connect…")
         self.mgr.host(self.my_name)
 
     def _find(self):
+        self.hosting = False
         self._set_status("Looking for nearby squids…")
         self.mgr.find()
 
@@ -169,14 +172,17 @@ class NearbyView(Popup):
 
     def _on_connected(self, endpoint_id):
         name = self.peer_names.get(endpoint_id, "a friend")
-        data = P.snapshot_bytes(self.app.sim)
-        if len(data) > P.SNAPSHOT_MAX_BYTES:
-            self._set_status("Your squid is too complex to send over this link.")
-            return
-        self.mgr.send(endpoint_id, data)
-        self._set_status(f"Connected to {name} — sent your squid for a visit.")
+        from ..engine.peer_visit import PeerVisit
+        visit = PeerVisit(self.app.sim,
+                          lambda data: self.mgr.send(endpoint_id, data), hosting=self.hosting)
+        self.visits[endpoint_id] = visit
+        visit.begin()
+        self._set_status(f"Connected to {name} — neural visit link active.")
 
     def _on_disconnected(self, endpoint_id):
+        visit = self.visits.pop(endpoint_id, None)
+        if visit:
+            visit.close(notify=False)
         name = self.peer_names.get(endpoint_id, "a friend")
         self._set_status(f"{name} disconnected.")
         self._on_peer_lost(endpoint_id)
@@ -184,16 +190,12 @@ class NearbyView(Popup):
     def _on_bytes(self, endpoint_id, base64_data):
         try:
             data = nearby.NearbyManager.decode(base64_data)
-            snap = P.snapshot_dict(data)
         except Exception as e:
-            self._set_status(f"Received an unreadable squid ({e}).")
+            self._set_status(f"Received an unreadable visit packet ({e}).")
             return
-        self.pending_bytes[endpoint_id] = data
-        name = self.peer_names.get(endpoint_id, "a friend")
-        self.app.sim.add_visitor(snap, name=name)
-        self.app._flash(f"[color=b39ddb]{name}'s squid is visiting your tank![/color]",
-                        seconds=3.5)
-        self._offer_import(name, data)
+        visit = self.visits.get(endpoint_id)
+        if visit is not None and not visit.receive(data):
+            self._set_status('Incompatible or invalid visit packet; both devices need protocol 4.')
 
     # ------------------------------------------------------------- preview/import
     def _preview(self):
@@ -231,5 +233,8 @@ class NearbyView(Popup):
         self.app._flash("[color=88ff88]Imported the visiting squid![/color]")
 
     def _teardown(self):
+        for visit in list(self.visits.values()):
+            visit.close()
+        self.visits.clear()
         if self.mgr:
             self.mgr.stop()

@@ -573,10 +573,12 @@ class StatisticsEventWiringTests(unittest.TestCase):
             filename="rock.png",
             setParentItem=Mock(),
             boundingRect=lambda: rock_rect,
+            sceneBoundingRect=lambda: rock_rect,
             setPos=Mock(),
             setVisible=Mock(),
         )
         squid.carried_rock = rock
+        squid.uuid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
         squid.status = "roaming"
         squid.happiness = 50
         squid.satisfaction = 50
@@ -602,7 +604,8 @@ class StatisticsEventWiringTests(unittest.TestCase):
         )
         logic = object.__new__(TamagotchiLogic)
         logic.squid = squid
-        logic.brain_window = SimpleNamespace(statistics_tab=statistics_tab)
+        logic.brain_window = SimpleNamespace(statistics_tab=statistics_tab,
+            brain_widget=SimpleNamespace(state={'act_play': 100.}))
         logic.statistics_window = SimpleNamespace(award=Mock())
 
         manager = object.__new__(RockInteractionManager)
@@ -616,6 +619,10 @@ class StatisticsEventWiringTests(unittest.TestCase):
         manager.throw_animation_timer = Mock()
         manager.throw_animation_timer.isActive.return_value = False
         manager.multiplayer_plugin = None
+        manager.scene = SimpleNamespace(width=lambda: 900, height=lambda: 500,
+            items=lambda: [], sceneRect=lambda: SimpleNamespace(bottom=lambda: 500))
+        manager.rock_test_timer = Mock()
+        manager.show_message = None
 
         self.assertTrue(manager.throw_rock())
         self.assertEqual(squid.statistics.total_rocks_thrown, 1)

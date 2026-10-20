@@ -54,6 +54,10 @@ def memory_key_for_record(record) -> str:
     mating_id = getattr(record, 'mating_id', '')
     if mating_id:
         return f"{record.memory_key}:mating:{mating_id}"
+    if getattr(record, 'hits_taken', 0) or getattr(record, 'hits_given', 0):
+        # A later impact must not reinforce an older, unchanged value under
+        # peer:<uuid>. Keep each physical encounter, with a stable replay key.
+        return f"{record.memory_key}:rocks:{int(record.started_at * 1000000):x}"
     return record.memory_key
 
 
@@ -62,7 +66,7 @@ class PeerSummary:
 
     __slots__ = ('uuid', 'name', 'encounters', 'good', 'bad', 'last_seen',
                  'last_outcome', 'matings', 'fights_won', 'fights_lost',
-                 'personality')
+                 'personality', 'hits_taken', 'hits_given')
 
     def __init__(self, uuid: str, name: str = "Squid"):
         self.uuid = uuid
@@ -76,6 +80,7 @@ class PeerSummary:
         self.fights_won = 0      # fights with this individual this squid won...
         self.fights_lost = 0     # ...and lost
         self.personality = ''    # as it introduced itself
+        self.hits_taken = self.hits_given = 0
 
     @property
     def familiarity(self) -> float:
@@ -109,6 +114,8 @@ class PeerSummary:
             'matings': len(self.matings),
             'fights_won': self.fights_won,
             'fights_lost': self.fights_lost,
+            'hits_taken': self.hits_taken,
+            'hits_given': self.hits_given,
             'personality': self.personality,
         }
 
@@ -162,6 +169,12 @@ class PeerLedger:
 
         `record` is an EncounterRecord. Returns True if it reached memory.
         """
+        key = memory_key_for_record(record)
+        manager = self.memory_manager
+        if ':rocks:' in key and manager is not None:
+            existing = manager.get_memories_by_key_prefix(MEMORY_CATEGORY, key)
+            if any(m.get('key') == key for m in existing):
+                return False
         summary = self.summary(record.peer.uuid)
         summary.name = record.peer.name or summary.name
         summary.encounters += 1
@@ -173,6 +186,8 @@ class PeerLedger:
         summary.last_outcome = record.outcome
         summary.fights_won += int(getattr(record, 'fights_won', 0) or 0)
         summary.fights_lost += int(getattr(record, 'fights_lost', 0) or 0)
+        summary.hits_taken += int(getattr(record, 'hits_taken', 0) or 0)
+        summary.hits_given += int(getattr(record, 'hits_given', 0) or 0)
         summary.personality = getattr(record.peer, 'personality', '') or summary.personality
         if getattr(record, 'mating_id', ''):
             summary.matings.add(record.mating_id)
@@ -262,7 +277,7 @@ class PeerLedger:
             summary.bad += abs(valence)
         summary.last_outcome = str(value.get('outcome') or summary.last_outcome)
         summary.personality = str(value.get('peer_personality') or summary.personality)
-        for field in ('fights_won', 'fights_lost'):
+        for field in ('fights_won', 'fights_lost', 'hits_taken', 'hits_given'):
             try:
                 setattr(summary, field, getattr(summary, field) + int(detail.get(field, 0) or 0))
             except (TypeError, ValueError):

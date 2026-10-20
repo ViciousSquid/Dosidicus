@@ -725,7 +725,7 @@ class NeuronOutputMonitor:
 
     def _handle_throw_rock(self, neuron_name, activation, squid, **kwargs):
         if squid and getattr(squid, 'carrying_rock', False):
-            squid.throw_rock()          # aimed and as hard as its network throws
+            squid.throw_rock(cause=(neuron_name, activation))
 
     def _handle_pick_up_rock(self, neuron_name, activation, squid, tamagotchi_logic=None, **kwargs):
         if not squid or getattr(squid, 'carrying_rock', False):

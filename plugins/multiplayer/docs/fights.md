@@ -59,7 +59,7 @@ as in any scuffle - but it is not a coin flip.
 
 A visitor works out its own aggression, defence (what it would commit if
 attacked) and fitness at home and sends them with every intent (encounter
-protocol 3); the host combines them with its resident's and resolves the
+protocol 4); the host combines them with its resident's and resolves the
 fight in the tank that owns both bodies.
 
 ## What a fight does

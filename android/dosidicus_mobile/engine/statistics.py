@@ -39,6 +39,7 @@ _FIELDS = [k for k, _ in DISPLAY] + ["squid_age_seconds"]
 
 class Statistics:
     def __init__(self):
+        self._fight_results = {}
         for f in _FIELDS:
             setattr(self, f, 0)
 
@@ -95,6 +96,13 @@ class Statistics:
     def on_fight_lost(self):
         self.fights_lost += 1
 
+    def record_fight_result(self, fight_id, won):
+        if fight_id in self._fight_results:
+            return False
+        self._fight_results[fight_id] = bool(won)
+        (self.on_fight_won if won else self.on_fight_lost)()
+        return True
+
     def on_sickness(self):
         self.sickness_episodes += 1
 
@@ -119,6 +127,7 @@ class Statistics:
 
     def to_dict(self):
         d = {k: getattr(self, k, 0) for k in _FIELDS}
+        d['fight_results'] = dict(self._fight_results)
         # desktop compatibility: it uses total_age_seconds
         d["total_age_seconds"] = self.squid_age_seconds
         return d
@@ -127,6 +136,7 @@ class Statistics:
     def from_dict(cls, data):
         s = cls()
         if data:
+            s._fight_results = dict(data.get('fight_results', {}))
             for k in _FIELDS:
                 if k in data:
                     setattr(s, k, data[k])
