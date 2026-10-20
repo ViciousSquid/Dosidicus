@@ -40,6 +40,16 @@ AGGRESSION_WORDS = ((90.0, 'fully aggro'), (70.0, 'aggressive'),
 #: How many recent social thoughts a brain keeps for the Decisions tab.
 THOUGHTS_KEPT = 30
 
+#: All a squid with no social sense or neuron has to show (translated in
+#: translations/*.py under this key).
+NO_SOCIAL_NEURONS_KEY = 'social_tab_no_neurons'
+NO_SOCIAL_NEURONS = "This squid has not grown any socialisation neurons: Enable Multiplayer"
+
+
+def no_social_neurons_message() -> str:
+    from .localisation import Localisation
+    return Localisation.instance().get(NO_SOCIAL_NEURONS_KEY, NO_SOCIAL_NEURONS)
+
 
 def is_social_memory(memory: Dict[str, Any]) -> bool:
     return isinstance(memory, dict) and memory.get('category') == SOCIAL_CATEGORY
@@ -324,9 +334,9 @@ def to_html(known: Dict[str, Any]) -> str:
     parts = []
     network = known['network']
     if not network:
-        return ("<h3>Social knowledge</h3><p>It has never met another squid. "
-                "Nothing in its brain stands for other squid: those senses and "
-                "neurons only grow from an encounter.</p>")
+        # Nothing grown, nothing to show: the page is blank but for this.
+        return (f"<p align='center' style='color:#666; font-size:13pt;'>"
+                f"{e(no_social_neurons_message())}</p>")
 
     agg = known['aggression']
     if agg['grown']:
@@ -444,7 +454,8 @@ def fight_thoughts(record: Dict[str, Any], me: str = 'first') -> List[str]:
     return lines
 
 
-__all__ = ['SOCIAL_CATEGORY', 'AGGRESSION_WORDS', 'is_social_memory', 'split_memories',
+__all__ = ['SOCIAL_CATEGORY', 'AGGRESSION_WORDS', 'NO_SOCIAL_NEURONS_KEY', 'NO_SOCIAL_NEURONS',
+           'no_social_neurons_message', 'is_social_memory', 'split_memories',
            'aggression_in_words', 'aggression', 'towards_strangers', 'grown_network',
            'fights', 'acquaintances', 'describe_memory', 'knowledge', 'to_html', 'think',
            'fight_thoughts']

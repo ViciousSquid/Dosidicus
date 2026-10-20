@@ -223,6 +223,8 @@ translations = {
     "long_term_memory": "Long-term Memory",
     "no_memories": "No memories stored yet.",
     "overview": "Overview",
+    "social_knowledge": "Social",
+    "social_tab_no_neurons": "This squid has not grown any socialisation neurons: Enable Multiplayer",
     "memory_stats": "Memory Statistics",
     "categories": "Categories",
     "time_label": "Time:",

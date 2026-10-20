@@ -250,6 +250,8 @@ translations = {
     "long_term_memory": "Memoria a Largo Plazo",
     "no_memories": "No hay memorias almacenadas todavia.",
     "overview": "Resumen",
+    "social_knowledge": "Social",
+    "social_tab_no_neurons": "Este calamar no ha desarrollado ninguna neurona de socialización: Activa el modo multijugador",
     "memory_stats": "Estadísticas de Memoria",
     "categories": "Categorías",
     "time_label": "Hora:",

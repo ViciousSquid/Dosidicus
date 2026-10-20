@@ -244,8 +244,10 @@ class MemoryTab(BrainBaseTab):
         if html != getattr(self, '_social_html', None):
             self._social_html = html
             self.social_summary.setText(html)
+        # A squid that has grown no social sense or neuron has a blank page
+        # but for to_html's message - no cards, whatever it remembers.
         seen, cards = set(), []
-        for memory in social_memories:
+        for memory in (social_memories if known['network'] else ()):
             if not self._is_displayable_memory(memory):
                 continue
             key = (memory.get('category', ''), memory.get('key', ''))

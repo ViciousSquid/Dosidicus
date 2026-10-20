@@ -223,6 +223,8 @@ translations = {
     "long_term_memory": "长期记忆",
     "no_memories": "尚未存储记忆。",
     "overview": "概览",
+    "social_knowledge": "社交",
+    "social_tab_no_neurons": "这只鱿鱼还没有长出任何社交神经元：请启用多人模式",
     "memory_stats": "记忆统计",
     "categories": "分类",
     "time_label": "时间：",

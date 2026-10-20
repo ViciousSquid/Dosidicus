@@ -130,8 +130,52 @@ def test_social_cards_read_as_sentences_not_dicts():
     assert 'cannot know' in sk.describe_memory(STRUCK)[1]
 
 
-def test_the_page_for_a_squid_that_never_met_another():
-    assert 'never met another squid' in sk.to_html(sk.knowledge(HeadlessBrain(), [SNACK]))
+def test_the_page_for_a_squid_with_no_social_neurons_says_only_enable_multiplayer():
+    html = sk.to_html(sk.knowledge(HeadlessBrain(), [SNACK, FIGHT]))
+    assert sk.NO_SOCIAL_NEURONS in html
+    for absent in ('Social knowledge', 'Aggression', 'Manuel', 'Fights'):
+        assert absent not in html
+
+
+def test_the_message_is_translated_into_every_language():
+    import importlib
+    from pathlib import Path
+    from src.localisation import Localisation
+    languages = sorted(p.stem for p in (Path(__file__).resolve().parents[1]
+                                        / 'translations').glob('*.py'))
+    assert len(languages) >= 7
+    seen = {}
+    loc = Localisation.instance()
+    try:
+        for lang in languages:
+            table = importlib.import_module(f'translations.{lang}').translations
+            assert table.get(sk.NO_SOCIAL_NEURONS_KEY), lang
+            assert table.get('social_knowledge'), lang
+            loc.load_language(lang)
+            html = sk.to_html(sk.knowledge(HeadlessBrain(), []))
+            assert table[sk.NO_SOCIAL_NEURONS_KEY].replace("'", '&#x27;') in html, lang
+            seen[lang] = table[sk.NO_SOCIAL_NEURONS_KEY]
+    finally:
+        loc.load_language('en')
+    assert seen['en'] == sk.NO_SOCIAL_NEURONS
+    others = [text for lang, text in seen.items() if lang not in ('en', 'ml')]
+    assert sk.NO_SOCIAL_NEURONS not in others        # each really translated
+
+
+def test_the_memory_tab_social_page_is_blank_without_social_neurons():
+    from src.brain_memory_tab import MemoryTab
+    legacy = {'category': 'social', 'key': 'squid_meeting', 'value': 'Met a squid',
+              'timestamp': 9.}
+    manager = SimpleNamespace(get_all_short_term_memories=lambda: [SNACK, legacy],
+                              get_all_long_term_memories=lambda: [FIGHT])
+    logic = SimpleNamespace(squid=SimpleNamespace(memory_manager=manager))
+    with redirect_stdout(io.StringIO()):
+        tab = MemoryTab(tamagotchi_logic=logic, brain_widget=HeadlessBrain())
+        tab.update_memory_display()
+    assert tab.social_cards_layout.count() == 0
+    assert sk.NO_SOCIAL_NEURONS in tab.social_summary.text()
+    assert tab.stm_content_layout.count() == 1            # the tank is unaffected
+    tab.deleteLater()
 
 
 def test_the_page_tells_the_whole_social_story():

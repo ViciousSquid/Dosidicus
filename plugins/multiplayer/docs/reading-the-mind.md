@@ -34,6 +34,10 @@ knows:
 The social memory cards follow, written as sentences and coloured by how
 they went.
 
+A squid that has grown no social sense or neuron has a blank Social page
+with one line, translated into every language (`social_tab_no_neurons`):
+"This squid has not grown any socialisation neurons: Enable Multiplayer".
+
 ## Neuron Laboratory
 
 - **Deep Inspector**: any social sense or neuron gets a *What does it know of

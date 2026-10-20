@@ -223,6 +223,8 @@ translations = {
     "long_term_memory": "Core Memories",
     "no_memories": "Clean slate.",
     "overview": "TL;DR",
+    "social_knowledge": "The Squad",
+    "social_tab_no_neurons": "This squid has zero social brain cells, it's giving lone wolf: Enable Multiplayer",
     "memory_stats": "Brain Stats",
     "categories": "Folders",
     "time_label": "Timestamp:",

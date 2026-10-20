@@ -223,6 +223,8 @@ translations = {
     "long_term_memory": "長期記憶",
     "no_memories": "記憶はまだありません。",
     "overview": "概要",
+    "social_knowledge": "社会性",
+    "social_tab_no_neurons": "このイカはまだ社会化ニューロンを育てていません：マルチプレイヤーを有効にしてください",
     "memory_stats": "記憶統計",
     "categories": "カテゴリー",
     "time_label": "時間:",

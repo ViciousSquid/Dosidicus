@@ -245,6 +245,8 @@ translations = {
     "long_term_memory": "Memoire a Long Terme",
     "no_memories": "Aucun souvenir stocke pour l'instant.",
     "overview": "Aperçu",
+    "social_knowledge": "Social",
+    "social_tab_no_neurons": "Ce calmar n'a développé aucun neurone de socialisation : Activez le mode multijoueur",
     "memory_stats": "Statistiques de Mémoire",
     "categories": "Catégories",
     "time_label": "Heure :",
