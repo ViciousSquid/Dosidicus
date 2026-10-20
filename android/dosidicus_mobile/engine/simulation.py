@@ -39,6 +39,7 @@ class Simulation:
         self.newborn_neuron = None     # set for one tick when neurogenesis fires
         self._prev_can_see_food = False
         self._rock_velocities = {}     # deco_id -> [vx, vy] for thrown rocks
+        self._rock_throws = {}         # deco_id -> the throw's plan (src/throwing.py)
         self.sweep_x = None            # x of the cleaning sweep bar (None = idle)
         self.stats = Statistics()
         self._prev_pos = (self.squid.x, self.squid.y)
@@ -173,6 +174,28 @@ class Simulation:
     def _rock_decorations(self):
         return [d for d in self.decorations if d.get("category") == "rock"]
 
+    #: A rock passing this close to a visitor strikes it.
+    ROCK_HIT_RADIUS = 45.0
+
+    def _rock_strikes(self, rid, rock):
+        """A rock in flight strikes a visitor once: it only feels it - a
+        startle and a knock - never told whether it was play or an attack."""
+        throw = self._rock_throws.get(rid)
+        if not throw or throw.get("hit"):
+            return
+        for v in self.visitors:
+            if math.hypot(v["x"] - rock["x"], v["y"] - rock["y"]) > self.ROCK_HIT_RADIUS:
+                continue
+            throw["hit"] = v["name"]
+            v["hits_taken"] = v.get("hits_taken", 0) + 1
+            mind = self._visitor_minds.get(v["id"])
+            if mind is not None:
+                if isinstance(getattr(mind, "health", None), (int, float)):
+                    mind.health = max(0.0, mind.health - 2.0)   # a knock
+                mind.startle("rock_hit")
+            self.visitor_event = f"{v['name']} was hit by a rock!"
+            return
+
     def _squid_to_play_at(self, x, y, facing, others):
         """Where a squid at play goes: the nearest squid in its view cone, if
         that is nearer than any rock it could pick up - as on desktop
@@ -189,6 +212,35 @@ class Simulation:
 
     def _deco_by_id(self, deco_id):
         return next((d for d in self.decorations if d["id"] == deco_id), None)
+
+    def _throw_carried_rock(self, rock):
+        """Throw the carried rock: aimed at the nearest visitor the squid can
+        see, or where it faces; as hard as its network throws
+        (src/throwing.py)."""
+        from src import throwing
+        from src.vision_cone import FACING_ANGLES
+        squid = self.squid
+        seen = [(v["name"], v["x"], v["y"]) for v in self.visitors
+                if self._sees_squid_at(squid.x, squid.y, squid.direction, v["x"], v["y"])]
+        plan = throwing.plan_throw(squid.brain.state, (squid.x, squid.y),
+                                   FACING_ANGLES.get(squid.direction, 0.0), seen,
+                                   slowest=250.0, fastest=650.0, gravity=520.0, drag=0.33)
+        self._rock_velocities[rock["id"]] = [plan["vx"], plan["vy"]]
+        self._rock_throws[rock["id"]] = dict(plan, hit=None)
+        squid.carrying_rock = False
+        squid.carried_rock_id = None
+        squid.satisfaction = min(100.0, squid.satisfaction + 18.0)
+        squid.happiness = min(100.0, squid.happiness + 15.0)
+        squid.curiosity = min(100.0, squid.curiosity + 8.0)
+        if squid.personality == Personality.GREEDY:
+            squid.satisfaction = min(100.0, squid.satisfaction + 6.0)
+        squid.brain.learn_from_playing()
+        squid.remember("play", "rock_throw", throwing.describe(plan),
+                       {"satisfaction": 18, "happiness": 15},
+                       importance=2.0, related=["satisfaction", "curiosity"])
+        self.stats.on_rock_thrown()
+        self.achievements.on_rock_throw()
+        self.last_status = "playfully tossing a rock"
 
     def _update_rock_play(self, dt):
         """The squid can approach a rock, pick it up, carry it, then throw it.
@@ -213,6 +265,7 @@ class Simulation:
             rock["x"] += vel[0] * dt
             rock["y"] += vel[1] * dt
             vel[0] *= (1.0 - 0.4 * dt)                 # light drag on x
+            self._rock_strikes(rid, rock)
             if rock["x"] < -margin or rock["x"] > w + margin or rock["y"] < -margin:
                 self.remove_decoration(rock["id"])     # left the tank -> gone
                 self._rock_velocities.pop(rid, None)
@@ -237,26 +290,14 @@ class Simulation:
             rock["x"] = squid.x
             rock["y"] = squid.y - 26
             if now >= squid._carry_until:
-                direction = random.choice([-1.0, 1.0])
-                # Variable strength: gentle lobs stay in the tank, hard throws
-                # can sail out of the play area (and get cleaned up).
-                vx = direction * random.uniform(220.0, 560.0)
-                vy = -random.uniform(120.0, 340.0)
-                self._rock_velocities[rock["id"]] = [vx, vy]
-                squid.carrying_rock = False
-                squid.carried_rock_id = None
-                squid.satisfaction = min(100.0, squid.satisfaction + 18.0)
-                squid.happiness = min(100.0, squid.happiness + 15.0)
-                squid.curiosity = min(100.0, squid.curiosity + 8.0)
-                if squid.personality == Personality.GREEDY:
-                    squid.satisfaction = min(100.0, squid.satisfaction + 6.0)
-                squid.brain.learn_from_playing()
-                squid.remember("play", "rock_throw", "Threw a rock",
-                               {"satisfaction": 18, "happiness": 15},
-                               importance=2.0, related=["satisfaction", "curiosity"])
-                self.stats.on_rock_thrown()
-                self.achievements.on_rock_throw()
-                self.last_status = "playfully tossing a rock"
+                from src import throwing
+                if throwing.throw_or_drop(squid.brain.state):
+                    self._throw_carried_rock(rock)
+                else:
+                    # Not playing any more: it puts the rock down.
+                    rock["y"] = self.tank_size[1] - 40
+                    squid.carrying_rock = False
+                    squid.carried_rock_id = None
             return
 
         # Not carrying: if the squid wants to play and a settled rock is around,
@@ -798,9 +839,10 @@ class Simulation:
                                           (255, 255, 100), (255, 100, 255), (100, 255, 255)])
             squid.color_tint = tuple(min(255, value) / 255.0 for value in channels)
         elif hook == 'neuron_output_throw_rock':
-            if squid.carrying_rock:
-                squid._carry_until = squid.brain.sim_time
-                self._update_rock_play(0)
+            # Its throw neuron fired: it throws (as desktop's _handle_throw_rock).
+            rock = self._deco_by_id(squid.carried_rock_id) if squid.carrying_rock else None
+            if rock is not None and not squid.is_sleeping:
+                self._throw_carried_rock(rock)
         elif hook == 'neuron_output_pick_up_rock':
             carried = self._visitor_carried_rocks()
             nearby = any(squid._dist(rock['x'], rock['y']) < 45

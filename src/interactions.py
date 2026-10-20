@@ -212,6 +212,7 @@ class RockInteractionManager:
     THROW_SLOWEST = 6.0
     THROW_FASTEST = 20.0
     THROW_GRAVITY = 0.3
+    THROW_DRAG = 0.02
     #: A rock passing this close to another squid's centre hits it.
     HIT_RADIUS = 45.0
 
@@ -222,12 +223,15 @@ class RockInteractionManager:
     def _squids_in_view(self):
         """(name, x, y) of every other squid in this squid's view cone."""
         from .vision_cone import VIEW_CONE_ANGLE, in_view_cone
+        scene = getattr(self, 'scene', None)
+        if scene is None:
+            return []
         rect = self.squid.squid_item.sceneBoundingRect()
         cx, cy = rect.center().x(), rect.center().y()
-        reach = math.hypot(self.scene.width(), self.scene.height())
+        reach = math.hypot(scene.width(), scene.height())
         angle = float(getattr(self.squid, 'current_view_angle', 0.0))
         seen = []
-        for item in self.scene.items():
+        for item in scene.items():
             if getattr(item, 'category', None) != 'squid' or not item.isVisible():
                 continue
             centre = item.sceneBoundingRect().center()
@@ -262,15 +266,17 @@ class RockInteractionManager:
         plan = plan_throw(self._brain_state(), (rect.center().x(), rect.center().y()),
                           float(getattr(self.squid, 'current_view_angle', 0.0)),
                           self._squids_in_view(), slowest=self.THROW_SLOWEST,
-                          fastest=self.THROW_FASTEST, gravity=self.THROW_GRAVITY)
+                          fastest=self.THROW_FASTEST, gravity=self.THROW_GRAVITY,
+                          drag=self.THROW_DRAG)
         self.current_throw = dict(plan, hit=None)
         self.throw_velocity_x, self.throw_velocity_y = plan['vx'], plan['vy']
         direction = 'right' if plan['vx'] >= 0 else 'left'
         if hasattr(self.squid, 'status'):
             self.squid.status = (f"throwing rock at {plan['target']}" if plan['target']
                                  else "throwing rock")
-        if self.show_message:
-            self.show_message(describe_throw(plan))
+        show = getattr(self, 'show_message', None)
+        if show:
+            show(describe_throw(plan))
         
         # Set position to squid's center in scene coordinates
         squid_rect = self.squid.squid_item.sceneBoundingRect()
@@ -422,10 +428,11 @@ class RockInteractionManager:
         was play or an attack, the struck squid cannot know.
         """
         throw = getattr(self, 'current_throw', None)
-        if not throw or throw.get('hit'):
+        scene = getattr(self, 'scene', None)
+        if not throw or throw.get('hit') or scene is None:
             return
         centre = rock.sceneBoundingRect().center()
-        for item in self.scene.items():
+        for item in scene.items():
             if getattr(item, 'category', None) != 'squid' or not item.isVisible():
                 continue
             other = item.sceneBoundingRect().center()

@@ -52,14 +52,26 @@ def throw_speed(state: Dict[str, Any], slowest: float, fastest: float) -> Tuple[
     return speed, {'drive': round(drive, 1), 'driven_by': by, 'speed': round(speed, 2)}
 
 
+def flight_steps(distance: float, speed: float, drag: float = 0.0) -> float:
+    """Steps for a rock thrown at `speed` to cover `distance`, slowed by
+    `drag` per step. Out of reach, as long as it flies before it stalls."""
+    if drag <= 0.0:
+        return distance / speed
+    keep = 1.0 - drag
+    reach = distance * drag / speed
+    if reach >= 0.95:
+        return math.log(0.05) / math.log(keep)
+    return math.log(1.0 - reach) / math.log(keep)
+
+
 def aim(origin: Sequence[float], gaze: float,
         targets: Iterable[Tuple[str, float, float]], speed: float,
-        gravity: float) -> Tuple[float, Optional[str], Dict[str, Any]]:
+        gravity: float, drag: float = 0.0) -> Tuple[float, Optional[str], Dict[str, Any]]:
     """The angle to throw at (screen coordinates, y down), the target, and why.
 
     `targets` are (name, x, y) of the squid in this squid's view cone. With
     one, it aims at the nearest, raised by the drop the rock will take on the
-    way (flight time from distance over speed; drop = gravity t^2 / 2).
+    way (steps to get there, slowed by drag; drop = gravity t^2 / 2).
     """
     ox, oy = origin
     seen = sorted(targets, key=lambda t: math.hypot(t[1] - ox, t[2] - oy))
@@ -67,7 +79,7 @@ def aim(origin: Sequence[float], gaze: float,
         return gaze, None, {'aimed_at': None, 'along': 'its gaze'}
     name, tx, ty = seen[0]
     distance = math.hypot(tx - ox, ty - oy)
-    steps = distance / speed
+    steps = flight_steps(distance, speed, drag)
     drop = 0.5 * gravity * steps * steps
     angle = math.atan2((ty - drop) - oy, tx - ox)
     return angle, name, {'aimed_at': name, 'distance': round(distance, 1),
@@ -76,10 +88,10 @@ def aim(origin: Sequence[float], gaze: float,
 
 def plan_throw(state: Dict[str, Any], origin: Sequence[float], gaze: float,
                targets: Iterable[Tuple[str, float, float]], *, slowest: float,
-               fastest: float, gravity: float) -> Dict[str, Any]:
+               fastest: float, gravity: float, drag: float = 0.0) -> Dict[str, Any]:
     """Everything about one throw: velocity, and the reasons for it."""
     speed, why_speed = throw_speed(state, slowest, fastest)
-    angle, target, why_aim = aim(origin, gaze, targets, speed, gravity)
+    angle, target, why_aim = aim(origin, gaze, targets, speed, gravity, drag)
     return {'vx': speed * math.cos(angle), 'vy': speed * math.sin(angle),
             'angle': round(math.degrees(angle), 1), 'target': target,
             **why_speed, **why_aim}
@@ -92,4 +104,5 @@ def describe(plan: Dict[str, Any]) -> str:
             f"{plan.get('driven_by', 'act_play')} at {plan.get('drive', 0):.0f}")
 
 
-__all__ = ['throw_or_drop', 'throw_drive', 'throw_speed', 'aim', 'plan_throw', 'describe']
+__all__ = ['throw_or_drop', 'throw_drive', 'throw_speed', 'flight_steps', 'aim',
+           'plan_throw', 'describe']
