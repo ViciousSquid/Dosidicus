@@ -7,6 +7,10 @@ question after it (the "Show tutorial?" prompt included) is in that language.
 The chosen language is preselected next time and saved to config.ini
 ([General] language), where Preferences reads and writes it too.
 
+Its look - the grey bar, the bold monospace, the orange button - is shared
+(scale_factor, splash_font, grey_bar, white_foot, orange_button, centre_on):
+the tutorial question is drawn the same way (main.TimedMessageBox).
+
 Light on purpose: PyQt5, the config manager and the localisation table only.
 """
 
@@ -73,6 +77,72 @@ def _monospace_family() -> str:
     return QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont).family()
 
 
+def scale_factor() -> float:
+    """The splash's scale: 1 at 96 dpi, more on denser screens."""
+    screen = QtWidgets.QApplication.primaryScreen()
+    return max(1.0, (screen.logicalDotsPerInch() / 96.0) if screen else 1.0)
+
+
+def splash_font(pixel_size: float, bold: bool = True) -> QtGui.QFont:
+    """The splash's monospace, at a size already scaled."""
+    font = QtGui.QFont(_monospace_family())
+    font.setBold(bold)
+    font.setPixelSize(max(1, int(round(pixel_size))))
+    return font
+
+
+def orange_button(text: str, f: float, width: float = 170) -> QtWidgets.QPushButton:
+    """The splash's button: orange, edged in black, bold monospace."""
+    def s(value):
+        return int(round(value * f))
+    button = QtWidgets.QPushButton(text)
+    button.setCursor(QtCore.Qt.PointingHandCursor)
+    button.setFixedSize(s(width), s(48))
+    button.setStyleSheet(
+        f"QPushButton {{ background: {OK_ORANGE}; color: black; border: {s(3)}px solid black;"
+        f" border-radius: {s(12)}px; font-family: '{_monospace_family()}'; font-weight: bold;"
+        f" font-size: {s(26)}px; }}"
+        f"QPushButton:hover {{ background: {OK_HOVER}; }}"
+        f"QPushButton:pressed {{ background: {OK_PRESSED}; }}")
+    return button
+
+
+def grey_bar(text: str, f: float) -> QtWidgets.QLabel:
+    """The splash's grey bar, carrying a line of text instead of the picker."""
+    def s(value):
+        return int(round(value * f))
+    label = QtWidgets.QLabel(text)
+    label.setAlignment(QtCore.Qt.AlignCenter)
+    label.setWordWrap(True)
+    label.setFont(splash_font(s(24)))
+    label.setFixedWidth(s(WIDTH))
+    label.setMinimumHeight(s(BAR_HEIGHT))
+    label.setStyleSheet(f"background: {BAR_GREY}; color: black; padding: {s(8)}px {s(14)}px;")
+    return label
+
+
+def white_foot(f: float) -> QtWidgets.QWidget:
+    foot = QtWidgets.QWidget()
+    foot.setFixedWidth(int(round(WIDTH * f)))
+    foot.setMinimumHeight(int(round(FOOT_HEIGHT * f)))
+    foot.setStyleSheet('background: white;')
+    return foot
+
+
+def centre_on(window: QtWidgets.QWidget, over: Optional[QtWidgets.QWidget] = None) -> None:
+    """Centre a window over another that is showing, else on the screen."""
+    if over is not None and over.isVisible():
+        area = over.frameGeometry()
+    else:
+        screen = QtWidgets.QApplication.primaryScreen()
+        if screen is None:
+            return
+        area = screen.availableGeometry()
+    frame = window.frameGeometry()
+    frame.moveCenter(area.center())
+    window.move(frame.topLeft())
+
+
 class _LanguageBar(QtWidgets.QComboBox):
     """The grey bar: the chosen language centred, a black triangle at the right."""
 
@@ -107,17 +177,15 @@ class LanguageSplash(QtWidgets.QDialog):
         icon = _image('images', 'icons', 'squidblack.png')
         if os.path.exists(icon):
             self.setWindowIcon(QtGui.QIcon(icon))
-        screen = QtWidgets.QApplication.primaryScreen()
-        f = max(1.0, (screen.logicalDotsPerInch() / 96.0) if screen else 1.0)
-        s = lambda value: int(round(value * f))         # noqa: E731
-        family = _monospace_family()
+        f = scale_factor()
+
+        def s(value):
+            return int(round(value * f))
 
         self.languages = list(languages)
         self.bar = _LanguageBar()
         self.bar.setFixedSize(s(WIDTH), s(BAR_HEIGHT))
-        font = QtGui.QFont(family)
-        font.setBold(True)
-        font.setPixelSize(s(30))
+        font = splash_font(s(30))
         self.bar.setFont(font)
         for code, name in self.languages:
             self.bar.addItem(name, code)
@@ -130,22 +198,13 @@ class LanguageSplash(QtWidgets.QDialog):
             f'QComboBox QAbstractItemView {{ background: white; color: black; outline: 0;'
             f' selection-background-color: {OK_ORANGE}; selection-color: black; }}')
 
-        self.ok = QtWidgets.QPushButton('OK')
+        self.ok = orange_button('OK', f)
         self.ok.setDefault(True)
         self.ok.setAutoDefault(True)
-        self.ok.setCursor(QtCore.Qt.PointingHandCursor)
-        self.ok.setFixedSize(s(170), s(48))
-        self.ok.setStyleSheet(
-            f"QPushButton {{ background: {OK_ORANGE}; color: black; border: {s(3)}px solid black;"
-            f" border-radius: {s(12)}px; font-family: '{family}'; font-weight: bold;"
-            f" font-size: {s(26)}px; }}"
-            f"QPushButton:hover {{ background: {OK_HOVER}; }}"
-            f"QPushButton:pressed {{ background: {OK_PRESSED}; }}")
         self.ok.clicked.connect(self.accept)
 
-        foot = QtWidgets.QWidget()
-        foot.setFixedSize(s(WIDTH), s(FOOT_HEIGHT))
-        foot.setStyleSheet('background: white;')
+        foot = white_foot(f)
+        foot.setFixedHeight(s(FOOT_HEIGHT))
         foot_layout = QtWidgets.QHBoxLayout(foot)
         foot_layout.addWidget(self.ok, 0, QtCore.Qt.AlignCenter)
 
@@ -156,10 +215,7 @@ class LanguageSplash(QtWidgets.QDialog):
             layout.addWidget(widget)
         self.setFixedSize(self.sizeHint())
         self.ok.setFocus()
-        if screen is not None:
-            frame = self.frameGeometry()
-            frame.moveCenter(screen.availableGeometry().center())
-            self.move(frame.topLeft())
+        centre_on(self)
 
     def language(self) -> str:
         return self.bar.currentData() or 'en'
@@ -201,4 +257,5 @@ def choose_language(config_manager=None) -> Optional[str]:
     return code
 
 
-__all__ = ['available_languages', 'LanguageSplash', 'choose_language']
+__all__ = ['available_languages', 'LanguageSplash', 'choose_language', 'scale_factor',
+           'splash_font', 'orange_button', 'grey_bar', 'white_foot', 'centre_on']

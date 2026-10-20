@@ -125,48 +125,65 @@ class TeeStream:
         self.file_stream.flush()
 
 class TimedMessageBox(QtWidgets.QDialog):
-    """A message box that auto-closes after a timeout with a default choice"""
+    """A yes/no question that declines itself after a timeout.
+
+    Drawn like the language splash (src/language_splash.py): the question on
+    the grey bar in bold monospace; below it, on white, the countdown and the
+    orange Yes and No.
+    """
     def __init__(self, parent, title, message, timeout_seconds=5):
-        super().__init__(parent)
+        from src.language_splash import (centre_on, grey_bar, orange_button,
+                                         scale_factor, splash_font, white_foot)
+        super().__init__(parent, QtCore.Qt.Dialog | QtCore.Qt.FramelessWindowHint)
         self.setWindowTitle(title)
+        self.setModal(True)
         self.timeout_seconds = timeout_seconds
         self.remaining_seconds = timeout_seconds
         self.result_value = QtWidgets.QMessageBox.No  # Default to No
         self.loc = Localisation.instance()
-        
-        # Setup UI
-        layout = QtWidgets.QVBoxLayout()
-        
-        self.message_label = QtWidgets.QLabel(message)
-        self.message_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(13)}pt;")
-        layout.addWidget(self.message_label)
-        
+        f = scale_factor()
+
+        self.message_label = grey_bar(message, f)
+
         # Auto-decline message
         self.timer_label = QtWidgets.QLabel(self.loc.get("auto_decline", seconds=self.remaining_seconds))
-        self.timer_label.setStyleSheet(f"color: gray; font-size: {DisplayScaling.font_size(11)}pt;")
-        layout.addWidget(self.timer_label)
-        
-        # Buttons
-        self.button_box = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Yes | QtWidgets.QDialogButtonBox.No
-        )
-        # Localise buttons manually since we use a custom dict system
-        self.button_box.button(QtWidgets.QDialogButtonBox.Yes).setText(self.loc.get("yes"))
-        self.button_box.button(QtWidgets.QDialogButtonBox.No).setText(self.loc.get("no"))
+        self.timer_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.timer_label.setFont(splash_font(14 * f, bold=False))
+        self.timer_label.setStyleSheet("color: #666666;")
 
-        self.button_box.accepted.connect(self.accept_yes)
-        self.button_box.rejected.connect(self.reject_no)
-        layout.addWidget(self.button_box)
-        
-        self.setLayout(layout)
+        # Buttons, localised from our own table
+        self.yes_button = orange_button(self.loc.get("yes"), f, width=140)
+        self.no_button = orange_button(self.loc.get("no"), f, width=140)
+        self.yes_button.setDefault(True)
+        self.yes_button.clicked.connect(self.accept_yes)
+        self.no_button.clicked.connect(self.reject_no)
+
+        foot = white_foot(f)
+        foot_layout = QtWidgets.QVBoxLayout(foot)
+        foot_layout.setContentsMargins(0, int(8 * f), 0, int(12 * f))
+        foot_layout.setSpacing(int(8 * f))
+        foot_layout.addWidget(self.timer_label)
+        buttons = QtWidgets.QHBoxLayout()
+        buttons.setSpacing(int(20 * f))
+        buttons.addStretch(1)
+        buttons.addWidget(self.yes_button)
+        buttons.addWidget(self.no_button)
+        buttons.addStretch(1)
+        foot_layout.addLayout(buttons)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.message_label)
+        layout.addWidget(foot)
+        self.setFixedSize(self.sizeHint())
+        centre_on(self, parent)
         
         # Setup timer
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.update_countdown)
         self.timer.start(1000)  # Update every second
 
-
-        
     def update_countdown(self):
         """Update the countdown and auto-close when time runs out"""
         self.remaining_seconds -= 1
@@ -184,9 +201,13 @@ class TimedMessageBox(QtWidgets.QDialog):
     
     def reject_no(self):
         """User clicked No or timeout occurred"""
+        self.reject()
+
+    def reject(self):
+        """No, however it came: the button, the timeout or Escape."""
         self.timer.stop()
         self.result_value = QtWidgets.QMessageBox.No
-        self.reject()
+        super().reject()
     
     def get_result(self):
         """Get the result after dialog closes"""

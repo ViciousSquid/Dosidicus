@@ -5,7 +5,7 @@
   * nothing else starts until a language is chosen - main.py shows it before
     the game is even imported, and closing it quits;
   * so everything after it, the "Show tutorial?" question included, is in
-    the chosen language.
+    the chosen language - and that question is drawn the same way.
 """
 import os
 import subprocess
@@ -121,3 +121,35 @@ open({str(probe)!r}, 'a').write(' GAME STARTED')
                             env=dict(os.environ, QT_QPA_PLATFORM='offscreen'))
     assert result.returncode == 0, result.stderr[-2000:]
     assert probe.read_text() == '[]'                # shown first, and nothing after it
+
+
+def test_the_tutorial_prompt_is_drawn_like_the_splash():
+    import main
+    dialog = main.TimedMessageBox(None, 'Startup', 'Show tutorial?')
+    splash = language_splash.LanguageSplash(language_splash.available_languages(), 'en')
+    assert dialog.windowFlags() & QtCore.Qt.FramelessWindowHint
+    assert language_splash.BAR_GREY in dialog.message_label.styleSheet()
+    assert dialog.message_label.font().family() == splash.bar.font().family()
+    assert dialog.message_label.font().bold()
+    for button in (dialog.yes_button, dialog.no_button):
+        assert button.styleSheet() == language_splash.orange_button(
+            button.text(), language_splash.scale_factor(), width=140).styleSheet()
+    assert splash.ok.styleSheet() == language_splash.orange_button(
+        'OK', language_splash.scale_factor()).styleSheet()
+    assert dialog.width() == splash.width()
+    dialog.deleteLater()
+
+
+def test_the_tutorial_prompt_answers_yes_no_and_declines_itself():
+    import main
+    yes = main.TimedMessageBox(None, 'Startup', 'Show tutorial?')
+    yes.yes_button.click()
+    assert yes.get_result() == QtWidgets.QMessageBox.Yes and not yes.timer.isActive()
+    escaped = main.TimedMessageBox(None, 'Startup', 'Show tutorial?')
+    escaped.result_value = QtWidgets.QMessageBox.Yes
+    escaped.keyPressEvent(QtGui.QKeyEvent(QtCore.QEvent.KeyPress, QtCore.Qt.Key_Escape,
+                                          QtCore.Qt.NoModifier))
+    assert escaped.get_result() == QtWidgets.QMessageBox.No
+    timed = main.TimedMessageBox(None, 'Startup', 'Show tutorial?', timeout_seconds=1)
+    timed.update_countdown()
+    assert timed.get_result() == QtWidgets.QMessageBox.No and not timed.timer.isActive()
