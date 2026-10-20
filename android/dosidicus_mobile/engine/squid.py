@@ -17,6 +17,8 @@ import uuid as _uuid
 from .personality import Personality, PERSONALITY_STAT_MODIFIERS
 from .brain import NeuralBrain
 from .memory import MemoryManager
+from . import shared  # noqa: F401  (locates src)
+from src.lifecycle import Lifecycle
 
 
 class Squid:
@@ -52,7 +54,10 @@ class Squid:
         self.is_sleeping = False
         self.is_sick = False
         self.is_eating = False
-        self.is_dead = False       # set when the squid starves (game over)
+        self.is_dead = False       # mirrors lifecycle.is_dead, for older readers
+        # Reproduction, the egg and death, shared with desktop (src/lifecycle.py).
+        self.lifecycle = Lifecycle()
+        self.inherited_from = []   # the parents a hatchling's weights came from
         self.color_tint = None     # (r,g,b) floats 0-1, or None for natural colour
         self.name = 'Squid'
         self.status = "just hatched"
@@ -172,6 +177,10 @@ class Squid:
 
     # ------------------------------------------------------------- care API
     def feed(self, food_type: str = "sushi"):
+        if not self.lifecycle.can_eat:
+            # A parent does not eat: a fact about its body, not a decision.
+            # Its hunger keeps rising by the ordinary rule.
+            return "won't eat - it has an egg"
         if self.is_sleeping:
             return "zzz... too sleepy to eat"
         self.brain.causal_learning.on_action('eating', self.sync_stats_to_brain(True))
@@ -389,6 +398,8 @@ class Squid:
                            if self.color_tint else None),
             "status": self.status, "age_seconds": self.age_seconds,
             "carrying_rock": self.carrying_rock, "carried_rock_id": self.carried_rock_id,
+            "lifecycle": self.lifecycle.to_dict(),
+            "inherited_from": list(self.inherited_from),
             "brain": self.brain.to_dict(),
             "memory": self.memory.to_dict(),
         }
@@ -419,6 +430,14 @@ class Squid:
         squid.carried_rock_id = data.get("carried_rock_id")
         squid.status = data.get("status", "resurfacing")
         squid.age_seconds = data.get("age_seconds", 0.0)
+        squid.lifecycle = Lifecycle.from_dict(data.get("lifecycle"))
+        if squid.is_dead and not squid.lifecycle.is_dead:
+            # Saved before deaths had causes: lethal damage, or left hungry.
+            from src.lifecycle import CAUSE_INJURED, CAUSE_NEGLECTED, CAUSE_STARVED
+            squid.lifecycle.die(CAUSE_INJURED if squid.health <= 0 else
+                                CAUSE_STARVED if squid.lifecycle.mating_id else CAUSE_NEGLECTED)
+        squid.is_dead = squid.lifecycle.is_dead
+        squid.inherited_from = [str(p)[:32] for p in (data.get("inherited_from") or [])][:2]
         return squid
 
     _last_dt = 0.033  # updated by the simulation each tick

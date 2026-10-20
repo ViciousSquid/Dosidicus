@@ -14,7 +14,7 @@ from plugins.multiplayer.host_body import HostBody
 from plugins.multiplayer.identity import SquidIdentity, ENCOUNTER_PROTOCOL_VERSION
 from plugins.multiplayer.peer_ledger import PeerLedger
 from plugins.multiplayer.remote_protocol import (
-    ActionIntent, ProtocolError, VisitEnd, new_visit_id, LINK_TIMEOUT,
+    ActionIntent, Gamete, ProtocolError, VisitEnd, new_visit_id, LINK_TIMEOUT, MSG_GAMETE,
 )
 from plugins.multiplayer.visitor_mind import VisitorMind
 
@@ -93,7 +93,11 @@ class PeerVisit:
     """One consented Nearby link. Transport callbacks execute on the UI thread."""
     def __init__(self, sim, send, hosting=False, clock=time.time):
         self.sim, self.send_bytes, self.hosting, self.clock = sim, send, hosting, clock
-        self.host = HostBody(World(sim, self), clock=clock, mating_chance=0.) if hosting else None
+        config = sim.lifecycle_config
+        self.host = HostBody(World(sim, self), clock=clock,
+                             mating_chance=config['mating_chance'],
+                             mating_contact_seconds=config['mating_contact_seconds'],
+                             on_mating=self._on_mating) if hosting else None
         self.ledger = PeerLedger(sim.squid.memory)
         self.mind = None if hosting else VisitorMind(sim, self.ledger, self.send, clock=clock)
         if self.mind:
@@ -109,10 +113,18 @@ class PeerVisit:
         return bool(self.mind and self.mind.perception.away and not self.closed)
 
     def begin(self):
+        """Open the visit. A parent stays with its egg and a dead squid goes
+        nowhere, so neither can visit; a dead squid hosts nobody."""
+        lifecycle = self.sim.squid.lifecycle
+        if (lifecycle.is_dead or not self.hosting and not lifecycle.can_visit
+                or self.sim.hatching):
+            self.close(notify=False)
+            return False
         if self.mind:
             self.mind.begin_visit(None)
         self.send('hello', {'identity': SquidIdentity.from_squid(self.sim.squid).to_payload(),
                             'hosting': self.hosting})
+        return True
 
     def send(self, kind, payload):
         data = json.dumps({'protocol': ENCOUNTER_PROTOCOL_VERSION,
@@ -150,6 +162,9 @@ class PeerVisit:
                     if end.visit_id != self.actor.visit_id:
                         return False
                     self.close(notify=False)
+                elif kind == MSG_GAMETE:
+                    if not self._keep_gamete(Gamete.from_payload(payload)):
+                        return False
                 else:
                     return False
             elif self.mind:
@@ -170,6 +185,29 @@ class PeerVisit:
         except (ValueError, TypeError, KeyError, ProtocolError):
             return False
 
+    def _on_mating(self, actor, mating_id):
+        """HostBody has resolved a mating with the resident: recorded in its
+        lifecycle (which lays the egg and saves), then in the encounter. The
+        visitor is told only if this returns True."""
+        if actor is not self.actor or not self.sim.record_reproduction(
+                mating_id, actor.identity.uuid, actor.identity.name):
+            return False
+        if self.session is not None:
+            self.session.note_mated(mating_id)
+        return True
+
+    def _keep_gamete(self, gamete):
+        """The mate's half of the egg's weights: kept only for this tank's own
+        egg, from that very mating, from the squid that mated - and once. The
+        visitor resends it with each announcement of the news; a resend is a
+        valid packet that changes nothing."""
+        lifecycle = self.sim.squid.lifecycle
+        if (gamete.visit_id != self.actor.visit_id or lifecycle.mating_id != gamete.mating_id
+                or lifecycle.mate_uuid != self.actor.uuid):
+            return False
+        self.sim.add_mate_genes(gamete.mating_id, self.actor.identity.name, gamete.genes)
+        return True
+
     def report(self, kind, detail):
         if self.actor is not None and not self.closed:
             self.host._report(self.actor, kind, detail)
@@ -185,6 +223,11 @@ class PeerVisit:
             return
         self.elapsed = 0.
         if self.host and self.actor:
+            # The host's housekeeping, as on desktop: news of a mating, repeated
+            # over the next round trips, and a visit whose link has gone quiet.
+            if self.host.tick():
+                self.close()
+                return
             actor, v = self.actor, self.body
             if v['fighting']:
                 actor.x, actor.y = v['x'], v['y']

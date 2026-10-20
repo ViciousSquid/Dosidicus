@@ -96,6 +96,7 @@ class TankView(Widget):
             "startled": _load_inverted("startled.png"),
             "curious": _load_inverted("curious.png"),
             "ink": _load("inkcloud.png"),
+            "egg": _load("egg.png"),
         }
         self._egg_frames = [f for f in
                             (_load_egg_frame(f"egg/anim0{i}.jpg") for i in range(1, 7))
@@ -143,6 +144,71 @@ class TankView(Widget):
         x = self.x + (tx / tw) * self.width
         y = self.y + (1.0 - ty / th) * self.height
         return x, y
+
+    def _draw_squid(self, squid, squid_w, squid_h, icon_sz):
+        """The resident: sprite, tint, name tag and mental-state icon."""
+        # Squid sprite (aspect-correct; swim frames swap once per second).
+        sx, sy = self._map(squid.x, squid.y)
+        frame = int(time.time()) % 2
+        if squid.is_sleeping:
+            tex = self._tex["sleep"][frame]
+        else:
+            tex = self._tex[squid.direction][frame]
+        sq_pos = (sx - squid_w / 2, sy - squid_h / 2)
+        Color(1, 1, 1, 1)
+        if tex:
+            Rectangle(texture=tex, pos=sq_pos, size=(squid_w, squid_h))
+            # Colour tint: overlay a translucent wash of the chosen colour,
+            # masked to the squid's shape by re-drawing its own texture
+            # (like the desktop's SourceAtop tint). Texture detail shows
+            # through the ~47% alpha.
+            if getattr(squid, "fighting", False):
+                tint, alpha = (1.0, 0.2, 0.2), 0.55   # red while fighting
+            else:
+                tint, alpha = getattr(squid, "color_tint", None), 0.47
+            if tint:
+                Color(tint[0], tint[1], tint[2], alpha)
+                Rectangle(texture=tex, pos=sq_pos, size=(squid_w, squid_h))
+                Color(1, 1, 1, 1)
+        else:
+            Color(0.9, 0.5, 0.8, 1)
+            Rectangle(pos=sq_pos, size=(squid_w, squid_h))
+
+        tag = self._name_texture(squid.name)
+        if tag:
+            th = dp(18)
+            tw = min(self.width-dp(20), dp(210), th * tag.width / max(1, tag.height))
+            left = max(self.x+dp(6), min(sx-tw/2, self.right-tw-dp(6)))
+            bottom = max(self.y+dp(8), sy-squid_h/2-th-dp(12))
+            Color(.04, .07, .13, .85)
+            RoundedRectangle(pos=(left-dp(6), bottom-dp(4)),
+                             size=(tw+dp(12), th+dp(8)), radius=[dp(7)])
+            Color(1, 1, 1, 1)
+            Rectangle(texture=tag, pos=(left, bottom), size=(tw, th))
+
+        # Above the head: while asleep show a "Zzz"; otherwise a mental-state
+        # icon mirroring the desktop set — startled "!" (takes priority — a
+        # fright is salient), then sick skull, then curious "?".
+        icon_pos = (sx - icon_sz / 2, sy + squid_h / 2 - icon_sz * 0.2)
+        if squid.is_sleeping and self._zzz_tex:
+            zt = self._zzz_tex
+            zw = icon_sz * 1.3
+            zh = zw * (zt.height / zt.width) if zt.width else zw * 0.6
+            Color(1, 1, 1, 1)
+            Rectangle(texture=zt, pos=(sx - zw / 2, sy + squid_h / 2 - zh * 0.2),
+                      size=(zw, zh))
+        else:
+            overlay = None
+            if getattr(squid, "is_startled", False) and self._tex["startled"]:
+                overlay = self._tex["startled"]
+            elif squid.is_sick and self._tex["sick"]:
+                overlay = self._tex["sick"]
+            elif self._is_curious(squid) and self._tex["curious"]:
+                overlay = self._tex["curious"]
+            if overlay:
+                Color(1, 1, 1, 1)
+                Rectangle(texture=overlay, pos=icon_pos, size=(icon_sz, icon_sz))
+
 
     def redraw(self, *args):
         self.canvas.clear()
@@ -211,8 +277,9 @@ class TankView(Widget):
                               size=(food_sz * 0.66, food_sz * 0.66))
 
             # Visiting squids from nearby players: drawn dimmed with a name tag,
-            # behind the resident squid, using the same swim frames.
-            vframe = int(time.time()) % 2
+            # behind the resident squid, using the same swim frames - always the
+            # other one, so host and guest never swim in step.
+            vframe = (int(time.time()) + 1) % 2
             vis_w = squid_w * 0.85
             vis_h = vis_w / SQUID_ASPECT
             for v in getattr(sim, "visitors", []):
@@ -238,67 +305,19 @@ class TankView(Widget):
                               size=(tw, th))
                 Color(1, 1, 1, 1)
 
-            # Squid sprite (aspect-correct; swim frames swap once per second).
-            sx, sy = self._map(squid.x, squid.y)
-            frame = int(time.time()) % 2
-            if squid.is_sleeping:
-                tex = self._tex["sleep"][frame]
-            else:
-                tex = self._tex[squid.direction][frame]
-            sq_pos = (sx - squid_w / 2, sy - squid_h / 2)
-            Color(1, 1, 1, 1)
-            if tex:
-                Rectangle(texture=tex, pos=sq_pos, size=(squid_w, squid_h))
-                # Colour tint: overlay a translucent wash of the chosen colour,
-                # masked to the squid's shape by re-drawing its own texture
-                # (like the desktop's SourceAtop tint). Texture detail shows
-                # through the ~47% alpha.
-                if getattr(squid, "fighting", False):
-                    tint, alpha = (1.0, 0.2, 0.2), 0.55   # red while fighting
-                else:
-                    tint, alpha = getattr(squid, "color_tint", None), 0.47
-                if tint:
-                    Color(tint[0], tint[1], tint[2], alpha)
-                    Rectangle(texture=tex, pos=sq_pos, size=(squid_w, squid_h))
-                    Color(1, 1, 1, 1)
-            else:
-                Color(0.9, 0.5, 0.8, 1)
-                Rectangle(pos=sq_pos, size=(squid_w, squid_h))
-
-            tag = self._name_texture(squid.name)
-            if tag:
-                th = dp(18)
-                tw = min(self.width-dp(20), dp(210), th * tag.width / max(1, tag.height))
-                left = max(self.x+dp(6), min(sx-tw/2, self.right-tw-dp(6)))
-                bottom = max(self.y+dp(8), sy-squid_h/2-th-dp(12))
-                Color(.04, .07, .13, .85)
-                RoundedRectangle(pos=(left-dp(6), bottom-dp(4)),
-                                 size=(tw+dp(12), th+dp(8)), radius=[dp(7)])
+            # The egg a parent is keeping, on the floor where it was laid.
+            egg = getattr(getattr(squid, 'lifecycle', None), 'egg', None)
+            if egg and self._tex.get("egg"):
+                ex, ey = self._map(egg.get("x", 0.), egg.get("y", 0.))
+                etex = self._tex["egg"]
+                eh = squid_h * 0.9
+                ew = eh * (etex.width / etex.height) if etex.height else eh * 0.75
                 Color(1, 1, 1, 1)
-                Rectangle(texture=tag, pos=(left, bottom), size=(tw, th))
+                Rectangle(texture=etex, pos=(ex - ew / 2, ey - eh / 2), size=(ew, eh))
 
-            # Above the head: while asleep show a "Zzz"; otherwise a mental-state
-            # icon mirroring the desktop set — startled "!" (takes priority — a
-            # fright is salient), then sick skull, then curious "?".
-            icon_pos = (sx - icon_sz / 2, sy + squid_h / 2 - icon_sz * 0.2)
-            if squid.is_sleeping and self._zzz_tex:
-                zt = self._zzz_tex
-                zw = icon_sz * 1.3
-                zh = zw * (zt.height / zt.width) if zt.width else zw * 0.6
-                Color(1, 1, 1, 1)
-                Rectangle(texture=zt, pos=(sx - zw / 2, sy + squid_h / 2 - zh * 0.2),
-                          size=(zw, zh))
-            else:
-                overlay = None
-                if getattr(squid, "is_startled", False) and self._tex["startled"]:
-                    overlay = self._tex["startled"]
-                elif squid.is_sick and self._tex["sick"]:
-                    overlay = self._tex["sick"]
-                elif self._is_curious(squid) and self._tex["curious"]:
-                    overlay = self._tex["curious"]
-                if overlay:
-                    Color(1, 1, 1, 1)
-                    Rectangle(texture=overlay, pos=icon_pos, size=(icon_sz, icon_sz))
+            # A dead squid's body has given way to its headstone.
+            if not getattr(getattr(squid, 'lifecycle', None), 'is_dead', False):
+                self._draw_squid(squid, squid_w, squid_h, icon_sz)
 
             fight = getattr(sim, 'fight', None)
             if fight and fight.get('phase') == 'fighting':

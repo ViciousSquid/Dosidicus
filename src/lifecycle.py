@@ -11,12 +11,13 @@ still loaded, so it lives here, in the core, and is written into the save.
                                |                    |
                              egg laid           egg hatches -> a new squid
 
-    living  --neglected / untreated sickness-->  dead
+    living  --neglected / untreated sickness / injuries-->  dead
                                      (no egg: a new squid hatches from a fresh one)
 
 A squid left at its hungriest for too long dies of neglect, and any squid -
-a parent too - dies of a sickness left too long without medicine. Every dead
-squid, however it died, leaves a headstone in its tank (see TamagotchiLogic).
+a parent too - dies of a sickness left too long without medicine, or of its
+injuries once its body has no health left. Every dead squid, however it died,
+leaves a headstone in its tank (see TamagotchiLogic).
 
 Three rules hold the whole thing together:
 
@@ -42,7 +43,7 @@ could be, stored here.
 
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 #: Asked the first time multiplayer is switched on, on desktop and mobile
 #: alike, and switched on only if the answer is yes. Multiplayer is the only
@@ -65,16 +66,19 @@ EGG_HATCHING = 'hatching'
 EGG_STATES = (EGG_INCUBATING, EGG_HATCHING)
 
 #: How a squid died. A parent starves after it stops eating; any other squid
-#: can die of neglect; any squid can die of a sickness left untreated.
+#: can die of neglect; any squid can die of a sickness left untreated, or of
+#: injuries (rocks, fights) that leave it no health.
 CAUSE_STARVED = 'starved'
 CAUSE_NEGLECTED = 'neglected'
 CAUSE_SICKNESS = 'sickness'
-CAUSES = (CAUSE_STARVED, CAUSE_NEGLECTED, CAUSE_SICKNESS)
+CAUSE_INJURED = 'injured'
+CAUSES = (CAUSE_STARVED, CAUSE_NEGLECTED, CAUSE_SICKNESS, CAUSE_INJURED)
 
 #: The stages each cause of death can end.
 _DIES_FROM = {CAUSE_STARVED: (STAGE_PARENT,),
               CAUSE_NEGLECTED: (STAGE_LIVING,),
-              CAUSE_SICKNESS: (STAGE_LIVING, STAGE_PARENT)}
+              CAUSE_SICKNESS: (STAGE_LIVING, STAGE_PARENT),
+              CAUSE_INJURED: (STAGE_LIVING, STAGE_PARENT)}
 
 #: Defaults for config.ini [Lifecycle]. See ConfigManager.get_lifecycle_config.
 DEFAULT_CONFIG = {
@@ -263,6 +267,19 @@ class Lifecycle:
             return False
         return self.die(CAUSE_SICKNESS)
 
+    def injure(self, squid) -> bool:
+        """A squid whose body has no health left dies of its injuries. True
+        if it just died.
+
+        Checked before starve(): a parent knocked to nothing by a rock did not
+        starve, while one whose starving takes the last of it this tick did.
+        """
+        if self.stage == STAGE_DEAD or squid is None:
+            return False
+        if float(getattr(squid, 'health', 100.0)) > 0.0:
+            return False
+        return self.die(CAUSE_INJURED)
+
     def die(self, cause: str = CAUSE_STARVED, now: Optional[float] = None) -> bool:
         """-> dead, by a cause that can end the current stage. True only once."""
         if self.stage not in _DIES_FROM.get(cause, ()):
@@ -312,8 +329,8 @@ class Lifecycle:
         reproduced = isinstance(reproduction, dict) and is_valid_mating_id(
             reproduction.get('mating_id'))
         if stage == STAGE_DEAD and not reproduced:
-            # Died without ever reproducing: of neglect or of sickness.
-            if cause in (CAUSE_NEGLECTED, CAUSE_SICKNESS):
+            # Died without ever reproducing: of neglect, sickness or injuries.
+            if cause in (CAUSE_NEGLECTED, CAUSE_SICKNESS, CAUSE_INJURED):
                 lifecycle.stage = STAGE_DEAD
                 lifecycle.death = {'cause': cause, 'at': _number(death.get('at'))}
             return lifecycle
@@ -321,9 +338,9 @@ class Lifecycle:
             return lifecycle
         lifecycle.stage = stage
         if stage == STAGE_DEAD:
-            # A dead parent starved or was sick; saves from before causes
-            # were recorded have no 'death' and mean it starved.
-            if cause not in (CAUSE_STARVED, CAUSE_SICKNESS):
+            # A dead parent starved, was sick or injured; saves from before
+            # causes were recorded have no 'death' and mean it starved.
+            if cause not in (CAUSE_STARVED, CAUSE_SICKNESS, CAUSE_INJURED):
                 cause = CAUSE_STARVED
             lifecycle.death = {'cause': cause, 'at': _number(death.get('at'))}
         lifecycle.reproduction = {
@@ -347,6 +364,50 @@ class Lifecycle:
         return lifecycle
 
 
+def age_in_words(seconds: Any) -> str:
+    """How long a squid lived, as a person would say it: '2d 4h', '3h 12m'."""
+    total = int(max(0.0, _number(seconds)))
+    days, rest = divmod(total, 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes, secs = divmod(rest, 60)
+    if days:
+        return f"{days}d {hours}h"
+    if hours:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m {secs}s"
+
+
+def epitaph(stone: Any) -> List[str]:
+    """What a headstone says of the squid beneath it, line by line.
+
+    `stone` is the headstone's saved record: its name ('deceased') and, for
+    stones laid since they were kept, its age and its fights won and lost.
+    Older stones bear the name alone.
+    """
+    stone = stone if isinstance(stone, dict) else {}
+    lines = [f"RIP {str(stone.get('deceased') or 'Squid')[:32]}"]
+    if stone.get('age_seconds') is not None:
+        lines.append(f"Lived {age_in_words(stone.get('age_seconds'))}")
+    if stone.get('fights_won') is not None or stone.get('fights_lost') is not None:
+        won = int(max(0.0, _number(stone.get('fights_won'))))
+        lost = int(max(0.0, _number(stone.get('fights_lost'))))
+        lines.append(f"Fights won: {won}, lost: {lost}")
+    return lines
+
+
+def headstone_record(squid, age_seconds: Any = 0.0, fights_won: Any = 0,
+                     fights_lost: Any = 0) -> Dict[str, Any]:
+    """What a headstone keeps of the squid it marks, for its epitaph."""
+    lifecycle = getattr(squid, 'lifecycle', None)
+    return {
+        'deceased': str(getattr(squid, 'name', '') or 'Squid')[:32],
+        'age_seconds': round(max(0.0, _number(age_seconds)), 1),
+        'fights_won': int(max(0.0, _number(fights_won))),
+        'fights_lost': int(max(0.0, _number(fights_lost))),
+        'died_of': getattr(lifecycle, 'death_cause', '') if lifecycle is not None else '',
+    }
+
+
 def _number(value: Any, default: float = 0.0) -> float:
     try:
         return float(value)
@@ -354,8 +415,10 @@ def _number(value: Any, default: float = 0.0) -> float:
         return default
 
 
-__all__ = ['Lifecycle', 'is_valid_mating_id', 'DEFAULT_CONFIG',
+__all__ = ['Lifecycle', 'is_valid_mating_id', 'DEFAULT_CONFIG', 'epitaph',
+           'headstone_record', 'age_in_words',
            'MULTIPLAYER_RISK_TITLE', 'MULTIPLAYER_RISK_NOTICE',
            'STAGE_LIVING', 'STAGE_PARENT', 'STAGE_DEAD', 'STAGES',
            'EGG_INCUBATING', 'EGG_HATCHING', 'EGG_STATES',
-           'CAUSE_STARVED', 'CAUSE_NEGLECTED', 'CAUSE_SICKNESS', 'CAUSES']
+           'CAUSE_STARVED', 'CAUSE_NEGLECTED', 'CAUSE_SICKNESS', 'CAUSE_INJURED',
+           'CAUSES']

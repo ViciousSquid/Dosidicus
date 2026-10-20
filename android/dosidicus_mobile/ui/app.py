@@ -67,6 +67,9 @@ class DosidicusApp(App):
         self._banner_until = 0.0
         self._ach_queue = []                       # pending achievement toasts
         self.sim.achievements.on_unlock = self._on_achievement
+        # A mating, a death or a new life is saved the moment it happens.
+        self.sim.on_save = self._save
+        self._generation = self.sim.generation
 
         root = BoxLayout(orientation="vertical", spacing=2, padding=2)
 
@@ -148,11 +151,11 @@ class DosidicusApp(App):
 
         # The Android presplash (assets/presplash.png) is the startup splash;
         # we don't stack a second in-app splash on top of it. The container
-        # FloatLayout stays so overlays (e.g. game over) have somewhere to live.
+        # FloatLayout stays so overlays have somewhere to live.
         container = FloatLayout()
         container.add_widget(root)
         self._container = container
-        self._game_over_overlay = None
+        self.deco_layer.on_headstone = self._read_headstone
         return container
 
     # ---------------------------------------------------------- persistence
@@ -197,6 +200,8 @@ class DosidicusApp(App):
         sim.tank_size = TANK_SIZE
         sim.squid.tank_size = TANK_SIZE
         sim.achievements.on_unlock = self._on_achievement
+        sim.on_save = self._save
+        self._generation = sim.generation
         self.tank.set_simulation(sim)
         self.deco_layer.set_simulation(sim)
         self.brain.set_simulation(sim)
@@ -206,51 +211,11 @@ class DosidicusApp(App):
         self.tank.redraw()
 
     def new_game(self):
-        self._dismiss_game_over()
         self.set_simulation(Simulation(tank_size=TANK_SIZE, squid=Squid(tank_size=TANK_SIZE)))
         self.sim.start_hatching()            # a new game begins as an egg
         self._pending_tutorial = True         # offer the tutorial once it hatches
         self._was_hatching = True
         self.save_now()
-
-    # ---------------------------------------------------------- game over
-    def _show_game_over(self):
-        """Full-screen 'game over' overlay when the squid has starved."""
-        overlay = FloatLayout()
-        with overlay.canvas.before:
-            Color(0.03, 0.02, 0.04, 0.88)
-            bg = Rectangle(pos=overlay.pos, size=overlay.size)
-        overlay.bind(pos=lambda *_: setattr(bg, "pos", overlay.pos),
-                     size=lambda *_: setattr(bg, "size", overlay.size))
-
-        panel = BoxLayout(orientation="vertical", spacing=dp(14), padding=dp(20),
-                          size_hint=(0.82, None), height=dp(240),
-                          pos_hint={"center_x": 0.5, "center_y": 0.5})
-
-        def _lbl(text, size, color):
-            l = Label(text=text, markup=True, font_size=size, color=color,
-                      halign="center", valign="middle", size_hint_y=None,
-                      height=size * 2.0)
-            l.bind(size=lambda *_: setattr(l, "text_size", l.size))
-            return l
-
-        panel.add_widget(_lbl("[b]Game Over[/b]", sp(30), (1, 0.45, 0.4, 1)))
-        panel.add_widget(_lbl("Your squid starved.\nIt was left too hungry for "
-                              "too long.", sp(16), (0.9, 0.92, 0.96, 1)))
-        btn = Button(text="New game", font_size=sp(18), bold=True,
-                     background_normal="", background_color=(0.5, 0.28, 0.72, 1),
-                     size_hint_y=None, height=dp(56))
-        btn.bind(on_release=lambda *_: self.new_game())
-        panel.add_widget(btn)
-        overlay.add_widget(panel)
-
-        self._game_over_overlay = overlay
-        self._container.add_widget(overlay)
-
-    def _dismiss_game_over(self):
-        if self._game_over_overlay is not None:
-            self._container.remove_widget(self._game_over_overlay)
-            self._game_over_overlay = None
 
     # --------------------------------------------------------------- header
     def _header_text(self):
@@ -333,6 +298,11 @@ class DosidicusApp(App):
         """Queue an unlock toast (shown one at a time by tick())."""
         self._ach_queue.append(ach)
 
+    def _read_headstone(self, stone):
+        """A tap on a headstone reads its epitaph: name, age, fights."""
+        from src.lifecycle import epitaph
+        self._flash("[color=dddddd]" + "   ".join(epitaph(stone)) + "[/color]", seconds=4.0)
+
     def _toggle_view(self, *a):
         self.showing_brain = not self.showing_brain
         self.viewport.clear_widgets()
@@ -357,6 +327,16 @@ class DosidicusApp(App):
             return
         dt = min(dt, 0.1)  # clamp after backgrounding so needs don't jump
         status = self.sim.update(dt)
+
+        # A death is followed by a new life in this tank: every view follows
+        # the hatchling. No game over, and no tutorial - it is not a new game.
+        if self.sim.generation != self._generation:
+            self.set_simulation(self.sim)
+            self._was_hatching = True
+        if self.sim.lifecycle_events:
+            self._flash("[color=b39ddb]" + "  ".join(self.sim.lifecycle_events) + "[/color]",
+                        seconds=4.0)
+            self.sim.lifecycle_events.clear()
 
         # Egg just hatched: celebrate and (first time) offer the tutorial.
         if self._was_hatching and not self.sim.hatching:
@@ -385,10 +365,6 @@ class DosidicusApp(App):
                 self._flash(f"[b][color=ff2222]{ev}[/color][/b]", seconds=3.0)
             else:
                 self._flash(f"[color=b39ddb]{ev}[/color]", seconds=3.0)
-
-        # Game over: the squid starved. Show the overlay once.
-        if self.sim.game_over and self._game_over_overlay is None:
-            self._show_game_over()
 
         # Redraw only the visible view for efficiency.
         if self.showing_brain:

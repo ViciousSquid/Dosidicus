@@ -215,9 +215,9 @@ ACHIEVEMENT_DEFINITIONS: Dict[str, Achievement] = {
         description="ach_all_stats_high_desc",
         icon="⚖️", category="milestones", points=40, tier=3,
     ),
-    # A parent stops eating after a multiplayer mating and starves, leaving
-    # its egg to hatch (src/lifecycle.py). Hidden: the mobile game has no
-    # mating, so it would otherwise list a goal it can never reach.
+    # A parent stops eating after a multiplayer mating and dies, leaving its
+    # egg to hatch (src/lifecycle.py), on desktop or mobile. Hidden: the egg's
+    # story is found, not set as a goal.
     "circle_of_life": Achievement(
         id="circle_of_life",
         name="ach_circle_of_life_name",

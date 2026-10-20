@@ -148,6 +148,11 @@ class AchievementManager:
         self._tiered(self._count("fights"), [
             (1, "first_fight"), (5, "fights_5"), (20, "fights_20"), (50, "fights_50")])
 
+    def on_squid_died(self, squid):
+        """CIRCLE OF LIFE: a parent died, leaving its egg to hatch."""
+        if getattr(getattr(squid, 'lifecycle', None), 'mating_id', ''):
+            self._unlock("circle_of_life")
+
     def on_brain_opened(self):
         self._unlock("brain_surgeon")
 

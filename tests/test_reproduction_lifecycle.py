@@ -1210,7 +1210,11 @@ class DeathAndHeadstoneTests(unittest.TestCase):
 
             [stone] = headstones_in(logic)
             self.assertEqual(stone.deceased, "Manuel")
-            self.assertEqual(stone.epitaph(), "<span>RIP Manuel</span>")
+            # Its epitaph: name, how long it lived, its fights - on hover too.
+            self.assertTrue(stone.epitaph().startswith("<span>RIP Manuel<br>Lived "))
+            self.assertIn("Fights won: 0, lost: 0", stone.epitaph())
+            self.assertEqual(stone.toolTip(), stone.epitaph())
+            self.assertEqual(stone.headstone['died_of'], 'neglected')
             # A decoration: seen and pushed like any, never carried or thrown.
             self.assertEqual(stone.category, 'decoration')
             self.assertFalse(stone.can_be_picked_up)
@@ -1346,6 +1350,21 @@ class HeadstoneDecorationTests(unittest.TestCase):
         self.assertLessEqual(self.stone.pixmap().width(), 253 * 0.8)
         self.assertLessEqual(self.stone.pixmap().height(), 147 * 0.8)
         self.assertGreaterEqual(self.stone.pixmap().height(), int(147 * 0.8) - 1)
+
+    def test_an_old_stone_bears_its_name_alone(self):
+        self.assertEqual(self.stone.epitaph(), "<span>RIP Manuel</span>")
+
+    def test_its_epitaph_survives_a_save(self):
+        from src.ui import Ui
+        self.stone.set_epitaph({'deceased': 'Manuel', 'age_seconds': 7260.,
+                                'fights_won': 4, 'fights_lost': 2, 'died_of': 'starved'})
+        saved = Ui.get_decorations_data(self.ui)
+        self.scene.removeItem(self.stone)
+        Ui.add_decorations_data(self.ui, saved)
+        [stone] = [i for i in self.scene.items() if getattr(i, 'is_headstone', False)]
+        self.assertEqual(stone.epitaph(),
+                         "<span>RIP Manuel<br>Lived 2h 1m<br>Fights won: 4, lost: 2</span>")
+        self.assertEqual(stone.toolTip(), stone.epitaph())
 
     def test_its_name_and_limit_survive_a_save(self):
         from src.ui import Ui

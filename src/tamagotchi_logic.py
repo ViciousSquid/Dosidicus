@@ -3189,7 +3189,13 @@ class TamagotchiLogic:
             return None
         path = os.path.join(HEADSTONE_DIR, random.choice(stones))
         item = ResizablePixmapItem(QtGui.QPixmap(path), path)
-        item.deceased = str(getattr(squid, 'name', '') or 'Squid')[:32]
+        # Its name, how long it lived and its fights, for its epitaph.
+        from .lifecycle import headstone_record
+        statistics = getattr(squid, 'statistics', None)
+        age = getattr(statistics, 'get_total_age_seconds', None)
+        item.set_epitaph(headstone_record(
+            squid, age() if callable(age) else 0.0,
+            getattr(statistics, 'fights_won', 0), getattr(statistics, 'fights_lost', 0)))
         item.limit_headstone(squid)
         stone = item.pixmap()
         ui = self.user_interface

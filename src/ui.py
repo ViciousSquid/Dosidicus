@@ -107,6 +107,8 @@ class DecorationItem(QtWidgets.QLabel):
 #: A dead squid's headstones. Not in images/decoration, so the player cannot
 #: place one from the Decorations window.
 HEADSTONE_DIR = os.path.join("images", "headstones")
+#: Kept with a headstone in the save, beside its name ('deceased').
+HEADSTONE_FIELDS = ('age_seconds', 'fights_won', 'fights_lost', 'died_of')
 
 
 def is_headstone_file(filename) -> bool:
@@ -151,6 +153,9 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         # never carried, thrown or deleted.
         self.is_headstone = is_headstone_file(filename)
         self.deceased = ''
+        #: What the stone keeps of the squid beneath it: age, fights won and
+        #: lost, and what it died of (src/lifecycle.py headstone_record).
+        self.headstone = {}
         #: (width, height) this item may never grow past; None for no limit.
         self.max_size = None
         if self.is_headstone:
@@ -227,9 +232,18 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         if self.is_headstone:
             QtWidgets.QToolTip.showText(event.screenPos(), self.epitaph())
 
+    def set_epitaph(self, record) -> None:
+        """Who lies here, and what the stone says of them, shown on hover."""
+        record = record if isinstance(record, dict) else {}
+        self.deceased = str(record.get('deceased') or self.deceased or '')[:32]
+        self.headstone = {key: record[key] for key in HEADSTONE_FIELDS if key in record}
+        self.setToolTip(self.epitaph())
+
     def epitaph(self) -> str:
         import html
-        return f"<span>RIP {html.escape(self.deceased or 'Squid')}</span>"
+        from .lifecycle import epitaph
+        lines = epitaph(dict(self.headstone, deceased=self.deceased or 'Squid'))
+        return "<span>" + "<br>".join(html.escape(line) for line in lines) + "</span>"
 
     def mouseMoveEvent(self, event):
         current_pos = event.pos()
@@ -1935,6 +1949,7 @@ class Ui:
                     }
                     if item.is_headstone:
                         decoration_dict['deceased'] = item.deceased
+                        decoration_dict.update(item.headstone)
                     decorations_data.append(decoration_dict)
                 except Exception as e:
                     print(f"Error serializing decoration: {e}")
@@ -1970,7 +1985,7 @@ class Ui:
                 scale = decoration_dict.get('scale', 1.0)
                 item.setScale(scale)
                 if item.is_headstone:
-                    item.deceased = str(decoration_dict.get('deceased') or '')[:32]
+                    item.set_epitaph(decoration_dict)
                     # Grow and shrink from the full-size stone, not the saved copy.
                     if os.path.exists(filename):
                         item.original_pixmap = QtGui.QPixmap(filename)

@@ -68,7 +68,9 @@ def export_squid(sim: Simulation, path: str):
         'game_state': dict(previous_game,
             squid=dict(previous_game.get('squid', {}), **pet),
             tamagotchi_logic=previous_game.get('tamagotchi_logic', {}),
-            decorations=previous_game.get('decorations', [])),
+            decorations=previous_game.get('decorations', []),
+            # Where desktop keeps the parent's state and its egg, as one record.
+            lifecycle=squid.lifecycle.to_dict()),
         'mobile_state': sim.to_dict(),
         'brain_state': _brain_state_desktop(squid.brain),
         'statistics': sim.stats.to_dict(),
@@ -140,6 +142,11 @@ def import_squid(path: str, tank_size=(900, 500)) -> Simulation:
     for name in ('uuid', 'name', 'is_sick', 'is_sleeping', 'is_dead', 'age_seconds', 'direction', 'health'):
         if name in pet:
             setattr(squid, name, pet[name])
+    if mobile is None and isinstance(game.get('lifecycle'), dict):
+        # A desktop save: its lifecycle record (a parent, its egg, a death).
+        from src.lifecycle import Lifecycle
+        squid.lifecycle = Lifecycle.from_dict(game['lifecycle'])
+        squid.is_dead = squid.lifecycle.is_dead
     squid.x = pet.get('squid_x', pet.get('x', squid.x))
     squid.y = pet.get('squid_y', pet.get('y', squid.y))
     if pet.get('tint_color'):

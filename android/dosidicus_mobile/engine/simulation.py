@@ -53,11 +53,14 @@ class Simulation:
         # falls asleep. Set for one tick after a consolidation so the UI can flash.
         self._was_sleeping = self.squid.is_sleeping
         self.sleep_consolidation = None
-        # Starvation / game over: prolonged severe hunger is fatal.
-        self.STARVE_HUNGER = 90.0      # hunger at/above this counts as starving
-        self.STARVE_SECONDS = 300.0    # ...for this long (5 real-world minutes)
-        self._starving_time = 0.0
-        self.game_over = self.squid.is_dead
+        # Reproduction, the egg and death (src/lifecycle.py), with desktop's
+        # [Lifecycle] defaults. A death is followed by a new life in this tank.
+        from src.lifecycle import DEFAULT_CONFIG
+        self.lifecycle_config = dict(DEFAULT_CONFIG)
+        self._death_t = 0.0            # seconds since the squid died
+        self.generation = 0            # bumped each time a new life begins here
+        self.lifecycle_events = []     # news for the player: a mating, a death, a hatch
+        self.on_save = None            # the app's save, for events that must persist now
         # Achievements (mobile port of the desktop plugin). The app wires an
         # on_unlock callback for the toast; events fire from update()/care API.
         self.achievements = AchievementManager()
@@ -444,6 +447,8 @@ class Simulation:
     def on_shake(self):
         """The player physically shook the device: the squid is badly rattled."""
         squid = self.squid
+        if self.game_over or self.hatching:
+            return
         squid.anxiety = min(100.0, squid.anxiety + 30.0)
         squid.happiness = max(0.0, squid.happiness - 12.0)
         squid.satisfaction = max(0.0, squid.satisfaction - 8.0)
@@ -878,6 +883,8 @@ class Simulation:
                 p["y"] = min(floor, p["y"] + 90 * dt)
 
     def _try_eat(self):
+        if not self.squid.lifecycle.can_eat:
+            return False   # a parent does not eat; the food stays where it is
         eaten = []
         from src.brain_constants import ACTION_THRESHOLDS
         driven_to_eat = self.squid._bound_action == 'eating' and self.squid.brain.sim_time < self.squid._bound_until
@@ -969,6 +976,183 @@ class Simulation:
                 squid.wants_to_play = True
                 self._update_rock_play(0)
 
+    # ------------------------------------------------------------- lifecycle
+    #: Pause between a death and the new life that follows it, so the player
+    #: sees the one happen before the other (TamagotchiLogic.HATCH_DELAY_MS).
+    HATCH_DELAY = 3.0
+    #: How each death is told, as on desktop.
+    DEATH_MESSAGES = {
+        'starved': "{name} has died.",
+        'neglected': "{name} has died of neglect.",
+        'sickness': "{name} has died of sickness.",
+        'injured': "{name} has died of its injuries.",
+    }
+
+    #: The stones desktop draws from (images/headstones); the APK carries
+    #: the same files under assets/headstones.
+    HEADSTONES = tuple(f"headstone{i:02d}.png" for i in range(1, 11))
+
+    @property
+    def game_over(self):
+        """Dead, and not yet followed by its new life. Nothing ends the game:
+        a death is followed by a hatching in the same tank."""
+        return self.squid.lifecycle.is_dead
+
+    def _announce(self, message):
+        self.last_status = message
+        self.lifecycle_events.append(message)
+
+    def _save_now(self):
+        """Persist an event at once (a mating, a death, a new life), as desktop
+        does; a failed write keeps it in memory for the next save."""
+        if callable(self.on_save):
+            try:
+                self.on_save()
+            except Exception as e:
+                print(f"[Lifecycle] could not save immediately: {e}")
+
+    def _check_death(self, dt):
+        """One tick of the shared lifecycle's ways to die. True if it just died."""
+        squid, config = self.squid, self.lifecycle_config
+        lifecycle = squid.lifecycle
+        # The health a starving parent loses: desktop's rate, per second.
+        loss = (0.2 if squid.happiness < 20 and squid.cleanliness < 20 else 0.1) * dt
+        if (lifecycle.injure(squid)
+                or lifecycle.starve(squid, loss, config['starvation_hunger'])
+                or lifecycle.sicken(squid, dt, config['sickness_seconds'])
+                or lifecycle.neglect(squid, dt, config['neglect_hunger'],
+                                     config['neglect_seconds'])):
+            self.on_squid_died()
+            return True
+        return False
+
+    def egg_position(self):
+        """On the tank floor, below where the parent is."""
+        w, h = self.tank_size
+        return max(50.0, min(w - 50.0, float(self.squid.x))), float(h - 50)
+
+    def record_reproduction(self, mating_id, mate_uuid, mate_name="Squid"):
+        """A mating with the resident, resolved by this tank's HostBody.
+
+        The resident becomes a parent and its egg is laid, in one lifecycle
+        record, carrying this parent's half of the hatchling's weights; then
+        saved at once. True only the first time.
+        """
+        squid = self.squid
+        x, y = self.egg_position()
+        if not squid.lifecycle.record_reproduction(mating_id, mate_uuid, mate_name, x, y):
+            return False
+        from src.inheritance import gamete
+        weights = getattr(squid.brain, 'weights', None)
+        if isinstance(weights, dict) and weights:
+            squid.lifecycle.add_genes(mating_id, squid.name, gamete(weights))
+        self._announce(f"{squid.name} and {str(mate_name)[:32]} produced an egg. "
+                       f"{squid.name} has stopped eating.")
+        squid.remember("social", f"mated:{mating_id}", f"Mated with {mate_name}",
+                       {"mating_id": mating_id, "peer_uuid": str(mate_uuid)}, importance=5.0)
+        self._save_now()
+        return True
+
+    def add_mate_genes(self, mating_id, mate_name, genes):
+        """The mate's half of the hatchling's weights: kept with the egg, once."""
+        if not self.squid.lifecycle.add_genes(mating_id, mate_name, genes):
+            return False
+        self._save_now()
+        return True
+
+    def on_squid_died(self):
+        """The squid has died, of any cause. Called once, by the transition."""
+        squid = self.squid
+        # Visits end on both sides - its own visit too, which gives it its
+        # body back - so nothing is left pointing at a squid about to be
+        # succeeded.
+        for visit in list(self.peer_visits):
+            visit.close()
+        if self.fight is not None:
+            self._end_fight(self._visitor_by_id(self.fight['visitor_id']))
+        for v in self.visitors:
+            v['leaving'] = True
+        squid.is_dead = True
+        squid.is_sleeping = squid.is_fleeing = squid.is_startled = squid.fighting = False
+        squid.carrying_rock, squid.carried_rock_id = False, None
+        squid.status = "dead"
+        self._place_headstone()
+        self.achievements.on_squid_died(squid)
+        cause = squid.lifecycle.death_cause
+        message = self.DEATH_MESSAGES.get(cause, self.DEATH_MESSAGES['starved'])
+        self._announce(message.format(name=squid.name))
+        self._death_t = 0.0
+        self._save_now()
+
+    def _place_headstone(self):
+        """One of desktop's headstones, at random, on the floor beneath where
+        the squid died, bearing who it was. A decoration like any other, except
+        that it is never carried, thrown or deleted."""
+        from src.lifecycle import headstone_record
+        squid = self.squid
+        self._decoration_id += 1
+        w, h = self.tank_size
+        stone = {
+            "id": self._decoration_id, "type": random.choice(self.HEADSTONES),
+            "category": "headstone", "scale": 1.0,
+            "x": max(40.0, min(w - 40.0, float(squid.x))), "y": float(h - 70),
+        }
+        # What its epitaph says of it: name, age, fights won and lost.
+        stone.update(headstone_record(squid, squid.age_seconds, self.stats.fights_won,
+                                      self.stats.fights_lost))
+        self.decorations.append(stone)
+        return stone
+
+    def _after_death(self, dt):
+        self._death_t += dt
+        if self._death_t >= self.HATCH_DELAY:
+            self.continue_after_death()
+        return self.last_status
+
+    def continue_after_death(self):
+        """What follows a death: the parent's egg hatches, or - with no egg -
+        a new squid hatches from a fresh one. The headstone stays either way."""
+        lifecycle = self.squid.lifecycle
+        if not lifecycle.is_dead:
+            return False
+        egg_born = lifecycle.egg is not None
+        if egg_born:
+            lifecycle.begin_hatching()
+        self._begin_new_life(lifecycle.egg_genes if egg_born else {}, egg_born)
+        return True
+
+    def _begin_new_life(self, genes, egg_born):
+        """Succeed the dead squid with a hatchling, in this same tank.
+
+        Its brain is a newborn's, overlaid with half of each parent's weights
+        if it hatches from a parent's egg (src/inheritance.py). The tank keeps
+        its decorations - its headstones too - and its achievements; the rest
+        is the newborn's own, from nothing.
+        """
+        from types import SimpleNamespace
+        from src.inheritance import inherit
+        newborn = Squid(tank_size=self.tank_size)
+        if genes:
+            inherit(newborn.brain, genes)
+            newborn.inherited_from = sorted(genes)[:2]
+        self.squid = newborn
+        self.stats = Statistics()
+        newborn.statistics = self.stats
+        self.brain_window = SimpleNamespace(brain_widget=newborn.brain)
+        self.food_items, self.poop_items, self.ink_clouds = [], [], []
+        self.visitors, self._visitor_minds, self.peer_visits = [], {}, []
+        self.fight, self._fight_cooldown = None, 0.0
+        self._rock_velocities.clear()
+        self._rock_throws.clear()
+        self._prev_pos = (newborn.x, newborn.y)
+        self._was_sick = self._was_sleeping = self._prev_can_see_food = False
+        self._decision_timer = self._poop_timer = self._death_t = 0.0
+        self._watching = None
+        self.generation += 1
+        self.start_hatching()
+        self._announce("An egg is hatching!" if egg_born else "Squid is hatching!")
+        self._save_now()
+
     # ---------------------------------------------------------------- update
     def start_hatching(self):
         self.hatching = True
@@ -983,12 +1167,9 @@ class Simulation:
         self.squid._last_dt = dt
         squid = self.squid
 
-        # Game over: the squid has died. Freeze the world.
-        if squid.health <= 0:
-            self.game_over = squid.is_dead = True
-            self.last_status = 'Your squid has died.'
-        if self.game_over:
-            return self.last_status
+        # Dead: the world waits, then a new life begins in this tank.
+        if squid.lifecycle.is_dead:
+            return self._after_death(dt)
 
         # While hatching, freeze the squid and just advance the egg animation
         # (one frame per second) until all frames have played.
@@ -1002,17 +1183,9 @@ class Simulation:
         # 1) Needs drift.
         squid.update_needs(dt)
 
-        # Starvation: severe hunger sustained too long is fatal (game over).
-        if squid.hunger >= self.STARVE_HUNGER:
-            self._starving_time += dt
-        else:
-            self._starving_time = 0.0
-        if self._starving_time >= self.STARVE_SECONDS:
-            self.game_over = True
-            squid.is_dead = True
-            squid.is_sleeping = False
-            squid.status = "starved"
-            self.last_status = "Your squid has died of hunger."
+        # Death, as on desktop: injuries, a parent starving, untreated
+        # sickness, or neglect at its hungriest (src/lifecycle.py).
+        if self._check_death(dt):
             return self.last_status
 
         # Perception drives the same fixed-rate neural pipeline as desktop.
@@ -1036,10 +1209,18 @@ class Simulation:
             # Another squid, as on desktop, is percepts, not sense organs: the
             # shared engine grows its social senses from them the first time they
             # matter. Off-screen arrivals are not perceived.
-            other_visible = any(self._sees_squid_at(squid.x, squid.y, squid.direction,
-                                                    v['x'], v['y'])
-                                for v in self.visitors)
+            in_view = [v for v in self.visitors
+                       if self._sees_squid_at(squid.x, squid.y, squid.direction, v['x'], v['y'])]
+            other_visible = bool(in_view)
             squid.brain.perceive('squid_in_view', 100. if other_visible else 0.)
+            # Who it is looking at - the nearest in view - and what it remembers
+            # of that individual, from its own memory, as on desktop.
+            from plugins.multiplayer.encounter import perceive_recognition
+            from plugins.multiplayer.peer_ledger import PeerLedger
+            looked_at = min(in_view, key=lambda v: squid._dist(v['x'], v['y'])) if in_view else None
+            peer_uuid = str(looked_at.get('uuid', '')) if looked_at else ''
+            perceive_recognition(squid.brain, PeerLedger(squid.memory) if peer_uuid else None,
+                                 peer_uuid)
             squid.brain.perceive('squid_proximity', self._squid_proximity(
                 squid.x, squid.y, [(v['x'], v['y']) for v in self.visitors]))
             squid.brain.perceive('in_fight', 100. if self.fight is not None else 0.)
@@ -1168,7 +1349,7 @@ class Simulation:
             "statistics": self.stats.to_dict(),
             "achievements": self.achievements.to_dict(),
             "game_over": self.game_over,
-            "starving_time": self._starving_time,
+            "death_t": self._death_t,
         }
 
     @classmethod
@@ -1186,8 +1367,7 @@ class Simulation:
         sim._prev_pos = (sim.squid.x, sim.squid.y)
         sim._was_sick = sim.squid.is_sick
         sim._was_sleeping = sim.squid.is_sleeping
-        sim._starving_time = data.get("starving_time", 0.0)
-        sim.game_over = data.get("game_over", sim.squid.is_dead)
+        sim._death_t = float(data.get("death_t", 0.0) or 0.0)
         return sim
 
     def save(self, path: str):
