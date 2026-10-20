@@ -66,6 +66,9 @@ DEFAULT_MATING_CONTACT_SECONDS = 2.0
 MATED_ANNOUNCEMENTS = 3
 
 
+_OPPOSITE = {'left': 'right', 'right': 'left', 'up': 'down', 'down': 'up'}
+
+
 def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
@@ -167,6 +170,8 @@ class HostBody:
               x: float, y: float) -> VisitorActor:
         """Give an accepted visitor a body. Consent is decided before this."""
         actor = VisitorActor(identity, visit_id, x, y, self.clock())
+        # It arrives at a side of the tank, facing in - not into the wall.
+        actor.facing = 'left' if x > self._tank_size()[0] / 2.0 else 'right'
         self.visitors[identity.uuid] = actor
         self.publish_presence(actor)
         return actor
@@ -744,9 +749,13 @@ class HostBody:
         dx = {'left': -VISITOR_STEP, 'right': VISITOR_STEP}.get(heading, 0.0)
         dy = {'up': -VISITOR_STEP, 'down': VISITOR_STEP}.get(heading, 0.0)
         width, height = self._tank_size()
-        actor.x = _clamp(actor.x + dx, 0.0, width)
-        actor.y = _clamp(actor.y + dy, 0.0, height)
-        actor.facing = heading
+        x, y = _clamp(actor.x + dx, 0.0, width), _clamp(actor.y + dy, 0.0, height)
+        blocked = (x, y) == (actor.x, actor.y)
+        actor.x, actor.y = x, y
+        # A wall turns a squid, as the edges of its own tank do at home
+        # (Squid.change_direction): one swimming on would otherwise press
+        # against the glass for as long as it kept exploring.
+        actor.facing = _OPPOSITE[heading] if blocked else heading
 
     def _step_toward(self, actor: VisitorActor, x: float, y: float) -> None:
         dx, dy = x - actor.x, y - actor.y
