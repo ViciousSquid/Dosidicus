@@ -143,51 +143,32 @@ SOCIAL_EXPERIENCE = {'social_fight': ('in_fight',),
 #: The anxiety at which a squid counts as alarmed, for SOCIAL_EXPERIENCE.
 SOCIAL_ALARM = 60.0
 
-#: How a newly grown sense organ is wired, onto the squid's EXISTING neurons.
-#: can_see_squid is wired by temperament - the only place personality enters,
-#: and as synapse weights, the same way INNATE_PERSONALITY_BIAS does it - so
-#: what a squid first does on seeing another is its network's response.
-#: Learning moves every one of these.
-SOCIAL_SENSOR_WIRING = {
-    'can_see_squid': {
-        'timid': (('anxiety', .5), ('act_flee', 1.0)),
-        'introvert': (('anxiety', .4), ('act_flee', .8), ('curiosity', .1)),
-        'lazy': (('curiosity', .3), ('act_play', .6)),
-        'greedy': (('curiosity', .3), ('act_play', .8), ('anxiety', .2)),
-        'stubborn': (('act_play', .8), ('anxiety', .2)),
-        'energetic': (('curiosity', .5), ('act_play', .9)),
-        'adventurous': (('curiosity', .5), ('act_play', .8)),
-    },
-    'squid_nearby': (('anxiety', .2), ('curiosity', .2)),
-    'recognises_squid': (('curiosity', -.2),),
-    'remembers_bad_encounter': (('anxiety', .5),),
-    'remembers_good_encounter': (('anxiety', -.3), ('happiness', .2)),
+#: How can_see_squid is wired when the first sighting grows it - the one place
+#: personality enters the social network, as synapse weights (the way
+#: INNATE_PERSONALITY_BIAS tilts the innate pathways), so what a squid first
+#: does on seeing another is its network's response. Learning moves these.
+SIGHTING_TEMPERAMENT = {
+    'timid': (('anxiety', .5), ('act_flee', 1.0)),
+    'introvert': (('anxiety', .4), ('act_flee', .8), ('curiosity', .1)),
+    'lazy': (('curiosity', .3), ('act_play', .6)),
+    'greedy': (('curiosity', .3), ('act_play', .8), ('anxiety', .2)),
+    'stubborn': (('act_play', .8), ('anxiety', .2)),
+    'energetic': (('curiosity', .5), ('act_play', .9)),
+    'adventurous': (('curiosity', .5), ('act_play', .8)),
 }
 
-#: Which senses feed each social neuron, wired whichever of the two is grown
-#: second: a social neuron is on while its senses report a squid.
-SOCIAL_INPUTS = {
-    'social_play': {'can_see_squid': 1.0, 'remembers_good_encounter': .6,
-                    'squid_nearby': .3},
-    'social_fight': {'can_see_squid': 1.0, 'remembers_bad_encounter': .6,
-                     'squid_nearby': .5},
-    'social_flee': {'can_see_squid': 1.0, 'remembers_bad_encounter': .6,
-                    'squid_nearby': .5},
-    'aggression': {'can_see_squid': .6, 'remembers_bad_encounter': .7,
-                   'squid_nearby': .4, 'anxiety': .5},
-}
-
-#: A social neuron's outgoing synapses at birth, onto the squid's EXISTING
-#: neurons: towards what it was grown from. Playing and attacking both go at
-#: the other squid (act_play is where contact happens - and, with aggression
-#: firing, a fight); knowing how to fight stands its ground and is less
-#: afraid; fleeing keeps away.
-SOCIAL_WIRING = {
-    'social_play': (('act_play', 1.0), ('curiosity', 0.2)),
-    'social_fight': (('act_play', 0.5), ('anxiety', -0.4), ('act_flee', -0.6)),
-    'social_flee': (('act_flee', 1.0), ('act_play', -0.6), ('anxiety', 0.4)),
-    'aggression': (('act_play', 0.6), ('act_flee', -0.5), ('anxiety', -0.2)),
-}
+#: Everything else in the social network is wired at birth from the moment
+#: it grew - no table says what any of it means. A new social neuron takes
+#: its input from the social senses reporting then (scaled by how strongly)
+#: and from the drives away from rest then (scaled by how far), and drives the
+#: actions the network was doing then. A new sense feeds the social neurons
+#: active then and the drives stirred then. Anything more - aggression coming
+#: to calm anxiety, a bad memory feeding flight - is learning's, recorded.
+BIRTH_SENSE_WEIGHT = 0.6
+BIRTH_DRIVE_WEIGHT = 0.5
+BIRTH_ACTION_WEIGHT = 1.0
+#: How far from rest a drive or a social neuron has to be to count as stirred.
+BIRTH_STIRRED = 10.0
 
 #: What a squid does about another squid, for the birth record.
 _SOCIAL_VERBS = {'social_play': 'played with', 'social_fight': 'fought',
@@ -861,6 +842,55 @@ class EnhancedNeurogenesis:
         del neuron.resting_history[:-50]
         return round(after - before, 2)
 
+    def _social_birth_wiring(self, neuron_name: str, concept: str,
+                             state: Dict[str, Any]) -> List[Tuple[str, str, float, str]]:
+        """Wire a new social sense or neuron to the moment it grew.
+
+        No rule about what other squid mean: can_see_squid by temperament
+        (SIGHTING_TEMPERAMENT); everything else by what was happening -
+        BIRTH_SENSE_WEIGHT and the rest.
+        """
+        from .brain_constants import CORE_STAT_NEURONS, ACTION_NEURONS
+        from .decision_engine import wants
+        from .propagation import baseline_of
+        positions = getattr(self.brain_widget, 'neuron_positions', None) or {}
+
+        def level(name):
+            try:
+                return float(state.get(name, 0.0) or 0.0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        stirred = {drive: level(drive) - baseline_of(drive)
+                   for drive in CORE_STAT_NEURONS
+                   if drive in positions and abs(level(drive) - baseline_of(drive)) >= BIRTH_STIRRED}
+        plan: List[Tuple[str, str, float, str]] = []
+        if concept == SOCIAL_SENSOR:
+            wiring = SIGHTING_TEMPERAMENT.get(self._personality(),
+                                              SIGHTING_TEMPERAMENT['adventurous'])
+            return [(neuron_name, target, weight, 'remedy') for target, weight in wiring]
+        if concept in SOCIAL_SENSORS:
+            reading = level(neuron_name) / 100.0
+            for social in SOCIAL_NEURONS:
+                if social in positions and abs(level(social) - baseline_of(social)) >= BIRTH_STIRRED:
+                    plan.append((neuron_name, social, BIRTH_SENSE_WEIGHT * reading, 'remedy'))
+            for drive, away in stirred.items():
+                plan.append((neuron_name, drive,
+                             BIRTH_DRIVE_WEIGHT * max(-1.0, min(1.0, away / 50.0)), 'remedy'))
+            return plan
+        # A social neuron: fed by what was sensed and felt, driving what was done.
+        for sense in SOCIAL_SENSORS:
+            if sense in positions and level(sense) > 0.0:
+                plan.append((sense, neuron_name, BIRTH_SENSE_WEIGHT * level(sense) / 100.0,
+                             'remedy'))
+        for drive, away in stirred.items():
+            plan.append((drive, neuron_name,
+                         BIRTH_DRIVE_WEIGHT * max(-1.0, min(1.0, away / 50.0)), 'remedy'))
+        for action in ACTION_NEURONS:
+            if action in positions and wants(action, level(action)):
+                plan.append((neuron_name, action, BIRTH_ACTION_WEIGHT, 'remedy'))
+        return plan
+
     def squid_sensor(self) -> str:
         """can_see_squid, once grown; '' before the first sighting."""
         positions = getattr(self.brain_widget, 'neuron_positions', None) or {}
@@ -1125,23 +1155,8 @@ class EnhancedNeurogenesis:
         state = getattr(self.brain_widget, 'state', {}) or {}
 
         concept = func_neuron.represents_concept
-        if concept in SOCIAL_SENSORS:
-            # Onto existing drives and actions (by temperament, for the first
-            # sighting), and into any social neuron that reads this sense.
-            wiring = SOCIAL_SENSOR_WIRING[concept]
-            if isinstance(wiring, dict):
-                wiring = wiring.get(self._personality(), wiring['adventurous'])
-            return ([(neuron_name, target, weight, 'remedy') for target, weight in wiring]
-                    + [(neuron_name, social, inputs[concept], 'remedy')
-                       for social, inputs in SOCIAL_INPUTS.items() if concept in inputs])
-        if concept in SOCIAL_WIRING:
-            # Fed by whichever senses for other squid the squid has grown, and
-            # driving what it did when it grew. Whether that wins is the
-            # competition's; learning moves it.
-            return ([(sensor, neuron_name, weight, 'remedy')
-                     for sensor, weight in SOCIAL_INPUTS[concept].items()]
-                    + [(neuron_name, target, weight, 'remedy')
-                       for target, weight in SOCIAL_WIRING[concept]])
+        if concept in SOCIAL_SENSORS or concept in SOCIAL_NEURONS:
+            return self._social_birth_wiring(neuron_name, concept, state)
 
         if deficit.kind == 'regulation':
             stat = deficit.target

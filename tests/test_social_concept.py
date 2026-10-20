@@ -119,8 +119,10 @@ def test_a_timid_squid_flees_and_grows_social_flee_from_doing_it():
         fled = fled or wants('act_flee', brain.state['act_flee'])
     assert fled
     assert 'social_flee' in grown(brain) and 'social_play' not in grown(brain)
+    # Wired to the moment it grew: it drives the flight it was doing, and
+    # nothing says it must hold back play - that would be a rule.
     assert brain.weights['social_flee', 'act_flee'] > 0
-    assert brain.weights['social_flee', 'act_play'] < 0
+    assert ('social_flee', 'act_play') not in brain.weights
     assert not wants('act_play', brain.state['act_play'])
 
 
@@ -134,11 +136,17 @@ def test_being_in_a_fight_grows_social_fight():
     brain = live(newborn(), ticks=1)
     live(brain, in_fight=100.)
     assert 'social_fight' in grown(brain)
-    assert brain.ledger.origins['social_fight'].evidence['experienced'] == 'in_fight'
+    origin = brain.ledger.origins['social_fight']
+    assert origin.evidence['experienced'] == 'in_fight'
     assert brain.weights['can_see_squid', 'social_fight'] > 0
-    assert brain.weights['social_fight', 'act_play'] > 0
-    assert brain.weights['social_fight', 'act_flee'] < 0
     assert brain.neuron_shapes['social_fight'] == 'hexagon'
+    # Fed by what it sensed and felt; driving only what it was doing then.
+    from src.brain_constants import ACTION_NEURONS, CORE_STAT_NEURONS
+    for src, dst, weight, _purpose in origin.wiring:
+        if dst == 'social_fight':
+            assert src in SOCIAL_SENSORS or src in CORE_STAT_NEURONS
+        else:
+            assert src == 'social_fight' and dst in ACTION_NEURONS and weight > 0
 
 
 def test_each_sense_grows_the_first_time_its_concept_matters_and_feeds_the_social_neurons():
@@ -154,7 +162,7 @@ def test_each_sense_grows_the_first_time_its_concept_matters_and_feeds_the_socia
     assert 'recognises_squid' in grown(brain) and 'recognises_squid' in BINARY_NEURONS
     live(brain, ticks=1, squid_familiar=40., squid_recalled_bad=55.)
     assert 'remembers_bad_encounter' in grown(brain)
-    assert brain.weights['remembers_bad_encounter', 'anxiety'] > 0
+    # It feeds the social neuron that was active when it grew.
     assert brain.weights['remembers_bad_encounter', 'social_fight'] > 0
     live(brain, ticks=1, squid_familiar=40., squid_recalled_good=30.)
     assert 'remembers_good_encounter' in grown(brain)
@@ -377,3 +385,15 @@ def test_mobile_resident_turns_to_a_visitor_coming_into_the_tank():
     # An arrival is noticed once, not every tick it is in the tank.
     sim.update(.1)
     assert not squid.noticing
+
+
+@pytest.mark.parametrize('anxiety, wired', [(85., True), (50., False)])
+def test_what_a_new_sense_means_is_the_moment_it_grew_not_a_rule(anxiety, wired):
+    """A bad memory sensed while anxious is wired to anxiety; sensed calmly, it
+    is not. Nothing says what a bad memory means - only what was felt."""
+    brain = live(newborn(), ticks=1)
+    brain.state['anxiety'] = anxiety
+    live(brain, ticks=1, squid_familiar=40., squid_recalled_bad=55.)
+    live(brain, ticks=1, squid_familiar=40., squid_recalled_bad=55.)
+    assert 'remembers_bad_encounter' in grown(brain)
+    assert (('remembers_bad_encounter', 'anxiety') in brain.weights) is wired
