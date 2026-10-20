@@ -90,6 +90,16 @@ GROWTH_ROW_YS = (530.0, 606.0, 682.0)
 #: most legible way to be crowded.
 GROWTH_ROW_CAPACITY = 8
 
+#: The social network a squid grows (its senses of other squid and other
+#: aquariums, and its social neurons) sits together on the bottom growth row,
+#: in a band of its own - which exists only once the first of them has grown.
+#: A squid that never meets another has no such band. The other grown
+#: neurons then use the rows above it.
+#: As tall as the newborn rows' bands, the neuron as far below its label; the
+#: two growth rows above move up a little to make room.
+SOCIAL_ROW = {'y': 694.0, 'band': (632.0, 746.0), 'label': 'SOCIAL'}
+GROWTH_ROW_YS_BESIDE_SOCIAL = (524.0, 588.0)
+
 
 # --- What sits on each row, left to right --------------------------------
 # All three memberships are declared together, because a neuron belongs to
@@ -433,6 +443,7 @@ ROW_COLORS = {
     'core':   (150, 150, 220),   # Soft indigo  - what the squid is
     'motor':  (216, 138, 106),   # Terracotta   - what it can do
     'sensor': (118, 190, 214),   # Pale cyan    - what it can notice
+    'social': (214, 84, 140),    # Rose         - what it has grown for others
 }
 
 #: A neuron the squid grew for itself belongs to no row, and is drawn as such.
@@ -443,6 +454,7 @@ ROW_BAND_COLORS = {
     'core':   ((150, 150, 220, 28), (150, 150, 220, 150)),
     'motor':  ((216, 138, 106, 28), (216, 138, 106, 150)),
     'sensor': ((118, 190, 214, 28), (118, 190, 214, 150)),
+    'social': ((214, 84, 140, 28), (214, 84, 140, 150)),
 }
 
 # Ring widths
@@ -1140,6 +1152,8 @@ def neuron_row(name: str):
         return 'sensor'
     if name in ACTION_NEURONS:
         return 'motor'
+    if is_social_member(name):
+        return 'social'
     if name in INPUT_SENSORS or name in PLUGIN_INPUT_SENSORS:
         return 'sensor'
     return None
@@ -1156,8 +1170,27 @@ def row_label_anchor(row: str) -> tuple:
     Above the neurons rather than beside them: the rows span nearly the whole
     canvas width, so there is no room at the left end for a word.
     """
-    top, _bottom = NEURON_ROWS[row]['band']
+    top, _bottom = (SOCIAL_ROW if row == 'social' else NEURON_ROWS[row])['band']
     return (ROW_X_FIRST - 24.0, top + 4.0)
+
+
+#: Everything a squid can grow for other squid and other aquariums, in the
+#: order the social band lays them out: its senses, then its neurons.
+SOCIAL_MEMBERS = tuple(SOCIAL_SENSORS) + tuple(SOCIAL_NEURONS)
+
+
+def is_social_member(name: str) -> bool:
+    """A grown social sense or social neuron - a member of the social band."""
+    return name in SOCIAL_SENSORS or name in SOCIAL_NEURONS
+
+
+def display_rows(names) -> dict:
+    """The rows to draw for a brain holding `names`: the newborn rows always,
+    the social band only once a member of it has grown. {row: spec}."""
+    rows = dict(NEURON_ROWS)
+    if any(is_social_member(name) for name in names):
+        rows['social'] = SOCIAL_ROW
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -1204,14 +1237,19 @@ def growth_positions(names) -> dict:
     names = tuple(names)
     if not names:
         return {}
-    rows = max(1, min(len(GROWTH_ROW_YS),
-                      -(-len(names) // GROWTH_ROW_CAPACITY)))
-    per_row = -(-len(names) // rows)
-
-    positions = {}
+    # The social network sits on its own band, in canonical order (senses,
+    # then neurons), whenever any of it has grown; the rest use the rows above.
+    social = [name for name in SOCIAL_MEMBERS if name in names]
+    others = tuple(name for name in names if not is_social_member(name))
+    row_ys = GROWTH_ROW_YS_BESIDE_SOCIAL if social else GROWTH_ROW_YS
+    positions = spread_along(social, SOCIAL_ROW['y']) if social else {}
+    if not others:
+        return positions
+    rows = max(1, min(len(row_ys), -(-len(others) // GROWTH_ROW_CAPACITY)))
+    per_row = -(-len(others) // rows)
     for row_index in range(rows):
-        chunk = names[row_index * per_row:(row_index + 1) * per_row]
-        positions.update(spread_along(chunk, GROWTH_ROW_YS[row_index]))
+        chunk = others[row_index * per_row:(row_index + 1) * per_row]
+        positions.update(spread_along(chunk, row_ys[row_index]))
     return positions
 
 

@@ -3113,7 +3113,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # report every neuron in the newborn layout, which since the motor
         # bank landed there meant a newborn was described as having nineteen
         # core neurons - and the whole design claim is eight.
-        by_row = {'core': [], 'motor': [], 'sensor': [], None: []}
+        by_row = {'core': [], 'motor': [], 'sensor': [], 'social': [], None: []}
         for n in neurons:
             by_row[neuron_row(n)].append(n)
 
@@ -3134,6 +3134,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             <tr>
                 <td style='padding:3px;'><b>Sense Neurons:</b></td>
                 <td style='padding:3px;'>{len(by_row['sensor'])}</td>
+            </tr>
+            <tr>
+                <td style='padding:3px;'><b>Social Network (grown):</b></td>
+                <td style='padding:3px;'>{len(by_row['social'])}</td>
             </tr>
             <tr>
                 <td style='padding:3px;'><b>Neurons from Neurogenesis:</b></td>

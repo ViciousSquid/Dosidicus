@@ -2137,9 +2137,17 @@ class EnhancedNeurogenesis:
         return int((r + m) * 255), int((g + m) * 255), int((b + m) * 255)
     
     def intelligent_pruning(self) -> Optional[str]:
+        from .brain_constants import is_social_member, SOCIAL_SENSOR
         candidates = []
         for name, func_neuron in self.functional_neurons.items():
-            if func_neuron.neuron_type == 'connector' or func_neuron.represents_concept: continue
+            if func_neuron.neuron_type == 'connector': continue
+            # Concept neurons stay - except the social network, which goes
+            # like anything else that is not useful and grows again when it
+            # matters. Never can_see_squid (that other squid exist at all),
+            # and never a neuron life has marked for good: a raised resting
+            # level (the aggression a fight leaves) cannot be undone by pruning.
+            if func_neuron.represents_concept and not is_social_member(name): continue
+            if name == SOCIAL_SENSOR or func_neuron.resting_level is not None: continue
             if time.time() - func_neuron.creation_context.timestamp < 300: continue
             score = 0.0
             score += func_neuron.utility_score * 0.4

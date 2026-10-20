@@ -71,8 +71,9 @@ class BrainView(Widget):
             Rectangle(pos=self.pos, size=self.size)
 
             # The canonical desktop row geometry makes the motor bank legible.
-            from src.brain_constants import NEURON_ROWS
-            for row in NEURON_ROWS.values():
+            # The social band only once something social has grown.
+            from src.brain_constants import display_rows
+            for row in display_rows(brain.neuron_positions).values():
                 _, upper = self._map(0, row['band'][0])
                 _, lower = self._map(0, row['band'][1])
                 Color(.25, .30, .44, .16)

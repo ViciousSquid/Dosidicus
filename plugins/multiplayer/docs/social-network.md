@@ -132,6 +132,22 @@ contact - where play, competition, mating and fights happen.
 - **Synapses.** Every encounter's outcome moves the sight sense's synapses
   ([social learning](social-learning.md)), and all the ordinary plasticity
   keeps working.
+- **Pruning.** A social sense or neuron that is not useful is pruned like any
+  other grown neuron when the brain is at its size limit - recorded, with the
+  reason - and grows again the next time it matters. Two never are:
+  `can_see_squid`, the squid's knowing that other squid exist at all, and a
+  neuron life has marked for good (a raised resting level), so pruning cannot
+  undo what a fight did.
+
+## Where it sits
+
+The social network has a band of its own in the brain view, **SOCIAL**, in
+rose, below the rows of grown neurons - drawn only once its first member has
+grown, so a squid that has never met another has no such band. Its members
+sit in a fixed order, senses first (`can_see_squid`, `squid_nearby`, ...,
+`aquarium_nearby`), then the social neurons; the other grown neurons use the
+two rows above it (`brain_constants.SOCIAL_ROW`, `growth_positions`). The
+same on Android.
 
 ## 6. Reading it
 

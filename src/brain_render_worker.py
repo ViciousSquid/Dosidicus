@@ -423,10 +423,11 @@ class BrainRenderWorker(QThread):
         deliberately faint: the bands are there to group the neurons, not to
         compete with them.
         """
-        from .brain_constants import NEURON_ROWS, ROW_BAND_COLORS, LOGICAL_CANVAS
+        from .brain_constants import display_rows, ROW_BAND_COLORS, LOGICAL_CANVAS
 
         canvas_w = LOGICAL_CANVAS[0]
-        for row, spec in NEURON_ROWS.items():
+        # The social band only once something social has grown.
+        for row, spec in display_rows(state.neuron_positions).items():
             top, bottom = spec['band']
             fill, border = ROW_BAND_COLORS[row]
             painter.setBrush(QBrush(QColor(*fill)))
@@ -440,7 +441,7 @@ class BrainRenderWorker(QThread):
         Each label sits on a chip in the page background colour, so it stays
         readable where a connection runs underneath it.
         """
-        from .brain_constants import (NEURON_ROWS, ROW_BAND_COLORS,
+        from .brain_constants import (display_rows, ROW_BAND_COLORS,
                                       row_label_anchor)
 
         label_font = QFont("Arial", 11)
@@ -449,7 +450,7 @@ class BrainRenderWorker(QThread):
         painter.setFont(label_font)
         fm = painter.fontMetrics()
 
-        for row, spec in NEURON_ROWS.items():
+        for row, spec in display_rows(state.neuron_positions).items():
             _fill, border = ROW_BAND_COLORS[row]
             label = spec['label']
             x, y = row_label_anchor(row)

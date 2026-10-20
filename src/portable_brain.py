@@ -174,6 +174,34 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
     def mark_render_dirty(self):
         pass
 
+    @property
+    def innate_neurons(self) -> frozenset:
+        """Every neuron neurogenesis did not grow: never moved by growth.
+
+        Taken from what neurogenesis grew rather than from the newborn layout,
+        so a designed (custom) brain's own neurons stay where they were put -
+        unless a loader has said which neurons the brain was born with
+        (custom_brain_loader), which then stands.
+        """
+        given = getattr(self, '_innate_neurons', None)
+        if given is not None:
+            return given
+        grown = self.enhanced_neurogenesis.functional_neurons
+        return frozenset(name for name in self.positions if name not in grown)
+
+    @innate_neurons.setter
+    def innate_neurons(self, names):
+        self._innate_neurons = frozenset(names)
+
+    def relayout_grown_neurons(self):
+        """Spread every grown neuron along the growth rows - the social
+        network on its own band - as the desktop brain does after each birth."""
+        from .brain_constants import growth_positions
+        innate = self.innate_neurons
+        grown = [name for name in self.positions if name not in innate]
+        if grown:
+            self.positions.update(growth_positions(grown))
+
     def sync_connections_from_weights(self):
         pass
 
@@ -369,6 +397,7 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
             self.last_neurogenesis_tick = brain_data.get('last_neurogenesis_tick', 0)
             self.new_neurons = set(self.neurogenesis_data.get('new_neurons', []))
             self.capability._decay_last = self.sim_seconds
+            self.relayout_grown_neurons()
             print(f"✓ Loaded brain: {len(self.positions)} neurons, {len(self.weights)} connections")
             return True
             

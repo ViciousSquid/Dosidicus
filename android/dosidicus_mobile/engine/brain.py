@@ -194,6 +194,7 @@ class NeuralBrain(HeadlessBrain):
         growth = data.get('enhanced_neurogenesis') or {'functional_neurons': data.get('functional_neurons', {})}
         brain.enhanced_neurogenesis.from_dict(payload.get('enhanced_neurogenesis') or growth)
         brain.experience_buffer = brain.enhanced_neurogenesis.experience_buffer
+        brain.relayout_grown_neurons()      # the social network on its band
         brain.new_neurons = set(brain.neurogenesis_data.get('new_neurons', []))
         for key, attribute in (('last_growth_at', '_last_growth_at'), ('first_real_tick', '_first_real_tick')):
             if key in payload.get('growth_clock', {}):

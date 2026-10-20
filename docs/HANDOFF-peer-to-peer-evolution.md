@@ -106,13 +106,14 @@ becomes increasingly sociable. Same start, diverging lives.
 | `3bfcbd2` | `plugins/multiplayer/docs/protocol.md`: the wire, every message's shape, a visit end to end |
 | `07fdf55` | Host and guest swim on opposite frames, always animating (desktop); the object of a fight flashes dark red from 2 s before the scuffle to 2 s after (desktop and Android); LAN harness allows a rested squid's second visit |
 | `063eb64` | `tests/test_inheritance.py`; a NaN gene from the wire is dropped |
-| this commit | Protocol hardening: no drives in `object_sync`; whole datagrams read, bounded inflate; de-duplication by datagram digest; remote-mind messages accepted only from the visit's own nodes; legacy `squid_return`/`rock_throw`/`squid_move` not listened for; queued consequences sent before a visitor is removed; gamete resent when a mating is retold; refusals addressed by node; intent leases immune to clock skew; a visitor drawn where its body is in the host tank |
+| `35a52bc` | Protocol hardening: no drives in `object_sync`; whole datagrams read, bounded inflate; de-duplication by datagram digest; remote-mind messages accepted only from the visit's own nodes; legacy `squid_return`/`rock_throw`/`squid_move` not listened for; queued consequences sent before a visitor is removed; gamete resent when a mating is retold; refusals addressed by node; intent leases immune to clock skew; a visitor drawn where its body is in the host tank |
+| this commit | SOCIAL band in the brain (desktop and Android), only once a social member has grown; social neurons prunable, never `can_see_squid` or a scarred neuron; headless brains lay out grown neurons like the desktop |
 
 Earlier on the branch (before this work): release workflows for all platforms
 (`e1f47c3`), shared brain interchange, the real two-instance gallery
 (`docs/canary-gallery`, now stale - see section 5).
 
-Test suite at the last commit: **858 passed**
+Test suite at the last commit: **863 passed**
 (`QT_QPA_PLATFORM=offscreen python -m pytest tests android/tests -q -p no:cacheprovider`, ~50 s).
 
 ---
@@ -320,18 +321,6 @@ Priority order agreed with the owner: big code changes first.
 
 ### Smaller
 
-- **SOCIAL band** in the brain layout - created only when the first social
-  sense/neuron is grown (never at birth). Plan: `SOCIAL_ROW` at the bottom of
-  the growth zone (y ~682, band ~646-716); other grown neurons use the rows
-  above (`GROWTH_ROW_YS_BESIDE_SOCIAL`); `growth_positions` places social
-  members in canonical order (senses then neurons); `neuron_row` returns
-  `'social'` (`ROW_COLORS`/`ROW_BAND_COLORS['social']`); renderer
-  (`brain_render_worker._draw_row_bands/_draw_row_labels`) and mobile
-  `ui/brainview.py` draw it only when a member exists; HeadlessBrain needs a
-  `relayout_grown_neurons`.
-- **Pruning**: social neurons/sensors prunable by the normal pruning when not
-  useful; `can_see_squid` protected (`neurogenesis.intelligent_pruning`
-  currently skips anything with `represents_concept`).
 - **Desktop death by injury**: mobile dies at 0 health (`CAUSE_INJURED`);
   desktop health falls with rocks and fights but ends nothing. Owner to decide.
 - **Docs**: `plugins/multiplayer/docs/` describing social behaviours (senses,

@@ -2417,6 +2417,9 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         for neuron, pos in self.original_neuron_positions.items():
             if neuron in self.neuron_positions:
                 self.neuron_positions[neuron] = pos
+        # And its grown neurons onto the growth rows - its social network on
+        # the social band - as they are after every birth.
+        self.relayout_grown_neurons()
 
         # Ensure all neurons in neuron_positions exist in state
         for neuron in self.neuron_positions:
