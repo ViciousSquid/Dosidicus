@@ -60,7 +60,9 @@ def worker(role, output):
     started = time.monotonic()
     state = {'role': role, 'plugin': None, 'reports': []}
 
-    def quiet(play=0., rest=100.):
+    def quiet(play=0., rest=0.):
+        # Nothing firing keeps a squid still. Not rest: a visitor whose rest
+        # wins goes home to sleep (visitor_mind.HOMEWARD).
         brain = window.brain_window.brain_widget
         for name in ACTION_NEURONS:
             brain.state[name] = 0.
@@ -100,6 +102,9 @@ def worker(role, output):
                 window.squid.squid_item.setPos(400., 300.)
                 window.squid.is_sleeping = False
                 window.squid.health = 100.
+                # Practised throwers (src/throwing.py): this is about impacts,
+                # not aim, so their throws land.
+                window.squid.statistics.total_rocks_thrown = 500
                 assert window.plugin_manager.enable_plugin('multiplayer')
                 plugin = window.plugin_manager.plugins['multiplayer']['instance']
                 state['plugin'] = plugin

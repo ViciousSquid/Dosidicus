@@ -110,7 +110,7 @@ def test_view_filters_self_hidden_and_behind(tank):
     tank.item(150, 200, 'squid', 'Hidden').hide()
     assert tank.manager.throw_rock()
     assert tank.manager.current_throw['aimed_at'] == 'Seen'
-    assert tank.manager.current_throw['vy'] < 0  # gravity compensation
+    assert tank.manager.current_throw['angle'] < 0   # aimed above it: gravity compensation
 
 
 def test_throw_releases_possession_and_carry_cleanup_keeps_flight(tank):

@@ -23,6 +23,7 @@ are in the caller's units (desktop: pixels per 50 ms step).
 """
 
 import math
+import random
 from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
 
 
@@ -109,15 +110,65 @@ def reaches(origin: Sequence[float], target: Sequence[float], vx: float, vy: flo
     return False
 
 
+#: Motor noise. A throw leaves the tentacles a little off the line the squid
+#: aims along and a little off the strength its network put in - widely for a
+#: novice, narrowing with practice (every rock and poop it has thrown) but
+#: never to nothing, so a throw does not always land. The body's, not a
+#: decision: whether and how hard to throw stay its network's.
+NOVICE_ANGLE_SD, SKILLED_ANGLE_SD = 9.0, 1.5      # degrees off the line
+NOVICE_SPEED_SD, SKILLED_SPEED_SD = 0.13, 0.02    # fraction of the strength
+#: Throws of practice that close half the gap from novice to skilled.
+PRACTICE_SCALE = 12.0
+
+
+def skill(practice: float) -> float:
+    """0 for a squid that has never thrown, rising towards 1 with practice."""
+    practice = max(0.0, float(practice or 0.0))
+    return practice / (practice + PRACTICE_SCALE)
+
+
+def spread(practice: float) -> Tuple[float, float]:
+    """(degrees, fraction): how far its throws stray, at this much practice."""
+    rough = 1.0 - skill(practice)
+    return (SKILLED_ANGLE_SD + (NOVICE_ANGLE_SD - SKILLED_ANGLE_SD) * rough,
+            SKILLED_SPEED_SD + (NOVICE_SPEED_SD - SKILLED_SPEED_SD) * rough)
+
+
+def practice_of(*records: Any) -> int:
+    """Throws made, from a squid's own statistics (desktop: rocks and poop;
+    mobile: rocks). Each record counted once, however it is reached."""
+    distinct = {id(record): record for record in records if record is not None}
+    return int(sum(float(getattr(record, field, 0) or 0) for record in distinct.values()
+                   for field in ('total_rocks_thrown', 'total_poops_thrown', 'rocks_thrown')))
+
+
+def release(plan: Dict[str, Any], practice: float, rng=None) -> Dict[str, Any]:
+    """Let go: the aimed velocity, strayed by motor noise for this practice.
+    Records how far it strayed ('aim_error', degrees; 'strength_error')."""
+    rng = rng or random
+    angle_sd, speed_sd = spread(practice)
+    off = rng.gauss(0.0, angle_sd)
+    strength = max(0.5, 1.0 + rng.gauss(0.0, speed_sd))
+    angle = math.atan2(plan['vy'], plan['vx']) + math.radians(off)
+    speed = math.hypot(plan['vx'], plan['vy']) * strength
+    plan.update(vx=speed * math.cos(angle), vy=speed * math.sin(angle),
+                aim_error=round(off, 1), strength_error=round(strength - 1.0, 3),
+                practice=int(practice), skill=round(skill(practice), 2))
+    return plan
+
+
 def plan_throw(state: Dict[str, Any], origin: Sequence[float], gaze: float,
                targets: Iterable[Tuple[str, float, float]], *, slowest: float,
                fastest: float, gravity: float, drag: float = 0.0,
-               bounds: Optional[Sequence[float]] = None) -> Dict[str, Any]:
+               bounds: Optional[Sequence[float]] = None,
+               practice: Optional[float] = None, rng=None) -> Dict[str, Any]:
     """Everything about one throw: velocity, and the reasons for it.
 
     With a squid to aim at, also whether the throw would reach it
     ('reaches'): the network decides whether and how hard; whether that is
-    far enough is what the squid sees.
+    far enough is what the squid sees - judged on the throw it means to make.
+    With `practice`, the throw it actually makes strays from that (release):
+    it does not always land, and lands more often the more it has thrown.
     """
     speed, why_speed = throw_speed(state, slowest, fastest)
     angle, target, why_aim = aim(origin, gaze, targets, speed, gravity, drag)
@@ -127,6 +178,8 @@ def plan_throw(state: Dict[str, Any], origin: Sequence[float], gaze: float,
     if target is not None:
         plan['reaches'] = reaches(origin, why_aim['target_at'], plan['vx'], plan['vy'],
                                   gravity, bounds)
+    if practice is not None:
+        release(plan, practice, rng)
     return plan
 
 
@@ -236,4 +289,5 @@ def flight_step(position, velocity, bounds, dt=1.0, gravity=0.3):
 
 __all__ = ['throw_or_drop', 'throw_drive', 'throw_speed', 'flight_steps', 'aim',
            'plan_throw', 'describe', 'swept_hit', 'flight_step', 'HIT_EFFECTS', 'feel_hit',
-           'REACH_RADIUS', 'reaches', 'out_of_reach']
+           'REACH_RADIUS', 'reaches', 'out_of_reach', 'skill', 'spread', 'practice_of',
+           'release']

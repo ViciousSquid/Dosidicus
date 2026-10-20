@@ -261,7 +261,7 @@ class Simulation:
     def _throw_rock(self, rock, owner, visitor=None, cause=None):
         """One neural actuation, using the same planner and units as desktop."""
         import uuid
-        from src.throwing import out_of_reach, plan_throw, describe
+        from src.throwing import out_of_reach, plan_throw, practice_of, describe
         from src.vision_cone import FACING_ANGLES
         x, y = (visitor['x'], visitor['y']) if visitor else (owner.x, owner.y)
         direction = visitor['dir'] if visitor else owner.direction
@@ -274,7 +274,8 @@ class Simulation:
         state = owner.brain.state if cause is None else {'act_play': cause[1]}
         plan = plan_throw(state, (x, y), FACING_ANGLES.get(direction, 0.), targets,
                           slowest=6., fastest=20., gravity=.3, drag=.02,
-                          bounds=(0., float(self.tank_size[0]), 0., float(self.tank_size[1] - 40)))
+                          bounds=(0., float(self.tank_size[0]), 0., float(self.tank_size[1] - 40)),
+                          practice=practice_of(self.stats if visitor is None else None))
         if cause is None and out_of_reach(plan):
             # Beyond this throw: keep the rock and close in (as desktop's
             # interactions.close_in); the caller steers and looks again.

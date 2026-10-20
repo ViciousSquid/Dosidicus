@@ -315,7 +315,8 @@ class RockInteractionManager:
         aggression if that is stronger (src/throwing.py). `direction` is
         ignored; it is kept for callers that still pass one.
         """
-        from .throwing import plan_throw, throw_or_drop, out_of_reach, describe as describe_throw
+        from .throwing import (plan_throw, practice_of, throw_or_drop, out_of_reach,
+                               describe as describe_throw)
         # Prevent multiple throws
         if self.throw_animation_timer.isActive():
             return False
@@ -339,7 +340,8 @@ class RockInteractionManager:
                           float(getattr(self.squid, 'current_view_angle', 0.0)),
                           self._squids_in_view(), slowest=self.THROW_SLOWEST,
                           fastest=self.THROW_FASTEST, gravity=self.THROW_GRAVITY,
-                          drag=self.THROW_DRAG, bounds=tank_bounds(self.scene, rock))
+                          drag=self.THROW_DRAG, bounds=tank_bounds(self.scene, rock),
+                          practice=practice_of(getattr(self.squid, 'statistics', None)))
         # It can see how far the squid it is aiming at is. Beyond this throw,
         # it keeps the rock and closes in (a bound output's throw is its
         # neuron's decision, and goes regardless).
@@ -516,7 +518,8 @@ class RockInteractionManager:
                           origin, angle, targets, slowest=self.THROW_SLOWEST,
                           fastest=self.THROW_FASTEST, gravity=self.THROW_GRAVITY,
                           drag=self.THROW_DRAG,
-                          bounds=tank_bounds(self.scene, rock) if rock.scene() else None)
+                          bounds=tank_bounds(self.scene, rock) if rock.scene() else None,
+                          practice=getattr(intent, 'practice', 0))
         if out_of_reach(plan):
             # As for the resident: beyond this throw, its body keeps the rock
             # and closes in (HostBody._do_play steps it at the target).

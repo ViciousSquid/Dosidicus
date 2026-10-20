@@ -284,14 +284,14 @@ class ActionIntent:
 
     __slots__ = ('visit_id', 'seq', 'sent_at', 'action', 'activation',
                  'confidence', 'heading', 'target_id', 'lease',
-                 'aggression', 'defence', 'fitness')
+                 'aggression', 'defence', 'fitness', 'practice')
 
     def __init__(self, visit_id: str, action: str, seq: int = 0,
                  sent_at: float = 0.0, activation: float = 0.0,
                  confidence: float = 0.0, heading: str = '',
                  target_id: str = '', lease: float = INTENT_LEASE,
                  aggression: float = 0.0, defence: float = 0.0,
-                 fitness: float = 1.0):
+                 fitness: float = 1.0, practice: int = 0):
         self.visit_id = visit_id
         self.seq = int(seq)
         self.sent_at = float(sent_at or time.time())
@@ -308,6 +308,9 @@ class ActionIntent:
         self.aggression = float(aggression)
         self.defence = float(defence)
         self.fitness = float(fitness)
+        # How practised a thrower it is (throws made, from its own record at
+        # home): how far its throws stray in the host's tank (src/throwing.py).
+        self.practice = int(practice)
 
     @property
     def expires_at(self) -> float:
@@ -330,6 +333,7 @@ class ActionIntent:
             'aggression': round(self.aggression, 1),
             'defence': round(self.defence, 1),
             'fitness': round(self.fitness, 3),
+            'practice': self.practice,
         }
 
     @classmethod
@@ -369,6 +373,7 @@ class ActionIntent:
             defence=_clamp(payload.get('defence', 0.0), 0.0, 100.0, 0.0),
             # An honest squid at its best is about 2; nothing claims more than 3.
             fitness=_clamp(payload.get('fitness', 1.0), 0.0, 3.0, 1.0),
+            practice=int(_clamp(payload.get('practice', 0), 0, 100000, 0)),
         )
 
 

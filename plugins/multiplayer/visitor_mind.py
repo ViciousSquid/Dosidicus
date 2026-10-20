@@ -356,6 +356,7 @@ class VisitorMind:
         # resolve a fight with: its aggression neuron, how hard it would
         # fight back, and its fitness (src/fighting.py).
         from src.fighting import commitment, fight_predisposition, squid_fitness
+        from src.throwing import practice_of
         squid = getattr(self.logic, 'squid', None)
         self._seq += 1
         intent = ActionIntent(
@@ -371,6 +372,10 @@ class VisitorMind:
             aggression=fight_predisposition(brain_state)[0],
             defence=commitment(brain_state, attacking=False)[0],
             fitness=squid_fitness(squid)[0] if squid is not None else 1.0,
+            # Its own throwing record at home: the squid's statistics on
+            # desktop, the game's on mobile.
+            practice=practice_of(getattr(squid, 'statistics', None),
+                                 getattr(self.logic, 'stats', None)),
         )
         self.last_intent = intent
         self.intents_sent += 1

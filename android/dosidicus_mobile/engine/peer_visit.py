@@ -59,14 +59,20 @@ class World:
         # Held decorations remain in the mobile scene and follow their body.
 
     def throw_visitor_rock(self, actor, item, intent):
-        from src.throwing import plan_throw
+        from src.throwing import out_of_reach, plan_throw
         from src.vision_cone import FACING_ANGLES
         v = self.visit.body
         targets = [(self.squid.name, self.squid.x, self.squid.y)] if self.sim._sees_squid_at(
             actor.x, actor.y, actor.facing, self.squid.x, self.squid.y) else []
         plan = plan_throw({'act_play': intent.activation, 'aggression': intent.aggression},
             (actor.x, actor.y), FACING_ANGLES.get(actor.facing, 0.), targets,
-            slowest=6., fastest=20., gravity=.3, drag=.02)
+            slowest=6., fastest=20., gravity=.3, drag=.02,
+            bounds=(0., float(self.sim.tank_size[0]), 0., float(self.sim.tank_size[1] - 40)),
+            practice=getattr(intent, 'practice', 0))
+        if out_of_reach(plan):
+            # Beyond this throw: the body keeps the rock and closes in.
+            return {'closing_in': True, 'target_at': plan['target_at'],
+                    'aimed_at': plan['aimed_at']}
         import uuid
         plan.update(throw_id=uuid.uuid4().hex, hit=None, owner=v['id'],
                     source_uuid=actor.uuid, source_name=actor.identity.name,

@@ -63,6 +63,27 @@ remains available for deliberately sharing a copy. Mobile health is persisted
 in both its state and the interoperable save archive. APK staging includes the
 shared throwing and Qt-free remote-mind modules.
 
+## Accuracy: practice makes better
+
+A throw does not always land. It leaves the tentacles a little off the line
+the squid aims along and a little off the strength its network put in - motor
+noise, the body's, not a decision (`throwing.release`). How far it strays
+narrows with practice: every rock and poop the squid has ever thrown, from its
+own saved statistics (`practice_of`), never to nothing.
+
+| Throws made | Strays by (s.d.) | Lands at 200 px | at 400 px | at 600 px |
+|---|---|---|---|---|
+| 0 (novice) | 9.0°, ±13% strength | 79% | 46% | 32% |
+| 25 | 3.9°, ±6% | 100% | 74% | 58% |
+| 400 | 1.7°, ±2% | 100% | 94% | 78% |
+
+(Full-power throws, the planner's own physics; `tests/test_throwing.py`.) Its
+judgement of reach is made on the throw it means to make; the throw it makes
+then strays. Every plan records `practice`, `skill` (0-1), `aim_error`
+(degrees) and `strength_error`. A visitor throws in the host's tank with its
+own practice from home, carried in its action intent (`practice`, throws
+made), as its fitness is.
+
 ## Range: closing in
 
 The network decides whether to throw (play) and how hard (play, or grown

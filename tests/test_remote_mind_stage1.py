@@ -865,9 +865,10 @@ class PrivacyTests(unittest.TestCase):
             set(payload),
             {'visit_id', 'seq', 'sent_at', 'action', 'activation',
              'confidence', 'heading', 'target_id', 'lease',
-             'aggression', 'defence', 'fitness'})
+             'aggression', 'defence', 'fitness', 'practice'})
         for name in ('aggression', 'defence', 'fitness'):
             self.assertIsInstance(payload[name], float)
+        self.assertIsInstance(payload['practice'], int)     # throws made, for its aim
 
     def test_a_message_carrying_private_state_is_refused_on_arrival(self):
         for key in ('weights', 'memory', 'anxiety', 'neurogenesis'):

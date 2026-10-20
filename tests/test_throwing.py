@@ -60,3 +60,48 @@ def test_a_hard_throw_lands_on_its_target_under_the_shared_physics(distance):
             break
         position = end
     assert closest == 0.
+
+
+def _hit_rate(practice, distance, seed=7, throws=400):
+    import random as _random
+    rng, hits = _random.Random(seed), 0
+    for _ in range(throws):
+        plan = throwing.plan_throw({'act_play': 100.}, (0., 400.), 0.,
+                                   [('Visitor', distance, 400.)], slowest=6., fastest=20.,
+                                   gravity=.3, drag=.02, practice=practice, rng=rng)
+        hits += throwing.reaches((0., 400.), (distance, 400.), plan['vx'], plan['vy'], .3)
+    return hits / throws
+
+
+def test_throws_do_not_always_land_and_practice_makes_them_land_more():
+    novice, practised, seasoned = (_hit_rate(n, 400.) for n in (0, 25, 400))
+    assert novice < 0.75                      # a beginner misses a good deal
+    assert novice < practised < seasoned      # it gets better with every throw
+    assert seasoned < 1.0 or _hit_rate(400, 600.) < 1.0   # never perfect at range
+
+
+def test_how_far_a_throw_strays_narrows_with_practice_but_never_to_nothing():
+    assert throwing.spread(0) == (throwing.NOVICE_ANGLE_SD, throwing.NOVICE_SPEED_SD)
+    wide, narrower, narrowest = (throwing.spread(n)[0] for n in (0, 12, 10000))
+    assert wide > narrower > narrowest > throwing.SKILLED_ANGLE_SD - 1e-9
+    assert throwing.skill(throwing.PRACTICE_SCALE) == 0.5
+
+
+def test_it_judges_reach_on_the_throw_it_means_and_records_how_it_strayed():
+    import random as _random
+    plan = throwing.plan_throw({'act_play': 100.}, (0., 400.), 0., [('V', 300., 400.)],
+                               slowest=6., fastest=20., gravity=.3, drag=.02,
+                               practice=0, rng=_random.Random(3))
+    meant = throwing.plan_throw({'act_play': 100.}, (0., 400.), 0., [('V', 300., 400.)],
+                                slowest=6., fastest=20., gravity=.3, drag=.02)
+    assert plan['reaches'] == meant['reaches'] and plan['angle'] == meant['angle']
+    assert (plan['vx'], plan['vy']) != (meant['vx'], meant['vy'])
+    assert plan['practice'] == 0 and plan['aim_error'] != 0
+
+
+def test_practice_is_its_own_record_of_throws_counted_once():
+    from types import SimpleNamespace as NS
+    desktop = NS(total_rocks_thrown=7, total_poops_thrown=3)
+    assert throwing.practice_of(desktop) == 10
+    mobile = NS(rocks_thrown=5)
+    assert throwing.practice_of(mobile, mobile, None) == 5

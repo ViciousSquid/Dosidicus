@@ -195,7 +195,7 @@ class PoopInteractionManager:
         ignored; it is kept for callers that still pass one."""
         from .interactions import (CLOSE_IN_SECONDS, RockInteractionManager as Rock,
                                    close_in, squids_in_view, tank_bounds)
-        from .throwing import plan_throw, describe, out_of_reach
+        from .throwing import plan_throw, describe, out_of_reach, practice_of
         # Prevent multiple throws
         if self.throw_animation_timer.isActive():
             return False
@@ -212,7 +212,8 @@ class PoopInteractionManager:
                           float(getattr(self.squid, 'current_view_angle', 0.0)),
                           squids_in_view(self.scene, self.squid),
                           slowest=Rock.THROW_SLOWEST, fastest=Rock.THROW_FASTEST,
-                          gravity=Rock.THROW_GRAVITY, drag=Rock.THROW_DRAG, bounds=bounds)
+                          gravity=Rock.THROW_GRAVITY, drag=Rock.THROW_DRAG, bounds=bounds,
+                          practice=practice_of(getattr(self.squid, 'statistics', None)))
         # Beyond this throw: keep it, close in, look again shortly.
         if out_of_reach(plan):
             close_in(self.squid, self.logic, plan)

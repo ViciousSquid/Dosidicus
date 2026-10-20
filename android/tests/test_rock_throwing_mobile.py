@@ -36,7 +36,10 @@ def test_mobile_throw_is_shared_plan_and_drops_when_play_loses():
     expected = plan_throw(sim.squid.brain.state, (sim.squid.x, sim.squid.y), 0., [],
                           slowest=6, fastest=20, gravity=.3)
     plan = sim._rock_throws[rock['id']]
-    assert (plan['vx'], plan['vy']) == (expected['vx'], expected['vy'])
+    # The throw it means is the shared plan's; the one it makes strays by its
+    # practice (src/throwing.py release).
+    assert (plan['angle'], plan['speed']) == (expected['angle'], expected['speed'])
+    assert 'aim_error' in plan and plan['practice'] == 0
     assert plan['driven_by'] == 'act_play' and plan['drive'] == 90.
     assert not sim.squid.carrying_rock
     other = Simulation(); dropped = carried(other)
@@ -131,6 +134,7 @@ def test_live_mobile_guest_can_throw_back_from_its_own_neural_intent():
     p.host.squid.x, p.host.squid.y = 240., 250.
     p.h.actor.x, p.h.actor.y, p.h.actor.facing = 80., 250., 'right'
     p.host.add_decoration('rock01.png', 'rock', 85., 250.)
+    p.guest.stats.rocks_thrown = 500        # a practised thrower: this is about the hit
     quiet(p.guest, act_play=95.)
     p.cycle()  # picks up the nearer rock
     assert p.h.actor.held_item is not None
@@ -138,7 +142,7 @@ def test_live_mobile_guest_can_throw_back_from_its_own_neural_intent():
     assert p.h.actor.held_item is None
     plan = next(iter(p.host._rock_throws.values()))
     assert plan['driven_by'] == 'act_play' and plan['drive'] == 95.
-    assert plan['aimed_at'] == p.host.squid.name
+    assert plan['aimed_at'] == p.host.squid.name and plan['practice'] == 500
     for _ in range(30):
         p.host._fly_rocks(.05)
     p.cycle()
@@ -217,6 +221,7 @@ def test_live_projectile_retains_source_after_visitor_disconnects():
     p.host.squid.x, p.host.squid.y = 240., 250.
     p.h.actor.x, p.h.actor.y, p.h.actor.facing = 80., 250., 'right'
     p.host.add_decoration('rock01.png', 'rock', 85., 250.)
+    p.guest.stats.rocks_thrown = 500        # practised: this is about the projectile
     quiet(p.guest, act_play=95.)
     p.cycle(); p.cycle()
     assert p.host._rock_throws

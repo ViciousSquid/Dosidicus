@@ -114,7 +114,8 @@ def poop_tank():
                squid_x=90, squid_y=190, squid_width=20, squid_height=20,
                squid_direction='right', current_view_angle=0., status='roaming',
                happiness=60., satisfaction=60., anxiety=30.,
-               memory_manager=NS(add_short_term_memory=Mock()))
+               memory_manager=NS(add_short_term_memory=Mock()),
+               statistics=NS(total_rocks_thrown=400, total_poops_thrown=100))
     logic = NS(squid=squid, brain_window=NS(brain_widget=NS(state=quiet_brain(act_play=100.))),
                statistics_window=NS(award=Mock()), track_poop_thrown=Mock(),
                on_rock_hit=Mock(), plugin_manager=NS(plugins={}))
