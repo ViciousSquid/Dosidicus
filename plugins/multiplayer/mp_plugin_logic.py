@@ -874,7 +874,8 @@ class MultiplayerPlugin:
         if key in hits:
             return False
         hits.add(key)
-        fact = {'what': 'rock', 'speed': round(float(throw.get('speed', 0.) or 0.), 1),
+        what = 'poop' if throw.get('what') == 'poop' else 'rock'
+        fact = {'what': what, 'speed': round(float(throw.get('speed', 0.) or 0.), 1),
                 'throw_id': throw_id}
         if target is not None:
             self.host_body._report(target, CONSEQUENCE_HIT,
@@ -884,8 +885,9 @@ class MultiplayerPlugin:
             if callable(feel):
                 feel(throw)  # the core hook may already have delivered it
             else:
-                resident.health = max(0., resident.health - 2.)
-                self.tamagotchi_logic.startle_squid(source='rock_hit')
+                from src.throwing import feel_hit
+                feel_hit(resident, what, startle=lambda source:
+                         self.tamagotchi_logic.startle_squid(source=source))
         if source is not None:
             self.host_body._report(source, CONSEQUENCE_HIT,
                                    dict(fact, taken=False, peer_uuid=target_uuid))
@@ -897,12 +899,12 @@ class MultiplayerPlugin:
             if session is None:
                 session = EncounterSession(peer.identity, drive_snapshot(resident))
                 self.open_encounters[peer.uuid] = session
-            session.note_hit(taken=target is None)
+            session.note_hit(taken=target is None, what=what)
         elif target is None and identity is not None:
             # A rock remains physical after its thrower has left. Keep this
             # later impact against its source; do not resurrect a visit.
             session = EncounterSession(identity, drive_snapshot(resident))
-            session.note_hit(taken=True)
+            session.note_hit(taken=True, what=what)
             record = session.close(drives=drive_snapshot(resident))
             if self.peer_ledger is not None:
                 self.peer_ledger.record(record)

@@ -99,10 +99,44 @@ def plan_throw(state: Dict[str, Any], origin: Sequence[float], gaze: float,
 
 
 def describe(plan: Dict[str, Any]) -> str:
-    """One line: at whom, how hard, and why that hard."""
+    """One line: what, at whom, how hard, and why that hard."""
     at = f"at {plan['aimed_at']}" if plan.get('aimed_at') else 'where it was looking'
-    return (f"Threw a rock {at}, {('hard' if plan.get('drive', 0) >= 70 else 'gently')} - "
+    thing = 'poop' if plan.get('what') == 'poop' else 'a rock'
+    return (f"Threw {thing} {at}, {('hard' if plan.get('drive', 0) >= 70 else 'gently')} - "
             f"{plan.get('driven_by', 'act_play')} at {plan.get('drive', 0):.0f}")
+
+
+#: What a thrown thing does to the squid it strikes - felt, never explained:
+#: the thrower's reasons never reach it. A rock knocks (health) and startles,
+#: and might have been play. Poop does no harm, but it is not a rock: nobody
+#: takes being splattered kindly - it is dirtied (cleanliness down), anxiety
+#: up, happiness down, and it counts as the worse mark in the encounter
+#: (encounter.EncounterSession._measure).
+HIT_EFFECTS = {
+    'rock': {'health': -2.0, 'startle': True},
+    'poop': {'cleanliness': -20.0, 'anxiety': 15.0, 'happiness': -10.0},
+}
+
+
+def feel_hit(squid, what: str = 'rock', startle=None) -> Dict[str, float]:
+    """A strike, on the struck squid's body and drives. Returns what changed.
+
+    `startle(source)` is called for a strike that startles. Shared by the
+    resident at home, a visitor at home and mobile, so a strike is the same
+    thing wherever it lands.
+    """
+    effects = HIT_EFFECTS.get(what, HIT_EFFECTS['rock'])
+    changed = {}
+    for stat in ('health', 'cleanliness', 'anxiety', 'happiness'):
+        if stat not in effects or not isinstance(getattr(squid, stat, None), (int, float)):
+            continue
+        before = float(getattr(squid, stat))
+        after = max(0.0, min(100.0, before + effects[stat]))
+        setattr(squid, stat, after)
+        changed[stat] = round(after - before, 2)
+    if effects.get('startle') and callable(startle):
+        startle(f'{what}_hit')
+    return changed
 
 
 def swept_hit(start, end, centre, radius):
@@ -164,4 +198,4 @@ def flight_step(position, velocity, bounds, dt=1.0, gravity=0.3):
 
 
 __all__ = ['throw_or_drop', 'throw_drive', 'throw_speed', 'flight_steps', 'aim',
-           'plan_throw', 'describe', 'swept_hit', 'flight_step']
+           'plan_throw', 'describe', 'swept_hit', 'flight_step', 'HIT_EFFECTS', 'feel_hit']

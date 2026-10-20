@@ -342,7 +342,7 @@ class DecisionEngine:
                 if s.throw_rock():
                     return "playfully tossing rock"
             elif s.carrying_poop:
-                if s.throw_poop(random.choice(["left", "right"])):
+                if s.throw_poop():           # aimed: src/throwing.py
                     return "flinging poop playfully"
             toy = self._nearest_of('rock', 'poop')
             if toy is not None:

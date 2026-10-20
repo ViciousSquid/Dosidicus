@@ -486,7 +486,8 @@ class VisitorMind:
                 self._feel_hit(squid, detail)
             elif self.session is not None and (not detail.get('peer_uuid')
                     or detail['peer_uuid'] == self.session.peer.uuid):
-                self.session.note_hit(taken=False)
+                self.session.note_hit(taken=False,
+                                      what='poop' if detail.get('what') == 'poop' else 'rock')
             elif detail.get('peer_uuid'):
                 memory = getattr(squid, 'memory_manager', None)
                 if memory is not None:
@@ -668,24 +669,30 @@ class VisitorMind:
     HIT_HEALTH_COST = 2.0
 
     def _feel_hit(self, squid, detail=None) -> None:
-        """Struck by a rock in the host's tank. Felt, at home: a startle and a
-        knock. Nothing says whether it was play or an attack; the squid's own
-        network decides what to make of it."""
-        squid.health = max(0.0, float(getattr(squid, 'health', 100.0)) - self.HIT_HEALTH_COST)
-        startle = getattr(self.logic, 'startle_squid', None)
-        if callable(startle):
-            try:
-                startle(source='rock_hit')
-            except Exception as exc:
-                self._log(f"could not startle on a hit: {exc}")
-        peer_uuid = (detail or {}).get('peer_uuid')
+        """Struck by something thrown in the host's tank - a rock (a knock and
+        a startle) or poop (no harm, but anxiety up and happiness down: see
+        throwing.HIT_EFFECTS). Felt, at home. Nothing says whether it was play
+        or an attack; the squid's own network decides what to make of it."""
+        from src.throwing import feel_hit
+        detail = detail or {}
+        what = 'poop' if detail.get('what') == 'poop' else 'rock'
+
+        def startle(source):
+            hook = getattr(self.logic, 'startle_squid', None)
+            if callable(hook):
+                try:
+                    hook(source=source)
+                except Exception as exc:
+                    self._log(f"could not startle on a hit: {exc}")
+        felt = feel_hit(squid, what, startle=startle)
+        peer_uuid = detail.get('peer_uuid')
         if self.session is not None and (not peer_uuid or peer_uuid == self.session.peer.uuid):
-            self.session.note_hit(taken=True)
+            self.session.note_hit(taken=True, what=what)
         elif peer_uuid:
             memory = getattr(squid, 'memory_manager', None)
             if memory is not None:
-                memory.add_short_term_memory('social', 'rock:' + detail['throw_id'],
-                    {'peer_uuid': peer_uuid, 'hits_taken': 1, 'health': -self.HIT_HEALTH_COST},
+                memory.add_short_term_memory('social', f"{what}:{detail['throw_id']}",
+                    dict({'peer_uuid': peer_uuid, 'hits_taken': 1, 'what': what}, **felt),
                     importance=3)
 
     def _live_through_fight(self, squid, fight_id: str, won: bool,

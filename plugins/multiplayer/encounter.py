@@ -158,7 +158,7 @@ class EncounterRecord:
                  'drive_deltas', 'valence', 'outcome', 'items_taken',
                  'items_lost', 'closest_approach', 'first_meeting',
                  'related_neurons', 'mating_id', 'fights_won', 'fights_lost',
-                 'hits_taken', 'hits_given')
+                 'hits_taken', 'hits_given', 'poop_taken', 'poop_given')
 
     def __init__(self, peer: SquidIdentity, started_at: float):
         self.peer = peer
@@ -183,6 +183,8 @@ class EncounterRecord:
         #: Rocks that struck this squid, and that it struck the other with.
         self.hits_taken = 0
         self.hits_given = 0
+        self.poop_taken = 0      # splattered with poop by the other squid...
+        self.poop_given = 0      # ...or splattered it
 
     @property
     def duration(self) -> float:
@@ -207,7 +209,8 @@ class EncounterRecord:
             weight += 3.0
         # A fight is never a mild encounter: it is remembered, and who won.
         weight += 2.5 * (self.fights_won + self.fights_lost)
-        weight += 1.0 * (self.hits_taken + self.hits_given)
+        weight += 1.0 * (self.hits_taken + self.hits_given
+                         + self.poop_taken + self.poop_given)
         if self.first_meeting:
             weight += 1.0
         return round(min(_MAX_IMPORTANCE, weight), 2)
@@ -245,6 +248,8 @@ class EncounterRecord:
                 'fights_lost': self.fights_lost,
                 'hits_taken': self.hits_taken,
                 'hits_given': self.hits_given,
+                'poop_taken': self.poop_taken,
+                'poop_given': self.poop_given,
             },
         }
 
@@ -280,6 +285,8 @@ class EncounterSession:
         self.fights_lost = 0
         self.hits_taken = 0
         self.hits_given = 0
+        self.poop_taken = 0      # splattered with poop by the other squid...
+        self.poop_given = 0      # ...or splattered it
         self.closed = False
         self._latest_drives: Dict[str, float] = dict(self.opening_drives)
 
@@ -315,9 +322,15 @@ class EncounterSession:
         else:
             self.fights_lost += 1
 
-    def note_hit(self, taken: bool) -> None:
-        """A thrown rock: struck by the other squid's (taken), or struck it."""
-        if taken:
+    def note_hit(self, taken: bool, what: str = 'rock') -> None:
+        """Something thrown: struck by the other squid's (taken), or struck it
+        - a rock, or poop."""
+        if what == 'poop':
+            if taken:
+                self.poop_taken += 1
+            else:
+                self.poop_given += 1
+        elif taken:
             self.hits_taken += 1
         else:
             self.hits_given += 1
@@ -346,7 +359,8 @@ class EncounterSession:
         stamp = now if now is not None else self.clock()
         if (self.items_taken or self.items_lost or self.mating_id
                 or self.fights_won or self.fights_lost
-                or self.hits_taken or self.hits_given):
+                or self.hits_taken or self.hits_given
+                or self.poop_taken or self.poop_given):
             return True
         return (self.last_seen_at - self.started_at) >= MIN_ENCOUNTER_DURATION
 
@@ -369,6 +383,8 @@ class EncounterSession:
         record.fights_lost = self.fights_lost
         record.hits_taken = self.hits_taken
         record.hits_given = self.hits_given
+        record.poop_taken = self.poop_taken
+        record.poop_given = self.poop_given
 
         closing = dict(drives or getattr(self, '_latest_drives', {}) or {})
         deltas, valence = self._measure(closing)
@@ -408,6 +424,10 @@ class EncounterSession:
         valence += self.fights_won * 5.0
         # Being hit by a rock hurts; having hit one says nothing either way.
         valence -= self.hits_taken * 4.0
+        # Poop does no harm, but it is not a rock: a rock might have been
+        # play, while nobody takes being splattered with poop kindly. It is
+        # the worse mark against the squid that did it.
+        valence -= self.poop_taken * 6.0
         return deltas, round(valence, 2)
 
     @staticmethod

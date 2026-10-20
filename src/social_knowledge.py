@@ -14,7 +14,7 @@ Everything here is read from the squid itself - nothing is decided:
     why, and why it ended as it did - from its own social memories.
 
 Social memories are those in category 'social' (encounters 'peer:<uuid>',
-fights 'fight:<id>', rock strikes 'rock:<throw_id>'); everything else the
+fights 'fight:<id>', strikes 'rock:<throw_id>' and 'poop:<throw_id>'); everything else the
 squid remembers is about its environment. `think` is how social events
 reach the Decisions tab as the squid's own thoughts, with their reasons.
 
@@ -228,7 +228,8 @@ def acquaintances(memories: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
                                        'personality': '', 'encounters': 0,
                                        'good': 0.0, 'bad': 0.0, 'fights_won': 0,
                                        'fights_lost': 0, 'hits_taken': 0,
-                                       'hits_given': 0, 'matings': 0,
+                                       'hits_given': 0, 'poop_taken': 0,
+                                       'poop_given': 0, 'matings': 0,
                                        'last_outcome': '', 'last_seen': 0.0})
         if name and row['name'] == 'a squid':
             row['name'] = name
@@ -252,11 +253,14 @@ def acquaintances(memories: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
             row['fights_lost'] += int(detail.get('fights_lost', 0) or 0)
             row['hits_taken'] += int(detail.get('hits_taken', 0) or 0)
             row['hits_given'] += int(detail.get('hits_given', 0) or 0)
+            row['poop_taken'] += int(detail.get('poop_taken', 0) or 0)
+            row['poop_given'] += int(detail.get('poop_given', 0) or 0)
             row['matings'] += 1 if detail.get('mating_id') else 0
-        elif key.startswith('rock:') and value.get('peer_uuid'):
+        elif key.startswith(('rock:', 'poop:')) and value.get('peer_uuid'):
             row = person(str(value['peer_uuid']))
-            row['hits_taken'] += int(value.get('hits_taken', 0) or 0)
-            row['hits_given'] += int(value.get('hits_given', 0) or 0)
+            kind = 'poop' if key.startswith('poop:') else 'hits'
+            row[f'{kind}_taken'] += int(value.get('hits_taken', 0) or 0)
+            row[f'{kind}_given'] += int(value.get('hits_given', 0) or 0)
         else:
             continue
         if isinstance(when, (int, float)):
@@ -268,7 +272,8 @@ def acquaintances(memories: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def _feeling(row) -> str:
     good, bad = row['good'], row['bad']
-    if row['fights_lost'] > row['fights_won'] or bad > good * 1.5 + 2:
+    if (row['fights_lost'] > row['fights_won'] or row.get('poop_taken')
+            or bad > good * 1.5 + 2):
         return 'remembers it badly'
     if good > bad * 1.5 + 2:
         return 'remembers it fondly'
@@ -287,6 +292,11 @@ def describe_memory(memory: Dict[str, Any]):
         won = value.get('outcome') == 'won'
         return (f"{'Won' if won else 'Lost'} a fight with {value.get('opponent', 'a squid')}",
                 str(value.get('summary', '')), 1 if won else -1)
+    if key.startswith('poop:'):
+        if value.get('hits_given'):
+            return ('Splattered a squid with poop', 'Poop it threw hit another squid.', 0)
+        return ('Splattered with poop', 'Another squid threw poop at it. It did no harm, '
+                'but it is not a rock: nobody takes that kindly.', -1)
     if key.startswith('rock:'):
         if value.get('hits_given'):
             return ('Struck a squid with a rock', 'A rock it threw hit another squid.', 0)
@@ -302,6 +312,8 @@ def describe_memory(memory: Dict[str, Any]):
             facts.append('they mated')
         for field, words in (('fights_won', 'fights won'), ('fights_lost', 'fights lost'),
                              ('hits_taken', 'struck by rocks'), ('hits_given', 'struck it'),
+                             ('poop_taken', 'splattered with poop'),
+                             ('poop_given', 'splattered it'),
                              ('items_taken', 'took'), ('items_lost', 'lost')):
             if detail.get(field):
                 facts.append(f"{words} {detail[field]}")
@@ -383,6 +395,10 @@ def to_html(known: Dict[str, Any]) -> str:
                 facts.append(f"hit by its rocks {p['hits_taken']}")
             if p['hits_given']:
                 facts.append(f"hit it with rocks {p['hits_given']}")
+            if p['poop_taken']:
+                facts.append(f"splattered by its poop {p['poop_taken']}")
+            if p['poop_given']:
+                facts.append(f"splattered it with poop {p['poop_given']}")
             if p['matings']:
                 facts.append('mated')
             who = e(p['name']) + (f" ({e(p['personality'])})" if p['personality'] else '')

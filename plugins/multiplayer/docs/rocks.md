@@ -63,6 +63,24 @@ remains available for deliberately sharing a copy. Mobile health is persisted
 in both its state and the interoperable save archive. APK staging includes the
 shared throwing and Qt-free remote-mind modules.
 
+## Poop
+
+A squid can throw poop at another squid exactly as it throws a rock: its play
+neuron decides throw or drop (not dice), it aims at the nearest squid in its
+view cone, as hard as play or aggression drives it, and the hit is swept and
+reported once (`src/interactions2.py`, sharing `squids_in_view` and
+`first_struck` with rocks). What reaches the struck squid is the fact only:
+`{'what': 'poop', 'speed': ..., 'throw_id': ...}`.
+
+Poop is not a rock. It does no harm - no health lost, no startle - but the
+struck squid is dirtied and miserable (`throwing.HIT_EFFECTS`: cleanliness
+-20, anxiety +15, happiness -10). And while a rock might have been play,
+nobody takes being splattered kindly: a poop hit is the worse mark on the
+encounter (valence -6 against a rock's -4, on top of the drives it moved),
+filed as `poop_taken`/`poop_given`, so the squid recalls the thrower badly and
+the lesson reaches how it meets strangers. The thrower still feels bad about
+throwing it (happiness -5, anxiety +10, as before).
+
 ## Validation
 
 With PyQt5, NumPy and pytest installed, run the complete suites:

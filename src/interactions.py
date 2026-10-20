@@ -7,6 +7,46 @@ import random
 import uuid
 from PyQt5 import QtCore, QtWidgets, QtGui
 
+def squids_in_view(scene, squid):
+    """(name, x, y) of every other squid in `squid`'s view cone - what a
+    thrown rock or poop can be aimed at (src/throwing.py)."""
+    from .vision_cone import VIEW_CONE_ANGLE, in_view_cone
+    rect = squid.squid_item.sceneBoundingRect()
+    cx, cy = rect.center().x(), rect.center().y()
+    reach = math.hypot(scene.width(), scene.height())
+    angle = float(getattr(squid, 'current_view_angle', 0.0))
+    seen = []
+    for item in scene.items():
+        if (item is squid.squid_item or getattr(item, 'category', None) != 'squid'
+                or not item.isVisible()):
+            continue
+        centre = item.sceneBoundingRect().center()
+        if in_view_cone(cx, cy, angle, VIEW_CONE_ANGLE, reach, centre.x(), centre.y()):
+            seen.append((getattr(item, 'squid_name', 'another squid'),
+                         centre.x(), centre.y()))
+    return seen
+
+
+def first_struck(scene, projectile, start, end, thrower_item, resident_item, hit_radius):
+    """The first squid a projectile's path from start to end passes through,
+    or None. Swept (throwing.swept_hit), so a fast throw cannot tunnel."""
+    from .throwing import swept_hit
+    contacts = []
+    size = max(projectile.sceneBoundingRect().width(), projectile.sceneBoundingRect().height())
+    for item in scene.items():
+        if (item is thrower_item
+                or (item is not resident_item and getattr(item, 'category', None) != 'squid')
+                or not item.isVisible()):
+            continue
+        body = item.sceneBoundingRect()
+        other = body.center()
+        radius = max(hit_radius, body.width()/2, body.height()/2) + size / 2
+        t = swept_hit(start, end, (other.x(), other.y()), radius)
+        if t is not None:
+            contacts.append((t, item))
+    return min(contacts, key=lambda c: c[0])[1] if contacts else None
+
+
 class RockInteractionManager:
     def __init__(self, squid, logic, scene, message_callback, config_manager):
         self.squid = squid
@@ -238,21 +278,7 @@ class RockInteractionManager:
 
     def _squids_in_view(self):
         """(name, x, y) of every other squid in this squid's view cone."""
-        from .vision_cone import VIEW_CONE_ANGLE, in_view_cone
-        rect = self.squid.squid_item.sceneBoundingRect()
-        cx, cy = rect.center().x(), rect.center().y()
-        reach = math.hypot(self.scene.width(), self.scene.height())
-        angle = float(getattr(self.squid, 'current_view_angle', 0.0))
-        seen = []
-        for item in self.scene.items():
-            if (item is self.squid.squid_item or getattr(item, 'category', None) != 'squid'
-                    or not item.isVisible()):
-                continue
-            centre = item.sceneBoundingRect().center()
-            if in_view_cone(cx, cy, angle, VIEW_CONE_ANGLE, reach, centre.x(), centre.y()):
-                seen.append((getattr(item, 'squid_name', 'another squid'),
-                             centre.x(), centre.y()))
-        return seen
+        return squids_in_view(self.scene, self.squid)
 
     def throw_rock(self, direction=None, *, cause=None):
         """Throw the carried rock - aimed and as hard as the squid's network throws it.
@@ -415,29 +441,16 @@ class RockInteractionManager:
 
     def _check_hit(self, rock, start=None, end=None):
         """First struck body, once per projectile, including its landing step."""
-        from .throwing import swept_hit
         throw = getattr(self, 'current_throw', None)
         if not throw or throw.get('hit') is not None:
             return
         centre = rock.sceneBoundingRect().center()
         end = end or (centre.x(), centre.y())
         start = start or end
-        contacts = []
         resident = getattr(getattr(self.logic, 'squid', None), 'squid_item', None)
-        for item in self.scene.items():
-            if (item is self.squid.squid_item
-                    or (item is not resident and getattr(item, 'category', None) != 'squid')
-                    or not item.isVisible()):
-                continue
-            body = item.sceneBoundingRect()
-            other = body.center()
-            radius = max(self.HIT_RADIUS, body.width()/2, body.height()/2)
-            radius += max(rock.sceneBoundingRect().width(), rock.sceneBoundingRect().height()) / 2
-            t = swept_hit(start, end, (other.x(), other.y()), radius)
-            if t is not None:
-                contacts.append((t, item))
-        if contacts:
-            _, item = min(contacts, key=lambda c: c[0])
+        item = first_struck(self.scene, rock, start, end, self.squid.squid_item,
+                            resident, self.HIT_RADIUS)
+        if item is not None:
             throw['hit'] = str(getattr(item, 'peer_uuid', '') or id(item))
             notify = getattr(self.logic, 'on_rock_hit', None)
             if callable(notify):

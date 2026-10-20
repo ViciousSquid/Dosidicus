@@ -668,6 +668,12 @@ class StatisticsEventWiringTests(unittest.TestCase):
         manager.squid = squid
         manager.logic = logic
         manager.poop_config = {}
+        # An empty tank to aim in (src/throwing.py): nobody in view.
+        manager.scene = SimpleNamespace(
+            items=lambda: [], width=lambda: 900, height=lambda: 500,
+            sceneRect=lambda: SimpleNamespace(bottom=lambda: 500))
+        manager.show_message = None
+        manager.flying_poop = manager.current_throw = None
         manager.throw_animation_timer = Mock()
         manager.throw_animation_timer.isActive.return_value = False
         manager.multiplayer_plugin = None

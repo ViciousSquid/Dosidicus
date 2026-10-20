@@ -3033,9 +3033,9 @@ class TamagotchiLogic:
         return True
 
     def on_rock_hit(self, target_item, throw):
-        """A rock this squid threw struck another squid. Tell the plugins -
-        the multiplayer host lets the struck squid feel it - with the fact
-        only: where it was aimed and how hard, never why."""
+        """Something thrown - a rock, or poop (throw['what']) - struck a squid.
+        Tell the plugins - the multiplayer host lets the struck squid feel it -
+        with the fact only: what, and how hard, never why."""
         own_body = target_item is self.squid.squid_item
         felt = self.feel_rock_hit(throw) if own_body else False
         manager = getattr(self, 'plugin_manager', None)
@@ -3048,9 +3048,10 @@ class TamagotchiLogic:
         if own_body and felt and not any(result is True for result in results):
             # Disabling the transport cannot undo a projectile already in
             # flight. Keep the physical fact even without an active plugin.
-            self.squid.memory_manager.add_short_term_memory('social', 'rock:' + throw['throw_id'],
-                {'peer_uuid': throw.get('source_uuid', ''), 'hits_taken': 1, 'health': -2.},
-                importance=3)
+            what = throw.get('what', 'rock')
+            self.squid.memory_manager.add_short_term_memory('social', f"{what}:{throw['throw_id']}",
+                dict({'peer_uuid': throw.get('source_uuid', ''), 'hits_taken': 1, 'what': what},
+                     **felt), importance=3)
 
     def feel_rock_hit(self, throw):
         """The resident's body owns damage/startle, once per physical impact."""
@@ -3063,9 +3064,10 @@ class TamagotchiLogic:
         if throw_id in hits:
             return False
         hits.add(throw_id)
-        self.squid.health = max(0., self.squid.health - 2.)
-        self.startle_squid(source='rock_hit')
-        return True
+        from .throwing import feel_hit
+        # What changed, or True for a strike that changed nothing it measures.
+        return feel_hit(self.squid, (throw or {}).get('what', 'rock'),
+                        startle=lambda source: self.startle_squid(source=source)) or True
 
     def throw_visitor_rock(self, actor, rock, intent):
         plugin = self.plugin_manager.plugins.get('multiplayer', {}).get('instance')
