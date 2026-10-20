@@ -18,6 +18,7 @@ synapse in a hatchling's brain: inherited from this parent, like this.
 Qt-free: desktop and mobile share it.
 """
 
+import math
 import random
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
@@ -71,8 +72,8 @@ def clean_gamete(genes: Any) -> Dict[str, float]:
         edge = _edge(key)
         if (edge is None or edge[0] == edge[1] or edge[0] not in innate
                 or edge[1] not in innate or isinstance(value, bool)
-                or not isinstance(value, (int, float))):
-            continue
+                or not isinstance(value, (int, float)) or not math.isfinite(value)):
+            continue                 # NaN would otherwise clamp to +1
         clean[_key(*edge)] = max(-1.0, min(1.0, float(value)))
     return clean
 

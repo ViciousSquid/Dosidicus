@@ -110,7 +110,7 @@ Earlier on the branch (before this work): release workflows for all platforms
 (`e1f47c3`), shared brain interchange, the real two-instance gallery
 (`docs/canary-gallery`, now stale - see section 5).
 
-Test suite at the last commit: **829 passed**
+Test suite at the last commit: **847 passed**
 (`QT_QPA_PLATFORM=offscreen python -m pytest tests android/tests -q -p no:cacheprovider`, ~50 s).
 
 ---
@@ -299,7 +299,7 @@ Remaining for this task:
    `add_genes` once per parent, only for its own egg/mating, survives
    save/load; the host keeps a visitor's gamete only from the mate, through
    `handle_gamete`; hatch combines both halves with provenance and mutation.
-2. Mobile inheritance (with mobile mating, section 5).
+2. Mobile inheritance (with mobile mating) - done (`9e439a7`); `tests/test_inheritance.py` specifies the shared module.
 
 ## 5. Left to do
 
