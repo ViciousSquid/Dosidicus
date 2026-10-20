@@ -173,6 +173,28 @@ adventurous squid that keeps getting hurt comes to stay home too. The squid's
 thoughts say when it leaves and why ("Another aquarium is nearby and I want to
 explore it"); `Squid.why_not_venturing()` says why it has not.
 
+### Coming home
+
+Fear or tiredness, decided by the visitor's own network at home
+(`VisitorMind.decide`):
+
+- its flight winning the competition: it swims home ("I was frightened, so I
+  swam home");
+- its rest winning, or exhaustion (the collapse reflex, which nothing
+  resists): it goes home to sleep. **A squid away from home always comes home
+  to sleep** - one that is asleep while visiting, however it fell asleep, is
+  home on the next tick.
+
+A stubborn squid can hold off sleep while another need is stronger (hunger, or
+curiosity x0.8, or anxiety x0.6, above 55%) - "Was tired but resisted sleep
+due to stubbornness" - and does the next thing its network wants instead. Not
+indefinitely: never once its sleepiness reaches 90, never when exhausted, and
+at 100 it falls asleep where it is - and so comes home. The same rule holds
+at home (`personality.resists_sleep`, used by the decision engine). Coming
+home ends the visit as the squid's own choice (`departed`), so the encounter
+is filed and its lessons learned. Otherwise it stays as long as its network
+keeps it engaged.
+
 ## Code
 
 | What | Where |
@@ -182,5 +204,6 @@ explore it"); `Squid.why_not_venturing()` says why it has not.
 | Percepts and resting levels | `src/propagation.py`: `perceive`, `CONCEPT_PERCEPTS`, `drive_external_neurons`, `propagate(resting=...)` |
 | Vision | `src/vision_worker.py`, `src/vision_cone.py`, `Squid.notice` |
 | Recognition | `plugins/multiplayer/encounter.py`: `perceive_recognition` |
-| Venturing out | `src/venturing.py`; `Squid.is_venturing`, `check_boundary_exit`; `MultiplayerPlugin._perceive_aquariums` |
-| Specification | `tests/test_social_concept.py`, `tests/test_venturing.py`; two real processes: `tools/test_venture_multiplayer.py` |
+| Venturing out | `src/venturing.py`; `Squid.is_venturing`, `check_boundary_exit`; `MultiplayerPlugin._perceive_aquariums`, `address_exit` |
+| Coming home | `plugins/multiplayer/visitor_mind.py`: `HOMEWARD`, `go_home`, `tick`; `src/personality.py`: `resists_sleep` |
+| Specification | `tests/test_social_concept.py`, `tests/test_venturing.py`, `tests/test_coming_home.py`; two real processes: `tools/test_venture_multiplayer.py` |

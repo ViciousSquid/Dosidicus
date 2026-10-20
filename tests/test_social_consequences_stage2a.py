@@ -347,7 +347,7 @@ class NoMemoryMeansNoDifferenceTests(unittest.TestCase):
             meeting.admit(x=300.0, y=400.0)
             meeting.host_sends_frame()
             meeting.visitor_receives()
-            meeting.set_brain(**quiet_brain(act_flee=90.0))
+            meeting.set_brain(**quiet_brain(act_shelter=90.0))
             actions.append(meeting.visitor_decides().action)
         self.assertEqual(actions[0], actions[1])
 

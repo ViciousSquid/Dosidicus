@@ -270,14 +270,14 @@ def test_departed_visitors_projectile_still_hurts_and_is_remembered_once():
 def test_remote_ink_is_parallel_and_fires_once_per_neural_crossing():
     meeting = Encounter(); meeting.admit(); meeting.host_sends_frame(); meeting.visitor_receives()
     meeting.host_tank.ink_visitor = Mock()
-    meeting.set_brain(**quiet_brain(act_rest=100., act_ink=100.))
+    meeting.set_brain(**quiet_brain(act_shelter=100., act_ink=100.))
     for _ in range(2):
         meeting.visitor_mind.tick(); meeting.host_receives()
     meeting.host_tank.ink_visitor.assert_called_once_with(meeting.actor)
-    assert meeting.actor.last_intent.action == 'act_rest'
-    meeting.set_brain(**quiet_brain(act_rest=100., act_ink=0.))
+    assert meeting.actor.last_intent.action == 'act_shelter'
+    meeting.set_brain(**quiet_brain(act_shelter=100., act_ink=0.))
     meeting.visitor_mind.tick(); meeting.host_receives()
-    meeting.set_brain(**quiet_brain(act_rest=100., act_ink=100.))
+    meeting.set_brain(**quiet_brain(act_shelter=100., act_ink=100.))
     meeting.visitor_mind.tick(); meeting.host_receives()
     assert meeting.host_tank.ink_visitor.call_count == 2
 

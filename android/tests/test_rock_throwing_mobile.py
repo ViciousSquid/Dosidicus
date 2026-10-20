@@ -161,14 +161,14 @@ def test_live_mobile_link_loss_restores_body_and_keeps_consequences():
 
 def test_live_ink_is_a_remote_reflex_without_a_host_brain_or_resident_stat():
     p = Pair()
-    quiet(p.guest, act_rest=100., act_ink=100.)
+    quiet(p.guest, act_shelter=100., act_ink=100.)
     p.cycle(); p.cycle()
     assert len(p.host.ink_clouds) == 1
     assert p.guest.stats.ink_clouds_created == 1 and p.host.stats.ink_clouds_created == 0
-    assert p.h.actor.last_intent.action == 'act_rest'
-    quiet(p.guest, act_rest=100.)
+    assert p.h.actor.last_intent.action == 'act_shelter'
+    quiet(p.guest, act_shelter=100.)
     p.cycle()
-    quiet(p.guest, act_rest=100., act_ink=100.)
+    quiet(p.guest, act_shelter=100., act_ink=100.)
     p.cycle()
     assert len(p.host.ink_clouds) == 2
     assert p.host._visitor_minds == {}
@@ -180,7 +180,7 @@ def test_live_fight_owns_body_motion_and_reports_persistent_result_at_home():
     p = Pair()
     p.host.squid.x, p.host.squid.y = 200., 250.
     p.h.actor.x, p.h.actor.y = 220., 250.
-    quiet(p.guest, act_rest=100., aggression=90.)
+    quiet(p.guest, act_shelter=100., aggression=90.)
     quiet(p.host)
     p.cycle()
     p.host._update_fight(0.)

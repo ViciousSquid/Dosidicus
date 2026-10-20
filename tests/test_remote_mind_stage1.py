@@ -435,10 +435,11 @@ class PerceptionReachesTheBrainTests(unittest.TestCase):
         Not "an action that looks plausible" - the specific one the squid's
         own network wants, chosen by the engine's own rule.
         """
-        self.meeting.set_brain(**quiet_brain(act_flee=95.0))
+        # (Not flight or rest: either takes a visitor home - test_coming_home.)
+        self.meeting.set_brain(**quiet_brain(act_shelter=95.0))
         intent = self.meeting.visitor_decides()
         self.assertIsNotNone(intent)
-        self.assertEqual(intent.action, 'act_flee')
+        self.assertEqual(intent.action, 'act_shelter')
 
     def test_a_brain_that_wants_nothing_sends_no_intent(self):
         """Silence is a real answer, and the body simply stops."""
@@ -476,14 +477,14 @@ class PluginDoesNotChooseBehaviourTests(unittest.TestCase):
         return meeting, meeting.visitor_decides()
 
     def test_two_different_brains_produce_different_actions_from_one_frame(self):
-        frightened, flee_intent = self._visit_with_brain(act_flee=95.0)
+        shy, shelter_intent = self._visit_with_brain(act_shelter=95.0)
         hungry, eat_intent = self._visit_with_brain(act_eat=95.0)
 
-        self.assertEqual(flee_intent.action, 'act_flee')
+        self.assertEqual(shelter_intent.action, 'act_shelter')
         self.assertEqual(eat_intent.action, 'act_eat')
         # Same tank, same resident, same position, same perception.
         self.assertEqual(
-            frightened.host_body.build_frame(frightened.actor).sensors,
+            shy.host_body.build_frame(shy.actor).sensors,
             hungry.host_body.build_frame(hungry.actor).sensors)
 
     def test_the_action_is_the_one_the_engines_own_rule_chose(self):
@@ -493,8 +494,9 @@ class PluginDoesNotChooseBehaviourTests(unittest.TestCase):
         intent must name the same behaviour. If the plugin were applying any
         policy of its own, this is where the two would part company.
         """
-        for activations in ({'act_flee': 90.0}, {'act_eat': 90.0},
-                            {'act_shelter': 90.0}, {'act_play': 90.0}):
+        # (Flight and rest send a visitor home instead: test_coming_home.)
+        for activations in ({'act_eat': 90.0}, {'act_shelter': 90.0},
+                            {'act_play': 90.0}):
             with self.subTest(brain=activations):
                 meeting, intent = self._visit_with_brain(**activations)
                 state = meeting.visitor_tank.brain_window.brain_widget.state
@@ -518,7 +520,7 @@ class PluginDoesNotChooseBehaviourTests(unittest.TestCase):
             meeting.admit()
             meeting.host_sends_frame()
             meeting.visitor_receives()
-            meeting.set_brain(**quiet_brain(act_flee=90.0))
+            meeting.set_brain(**quiet_brain(act_shelter=90.0))
             actions.append(meeting.visitor_decides().action)
         self.assertEqual(actions[0], actions[1])
 
@@ -857,7 +859,7 @@ class PrivacyTests(unittest.TestCase):
         meeting.admit()
         meeting.host_sends_frame()
         meeting.visitor_receives()
-        meeting.set_brain(**quiet_brain(act_flee=95.0))
+        meeting.set_brain(**quiet_brain(act_shelter=95.0))
         payload = meeting.visitor_decides().to_payload()
         self.assertEqual(
             set(payload),

@@ -1547,19 +1547,10 @@ class TamagotchiLogic:
                     self.user_interface.show_message("😴 The squid woke up feeling refreshed!")
                     self.sleep_frame = 0
 
-            # ── STUBBORN PERSONALITY: RESIST SLEEP WHEN OTHER NEEDS ARE STRONGER ── (from original)
-            elif self.squid.personality == Personality.STUBBORN:
-                hunger_urge = self.squid.hunger / 100.0
-                curiosity_urge = self.squid.curiosity / 100.0
-                anxiety_urge = self.squid.anxiety / 100.0
-
-                # If any competing need is > 55% and stronger than current sleepiness,
-                # stubborn squid will refuse to fall asleep (even if sleepiness is high)
-                if max(hunger_urge, curiosity_urge * 0.8, anxiety_urge * 0.6) > 0.55:
-                    if self.squid.sleepiness > 65 and random.random() < 0.22:  # 22% chance per frame to resist
-                        self.user_interface.show_message("😤 Stubborn squid refuses to sleep right now!")
-                        # Tiny happiness penalty for fighting sleep
-                        self.squid.happiness = max(15.0, self.squid.happiness - 1.8)
+            # A stubborn squid holding off sleep (personality.resists_sleep,
+            # decided where sleep is - DecisionEngine) pays a little for it.
+            elif getattr(self.squid, '_resisting_sleep', False):
+                self.squid.happiness = max(15.0, self.squid.happiness - 1.8)
 
             # Normal behavior only when NOT sleeping
             if not getattr(self.squid, 'is_sleeping', False):

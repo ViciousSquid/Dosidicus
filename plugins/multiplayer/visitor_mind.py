@@ -56,6 +56,17 @@ _CONTEST_LOST_ANXIETY = 6.0
 _BLOCKED_SATISFACTION = 2.0
 
 
+#: What brings a visiting squid home, when its own network chooses it: flight
+#: (a frightened squid swims home) or rest (it goes home to sleep - always: a
+#: squid that is asleep while away comes home on the next tick, however it
+#: fell asleep). With the thought it has about it.
+HOMEWARD = {
+    'act_flee': "I was frightened, so I swam home.",
+    'act_rest': "I am tired: I went home to sleep.",
+    'act_collapse': "I am exhausted: I went home to sleep.",
+}
+
+
 class RemotePerception:
     """The last thing the host said the visiting squid could see.
 
@@ -170,6 +181,7 @@ class VisitorMind:
         # never repeat an irreversible physical or remembered consequence.
         self._rock_hits = set()
         self._inking = False
+        self._resisting_sleep = False     # a stubborn squid holding off sleep
 
     # ==================================================================
     # Perception: the host's frame, through the ordinary sensor path
@@ -284,6 +296,12 @@ class VisitorMind:
         from src.brain_constants import (ACTION_BEHAVIOURS, FALLBACK_ACTION,
                                          ACTION_THRESHOLDS)
 
+        # Exhaustion is a reflex, outside the competition, and nothing resists
+        # it: an exhausted squid goes home to sleep.
+        if wants('act_collapse', float(brain_state.get('act_collapse', 0.0) or 0.0)):
+            self.go_home('act_collapse')
+            return None
+
         behaviour, confidence, _urgency = select_action(brain_state)
         if behaviour is None:
             # Nothing cleared its own threshold. Locomotion is the fallback,
@@ -298,6 +316,29 @@ class VisitorMind:
 
         action = self._neuron_for(behaviour)
         if action is None:
+            return None
+
+        # Fear or tiredness takes it home: its own network's flight, or its
+        # rest, winning the competition ends the visit - no timer, no host.
+        # A stubborn squid can hold off sleep for a while (never exhaustion,
+        # never past personality.STUBBORN_SLEEP_LIMIT) and does the next thing
+        # its network wants instead.
+        from src.personality import RESISTED_SLEEP, squid_resists_sleep
+        squid = getattr(self.logic, 'squid', None)
+        resisting = action == 'act_rest' and squid_resists_sleep(squid)
+        if resisting and not self._resisting_sleep:
+            window = getattr(self.logic, 'brain_window', None)
+            if hasattr(window, 'add_thought'):
+                window.add_thought(RESISTED_SLEEP)
+        self._resisting_sleep = resisting
+        if resisting:
+            awake = {b: u for b, u in (_urgency or {}).items() if b != behaviour}
+            behaviour = max(awake, key=awake.get) if awake else ACTION_BEHAVIOURS[FALLBACK_ACTION]
+            action = self._neuron_for(behaviour)
+            if action is None or action in HOMEWARD:
+                return None
+        elif action in HOMEWARD:
+            self.go_home(action)
             return None
 
         # The encounter is being had, not just transacted: what this squid did
@@ -546,10 +587,18 @@ class VisitorMind:
         self._seq = 0
         from src.decision_engine import wants
         self._inking = wants('act_ink', float(self._brain_state().get('act_ink', 0.) or 0.))
+        self._resisting_sleep = False
         if squid is not None:
             squid.is_transitioning = True
             squid.can_move = False
         return self.visit_id
+
+    def go_home(self, action: str) -> None:
+        """Come home because its own network chose to (HOMEWARD), and say why."""
+        from src.social_knowledge import think
+        think(self.logic, HOMEWARD[action])
+        self._log(f"going home: {action} won")
+        self.end_visit(reason=END_DEPARTED, notify=True)
 
     def end_visit(self, reason: str = END_DEPARTED, notify: bool = True) -> None:
         """Come home. Always safe to call, and always leaves the squid usable.
@@ -699,6 +748,11 @@ class VisitorMind:
         """
         if not self.perception.away:
             return None
+        # A squid away from home always comes home to sleep, however it
+        # came to be asleep - it never sleeps in another squid's tank.
+        if getattr(getattr(self.logic, 'squid', None), 'is_sleeping', False):
+            self.go_home('act_rest')
+            return None
         if not self.perception.linked:
             silence = self.clock() - self.perception.received_at
             if silence >= LINK_TIMEOUT:
@@ -743,4 +797,4 @@ class VisitorMind:
             self.logger.info(f"[VisitorMind] {message}")
 
 
-__all__ = ['VisitorMind', 'RemotePerception', 'REMOTE_DRIVEN_SENSORS']
+__all__ = ['VisitorMind', 'RemotePerception', 'REMOTE_DRIVEN_SENSORS', 'HOMEWARD']

@@ -352,6 +352,21 @@ class DecisionEngine:
             return self._drift()
 
         if decision == "sleeping":
+            # A stubborn squid can hold off sleep - for a while
+            # (personality.resists_sleep). Exhaustion it cannot resist.
+            from .personality import RESISTED_SLEEP, squid_resists_sleep
+            if squid_resists_sleep(s):
+                if not getattr(s, '_resisting_sleep', False):
+                    s._resisting_sleep = True
+                    logic = getattr(s, 'tamagotchi_logic', None)
+                    window = getattr(logic, 'brain_window', None)
+                    if hasattr(window, 'add_thought'):
+                        window.add_thought(RESISTED_SLEEP)
+                    if hasattr(logic, 'show_message'):
+                        logic.show_message("😤 Stubborn squid refuses to sleep right now!")
+                self._drift()
+                return "resisting sleep"
+            s._resisting_sleep = False
             s.go_to_sleep()
             return "settling down to sleep"
 
