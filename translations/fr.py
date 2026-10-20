@@ -1,4 +1,4 @@
-LANGUAGE_HEADER = "fr - Francais"
+LANGUAGE_HEADER = "fr - Français"
 translations = {
     # Core continuous neurons
     "hunger": "Faim",
@@ -87,6 +87,11 @@ translations = {
     "error_saving": "Erreur lors de la sauvegarde.",
     "error_loading": "Erreur lors du chargement.",
     "no_save_found": "Aucun fichier de sauvegarde trouve.",
+    "startup": "Démarrage",
+    "show_tutorial_q": "Afficher le tutoriel ?",
+    "auto_decline": "(Refus automatique dans {seconds}s)",
+    "tutorial_title": "Tutoriel",
+    "tutorial_query": "Voulez-vous voir le tutoriel ?",
 
     # ===== ONGLET A PROPOS =====
     "hello": "BONJOUR",

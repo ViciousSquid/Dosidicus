@@ -10,6 +10,34 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+QT_LOGGING_RULES = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
+
+_EARLY_APP = None
+
+#: Launches that never show the game, and so never ask for a language.
+NO_SPLASH_FLAGS = ('-c', '--clean', '-designer', '--designer', '-h', '--help')
+
+
+def choose_language_first():
+    """As early as possible - before the game is even imported - show the
+    splash with its language picker. Nothing else starts until a language
+    is chosen (src/language_splash.py), so everything after it, the
+    tutorial question included, is in that language. Closing it quits."""
+    import multiprocessing
+    multiprocessing.freeze_support()        # a frozen child process stops here
+    if any(flag in sys.argv[1:] for flag in NO_SPLASH_FLAGS):
+        return
+    os.environ['QT_LOGGING_RULES'] = QT_LOGGING_RULES
+    global _EARLY_APP           # kept: main() goes on with this application
+    _EARLY_APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
+    from src.language_splash import choose_language
+    if choose_language() is None:
+        sys.exit(0)
+
+
+if __name__ == '__main__':
+    choose_language_first()
+
 import time
 import sys
 import json
@@ -41,7 +69,7 @@ def launch_brain_designer_process():
 
 def setup_logging_configuration():
     """Initialize logging configuration"""
-    os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
+    os.environ['QT_LOGGING_RULES'] = QT_LOGGING_RULES
     os.makedirs('logs', exist_ok=True)
 
     logging.basicConfig(
@@ -1166,7 +1194,8 @@ def main():
     # wait short at a negligible cost in switching.
     sys.setswitchinterval(0.001)
 
-    app = QtWidgets.QApplication(sys.argv)
+    # Already made for the language splash (choose_language_first).
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
     
     try:
         personality = Personality(args.personality) if args.personality else None
