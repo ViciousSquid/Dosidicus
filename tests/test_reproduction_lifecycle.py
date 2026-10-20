@@ -257,6 +257,11 @@ class FakeNode:
 class FakeEntities:
     def __init__(self):
         self.removed = []
+        self.hearts = []
+
+    def show_mating_heart(self, key, x, y):
+        self.hearts.append((key, x, y))
+        return True
 
     def update_remote_squid(self, node_id, payload, is_new_arrival=False):
         return True
@@ -499,6 +504,27 @@ class MatingTests(unittest.TestCase):
             # Nothing happened to the visitor's own body or lifecycle.
             self.assertEqual(visit.visitor_squid.lifecycle.stage, STAGE_LIVING)
             self.assertEqual(visit.visitor_squid.hunger, 25.0)
+
+    def test_one_heart_is_drawn_over_the_pair_when_a_mating_is_recorded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            visit = Visit(tmp, chance=1.0)
+            self.assertTrue(visit.arrive())
+            visit.hold_contact(6.0)
+            visit.hold_contact(6.0)        # contact goes on; still one mating
+
+            resident, actor = visit.resident, visit.actor
+            centre_x = (resident.squid_x + actor.x + resident.squid_width) / 2
+            centre_y = (resident.squid_y + actor.y + resident.squid_height) / 2
+            self.assertEqual(visit.plugin.entity_manager.hearts,
+                             [(VISITOR_UUID, centre_x, centre_y)])
+
+    def test_no_heart_when_the_roll_is_not_a_mating(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            visit = Visit(tmp, chance=0.0)
+            self.assertTrue(visit.arrive())
+            visit.hold_contact(6.0)
+            self.assertEqual(visit.resident.lifecycle.stage, STAGE_LIVING)
+            self.assertEqual(visit.plugin.entity_manager.hearts, [])
 
     def test_the_mating_and_the_egg_are_saved_together_before_the_visitor_hears(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -990,6 +1016,61 @@ class FightCloudTests(unittest.TestCase):
         self.entities._end_scuffle(VISITOR_UUID)
         self.assertTrue(resident.can_move)
         self.assertEqual(self._clouds(), [])
+
+
+class MatingHeartTests(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.scene = QtWidgets.QGraphicsScene()
+        self.entities = RemoteEntityManager(self.scene, 1280, 900)
+        self.addCleanup(self.entities.position_update_timer.stop)
+        self.entities.images_folder_root_path = self.tmp.name
+
+    def _install_gif(self):
+        with open(os.path.join(self.tmp.name, RemoteEntityManager.MATING_HEART_FILE), 'wb') as f:
+            f.write(TINY_GIF)
+
+    def _overlays(self):
+        return [i for i in self.scene.items() if i.zValue() == 600]
+
+    def test_one_heart_for_the_pair_at_the_gifs_own_size(self):
+        self._install_gif()
+        self.assertTrue(self.entities.show_mating_heart(VISITOR_UUID, 500.0, 400.0))
+        self.assertTrue(self.entities.show_mating_heart(VISITOR_UUID, 510.0, 400.0))
+        self.assertEqual(len(self._overlays()), 1)
+        # Not rescaled, so the pixel heart stays crisp.
+        movie = self.entities._mating_hearts[VISITOR_UUID]['movie']
+        self.assertFalse(movie.scaledSize().isValid())
+        self.entities.cleanup_all()
+        self.assertEqual(self._overlays(), [])
+
+    def test_a_missing_gif_draws_nothing(self):
+        self.assertFalse(self.entities.show_mating_heart(VISITOR_UUID, 500.0, 400.0))
+        self.assertEqual(self._overlays(), [])
+
+    def test_an_earlier_hearts_timer_leaves_a_later_heart_alone(self):
+        from PyQt5.QtTest import QTest
+        self._install_gif()
+        self.entities.show_mating_heart(VISITOR_UUID, 500.0, 400.0, duration_ms=50)
+        self.entities.hide_mating_heart(VISITOR_UUID)
+        self.entities.show_mating_heart(VISITOR_UUID, 500.0, 400.0, duration_ms=5000)
+        QTest.qWait(150)
+        self.assertEqual(len(self._overlays()), 1)
+        self.entities.hide_mating_heart(VISITOR_UUID)
+
+    def test_the_shipped_heart_is_an_animated_gif_with_a_clear_background(self):
+        movie = QtGui.QMovie(os.path.join(_REPO_ROOT, 'images',
+                                          RemoteEntityManager.MATING_HEART_FILE))
+        self.assertTrue(movie.isValid())
+        self.assertGreater(movie.frameCount(), 1)
+        self.assertTrue(movie.jumpToFrame(0))
+        frame = movie.currentImage()
+        self.assertEqual(frame.pixelColor(0, 0).alpha(), 0)
+        centre = frame.pixelColor(frame.width() // 2, frame.height() // 2)
+        self.assertEqual((centre.red(), centre.green(), centre.blue(), centre.alpha()),
+                         (255, 255, 255, 255))
 
 
 class RoundTripTimerTests(unittest.TestCase):

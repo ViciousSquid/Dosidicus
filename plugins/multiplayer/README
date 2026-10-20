@@ -146,6 +146,11 @@ within `FIGHT_CLOUD_RANGE` of each other, **one** animated cloud
 (`images/fight_cloud.gif`) is drawn between them for a couple of seconds. It
 is a drawing and nothing else. If the GIF is not installed, nothing is drawn.
 
+When the host records a mating, **one** beating pixel heart
+(`images/mating_heart.gif`) is drawn over the pair the same way, for about
+three seconds. It is shown only once the mating is recorded and saved, and like
+the cloud it is a drawing and nothing else.
+
 ## Consent
 
 Entry is something the host agrees to. A refused visitor gets no body and no

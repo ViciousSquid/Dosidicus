@@ -88,6 +88,8 @@ class RemoteEntityManager:
         #: other squid's uuid.
         self._fight_clouds = {}
         self._scuffles = {}
+        #: Mating hearts on screen, the same way.
+        self._mating_hearts = {}
 
         self.position_update_timer = QtCore.QTimer()
         self.position_update_timer.timeout.connect(self._update_visuals_once_per_second)
@@ -532,6 +534,9 @@ class RemoteEntityManager:
     #: The animated cloud drawn over a scuffle, from the game's images folder.
     FIGHT_CLOUD_FILE = "fight_cloud.gif"
     FIGHT_CLOUD_MS = 2500
+    #: The beating heart drawn over a pair that has just mated.
+    MATING_HEART_FILE = "mating_heart.gif"
+    MATING_HEART_MS = 3200
 
     def start_fight_sequence(self, key, node_id, resident, actor, on_finished=None):
         """Bring both bodies together before playing one cloud over the pair."""
@@ -601,21 +606,45 @@ class RemoteEntityManager:
         Purely a drawing: it changes nothing about either squid. Returns False
         and draws nothing if the GIF is not installed.
         """
-        entry = self._fight_clouds.get(key)
+        # The GIF includes distant puffs. Scale its central cloud to obscure
+        # the pair, with room for the outer puffs without filling the tank.
+        return self._show_overlay(self._fight_clouds, key, self.FIGHT_CLOUD_FILE,
+                                  x, y, duration_ms, QtCore.QSize(720, 840))
+
+    def hide_fight_cloud(self, key: str) -> None:
+        self._hide_overlay(self._fight_clouds, key)
+
+    def show_mating_heart(self, key: str, x: float, y: float,
+                          duration_ms: int = MATING_HEART_MS) -> bool:
+        """One beating heart over two squid that have just mated.
+
+        The fight cloud's counterpart: one heart for the pair, centred between
+        them, and purely a drawing. Shown at the GIF's own size so its pixels
+        stay crisp. Returns False and draws nothing if the GIF is not installed.
+        """
+        return self._show_overlay(self._mating_hearts, key, self.MATING_HEART_FILE,
+                                  x, y, duration_ms)
+
+    def hide_mating_heart(self, key: str) -> None:
+        self._hide_overlay(self._mating_hearts, key)
+
+    def _show_overlay(self, overlays, key, filename, x, y, duration_ms,
+                      scaled_size=None) -> bool:
+        """Play an animated GIF from the images folder over a pair of squid."""
+        entry = overlays.get(key)
         if entry is not None:
             entry['x'], entry['y'] = float(x), float(y)
             return True
-        path = os.path.join(self.images_folder_root_path, self.FIGHT_CLOUD_FILE)
+        path = os.path.join(self.images_folder_root_path, filename)
         if not os.path.exists(path):
             if self.debug_mode:
-                self.logger.debug(f"No fight cloud: {path} is missing")
+                self.logger.debug(f"No overlay: {path} is missing")
             return False
         movie = QtGui.QMovie(path)
         if not movie.isValid():
             return False
-        # The GIF includes distant puffs. Scale its central cloud to obscure
-        # the pair, with room for the outer puffs without filling the tank.
-        movie.setScaledSize(QtCore.QSize(720, 840))
+        if scaled_size is not None:
+            movie.setScaledSize(scaled_size)
         item = QtWidgets.QGraphicsPixmapItem()
         item.setZValue(600)
         entry = {'movie': movie, 'item': item, 'x': float(x), 'y': float(y)}
@@ -628,15 +657,18 @@ class RemoteEntityManager:
 
         movie.frameChanged.connect(show_frame)
         self.scene.addItem(item)
-        self._fight_clouds[key] = entry
+        overlays[key] = entry
         movie.start()
-        QtCore.QTimer.singleShot(duration_ms, lambda: self.hide_fight_cloud(key))
+        # Hides this overlay only - not a later one shown under the same key.
+        QtCore.QTimer.singleShot(duration_ms,
+                                 lambda: self._hide_overlay(overlays, key, entry))
         return True
 
-    def hide_fight_cloud(self, key: str) -> None:
-        entry = self._fight_clouds.pop(key, None)
-        if entry is None:
+    def _hide_overlay(self, overlays, key, only=None) -> None:
+        entry = overlays.get(key)
+        if entry is None or (only is not None and entry is not only):
             return
+        del overlays[key]
         entry['movie'].stop()
         item = entry['item']
         if item.scene() is self.scene:
@@ -690,6 +722,7 @@ class RemoteEntityManager:
     def cleanup_all(self): # Full method
         for key in list(self._scuffles): self._end_scuffle(key)
         for key in list(self._fight_clouds.keys()):self.hide_fight_cloud(key)
+        for key in list(self._mating_hearts.keys()):self.hide_mating_heart(key)
         for nid in list(self.remote_squids.keys()):self.remove_remote_squid(nid)
         for oid in list(self.remote_objects.keys()):self.remove_remote_object(oid)
         for line_id in list(self.connection_lines.keys()):

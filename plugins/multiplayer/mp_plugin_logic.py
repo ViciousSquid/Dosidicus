@@ -850,7 +850,37 @@ class MultiplayerPlugin:
             self.open_encounters[actor.uuid] = session
         session.note_mated(mating_id)
         self.logger.info(f"Mating {mating_id} with {actor.identity} recorded")
+        try:
+            self.show_mating_heart(actor)
+        except Exception as exc:
+            self.logger.error(f"Could not draw the mating heart: {exc}")
         return True
+
+    def show_mating_heart(self, actor) -> bool:
+        """A mating here: draw ONE beating heart over the pair.
+
+        Called once the mating is recorded, so the heart only ever marks a
+        mating this tank kept. A drawing and nothing else, like the fight
+        cloud.
+        """
+        squid = getattr(self.tamagotchi_logic, 'squid', None)
+        show = getattr(self.entity_manager, 'show_mating_heart', None)
+        if squid is None or not callable(show):
+            return False
+        width = float(getattr(squid, 'squid_width', 0.0))
+        height = float(getattr(squid, 'squid_height', 0.0))
+        rx = float(getattr(squid, 'squid_x', 0.0)) + width / 2
+        ry = float(getattr(squid, 'squid_y', 0.0)) + height / 2
+        # The visitor where it is drawn, or where its body is if not drawn yet.
+        node_id = self.visit_node_ids.get(actor.uuid)
+        remote = getattr(self.entity_manager, 'remote_squids', None) or {}
+        visual = (remote.get(node_id) or {}).get('visual')
+        if visual is not None and visual.scene() is not None:
+            centre = visual.sceneBoundingRect().center()
+            vx, vy = centre.x(), centre.y()
+        else:
+            vx, vy = actor.x + width / 2, actor.y + height / 2
+        return show(actor.uuid, (rx + vx) / 2, (ry + vy) / 2)
 
     def handle_resident_died(self, **kwargs) -> None:
         """This tank's resident has died. End every visit to it.
