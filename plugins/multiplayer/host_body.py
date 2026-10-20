@@ -86,7 +86,8 @@ class VisitorActor:
                  'arrived_at', 'last_intent', 'last_intent_at', 'action',
                  'items_taken', 'pending_consequences', 'seq_seen',
                  'has_seen_resident', 'contact_since', 'mating_rolled',
-                 'mated_id', 'mating_announcements', 'body_busy_until', 'held_item')
+                 'mated_id', 'mating_announcements', 'body_busy_until', 'held_item',
+                 'clock_offset')
 
     def __init__(self, identity: SquidIdentity, visit_id: str,
                  x: float, y: float, now: float):
@@ -116,6 +117,9 @@ class VisitorActor:
         self.mated_id = ''
         self.mating_announcements = 0
         self.body_busy_until = 0.0
+        #: This host's clock minus the visitor's, as best seen so far: the
+        #: least delay any of its intents has arrived with.
+        self.clock_offset: Optional[float] = None
 
     @property
     def uuid(self) -> str:
@@ -349,6 +353,14 @@ class HostBody:
         if intent.seq <= actor.seq_seen:
             self.rejected_intents += 1
             return False                       # duplicate or out of order
+        # The visitor stamped this with its own machine's clock. Measured
+        # against this one, a skew of more than a lease made every intent
+        # arrive "expired" and stalled the visit; taken relative to the least
+        # delay seen yet, a constant skew cancels and a late packet is still late.
+        observed = now - intent.sent_at
+        if actor.clock_offset is None or observed < actor.clock_offset:
+            actor.clock_offset = observed
+        intent.sent_at += actor.clock_offset
         if not intent.is_live(now):
             self.rejected_intents += 1
             return False                       # arrived after its lease ran out

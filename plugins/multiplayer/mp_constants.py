@@ -14,6 +14,12 @@ MULTICAST_GROUP = '224.3.29.71'   # IP address for the multicast group
 MULTICAST_PORT = 10000            # Port number for multicast communication
 SYNC_INTERVAL = 1.0               # Default seconds between game state sync broadcasts
 MAX_PACKET_SIZE = 1472           # Maximum UDP packet size, to prevent fragmentation
+# What a receiver reads: a whole datagram, however large. Reading only
+# MAX_PACKET_SIZE cut larger ones short (and failed outright on Windows), so a
+# message the sender merely warned about was lost.
+RECEIVE_BUFFER_SIZE = 65535
+# No received message may decompress to more than this.
+MAX_MESSAGE_BYTES = 256 * 1024
 
 USE_TCP        = False   # default – restored from ini
 TCP_IP_LIST    = []      # will be ['192.168.1.50','192.168.1.51',…]

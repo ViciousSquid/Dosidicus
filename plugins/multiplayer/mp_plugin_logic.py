@@ -708,6 +708,9 @@ class MultiplayerPlugin:
             for actor, reason in self.host_body.tick():
                 self.end_visit_as_host(actor, reason)
             for actor in list(self.host_body.visitors.values()):
+                node_id = self.visit_node_ids.get(actor.uuid)
+                if node_id and self.entity_manager is not None:
+                    self.entity_manager.follow_body(node_id, actor.x, actor.y, actor.facing)
                 self._send('perception_frame',
                            self.host_body.build_frame(actor).to_payload())
                 for consequence in self.host_body.drain_consequences(actor):
@@ -735,7 +738,9 @@ class MultiplayerPlugin:
             return False
         payload = message.get('payload') or {}
         squid = getattr(self.tamagotchi_logic, 'squid', None)
-        if squid is None or payload.get('peer_uuid') != str(getattr(squid, 'uuid', '')):
+        mine = self.network_node is not None and payload.get('to') == self.network_node.node_id
+        if squid is None or not (payload.get('peer_uuid') == str(getattr(squid, 'uuid', ''))
+                                 or (mine and not payload.get('accepted'))):
             return False          # somebody else's answer
         if self._asked_to_visit and message.get('node_id') != self._asked_to_visit:
             return False          # a tank it did not ask to visit
@@ -750,9 +755,22 @@ class MultiplayerPlugin:
         self.visitor_mind.end_visit(reason='departed', notify=False)
         return True
 
+    def _from_my_host(self, message: Dict) -> bool:
+        """Did this come from the one tank this squid asked to visit?
+
+        Visit ids travel in the open, so without this a visitor would adopt
+        the first frame any host sent - another squid's visit included.
+        """
+        return not self._asked_to_visit or message.get('node_id') == self._asked_to_visit
+
+    def _from_visitor(self, actor, message: Dict) -> bool:
+        """Did this come from the node this visitor arrived from?"""
+        node = self.visit_node_ids.get(actor.uuid)
+        return not node or message.get('node_id') == node
+
     def handle_perception_frame(self, node, message: Dict, addr) -> bool:
         """A host is telling this squid what it can see over there."""
-        if self.visitor_mind is None:
+        if self.visitor_mind is None or not self._from_my_host(message):
             return False
         return self.visitor_mind.on_perception_frame(message.get('payload') or {})
 
@@ -773,12 +791,14 @@ class MultiplayerPlugin:
             return False
         for actor in self.host_body.visitors.values():
             if actor.visit_id == intent.visit_id:
+                if not self._from_visitor(actor, message):
+                    return False
                 return self.host_body.apply_intent(actor, intent)
         return False
 
     def handle_consequence(self, node, message: Dict, addr) -> bool:
         """The host is reporting what actually happened to this squid."""
-        if self.visitor_mind is None:
+        if self.visitor_mind is None or not self._from_my_host(message):
             return False
         return self.visitor_mind.on_consequence(
             message.get('payload') or {}) is not None
@@ -787,7 +807,7 @@ class MultiplayerPlugin:
         """Either side has ended a visit."""
         payload = message.get('payload') or {}
         handled = False
-        if self.visitor_mind is not None:
+        if self.visitor_mind is not None and self._from_my_host(message):
             handled = self.visitor_mind.on_visit_end(payload)
         if not handled and self.host_body is not None:
             try:
@@ -795,7 +815,7 @@ class MultiplayerPlugin:
             except ProtocolError:
                 return False
             for actor in list(self.host_body.visitors.values()):
-                if actor.visit_id == ending.visit_id:
+                if actor.visit_id == ending.visit_id and self._from_visitor(actor, message):
                     self.end_visit_as_host(actor, ending.reason, notify=False)
                     return True
         return handled
@@ -805,6 +825,10 @@ class MultiplayerPlugin:
         """Take a visitor's body out of this tank, and say so."""
         if self.host_body is None:
             return
+        # Whatever happened to it last - an 'ejected' for a silent link, a
+        # hit - goes out before its body does; it was being dropped.
+        for consequence in self.host_body.drain_consequences(actor):
+            self._send('consequence', consequence.to_payload())
         if notify:
             self._send('visit_end',
                        VisitEnd(actor.visit_id, reason).to_payload())
@@ -930,7 +954,7 @@ class MultiplayerPlugin:
         squid = getattr(self.tamagotchi_logic, 'squid', None)
         lifecycle = getattr(squid, 'lifecycle', None)
         if actor is None or lifecycle is None or lifecycle.mating_id != gamete.mating_id \
-                or lifecycle.mate_uuid != actor.uuid:
+                or lifecycle.mate_uuid != actor.uuid or not self._from_visitor(actor, message or {}):
             return False
         keep = getattr(self.tamagotchi_logic, 'add_mate_genes', None)
         if not callable(keep) or not keep(gamete.mating_id, actor.identity.name, gamete.genes):
@@ -1869,11 +1893,16 @@ class MultiplayerPlugin:
                 self.logger.info(
                     f"Refused entry to {visitor_identity or source_node_id}: {decision.reason}")
                 if self.network_node:
-                    self.network_node.send_message('visit_response', decision.to_payload())
+                    # Addressed to the node too: a refusal for an identity it
+                    # could not read has no uuid to address, and was ignored -
+                    # the squid kept asking every few seconds.
+                    self.network_node.send_message(
+                        'visit_response', dict(decision.to_payload(), to=source_node_id))
                 return False
             self.peer_identities[source_node_id] = visitor_identity
             if self.network_node:
-                self.network_node.send_message('visit_response', decision.to_payload())
+                self.network_node.send_message(
+                    'visit_response', dict(decision.to_payload(), to=source_node_id))
 
             # ========== NEW: SHOW THE BIG EXIT ARROW ==========
             exit_dir = exit_payload_inner.get('direction', 'right')
@@ -2668,13 +2697,14 @@ class MultiplayerPlugin:
             # The hook name generated by NetworkNode is "on_network_squid_exit"
             # The subscribe_to_hook call should match this.
             "on_network_squid_exit": self.handle_squid_exit_message,
-            "on_network_squid_move": self.handle_squid_move,
             "on_network_object_sync": self.handle_object_sync,
-            "on_network_rock_throw": self.handle_rock_throw,
             "on_network_heartbeat": self.handle_heartbeat,
             "on_network_state_update": self.handle_state_update, # Generic state update
-            # Add new 'squid_return' handler
-            "on_network_squid_return": self.handle_squid_return,
+            # Not listened for: squid_return, rock_throw and squid_move. Nothing
+            # sends them since the remote mind replaced the copied visitor, and
+            # each acted on whatever any peer said - squid_return moved this
+            # squid and rewrote its drives from an untrusted summary;
+            # rock_throw loaded an image from a path the peer chose.
             # The remote-mind round trip. Four messages, two roles: this
             # instance is a host to other people's squid and the home of its
             # own, so it subscribes to both directions.
@@ -2802,8 +2832,8 @@ class MultiplayerPlugin:
             'image_direction_key': squid.squid_direction, # Explicit key for visual rendering direction
             'looking_direction': view_direction_rad, # For view cone
             'view_cone_angle': getattr(squid, 'view_cone_angle_rad', math.radians(60)),
-            'hunger': squid.hunger, 
-            'happiness': squid.happiness,
+            # No drives: hunger, happiness and the rest are private cognitive
+            # state (remote_protocol.FORBIDDEN_KEYS), seen by no other tank.
             'status': getattr(squid, 'status', "idle"), # Current action/status
             'carrying_rock': getattr(squid, 'carrying_rock', False),
             'is_sleeping': getattr(squid, 'is_sleeping', False),

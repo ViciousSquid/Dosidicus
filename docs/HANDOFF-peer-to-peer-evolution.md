@@ -104,13 +104,15 @@ becomes increasingly sociable. Same start, diverging lives.
 | `faa5e8c` | Throws stray by motor noise that narrows with practice (`throwing.release`) |
 | `9e439a7` | Mobile lifecycle parity: neglect/sickness/injury/starvation deaths, headstones with epitaphs (name, age, fights), succession in the same tank, Android-hosted matings with both gametes, inheritance, resident recognition; desktop headstone tooltip shows the epitaph; mobile visitors swim on the other frame |
 | `3bfcbd2` | `plugins/multiplayer/docs/protocol.md`: the wire, every message's shape, a visit end to end |
-| this commit | Host and guest swim on opposite frames, always animating (desktop); the object of a fight flashes dark red from 2 s before the scuffle to 2 s after (desktop and Android); LAN harness allows a rested squid's second visit |
+| `07fdf55` | Host and guest swim on opposite frames, always animating (desktop); the object of a fight flashes dark red from 2 s before the scuffle to 2 s after (desktop and Android); LAN harness allows a rested squid's second visit |
+| `063eb64` | `tests/test_inheritance.py`; a NaN gene from the wire is dropped |
+| this commit | Protocol hardening: no drives in `object_sync`; whole datagrams read, bounded inflate; de-duplication by datagram digest; remote-mind messages accepted only from the visit's own nodes; legacy `squid_return`/`rock_throw`/`squid_move` not listened for; queued consequences sent before a visitor is removed; gamete resent when a mating is retold; refusals addressed by node; intent leases immune to clock skew; a visitor drawn where its body is in the host tank |
 
 Earlier on the branch (before this work): release workflows for all platforms
 (`e1f47c3`), shared brain interchange, the real two-instance gallery
 (`docs/canary-gallery`, now stale - see section 5).
 
-Test suite at the last commit: **847 passed**
+Test suite at the last commit: **858 passed**
 (`QT_QPA_PLATFORM=offscreen python -m pytest tests android/tests -q -p no:cacheprovider`, ~50 s).
 
 ---
@@ -307,13 +309,14 @@ Priority order agreed with the owner: big code changes first.
 
 ### Big
 
-- **Protocol problems** found while writing `protocol.md` (its review list):
-  `object_sync` broadcasts hunger and happiness; `PacketValidator` is not
-  wired in; datagrams over 1472 bytes are cut; nothing checks who sent a
-  remote-mind message (visit ids are public); the legacy `squid_return`
-  handler still acts on untrusted summaries; intent leases compare two
-  machines' clocks; `(node_id, timestamp)` de-duplication can drop
-  back-to-back messages on coarse clocks.
+- **Protocol, lesser findings left** (`protocol.md` review list; the serious
+  ones are fixed): `PacketValidator` is not wired in (the handlers validate);
+  an identity with no `protocol` field counts as current (it is parsed in
+  many places, so changing the default needs care); `player_leave` has no
+  handler; the round-trip gate and timer share 0.5 s (cadence 0.5-1 s); a
+  squid gets two colours (`squid_exit` vs `object_sync` hashes);
+  `send_message_batch` sends untyped packets (unused); with no entity manager
+  a host accepts a visit but admits no body.
 
 ### Smaller
 

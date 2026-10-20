@@ -61,7 +61,7 @@ every remote-mind message.
   what physically happened. A payload containing any key in `FORBIDDEN_KEYS`
   (weights, neuron state, drives, memories, ...), at any depth, is refused
   outright (section 7). The two presence broadcasts, `object_sync` and
-  `heartbeat`, predate this rule and are not checked against it (7.3).
+  `heartbeat`, predate this rule; they carry no drives (7.3).
 - **The only weights that ever cross are a gamete**: after a mating, a random
   half of the visitor's synapses between the neurons every newborn has, sent
   to the host for the egg (4.8).
@@ -122,7 +122,7 @@ plugin never does.
 | Bind | `('', 10000)` with `SO_REUSEADDR` (and `SO_REUSEPORT` where available), so several instances share the port | same |
 | Membership | joined on every usable local IPv4 address (ranked 192.168 > 172.16-31 > 10 > other; loopback and link-local skipped), then once more on `0.0.0.0` | `_get_all_send_ips` |
 | Sending | each datagram is sent once **per interface** in that list, setting `IP_MULTICAST_IF` before each `sendto` | `send_message` |
-| Receiving | a daemon listener thread calls `recvfrom(1472)` with a 0.1 s timeout and puts raw bytes on a queue (max 500 entries; when full, the oldest entry is discarded) | `_listen_for_multicast` |
+| Receiving | a daemon listener thread calls `recvfrom(65535)` (`RECEIVE_BUFFER_SIZE`) with a 0.1 s timeout and puts raw bytes on a queue (max 500 entries; when full, the oldest entry is discarded) | `_listen_for_multicast` |
 | Draining | a 50 ms `QTimer` on the Qt thread decodes the queue and dispatches handlers | `_process_network_node_queue` |
 | Reconnect | a dead socket or listener is rebuilt, at most every 5 s (`connection_retry_interval`) | `try_reconnect`, `watchdog_check` |
 | Override | a `MULTICAST_BIND_IP` constant, if added to `mp_constants.py`, replaces the auto-detected local IP (shown in the UI and sent as `object_sync.node_info.ip`); it does not change the interfaces used | `_get_local_ip` |
@@ -170,7 +170,7 @@ Every message is one JSON object, one per datagram:
 | Field | Type | Meaning |
 |---|---|---|
 | `node_id` | string | The sender's node id (1.4). Receivers drop messages carrying their own id. |
-| `timestamp` | number | The sender's `time.time()` (seconds since the epoch, float) at sending. Used only as half of the de-duplication key; never compared with the receiver's clock. |
+| `timestamp` | number | The sender's `time.time()` (seconds since the epoch, float) at sending. Informational: never compared with the receiver's clock, and not used for de-duplication (2.6). |
 | `type` | string | Message type (section 3). Selects the handler `on_network_<type>`. |
 | `payload` | object | The message body (section 4). |
 
@@ -215,13 +215,14 @@ Sizes of the examples in section 4, as sent:
 - `MAX_PACKET_SIZE = 1472`: a 1500-byte Ethernet MTU less 20 bytes of IPv4
   header and 8 of UDP, so a datagram up to this size is never fragmented.
 - The sender only **warns** when a compressed message is larger; it still
-  sends it.
-- The receiver reads with `recvfrom(1472)`. A larger datagram does not
-  survive: on Linux and macOS the excess is silently cut off, the zlib stream
-  is incomplete, both decode attempts fail and the packet is dropped; on
-  Windows the call fails (`WSAEMSGSIZE`), which the listener treats as a lost
-  socket and reconnects. In practice **1472 bytes after compression is a hard
-  limit**. The largest message, a gamete, stays under it (table above).
+  sends it, and the network may fragment it.
+- The receiver reads a whole datagram (`RECEIVE_BUFFER_SIZE = 65535`), so a
+  larger message arrives intact if the network delivers it. (It used to read
+  only 1472 bytes: on Linux and macOS the rest was cut off and the packet
+  dropped, on Windows the call failed and the listener reconnected.)
+- No received message may decompress to more than `MAX_MESSAGE_BYTES`
+  (256 KiB); a datagram that would is refused rather than inflated.
+- The largest message, a gamete, stays under 1472 bytes anyway (table above).
 - Field-level limits (string lengths, list lengths, numeric ranges) are listed
   with each message in section 4 and summarised in 7.4.
 
@@ -232,9 +233,12 @@ Sizes of the examples in section 4, as sent:
 3. **Not a JSON object, or no `node_id`**: dropped.
 4. **Own message** (`node_id` equals this node's id): dropped
    (`packets_dropped_self`).
-5. **Duplicate**: the key `(node_id, timestamp)` was seen in the last 10 s
-   (`_dedup_ttl`): dropped (`packets_dropped_duplicate`). This is what removes
-   the per-interface copies.
+5. **Duplicate**: the key `(node_id, digest of the datagram's bytes)` was
+   seen in the last 10 s (`_dedup_ttl`): dropped
+   (`packets_dropped_duplicate`). This removes the per-interface copies, which
+   are byte for byte the same datagram. (Keyed on `(node_id, timestamp)`
+   instead, different messages sent back to back on a coarse clock - a frame
+   and its consequences - were dropped as copies.)
 6. Otherwise `known_nodes` is updated and the message is passed on.
 7. **No `type`**: dropped.
 8. **Dispatch**: the hook `on_network_<type>` is triggered on the plugin
@@ -253,12 +257,12 @@ checks that actually run are these:
 | Type | Checked by the handler |
 |---|---|
 | `squid_exit` | `payload.payload` and its `node_id` must exist; own exits ignored; `to`, if present, must be this node's id; identity re-parsed (`None` means refusal `unusable_identity`) |
-| `visit_response` | `payload.peer_uuid` must equal this squid's uuid, and the sender must be the node this squid addressed |
-| `perception_frame` | `PerceptionFrame.from_payload`, then `RemotePerception.accept` (squid is away, visit id, `seq`) |
-| `action_intent` | `ActionIntent.from_payload`; `visit_id` must name a current visitor; then `HostBody.apply_intent` (`seq`, lease) |
-| `consequence` | `Consequence.from_payload`; `visit_id` must equal this squid's current visit; `hit`/`rock_thrown` need a `throw_id` and are taken once |
-| `visit_end` | `VisitEnd.from_payload`; this squid's own visit first, otherwise a visitor hosted here |
-| `gamete` | `Gamete.from_payload`; `visit_id` of a current visitor; the resident's recorded mating and mate must match |
+| `visit_response` | the sender must be the node this squid addressed; `payload.peer_uuid` must equal this squid's uuid - or, for a refusal, `payload.to` its node id |
+| `perception_frame` | the sender must be the node this squid asked to visit; `PerceptionFrame.from_payload`, then `RemotePerception.accept` (squid is away, visit id, `seq`) |
+| `action_intent` | `ActionIntent.from_payload`; `visit_id` must name a current visitor, and the sender must be the node it arrived from; then `HostBody.apply_intent` (`seq`, lease) |
+| `consequence` | the sender must be this squid's host; `Consequence.from_payload`; `visit_id` must equal this squid's current visit; `hit`/`rock_thrown` need a `throw_id` and are taken once |
+| `visit_end` | `VisitEnd.from_payload`; this squid's own visit first (from its host), otherwise a visitor hosted here (from its node) |
+| `gamete` | `Gamete.from_payload`; `visit_id` of a current visitor, from the node it arrived from; the resident's recorded mating and mate must match |
 | `heartbeat` | `payload.node_id` must be present and not this node |
 | `object_sync` | sender taken from `payload.node_info.id` or `payload.squid.node_id`; only updates a remote squid already drawn here |
 
@@ -282,15 +286,15 @@ the intended receiver recognises a message as its own.
 | `action_intent` | visitor's home → host | `payload.visit_id` | every round trip while linked and an action clears its threshold; plus one `act_ink` intent each time ink starts firing | `handle_action_intent` → `HostBody.apply_intent` |
 | `consequence` | host → visitor's home | `payload.visit_id` | in each round trip, after the frame, one per queued event | `handle_consequence` → `VisitorMind.on_consequence` |
 | `visit_end` | either side | `payload.visit_id` | the visit ends (5.8) | `handle_visit_end` |
-| `gamete` | visitor's home → host | `payload.visit_id` and `payload.mating_id` | each time a `mated` consequence arrives for a mating not yet in the visitor's long-term record (4.8) | `handle_gamete` |
+| `gamete` | visitor's home → host | `payload.visit_id` and `payload.mating_id` | each time a `mated` consequence arrives - including a mating retold on a later visit (4.8) | `handle_gamete` |
 
 ### 3.2 Legacy and unused types
 
 | Type | Status |
 |---|---|
-| `squid_return` | Sent only by the dead autopilot (`RemoteSquidController`, never constructed). `handle_squid_return` is still registered: it moves this node's squid and applies the received `activity_summary`. |
-| `squid_move` | Nothing sends it. `handle_squid_move` still registered. |
-| `rock_throw` | `throw_rock_network` has no caller. `handle_rock_throw` still registered (draws a rock for 1.5 s). |
+| `squid_return` | Sent only by the dead autopilot (`RemoteSquidController`, never constructed). **Not listened for**: its handler moved this node's squid and rewrote its drives from the received `activity_summary`. |
+| `squid_move` | Nothing sends it. Not listened for. |
+| `rock_throw` | `throw_rock_network` has no caller. Not listened for: its handler loaded an image from a path the peer chose. |
 | `state_update` | Nothing sends it. `handle_state_update` only logs. |
 | `visit_request`, `squid_action`, `player_join`, `new_squid_arrival` | Named in `PacketValidator`'s allow-list only. Never sent, no handler. `squid_exit` plays the part of `visit_request`. |
 
@@ -364,7 +368,8 @@ down, under `payload.payload`.
 Host → visitor's home. `ConsentDecision.to_payload()`.
 
 ```json
-{"accepted": true, "reason": "accepted", "peer_uuid": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"}
+{"accepted": true, "reason": "accepted", "peer_uuid": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+ "to": "squid_4e51c5"}
 ```
 
 | Field | Type | Values | Meaning |
@@ -372,6 +377,7 @@ Host → visitor's home. `ConsentDecision.to_payload()`.
 | `accepted` | boolean | | admitted or not |
 | `reason` | string | see below | why |
 | `peer_uuid` | string | squid uuid, or `""` when the identity was unusable | the squid the answer is for |
+| `to` | string | node id | the node that asked; what a refusal with no `peer_uuid` is matched on |
 
 | `reason` | Constant | When |
 |---|---|---|
@@ -476,7 +482,7 @@ its body. `ActionIntent.to_payload()`.
 |---|---|---|---|
 | `visit_id` | string | required, non-empty; trimmed, at most 64 | the visit, as named by the host |
 | `seq` | integer | clamped 0 to 10^12 | per visit, starting at 1; `act_ink` intents share the counter |
-| `sent_at` | number | clamped 0 to 10^12 | **visitor's** clock at sending; the lease runs from it |
+| `sent_at` | number | clamped 0 to 10^12 | **visitor's** clock at sending. The host converts it to its own clock with the smallest delay it has seen from this visitor (`VisitorActor.clock_offset`), so a constant clock skew cancels; the lease runs from the converted time |
 | `action` | string | must be one of the eight action neurons, else the intent is rejected: `act_move`, `act_eat`, `act_flee`, `act_play`, `act_shelter`, `act_rest`, `act_ink`, `act_collapse` | the winning action neuron. There is no other vocabulary. |
 | `activation` | number | clamped 0-100; sent to 2 dp | that neuron's activation |
 | `confidence` | number | clamped 0-1; sent to 3 dp | from `select_action` |
@@ -645,7 +651,6 @@ The world sync: the sender's own squid as it is in its own tank.
     "direction": "left", "image_direction_key": "left",
     "looking_direction": 3.141592653589793,
     "view_cone_angle": 1.0471975511965976,
-    "hunger": 35.2, "happiness": 71.0,
     "status": "roaming",
     "carrying_rock": false, "is_sleeping": false,
     "color": [140, 212, 96],
@@ -665,7 +670,6 @@ The world sync: the sender's own squid as it is in its own tank.
 | `squid.direction`, `squid.image_direction_key` | string | movement direction; which sprite to draw |
 | `squid.looking_direction` | number | view direction, radians |
 | `squid.view_cone_angle` | number | radians (default π/3) |
-| `squid.hunger`, `squid.happiness` | number | the sender's drives, 0-100 (see 7.3) |
 | `squid.status` | string | what it is visibly doing |
 | `squid.carrying_rock`, `squid.is_sleeping`, `squid.view_cone_visible` | boolean | |
 | `squid.color` | array | `[r, g, b]`, each 80-220, from a hash of the node id (a different scheme from `squid_exit`'s `color`) |
@@ -817,9 +821,15 @@ Both roles run on the same 500 ms `QTimer` (`sync_game_state` →
   (`act_rest`) winning ends the visit instead; a stubborn squid may hold off
   rest for a while and send its next-strongest action. Nothing clearing its
   threshold means no intent, and the body stops.
-- **Host, on each intent** (`apply_intent`): the visit id must match, `seq`
-  must be greater than the last applied, and the lease (`sent_at + lease`)
-  must still be live by the host's clock. The body then carries out the
+- **Host, on each intent** (`apply_intent`): it must come from the node the
+  visitor arrived from, the visit id must match, `seq` must be greater than
+  the last applied, and the lease (`sent_at + lease`, `sent_at` converted to
+  the host's clock) must still be live.
+- **Host, drawing**: each cycle the visitor's drawing is moved towards where
+  its body is in this tank, facing the way the body faces
+  (`RemoteEntityManager.follow_body`); its home's `object_sync` no longer
+  places it, since its home body is frozen by the glass. The resident's eyes
+  see the drawing, so this is where the resident sees it. The body then carries out the
   action (4.5) unless it is in a fight animation, and the host works out
   contact with the resident (a mating roll after 2 s of contact within
   120 px, once per visit, at `mating_chance`).
@@ -857,11 +867,12 @@ leave a squid stranded: every failure path ends there.
 | 4 s (`LINK_TIMEOUT`) | no intent and no live lease: the body is marked `stalled` | no frame accepted: comes home, `visit_end link_lost` |
 | 12 s (`VISIT_ABANDON_TIMEOUT`) | ends the visit, `visit_end link_lost` | |
 
-The host never predicts or substitutes behaviour for a silent visitor. Note
-that the lease is measured against the visitor's `sent_at`, so it assumes the
-two machines' clocks agree to well within 1.5 s. The `ejected` consequence that
-`HostBody.tick` queues at 12 s is dropped with the body before it can be sent;
-the `visit_end` is what tells the visitor.
+The host never predicts or substitutes behaviour for a silent visitor. The
+lease is measured in the host's clock: each intent's `sent_at` is shifted by
+the smallest delay seen from that visitor, so the two machines' clocks need
+not agree. Whatever is queued for a visitor - the `ejected` that
+`HostBody.tick` queues at 12 s included - is sent before its body is removed,
+then the `visit_end`.
 
 ### 5.10 Refusal
 
@@ -869,8 +880,9 @@ A refused visitor stays home and its squid keeps its normal walls once it
 stops venturing. While it is still venturing it asks again every 3 s; the
 host's `ConsentPolicy` remembers decisions (`DECISION_TTL = 30` s) but does not
 consult them when evaluating, so each request is decided afresh. A refusal for
-`unusable_identity` carries `peer_uuid: ""`, which no visitor accepts as its
-answer.
+`unusable_identity` has no uuid to address (`peer_uuid: ""`); every
+`visit_response` also names the node that asked (`to`), and that is what such
+a refusal is matched on, so the squid comes home rather than asking forever.
 
 ### 5.11 Replays and duplicates
 
@@ -880,14 +892,14 @@ or repeated.
 
 | Mechanism | Where | What it protects |
 |---|---|---|
-| `(node_id, timestamp)` seen within 10 s | `NetworkNode.receive_messages` | the same datagram arriving once per interface |
+| `(node_id, digest of the datagram)` seen within 10 s | `NetworkNode.receive_messages` | the same datagram arriving once per interface |
 | `visit_id` | every remote-mind message | a packet from an earlier visit to the same tank. A new id is made for every admission (millisecond timestamp). |
 | frame `seq`, strictly increasing | `RemotePerception.accept` | duplicate or out-of-order frames; reset when a visit begins |
 | intent `seq` greater than the last applied, and a live lease | `HostBody.apply_intent` | duplicate, reordered or late intents |
 | `mating_id` = `<visit_id>-mate` | host: one roll per visit; visitor: `PeerLedger.has_mated`, `EncounterSession.note_mated` | a visit can produce one mating, filed once however often `mated` is repeated (3 times per announcement) |
 | `fight_id` (uuid4) | visitor: `SquidStatistics.record_fight_result(fight_id)`; host likewise | `fight_resolved` is sent 3 times; outcome applied once |
 | `throw_id` (32 hex) | host: `(throw_id, target_uuid)` reported once (`_reported_rock_hits`); resident: felt once (`TamagotchiLogic._felt_rock_hits`); visitor: `(visit_id, throw_id, kind, taken)` once for the life of the process (`VisitorMind._rock_hits`) | one physical impact is felt and counted once on every side |
-| gamete kept once per parent per egg | `Lifecycle.add_genes` | the gamete is resent with every `mated` received during the visit |
+| gamete kept once per parent per egg | `Lifecycle.add_genes` | the gamete is resent with every `mated` received, on this visit or when the mating is retold on a later one |
 | none | `contest_resolved`, `ate`, `blocked` | relies on the transport de-duplication only |
 
 ### 5.12 What each side keeps
@@ -919,7 +931,7 @@ saved. What persists is what happened:
 | `HEARD_WITHIN` | 30.0 s | `src/venturing.py` | how long a heard peer counts as a nearby aquarium |
 | `EXIT_RETRY_SECONDS` | 3.0 s | `src/squid.py` | gap between `squid_exit` requests |
 | `DECISION_TTL` | 30.0 s | `consent.py` | how long a consent decision is remembered (not used by admission) |
-| `_dedup_ttl` | 10.0 s | `mp_network_node.py` | how long a `(node_id, timestamp)` key is remembered |
+| `_dedup_ttl` | 10.0 s | `mp_network_node.py` | how long a `(node_id, datagram digest)` key is remembered |
 | `connection_retry_interval` | 5.0 s | `mp_network_node.py` | minimum gap between socket reconnects |
 | message drain | 50 ms | `mp_plugin_logic.py` (`message_process_timer`) | how often received datagrams are decoded and handled |
 | socket timeout | 0.1 s | `mp_network_node.py` | listener's `recvfrom` timeout |
@@ -963,12 +975,12 @@ arrival to exactly that and kept only for the host's own egg from that mating.
 
 ### 7.3 What the presence broadcasts do carry
 
-`object_sync` and `heartbeat` are older than the rules above and are not
-checked against `FORBIDDEN_KEYS`. `object_sync` goes to the whole group every
-second while multiplayer is on, visiting or not, and includes the sender's
-`hunger` and `happiness`, its `status`, `is_sleeping`, position, view direction,
-its identity and its LAN address (`node_info.ip`). `heartbeat` carries its
-position.
+`object_sync` and `heartbeat` are older than the rules above. `object_sync`
+goes to the whole group every second while multiplayer is on, visiting or not:
+the sender's `status`, `is_sleeping`, position, view direction, its identity
+and its LAN address (`node_info.ip`). It used to carry `hunger` and
+`happiness` too - private drives, broadcast to every tank; it no longer does,
+and a test holds it to `FORBIDDEN_KEYS`. `heartbeat` carries its position.
 
 ### 7.4 Clamping and limits
 
@@ -988,7 +1000,7 @@ position.
 | consequence `detail` | at most 12 keys of at most 32 characters; booleans, numbers (±10^6) and strings (at most 64) only |
 | identity | uuid pattern and parse; name at most 32 plain characters |
 | gamete | at most 600 genes, newborn-neuron synapses only, weights −1..1 |
-| datagram | 1472 bytes after compression (2.5) |
+| datagram | read whole (65535 bytes); at most 256 KiB once decompressed (2.5) |
 
 ### 7.5 Facts, never intent
 
@@ -1011,11 +1023,14 @@ position.
 - Senders are not authenticated. Several handlers take the sender from a field
   inside the payload (`heartbeat.node_id`, `object_sync.node_info.id`,
   `squid_exit`'s inner `node_id`) rather than the envelope.
-- Remote-mind messages are matched on `visit_id` alone, and visit ids travel
-  in clear to the whole group in every frame. Any instance on the LAN could
-  send an intent, `visit_end` or gamete for a visit it can hear. Likewise, a
-  visitor adopts the visit id of the first frame it accepts after being
-  admitted without checking which host sent it.
+- Remote-mind messages are matched on `visit_id` and on the envelope's
+  `node_id`: a host takes intents, `visit_end` and gametes for a visit only
+  from the node its visitor arrived from, and a visitor takes frames,
+  consequences and `visit_end` only from the host it asked to visit. Visit ids
+  travel in clear, and node ids are self-declared, so this keeps visits from
+  crossing by accident or by a careless peer - not from a determined forger.
+- Only the remote-mind messages are listened for among those that act on a
+  squid. The legacy `squid_return`, `rock_throw` and `squid_move` are not.
 - There is no encryption and no rate limiting. The design assumes a trusted
   LAN.
 
@@ -1042,7 +1057,7 @@ position.
 | Rock and poop impacts | `mp_plugin_logic.py`, `handle_rock_hit`; `src/tamagotchi_logic.py`, `on_rock_hit`, `throw_visitor_rock`; `src/interactions.py`, `throw_from_visitor`; `src/throwing.py` |
 | Gamete contents | `src/inheritance.py` (`gamete`, `clean_gamete`); `src/lifecycle.py` (`is_valid_mating_id`, `Lifecycle.add_genes`) |
 | Packet allow-list (not wired in) | `plugins/multiplayer/packet_validator.py` |
-| Tests | `tests/test_peer_discovery.py`, `tests/test_encounter_stage0.py`, `tests/test_remote_mind_stage1.py`, `tests/test_reproduction_lifecycle.py`, `tests/test_rock_throwing.py`; LAN harnesses in `tools/test_lan_round_trip.py`, `tools/test_rock_multiplayer.py`, `tools/test_venture_multiplayer.py` |
+| Tests | `tests/test_peer_discovery.py`, `tests/test_encounter_stage0.py`, `tests/test_remote_mind_stage1.py`, `tests/test_reproduction_lifecycle.py`, `tests/test_rock_throwing.py`, `tests/test_protocol_hardening.py`; LAN harnesses in `tools/test_lan_round_trip.py`, `tools/test_rock_multiplayer.py`, `tools/test_venture_multiplayer.py` |
 
 ### Android (Nearby) transport
 

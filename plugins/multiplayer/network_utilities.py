@@ -119,7 +119,12 @@ class NetworkUtilities:
         try:
             # Attempt zlib decompression first
             try:
-                decompressed_bytes = zlib.decompress(compressed_msg)
+                from .mp_constants import MAX_MESSAGE_BYTES
+                inflater = zlib.decompressobj()
+                decompressed_bytes = inflater.decompress(compressed_msg, MAX_MESSAGE_BYTES)
+                if inflater.unconsumed_tail:
+                    # A bomb, not a message: refuse it rather than inflate it.
+                    return {"error": "message_too_large"}
                 if is_potentially_squid_exit:
                      print(f"DEBUG_DECOMPRESS: SQUID_EXIT (potential) successfully zlib decompressed. Decompressed size: {len(decompressed_bytes)}")
                 decompressed_data_str = decompressed_bytes.decode('utf-8')

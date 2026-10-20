@@ -233,6 +233,27 @@ class RemoteEntityManager:
                 self._show_frame(info, 3 - self._shown_frame(info))
                 info['swum_at'] = now
 
+    def follow_body(self, node_id, x: float, y: float, facing: Optional[str] = None) -> bool:
+        """A visitor's body is in this tank: draw it where the host has it.
+
+        Its home keeps sending object_sync from where its body is frozen at
+        home; drawn from that, the visitor stayed by the glass while its body
+        - what the host simulates, and what the resident's eyes see - moved.
+        """
+        info = self.remote_squids.get(node_id)
+        if not info or info.get('visual') is None:
+            return False
+        info['in_tank_body'] = True
+        info['network_target_x'], info['network_target_y'] = float(x), float(y)
+        if facing in ('left', 'right'):
+            name = f"{facing}{self._shown_frame(info)}.png"
+            if name != info.get('current_image_name'):
+                pixmap, size = self._get_scaled_pixmap(name)
+                info['visual'].setPixmap(pixmap)
+                info['current_image_name'] = name
+                info['current_display_dimensions'] = size
+        return True
+
     def _update_dependent_items_position(self, remote_squid_info, new_visual_x, new_visual_y):
         if remote_squid_info.get('status_text'):
             remote_squid_info['status_text'].setPos(new_visual_x, new_visual_y - 30)
@@ -400,6 +421,14 @@ class RemoteEntityManager:
 
         network_x = squid_data_payload.get('x')
         network_y = squid_data_payload.get('y')
+        if remote_squid_info.get('in_tank_body'):
+            # Its body is in this tank (follow_body): where it is and which
+            # way it faces are the host's to say, not its frozen home's.
+            network_x = network_y = None
+            squid_data_payload = {k: v for k, v in squid_data_payload.items()
+                                  if k not in ('image_direction_key', 'direction')}
+            squid_data_payload['image_direction_key'] = \
+                str(remote_squid_info.get('current_image_name', 'right1.png'))[:-5] or 'right'
 
         if network_x is not None and network_y is not None:
             remote_squid_info['network_target_x'] = network_x

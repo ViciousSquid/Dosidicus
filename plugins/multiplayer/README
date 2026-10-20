@@ -118,18 +118,19 @@ actually observe**, and **private cognitive state never leaves home**.
 
 | Direction | Message | Carries |
 |-----------|---------|---------|
-| host → visitor | `perception_frame` | position, tank bounds, facing, five observable sensor values (`can_see_food`, `plant_proximity`, `external_stimulus`, `squid_in_view`, `squid_proximity`), the resident's identity, host-issued item ids |
-| visitor → host | `action_intent` | an action **neuron name**, its activation, confidence, heading, target id, lease |
-| host → visitor | `consequence` | what happened: a contest resolved, food eaten, an action blocked, a mating (its id only) |
-| either | `visit_request` / `visit_response` / `visit_end` | consent, and the end of a visit |
+| host → visitor | `perception_frame` | position, tank bounds, facing, six observable sensor values (`can_see_food`, `plant_proximity`, `external_stimulus`, `squid_in_view`, `squid_proximity`, `in_fight`), the resident's identity, host-issued item ids |
+| visitor → host | `action_intent` | an action **neuron name**, its activation, confidence, heading, target id, lease; for a fight or a throw its `aggression`, `defence`, `fitness` and `practice` (throws made) |
+| host → visitor | `consequence` | what happened: a contest resolved, food eaten, an action blocked, a hit, its own throw, a fight's result, an ejection, a mating (its id only) |
+| visitor → host | `gamete` | after a mating only: half its innate synapses, for the egg |
+| either | `squid_exit` / `visit_response` / `visit_end` | asking to come in (addressed to one tank), consent, and the end of a visit |
 
 **Never crosses:** weights, neuron activations, drives, memories, the capability
 ledger, neurogenesis state, scene contents, or any filesystem path. A message
 containing any of them is rejected on arrival at any nesting depth
 (`FORBIDDEN_KEYS` in `remote_protocol.py`).
 
-A frame carries only those five; any other sensor name a host sends is dropped
-on arrival. There is nothing of the visitor's a host could assert: no neuron
+A frame carries only those six; any other sensor name a host sends is dropped
+on arrival. Every shape, field and limit is in [docs/protocol.md](docs/protocol.md). There is nothing of the visitor's a host could assert: no neuron
 stands for another squid, and its memories never leave home.
 
 ### An intent is a lease, not a command

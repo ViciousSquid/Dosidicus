@@ -548,16 +548,18 @@ class VisitorMind:
         from src.lifecycle import is_valid_mating_id
         if not is_valid_mating_id(mating_id):
             return False
+        # Its half of the hatchling's weights, made here from its own brain.
+        # Sent every time the news comes - the host keeps it once - so a
+        # lost packet does not leave the egg with one parent: the host retells
+        # a mating when the same squid comes back, and the gamete goes again
+        # then too, though the mating itself is already remembered.
+        self._send_gamete(mating_id)
         if self.peer_ledger is not None and self.peer_ledger.has_mated(mating_id):
             return False
         if self.session is None:
             self._open_session()
         if self.session is None:
             return False
-        # Its half of the hatchling's weights, made here from its own brain.
-        # Sent every time the news comes - the host keeps it once - so a
-        # lost packet does not leave the egg with one parent.
-        self._send_gamete(mating_id)
         if self.session.note_mated(mating_id):
             self._log(f"Mating {mating_id} with {self.session.peer} noted")
             return True
