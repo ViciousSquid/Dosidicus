@@ -67,6 +67,12 @@ meeting with another: recall is by the individual's identity, and only what
 this squid itself remembers counts - nothing the other squid, or its host,
 says. A forgotten encounter is not recalled: that squid is a stranger again.
 
+The same memory picks **whom** it goes at. Of the squid in view, a throw - rock
+or poop - and its swim at a squid when at play go at one it remembers badly
+before any it does not, the worst remembered first, otherwise the nearest
+(`throwing.choose_target`). Whether it throws at all, and how hard, is still
+its network's; this is only where. The plan says why it chose that one.
+
 ## 4. It generalises - to every squid, strangers included
 
 When an encounter is filed, how it went moves the synapses leaving

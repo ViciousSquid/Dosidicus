@@ -96,3 +96,10 @@ def test_unused_social_neurons_are_pruned_but_not_can_see_squid_or_a_scar():
     assert {'can_see_squid', 'aggression', 'curious_thing'} <= set(brain.positions)
     [record] = [o for o in brain.ledger.pruned if o.name == 'social_play']   # with why
     assert 'lowest utility' in record.prune_reason
+
+
+def test_squid_nearby_reaches_a_thousand_pixels():
+    from src.vision_cone import PROXIMITY_RANGE, proximity
+    assert PROXIMITY_RANGE == 1000.0
+    assert proximity(0.) == 100. and proximity(500.) == 50. and proximity(1000.) == 0.
+    assert proximity(700.) > 0.                      # felt across most of a tank

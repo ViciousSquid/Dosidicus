@@ -8,10 +8,15 @@ The existing action-neuron competition decides whether to throw or drop, with
 no random throw probability or directional coin flip. Velocity follows the
 stronger activation of `act_play` and the squid's grown `aggression` neuron.
 A custom motor binding instead uses the neuron that actually fired. Aim follows
-the nearest squid in the current view cone, compensating for gravity and the
-flight's drag (without the drag a full-power throw at 600 px falls 80 px
-short), or the squid's gaze when no squid is visible. Aim, activation, source neuron, speed
-and angle are recorded for the thrower. Personality does not choose a throw.
+a squid in the current view cone - one the thrower remembers badly before any
+it does not (the worst remembered first, the nearest among equals), otherwise
+the nearest - compensating for gravity and the flight's drag (without the drag
+a full-power throw at 600 px falls 80 px short), or the squid's gaze when no
+squid is visible. The memory is the thrower's own (`PeerLedger`,
+`throwing.choose_target`); a squid at play swims at the same one. Aim, why
+that squid (`chosen_because`: "remembered badly" or "nearest"), activation,
+source neuron, speed and angle are recorded for the thrower. Personality does
+not choose a throw.
 
 A projectile has its own lifetime, independent of carrying. Repeated throw
 requests cannot relaunch it, carry cleanup cannot stop its flight, and a drop
@@ -103,8 +108,9 @@ regardless.
 ## Poop
 
 A squid can throw poop at another squid exactly as it throws a rock: its play
-neuron decides throw or drop (not dice), it aims at the nearest squid in its
-view cone, as hard as play or aggression drives it, and the hit is swept and
+neuron decides throw or drop (not dice), it aims at a squid in its view cone
+(one it remembers badly first, else the nearest), as hard as play or
+aggression drives it, and the hit is swept and
 reported once (`src/interactions2.py`, sharing `squids_in_view` and
 `first_struck` with rocks). What reaches the struck squid is the fact only:
 `{'what': 'poop', 'speed': ..., 'throw_id': ...}`.

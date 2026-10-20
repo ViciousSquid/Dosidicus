@@ -184,14 +184,25 @@ class Simulation:
     def _rock_decorations(self):
         return [d for d in self.decorations if d.get("category") == "rock"]
 
+    def _grudge(self, v):
+        """How badly the resident remembers visitor `v`, 0-100, from its own memory."""
+        from src.throwing import recalled_bad
+        return recalled_bad(self.squid.memory, v.get('uuid', ''))
+
     def _squid_to_play_at(self, x, y, facing, others):
-        """Where a squid at play goes: the nearest squid in its view cone, if
-        that is nearer than any rock it could pick up - as on desktop
-        (brain_neuron_outputs._go_at_squid_in_view). None means rocks."""
-        seen = [(ox, oy) for ox, oy in others if self._sees_squid_at(x, y, facing, ox, oy)]
-        if not seen:
+        """Where a squid at play goes: a squid in its view cone - one it
+        remembers badly before any it does not, else the nearest - if that is
+        nearer than any rock it could pick up, as on desktop
+        (brain_neuron_outputs._go_at_squid_in_view). None means rocks.
+
+        `others` are (x, y) or (x, y, recalled_bad)."""
+        from src.throwing import choose_target
+        seen = [(i, o[0], o[1], o[2] if len(o) > 2 else 0.) for i, o in enumerate(others)
+                if self._sees_squid_at(x, y, facing, o[0], o[1])]
+        chosen = choose_target((x, y), seen)
+        if chosen is None:
             return None
-        target = min(seen, key=lambda p: math.hypot(p[0] - x, p[1] - y))
+        target = (chosen[1], chosen[2])
         rocks = [r for r in self._rock_decorations() if r["id"] not in self._rock_velocities
                  and self._rock_cooldowns.get(r['id'], 0.) <= self.squid.brain.sim_time]
         if rocks and min(math.hypot(r["x"] - x, r["y"] - y) for r in rocks) < \
@@ -269,12 +280,13 @@ class Simulation:
         from src.vision_cone import FACING_ANGLES
         x, y = (visitor['x'], visitor['y']) if visitor else (owner.x, owner.y)
         direction = visitor['dir'] if visitor else owner.direction
-        others = [(v['name'], v['x'], v['y']) for v in self.visitors
-                  if v is not visitor and not v['leaving']]
+        # How badly the thrower remembers each: the resident from its own
+        # memory; a local preview visitor has none of the resident's.
+        others = [(v['name'], v['x'], v['y'], self._grudge(v) if visitor is None else 0.)
+                  for v in self.visitors if v is not visitor and not v['leaving']]
         if visitor is not None:
-            others.append((self.squid.name, self.squid.x, self.squid.y))
-        targets = [(name, tx, ty) for name, tx, ty in others
-                   if self._sees_squid_at(x, y, direction, tx, ty)]
+            others.append((self.squid.name, self.squid.x, self.squid.y, 0.))
+        targets = [t for t in others if self._sees_squid_at(x, y, direction, t[1], t[2])]
         state = owner.brain.state if cause is None else {'act_play': cause[1]}
         plan = plan_throw(state, (x, y), FACING_ANGLES.get(direction, 0.), targets,
                           slowest=6., fastest=20., gravity=.3, drag=.02,
@@ -1284,7 +1296,7 @@ class Simulation:
         self._process_neural_outputs()
         squid.play_at = self._squid_to_play_at(
             squid.x, squid.y, squid.direction,
-            [(v['x'], v['y']) for v in self.visitors if not v['leaving']])
+            [(v['x'], v['y'], self._grudge(v)) for v in self.visitors if not v['leaving']])
         self._decision_timer += dt
         if self.fight is not None:
             self.last_status = "Aggression! FIGHTING!"   # a fight overrides normal behaviour

@@ -8,9 +8,12 @@ import uuid
 from PyQt5 import QtCore, QtWidgets, QtGui
 
 def squids_in_view(scene, squid):
-    """(name, x, y) of every other squid in `squid`'s view cone - what a
-    thrown rock or poop can be aimed at (src/throwing.py)."""
+    """(name, x, y, recalled_bad) of every other squid in `squid`'s view
+    cone - what a thrown rock or poop can be aimed at (src/throwing.py), with
+    how badly `squid` remembers each, from its own memory."""
+    from .throwing import recalled_bad
     from .vision_cone import VIEW_CONE_ANGLE, in_view_cone
+    memory = getattr(squid, 'memory_manager', None)
     rect = squid.squid_item.sceneBoundingRect()
     cx, cy = rect.center().x(), rect.center().y()
     reach = math.hypot(scene.width(), scene.height())
@@ -23,7 +26,8 @@ def squids_in_view(scene, squid):
         centre = item.sceneBoundingRect().center()
         if in_view_cone(cx, cy, angle, VIEW_CONE_ANGLE, reach, centre.x(), centre.y()):
             seen.append((getattr(item, 'squid_name', 'another squid'),
-                         centre.x(), centre.y()))
+                         centre.x(), centre.y(),
+                         recalled_bad(memory, getattr(item, 'peer_uuid', ''))))
     return seen
 
 

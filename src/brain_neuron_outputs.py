@@ -706,7 +706,11 @@ class NeuronOutputMonitor:
         view = getattr(logic, 'conspecific_view', None)
         if not getattr(vision, 'can_see_squid', False) or view is None:
             return False
-        rival = view.nearest()
+        # One it remembers badly before any it does not; else the nearest.
+        from .throwing import recalled_bad
+        memory = getattr(squid, 'memory_manager', None)
+        rival = view.target((squid.squid_x, squid.squid_y),
+                            lambda uuid: recalled_bad(memory, uuid))
         if rival is None:
             return False
         distance = ((rival.x - squid.squid_x) ** 2 + (rival.y - squid.squid_y) ** 2) ** 0.5

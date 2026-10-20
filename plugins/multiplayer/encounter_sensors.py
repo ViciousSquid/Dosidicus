@@ -24,8 +24,9 @@ from typing import Any, Callable, Dict, List, Optional
 from .identity import SquidIdentity
 
 #: Beyond this a squid is a speck on the far side of the tank: visible,
-#: but proximity reads zero.
-PROXIMITY_RANGE = 400.0
+#: but proximity reads zero. The one range every squid's sense of closeness
+#: uses (src/vision_cone.py).
+from src.vision_cone import PROXIMITY_RANGE  # noqa: E402
 
 #: Pixels per second that count as "closing fast".
 FULL_CLOSING_SPEED = 60.0
@@ -163,17 +164,32 @@ class ConspecificView:
             del self.presences[uuid]
 
     # -- reading it -----------------------------------------------------
-    def nearest(self, now: Optional[float] = None, bounds=None) -> Optional[ConspecificPresence]:
-        """The other squid this one would be reacting to, if any."""
+    def _live(self, now: Optional[float] = None, bounds=None) -> List[ConspecificPresence]:
         stamp = now if now is not None else self.clock()
         live = [p for p in self.presences.values()
                 if stamp - p.last_update <= PRESENCE_TIMEOUT]
         if bounds is not None:
             width, height = bounds
             live = [p for p in live if 0 <= p.x <= width and 0 <= p.y <= height]
+        return live
+
+    def nearest(self, now: Optional[float] = None, bounds=None) -> Optional[ConspecificPresence]:
+        """The other squid this one would be reacting to, if any."""
+        live = self._live(now, bounds)
         if not live:
             return None
         return min(live, key=lambda p: p.distance)
+
+    def target(self, origin, recalled_bad: Callable[[str], float] = lambda uuid: 0.0,
+               now: Optional[float] = None, bounds=None) -> Optional[ConspecificPresence]:
+        """The other squid to go at: one this squid remembers badly before
+        any it does not, else the nearest - the rule a throw aims by
+        (src/throwing.choose_target). `recalled_bad(uuid)` reads its memory."""
+        from src.throwing import choose_target
+        live = {p.uuid: p for p in self._live(now, bounds)}
+        chosen = choose_target(origin, [(uuid, p.x, p.y, recalled_bad(uuid))
+                                        for uuid, p in live.items()])
+        return live[chosen[0]] if chosen else None
 
     def any_contesting(self, now: Optional[float] = None) -> bool:
         stamp = now if now is not None else self.clock()

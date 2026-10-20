@@ -16,7 +16,7 @@ from .interactions import RockInteractionManager
 from .interactions2 import PoopInteractionManager
 from .config_manager import ConfigManager
 from .lifecycle import (Lifecycle, EGG_HATCHING, CAUSE_STARVED,
-                        CAUSE_NEGLECTED, CAUSE_SICKNESS)
+                        CAUSE_NEGLECTED, CAUSE_SICKNESS, CAUSE_INJURED)
 from .plugin_manager import PluginManager
 from .brain_neuron_hooks import BrainNeuronHooks
 from .brain_neuron_outputs import NeuronOutputMonitor
@@ -2492,6 +2492,13 @@ class TamagotchiLogic:
             return
 
         if self.squid is not None:
+            # A squid whose body has no health left - rocks and fights take it
+            # and nothing gives it back - dies of its injuries, asleep or
+            # awake, as on Android (src/lifecycle.py).
+            if lifecycle is not None and lifecycle.injure(self.squid):
+                self.on_squid_died()
+                return
+
             # Update squid needs
             if not self.squid.is_sleeping:
                 self.squid.hunger      = min(100, self.squid.hunger      + (0.1 * self.simulation_speed))
@@ -3214,6 +3221,7 @@ class TamagotchiLogic:
         CAUSE_STARVED: "{name} has died.",
         CAUSE_NEGLECTED: "{name} has died of neglect.",
         CAUSE_SICKNESS: "{name} has died of sickness.",
+        CAUSE_INJURED: "{name} has died of its injuries.",
     }
 
     def on_squid_died(self):

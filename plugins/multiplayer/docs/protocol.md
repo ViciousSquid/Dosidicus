@@ -447,7 +447,7 @@ The sensors (`OBSERVABLE_SENSORS`, computed by `HostBody._observable_sensors`):
 | `plant_proximity` | 0-100 | `100 - distance_to_nearest_plant / 300 * 100` |
 | `external_stimulus` | 0-60 | 12 per food item in the tank |
 | `squid_in_view` | 0 or 100 | 100 when the resident is in the body's view cone (72°, `src/vision_cone.py`) and not itself away |
-| `squid_proximity` | 0-100 | `100 - distance_to_resident / 400 * 100` (`vision_cone.proximity`) |
+| `squid_proximity` | 0-100 | `100 - distance_to_resident / 1000 * 100` (`vision_cone.proximity`) |
 | `in_fight` | 0 or 100 | 100 while the body is in a fight animation (`body_busy_until`) |
 
 The first three drive the visitor's built-in sensors of the same name while it

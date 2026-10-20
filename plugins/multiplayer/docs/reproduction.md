@@ -30,7 +30,7 @@ pixel for pixel. The parent's headstone stays in the tank.
 Any squid can die, not only a parent (`src/lifecycle.py`): of **neglect**
 (left at its hungriest for 5 minutes of play), of **sickness** left 10
 minutes without medicine, of its **injuries** once rocks and fights have left
-it no health (on Android; desktop health does not yet end a life), or - a
+it no health, or - a
 parent - **starved**. A headstone is laid where it died, and its epitaph keeps
 its name, how long it lived and its fights won and lost (hover on desktop,
 tap on Android). A few seconds later a new squid hatches in the same tank:

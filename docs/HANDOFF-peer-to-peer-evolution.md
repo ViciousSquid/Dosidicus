@@ -107,13 +107,14 @@ becomes increasingly sociable. Same start, diverging lives.
 | `07fdf55` | Host and guest swim on opposite frames, always animating (desktop); the object of a fight flashes dark red from 2 s before the scuffle to 2 s after (desktop and Android); LAN harness allows a rested squid's second visit |
 | `063eb64` | `tests/test_inheritance.py`; a NaN gene from the wire is dropped |
 | `35a52bc` | Protocol hardening: no drives in `object_sync`; whole datagrams read, bounded inflate; de-duplication by datagram digest; remote-mind messages accepted only from the visit's own nodes; legacy `squid_return`/`rock_throw`/`squid_move` not listened for; queued consequences sent before a visitor is removed; gamete resent when a mating is retold; refusals addressed by node; intent leases immune to clock skew; a visitor drawn where its body is in the host tank |
-| this commit | SOCIAL band in the brain (desktop and Android), only once a social member has grown; social neurons prunable, never `can_see_squid` or a scarred neuron; headless brains lay out grown neurons like the desktop |
+| `3c4fe70` | SOCIAL band in the brain (desktop and Android), only once a social member has grown; social neurons prunable, never `can_see_squid` or a scarred neuron; headless brains lay out grown neurons like the desktop |
+| this commit | Owner's calls: desktop squids die of injuries at 0 health, as on Android; `squid_nearby` reaches 1000 px; a throw (and a swim at a squid at play) goes at one the squid remembers badly before a nearer stranger. Release APK built by CI (`android-release.yml`, signed) |
 
 Earlier on the branch (before this work): release workflows for all platforms
 (`e1f47c3`), shared brain interchange, the real two-instance gallery
 (`docs/canary-gallery`, now stale - see section 5).
 
-Test suite at the last commit: **863 passed**
+Test suite at the last commit: **869 passed**
 (`QT_QPA_PLATFORM=offscreen python -m pytest tests android/tests -q -p no:cacheprovider`, ~50 s).
 
 ---
@@ -126,7 +127,7 @@ Test suite at the last commit: **863 passed**
   `category == 'squid'`; `src/vision_worker.py` sees it through the view cone.
   The cone geometry is shared, Qt-free, in `src/vision_cone.py` (72 degrees),
   used by desktop vision, the multiplayer host (for the visitor's view) and
-  mobile. `vision_cone.proximity()` gives closeness (0-100 over 400 px),
+  mobile. `vision_cone.proximity()` gives closeness (0-100 over 1000 px),
   felt whichever way the squid looks.
 - **Percepts, not neurons.** The world reports `squid_in_view`,
   `squid_proximity`, `in_fight`, and from the squid's OWN memory (never the
@@ -321,8 +322,6 @@ Priority order agreed with the owner: big code changes first.
 
 ### Smaller
 
-- **Desktop death by injury**: mobile dies at 0 health (`CAUSE_INJURED`);
-  desktop health falls with rocks and fights but ends nothing. Owner to decide.
 - **Docs**: `plugins/multiplayer/docs/` describing social behaviours (senses,
   social neurons and how the social network grows inside the main network,
   personality-as-wiring, memory/recognition, fights, consequences, ink,

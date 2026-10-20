@@ -16,7 +16,7 @@ Through the senses the squid already has, and nothing else.
 | What the squid perceives | Where it comes from |
 |---|---|
 | `squid_in_view` | Its own vision: a visitor is drawn in the tank as a scene item of category `squid`, and the view cone (72°, `src/vision_cone.py`) decides whether it is seen - exactly as for food. While visiting, the host reports what the visitor's eyes would see from its body, by the same cone. |
-| `squid_proximity` | How close the nearest other squid is, 0-100 over 400 px (`vision_cone.proximity`) - felt whichever way it is looking. |
+| `squid_proximity` | How close the nearest other squid is, 0-100 over 1000 px (`vision_cone.proximity`) - felt whichever way it is looking. |
 | `in_fight` | Its body is in a scuffle. |
 | `squid_familiar`, `squid_recalled_good`, `squid_recalled_bad` | Its **own memory** of the individual in its view cone (`PeerLedger`, section 4 of [social learning](social-learning.md)). Never something the other squid or its host says. |
 | `aquarium_heard` | Another aquarium is nearby: a peer's heartbeat heard on the network in the last 30 s (`venturing.peer_heard`). Not about a squid in view - how a squid comes to know there is somewhere to go. |

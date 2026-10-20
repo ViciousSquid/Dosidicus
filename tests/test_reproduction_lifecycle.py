@@ -1196,6 +1196,21 @@ class DeathAndHeadstoneTests(unittest.TestCase):
             logic.lifecycle_config['sickness_seconds'] = 1e9
         return squid, logic, window
 
+    def test_a_squid_with_no_health_left_dies_of_its_injuries_even_asleep(self):
+        """Rocks and fights take health and nothing gives it back; at none
+        the squid dies of its injuries, as on Android."""
+        with tempfile.TemporaryDirectory() as tmp:
+            squid, logic, window = self._tank(tmp, sickness=False)
+            squid.health = 1.0
+            logic.update_statistics()
+            self.assertFalse(squid.lifecycle.is_dead)
+            squid.health, squid.is_sleeping = 0.0, True
+            logic.update_statistics()
+            self.assertEqual(squid.lifecycle.death_cause, 'injured')
+            self.assertEqual(logic.messages[-1], "Manuel has died of its injuries.")
+            [stone] = headstones_in(logic)
+            self.assertEqual(stone.headstone['died_of'], 'injured')
+
     def test_a_neglected_squid_dies_and_leaves_a_headstone_bearing_its_name(self):
         with tempfile.TemporaryDirectory() as tmp:
             random.seed(4)

@@ -66,26 +66,58 @@ def flight_steps(distance: float, speed: float, drag: float = 0.0) -> float:
     return math.log(1.0 - reach) / math.log(keep)
 
 
+def choose_target(origin: Sequence[float], targets: Iterable[Sequence[Any]]):
+    """Which squid in view to go at: (name, x, y, why), or None.
+
+    `targets` are (name, x, y) of the squid in view, or (name, x, y,
+    recalled_bad) where recalled_bad (0-100) is how badly THIS squid
+    remembers that one, from its own memory (PeerLedger). One it remembers
+    badly is gone at before any it does not - the worst remembered first, the
+    nearest among equals; with none remembered badly, simply the nearest.
+    """
+    ox, oy = float(origin[0]), float(origin[1])
+    seen = [(t[0], float(t[1]), float(t[2]), max(0.0, float(t[3]) if len(t) > 3 else 0.0))
+            for t in targets]
+    if not seen:
+        return None
+    name, tx, ty, bad = min(seen, key=lambda t: (-t[3], math.hypot(t[1] - ox, t[2] - oy)))
+    why = ({'chosen_because': 'remembered badly', 'recalled_bad': round(bad, 1)} if bad > 0
+           else {'chosen_because': 'nearest'})
+    return name, tx, ty, why
+
+
 def aim(origin: Sequence[float], gaze: float,
-        targets: Iterable[Tuple[str, float, float]], speed: float,
+        targets: Iterable[Sequence[Any]], speed: float,
         gravity: float, drag: float = 0.0) -> Tuple[float, Optional[str], Dict[str, Any]]:
     """The angle to throw at (screen coordinates, y down), the target, and why.
 
-    `targets` are (name, x, y) of the squid in this squid's view cone. With
-    one, it aims at the nearest, raised by the drop the rock will take on the
-    way (steps to get there, slowed by drag; drop = gravity t^2 / 2).
+    `targets` are the squid in this squid's view cone (choose_target). With
+    one, it aims at the one it remembers worst, or else the nearest, raised by
+    the drop the rock will take on the way (steps to get there, slowed by
+    drag; drop = gravity t^2 / 2).
     """
     ox, oy = origin
-    seen = sorted(targets, key=lambda t: math.hypot(t[1] - ox, t[2] - oy))
-    if not seen or speed <= 0:
+    chosen = choose_target(origin, targets)
+    if chosen is None or speed <= 0:
         return gaze, None, {'aimed_at': None, 'along': 'its gaze'}
-    name, tx, ty = seen[0]
+    name, tx, ty, why = chosen
     distance = math.hypot(tx - ox, ty - oy)
     steps = flight_steps(distance, speed, drag)
     drop = 0.5 * gravity * steps * steps
     angle = math.atan2((ty - drop) - oy, tx - ox)
     return angle, name, {'aimed_at': name, 'distance': round(distance, 1),
-                         'lead_for_drop': round(drop, 1), 'target_at': (tx, ty)}
+                         'lead_for_drop': round(drop, 1), 'target_at': (tx, ty), **why}
+
+
+def recalled_bad(memory_manager, peer_uuid: str) -> float:
+    """How badly a squid remembers another, 0-100, from its own memory."""
+    if memory_manager is None or not peer_uuid:
+        return 0.0
+    try:
+        from plugins.multiplayer.peer_ledger import PeerLedger
+        return float(PeerLedger(memory_manager).recalled_bad(str(peer_uuid)))
+    except Exception:
+        return 0.0
 
 
 #: A thrown thing passing this close to a squid's centre strikes it.
@@ -191,6 +223,8 @@ def out_of_reach(plan: Dict[str, Any]) -> bool:
 def describe(plan: Dict[str, Any]) -> str:
     """One line: what, at whom, how hard, and why that hard."""
     at = f"at {plan['aimed_at']}" if plan.get('aimed_at') else 'where it was looking'
+    if plan.get('chosen_because') == 'remembered badly':
+        at += ', whom it remembers badly'
     thing = 'poop' if plan.get('what') == 'poop' else 'a rock'
     return (f"Threw {thing} {at}, {('hard' if plan.get('drive', 0) >= 70 else 'gently')} - "
             f"{plan.get('driven_by', 'act_play')} at {plan.get('drive', 0):.0f}")

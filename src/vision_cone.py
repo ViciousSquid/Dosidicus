@@ -13,8 +13,10 @@ VIEW_CONE_ANGLE = math.pi / 2.5
 
 #: How far off another squid can be felt as near: across this range proximity
 #: falls from 100 (touching) to 0. Closeness is felt whichever way the squid is
-#: looking - the cone is for seeing, not for this.
-PROXIMITY_RANGE = 400.0
+#: looking - the cone is for seeing, not for this. 1000 px reaches across most
+#: of a tank, so a squid can tell a far squid from a near one, not just near
+#: from "out of range".
+PROXIMITY_RANGE = 1000.0
 
 #: Which way the cone points, for each way a squid can face.
 FACING_ANGLES = {'right': 0.0, 'down': math.pi / 2, 'left': math.pi,
