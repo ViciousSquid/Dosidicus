@@ -29,6 +29,10 @@ class MemoryTab(BrainBaseTab):
         self.ltm_tab = QtWidgets.QWidget()
         self.ltm_layout = QtWidgets.QVBoxLayout(self.ltm_tab)
         
+        # Social tab: what it knows of other squid, apart from its tank
+        self.social_tab = QtWidgets.QWidget()
+        self.social_layout = QtWidgets.QVBoxLayout(self.social_tab)
+
         # Overview tab
         self.overview_tab = QtWidgets.QWidget()
         self.overview_layout = QtWidgets.QVBoxLayout(self.overview_tab)
@@ -37,6 +41,8 @@ class MemoryTab(BrainBaseTab):
         # We keep the emojis but translate the text
         self.memory_subtabs.addTab(self.stm_tab, f"🧠 {self.loc.get('short_term_memory')}")
         self.memory_subtabs.addTab(self.ltm_tab, f"📚 {self.loc.get('long_term_memory')}")
+        self.memory_subtabs.addTab(self.social_tab,
+                                   f"🦑 {self.loc.get('social_knowledge', 'Social')}")
         self.memory_subtabs.addTab(self.overview_tab, f"📊 {self.loc.get('overview')}")
         
         # Configure STM tab
@@ -64,6 +70,24 @@ class MemoryTab(BrainBaseTab):
         self.ltm_scroll.setWidget(self.ltm_content)
         self.ltm_layout.addWidget(self.ltm_scroll)
         
+        # Configure Social tab: the squid's social knowledge, then the social
+        # memories it is drawn from.
+        self.social_scroll = QtWidgets.QScrollArea()
+        self.social_scroll.setWidgetResizable(True)
+        self.social_content = QtWidgets.QWidget()
+        self.social_content_layout = QtWidgets.QVBoxLayout(self.social_content)
+        self.social_summary = QtWidgets.QLabel()
+        self.social_summary.setWordWrap(True)
+        self.social_summary.setTextFormat(QtCore.Qt.RichText)
+        self.social_summary.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        self.social_summary.setContentsMargins(6, 4, 6, 4)
+        self.social_content_layout.addWidget(self.social_summary)
+        self.social_cards_layout = QtWidgets.QVBoxLayout()
+        self.social_content_layout.addLayout(self.social_cards_layout)
+        self.social_content_layout.addStretch(1)
+        self.social_scroll.setWidget(self.social_content)
+        self.social_layout.addWidget(self.social_scroll)
+
         # Configure Overview tab
         self.overview_stats = QtWidgets.QTextEdit()
         self.overview_stats.setReadOnly(True)
@@ -129,6 +153,13 @@ class MemoryTab(BrainBaseTab):
                 stm = self.tamagotchi_logic.squid.memory_manager.get_all_short_term_memories()
                 ltm = self.tamagotchi_logic.squid.memory_manager.get_all_long_term_memories()
                 
+                # What it knows of other squid is kept apart from what it
+                # knows of its tank (src/social_knowledge.py).
+                from .social_knowledge import split_memories
+                social_stm, stm = split_memories(stm)
+                social_ltm, ltm = split_memories(ltm)
+                self._update_social(social_ltm + social_stm)
+
                 # Filter displayable memories
                 stm_filtered = [m for m in stm if self._is_displayable_memory(m)]
                 ltm_filtered = [m for m in ltm if self._is_displayable_memory(m)]
@@ -196,6 +227,40 @@ class MemoryTab(BrainBaseTab):
             print(f"Error updating memory tab: {e}")
             import traceback
             traceback.print_exc()
+
+    def _social_brain(self):
+        brain = getattr(self, 'brain_widget', None)
+        if brain is None:
+            window = getattr(self.tamagotchi_logic, 'brain_window', None)
+            brain = getattr(window, 'brain_widget', None)
+        return brain
+
+    def _update_social(self, social_memories):
+        """The Social page: the squid's social knowledge, then the social
+        memories behind it (long-term first), each once."""
+        from .social_knowledge import knowledge, to_html
+        known = knowledge(self._social_brain(), social_memories)
+        html = to_html(known)
+        if html != getattr(self, '_social_html', None):
+            self._social_html = html
+            self.social_summary.setText(html)
+        seen, cards = set(), []
+        for memory in social_memories:
+            if not self._is_displayable_memory(memory):
+                continue
+            key = (memory.get('category', ''), memory.get('key', ''))
+            if key not in seen:
+                seen.add(key)
+                cards.append(memory)
+        signature = repr(cards)
+        if signature == getattr(self, '_social_signature', None) or \
+                reader_is_busy(self.social_scroll):
+            return
+        with preserve_scroll(self.social_scroll):
+            self._clear_layout(self.social_cards_layout)
+            for memory in cards:
+                self._create_memory_widget(memory, self.social_cards_layout)
+        self._social_signature = signature
 
     def _clear_layout(self, layout):
         """Clear all widgets from the given layout"""
@@ -495,6 +560,10 @@ class MemoryTab(BrainBaseTab):
             return (name.replace('_', ' ').capitalize(), thumb, content, None)
 
         # ---- social -----------------------------------------------------
+        if cat == 'social' and isinstance(value, dict):
+            from .social_knowledge import describe_memory
+            title, text, _sign = describe_memory(memory)
+            return (title, None, text, None)
         if cat == 'social':
             _SOCIAL = {
                 'squid_meeting':        'Met Another Squid',
@@ -768,6 +837,11 @@ class MemoryTab(BrainBaseTab):
         if cat == 'social':
             if key == 'targeted':
                 return "#FFD1DC"
+            if isinstance(val, dict):
+                from .social_knowledge import describe_memory
+                sign = describe_memory(memory)[2]
+                if sign:
+                    return "#D1FFD1" if sign > 0 else "#FFD1DC"
             return "#E8F4FD"  # pale blue
 
         # Cleanliness always positive

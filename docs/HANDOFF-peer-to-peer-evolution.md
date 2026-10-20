@@ -90,12 +90,17 @@ becomes increasingly sociable. Same start, diverging lives.
 | `50f786a` | Other squid are sensed through vision, and grown senses/social neurons replace all `conspecific_*` neurons (details in section 3) |
 | `a7cff7f` | "Enable peer-to-peer evolution?" Yes/No confirmation (desktop) / Enable-Cancel (mobile); mobile play goes at a squid in view |
 | `3b6d87e` | Fights: grown `aggression` neuron, ability-based outcome, provenance, permanent aggression scar, encounter-driven learning, `act_ink` always inks, ink clouds and messages fade properly |
+| `906c850` | A hatchling inherits half its weights from each parent (desktop; section 4) |
+| `2c49c35` | Social birth wiring taken from the experience that grew each neuron - the hard-rule tables are gone |
+| `425db91`, `9104c45` | `plugins/multiplayer/docs/` (social network, social learning, fights, reproduction) |
+| `3e4a8f6`, `bfd5eb4` | Rocks: aimed (leading for drop and drag) and powered by the network; swept, replay-safe hits that are only felt; Android live visits (`UNSTABLE` merged - `plugins/multiplayer/docs/rocks.md`) |
+| this commit | Social knowledge, apart from the tank: Memory tab Social page, Laboratory social card and overview, Decisions tab social thoughts (`src/social_knowledge.py`) |
 
 Earlier on the branch (before this work): release workflows for all platforms
 (`e1f47c3`), shared brain interchange, the real two-instance gallery
 (`docs/canary-gallery`, now stale - see section 5).
 
-Test suite at the last commit: **683 passed**
+Test suite at the last commit: **743 passed**
 (`QT_QPA_PLATFORM=offscreen python -m pytest tests android/tests -q -p no:cacheprovider`, ~50 s).
 
 ---
@@ -165,17 +170,12 @@ Grown only from encounters; a squid that never meets another has none of it.
 - Desktop `act_play` at a squid in view goes at it if it is nearer than any
   rock (`brain_neuron_outputs._go_at_squid_in_view`); the host does the same
   for a visitor's play intent; mobile likewise (`Simulation._squid_to_play_at`).
-- **OPEN DECISION (owner's latest instruction, not yet implemented):** the
-  fixed birth-wiring tables (`SOCIAL_WIRING`, `SOCIAL_INPUTS`, and the
-  non-`can_see_squid` entries of `SOCIAL_SENSOR_WIRING`) are "hard rules" and
-  must go. Replace with wiring taken from the experience that grew the neuron:
-  inputs from the senses and drives that were active at that moment, outputs
-  to what the network was doing/feeling then (sign by deviation from rest).
-  Any further wiring (e.g. `aggression` lowering anxiety) must come only from
-  learning, with provenance. Keep the per-personality `can_see_squid` table.
-  Re-check the behaviour tests in `tests/test_social_concept.py` and
-  `tests/test_fighting.py` afterwards (bold squid still approaches, timid
-  still flees).
+- **Birth wiring is experience-derived** (`2c49c35`, owner's instruction):
+  a social neuron takes its inputs from the senses and drives active when it
+  grew and outputs to what the network was doing then
+  (`EnhancedNeurogenesis._social_birth_wiring`); only `can_see_squid` keeps a
+  per-personality table (`SIGHTING_TEMPERAMENT`). Anything further comes from
+  learning, with provenance.
 
 ### Fights (`src/fighting.py`, Qt-free, shared by host and mobile)
 
@@ -297,28 +297,6 @@ Priority order agreed with the owner: big code changes first.
 
 ### Big
 
-- **Experience-derived birth wiring for social neurons/sensors** (section 3,
-  "OPEN DECISION") - remove the hard-rule tables.
-- **Rocks: conscious aim and velocity** (task "Conscious aim and velocity").
-  Throwing exists already. Aim = what the squid is attending to (the target
-  in its view cone - another squid if one is there, else where it looks);
-  velocity = from the network (activation of what drives the throw); both
-  recorded with provenance. Whether to throw stays the network's existing
-  decision; no scripted targeting or intent. A squid hit by a rock (or seeing
-  one land close) only *feels* it (percepts) and its own network reacts -
-  intent is never transmitted. Resident<->visitor via the host. Hits recorded
-  in the encounter memory. Desktop + mobile. (Mobile throws are currently a
-  random direction and speed: `Simulation._update_rock_play`.)
-- **Social knowledge in Laboratory, Memory tab and Decisions tab**: Memory tab
-  gets a Social Knowledge view separate from environmental memories (known
-  individuals: name, personality, encounters, fights won/lost, matings, how
-  it went; each fight with who started it and why, abilities, chance,
-  consequences). Laboratory: social overview (grown social senses/neurons and
-  why they grew), `aggression` described in words (placid .. fully aggro) with
-  its resting level and every permanent rise and its cause, encounter-driven
-  synapse changes. Decisions tab: social thoughts as they happen ("I see
-  another squid", "I remember that one - it beat me", "I'm getting aggro",
-  "I attacked", "I fought back", "I fled", "I played"), each with its reason.
 - **Squid senses nearby aquariums and decides itself to venture out**
   (gameplay loop 2-3): peers discovered -> a percept -> a sense organ grown the
   first time; exit through an edge only when its own network is driving it
@@ -382,7 +360,9 @@ Priority order agreed with the owner: big code changes first.
 | Learning from encounters | `src/social_learning.py`; called from `mp_plugin_logic.close_encounter` and `VisitorMind._learn_from` |
 | Memory of individuals | `plugins/multiplayer/peer_ledger.py`, `encounter.py` (`remember_fight`, `perceive_recognition`, `active_social_neurons`) |
 | Provenance | `src/neural_provenance.py` (`MECHANISMS` incl. `encounter`, `inheritance`) |
-| Laboratory | `src/laboratory.py` (`_card_identity`, `_role`) |
+| Laboratory | `src/laboratory.py` (`_card_identity`, `_role`, `_card_social`, overview "Its social network") |
+| Social knowledge | `src/social_knowledge.py` (read from the squid: grown network, aggression in words and its rises, how it meets strangers, individuals, fights; `think` for social thoughts); Memory tab Social page (`src/brain_memory_tab.py`); Decisions tab "Social thoughts" (`src/brain_decisions_tab.py`) |
+| Rocks | `src/throwing.py` (planner, `flight_step`, `swept_hit`), `src/interactions.py`; mobile `engine/simulation.py`, `engine/peer_visit.py`; `plugins/multiplayer/docs/rocks.md` |
 | Lifecycle, warning | `src/lifecycle.py` |
 | Inheritance | `src/inheritance.py`, `main.py` (`_begin_new_life`) |
 | Protocol | `plugins/multiplayer/remote_protocol.py`, `identity.py` (`ENCOUNTER_PROTOCOL_VERSION = 3`), `packet_validator.py` |

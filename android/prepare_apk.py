@@ -11,6 +11,7 @@ SHARED_MODULES = (
     'neurogenesis', 'learning', 'config_manager', 'personality', 'localisation',
     'portable_brain', 'neuron_binding', 'decision_engine', 'memory_manager', 'stdp', 'brain_clock', 'brain_io', 'save_archive',
     'vision_cone', 'lifecycle', 'fighting', 'social_learning', 'inheritance', 'throwing',
+    'social_knowledge',
 )
 
 

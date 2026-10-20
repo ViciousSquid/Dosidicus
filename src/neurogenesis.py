@@ -768,7 +768,11 @@ class EnhancedNeurogenesis:
         for sensor, (threshold, summary) in SOCIAL_SENSOR_GROWTH.items():
             percept = SOCIAL_SENSORS[sensor][0]
             if sensor not in positions and percepts.get(percept, 0.0) > threshold:
-                return self._grow_social_sensor(sensor, summary, percepts.get(percept))
+                grown = self._grow_social_sensor(sensor, summary, percepts.get(percept))
+                if grown:
+                    self._think(f"{summary} I had no way to sense that, so I grew "
+                                f"{grown}: {SOCIAL_CONCEPTS[sensor]}.")
+                return grown
         state = bw.state
         from .decision_engine import wants
 
@@ -781,8 +785,18 @@ class EnhancedNeurogenesis:
 
         for concept, sources in SOCIAL_EXPERIENCE.items():
             if concept not in positions and all(happening(s) for s in sources):
-                return self._grow_social_neuron(concept, sources)
+                grown = self._grow_social_neuron(concept, sources)
+                if grown:
+                    self._think(f"I {_SOCIAL_VERBS[concept]} another squid and had no "
+                                f"neuron for that, so I grew {grown}: "
+                                f"{SOCIAL_CONCEPTS[concept]}.")
+                return grown
         return None
+
+    def _think(self, text: str) -> None:
+        """A social thought for the Decisions tab (src/social_knowledge.py)."""
+        from .social_knowledge import think
+        think(self.brain_widget, text)
 
     def _grow_social_sensor(self, sensor: str, summary: str,
                             reading: float) -> Optional[str]:
@@ -840,6 +854,9 @@ class EnhancedNeurogenesis:
         neuron.resting_history.append({'at': time.time(), 'from': round(before, 2),
                                        'to': neuron.resting_level, 'cause': str(cause)[:120]})
         del neuron.resting_history[:-50]
+        self._think(f"Something has changed in me: my {name.replace('_', ' ')} rests at "
+                    f"{neuron.resting_level:.0f} now, not {before:.0f}, and always will - "
+                    f"I {cause}.")
         return round(after - before, 2)
 
     def _social_birth_wiring(self, neuron_name: str, concept: str,

@@ -23,6 +23,7 @@ from .remote_entity_manager import RemoteEntityManager # Ensure this is imported
 from .squid_multiplayer_autopilot import RemoteSquidController # Ensure this for autopilot logic
 from .asset_paths import resolve_local_asset, is_inside_assets
 from src import fighting
+from src.social_knowledge import fight_thoughts, think
 from src.lifecycle import MULTIPLAYER_RISK_NOTICE, MULTIPLAYER_RISK_TITLE
 from src.vision_cone import VIEW_CONE_ANGLE, in_view_cone
 from .remote_protocol import CONSEQUENCE_FIGHT, CONSEQUENCE_HIT
@@ -1089,6 +1090,8 @@ class MultiplayerPlugin:
                       consequences=fighting.apply_consequences(squid, won))
         brain = getattr(getattr(self.tamagotchi_logic, 'brain_window', None),
                         'brain_widget', None)
+        for thought in fight_thoughts(record, 'first'):
+            think(self.tamagotchi_logic, thought)
         if brain is not None:
             record['aggression_rose'] = fighting.scar(
                 brain, won, f"{'won' if won else 'lost'} a fight with {actor.identity.name}")

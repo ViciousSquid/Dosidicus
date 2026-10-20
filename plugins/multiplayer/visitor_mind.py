@@ -670,6 +670,9 @@ class VisitorMind:
                   'consequences': fighting.apply_consequences(squid, won)}
         window = getattr(self.logic, 'brain_window', None)
         brain = getattr(window, 'brain_widget', None)
+        from src.social_knowledge import fight_thoughts, think
+        for thought in fight_thoughts(record, 'first'):
+            think(self.logic, thought)
         if brain is not None:
             record['aggression_rose'] = fighting.scar(
                 brain, won, f"{'won' if won else 'lost'} a fight with {record['opponent']}")

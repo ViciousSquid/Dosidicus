@@ -67,6 +67,12 @@ def learn_from_encounter(brain, valence: float, outcome: str = '',
             if brain.apply_weight_change(edge, value=after, mechanism='encounter',
                                          detail=detail, create=before is None):
                 changes.append((edge, before, after))
+    if changes:
+        from .social_knowledge import think
+        lesson = ('more drawn to squid' if step > 0 else 'warier of squid')
+        think(brain, f"That {outcome or ''} encounter{' with ' + peer if peer else ''} "
+                     f"went {'well' if step > 0 else 'badly'} (felt {float(valence):+.1f}): "
+                     f"I am {lesson}, even ones I do not know.".replace('That  ', 'That '))
     return changes
 
 

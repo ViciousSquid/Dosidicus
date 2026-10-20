@@ -275,6 +275,12 @@ s=Simulation()
 for _ in range(60): s.update(1/30)
 assert s.squid.brain.sim_time == 2
 assert s.squid.brain.plasticity.stdp is not None
+from src.social_learning import learn_from_encounter
+b=s.squid.brain
+b.perceive('squid_in_view', 100.)
+assert b.enhanced_neurogenesis.observe_social() == 'can_see_squid'
+assert learn_from_encounter(b, -20., 'hostile', 'Guest')
+assert 'warier of squid' in b.social_thoughts[-1][1]
 assert 'PyQt5' not in sys.modules and 'kivy' not in sys.modules
 '''
     result = subprocess.run([sys.executable, '-c', code], cwd=staged,
