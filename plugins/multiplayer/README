@@ -36,11 +36,15 @@ What it can find out there:
   and social neurons for playing with, fighting or fleeing from them - and each
   individual it meets, if the meeting mattered, is remembered as that
   individual.
-- **Contests and fights.** Two squid going for the same object contest it;
-  close by, that can become a fight (one cloud over both) with a winner and a
-  loser, counted in each squid's statistics and towards the Fisticuffs!,
-  Scuffle, Tussle and Slugfest achievements. Personality matters: a timid
-  squid never starts a fight, though it can be drawn into one.
+- **Contests and fights.** Two squid can compete for the same object. A
+  fight starts when two squid are in contact and one of them is more aggro
+  than placid - its own grown `aggression` neuron, never its personality
+  label - and is won by ability: body, experience and how hard each network
+  commits, so a timid squid that rarely fights can be formidable when
+  attacked. One cloud over both; a winner and a loser, with lasting
+  consequences, counted in each squid's statistics and towards the
+  Fisticuffs!, Scuffle, Tussle and Slugfest achievements (see
+  [docs/fights.md](docs/fights.md)).
 - **A mate.** Two squid that stay in contact for 2 seconds during a visit get
   one 2% roll for that visit (see [Reproduction](#reproduction)). Only the
   host tank's resident is affected: it lays an egg and becomes a parent.
@@ -135,6 +139,9 @@ it looking alive. Both would be the host inventing behaviour.
 
 ## Encounters
 
+How squid sense each other, grow a social network, learn from encounters,
+fight and inherit is documented in [docs/](docs/README.md). In short:
+
 **No neuron is added for another squid.** A squid sees another squid the way it
 sees food: with its own vision (`src/vision_worker.py`). A visitor is drawn in
 the tank as category `squid`, and the squid's view cone (72°, shared by desktop,
@@ -158,8 +165,10 @@ not a neuron.
   - **social neurons**, hexagons named for their purpose, the first time the
     squid's own network does the thing with another squid in view:
     `social_play` (its play neuron fired), `social_flee` (its flight neuron
-    fired) or `social_fight` (it was in a fight). Each is fed by the senses
-    and drives the squid's existing actions; learning moves every synapse.
+    fired), `social_fight` (it was in a fight) or `aggression` (it went at
+    another squid while alarmed). Each is wired to the moment it grew - fed
+    by the senses and drives active then, driving what it was doing then -
+    and learning moves every synapse.
 - **Personality is wiring.** It enters only as how `can_see_squid` is wired
   when it grows — towards the other squid for most, away for a timid one —
   so what a squid first does on seeing another is its network's response.
@@ -168,7 +177,8 @@ not a neuron.
   the other squid or its host. Encounters that mattered (fights, thefts,
   matings, ones that moved its drives) are kept; mild ones are forgotten.
 - **`act_play` at a squid in view** swims at it, if it is nearer than any rock;
-  face to face, that is a contest, which can become a fight. A visitor's play
+  face to face, that is contact, which becomes a fight only if one of them is
+  aggro. A visitor's play
   intent does the same on the host. Nothing here maps "another squid" to an
   action: the grown neurons drive the squid's own action neurons, and the
   decision engine reads the winner.
@@ -231,7 +241,7 @@ risks](#rules-and-risks)). A dead resident ends every visit, its own included
 
 ## The fight cloud
 
-When a contest breaks out between two squid that are both in the tank and
+When a fight starts between two squid that are both in the tank and
 within `FIGHT_CLOUD_RANGE` of each other, **one** animated cloud
 (`images/fight_cloud.gif`) is drawn between them for a couple of seconds. It
 is a drawing and nothing else. If the GIF is not installed, nothing is drawn.
