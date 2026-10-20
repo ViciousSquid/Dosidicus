@@ -892,6 +892,9 @@ class MultiplayerPlugin:
         if self.host_body is not None:
             for actor in list(self.host_body.visitors.values()):
                 self.end_visit_as_host(actor, reason=END_EJECTED)
+        # It may have died while away visiting: its own visit ends too.
+        if self.visitor_mind is not None and self.visitor_mind.perception.away:
+            self.visitor_mind.end_visit(reason='departed', notify=True)
         for peer_uuid in list(self.open_encounters):
             self.close_encounter(peer_uuid)
         self.conspecific_view.clear()

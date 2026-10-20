@@ -48,6 +48,7 @@ from src.save_manager import SaveManager                     # noqa: E402
 from src.squid import Squid                                  # noqa: E402
 from src.squid_statistics import SquidStatistics             # noqa: E402
 from src.tamagotchi_logic import TamagotchiLogic             # noqa: E402
+from src.ui import ResizablePixmapItem                       # noqa: E402
 
 from plugins.multiplayer.consent import REASON_CLOSED        # noqa: E402
 from plugins.multiplayer.encounter_sensors import ConspecificView  # noqa: E402
@@ -173,9 +174,14 @@ class FakeWindow:
 
     def __init__(self):
         self.hatched = []
+        self.replaced = []
 
     def hatch_egg(self, egg_id):
         self.hatched.append(egg_id)
+        return True
+
+    def replace_dead_squid(self, death_id):
+        self.replaced.append(death_id)
         return True
 
 
@@ -385,13 +391,15 @@ class IsolatedSquidTests(unittest.TestCase):
             random.seed(3)
             for _ in range(3000):            # fifty minutes of neglect
                 logic.update_statistics()
-            self.assertEqual(squid.lifecycle.stage, STAGE_LIVING)
-            self.assertEqual(squid.hunger, 100)
-            # Health never moved: the starvation rule is a parent's alone, and
-            # the tank's health loss was never applied to anyone before it.
+            # Neglect is fatal - but it is never a parent's starvation: no
+            # reproduction, no egg, and the tank's health loss, which is a
+            # parent's alone, was never applied.
+            self.assertTrue(squid.lifecycle.is_dead)
+            self.assertIn(squid.lifecycle.death_cause, ('neglected', 'sickness'))
+            self.assertIsNone(squid.lifecycle.reproduction)
             self.assertEqual(squid.health, 100.0)
             self.assertEqual(eggs_in(logic), [])
-            self.assertNotIn("on_squid_died", logic.plugin_manager.triggered)
+            self.assertIn("on_squid_died", logic.plugin_manager.triggered)
 
     def test_reproduction_has_no_path_outside_a_visit(self):
         """Only HostBody ever calls record_reproduction, and only for a visitor."""
@@ -717,6 +725,9 @@ class ParentStarvationTests(unittest.TestCase):
         squid = LiteSquid(RESIDENT_UUID, "Parent")
         logic = make_tank(tmp, squid)
         self.assertTrue(logic.record_reproduction("v1-mate", VISITOR_UUID, "Mate"))
+        # A player who gives medicine: a starving parent falls sick, and left
+        # untreated that kills it first. These tests are about starvation.
+        logic.lifecycle_config = dict(logic.lifecycle_config, sickness_seconds=1e9)
         return squid, logic
 
     def test_a_parent_refuses_food_through_the_one_eating_path(self):
@@ -807,7 +818,11 @@ class ParentStarvationTests(unittest.TestCase):
             bystander = LiteSquid(OTHER_UUID, "Bystander")
             bystander_tank = make_tank(os.path.join(tmp, 'other'), bystander)
             random.seed(2)
-            for _ in range(3000):
+            for tick in range(3000):
+                if tick % 100 == 0:
+                    # Fed and cleaned: left alone it would die of neglect, or
+                    # fall sick in its dirt and die of that.
+                    bystander.hunger, bystander.cleanliness = 25.0, 100.0
                 visit.logic.update_statistics()
                 bystander_tank.update_statistics()
             self.assertTrue(visit.resident.lifecycle.is_dead)
@@ -1071,6 +1086,193 @@ class MatingHeartTests(unittest.TestCase):
         centre = frame.pixelColor(frame.width() // 2, frame.height() // 2)
         self.assertEqual((centre.red(), centre.green(), centre.blue(), centre.alpha()),
                          (255, 255, 255, 255))
+
+
+# ===========================================================================
+# 9. Death of any cause, and the headstone it leaves
+# ===========================================================================
+def headstones_in(logic):
+    return [item for item in logic.user_interface.scene.items()
+            if getattr(item, 'is_headstone', False)]
+
+
+class DeathAndHeadstoneTests(unittest.TestCase):
+
+    def setUp(self):
+        # The game finds its images from its own folder, headstones included.
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(_REPO_ROOT)
+
+    def _tank(self, tmp, squid=None, sickness=True):
+        squid = squid or LiteSquid(RESIDENT_UUID, "Manuel")
+        window = FakeWindow()
+        logic = make_tank(tmp, squid, window)
+        if not sickness:
+            logic.lifecycle_config['sickness_seconds'] = 1e9
+        return squid, logic, window
+
+    def test_a_neglected_squid_dies_and_leaves_a_headstone_bearing_its_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            random.seed(4)
+            squid, logic, window = self._tank(tmp)
+            squid.hunger = 100.0
+            ticks = tick_until(logic, lambda: squid.lifecycle.is_dead, 1000)
+            self.assertEqual(ticks, DEFAULT_CONFIG['neglect_seconds'])
+            self.assertEqual(squid.lifecycle.death_cause, 'neglected')
+            self.assertEqual(logic.messages[-1], "Manuel has died of neglect.")
+            self.assertEqual(squid.status, "dead")
+            self.assertFalse(squid.can_move)
+
+            [stone] = headstones_in(logic)
+            self.assertEqual(stone.deceased, "Manuel")
+            self.assertEqual(stone.epitaph(), "<span>RIP Manuel</span>")
+            # A decoration: seen and pushed like any, never carried or thrown.
+            self.assertEqual(stone.category, 'decoration')
+            self.assertFalse(stone.can_be_picked_up)
+            # Never bigger than 80% of the squid, and on the tank floor.
+            self.assertLessEqual(stone.pixmap().width(), squid.squid_width * 0.8)
+            self.assertLessEqual(stone.pixmap().height(), squid.squid_height * 0.8)
+            self.assertEqual(stone.pos().y() + stone.pixmap().height(), 900 - 120)
+
+            # Dead is final: no second death, no second headstone.
+            for _ in range(500):
+                logic.update_statistics()
+            self.assertEqual(logic.plugin_manager.triggered.count("on_squid_died"), 1)
+            self.assertEqual(len(headstones_in(logic)), 1)
+            # With no egg, a new squid follows - once the window says so.
+            self.assertTrue(logic.continue_after_death())
+            self.assertEqual(window.replaced, [RESIDENT_UUID])
+            self.assertEqual(window.hatched, [])
+
+    def test_a_meal_starts_the_neglect_count_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            squid, logic, _ = self._tank(tmp, sickness=False)
+            seconds = int(DEFAULT_CONFIG['neglect_seconds'])
+            squid.hunger = 100.0
+            for _ in range(seconds - 1):
+                logic.update_statistics()
+            squid.hunger = 40.0                  # fed, just in time
+            logic.update_statistics()
+            squid.hunger = 100.0
+            for _ in range(seconds - 1):
+                logic.update_statistics()
+            self.assertFalse(squid.lifecycle.is_dead)
+
+    def test_untreated_sickness_kills_and_medicine_starts_the_count_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            squid, logic, _ = self._tank(tmp)
+            seconds = int(DEFAULT_CONFIG['sickness_seconds'])
+
+            def sick_for(ticks):
+                for tick in range(ticks):
+                    if tick % 100 == 0:
+                        squid.hunger = 25.0      # fed: only the sickness can kill
+                    logic.update_statistics()
+
+            squid.is_sick = True
+            sick_for(seconds - 1)
+            squid.is_sick = False                # medicine
+            logic.update_statistics()
+            squid.is_sick = True
+            sick_for(seconds - 1)
+            self.assertFalse(squid.lifecycle.is_dead)
+            logic.update_statistics()
+            self.assertEqual(squid.lifecycle.death_cause, 'sickness')
+            self.assertEqual(logic.messages[-1], "Manuel has died of sickness.")
+            self.assertEqual(len(headstones_in(logic)), 1)
+
+    def test_a_sick_parent_dies_of_it_and_its_egg_still_hatches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            squid, logic, window = self._tank(tmp)
+            self.assertTrue(logic.record_reproduction("v1-mate", VISITOR_UUID, "Mate"))
+            squid.is_sick = True
+            tick_until(logic, lambda: squid.lifecycle.is_dead, 1000)
+            self.assertEqual(squid.lifecycle.death_cause, 'sickness')
+            self.assertEqual(len(headstones_in(logic)), 1)
+            self.assertTrue(logic.continue_after_death())
+            self.assertEqual(window.hatched, ["v1-mate"])
+            self.assertEqual(window.replaced, [])
+
+    def test_the_cause_and_the_counts_survive_a_reload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            squid, logic, _ = self._tank(tmp, sickness=False)
+            squid.hunger = 100.0
+            for _ in range(120):
+                logic.update_statistics()
+            logic.save_game()
+            reloaded = LiteSquid(RESIDENT_UUID, "Manuel")
+            tank = make_tank(tmp, reloaded)
+            tank.load_game()
+            self.assertEqual(reloaded.lifecycle.neglected_seconds, 120.0)
+            squid.hunger = 100.0
+            tick_until(logic, lambda: squid.lifecycle.is_dead, 1000)
+            logic.save_game()
+            dead = LiteSquid(RESIDENT_UUID, "Manuel")
+            tank = make_tank(tmp, dead)
+            tank.load_game()
+            self.assertEqual(dead.lifecycle.death_cause, 'neglected')
+            # The reload lays it to rest; the headstone comes back with the
+            # decorations, not as a second one.
+            self.assertEqual(dead.status, "dead")
+            self.assertEqual(headstones_in(tank), [])
+
+
+class HeadstoneDecorationTests(unittest.TestCase):
+    """The headstone as a decoration, through the real Ui methods."""
+
+    def setUp(self):
+        from src.ui import HEADSTONE_DIR
+        self.scene = QtWidgets.QGraphicsScene()
+        self.squid = SimpleNamespace(squid_width=253.0, squid_height=147.0)
+        self.ui = SimpleNamespace(scene=self.scene, awarded_decorations=set(),
+                                  tamagotchi_logic=SimpleNamespace(squid=self.squid),
+                                  show_floating_score=lambda *a, **k: None)
+        path = os.path.join(_REPO_ROOT, HEADSTONE_DIR, 'headstone02.png')
+        self.stone = ResizablePixmapItem(QtGui.QPixmap(path), path)
+        self.stone.deceased = "Manuel"
+        self.stone.limit_headstone(self.squid)
+        self.scene.addItem(self.stone)
+
+    def test_every_headstone_is_a_transparent_image_the_game_can_load(self):
+        from src.ui import HEADSTONE_DIR
+        stones = sorted(os.listdir(os.path.join(_REPO_ROOT, HEADSTONE_DIR)))
+        self.assertEqual(len(stones), 10)
+        for name in stones:
+            image = QtGui.QImage(os.path.join(_REPO_ROOT, HEADSTONE_DIR, name))
+            self.assertFalse(image.isNull(), name)
+            self.assertEqual(image.pixelColor(0, 0).alpha(), 0, name)
+
+    def test_it_cannot_be_deleted_but_a_plant_can(self):
+        from src.ui import Ui
+        plant = ResizablePixmapItem(QtGui.QPixmap(10, 10), 'images/decoration/plant01.png')
+        self.scene.addItem(plant)
+        self.stone.setSelected(True)
+        plant.setSelected(True)
+        Ui.delete_selected_items(self.ui)
+        self.assertIn(self.stone, self.scene.items())
+        self.assertNotIn(plant, self.scene.items())
+
+    def test_it_never_grows_past_80_percent_of_the_squid(self):
+        self.stone.setSelected(True)
+        grow = SimpleNamespace(angleDelta=lambda: QtCore.QPoint(0, 120),
+                               accept=lambda: None)
+        for _ in range(20):
+            self.stone.wheelEvent(grow)
+        self.assertLessEqual(self.stone.pixmap().width(), 253 * 0.8)
+        self.assertLessEqual(self.stone.pixmap().height(), 147 * 0.8)
+        self.assertGreaterEqual(self.stone.pixmap().height(), int(147 * 0.8) - 1)
+
+    def test_its_name_and_limit_survive_a_save(self):
+        from src.ui import Ui
+        saved = Ui.get_decorations_data(self.ui)
+        self.assertEqual(saved[0]['deceased'], "Manuel")
+        self.scene.removeItem(self.stone)
+        smaller = SimpleNamespace(squid_width=100.0, squid_height=60.0)
+        self.ui.tamagotchi_logic.squid = smaller      # e.g. a lower DPI now
+        Ui.add_decorations_data(self.ui, saved)
+        [stone] = [i for i in self.scene.items() if getattr(i, 'is_headstone', False)]
+        self.assertEqual(stone.deceased, "Manuel")
+        self.assertLessEqual(stone.pixmap().height(), 60 * 0.8)
 
 
 class RoundTripTimerTests(unittest.TestCase):

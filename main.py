@@ -607,24 +607,42 @@ class MainWindow(QtWidgets.QMainWindow):
             return False
         self._hatched_egg_id = egg_id
         print(f"🥚 Egg {egg_id} is hatching")
+        return self._succeed_dead_squid(egg_born=True)
+
+    def replace_dead_squid(self, death_id):
+        """A squid died with no egg to follow it - of neglect or sickness.
+
+        A new squid hatches from a fresh egg, as at the start of a game, with
+        no way out, the way a parent's egg hatches. Its headstone stays.
+        Called by TamagotchiLogic.continue_after_death, once per death.
+        """
+        if not death_id or getattr(self, '_replaced_death_id', None) == death_id:
+            return False
+        self._replaced_death_id = death_id
+        print(f"🪦 {death_id} is succeeded by a new squid")
+        return self._succeed_dead_squid(egg_born=False)
+
+    def _succeed_dead_squid(self, egg_born):
         self.show_tutorial = False
-        # Paint the exact first frame of a new game before retiring the parent.
-        # The same cover survives the reset, so no empty tank or newborn flashes.
+        # Paint the exact first frame of a new game before retiring the dead
+        # squid. The same cover survives the reset, so no empty tank or
+        # newborn flashes.
         self._hatch_cover = SplashScreen(self)
         self._hatch_cover.show()
         self._hatch_cover.raise_()
         self._hatch_cover.repaint()
         QtWidgets.QApplication.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
-        self._begin_new_life(egg_born=True)
+        self._begin_new_life(egg_born=egg_born, after_death=True)
         try:
             self.tamagotchi_logic.save_game()
         except Exception as e:
             print(f"[Hatch] could not save the hatchling yet: {e}")
         return True
 
-    def _begin_new_life(self, egg_born=False):
-        """Replace the squid in this tank with a newborn. Shared by New Game
-        and by an egg hatching, so the two are the same sequence.
+    def _begin_new_life(self, egg_born=False, after_death=False):
+        """Replace the squid in this tank with a newborn. Shared by New Game,
+        by an egg hatching and by a squid that died with no egg, so all three
+        are the same sequence.
 
         Order matters: plugins come down first, while the squid they refer to
         still exists, so the multiplayer plugin can end its visits on both
@@ -635,11 +653,15 @@ class MainWindow(QtWidgets.QMainWindow):
         old_logic = getattr(self, 'tamagotchi_logic', None)
         old_squid = getattr(self, 'squid', None)
 
-        # A hatch continues the player's story, so its achievements carry on
-        # - CIRCLE OF LIFE is unlocked by the very death that lays this egg.
-        # They live in the parent's save, which is deleted below. New Game
-        # is a fresh start and keeps no achievements, as it always has.
-        carried_achievements = self._achievements_save_data() if egg_born else None
+        # A death continues the player's story, so its achievements carry on
+        # - CIRCLE OF LIFE is unlocked by the very death that lays an egg.
+        # They live in the dead squid's save, which is deleted below. New
+        # Game is a fresh start and keeps no achievements, as it always has.
+        carried_achievements = self._achievements_save_data() if after_death else None
+        # Headstones are never removed: every reset keeps the tank's dead.
+        ui = getattr(self, 'user_interface', None)
+        carried_headstones = [d for d in (ui.get_decorations_data() if ui else [])
+                              if d.get('deceased') is not None]
 
         # Plugins down. unload_plugin() calls each plugin's shutdown(), which
         # for multiplayer ends every visit and closes the network node.
@@ -740,6 +762,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._setup_plugins()
         if carried_achievements:
             self._restore_achievements_data(carried_achievements)
+        if carried_headstones:
+            self.user_interface.add_decorations_data(carried_headstones)
 
     def load_game(self):
         """Delegate to tamagotchi_logic"""
@@ -805,7 +829,7 @@ class MainWindow(QtWidgets.QMainWindow):
         multiplayer mating. The sequence is the same as any new game; only
         the two messages differ, and the starter egg keeps its own.
         """
-        cover = getattr(self, '_hatch_cover', None) if egg_born else None
+        cover = getattr(self, '_hatch_cover', None)
         self.splash = cover if cover is not None else SplashScreen(self)
         self._hatch_cover = None
         splash = self.splash

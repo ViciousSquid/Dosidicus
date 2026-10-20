@@ -15,7 +15,8 @@ from .learning import HebbianLearning
 from .interactions import RockInteractionManager
 from .interactions2 import PoopInteractionManager
 from .config_manager import ConfigManager
-from .lifecycle import Lifecycle, EGG_HATCHING
+from .lifecycle import (Lifecycle, EGG_HATCHING, CAUSE_STARVED,
+                        CAUSE_NEGLECTED, CAUSE_SICKNESS)
 from .plugin_manager import PluginManager
 from .brain_neuron_hooks import BrainNeuronHooks
 from .brain_neuron_outputs import NeuronOutputMonitor
@@ -2529,11 +2530,20 @@ class TamagotchiLogic:
 
                 # Only a parent, which no longer eats, actually loses this
                 # health - and only once it is starving. Every other squid's
-                # health is untouched here, exactly as before.
-                starvation_hunger = self._lifecycle_setting('starvation_hunger')
-                if lifecycle is not None and lifecycle.starve(
-                        self.squid, health_decrease, starvation_hunger):
-                    self.on_parent_died()
+                # health is untouched here, exactly as before. Any squid can
+                # also die of neglect or of a sickness left untreated, counted
+                # in the same play-time as the needs above.
+                if lifecycle is not None:
+                    seconds = float(self.simulation_speed)
+                    setting = self._lifecycle_setting
+                    if (lifecycle.starve(self.squid, health_decrease,
+                                         setting('starvation_hunger'))
+                            or lifecycle.sicken(self.squid, seconds,
+                                                setting('sickness_seconds'))
+                            or lifecycle.neglect(self.squid, seconds,
+                                                 setting('neglect_hunger'),
+                                                 setting('neglect_seconds'))):
+                        self.on_squid_died()
 
     def handle_window_resize(self, event):
         new_width = event.size().width()
@@ -3041,12 +3051,14 @@ class TamagotchiLogic:
         if squid.lifecycle.egg:
             self._place_egg()
         if squid.lifecycle.is_dead:
-            # Closed while the parent was dead or its egg was hatching. The
-            # hatch picks up from the saved state, and only once.
-            self._lay_parent_to_rest()
-            QtCore.QTimer.singleShot(self.HATCH_DELAY_MS, self.begin_egg_hatching)
+            # Closed while the squid was dead or its egg was hatching. Its
+            # headstone came back with the decorations; what follows picks up
+            # from the saved state, and only once.
+            self._lay_to_rest()
+            QtCore.QTimer.singleShot(self.HATCH_DELAY_MS, self.continue_after_death)
 
-    def _lay_parent_to_rest(self):
+    def _lay_to_rest(self):
+        """A dead squid stops, and its body gives way to its headstone."""
         squid = self.squid
         squid.can_move = False
         squid.is_fleeing = False
@@ -3054,15 +3066,57 @@ class TamagotchiLogic:
         squid.status = "dead"
         if hasattr(squid, 'clear_neural_drive'):
             squid.clear_neural_drive()
+        if hasattr(squid, 'remove_view_cone'):
+            squid.remove_view_cone()
+        item = getattr(squid, 'squid_item', None)
+        if item is not None:
+            item.setVisible(False)
 
-    def on_parent_died(self):
-        """The starving parent has died. Called once, by the transition."""
+    def _place_headstone(self):
+        """One of the stones in images/headstones, at random, on the tank
+        floor beneath where the squid died, bearing its name. A decoration
+        like any other, except that it is never carried, thrown or deleted.
+        """
+        from .ui import HEADSTONE_DIR
         squid = self.squid
-        self._lay_parent_to_rest()
-        # The multiplayer plugin, if it is running, ends visits to a tank
-        # whose resident is gone, so nothing is left pointing at it; the
-        # achievements plugin awards CIRCLE OF LIFE. Before the message, so
-        # nothing a plugin shows replaces the news of the death.
+        try:
+            stones = sorted(n for n in os.listdir(HEADSTONE_DIR)
+                            if n.lower().endswith('.png'))
+        except OSError:
+            stones = []
+        if not stones:
+            return None
+        path = os.path.join(HEADSTONE_DIR, random.choice(stones))
+        item = ResizablePixmapItem(QtGui.QPixmap(path), path)
+        item.deceased = str(getattr(squid, 'name', '') or 'Squid')[:32]
+        item.limit_headstone(squid)
+        stone = item.pixmap()
+        ui = self.user_interface
+        width = float(getattr(ui, 'window_width', 1280))
+        height = float(getattr(ui, 'window_height', 900))
+        centre = float(squid.squid_x) + float(getattr(squid, 'squid_width', 0)) / 2
+        item.setPos(max(0.0, min(width - stone.width(), centre - stone.width() / 2)),
+                    max(0.0, height - 120.0 - stone.height()))
+        ui.scene.addItem(item)
+        if hasattr(squid, 'mark_scene_objects_dirty'):
+            squid.mark_scene_objects_dirty()
+        return item
+
+    #: How each death is told.
+    DEATH_MESSAGES = {
+        CAUSE_STARVED: "{name} has died.",
+        CAUSE_NEGLECTED: "{name} has died of neglect.",
+        CAUSE_SICKNESS: "{name} has died of sickness.",
+    }
+
+    def on_squid_died(self):
+        """The squid has died, of any cause. Called once, by the transition."""
+        squid = self.squid
+        # The multiplayer plugin, if it is running, ends visits to and by this
+        # squid, so nothing is left pointing at it; the achievements plugin
+        # awards CIRCLE OF LIFE to a parent. First: ending its own visit gives
+        # a squid its body back, and nothing a plugin shows may replace the
+        # news of the death.
         plugin_manager = getattr(self, 'plugin_manager', None)
         if plugin_manager is not None:
             try:
@@ -3071,12 +3125,31 @@ class TamagotchiLogic:
                                             squid=squid)
             except Exception as e:
                 print(f"[Lifecycle] on_squid_died hook failed: {e}")
-        self.show_message(f"{squid.name} has died.")
+        self._lay_to_rest()
+        self._place_headstone()
+        message = self.DEATH_MESSAGES.get(squid.lifecycle.death_cause,
+                                          self.DEATH_MESSAGES[CAUSE_STARVED])
+        self.show_message(message.format(name=squid.name))
         try:
             self.save_game()
         except Exception as e:
             print(f"[Lifecycle] could not save the death: {e}")
-        QtCore.QTimer.singleShot(self.HATCH_DELAY_MS, self.begin_egg_hatching)
+        QtCore.QTimer.singleShot(self.HATCH_DELAY_MS, self.continue_after_death)
+
+    def continue_after_death(self):
+        """What follows a death: the parent's egg hatches, or - with no egg -
+        a new squid hatches from a fresh one. The headstone stays either way.
+        """
+        lifecycle = getattr(self.squid, 'lifecycle', None)
+        if lifecycle is None or not lifecycle.is_dead:
+            return False
+        if lifecycle.egg is not None:
+            return self.begin_egg_hatching()
+        window = getattr(self.user_interface, 'window', None)
+        replace = getattr(window, 'replace_dead_squid', None)
+        if not callable(replace):
+            return False
+        return bool(replace(str(self.squid.uuid)))
 
     def begin_egg_hatching(self):
         """The dead parent's egg hatches into a new game. No cancel.

@@ -8,6 +8,74 @@ individual afterwards.
 traversal. Not enabled at startup (`auto_load_blacklist` in `plugin_manager.py`);
 turn it on from the Plugin manager.
 
+## Rules and risks
+
+> Multiplayer is optional. Enabling it exposes the squid to new experiences
+> but may ultimately result in losing its life. The user takes this risk.
+
+That notice is shown the first time multiplayer is enabled (remembered as
+`[Multiplayer] risk_notice_shown` in `config.ini`). It is the whole bargain.
+
+**Whether to mollycoddle your squid or foster its independence is up to you.**
+Keep multiplayer off and it never meets another squid: it cannot fight, it
+cannot mate, and no egg is ever laid - reproduction has no other way to
+happen. Turn multiplayer on and it can swim off into other tanks, where its own
+brain - not you, and not the other player - decides what it does with whoever
+it meets.
+
+What it can find out there:
+
+- **Other squid.** The first sighting grows a lasting Social/Encounter neuron,
+  and each individual it meets is remembered as that individual.
+- **Contests and fights.** Two squid going for the same object contest it;
+  close by, that can become a fight (one cloud over both) with a winner and a
+  loser, counted in each squid's statistics and towards the Fisticuffs!,
+  Scuffle, Tussle and Slugfest achievements. Personality matters: a timid
+  squid never starts a fight, though it can be drawn into one.
+- **A mate.** Two squid that stay in contact for 5 seconds during a visit get
+  one 2% roll for that visit (see [Reproduction](#reproduction)). Only the
+  host tank's resident is affected: it lays an egg and becomes a parent.
+
+The risk, in full:
+
+1. **A parent stops eating.** It will not touch food again, stays home with its
+   egg, grows hungry on the ordinary metabolism and, once starving, loses
+   health until it dies. Starting from a fed squid that takes roughly 20-30
+   minutes of play at normal speed; sleep pauses it, medicine only delays it.
+2. **When it dies, its egg hatches** into a new squid with a newborn brain. The
+   parent's save, memories and learning are gone; its achievements carry on,
+   CIRCLE OF LIFE among them.
+
+Neither risk can be undone once the roll has gone against you - which is why
+the choice is made before the first visit, not after.
+
+### Any squid can die
+
+These have nothing to do with multiplayer and apply to every squid, plugin on
+or off:
+
+| Cause | When |
+|---|---|
+| Neglect | hunger stays at 100 (the hungriest) for 5 minutes of play; any meal resets it |
+| Sickness | it stays sick for 10 minutes of play without medicine; medicine resets it |
+| Starvation | a parent, as above |
+
+Every dead squid becomes a **headstone** - one of ten, at random - on the tank
+floor where it died. Click it to read "RIP *name*". The squid can see it and
+push it like any decoration; it can never be picked up, thrown or deleted, and
+it is never bigger than 80% of a squid. Headstones stay through hatches and New
+Games. After a death, the parent's egg hatches - or, with no egg, a new squid
+hatches from a fresh one.
+
+| Setting (`config.ini` `[Lifecycle]`) | Default | Meaning |
+|---|---|---|
+| `mating_chance` | 0.02 | chance of the one roll a visit gets |
+| `mating_contact_seconds` | 5.0 | sustained contact before that roll |
+| `starvation_hunger` | 90 | hunger at which a parent starts losing health |
+| `neglect_hunger` | 100 | hunger counted as neglect |
+| `neglect_seconds` | 300 | seconds of play at that hunger before death |
+| `sickness_seconds` | 600 | seconds of play sick, untreated, before death |
+
 ## The invariant
 
 > A visiting squid's brain stays on its own machine. The host runs its body,
@@ -129,15 +197,11 @@ its own, and the host works out what that means in its tank.
    (`peer:<uuid>:mating:<id>`) - its body and lifecycle are untouched.
 
 What follows is not a multiplayer concern and keeps happening with the plugin
-off: the parent stops eating, starves on the ordinary metabolism, dies once,
-and its egg hatches into a new game (see `src/lifecycle.py`). A dead resident
-ends every visit (`on_squid_died`) and refuses new ones.
-
-| Setting (`config.ini` `[Lifecycle]`) | Default | Meaning |
-|---|---|---|
-| `mating_chance` | 0.02 | chance of the one roll a visit gets |
-| `mating_contact_seconds` | 5.0 | sustained contact before that roll |
-| `starvation_hunger` | 90 | hunger at which a parent starts losing health |
+off: the parent stops eating, starves on the ordinary metabolism (or dies
+sooner of a sickness left untreated), dies once, becomes a headstone, and its
+egg hatches into a new game (see `src/lifecycle.py` and [Rules and
+risks](#rules-and-risks)). A dead resident ends every visit, its own included
+(`on_squid_died`), and refuses new ones.
 
 ## The fight cloud
 

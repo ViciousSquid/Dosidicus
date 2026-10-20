@@ -140,6 +140,11 @@ def give_the_squid_a_past():
     return innate_pair, innate_value
 
 
+def headstones():
+    return [item for item in WINDOW.user_interface.scene.items()
+            if getattr(item, 'is_headstone', False)]
+
+
 class Recorder:
     def __init__(self):
         self.messages = []
@@ -308,11 +313,61 @@ class HatchTests(unittest.TestCase):
         self.assertIn('circle_of_life', hatched['instance'].unlocked)
         self.assertIn('circle_of_life', loaded['achievements']['unlocked'])
 
+        # The parent became a headstone, which the hatchling's tank keeps.
+        self.assertEqual([stone.deceased for stone in headstones()], [parent.name])
+        self.assertEqual([d['deceased'] for d in loaded['game_state']['decorations']
+                          if 'deceased' in d], [parent.name])
+
+
+class NeglectTests(unittest.TestCase):
+
+    def test_4_a_neglected_squid_becomes_a_headstone_and_a_new_squid_hatches(self):
+        logic = WINDOW.tamagotchi_logic
+        squid = WINDOW.squid
+        before = [stone.deceased for stone in headstones()]
+        logic.lifecycle_config['sickness_seconds'] = 1e9     # neglect alone
+        squid.is_sleeping = False
+        squid.hunger = 100.0
+        messages = Recorder()
+        with mock.patch.object(WINDOW.user_interface, 'show_message', messages):
+            for _ in range(int(logic.lifecycle_config['neglect_seconds'])):
+                logic.update_statistics()
+        self.assertEqual(squid.lifecycle.death_cause, 'neglected')
+        self.assertEqual(messages.messages[-1], f"{squid.name} has died of neglect.")
+        self.assertFalse(squid.squid_item.isVisible())
+        stones = headstones()
+        self.assertEqual(sorted(s.deceased for s in stones), sorted(before + [squid.name]))
+        for stone in stones:
+            self.assertLessEqual(stone.pixmap().width(), squid.squid_width * 0.8)
+            self.assertLessEqual(stone.pixmap().height(), squid.squid_height * 0.8)
+
+        # The player cannot delete one, through the real Delete action.
+        for stone in stones:
+            stone.setSelected(True)
+        WINDOW.user_interface.delete_selected_items()
+        self.assertEqual(len(headstones()), len(stones))
+
+        # With no egg, a new squid hatches from a fresh one - no dialog, once.
+        with mock.patch.object(MAIN, 'TimedMessageBox',
+                               side_effect=AssertionError("no dialogs")):
+            self.assertTrue(logic.continue_after_death())
+        newborn = WINDOW.squid
+        self.assertIsNot(newborn, squid)
+        self.assertEqual(newborn.lifecycle.stage, 'living')
+        self.assertFalse(WINDOW.replace_dead_squid(str(squid.uuid)))
+        self.assertIs(WINDOW.squid, newborn)
+        self.assertEqual(sorted(s.deceased for s in headstones()),
+                         sorted(before + [squid.name]))
+        recorder = Recorder()
+        with mock.patch.object(WINDOW.user_interface, 'show_message', recorder):
+            WINDOW.splash.second_frame.emit()
+        self.assertEqual(recorder.messages, ["Squid is hatching!"])
+
 
 class QuitTests(unittest.TestCase):
     """Runs last: it closes the window."""
 
-    def test_4_quitting_keeps_the_achievements_in_the_save(self):
+    def test_5_quitting_keeps_the_achievements_in_the_save(self):
         squid_uuid = WINDOW.squid.uuid
         instance = WINDOW.plugin_manager.plugins['achievements']['instance']
         instance.progress['quit_marker'] = 7

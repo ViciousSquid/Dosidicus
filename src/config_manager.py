@@ -271,6 +271,9 @@ class ConfigManager:
         values['mating_chance'] = max(0.0, min(1.0, values['mating_chance']))
         values['mating_contact_seconds'] = max(0.0, values['mating_contact_seconds'])
         values['starvation_hunger'] = max(0.0, min(100.0, values['starvation_hunger']))
+        values['neglect_hunger'] = max(0.0, min(100.0, values['neglect_hunger']))
+        values['neglect_seconds'] = max(0.0, values['neglect_seconds'])
+        values['sickness_seconds'] = max(0.0, values['sickness_seconds'])
         return values
 
     def get_multiplayer_risk_notice_shown(self):
