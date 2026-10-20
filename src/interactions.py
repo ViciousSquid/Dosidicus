@@ -135,13 +135,11 @@ class RockInteractionManager:
             self.decide_rock_action()
 
     def decide_rock_action(self):
-        """Randomly decide to throw or drop the rock"""
-        if random.random() < 0.7:  # 70% chance to throw
-            direction = "right" if random.random() < 0.5 else "left"
-            self.throw_rock(direction)
-            if self.show_message:
-                self.show_message("Squid threw the rock!")
-        else:  # 30% chance to drop
+        """Throw the rock if the squid's play neuron is firing; else put it down."""
+        from .throwing import throw_or_drop
+        if throw_or_drop(self._brain_state()):
+            self.throw_rock()
+        else:
             self.drop_rock()
             if self.show_message:
                 self.show_message("Squid dropped the rock")
@@ -210,8 +208,43 @@ class RockInteractionManager:
         self.highlight_animation.setLoopCount(3)
         self.highlight_animation.start()
 
-    def throw_rock(self, direction="right"):
-        """Initiates a rock throw with positive memory formation"""
+    #: Throw speeds, in pixels per 50 ms animation step, and the rock's gravity.
+    THROW_SLOWEST = 6.0
+    THROW_FASTEST = 20.0
+    THROW_GRAVITY = 0.3
+    #: A rock passing this close to another squid's centre hits it.
+    HIT_RADIUS = 45.0
+
+    def _brain_state(self):
+        brain = getattr(getattr(self.logic, 'brain_window', None), 'brain_widget', None)
+        return dict(getattr(brain, 'state', None) or {})
+
+    def _squids_in_view(self):
+        """(name, x, y) of every other squid in this squid's view cone."""
+        from .vision_cone import VIEW_CONE_ANGLE, in_view_cone
+        rect = self.squid.squid_item.sceneBoundingRect()
+        cx, cy = rect.center().x(), rect.center().y()
+        reach = math.hypot(self.scene.width(), self.scene.height())
+        angle = float(getattr(self.squid, 'current_view_angle', 0.0))
+        seen = []
+        for item in self.scene.items():
+            if getattr(item, 'category', None) != 'squid' or not item.isVisible():
+                continue
+            centre = item.sceneBoundingRect().center()
+            if in_view_cone(cx, cy, angle, VIEW_CONE_ANGLE, reach, centre.x(), centre.y()):
+                seen.append((getattr(item, 'squid_name', 'another squid'),
+                             centre.x(), centre.y()))
+        return seen
+
+    def throw_rock(self, direction=None):
+        """Throw the carried rock - aimed and as hard as the squid's network throws it.
+
+        Where: at the nearest squid in its view cone, leading for the drop,
+        else along its gaze. How hard: from its play neuron, or its
+        aggression if that is stronger (src/throwing.py). `direction` is
+        ignored; it is kept for callers that still pass one.
+        """
+        from .throwing import plan_throw, describe as describe_throw
         # Prevent multiple throws
         if self.throw_animation_timer.isActive():
             return False
@@ -222,21 +255,22 @@ class RockInteractionManager:
         config = self.rock_config
         rock = self.squid.carried_rock
         
-        # Set squid status to throwing rock with more detail
-        if hasattr(self.squid, 'status'):
-            if random.random() < 0.3:
-                self.squid.status = "throwing rock"
-            else:
-                self.squid.status = "playing with rock"
-        
         # Detach from squid and reset parent to scene
         rock.setParentItem(None)
-        
-        # Calculate throw vectors
-        throw_power = 12  # Increased from 8
-        angle = math.radians(30 if direction == "right" else 150)
-        self.throw_velocity_x = throw_power * math.cos(angle)
-        self.throw_velocity_y = -throw_power * math.sin(angle)  # Negative for upward
+
+        rect = self.squid.squid_item.sceneBoundingRect()
+        plan = plan_throw(self._brain_state(), (rect.center().x(), rect.center().y()),
+                          float(getattr(self.squid, 'current_view_angle', 0.0)),
+                          self._squids_in_view(), slowest=self.THROW_SLOWEST,
+                          fastest=self.THROW_FASTEST, gravity=self.THROW_GRAVITY)
+        self.current_throw = dict(plan, hit=None)
+        self.throw_velocity_x, self.throw_velocity_y = plan['vx'], plan['vy']
+        direction = 'right' if plan['vx'] >= 0 else 'left'
+        if hasattr(self.squid, 'status'):
+            self.squid.status = (f"throwing rock at {plan['target']}" if plan['target']
+                                 else "throwing rock")
+        if self.show_message:
+            self.show_message(describe_throw(plan))
         
         # Set position to squid's center in scene coordinates
         squid_rect = self.squid.squid_item.sceneBoundingRect()
@@ -266,7 +300,10 @@ class RockInteractionManager:
                 "anxiety": -config['anxiety_reduction']
             },
             "description": "Had fun throwing an urchin!" if is_urchin else "Had fun throwing a rock!",
-            "is_positive": True
+            "is_positive": True,
+            # Where it was aimed, how hard, and what drove it.
+            "throw": {"aimed_at": plan['target'], "driven_by": plan['driven_by'],
+                      "drive": plan['drive'], "angle": plan['angle']},
         }
 
         # Deliver the completed throw once to the canonical statistics model.
@@ -318,16 +355,8 @@ class RockInteractionManager:
             
             # Check if carry duration has elapsed
             if self.rock_carry_time >= self.rock_carry_duration:
-                # Time to make a decision
-                if random.random() < 0.7:  # 70% chance to throw
-                    direction = "right" if random.random() < 0.5 else "left"
-                    self.throw_rock(direction)
-                    if self.show_message:
-                        self.show_message("Squid threw the rock!")
-                else:  # 30% chance to drop
-                    self.drop_rock()
-                    if self.show_message:
-                        self.show_message("Squid dropped the rock")
+                # The squid's network decides: throw, or put it down.
+                self.decide_rock_action()
                         
                 # End the test
                 self.cleanup()
@@ -378,11 +407,34 @@ class RockInteractionManager:
             return
 
         rock.setPos(new_x, new_y)
+        self._check_hit(rock)
 
         # Stop the animation if the rock has slowed down enough
         if abs(self.throw_velocity_x) < 0.1 and abs(self.throw_velocity_y) < 0.1:
             self.throw_animation_timer.stop()
             self.cleanup_after_throw()
+
+    def _check_hit(self, rock):
+        """Did the rock in flight strike another squid? Once per throw.
+
+        Only the fact goes anywhere: TamagotchiLogic.on_rock_hit tells the
+        plugins, and the struck squid feels it (a startle, a knock). Whether it
+        was play or an attack, the struck squid cannot know.
+        """
+        throw = getattr(self, 'current_throw', None)
+        if not throw or throw.get('hit'):
+            return
+        centre = rock.sceneBoundingRect().center()
+        for item in self.scene.items():
+            if getattr(item, 'category', None) != 'squid' or not item.isVisible():
+                continue
+            other = item.sceneBoundingRect().center()
+            if math.hypot(other.x() - centre.x(), other.y() - centre.y()) <= self.HIT_RADIUS:
+                throw['hit'] = getattr(item, 'squid_name', 'another squid')
+                notify = getattr(self.logic, 'on_rock_hit', None)
+                if callable(notify):
+                    notify(item, dict(throw))
+                return
 
     def cleanup(self):
         """Reset all rock interaction state"""

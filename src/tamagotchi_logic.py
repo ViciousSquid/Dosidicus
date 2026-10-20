@@ -3043,6 +3043,16 @@ class TamagotchiLogic:
                           f"{squid.name} has stopped eating.")
         return True
 
+    def on_rock_hit(self, target_item, throw):
+        """A rock this squid threw struck another squid. Tell the plugins -
+        the multiplayer host lets the struck squid feel it - with the fact
+        only: where it was aimed and how hard, never why."""
+        manager = getattr(self, 'plugin_manager', None)
+        if manager is not None and hasattr(manager, 'trigger_hook'):
+            manager.trigger_hook('on_rock_hit',
+                                 target_uuid=str(getattr(target_item, 'peer_uuid', '') or ''),
+                                 throw=throw)
+
     def add_mate_genes(self, mating_id, mate_name, genes):
         """The mate's half of the hatchling's weights has arrived: keep it with
         the egg and save. True if it was kept now (once, for this egg only)."""
@@ -3808,8 +3818,7 @@ class TamagotchiLogic:
         elif self.squid.status == "carrying_rock":
             self.squid.rock_carry_timer -= 1
             if self.squid.rock_carry_timer <= 0:
-                direction = "left" if random.random() < 0.5 else "right"
-                if self.squid.throw_rock(direction):
+                if self.squid.throw_rock():
                     self.squid.status = "roaming"
                     self.squid.current_rock_target = None
 

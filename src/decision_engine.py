@@ -338,7 +338,7 @@ class DecisionEngine:
 
         if decision == "playing":
             if s.carrying_rock:
-                if s.throw_rock(random.choice(["left", "right"])):
+                if s.throw_rock():
                     return "playfully tossing rock"
             elif s.carrying_poop:
                 if s.throw_poop(random.choice(["left", "right"])):

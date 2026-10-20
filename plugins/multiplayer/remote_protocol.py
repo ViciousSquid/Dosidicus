@@ -114,10 +114,14 @@ CONSEQUENCE_EJECTED = 'ejected'
 #: can remember it once however many times it is told.
 CONSEQUENCE_MATED = 'mated'
 CONSEQUENCE_FIGHT = 'fight_resolved'
+#: A thrown rock struck the visitor. Only that, and how hard - never why: the
+#: thrower might have been playing or attacking, and the struck squid's own
+#: brain makes of it what it will.
+CONSEQUENCE_HIT = 'hit'
 
 CONSEQUENCE_KINDS = (CONSEQUENCE_CONTEST, CONSEQUENCE_ATE,
                      CONSEQUENCE_BLOCKED, CONSEQUENCE_EJECTED,
-                     CONSEQUENCE_MATED, CONSEQUENCE_FIGHT)
+                     CONSEQUENCE_MATED, CONSEQUENCE_FIGHT, CONSEQUENCE_HIT)
 
 _MAX_ITEM_ID = 40
 _MAX_ITEMS_IN_FRAME = 8
@@ -515,7 +519,8 @@ __all__ = [
     'VISIT_ABANDON_TIMEOUT',
     'OBSERVABLE_SENSORS', 'FORBIDDEN_KEYS', 'HEADINGS',
     'CONSEQUENCE_CONTEST', 'CONSEQUENCE_ATE', 'CONSEQUENCE_BLOCKED',
-    'CONSEQUENCE_EJECTED', 'CONSEQUENCE_MATED', 'CONSEQUENCE_FIGHT', 'CONSEQUENCE_KINDS',
+    'CONSEQUENCE_EJECTED', 'CONSEQUENCE_MATED', 'CONSEQUENCE_FIGHT', 'CONSEQUENCE_HIT',
+    'CONSEQUENCE_KINDS',
     'mating_id_for',
     'END_DEPARTED', 'END_EJECTED', 'END_LINK_LOST', 'END_REASONS',
     'ENCOUNTER_PROTOCOL_VERSION',

@@ -2623,7 +2623,7 @@ class Squid:
             return False
         return self.tamagotchi_logic.rock_interaction.attach_rock_to_squid(item)
 
-    def throw_rock(self, direction):
+    def throw_rock(self, direction=None):
         """
         Delegate to interaction manager BUT capture result for RL reward.
         Returns:  bool  True = rock landed (success), False = fell out of bounds / no effect
@@ -2716,17 +2716,22 @@ class Squid:
             self.squid_x, self.squid_y, 150)
         interactables = [d for d in decorations if d.category in ['rock', 'poop']]
 
-        if (self.carrying_rock 
-                and self.rock_throw_cooldown == 0 
-                and random.random() < config['throw_prob']):
-            direction = random.choice(["left", "right"])
-            if self.throw_rock(direction):
+        # Whether to throw, and whether to pick one up, is the squid's play
+        # neuron's - not a roll of the dice (src/throwing.py).
+        from .throwing import throw_or_drop
+        brain = getattr(getattr(self.tamagotchi_logic, 'brain_window', None),
+                        'brain_widget', None)
+        playing = throw_or_drop(dict(getattr(brain, 'state', None) or {}))
+        if (self.carrying_rock
+                and self.rock_throw_cooldown == 0
+                and playing):
+            if self.throw_rock():
                 return
 
-        if (not self.carrying_rock 
-                and self.rock_throw_cooldown == 0 
+        if (not self.carrying_rock
+                and self.rock_throw_cooldown == 0
                 and interactables
-                and random.random() < config['pickup_prob']):
+                and playing):
             target_item = random.choice(interactables)
             
             if self.pick_up_rock(target_item):

@@ -25,7 +25,7 @@ from .asset_paths import resolve_local_asset, is_inside_assets
 from src import fighting
 from src.lifecycle import MULTIPLAYER_RISK_NOTICE, MULTIPLAYER_RISK_TITLE
 from src.vision_cone import VIEW_CONE_ANGLE, in_view_cone
-from .remote_protocol import CONSEQUENCE_FIGHT
+from .remote_protocol import CONSEQUENCE_FIGHT, CONSEQUENCE_HIT
 from .identity import SquidIdentity
 from .consent import ConsentPolicy, ConsentDecision, MODE_OPEN, REASON_CLOSED
 from .peer_ledger import PeerLedger
@@ -842,6 +842,22 @@ class MultiplayerPlugin:
             self.show_mating_heart(actor)
         except Exception as exc:
             self.logger.error(f"Could not draw the mating heart: {exc}")
+        return True
+
+    def handle_rock_hit(self, target_uuid='', throw=None, **_kw) -> bool:
+        """The resident's rock struck a visitor: let it feel that, at home.
+
+        Only the fact and how hard. The visitor cannot know whether it was
+        play or an attack; its own brain decides what to make of it.
+        """
+        actor = self.host_body.visitor(target_uuid) if (self.host_body and target_uuid) else None
+        if actor is None:
+            return False
+        speed = float((throw or {}).get('speed', 0.0) or 0.0)
+        self.host_body._report(actor, CONSEQUENCE_HIT, {'what': 'rock', 'speed': round(speed, 1)})
+        session = self.open_encounters.get(actor.uuid)
+        if session is not None:
+            session.note_hit(taken=False)
         return True
 
     def handle_gamete(self, node=None, message=None, addr=None, **_kw) -> bool:
@@ -1788,6 +1804,11 @@ class MultiplayerPlugin:
                     resident = getattr(self.tamagotchi_logic, 'squid', None)
                     visual = getattr(self.entity_manager, 'remote_squids', {}).get(
                         source_node_id, {}).get('visual')
+                    if visual is not None:
+                        # Who that drawn squid is, for aiming at it and for a
+                        # rock that strikes it (src/interactions.py).
+                        visual.squid_name = visitor_identity.name
+                        visual.peer_uuid = visitor_identity.uuid
                     if hasattr(resident, 'notice'):
                         resident.notice(visual)
                     # The squid this resident mated with is back. Tell it
@@ -2555,6 +2576,8 @@ class MultiplayerPlugin:
             "on_network_visit_end": self.handle_visit_end,
             "on_network_visit_response": self.handle_visit_response,
             "on_network_gamete": self.handle_gamete,
+            # Not a network message: a rock the resident threw struck a squid.
+            "on_rock_hit": self.handle_rock_hit,
             # Not a network message: the core tells plugins its squid died.
             "on_squid_died": self.handle_resident_died,
         }

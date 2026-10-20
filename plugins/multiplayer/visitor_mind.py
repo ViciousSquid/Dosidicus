@@ -35,7 +35,8 @@ from .identity import SquidIdentity
 from .remote_protocol import (
     ActionIntent, Consequence, PerceptionFrame, ProtocolError, VisitEnd,
     CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
-    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, CONSEQUENCE_FIGHT, END_DEPARTED, END_LINK_LOST, HEADINGS,
+    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, CONSEQUENCE_FIGHT, CONSEQUENCE_HIT,
+    END_DEPARTED, END_LINK_LOST, HEADINGS,
     INTENT_LEASE, LINK_TIMEOUT, OBSERVABLE_SENSORS, new_visit_id,
 )
 
@@ -425,6 +426,10 @@ class VisitorMind:
             self._note_mated(detail.get('mating_id'))
             return consequence
 
+        if kind == CONSEQUENCE_HIT:
+            self._feel_hit(squid)
+            return consequence
+
         # File the objective fact against this individual. What went into the
         # tank's ledger is what HAPPENED - an object changed hands, food was
         # eaten, an action found nothing - never a verdict about the resident.
@@ -575,6 +580,23 @@ class VisitorMind:
         brain = getattr(window, 'brain_widget', None)
         if brain is not None and hasattr(brain, 'apply_weight_change'):
             learn_from_encounter(brain, record.valence, record.outcome, record.peer.name)
+
+    #: What a rock strike does to the body: a knock.
+    HIT_HEALTH_COST = 2.0
+
+    def _feel_hit(self, squid) -> None:
+        """Struck by a rock in the host's tank. Felt, at home: a startle and a
+        knock. Nothing says whether it was play or an attack; the squid's own
+        network decides what to make of it."""
+        squid.health = max(0.0, float(getattr(squid, 'health', 100.0)) - self.HIT_HEALTH_COST)
+        startle = getattr(self.logic, 'startle_squid', None)
+        if callable(startle):
+            try:
+                startle(source='rock_hit')
+            except Exception as exc:
+                self._log(f"could not startle on a hit: {exc}")
+        if self.session is not None:
+            self.session.note_hit(taken=True)
 
     def _live_through_fight(self, squid, fight_id: str, won: bool,
                             detail: Dict[str, Any]) -> Dict[str, Any]:

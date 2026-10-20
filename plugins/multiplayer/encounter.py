@@ -157,7 +157,8 @@ class EncounterRecord:
     __slots__ = ('peer', 'started_at', 'ended_at', 'actions', 'peer_actions',
                  'drive_deltas', 'valence', 'outcome', 'items_taken',
                  'items_lost', 'closest_approach', 'first_meeting',
-                 'related_neurons', 'mating_id', 'fights_won', 'fights_lost')
+                 'related_neurons', 'mating_id', 'fights_won', 'fights_lost',
+                 'hits_taken', 'hits_given')
 
     def __init__(self, peer: SquidIdentity, started_at: float):
         self.peer = peer
@@ -179,6 +180,9 @@ class EncounterRecord:
         #: Fights with this individual, and how each went for THIS squid.
         self.fights_won = 0
         self.fights_lost = 0
+        #: Rocks that struck this squid, and that it struck the other with.
+        self.hits_taken = 0
+        self.hits_given = 0
 
     @property
     def duration(self) -> float:
@@ -203,6 +207,7 @@ class EncounterRecord:
             weight += 3.0
         # A fight is never a mild encounter: it is remembered, and who won.
         weight += 2.5 * (self.fights_won + self.fights_lost)
+        weight += 1.0 * (self.hits_taken + self.hits_given)
         if self.first_meeting:
             weight += 1.0
         return round(min(_MAX_IMPORTANCE, weight), 2)
@@ -238,6 +243,8 @@ class EncounterRecord:
                 'mating_id': self.mating_id,
                 'fights_won': self.fights_won,
                 'fights_lost': self.fights_lost,
+                'hits_taken': self.hits_taken,
+                'hits_given': self.hits_given,
             },
         }
 
@@ -271,6 +278,8 @@ class EncounterSession:
         self.mating_id = ''
         self.fights_won = 0
         self.fights_lost = 0
+        self.hits_taken = 0
+        self.hits_given = 0
         self.closed = False
         self._latest_drives: Dict[str, float] = dict(self.opening_drives)
 
@@ -306,6 +315,13 @@ class EncounterSession:
         else:
             self.fights_lost += 1
 
+    def note_hit(self, taken: bool) -> None:
+        """A thrown rock: struck by the other squid's (taken), or struck it."""
+        if taken:
+            self.hits_taken += 1
+        else:
+            self.hits_given += 1
+
     def note_mated(self, mating_id: str) -> bool:
         """This encounter produced a mating. True the first time only."""
         if not mating_id or self.mating_id == mating_id:
@@ -329,7 +345,8 @@ class EncounterSession:
         """
         stamp = now if now is not None else self.clock()
         if (self.items_taken or self.items_lost or self.mating_id
-                or self.fights_won or self.fights_lost):
+                or self.fights_won or self.fights_lost
+                or self.hits_taken or self.hits_given):
             return True
         return (self.last_seen_at - self.started_at) >= MIN_ENCOUNTER_DURATION
 
@@ -350,6 +367,8 @@ class EncounterSession:
         record.mating_id = self.mating_id
         record.fights_won = self.fights_won
         record.fights_lost = self.fights_lost
+        record.hits_taken = self.hits_taken
+        record.hits_given = self.hits_given
 
         closing = dict(drives or getattr(self, '_latest_drives', {}) or {})
         deltas, valence = self._measure(closing)
@@ -387,6 +406,8 @@ class EncounterSession:
         # So is being beaten, and so is winning.
         valence -= self.fights_lost * 8.0
         valence += self.fights_won * 5.0
+        # Being hit by a rock hurts; having hit one says nothing either way.
+        valence -= self.hits_taken * 4.0
         return deltas, round(valence, 2)
 
     @staticmethod
