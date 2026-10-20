@@ -383,7 +383,13 @@ def test_visitor_uses_imported_brain_instead_of_scripted_looting():
     assert visitor['stole'] == 0
     assert not visitor['wants_rock']
     assert not sim.ink_clouds
-    assert sim._visitor_minds[visitor['id']].last_decision['chosen'] == 'exploring'
+    # Its own network decides: idle exploring, or - once it has seen the
+    # resident and grown the sense for another squid - going to play with it.
+    mind = sim._visitor_minds[visitor['id']]
+    chosen = mind.last_decision['chosen']
+    assert chosen in ('exploring', 'playing')
+    if chosen == 'playing':
+        assert 'can_see_squid' in mind.brain.positions
 
 
 def test_clock_transfer_preserves_deficit_age_and_spike_intervals():

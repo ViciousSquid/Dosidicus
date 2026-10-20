@@ -2790,6 +2790,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                              'functional_neurons', {}) or {}
         strengths = {name: getattr(fn, 'strength_multiplier', 1.0)
                      for name, fn in functional.items()}
+        resting = {name: fn.resting_level for name, fn in functional.items()
+                   if getattr(fn, 'resting_level', None) is not None}
 
         noise = {}
         if isinstance(self.neurons, dict):
@@ -2799,7 +2801,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                     noise[name] = props['noise']
 
         changed = propagate(self.state, self.weights, targets,
-                            strengths=strengths, noise=noise, smoothing=smoothing)
+                            strengths=strengths, noise=noise, smoothing=smoothing,
+                            resting=resting)
 
         # Evidence is gathered AFTER the forward pass, so every mechanism sees
         # this tick's sensors alongside the activations those sensors actually

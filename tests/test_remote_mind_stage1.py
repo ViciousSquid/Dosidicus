@@ -849,7 +849,10 @@ class PrivacyTests(unittest.TestCase):
             for index, inner in enumerate(value):
                 self._assert_clean(inner, f"{path}[{index}]")
 
-    def test_an_intent_carries_only_a_decision(self):
+    def test_an_intent_carries_only_a_decision_and_how_it_would_fight(self):
+        """The decision, plus three numbers the host needs to resolve a fight
+        (src/fighting.py) - each one figure the squid shows in a fight, worked
+        out at home, never what is in its brain."""
         meeting = Encounter()
         meeting.admit()
         meeting.host_sends_frame()
@@ -859,7 +862,10 @@ class PrivacyTests(unittest.TestCase):
         self.assertEqual(
             set(payload),
             {'visit_id', 'seq', 'sent_at', 'action', 'activation',
-             'confidence', 'heading', 'target_id', 'lease'})
+             'confidence', 'heading', 'target_id', 'lease',
+             'aggression', 'defence', 'fitness'})
+        for name in ('aggression', 'defence', 'fitness'):
+            self.assertIsInstance(payload[name], float)
 
     def test_a_message_carrying_private_state_is_refused_on_arrival(self):
         for key in ('weights', 'memory', 'anxiety', 'neurogenesis'):

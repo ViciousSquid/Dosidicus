@@ -367,7 +367,7 @@ class Simulation:
             "leave_at": now + (seconds if seconds is not None else self.VISIT_SECONDS),
             "leaving": False,
             "stole": 0,
-            "ink_cd": 0.0,
+            "inking": False,       # act_ink above threshold last tick
             "wants_rock": random.random() < 0.6,   # half the guests are here to loot a rock
             "carried_rock": None,
             "fighting": False,
@@ -412,7 +412,6 @@ class Simulation:
                 v["dir"] = "right" if v["vx"] >= 0 else "left"
                 continue
 
-            v["ink_cd"] = max(0.0, v["ink_cd"] - dt)
             mind = self._visitor_minds[v['id']]
             mind._last_dt = dt
             mind.x, mind.y = v['x'], v['y']
@@ -483,12 +482,14 @@ class Simulation:
             self._carry_rock(v)     # keep a held rock glued to the visitor
 
             from src.brain_constants import ACTION_THRESHOLDS
-            if (v["ink_cd"] <= 0 and mind.brain.state.get('act_ink', 0) >= ACTION_THRESHOLDS['act_ink']
-                    and random.random() < .35):
+            # Inking is the visitor's own network's: every time its act_ink
+            # fires - crosses its threshold - it inks; once per firing.
+            firing = mind.brain.state.get('act_ink', 0) >= ACTION_THRESHOLDS['act_ink']
+            if firing and not v.get("inking"):
                 self.ink_clouds.append({"x": v["x"], "y": v["y"], "t": now, "ttl": 3.0})
-                v["ink_cd"] = 12.0
                 self.visitor_event = f"{v['name']} puffed an ink cloud!"
                 self.squid.curiosity = min(100.0, self.squid.curiosity + 3.0)
+            v["inking"] = firing
 
             v["dir"] = "right" if v["vx"] >= 0 else "left"
 
@@ -544,44 +545,44 @@ class Simulation:
         return next((v for v in self.visitors if v["id"] == vid), None)
 
     # ------------------------------------------------------------- fighting
-    # Rough combat "strength" bias by personality (bold/aggressive win more).
-    _FIGHT_BONUS = {
-        Personality.STUBBORN: 0.35, Personality.ENERGETIC: 0.25,
-        Personality.GREEDY: 0.2, Personality.ADVENTUROUS: 0.15,
-        Personality.LAZY: -0.15, Personality.TIMID: -0.3,
-    }
+    #: Closer than this, two squid are in contact - where a fight can start.
+    FIGHT_CONTACT = 130.0
 
     def _update_fight(self, dt):
-        """Territorial scrap between the resident and a nearby visitor.
+        """A scrap between the resident and a visitor, as on desktop.
 
-        Sequence: the two swim together, both turn red and puff ink, "Aggression!
-        FIGHTING!" shows, moods sour — then after a moment a winner is decided.
+        Nothing here decides to fight. A fight starts when two squid are in
+        contact and one of them is more aggro than placid - its own grown
+        aggression neuron (src/fighting.py); the more aggro one starts it.
+        The two close in, scuffle under one cloud, and their abilities - body,
+        experience, and how hard each network commits - decide who wins.
+        Inking is each squid's own network's (act_ink), never this code's.
         """
+        from src import fighting
         squid = self.squid
         now = squid.brain.sim_time
         if self._fight_cooldown > 0:
             self._fight_cooldown -= dt
 
         if self.fight is None:
-            if (self._fight_cooldown > 0 or squid.is_sleeping or squid.is_fleeing
-                    or self.game_over):
+            if self._fight_cooldown > 0 or squid.is_sleeping or self.game_over:
                 return
-            res_timid = squid.personality == Personality.TIMID
+            mine, my_why = fighting.fight_predisposition(squid.brain.state)
             for v in self.visitors:
                 if v["leaving"] or v["fighting"]:
                     continue
-                vis_timid = Personality.from_value(
-                    v.get("personality", "adventurous")) == Personality.TIMID
-                # A fight always has a (non-timid) instigator; two timid squids
-                # never fight.
-                bold = [who for who, timid in
-                        (("resident", res_timid), ("visitor", vis_timid)) if not timid]
-                if not bold:
+                if math.hypot(squid.x - v["x"], squid.y - v["y"]) >= self.FIGHT_CONTACT:
                     continue
-                if (math.hypot(squid.x - v["x"], squid.y - v["y"]) < 130
-                        and random.random() < 0.7 * dt):
-                    self._start_fight(v, instigator=random.choice(bold))
-                    break
+                mind = self._visitor_minds.get(v["id"])
+                theirs, their_why = (fighting.fight_predisposition(mind.brain.state)
+                                     if mind is not None else (0.0, {}))
+                if max(mine, theirs) < fighting.AGGRESSION_THRESHOLD:
+                    continue        # in contact, and nobody is aggro: not a fight
+                if mine >= theirs:
+                    self._start_fight(v, "resident", my_why)
+                else:
+                    self._start_fight(v, "visitor", their_why)
+                break
             return
 
         f = self.fight
@@ -614,6 +615,7 @@ class Simulation:
         v["y"] = max(40, min(h - 40, v["y"]))
 
         if f["phase"] == "fighting":
+            # Being in a scuffle is stressful - the body, not a decision.
             squid.anxiety = min(100.0, squid.anxiety + 6.0 * dt)
             squid.happiness = max(0.0, squid.happiness - 3.0 * dt)
             if now >= f["until"]:
@@ -621,52 +623,64 @@ class Simulation:
         elif f["phase"] == "result" and now >= f["until"]:
             self._end_fight(v)
 
-    def _start_fight(self, v, instigator="visitor"):
-        if self.fight is not None:
-            return
-        squid = self.squid
-        from src.personality import can_initiate_fight
-        initiator = v.get('personality') if instigator == 'visitor' else squid.personality
-        if not can_initiate_fight(initiator):
-            return
-        now = squid.brain.sim_time
-        self.fight = {"visitor_id": v["id"], "phase": "approaching", "until": now + 3.5,
-                      "instigator": instigator}
-        squid.fighting = True
-        v["fighting"] = True
-        squid.is_fleeing = squid.is_startled = False
-        squid.status = "fighting!"
-        squid.happiness = max(0.0, squid.happiness - 12.0)
-        squid.satisfaction = max(0.0, squid.satisfaction - 10.0)
-        squid.anxiety = min(100.0, squid.anxiety + 20.0)
-        if instigator == "resident":
-            self.stats.on_fight_instigated()
-        # The renderer draws one shared fight cloud after the approach.
-        who = "Your squid" if instigator == "resident" else v["name"]
-        squid.remember("mental_state", "fight",
-                       f"{who} started a fight!", {"anxiety": 20, "happiness": -12},
-                       importance=2.5, related=["anxiety"])
-        self.visitor_event = "Aggression! FIGHTING!"
+    def _start_fight(self, v, instigator="visitor", why=None):
+        """The more aggro squid in contact starts it; `why` is its aggression."""
+        if self.fight is None:
+            squid = self.squid
+            self._fight_seq = getattr(self, '_fight_seq', 0) + 1
+            self.fight = {"visitor_id": v["id"], "phase": "approaching",
+                          "until": squid.brain.sim_time + 3.5, "instigator": instigator,
+                          "why": dict(why or {}), "id": f"m{self._fight_seq}"}
+            squid.fighting = True
+            v["fighting"] = True
+            squid.is_fleeing = squid.is_startled = False
+            squid.status = "fighting!"
+            if instigator == "resident":
+                self.stats.on_fight_instigated()
+            # The renderer draws one shared fight cloud after the approach.
+            self.visitor_event = "Aggression! FIGHTING!"
 
     def _resolve_fight(self, f, v):
+        """Who wins, from both squid's abilities - and everything it leaves.
+
+        Both brains are here, so both sides are worked out in full
+        (src/fighting.py). The result, the reasons and the consequences are
+        filed in the resident's long-term memory; each squid's body takes
+        its outcome and its aggression neuron is marked for good.
+        """
+        from src import fighting
         squid = self.squid
-        res = random.random() + self._FIGHT_BONUS.get(squid.personality, 0.0)
-        vis = random.random() + self._FIGHT_BONUS.get(
-            Personality.from_value(v.get("personality", "adventurous")), 0.0)
-        won = res >= vis
+        mind = self._visitor_minds.get(v["id"])
+        resident_attacks = f.get("instigator") == "resident"
+        mine = fighting.side(squid.brain.state, *fighting.squid_fitness(squid, self.stats),
+                             attacking=resident_attacks)
+        if mind is not None:
+            theirs = fighting.side(mind.brain.state, *fighting.squid_fitness(mind),
+                                   attacking=not resident_attacks)
+        else:
+            theirs = {'role': 'defender' if resident_attacks else 'attacker',
+                      'fitness': 1.0, 'commitment': 0.0, 'ability': 50.0}
+        record = fighting.resolve_fight(mine, theirs)
+        won = record["first_won"]
+        record.update(fight_id=f.get("id", ""), opponent=v["name"], why=f.get("why", {}),
+                      consequences=fighting.apply_consequences(squid, won))
+        record["aggression_rose"] = fighting.scar(
+            squid.brain, won, f"{'won' if won else 'lost'} a fight with {v['name']}")
+        if mind is not None:
+            fighting.apply_consequences(mind, not won)
+            fighting.scar(mind.brain, not won,
+                          f"{'won' if not won else 'lost'} a fight with {squid.name}")
+        v["res_won" if won else "res_lost"] = v.get("res_won" if won else "res_lost", 0) + 1
         f["phase"] = "result"
         f["until"] = squid.brain.sim_time + 2.0
+        f["record"] = record
         self.achievements.on_fight()
-        if won:
-            self.stats.on_fight_won()
-            squid.satisfaction = min(100.0, squid.satisfaction + 15.0)
-            squid.happiness = min(100.0, squid.happiness + 8.0)
-            self.visitor_event = f"Your squid won the fight against {v['name']}!"
-        else:
-            self.stats.on_fight_lost()
-            squid.anxiety = min(100.0, squid.anxiety + 15.0)
-            squid.happiness = max(0.0, squid.happiness - 8.0)
-            self.visitor_event = f"{v['name']} won the fight!"
+        (self.stats.on_fight_won if won else self.stats.on_fight_lost)()
+        summary = fighting.describe(record, "first")
+        squid.remember("social", f"fight:{record['fight_id']}:{v['name']}", summary,
+                       {"health": record["consequences"].get("health", 0)},
+                       importance=7.0, related=["aggression", "social_fight"])
+        self.visitor_event = f"{squid.name}: {summary}"
 
     def _end_fight(self, v):
         self.squid.fighting = False

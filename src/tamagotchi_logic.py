@@ -1328,6 +1328,9 @@ class TamagotchiLogic:
             )
 
 
+    #: How long an ink cloud takes to fade away.
+    INK_FADE_MS = 10000
+
     def create_ink_cloud(self):
         """Create an ink cloud with guaranteed fade-out after 10 seconds"""
         ink_cloud_pixmap = QtGui.QPixmap(os.path.join("images", "inkcloud.png"))
@@ -1349,9 +1352,13 @@ class TamagotchiLogic:
         opacity_effect.setOpacity(1.0)  # Start fully visible
         ink_cloud_item.setGraphicsEffect(opacity_effect)
 
-        # Create a QPropertyAnimation for the opacity effect
-        fade_out_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
-        fade_out_animation.setDuration(10000)  # 10 seconds duration
+        # Parented to the effect it animates: an unparented animation held only
+        # by a local is collected the moment this returns, so the cloud never
+        # faded - it sat at full opacity until the backup timer below removed
+        # it all at once.
+        fade_out_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity",
+                                                       opacity_effect)
+        fade_out_animation.setDuration(self.INK_FADE_MS)
         fade_out_animation.setStartValue(1.0)
         fade_out_animation.setEndValue(0.0)
         fade_out_animation.setEasingCurve(QtCore.QEasingCurve.InQuad)
@@ -1366,8 +1373,9 @@ class TamagotchiLogic:
         self.record_statistic_event('ink_clouds_created')
         
         
-        # Backup timer to force remove after 10 seconds in case animation fails
-        QtCore.QTimer.singleShot(10000, lambda: self.force_remove_ink_cloud(ink_cloud_item))
+        # Backup timer to force remove it, should the animation ever fail.
+        QtCore.QTimer.singleShot(self.INK_FADE_MS + 500,
+                                 lambda: self.force_remove_ink_cloud(ink_cloud_item))
 
     def force_remove_ink_cloud(self, ink_cloud_item):
         """Force remove the ink cloud if it still exists after timeout"""
@@ -1375,9 +1383,10 @@ class TamagotchiLogic:
             self.squid.ui.scene.removeItem(ink_cloud_item)
 
     def remove_ink_cloud(self, ink_cloud_item):
-        """Remove the ink cloud from the scene"""
-        if ink_cloud_item in self.ui.scene.items():
-            self.ui.scene.removeItem(ink_cloud_item)
+        """Remove the ink cloud from the scene, once it has faded."""
+        scene = self.user_interface.scene
+        if ink_cloud_item in scene.items():
+            scene.removeItem(ink_cloud_item)
         if ink_cloud_item.graphicsEffect():
             ink_cloud_item.graphicsEffect().deleteLater()
         ink_cloud_item.setGraphicsEffect(None)
@@ -2873,7 +2882,10 @@ class TamagotchiLogic:
             scene.addItem(message_item)
 
             # Fade out the message after 8 seconds
-            fade_out_animation = QtCore.QPropertyAnimation(message_item, b"opacity")
+            # Parented to the message, or Python collects it on return and the
+            # message neither fades nor goes away.
+            fade_out_animation = QtCore.QPropertyAnimation(message_item, b"opacity",
+                                                           message_item)
             fade_out_animation.setDuration(8000)
             fade_out_animation.setStartValue(1.0)
             fade_out_animation.setEndValue(0.0)

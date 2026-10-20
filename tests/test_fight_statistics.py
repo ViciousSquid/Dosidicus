@@ -67,19 +67,26 @@ def test_statistics_tab_and_save_archive_retain_win_loss_totals(tmp_path):
         app.processEvents()
 
 
-@pytest.mark.parametrize('local,peer,by,allowed', [
-    ('timid','adventurous','resident',False),
-    ('adventurous','timid','visitor',False),
-    ('timid','adventurous','visitor',True),
-    ('adventurous','timid','resident',True),
-    ('timid','timid','visitor',False),
+@pytest.mark.parametrize('personality', ['timid', 'adventurous'])
+@pytest.mark.parametrize('resident_aggro,visitor_aggro,starter', [
+    (80., 0., 'resident'),
+    (0., 80., 'visitor'),
+    (30., 45., None),          # in contact, nobody aggro: not a fight
 ])
-def test_mobile_timid_never_starts_but_can_be_attacked(local, peer, by, allowed):
+def test_mobile_fights_start_from_aggression_not_personality(
+        personality, resident_aggro, visitor_aggro, starter):
     sys.path.append(str(Path(__file__).resolve().parents[1]/'android'))
     from dosidicus_mobile.engine import Simulation, Personality
     sim = Simulation()
-    sim.squid.personality = Personality.from_value(local)
+    sim.squid.personality = Personality.from_value(personality)
     guest = sim.add_visitor({}, name='Guest')
-    guest['personality'] = peer
-    sim._start_fight(guest, instigator=by)
-    assert (sim.fight is not None) == allowed
+    guest['personality'] = personality
+    guest['x'], guest['y'] = sim.squid.x + 60., sim.squid.y       # in contact
+    sim.squid.brain.state['aggression'] = resident_aggro
+    sim._visitor_minds[guest['id']].brain.state['aggression'] = visitor_aggro
+    sim._update_fight(0.1)
+    if starter is None:
+        assert sim.fight is None
+    else:
+        assert sim.fight['instigator'] == starter
+        assert sim.fight['why']['aggression'] == 80.

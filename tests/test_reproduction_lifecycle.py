@@ -1024,12 +1024,22 @@ class FightCloudTests(unittest.TestCase):
     def _clouds(self):
         return [i for i in self.scene.items() if i.zValue() == 600]
 
-    def _plugin(self, peer_x):
+    def _plugin(self, peer_x, resident_aggression=0.0, visitor_aggression=0.0):
+        """A resident and a visitor in contact, each with an aggression
+        neuron reading as given (0 placid .. 100 fully aggro)."""
         clock = Clock()
         resident = LiteSquid(RESIDENT_UUID, "Resident", x=600.0, y=400.0)
         plugin = MultiplayerPlugin()
         plugin.logger = logging.getLogger("lifecycle-test")
-        plugin.tamagotchi_logic = SimpleNamespace(squid=resident)
+        brain = SimpleNamespace(state={'aggression': resident_aggression, 'anxiety': 50.0})
+        plugin.tamagotchi_logic = SimpleNamespace(
+            squid=resident, brain_window=SimpleNamespace(brain_widget=brain))
+        visitor = SimpleNamespace(last_intent=SimpleNamespace(aggression=visitor_aggression))
+        plugin.host_body = SimpleNamespace(visitor=lambda uuid: visitor,
+                                           clock=clock, visitors={})
+        # The decision and the cloud, not the scuffle that brings two drawn
+        # bodies together (test_bodies_approach_before_one_shared_cloud...).
+        self.entities.start_fight_sequence = None
         plugin.entity_manager = self.entities
         plugin.conspecific_view = ConspecificView(clock=clock)
         plugin.conspecific_view.on_contest = plugin.show_fight_cloud
@@ -1038,36 +1048,46 @@ class FightCloudTests(unittest.TestCase):
             identity, x=peer_x, y=420.0, observer_x=600.0, observer_y=400.0)
         return plugin, presence
 
-    def test_one_cloud_for_the_pair_when_a_contest_breaks_out_close_by(self):
+    def test_one_cloud_for_the_pair_when_an_aggro_squid_is_in_contact(self):
         self._install_gif()
-        plugin, presence = self._plugin(peer_x=700.0)
+        plugin, presence = self._plugin(peer_x=700.0, visitor_aggression=80.)
         plugin.conspecific_view.note_contest(presence, None, taken=False, by='peer')
         plugin.conspecific_view.note_contest(presence, None, taken=True, by='peer')
         self.assertEqual(len(self._clouds()), 1)
         self.entities.hide_fight_cloud(VISITOR_UUID)
         self.assertEqual(self._clouds(), [])
 
-    def test_timid_cannot_initiate_but_can_be_in_a_fight_started_by_a_peer(self):
+    def test_contact_between_placid_squid_is_not_a_fight(self):
+        """Playing, competing, perhaps mating - but nobody is aggro."""
+        self._install_gif()
+        plugin, presence = self._plugin(peer_x=700.0, resident_aggression=30.,
+                                        visitor_aggression=45.)
+        plugin.conspecific_view.note_contest(presence, None, taken=False, by='peer')
+        self.assertEqual(self._clouds(), [])
+
+    def test_whichever_squid_is_aggro_starts_it_whatever_its_personality(self):
+        """No personality rule: a timid squid that has grown aggression can
+        start a fight, and a bold one with none cannot."""
         from dataclasses import replace
         self._install_gif()
-        for local, peer, by, expected in (
-                ('timid', 'adventurous', 'local', 0),
-                ('adventurous', 'timid', 'peer', 0),
-                ('timid', 'timid', 'local', 0),
-                ('timid', 'timid', 'peer', 0),
-                ('timid', 'adventurous', 'peer', 1),
-                ('adventurous', 'timid', 'local', 1)):
-            with self.subTest(local=local, peer=peer, by=by):
-                plugin, presence = self._plugin(peer_x=700.)
+        for local, peer, mine, theirs, expected in (
+                ('timid', 'adventurous', 80., 0., 'resident'),
+                ('adventurous', 'timid', 0., 80., 'visitor'),
+                ('adventurous', 'adventurous', 0., 0., None)):
+            with self.subTest(local=local, peer=peer):
+                plugin, presence = self._plugin(peer_x=700., resident_aggression=mine,
+                                                visitor_aggression=theirs)
                 plugin.tamagotchi_logic.squid.personality = local
                 presence.identity = replace(presence.identity, personality=peer)
-                plugin.conspecific_view.note_contest(presence, by=by)
-                self.assertEqual(len(self._clouds()), expected)
+                start = plugin._who_starts_a_fight(VISITOR_UUID)
+                self.assertEqual(start and start['attacker'], expected)
+                plugin.conspecific_view.note_contest(presence, by='local')
+                self.assertEqual(len(self._clouds()), 1 if expected else 0)
                 self.entities.hide_fight_cloud(VISITOR_UUID)
 
     def test_no_cloud_for_a_contest_across_the_tank(self):
         self._install_gif()
-        plugin, presence = self._plugin(peer_x=1200.0)
+        plugin, presence = self._plugin(peer_x=1200.0, resident_aggression=90.)
         plugin.conspecific_view.note_contest(presence, None, taken=False)
         self.assertEqual(self._clouds(), [])
 

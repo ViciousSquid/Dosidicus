@@ -275,12 +275,15 @@ class ActionIntent:
     """
 
     __slots__ = ('visit_id', 'seq', 'sent_at', 'action', 'activation',
-                 'confidence', 'heading', 'target_id', 'lease')
+                 'confidence', 'heading', 'target_id', 'lease',
+                 'aggression', 'defence', 'fitness')
 
     def __init__(self, visit_id: str, action: str, seq: int = 0,
                  sent_at: float = 0.0, activation: float = 0.0,
                  confidence: float = 0.0, heading: str = '',
-                 target_id: str = '', lease: float = INTENT_LEASE):
+                 target_id: str = '', lease: float = INTENT_LEASE,
+                 aggression: float = 0.0, defence: float = 0.0,
+                 fitness: float = 1.0):
         self.visit_id = visit_id
         self.seq = int(seq)
         self.sent_at = float(sent_at or time.time())
@@ -290,6 +293,13 @@ class ActionIntent:
         self.heading = heading
         self.target_id = target_id
         self.lease = float(lease)
+        # How this squid would fight, worked out at home from its own brain
+        # and body (src/fighting.py): its aggression neuron, how hard it
+        # would fight back, and its fitness. What it shows in a fight, not
+        # what is in its brain - the host needs them only to resolve one.
+        self.aggression = float(aggression)
+        self.defence = float(defence)
+        self.fitness = float(fitness)
 
     @property
     def expires_at(self) -> float:
@@ -309,6 +319,9 @@ class ActionIntent:
             'heading': self.heading,
             'target_id': self.target_id,
             'lease': self.lease,
+            'aggression': round(self.aggression, 1),
+            'defence': round(self.defence, 1),
+            'fitness': round(self.fitness, 3),
         }
 
     @classmethod
@@ -344,6 +357,10 @@ class ActionIntent:
             # body: the host caps it at the protocol's value.
             lease=_clamp(payload.get('lease', INTENT_LEASE), 0.0, INTENT_LEASE,
                          INTENT_LEASE),
+            aggression=_clamp(payload.get('aggression', 0.0), 0.0, 100.0, 0.0),
+            defence=_clamp(payload.get('defence', 0.0), 0.0, 100.0, 0.0),
+            # An honest squid at its best is about 2; nothing claims more than 3.
+            fitness=_clamp(payload.get('fitness', 1.0), 0.0, 3.0, 1.0),
         )
 
 

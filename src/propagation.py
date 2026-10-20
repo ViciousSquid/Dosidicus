@@ -60,7 +60,8 @@ DEFAULT_SMOOTHING = 0.5
 # Imported lazily-ish at module level because brain_constants has no imports of
 # its own and cannot cycle.
 from .brain_constants import (BINARY_NEURONS, PURE_INPUT_NEURONS,  # noqa: E402
-                              ACTION_NEURONS, SOCIAL_SENSORS, action_resting_level,
+                              ACTION_NEURONS, SOCIAL_SENSORS, AGGRESSION_NEURON,
+                              action_resting_level,
                               ensure_grown_sensor, on_input_sensor_change)
 
 # Action neurons rest at zero for the same reason sensors do. "I do not want to
@@ -70,7 +71,9 @@ from .brain_constants import (BINARY_NEURONS, PURE_INPUT_NEURONS,  # noqa: E402
 # compete with the ones it has, and a newborn would be born wanting to do
 # everything equally. Resting at zero is what makes "the squid has not learned
 # this yet" a state the network can actually be in.
-_RESTS_AT_ZERO = set(PURE_INPUT_NEURONS) | set(BINARY_NEURONS) | set(ACTION_NEURONS)
+#: The grown aggression neuron too: 0 is placid, 100 fully aggro.
+_RESTS_AT_ZERO = (set(PURE_INPUT_NEURONS) | set(BINARY_NEURONS) | set(ACTION_NEURONS)
+                  | {AGGRESSION_NEURON})
 
 
 def _follow_sensor_registration(name: str, _binary: bool, added: bool) -> None:
@@ -221,16 +224,21 @@ def propagate(state: Dict[str, object],
               targets: Iterable[str],
               strengths: Optional[Mapping[str, float]] = None,
               noise: Optional[Mapping[str, float]] = None,
-              smoothing: float = DEFAULT_SMOOTHING) -> Dict[str, float]:
+              smoothing: float = DEFAULT_SMOOTHING,
+              resting: Optional[Mapping[str, float]] = None) -> Dict[str, float]:
     """Compute one timestep for every target neuron, in place.
 
-    Returns the neurons whose activation actually changed.
+    `resting` overrides baseline_of() for this brain's neurons whose resting
+    level life has moved (FunctionalNeuron.resting_level) - what a neuron
+    settles to with nothing driving it. Returns the neurons whose activation
+    actually changed.
     """
     targets = [t for t in targets]
     if not targets:
         return {}
     strengths = strengths or {}
     noise = noise or {}
+    resting = resting or {}
 
     # 1. Sum weighted input from a single consistent snapshot, so all neurons
     #    step together rather than the result depending on dict order.
@@ -240,15 +248,18 @@ def propagate(state: Dict[str, object],
     changed: Dict[str, float] = {}
     for name in targets:
         strength = float(strengths.get(name, 1.0) or 1.0)
-        target_val = baseline_of(name) + net_input[name] * strength
+        rest = resting.get(name)
+        if rest is None:
+            rest = baseline_of(name)
+        target_val = rest + net_input[name] * strength
 
         jitter = float(noise.get(name, 0.0) or 0.0)
         if jitter:
             target_val += random.uniform(-jitter, jitter)
 
-        old = activation_of(state.get(name, baseline_of(name)))
+        old = activation_of(state.get(name, rest))
         if old is None:
-            old = baseline_of(name)
+            old = rest
 
         new_val = old + (target_val - old) * smoothing
         new_val = max(0.0, min(100.0, new_val))

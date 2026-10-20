@@ -90,6 +90,50 @@ def active_social_neurons(brain_widget) -> List[str]:
                      if name in positions and float(state.get(name, 0) or 0) > 60.0]
 
 
+#: Where a fight is filed, and how much it matters - never a mild encounter.
+FIGHT_MEMORY_PREFIX = 'fight:'
+FIGHT_IMPORTANCE = 7.0
+
+
+def remember_fight(memory_manager, record: Dict[str, Any], me: str = 'first') -> bool:
+    """File one fight as a long-term social memory, with everything behind it.
+
+    `record` is src.fighting.resolve_fight's, plus fight_id, opponent, who
+    started it and why, and the consequences applied; `me` says which side is
+    this squid. The summary line says who started it, why, and why it ended
+    as it did (src.fighting.describe); every number is under 'detail', so the
+    Memory tab's colouring reads only the valence.
+    """
+    from src.fighting import describe
+    if memory_manager is None or not hasattr(memory_manager, 'add_short_term_memory'):
+        return False
+    won = bool(record.get('first_won')) == (me == 'first')
+    key = f"{FIGHT_MEMORY_PREFIX}{record.get('fight_id', '')}"
+    value = {
+        'valence': 5.0 if won else -8.0,
+        'summary': describe(record, me),
+        'opponent': str(record.get('opponent', 'another squid')),
+        'opponent_uuid': str(record.get('opponent_uuid', '')),
+        'outcome': 'won' if won else 'lost',
+        'detail': {
+            'won': won,
+            'started_it': (record.get(me) or {}).get('role') == 'attacker',
+            'why_started': dict(record.get('why') or {}),
+            'mine': dict(record.get(me) or {}),
+            'theirs': dict(record.get('second' if me == 'first' else 'first') or {}),
+            'chance': (record.get('first_chance', .5) if me == 'first'
+                       else round(1 - record.get('first_chance', .5), 3)),
+            'consequences': dict(record.get('consequences') or {}),
+        },
+    }
+    memory_manager.add_short_term_memory(category='social', key=key, value=value,
+                                         importance=FIGHT_IMPORTANCE,
+                                         related_neurons=['aggression', 'social_fight'])
+    if hasattr(memory_manager, 'transfer_to_long_term_memory'):
+        memory_manager.transfer_to_long_term_memory('social', key)
+    return True
+
+
 def perceive_recognition(brain_widget, ledger, peer_uuid: str = '') -> None:
     """What this squid remembers of the squid it is looking at, as percepts.
 
@@ -371,6 +415,7 @@ class EncounterSession:
 
 __all__ = ['EncounterSession', 'EncounterRecord', 'OUTCOME_DRIVES',
            'drive_snapshot', 'active_social_neurons', 'perceive_recognition',
+           'remember_fight', 'FIGHT_MEMORY_PREFIX',
            'SNAPSHOT_DRIVES',
            'LOST_SIGHT_GRACE', 'MAX_ENCOUNTER_DURATION',
            'MIN_ENCOUNTER_DURATION']

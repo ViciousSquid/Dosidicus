@@ -534,7 +534,7 @@ class StatisticsEventWiringTests(unittest.TestCase):
         logic.statistics_window.award.assert_called_once_with(-250)
         squid.ui.scene.addItem.assert_called_once_with(ink_cloud_item)
         single_shot.assert_called_once()
-        self.assertEqual(single_shot.call_args.args[0], 10000)
+        self.assertEqual(single_shot.call_args.args[0], TamagotchiLogic.INK_FADE_MS + 500)
 
     def test_legacy_peak_memory_and_age_updates_are_model_owned(self):
         squid = FakeSquid()

@@ -9,7 +9,6 @@ class Personality(Enum):
     GREEDY = "greedy"
     STUBBORN = "stubborn"
 
-def can_initiate_fight(personality):
-    """Timid squid may defend themselves, but never start a fight."""
-    value = getattr(personality, "value", personality)
-    return str(value).lower() != "timid"
+# There is no rule here about who may start a fight. Whether a squid does is
+# its own grown aggression neuron's (src/fighting.py); personality reaches it
+# only through how the squid's network is wired and what it has lived through.

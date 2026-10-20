@@ -19,7 +19,9 @@ from typing import Any, Dict, Optional
 #: Bumped when the meaning of a field changes, so two instances running
 #: different versions can decline to interpret each other's payloads.
 #: 2: other squid are seen through vision (squid_in_view), not sensor neurons.
-ENCOUNTER_PROTOCOL_VERSION = 2
+#: 3: frames report in_fight; intents carry aggression, defence and fitness,
+#:    so the host resolves a fight from both squid (src/fighting.py).
+ENCOUNTER_PROTOCOL_VERSION = 3
 
 #: A uuid as text and nothing else. Peer identity is used to build memory keys
 #: and to look up relationship history, so a malformed one from the network

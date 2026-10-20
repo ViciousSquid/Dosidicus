@@ -115,6 +115,7 @@ SOCIAL_CONCEPTS = {
     'social_play': 'the concept of "playing with another squid"',
     'social_fight': 'the concept of "fighting another squid"',
     'social_flee': 'the concept of "fleeing from another squid"',
+    'aggression': 'the concept of "attacking another squid"',
 }
 
 #: When each social sense organ is grown: the first time its percept reaches
@@ -128,13 +129,19 @@ SOCIAL_SENSOR_GROWTH = {
     'remembers_good_encounter': (0.0, 'It met a squid it remembered fondly'),
 }
 
-#: Each social neuron is grown from experience, not chosen: the first time the
-#: squid's own network does the thing - its action neuron firing - while
-#: another squid is in view, or, for a fight, the first time it is in one
-#: (the 'in_fight' percept the world reports). A fight is checked first: it is
-#: the rarest of the three and lasts only a few ticks.
-SOCIAL_EXPERIENCE = {'social_fight': 'in_fight', 'social_flee': 'act_flee',
-                     'social_play': 'act_play'}
+#: Each social neuron is grown from experience, not chosen: the first time
+#: everything listed is happening at once while another squid is in view - a
+#: percept the world reports ('in_fight'), an action neuron of the squid's own
+#: firing, or alarm (anxiety at SOCIAL_ALARM). aggression is the squid's own
+#: network going at another squid while alarmed: a hostile approach. Rarest
+#: first, since one grows per tick and a fight lasts only a few.
+SOCIAL_EXPERIENCE = {'social_fight': ('in_fight',),
+                     'aggression': ('act_play', 'anxiety'),
+                     'social_flee': ('act_flee',),
+                     'social_play': ('act_play',)}
+
+#: The anxiety at which a squid counts as alarmed, for SOCIAL_EXPERIENCE.
+SOCIAL_ALARM = 60.0
 
 #: How a newly grown sense organ is wired, onto the squid's EXISTING neurons.
 #: can_see_squid is wired by temperament - the only place personality enters,
@@ -166,21 +173,25 @@ SOCIAL_INPUTS = {
                      'squid_nearby': .5},
     'social_flee': {'can_see_squid': 1.0, 'remembers_bad_encounter': .6,
                     'squid_nearby': .5},
+    'aggression': {'can_see_squid': .6, 'remembers_bad_encounter': .7,
+                   'squid_nearby': .4, 'anxiety': .5},
 }
 
 #: A social neuron's outgoing synapses at birth, onto the squid's EXISTING
-#: neurons: towards the action it was grown from. Playing and fighting both go
-#: at the other squid (act_play is where contact, contests and fights happen);
-#: fighting is not afraid and stands its ground, fleeing keeps away.
+#: neurons: towards what it was grown from. Playing and attacking both go at
+#: the other squid (act_play is where contact happens - and, with aggression
+#: firing, a fight); knowing how to fight stands its ground and is less
+#: afraid; fleeing keeps away.
 SOCIAL_WIRING = {
     'social_play': (('act_play', 1.0), ('curiosity', 0.2)),
-    'social_fight': (('act_play', 1.0), ('anxiety', -0.4), ('act_flee', -0.6)),
+    'social_fight': (('act_play', 0.5), ('anxiety', -0.4), ('act_flee', -0.6)),
     'social_flee': (('act_flee', 1.0), ('act_play', -0.6), ('anxiety', 0.4)),
+    'aggression': (('act_play', 0.6), ('act_flee', -0.5), ('anxiety', -0.2)),
 }
 
 #: What a squid does about another squid, for the birth record.
 _SOCIAL_VERBS = {'social_play': 'played with', 'social_fight': 'fought',
-                 'social_flee': 'fled from'}
+                 'social_flee': 'fled from', 'aggression': 'went at'}
 
 
 @dataclass
@@ -339,6 +350,12 @@ class FunctionalNeuron:
         # what it was grown to represent.
         self.represents_action: str = ""
         self.represents_concept = str(self.origin_deficit.get("evidence", {}).get("concept", ""))
+        # Where this neuron settles with nothing driving it, once life has
+        # moved that (None: the ordinary propagation.baseline_of). It only
+        # ever rises - see EnhancedNeurogenesis.raise_resting_level - and
+        # resting_history says what raised it, when.
+        self.resting_level: Optional[float] = None
+        self.resting_history: List[Dict[str, Any]] = []
 
     @property
     def display_name(self) -> str:
@@ -380,6 +397,10 @@ class FunctionalNeuron:
         neuron.represents_action = str(data.get('represents_action', '') or '')
         neuron.represents_concept = str(data.get('represents_concept') or
                                        neuron.origin_deficit.get('evidence', {}).get('concept', ''))
+        rest = data.get('resting_level')
+        neuron.resting_level = float(rest) if isinstance(rest, (int, float)) else None
+        neuron.resting_history = [dict(entry) for entry in data.get('resting_history', [])
+                                  if isinstance(entry, dict)][-50:]
         return neuron
 
     def to_dict(self):
@@ -394,6 +415,8 @@ class FunctionalNeuron:
             'origin_deficit': dict(self.origin_deficit),
             'represents_action': self.represents_action,
             'represents_concept': self.represents_concept,
+            'resting_level': self.resting_level,
+            'resting_history': [dict(entry) for entry in self.resting_history],
             'creation_context': {
                 'trigger_type': self.creation_context.trigger_type,
                 'timestamp': self.creation_context.timestamp,
@@ -767,15 +790,17 @@ class EnhancedNeurogenesis:
                 return self._grow_social_sensor(sensor, summary, percepts.get(percept))
         state = bw.state
         from .decision_engine import wants
-        for concept, source in SOCIAL_EXPERIENCE.items():
-            if concept in positions:
-                continue
+
+        def happening(source):
             if source in percepts:
-                experienced = percepts.get(source, 0.0) > 0.0
-            else:
-                experienced = wants(source, float(state.get(source, 0.0) or 0.0))
-            if experienced:
-                return self._grow_social_neuron(concept, source)
+                return percepts.get(source, 0.0) > 0.0
+            if source == 'anxiety':
+                return float(state.get('anxiety', 0.0) or 0.0) >= SOCIAL_ALARM
+            return wants(source, float(state.get(source, 0.0) or 0.0))
+
+        for concept, sources in SOCIAL_EXPERIENCE.items():
+            if concept not in positions and all(happening(s) for s in sources):
+                return self._grow_social_neuron(concept, sources)
         return None
 
     def _grow_social_sensor(self, sensor: str, summary: str,
@@ -793,20 +818,48 @@ class EnhancedNeurogenesis:
                                   {'other_squid_visible': True})
         return self._create_neuron_internal(ctx, deficit=deficit)
 
-    def _grow_social_neuron(self, concept: str, source: str) -> Optional[str]:
+    def _grow_social_neuron(self, concept: str, sources) -> Optional[str]:
         verb = _SOCIAL_VERBS[concept]
+        state = self.brain_widget.state
+        while_ = ' while alarmed' if 'anxiety' in sources else ''
         deficit = Deficit(
             kind='representation', key=f'concept:{concept}',
-            summary=f'It {verb} another squid and had no neuron for that',
-            sources=[SOCIAL_SENSOR, source],
+            summary=f'It {verb} another squid{while_} and had no neuron for that',
+            sources=[SOCIAL_SENSOR, *sources],
             remedy=f'represent {SOCIAL_CONCEPTS[concept]}: on while its senses '
                    f'report a squid, driving what it did then.',
-            evidence={'concept': concept, 'experienced': source,
-                      'squid_in_view': 100.0},
+            evidence={'concept': concept, 'experienced': ' + '.join(sources),
+                      'squid_in_view': 100.0,
+                      **{s: round(float(state.get(s, 0.0) or 0.0), 1)
+                         for s in sources if s in state}},
             suggested_type='novelty', specialization=concept)
         ctx = self._build_context('novelty', self.brain_widget.state,
                                   {'other_squid_visible': True})
         return self._create_neuron_internal(ctx, deficit=deficit)
+
+    def raise_resting_level(self, name: str, amount: float, cause: str,
+                            ceiling: float = 100.0) -> float:
+        """Raise where a grown neuron settles, for good. Returns the rise.
+
+        Something that happened to the squid has left a mark: the neuron now
+        rests higher - for aggression, the squid is never again as placid as
+        it was. Nothing lowers a resting level; every rise is recorded on the
+        neuron with its cause (FunctionalNeuron.resting_history), travels in
+        the save, and is shown by the Neuron Laboratory.
+        """
+        from .propagation import baseline_of
+        neuron = self.functional_neurons.get(name)
+        if neuron is None or amount <= 0:
+            return 0.0
+        before = neuron.resting_level if neuron.resting_level is not None else baseline_of(name)
+        after = min(float(ceiling), before + float(amount))
+        if after <= before:
+            return 0.0
+        neuron.resting_level = round(after, 2)
+        neuron.resting_history.append({'at': time.time(), 'from': round(before, 2),
+                                       'to': neuron.resting_level, 'cause': str(cause)[:120]})
+        del neuron.resting_history[:-50]
+        return round(after - before, 2)
 
     def squid_sensor(self) -> str:
         """can_see_squid, once grown; '' before the first sighting."""

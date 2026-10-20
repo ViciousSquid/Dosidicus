@@ -689,10 +689,15 @@ SOCIAL_SENSORS = {
 SOCIAL_SENSOR = 'can_see_squid'
 
 #: The social neurons neurogenesis can grow once a squid knows other squid
-#: exist: the concepts for playing with, fighting or fleeing from one, each
-#: grown from having done it. One of each at most, named for what it is for,
-#: and drawn as hexagons.
-SOCIAL_NEURONS = ('social_play', 'social_fight', 'social_flee')
+#: exist: the concepts for playing with, fighting or fleeing from one, and the
+#: aggression that starts a fight - each grown from having done it. One of
+#: each at most, named for what it is for, and drawn as hexagons.
+SOCIAL_NEURONS = ('social_play', 'social_fight', 'social_flee', 'aggression')
+
+
+#: Reads 0 when the squid is placid and relaxed and 100 when it is fully
+#: aggro, so it rests at zero like a sense or an action, not at the midpoint.
+AGGRESSION_NEURON = 'aggression'
 
 
 def is_social_neuron(name: str) -> bool:
@@ -951,11 +956,11 @@ LEARNED_ACTIONS = tuple(
 # ---------------------------------------------------------------------------
 # (neuron, output hook, threshold, cooldown seconds, probability).
 #
-# `probability` is what "a CHANCE of an ink cloud when startled" is made of:
-# the reflex fires when the neuron crosses its threshold, and then only
-# actually inks that fraction of the time. Keeping it here makes the chance a
-# property of the reflex - visible, tunable, and the same for every squid -
-# instead of a random.random() buried in a behaviour rule.
+# A binding fires when its neuron crosses its threshold. `probability` below
+# 1.0 would make that only some of the time; the innate ones are all 1.0 -
+# whether a squid inks is its network's business entirely: act_ink firing
+# always inks, every time it fires (and once per firing, not every tick it
+# stays high). The cooldown is the least time between two firings.
 # Thresholds are calibrated against what the innate wiring can actually
 # produce, which is bounded: a saturated sensor contributes half its value
 # (see propagation.signal_of), so is_startled at 100 through a 0.70 synapse is
@@ -967,8 +972,8 @@ INNATE_ACTION_BINDINGS = (
     ("act_move",     "neuron_output_wander",         3.0, 1.00),
     ("act_eat",      "neuron_output_seek_food",      1.5, 1.00),
     ("act_flee",     "neuron_output_flee",           3.0, 1.00),
-    # Reachable on a real startle, and then only about a third of the time.
-    ("act_ink",      "neuron_output_ink_cloud",      8.0, 0.35),
+    # Reachable on a real startle; every firing inks.
+    ("act_ink",      "neuron_output_ink_cloud",      0.0, 1.00),
     # The body can always do these. What it lacks is anything driving the
     # neuron, and for a learned action nothing does until experience wires it.
     ("act_play",     "neuron_output_approach_rock",  5.0, 1.00),

@@ -302,6 +302,11 @@ class VisitorMind:
                 visible=bool(self.perception.sensor('squid_in_view', 0.0)),
                 now=self.clock())
 
+        # How it would fight, from its own brain and body, for the host to
+        # resolve a fight with: its aggression neuron, how hard it would
+        # fight back, and its fitness (src/fighting.py).
+        from src.fighting import commitment, fight_predisposition, squid_fitness
+        squid = getattr(self.logic, 'squid', None)
         self._seq += 1
         intent = ActionIntent(
             visit_id=self.visit_id,
@@ -313,6 +318,9 @@ class VisitorMind:
             heading=self._heading_for(action, brain_state),
             target_id=self._target_for(action),
             lease=INTENT_LEASE,
+            aggression=fight_predisposition(brain_state)[0],
+            defence=commitment(brain_state, attacking=False)[0],
+            fitness=squid_fitness(squid)[0] if squid is not None else 1.0,
         )
         self.last_intent = intent
         self.intents_sent += 1
@@ -398,6 +406,7 @@ class VisitorMind:
             if (isinstance(fight_id, str) and 0 < len(fight_id) <= 64
                     and isinstance(won, bool) and stats is not None):
                 if stats.record_fight_result(fight_id, won):
+                    self._live_through_fight(squid, fight_id, won, detail)
                     if self.session is not None:
                         self.session.observe(action='fighting', now=self.clock())
                         self.session.note_fight(won)   # remembered against the resident
@@ -533,8 +542,55 @@ class VisitorMind:
             related_neurons=self._active_social_neurons())
         if self.peer_ledger.record(record):
             self._log(f"Visit remembered: {record.describe()}")
+            self._learn_from(record)
             return record
         return None
+
+    def _learn_from(self, record) -> None:
+        """How the visit went moves how this squid meets ANY squid
+        (src/social_learning.py), recorded on each synapse it moves."""
+        from src.social_learning import learn_from_encounter
+        window = getattr(self.logic, 'brain_window', None)
+        brain = getattr(window, 'brain_widget', None)
+        if brain is not None and hasattr(brain, 'apply_weight_change'):
+            learn_from_encounter(brain, record.valence, record.outcome, record.peer.name)
+
+    def _live_through_fight(self, squid, fight_id: str, won: bool,
+                            detail: Dict[str, Any]) -> Dict[str, Any]:
+        """What a fight the host resolved does to this squid, at home.
+
+        Its body and drives take the outcome (src/fighting.py CONSEQUENCES),
+        its aggression neuron is marked for good (fighting.scar), and the
+        fight is filed in its long-term memory with everything behind it:
+        whether it started it, the aggression or defence it fought with and
+        its fitness (what its intent carried), both abilities and its chance.
+        """
+        from src import fighting
+        from .encounter import remember_fight
+        intent = self.last_intent
+        started = bool(detail.get('you_started'))
+        commit = getattr(intent, 'aggression' if started else 'defence', 0.0) if intent else 0.0
+        mine = {'role': 'attacker' if started else 'defender',
+                'fitness': getattr(intent, 'fitness', 1.0) if intent else 1.0,
+                'commitment': round(float(commit or 0.0), 1),
+                'committed_by': 'aggression' if started else 'defence',
+                'ability': float(detail.get('your_ability', 0.0) or 0.0)}
+        theirs = {'role': 'defender' if started else 'attacker',
+                  'ability': float(detail.get('their_ability', 0.0) or 0.0)}
+        resident = self.perception.resident
+        record = {'first_won': bool(won), 'first_chance': float(detail.get('chance', .5) or .5),
+                  'first': mine, 'second': theirs, 'fight_id': fight_id,
+                  'opponent': getattr(resident, 'name', 'the resident'),
+                  'opponent_uuid': getattr(resident, 'uuid', ''),
+                  'why': {'aggression': mine['commitment']} if started else {},
+                  'consequences': fighting.apply_consequences(squid, won)}
+        window = getattr(self.logic, 'brain_window', None)
+        brain = getattr(window, 'brain_widget', None)
+        if brain is not None:
+            record['aggression_rose'] = fighting.scar(
+                brain, won, f"{'won' if won else 'lost'} a fight with {record['opponent']}")
+        remember_fight(getattr(squid, 'memory_manager', None), record, me='first')
+        return record
 
     def _active_social_neurons(self) -> List[str]:
         """The social senses and neurons it grew, if active during this.

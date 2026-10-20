@@ -22,7 +22,7 @@ from .mp_network_node import NetworkNode
 from .remote_entity_manager import RemoteEntityManager # Ensure this is imported if type hinting or direct use
 from .squid_multiplayer_autopilot import RemoteSquidController # Ensure this for autopilot logic
 from .asset_paths import resolve_local_asset, is_inside_assets
-from src.personality import can_initiate_fight
+from src import fighting
 from src.lifecycle import MULTIPLAYER_RISK_NOTICE, MULTIPLAYER_RISK_TITLE
 from src.vision_cone import VIEW_CONE_ANGLE, in_view_cone
 from .remote_protocol import CONSEQUENCE_FIGHT
@@ -30,7 +30,7 @@ from .identity import SquidIdentity
 from .consent import ConsentPolicy, ConsentDecision, MODE_OPEN, REASON_CLOSED
 from .peer_ledger import PeerLedger
 from .encounter import (EncounterSession, drive_snapshot, active_social_neurons,
-                        perceive_recognition)
+                        perceive_recognition, remember_fight)
 from .encounter_sensors import ConspecificView
 from .host_body import HostBody, DEFAULT_MATING_CHANCE, DEFAULT_MATING_CONTACT_SECONDS
 from .visitor_mind import VisitorMind
@@ -76,6 +76,7 @@ class MultiplayerPlugin:
         self.remote_squids: Dict[str, Dict[str, Any]] = {}
         self.remote_objects: Dict[str, Dict[str, Any]] = {}
         self._peers_heard: set = set()  # node ids a heartbeat has come from
+        self._fight_starts: Dict[str, Dict[str, Any]] = {}  # fight id -> who started it, why
         self.remote_squid_controllers: Dict[str, Any] = {} # Should be RemoteSquidController
         self.pending_controller_creations: List[Dict[str, Any]] = []
         self.connection_lines: Dict[str, QtWidgets.QGraphicsLineItem] = {}
@@ -913,12 +914,15 @@ class MultiplayerPlugin:
         presence = self.conspecific_view.presences.get(peer_uuid)
         if squid is None or presence is None:
             return False
-        initiator = (presence.identity.personality if presence.contest_by == 'peer'
-                     else getattr(squid, 'personality', None))
-        if not can_initiate_fight(initiator):
-            return False
         if getattr(squid, 'is_transitioning', False):
             return False            # the resident is away; nobody to fight here
+        # A contact or a contest is not a fight. One squid has to start it:
+        # the one whose own aggression neuron is the more aggro, if it is
+        # more aggro than placid (src/fighting.py). Neither? They are just
+        # in contact - playing, competing, perhaps mating.
+        start = self._who_starts_a_fight(peer_uuid)
+        if start is None:
+            return False
         now = self.host_body.clock() if self.host_body is not None else time.time()
         if now < self._fight_cooldown_until.get(peer_uuid, 0.0):
             return False
@@ -934,6 +938,7 @@ class MultiplayerPlugin:
             started = sequence(peer_uuid, self.visit_node_ids.get(peer_uuid), squid, actor,
                                on_finished=lambda: self.resolve_fight(actor, fight_id))
             if started and not already_busy:
+                self._fight_starts[fight_id] = start
                 actor.body_busy_until = self.host_body.clock() + 3.2
                 self._fight_cooldown_until[peer_uuid] = now + self.FIGHT_COOLDOWN
             return started
@@ -943,25 +948,78 @@ class MultiplayerPlugin:
             self._fight_cooldown_until[peer_uuid] = now + self.FIGHT_COOLDOWN
         return shown
 
+    def _resident_brain_state(self) -> Dict[str, float]:
+        brain = getattr(getattr(self.tamagotchi_logic, 'brain_window', None),
+                        'brain_widget', None)
+        return dict(getattr(brain, 'state', None) or {})
+
+    def _who_starts_a_fight(self, peer_uuid: str):
+        """Which squid starts a fight with the other, and why - or None.
+
+        Read from each squid's own aggression neuron: the resident's here, the
+        visitor's from its latest intent (worked out on its own machine).
+        """
+        actor = self.host_body.visitor(peer_uuid) if self.host_body is not None else None
+        mine, why = fighting.fight_predisposition(self._resident_brain_state())
+        intent = getattr(actor, 'last_intent', None)
+        theirs = float(getattr(intent, 'aggression', 0.0) or 0.0)
+        if max(mine, theirs) < fighting.AGGRESSION_THRESHOLD:
+            return None
+        if mine >= theirs:
+            return {'attacker': 'resident', 'why': why}
+        return {'attacker': 'visitor', 'why': {'aggression': round(theirs, 1)}}
+
     def resolve_fight(self, actor, fight_id):
-        """Resolve a completed scuffle once, in the host that owns its bodies."""
+        """Resolve a completed scuffle once, in the host that owns its bodies.
+
+        Not a coin flip: each side's ability - its body, its experience and
+        how hard its network commits - decides it (src/fighting.py), with a
+        little luck. The whole of it is recorded: who started it and why,
+        both sides' abilities, the chance, the consequences.
+        """
         if self.host_body is None or self.host_body.visitor(actor.uuid) is not actor:
             return False
         squid = getattr(self.tamagotchi_logic, 'squid', None)
         stats = getattr(squid, 'statistics', None)
         if stats is None or self._resident_is_dead():
             return False
-        won = random.random() < .5
+        start = self._fight_starts.pop(fight_id, None) or {'attacker': 'visitor', 'why': {}}
+        resident_attacks = start['attacker'] == 'resident'
+        fit, fit_why = fighting.squid_fitness(squid)
+        mine = fighting.side(self._resident_brain_state(), fit, fit_why,
+                             attacking=resident_attacks)
+        intent = actor.last_intent
+        their_commit = (getattr(intent, 'aggression', 0.0) if not resident_attacks
+                        else getattr(intent, 'defence', 0.0))
+        their_fit = float(getattr(intent, 'fitness', 1.0) or 0.0) if intent else 1.0
+        theirs = {'role': 'defender' if resident_attacks else 'attacker',
+                  'fitness': their_fit, 'commitment': round(float(their_commit or 0.0), 1),
+                  'committed_by': 'defence' if resident_attacks else 'aggression',
+                  'ability': fighting.fighting_ability(their_fit, their_commit or 0.0)}
+        record = fighting.resolve_fight(mine, theirs)
+        won = record['first_won']
         if not stats.record_fight_result(fight_id, won):
             return False
+        record.update(fight_id=fight_id, opponent=actor.identity.name,
+                      opponent_uuid=actor.uuid, why=start['why'],
+                      consequences=fighting.apply_consequences(squid, won))
+        brain = getattr(getattr(self.tamagotchi_logic, 'brain_window', None),
+                        'brain_widget', None)
+        if brain is not None:
+            record['aggression_rose'] = fighting.scar(
+                brain, won, f"{'won' if won else 'lost'} a fight with {actor.identity.name}")
+        remember_fight(getattr(squid, 'memory_manager', None), record, me='first')
         session = self.open_encounters.get(actor.uuid)
         if session is not None:
             session.note_fight(won)       # remembered against that individual
         self.announce_fight(won)
         for _ in range(3):
-            self.host_body._report(actor, CONSEQUENCE_FIGHT,
-                                   {'fight_id': fight_id, 'won': not won})
-        message = f"{squid.name} {'won' if won else 'lost'} the fight with {actor.identity.name}."
+            self.host_body._report(actor, CONSEQUENCE_FIGHT, {
+                'fight_id': fight_id, 'won': not won,
+                'you_started': not resident_attacks,
+                'chance': round(1.0 - record['first_chance'], 3),
+                'their_ability': mine['ability'], 'your_ability': theirs['ability']})
+        message = f"{squid.name}: {fighting.describe(record, 'first')}"
         if hasattr(self.tamagotchi_logic, 'show_message'):
             self.tamagotchi_logic.show_message(message)
         return True
@@ -1106,6 +1164,13 @@ class MultiplayerPlugin:
                                related_neurons=list(self._active_encounter_neurons()))
         if self.peer_ledger.record(record):
             self.logger.info(f"Encounter remembered: {record.describe()}")
+            # How it went moves how the squid meets ANY squid, strangers too
+            # (src/social_learning.py), recorded on each synapse it moves.
+            from src.social_learning import learn_from_encounter
+            brain = getattr(getattr(self.tamagotchi_logic, 'brain_window', None),
+                            'brain_widget', None)
+            if brain is not None and hasattr(brain, 'apply_weight_change'):
+                learn_from_encounter(brain, record.valence, record.outcome, record.peer.name)
             if hasattr(self.tamagotchi_logic, 'show_message'):
                 self.tamagotchi_logic.show_message(
                     f"Your squid remembers a {record.outcome} encounter with {record.peer.name}.")

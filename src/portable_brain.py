@@ -533,10 +533,13 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
         if not targets:
             return {}
 
+        functional = self.enhanced_neurogenesis.functional_neurons
         strengths = {name: getattr(fn, 'strength_multiplier', 1.0)
-                     for name, fn in
-                     self.enhanced_neurogenesis.functional_neurons.items()}
-        return propagate(self.state, self.weights, targets, strengths=strengths)
+                     for name, fn in functional.items()}
+        resting = {name: fn.resting_level for name, fn in functional.items()
+                   if getattr(fn, 'resting_level', None) is not None}
+        return propagate(self.state, self.weights, targets, strengths=strengths,
+                         resting=resting)
 
     def compute_neural_modulation(self, gain: float = 0.30):
         from .propagation import compute_neural_modulation

@@ -58,6 +58,8 @@ MECHANISMS: Dict[str, str] = {
     'prune':         "it never amounted to anything and was pruned",
     'decay':         "it faded from disuse",
     'manual':        "it was set directly",
+    'encounter':     "an encounter with another squid went well or badly",
+    'inheritance':   "it was inherited from its parents",
 }
 
 # How a deficit is described to the player. Mirrors capability.DEFICIT_KINDS.
