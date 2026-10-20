@@ -7,8 +7,9 @@ question after it (the "Show tutorial?" prompt included) is in that language.
 The chosen language is preselected next time and saved to config.ini
 ([General] language), where Preferences reads and writes it too.
 
-Its look - the grey bar, the bold monospace, the orange button - is shared
-(scale_factor, splash_font, grey_bar, white_foot, orange_button, centre_on):
+Its look - the grey bar, the bold monospace, the dark green (yes / OK) and
+dark red (no) buttons - is shared (scale_factor, splash_font, grey_bar,
+white_foot, splash_button, centre_on):
 the tutorial question is drawn the same way (main.TimedMessageBox).
 
 Light on purpose: PyQt5, the config manager and the localisation table only.
@@ -25,7 +26,10 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 #: The splash at 100%, in the mockup's proportions.
 WIDTH, BAR_HEIGHT, FOOT_HEIGHT = 352, 64, 62
 BAR_GREY = '#c4c4c4'
-OK_ORANGE, OK_HOVER, OK_PRESSED = '#f7841f', '#ff9a3d', '#d96d10'
+#: Button colours - (face, hover, pressed): dark green says yes (and OK),
+#: dark red says no.
+GREEN = ('#1f6e30', '#28883c', '#164f23')
+RED = ('#9e1c1c', '#b82626', '#741313')
 
 
 def available_languages() -> List[Tuple[str, str]]:
@@ -91,19 +95,21 @@ def splash_font(pixel_size: float, bold: bool = True) -> QtGui.QFont:
     return font
 
 
-def orange_button(text: str, f: float, width: float = 170) -> QtWidgets.QPushButton:
-    """The splash's button: orange, edged in black, bold monospace."""
+def splash_button(text: str, f: float, colours=GREEN,
+                  width: float = 170) -> QtWidgets.QPushButton:
+    """The splash's button: dark green (or red), edged in black, bold monospace."""
+    face, hover, pressed = colours
     def s(value):
         return int(round(value * f))
     button = QtWidgets.QPushButton(text)
     button.setCursor(QtCore.Qt.PointingHandCursor)
     button.setFixedSize(s(width), s(48))
     button.setStyleSheet(
-        f"QPushButton {{ background: {OK_ORANGE}; color: black; border: {s(3)}px solid black;"
+        f"QPushButton {{ background: {face}; color: white; border: {s(3)}px solid black;"
         f" border-radius: {s(12)}px; font-family: '{_monospace_family()}'; font-weight: bold;"
         f" font-size: {s(26)}px; }}"
-        f"QPushButton:hover {{ background: {OK_HOVER}; }}"
-        f"QPushButton:pressed {{ background: {OK_PRESSED}; }}")
+        f"QPushButton:hover {{ background: {hover}; }}"
+        f"QPushButton:pressed {{ background: {pressed}; }}")
     return button
 
 
@@ -152,7 +158,7 @@ class _LanguageBar(QtWidgets.QComboBox):
         rect = self.rect()
         painter.fillRect(rect, QtGui.QColor(BAR_GREY))
         if self.hasFocus():
-            pen = QtGui.QPen(QtGui.QColor(OK_ORANGE), 2)
+            pen = QtGui.QPen(QtGui.QColor(GREEN[0]), 2)
             painter.setPen(pen)
             painter.drawRect(rect.adjusted(1, 1, -2, -2))
         painter.setPen(QtCore.Qt.black)
@@ -196,9 +202,9 @@ class LanguageSplash(QtWidgets.QDialog):
         self.bar.view().setFont(listing)
         self.bar.setStyleSheet(
             f'QComboBox QAbstractItemView {{ background: white; color: black; outline: 0;'
-            f' selection-background-color: {OK_ORANGE}; selection-color: black; }}')
+            f' selection-background-color: {GREEN[0]}; selection-color: white; }}')
 
-        self.ok = orange_button('OK', f)
+        self.ok = splash_button('OK', f, GREEN)
         self.ok.setDefault(True)
         self.ok.setAutoDefault(True)
         self.ok.clicked.connect(self.accept)
@@ -258,4 +264,5 @@ def choose_language(config_manager=None) -> Optional[str]:
 
 
 __all__ = ['available_languages', 'LanguageSplash', 'choose_language', 'scale_factor',
-           'splash_font', 'orange_button', 'grey_bar', 'white_foot', 'centre_on']
+           'splash_font', 'splash_button', 'grey_bar', 'white_foot', 'centre_on',
+           'GREEN', 'RED']

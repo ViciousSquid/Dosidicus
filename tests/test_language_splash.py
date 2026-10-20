@@ -131,11 +131,15 @@ def test_the_tutorial_prompt_is_drawn_like_the_splash():
     assert language_splash.BAR_GREY in dialog.message_label.styleSheet()
     assert dialog.message_label.font().family() == splash.bar.font().family()
     assert dialog.message_label.font().bold()
-    for button in (dialog.yes_button, dialog.no_button):
-        assert button.styleSheet() == language_splash.orange_button(
-            button.text(), language_splash.scale_factor(), width=140).styleSheet()
-    assert splash.ok.styleSheet() == language_splash.orange_button(
-        'OK', language_splash.scale_factor()).styleSheet()
+    f = language_splash.scale_factor()
+    assert dialog.yes_button.styleSheet() == language_splash.splash_button(
+        'Yes', f, language_splash.GREEN, width=140).styleSheet()
+    assert dialog.no_button.styleSheet() == language_splash.splash_button(
+        'No', f, language_splash.RED, width=140).styleSheet()
+    assert splash.ok.styleSheet() == language_splash.splash_button(
+        'OK', f, language_splash.GREEN).styleSheet()
+    assert language_splash.GREEN[0] in dialog.yes_button.styleSheet()
+    assert language_splash.RED[0] in dialog.no_button.styleSheet()
     assert dialog.width() == splash.width()
     dialog.deleteLater()
 

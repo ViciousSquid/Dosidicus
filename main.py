@@ -129,11 +129,11 @@ class TimedMessageBox(QtWidgets.QDialog):
 
     Drawn like the language splash (src/language_splash.py): the question on
     the grey bar in bold monospace; below it, on white, the countdown and the
-    orange Yes and No.
+    Yes in dark green and No in dark red.
     """
     def __init__(self, parent, title, message, timeout_seconds=5):
-        from src.language_splash import (centre_on, grey_bar, orange_button,
-                                         scale_factor, splash_font, white_foot)
+        from src.language_splash import (GREEN, RED, centre_on, grey_bar, scale_factor,
+                                         splash_button, splash_font, white_foot)
         super().__init__(parent, QtCore.Qt.Dialog | QtCore.Qt.FramelessWindowHint)
         self.setWindowTitle(title)
         self.setModal(True)
@@ -152,8 +152,8 @@ class TimedMessageBox(QtWidgets.QDialog):
         self.timer_label.setStyleSheet("color: #666666;")
 
         # Buttons, localised from our own table
-        self.yes_button = orange_button(self.loc.get("yes"), f, width=140)
-        self.no_button = orange_button(self.loc.get("no"), f, width=140)
+        self.yes_button = splash_button(self.loc.get("yes"), f, GREEN, width=140)
+        self.no_button = splash_button(self.loc.get("no"), f, RED, width=140)
         self.yes_button.setDefault(True)
         self.yes_button.clicked.connect(self.accept_yes)
         self.no_button.clicked.connect(self.reject_no)
