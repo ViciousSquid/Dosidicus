@@ -63,6 +63,7 @@ class Squid:
         self.carried_rock_id = None
         self._carry_until = 0.0
         self.wants_to_play = False
+        self.play_at = None        # (x, y) of a squid in view that play goes at
 
         # Startle / flee (a fright response, optionally releasing an ink cloud).
         self.is_startled = False
@@ -286,8 +287,12 @@ class Squid:
                 self.move_slowly()
             self.status = "seeking shelter"
         elif decision == "playing":
-            self.move_erratically()
-            self.status = "playing"
+            if getattr(self, 'play_at', None) is not None:
+                self.move_towards(*self.play_at)      # at the squid in view
+                self.status = "approaching squid"
+            else:
+                self.move_erratically()
+                self.status = "playing"
         elif decision == "exploring":
             self.move_randomly()
             self.status = "exploring"

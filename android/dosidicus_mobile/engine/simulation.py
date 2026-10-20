@@ -173,6 +173,20 @@ class Simulation:
     def _rock_decorations(self):
         return [d for d in self.decorations if d.get("category") == "rock"]
 
+    def _squid_to_play_at(self, x, y, facing, others):
+        """Where a squid at play goes: the nearest squid in its view cone, if
+        that is nearer than any rock it could pick up - as on desktop
+        (brain_neuron_outputs._go_at_squid_in_view). None means rocks."""
+        seen = [(ox, oy) for ox, oy in others if self._sees_squid_at(x, y, facing, ox, oy)]
+        if not seen:
+            return None
+        target = min(seen, key=lambda p: math.hypot(p[0] - x, p[1] - y))
+        rocks = [r for r in self._rock_decorations() if r["id"] not in self._rock_velocities]
+        if rocks and min(math.hypot(r["x"] - x, r["y"] - y) for r in rocks) < \
+                math.hypot(target[0] - x, target[1] - y):
+            return None
+        return target
+
     def _deco_by_id(self, deco_id):
         return next((d for d in self.decorations if d["id"] == deco_id), None)
 
@@ -250,7 +264,7 @@ class Simulation:
         carried = self._visitor_carried_rocks()
         rocks = [r for r in self._rock_decorations()
                  if r["id"] not in self._rock_velocities and r["id"] not in carried]
-        if not (squid.wants_to_play and rocks):
+        if not (squid.wants_to_play and rocks) or squid.play_at is not None:
             return
         target = min(rocks, key=lambda r: squid._dist(r["x"], r["y"]))
         dist = squid._dist(target["x"], target["y"])
@@ -418,7 +432,10 @@ class Simulation:
                 mind.decide(mind.brain.state, self.food_items)
                 mind._visit_decision_at = mind.brain.sim_time
             action = mind.last_decision.get('chosen', 'idle')
-            v['wants_rock'] = action == 'playing'
+            play_at = (self._squid_to_play_at(v['x'], v['y'], v.get('dir', 'right'),
+                                              [(self.squid.x, self.squid.y)])
+                       if action == 'playing' else None)
+            v['wants_rock'] = action == 'playing' and play_at is None
 
             # The chosen action drives the visitor's body, not loot priorities.
             # Priority 1: loot a rock (and carry it), if this guest wants one.
@@ -454,6 +471,8 @@ class Simulation:
                                    importance=1.5, related=["anxiety"])
                         if random.random() < 0.2:
                             self.startle("visitor")
+                elif play_at is not None:
+                    self._steer(v, play_at[0], play_at[1], dt)   # at the resident
                 elif action == 'approaching_plant' and mind.plant_targets:
                     plant = min(mind.plant_targets, key=lambda p: (p['x']-v['x'])**2 + (p['y']-v['y'])**2)
                     self._steer(v, plant['x'], plant['y'], dt)
@@ -861,6 +880,9 @@ class Simulation:
             on_leveled=lambda name, strength: self.achievements.on_neuron_levelled(strength))
         squid.memory.periodic(squid.brain.sim_time)
         self._process_neural_outputs()
+        squid.play_at = self._squid_to_play_at(
+            squid.x, squid.y, squid.direction,
+            [(v['x'], v['y']) for v in self.visitors if not v['leaving']])
         self._decision_timer += dt
         if self.fight is not None:
             self.last_status = "Aggression! FIGHTING!"   # a fight overrides normal behaviour

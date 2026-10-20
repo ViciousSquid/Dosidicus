@@ -44,6 +44,17 @@ import re
 import time
 from typing import Any, Dict, Optional
 
+#: Asked the first time multiplayer is switched on, on desktop and mobile
+#: alike, and switched on only if the answer is yes. Multiplayer is the only
+#: way a squid ever meets another, so it is the only way any of what follows -
+#: a fight, a mating, an egg, a death - can happen.
+MULTIPLAYER_RISK_TITLE = "Enable peer-to-peer evolution?"
+MULTIPLAYER_RISK_NOTICE = (
+    "Enabling multiplayer introduces new experiences that may permanently "
+    "alter your squid's behaviour, neural development and life.\n\n"
+    "Encounters may result in fights, reproduction or even death.\n\n"
+    "Changes to your squid and its saved state cannot be undone.")
+
 STAGE_LIVING = 'living'
 STAGE_PARENT = 'parent'
 STAGE_DEAD = 'dead'
@@ -313,6 +324,7 @@ def _number(value: Any, default: float = 0.0) -> float:
 
 
 __all__ = ['Lifecycle', 'is_valid_mating_id', 'DEFAULT_CONFIG',
+           'MULTIPLAYER_RISK_TITLE', 'MULTIPLAYER_RISK_NOTICE',
            'STAGE_LIVING', 'STAGE_PARENT', 'STAGE_DEAD', 'STAGES',
            'EGG_INCUBATING', 'EGG_HATCHING', 'EGG_STATES',
            'CAUSE_STARVED', 'CAUSE_NEGLECTED', 'CAUSE_SICKNESS', 'CAUSES']

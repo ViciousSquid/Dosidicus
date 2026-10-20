@@ -22,8 +22,44 @@ from ..engine import portability as P
 from . import nearby
 
 
+#: Remembered once the player has accepted the multiplayer risk on this device.
+NOTICE_FLAG = "multiplayer_risk_notice_shown"
+
+
 def open_nearby(app):
-    NearbyView(app).open()
+    """Nearby squids - only once the player has said yes to the risk (as on desktop).
+
+    Asked until accepted; Cancel leaves Nearby closed.
+    """
+    import os
+    flag = os.path.join(getattr(app, "user_data_dir", "") or ".", NOTICE_FLAG)
+    if os.path.exists(flag):
+        NearbyView(app).open()
+        return
+    from ..engine import shared  # noqa: F401 - locate the desktop source package
+    from src.lifecycle import MULTIPLAYER_RISK_NOTICE, MULTIPLAYER_RISK_TITLE
+    body = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(12))
+    text = Label(text=MULTIPLAYER_RISK_NOTICE, font_size=sp(16), halign="center",
+                 valign="middle", color=(0.92, 0.92, 0.95, 1))
+    text.bind(size=lambda *_: setattr(text, "text_size", text.size))
+    body.add_widget(text)
+    notice = Popup(title=MULTIPLAYER_RISK_TITLE, content=body, size_hint=(0.92, 0.66),
+                   title_size=sp(18), auto_dismiss=False)
+
+    def accept(*_):
+        try:
+            with open(flag, "w") as handle:
+                handle.write("1")
+        except OSError:
+            pass
+        notice.dismiss()
+        NearbyView(app).open()
+
+    row = BoxLayout(size_hint_y=None, height=dp(56), spacing=dp(8))
+    row.add_widget(_btn("Cancel", lambda *_: notice.dismiss(), (0.3, 0.3, 0.34, 1)))
+    row.add_widget(_btn("Enable", accept, (0.13, 0.42, 0.18, 1)))
+    body.add_widget(row)
+    notice.open()
 
 
 def _btn(text, cb, color=(0.2, 0.3, 0.42, 1), h=54):

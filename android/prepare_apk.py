@@ -10,7 +10,7 @@ SHARED_MODULES = (
     'causal_learning', 'neural_provenance', 'consolidation', 'sleep_consolidation',
     'neurogenesis', 'learning', 'config_manager', 'personality', 'localisation',
     'portable_brain', 'neuron_binding', 'decision_engine', 'memory_manager', 'stdp', 'brain_clock', 'brain_io', 'save_archive',
-    'vision_cone',
+    'vision_cone', 'lifecycle',
 )
 
 

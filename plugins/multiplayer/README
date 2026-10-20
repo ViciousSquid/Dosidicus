@@ -10,8 +10,14 @@ turn it on from the Plugin manager.
 
 ## Rules and risks
 
-> Multiplayer is optional. Enabling it exposes the squid to new experiences
-> but may ultimately result in losing its life. The user takes this risk.
+> **Enable peer-to-peer evolution?**
+>
+> Enabling multiplayer introduces new experiences that may permanently alter
+> your squid's behaviour, neural development and life.
+>
+> Encounters may result in fights, reproduction or even death.
+>
+> Changes to your squid and its saved state cannot be undone.
 
 That notice is shown the first time multiplayer is enabled (remembered as
 `[Multiplayer] risk_notice_shown` in `config.ini`). It is the whole bargain.

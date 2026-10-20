@@ -23,6 +23,7 @@ from .remote_entity_manager import RemoteEntityManager # Ensure this is imported
 from .squid_multiplayer_autopilot import RemoteSquidController # Ensure this for autopilot logic
 from .asset_paths import resolve_local_asset, is_inside_assets
 from src.personality import can_initiate_fight
+from src.lifecycle import MULTIPLAYER_RISK_NOTICE, MULTIPLAYER_RISK_TITLE
 from src.vision_cone import VIEW_CONE_ANGLE, in_view_cone
 from .remote_protocol import CONSEQUENCE_FIGHT
 from .identity import SquidIdentity
@@ -213,6 +214,9 @@ class MultiplayerPlugin:
     # and threw away, and MultiplayerPlugin had no enable() at all.
     def enable(self):
         self.logger.info("Attempting to enable Multiplayer...")
+        if not self.confirm_risk_once():
+            self.logger.info("Multiplayer left off: the player did not accept the risk.")
+            return False
 
         # --- NEW: Debug log all key objects ---
         self.logger.debug(f"[ENABLE] status_widget: {self.status_widget}")
@@ -231,8 +235,6 @@ class MultiplayerPlugin:
                 return False
         else:
             self.logger.info("Multiplayer is already marked as set up. Re-enabling components.")
-
-        self.show_risk_notice_once()
 
         # --- BEGIN NEW/MODIFIED SECTION ---
         # Ensure network node is ready and listening
@@ -296,25 +298,30 @@ class MultiplayerPlugin:
         self.logger.info("Multiplayer enabled successfully.")
         return True
 
-    #: Shown once, the first time multiplayer is enabled on this installation.
-    RISK_NOTICE = ("Multiplayer is optional. Enabling it exposes the squid to new "
-                   "experiences but may ultimately result in losing its life. "
-                   "The user takes this risk.")
+    #: Asked once, the first time multiplayer is enabled on this installation.
+    RISK_TITLE = MULTIPLAYER_RISK_TITLE
+    RISK_NOTICE = MULTIPLAYER_RISK_NOTICE
 
-    def show_risk_notice_once(self) -> bool:
-        """Tell the player what multiplayer can cost - the first time only.
+    def confirm_risk_once(self) -> bool:
+        """Ask before multiplayer first goes on. True means go ahead.
 
-        A visit can end in a mating, and a parent stops eating and dies (see
-        src/lifecycle.py). Remembered in config.ini, so it is shown once per
-        installation. Returns True if it was shown now.
+        Encounters change a squid for good, and can end its life (see
+        src/lifecycle.py). Only a yes is remembered (config.ini), so it is
+        asked once per installation; a no leaves multiplayer off, and the
+        question is asked again the next time it is switched on.
         """
         from src.config_manager import ConfigManager
         config = ConfigManager()
         if config.get_multiplayer_risk_notice_shown():
-            return False
+            return True
         ui = getattr(self.tamagotchi_logic, 'user_interface', None)
-        QtWidgets.QMessageBox.warning(getattr(ui, 'window', None),
-                                      "Multiplayer", self.RISK_NOTICE)
+        answer = QtWidgets.QMessageBox.question(
+            getattr(ui, 'window', None), self.RISK_TITLE,
+            f"{self.RISK_TITLE}\n\n{self.RISK_NOTICE}",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No)
+        if answer != QtWidgets.QMessageBox.Yes:
+            return False
         config.set_multiplayer_risk_notice_shown()
         return True
 

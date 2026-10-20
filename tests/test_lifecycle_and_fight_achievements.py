@@ -140,31 +140,54 @@ def test_a_parent_refusing_food_is_not_counted_as_fed(achievements):
         achievements._uninstall_hooks()
 
 
-def test_the_risk_notice_is_shown_the_first_time_only(tmp_path, monkeypatch):
+NOTICE = ("Enabling multiplayer introduces new experiences that may permanently "
+          "alter your squid's behaviour, neural development and life.\n\n"
+          "Encounters may result in fights, reproduction or even death.\n\n"
+          "Changes to your squid and its saved state cannot be undone.")
+
+
+@pytest.fixture
+def config_path(tmp_path, monkeypatch):
     from src import config_manager
-    config_path = tmp_path / 'config.ini'
+    path = tmp_path / 'config.ini'
     real = config_manager.ConfigManager
     monkeypatch.setattr(config_manager, 'ConfigManager',
-                        lambda *args, **kwargs: real(str(config_path)))
+                        lambda *args, **kwargs: real(str(path)))
+    return path
+
+
+def test_the_question_is_asked_until_accepted_and_then_never_again(config_path):
+    from src.config_manager import ConfigManager
     plugin = MultiplayerPlugin()
+    no, yes = QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.Yes
+    with mock.patch.object(QtWidgets.QMessageBox, 'question', side_effect=[no, yes]) as asked:
+        assert not plugin.confirm_risk_once()            # declined: stays off
+        assert not ConfigManager().get_multiplayer_risk_notice_shown()
+        assert plugin.confirm_risk_once()                # asked again; accepted
+        assert plugin.confirm_risk_once()                # never asked a third time
+    assert asked.call_count == 2
+    title, text = asked.call_args.args[1:3]
+    assert title == "Enable peer-to-peer evolution?"
+    assert text == "Enable peer-to-peer evolution?\n\n" + NOTICE
+    assert asked.call_args.args[4] == no                 # No is the default
+    assert ConfigManager().get_multiplayer_risk_notice_shown()
 
-    with mock.patch.object(QtWidgets.QMessageBox, 'warning') as warning:
-        assert plugin.show_risk_notice_once()
-        assert not plugin.show_risk_notice_once()
 
-    warning.assert_called_once()
-    assert warning.call_args.args[2] == (
-        "Multiplayer is optional. Enabling it exposes the squid to new "
-        "experiences but may ultimately result in losing its life. "
-        "The user takes this risk.")
-    assert real(str(config_path)).get_multiplayer_risk_notice_shown()
+def test_declining_leaves_multiplayer_off(config_path):
+    plugin = MultiplayerPlugin()
+    plugin.logger = logging.getLogger('test-multiplayer')
+    plugin.is_setup = True
+    plugin.network_node = None
+    with mock.patch.object(QtWidgets.QMessageBox, 'question',
+                           return_value=QtWidgets.QMessageBox.No):
+        assert plugin.enable() is False
 
 
-def test_enabling_multiplayer_shows_the_notice():
+def test_enabling_multiplayer_asks_first():
     plugin = MultiplayerPlugin()
     plugin.logger = logging.getLogger('test-multiplayer')
     plugin.is_setup = True
     plugin.network_node = None          # stops enable() before any networking
-    with mock.patch.object(plugin, 'show_risk_notice_once') as notice:
+    with mock.patch.object(plugin, 'confirm_risk_once', return_value=True) as asked:
         plugin.enable()
-    notice.assert_called_once_with()
+    asked.assert_called_once_with()
