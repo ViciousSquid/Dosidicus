@@ -88,6 +88,8 @@ class RemoteEntityManager:
         #: other squid's uuid.
         self._fight_clouds = {}
         self._scuffles = {}
+        #: Objects flashing dark red because two squid are fighting over them.
+        self._contest_flashes = {}
         #: Mating hearts on screen, the same way.
         self._mating_hearts = {}
 
@@ -96,6 +98,14 @@ class RemoteEntityManager:
         self.MOVEMENT_INTERVAL_MS = 1000  # Update once per second
         self.MAX_PIXELS_PER_JUMP = 90.0
         self.position_update_timer.start(self.MOVEMENT_INTERVAL_MS)
+
+        #: The resident's swim frame (its Squid.current_frame, 0 or 1), or
+        #: None; set by the plugin. A visitor always swims on the other one.
+        self.resident_frame = None
+        self._last_resident_frame = None
+        self.swim_timer = QtCore.QTimer()
+        self.swim_timer.timeout.connect(self._swim)
+        self.swim_timer.start(self.SWIM_POLL_MS)
 
     def _get_image_file_name_and_direction(self, payload_direction_key: Optional[str], payload_animation_frame: Any, 
                                           entry_direction_on_this_screen: Optional[str] = None, 
@@ -163,6 +173,66 @@ class RemoteEntityManager:
             return fb_pixmap, (target_width, target_height) 
         return pixmap.scaled(target_width, target_height, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation), (target_width, target_height)
 
+    # ------------------------------------------------------------------
+    # Swimming: every squid in the tank animates, never in step
+    # ------------------------------------------------------------------
+    #: How often the resident's frame is looked at.
+    SWIM_POLL_MS = 100
+    #: A visitor turns its own frame over when the resident has not for this
+    #: long - a still resident does not stop a visitor swimming.
+    SWIM_SECONDS = 1.0
+
+    def _resident_swim_frame(self):
+        try:
+            frame = self.resident_frame() if callable(self.resident_frame) else None
+        except Exception:
+            return None
+        return frame if frame in (0, 1) else None
+
+    @staticmethod
+    def _shown_frame(info) -> int:
+        """The swim frame (1 or 2) a remote squid is drawn with now."""
+        name = str(info.get('current_image_name') or 'right1.png')
+        return 2 if name[:-4].endswith('2') else 1
+
+    def _other_frame(self) -> int:
+        """The frame a visitor should show: the one the resident is not."""
+        resident = self._resident_swim_frame()
+        return 1 if resident is None else (2 if resident == 0 else 1)
+
+    def _show_frame(self, info, frame: int) -> None:
+        name = str(info.get('current_image_name') or 'right1.png')
+        stem = name[:-4].rstrip('12') or 'right'
+        new_name = f"{stem}{frame}.png"
+        if new_name == name or info.get('visual') is None:
+            return
+        pixmap, size = self._get_scaled_pixmap(new_name)
+        info['visual'].setPixmap(pixmap)
+        info['current_image_name'] = new_name
+        info['current_display_dimensions'] = size
+
+    def _swim(self):
+        """Each visitor uses both swim frames, always the resident's other one.
+
+        When the resident's frame turns over, every visitor's follows it onto
+        the opposite frame; when the resident is still, a visitor turns its own
+        over each SWIM_SECONDS. Drawing only - nothing about any squid changes.
+        """
+        resident = self._resident_swim_frame()
+        turned = resident is not None and resident != self._last_resident_frame
+        self._last_resident_frame = resident
+        now = time.monotonic()
+        for info in list(self.remote_squids.values()):
+            visual = info.get('visual')
+            if visual is None or not visual.isVisible():
+                continue
+            if turned:
+                self._show_frame(info, self._other_frame())
+                info['swum_at'] = now
+            elif now - info.get('swum_at', 0.0) >= self.SWIM_SECONDS:
+                self._show_frame(info, 3 - self._shown_frame(info))
+                info['swum_at'] = now
+
     def _update_dependent_items_position(self, remote_squid_info, new_visual_x, new_visual_y):
         if remote_squid_info.get('status_text'):
             remote_squid_info['status_text'].setPos(new_visual_x, new_visual_y - 30)
@@ -206,7 +276,8 @@ class RemoteEntityManager:
             self.logger.debug(f"Payload for new arrival '{node_id}': {squid_data_payload}")
 
         payload_dir_key = squid_data_payload.get('image_direction_key', 'right')
-        payload_anim_frame = squid_data_payload.get('current_animation_frame', 1) 
+        # Its swim frame is drawn here, the resident's other one (_swim).
+        payload_anim_frame = self._other_frame()
         
         squid_image_name, determined_facing_direction = self._get_image_file_name_and_direction(
             payload_dir_key, 
@@ -279,7 +350,7 @@ class RemoteEntityManager:
         visual_item.setScale(1.0) 
 
         payload_dir_key = squid_data_payload.get('image_direction_key', 'right')
-        payload_anim_frame = squid_data_payload.get('current_animation_frame', 1)
+        payload_anim_frame = self._other_frame()
         current_img_name_fallback = remote_squid_info.get('current_image_name', 'right1.png')
 
         new_squid_image_name, determined_facing_direction = self._get_image_file_name_and_direction(
@@ -362,7 +433,8 @@ class RemoteEntityManager:
                 remote_squid_info['view_cone'] = None
         
         payload_dir_key = squid_data_payload.get('image_direction_key') 
-        payload_anim_frame = squid_data_payload.get('current_animation_frame', 1)
+        # Facing comes from home; the swim frame is drawn here (_swim).
+        payload_anim_frame = self._shown_frame(remote_squid_info)
         current_img_name_fallback = remote_squid_info.get('current_image_name', 'right1.png')
 
         potential_new_image_name, determined_facing_direction = self._get_image_file_name_and_direction(
@@ -541,14 +613,51 @@ class RemoteEntityManager:
     MATING_HEART_FILE = "mating_heart.gif"
     MATING_HEART_MS = 3200
 
-    def start_fight_sequence(self, key, node_id, resident, actor, on_finished=None):
-        """Bring both bodies together before playing one cloud over the pair."""
+    #: A fight over an object: the object flashes dark red for this long
+    #: before the bodies come together, and for this long after the scuffle.
+    CONTEST_LEAD_MS = 2000
+    CONTEST_AFTER_MS = 2000
+    CONTEST_FLASH_MS = 250
+    CONTEST_RED = (110, 0, 0)
+    #: The scuffle itself: bodies close in (650 ms), then the cloud.
+    SCUFFLE_MS = 3150
+
+    def start_fight_sequence(self, key, node_id, resident, actor, on_finished=None,
+                             contested=None):
+        """Bring both bodies together before playing one cloud over the pair.
+
+        A fight over an object (`contested`, a scene item) opens with a lead-in:
+        the object flashes dark red for CONTEST_LEAD_MS before the bodies
+        close in, and on until CONTEST_AFTER_MS after the scuffle.
+        """
         if key in self._scuffles:
             return True
         info = self.remote_squids.get(node_id)
         if not info or not info.get('visual'):
             return False
+        if contested is not None and self.flash_contested(
+                contested, self.CONTEST_LEAD_MS + self.SCUFFLE_MS + self.CONTEST_AFTER_MS):
+            # Held while the object flashes; the bodies come together after.
+            self._scuffles[key] = {'timer': None, 'resident': resident,
+                                   'was_moving': getattr(resident, 'can_move', True),
+                                   'on_finished': on_finished, 'waiting': True}
+            QtCore.QTimer.singleShot(self.CONTEST_LEAD_MS, lambda: self._begin_scuffle(
+                key, info, resident, actor, on_finished, after_lead=True))
+            return True
+        return self._begin_scuffle(key, info, resident, actor, on_finished)
+
+    def _begin_scuffle(self, key, info, resident, actor, on_finished, after_lead=False):
+        if after_lead:
+            held = self._scuffles.get(key)
+            if held is None or not held.get('waiting'):
+                return False                 # ended during the lead-in
+            del self._scuffles[key]
         visual = info['visual']
+        try:
+            if visual.scene() is not self.scene:
+                return False
+        except RuntimeError:
+            return False
         initial = (float(resident.squid_x), float(resident.squid_y), float(actor.x), float(actor.y))
         mx, my = (initial[0]+initial[2])/2, (initial[1]+initial[3])/2
         moving = getattr(resident, 'can_move', True)
@@ -592,13 +701,78 @@ class RemoteEntityManager:
     def _end_scuffle(self, key, completed=False):
         entry = self._scuffles.pop(key, None)
         if entry:
-            entry['timer'].stop()
+            if entry.get('timer') is not None:      # None: still in its lead-in
+                entry['timer'].stop()
             resident = entry['resident']
             if not getattr(getattr(resident, 'lifecycle', None), 'is_dead', False):
                 resident.can_move = entry['was_moving']
         self.hide_fight_cloud(key)
         if entry and completed and entry.get('on_finished'):
             entry['on_finished']()
+
+    def flash_contested(self, item, duration_ms: int) -> bool:
+        """The object two squid are fighting over flashes dark red.
+
+        A drawing only: a colourise effect switched on and off every
+        CONTEST_FLASH_MS, then put back as it was. An object that already
+        shows another kind of effect is left alone; one that leaves the tank
+        stops flashing. Flashing an object again extends it.
+        """
+        try:
+            if item is None or item.scene() is not self.scene:
+                return False
+            existing = item.graphicsEffect()
+        except (AttributeError, RuntimeError):
+            return False
+        key = id(item)
+        clock_now = QtCore.QDateTime.currentMSecsSinceEpoch()
+        flash = self._contest_flashes.get(key)
+        if flash is not None:
+            flash['until'] = max(flash['until'], clock_now + int(duration_ms))
+            return True
+        if existing is not None and not isinstance(existing, QtWidgets.QGraphicsColorizeEffect):
+            return False
+        if existing is None:
+            effect, restore = QtWidgets.QGraphicsColorizeEffect(), None
+            item.setGraphicsEffect(effect)
+        else:
+            effect, restore = existing, (QtGui.QColor(existing.color()), existing.strength())
+        effect.setColor(QtGui.QColor(*self.CONTEST_RED))
+        effect.setStrength(1.0)
+        timer = QtCore.QTimer()
+        flash = {'item': item, 'effect': effect, 'restore': restore, 'timer': timer,
+                 'until': clock_now + int(duration_ms), 'on': True}
+        self._contest_flashes[key] = flash
+
+        def tick():
+            try:
+                if (item.scene() is not self.scene
+                        or QtCore.QDateTime.currentMSecsSinceEpoch() >= flash['until']):
+                    self._end_contest_flash(key)
+                    return
+                flash['on'] = not flash['on']
+                effect.setStrength(1.0 if flash['on'] else 0.0)
+            except RuntimeError:
+                self._end_contest_flash(key)
+        timer.timeout.connect(tick)
+        timer.start(self.CONTEST_FLASH_MS)
+        return True
+
+    def _end_contest_flash(self, key) -> None:
+        flash = self._contest_flashes.pop(key, None)
+        if flash is None:
+            return
+        flash['timer'].stop()
+        item, effect, restore = flash['item'], flash['effect'], flash['restore']
+        try:
+            if restore is None:
+                if item.graphicsEffect() is effect:
+                    item.setGraphicsEffect(None)
+            else:
+                effect.setColor(restore[0])
+                effect.setStrength(restore[1])
+        except RuntimeError:
+            pass
 
     def show_fight_cloud(self, key: str, x: float, y: float,
                          duration_ms: int = FIGHT_CLOUD_MS) -> bool:
@@ -723,7 +897,9 @@ class RemoteEntityManager:
         if visual and visual.scene():visual.scene().removeItem(visual)
         if self.debug_mode:self.logger.debug(f"Removed remote object {obj_id}")
     def cleanup_all(self): # Full method
+        self.swim_timer.stop()
         for key in list(self._scuffles): self._end_scuffle(key)
+        for key in list(self._contest_flashes): self._end_contest_flash(key)
         for key in list(self._fight_clouds.keys()):self.hide_fight_cloud(key)
         for key in list(self._mating_hearts.keys()):self.hide_mating_heart(key)
         for nid in list(self.remote_squids.keys()):self.remove_remote_squid(nid)

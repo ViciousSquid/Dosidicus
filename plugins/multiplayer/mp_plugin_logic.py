@@ -166,6 +166,7 @@ class MultiplayerPlugin:
                     debug_mode=self.debug_mode, # self.debug_mode should be set in MpPluginLogic
                     logger=self.logger.getChild("RemoteEntityManager") # Pass a child logger
                 )
+                self.entity_manager.resident_frame = self._resident_swim_frame
                 self.logger.info("RemoteEntityManager initialized successfully.")
             except ImportError: # Should not happen if imports are correct at file top
                 self.logger.error("RemoteEntityManager import failed during initialization. Visuals for remote entities will be basic or non-functional.", exc_info=True)
@@ -510,6 +511,7 @@ class MultiplayerPlugin:
                     debug_mode=self.debug_mode, # Correct: Pass the debug_mode boolean
                     logger=self.logger.getChild("RemoteEntityManager") # Good practice for logger
                 )
+                self.entity_manager.resident_frame = self._resident_swim_frame
                 self.logger.info("RemoteEntityManager initialized.")
             except ImportError: # Should be caught if RemoteEntityManager isn't imported
                 self.logger.error("RemoteEntityManager class import failed. Visuals for remote entities will be basic or non-functional.", exc_info=True)
@@ -963,6 +965,12 @@ class MultiplayerPlugin:
             vx, vy = actor.x + width / 2, actor.y + height / 2
         return show(actor.uuid, (rx + vx) / 2, (ry + vy) / 2)
 
+    def _resident_swim_frame(self):
+        """The frame the resident is drawn with (0 or 1): visitors swim on
+        the other one (RemoteEntityManager._swim)."""
+        squid = getattr(self.tamagotchi_logic, 'squid', None)
+        return getattr(squid, 'current_frame', None)
+
     def handle_resident_died(self, **kwargs) -> None:
         """This tank's resident has died. End every visit to it.
 
@@ -1028,11 +1036,17 @@ class MultiplayerPlugin:
         if callable(sequence) and actor is not None:
             already_busy = actor.body_busy_until > self.host_body.clock()
             fight_id = str(uuid.uuid4())
+            # A fight over an object opens with the object flashing dark red
+            # (RemoteEntityManager.CONTEST_LEAD_MS) before the bodies close in.
+            contested = getattr(presence, 'contested_item', None)
+            lead = getattr(self.entity_manager, 'CONTEST_LEAD_MS', 0) / 1000.0 \
+                if contested is not None else 0.0
             started = sequence(peer_uuid, self.visit_node_ids.get(peer_uuid), squid, actor,
-                               on_finished=lambda: self.resolve_fight(actor, fight_id))
+                               on_finished=lambda: self.resolve_fight(actor, fight_id),
+                               contested=contested)
             if started and not already_busy:
                 self._fight_starts[fight_id] = start
-                actor.body_busy_until = self.host_body.clock() + 3.2
+                actor.body_busy_until = self.host_body.clock() + lead + 3.2
                 self._fight_cooldown_until[peer_uuid] = now + self.FIGHT_COOLDOWN
             return started
         shown = self.entity_manager.show_fight_cloud(

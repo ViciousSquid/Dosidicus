@@ -51,6 +51,8 @@ def _build_catalog():
 DECO_CATALOG = _build_catalog()
 
 _ASPECT_CACHE = {}
+#: The tint of an object two squid are fighting over, when lit.
+CONTEST_RED = (0.55, 0.0, 0.0, 1.0)
 
 
 def deco_source(deco):
@@ -84,6 +86,7 @@ class _DecoScatter(Scatter):
                     size=self.size, size_hint=(None, None))
         self.bind(size=lambda *_: setattr(img, "size", self.size))
         self.add_widget(img)
+        self.img = img
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos) and self.deco.get("category") == "headstone":
@@ -183,6 +186,13 @@ class DecorationLayer(FloatLayout):
             for deco in self.sim.decorations:
                 if deco["id"] not in self._scatters:
                     self.add(deco)
+
+        # The rock two squid are fighting over flashes dark red.
+        flashing, lit = self.sim.contested_flash()
+        for did, sc in self._scatters.items():
+            colour = CONTEST_RED if (did == flashing and lit) else (1, 1, 1, 1)
+            if tuple(sc.img.color) != colour:
+                sc.img.color = colour
 
         ids = set(self.sim._rock_velocities.keys())
         if self.sim.squid.carried_rock_id is not None:

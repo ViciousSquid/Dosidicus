@@ -103,13 +103,14 @@ becomes increasingly sociable. Same start, diverging lives.
 | `e89bda0` | A squid judges whether its throw reaches the squid it aims at, and closes in if not |
 | `faa5e8c` | Throws stray by motor noise that narrows with practice (`throwing.release`) |
 | `9e439a7` | Mobile lifecycle parity: neglect/sickness/injury/starvation deaths, headstones with epitaphs (name, age, fights), succession in the same tank, Android-hosted matings with both gametes, inheritance, resident recognition; desktop headstone tooltip shows the epitaph; mobile visitors swim on the other frame |
-| this commit | `plugins/multiplayer/docs/protocol.md`: the wire, every message's shape, a visit end to end |
+| `3bfcbd2` | `plugins/multiplayer/docs/protocol.md`: the wire, every message's shape, a visit end to end |
+| this commit | Host and guest swim on opposite frames, always animating (desktop); the object of a fight flashes dark red from 2 s before the scuffle to 2 s after (desktop and Android); LAN harness allows a rested squid's second visit |
 
 Earlier on the branch (before this work): release workflows for all platforms
 (`e1f47c3`), shared brain interchange, the real two-instance gallery
 (`docs/canary-gallery`, now stale - see section 5).
 
-Test suite at the last commit: **816 passed**
+Test suite at the last commit: **829 passed**
 (`QT_QPA_PLATFORM=offscreen python -m pytest tests android/tests -q -p no:cacheprovider`, ~50 s).
 
 ---
@@ -328,13 +329,8 @@ Priority order agreed with the owner: big code changes first.
 - **Pruning**: social neurons/sensors prunable by the normal pruning when not
   useful; `can_see_squid` protected (`neurogenesis.intelligent_pruning`
   currently skips anything with `represents_concept`).
-- **Host and guest always use both swim frames, never in sync** (desktop
-  `remote_entity_manager` visuals vs `Squid` frames; mobile done).
 - **Desktop death by injury**: mobile dies at 0 health (`CAUSE_INJURED`);
   desktop health falls with rocks and fights but ends nothing. Owner to decide.
-- **Contested object flashes dark red**: when a fight arises from a contest
-  over an object, tint it dark red and flash it from 2 s before the scuffle
-  (a lead-in after the fight is decided) until 2 s after. Desktop + mobile.
 - **Docs**: `plugins/multiplayer/docs/` describing social behaviours (senses,
   social neurons and how the social network grows inside the main network,
   personality-as-wiring, memory/recognition, fights, consequences, ink,

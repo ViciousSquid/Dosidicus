@@ -56,8 +56,8 @@ class ConspecificPresence:
     """One other squid, as currently perceived."""
 
     __slots__ = ('identity', 'x', 'y', 'distance', 'closing_rate', 'ahead',
-                 'status', 'last_update', 'contest_until', 'contest_by', '_last_distance',
-                 '_last_distance_at')
+                 'status', 'last_update', 'contest_until', 'contest_by', 'contested_item',
+                 '_last_distance', '_last_distance_at')
 
     def __init__(self, identity: SquidIdentity, now: float):
         self.identity = identity
@@ -70,6 +70,9 @@ class ConspecificPresence:
         self.last_update = now
         self.contest_until = 0.0
         self.contest_by = 'local'
+        #: The object of its latest contest with this squid (a scene item),
+        #: or None for a confrontation over nothing.
+        self.contested_item = None
         self._last_distance: Optional[float] = None
         self._last_distance_at = now
 
@@ -195,6 +198,7 @@ class ConspecificView:
         if presence is not None:
             presence.contest_until = stamp + CONTEST_LINGER
             presence.contest_by = 'peer' if by == 'peer' else 'local'
+            presence.contested_item = item
         self._contest_log.append({
             'peer_uuid': getattr(rival, 'uuid', ''),
             'taken': bool(taken),

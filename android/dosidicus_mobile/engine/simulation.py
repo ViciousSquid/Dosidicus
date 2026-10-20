@@ -79,6 +79,7 @@ class Simulation:
         # Territorial fight between the resident and a visitor (transient).
         self.fight = None
         self._fight_cooldown = 0.0
+        self.contested = None          # {'id', 'until'}: a rock fought over, flashing
         # Egg hatching: a new game begins as an egg that plays its frames
         # (1/second) before the squid emerges.
         self.hatching = False
@@ -733,6 +734,12 @@ class Simulation:
             self._end_fight(None)
             return
 
+        if f['phase'] == 'squaring':
+            # A fight over an object: it flashes before the bodies come
+            # together. Both hold still, facing off.
+            if now < f['until']:
+                return
+            f['phase'] = 'approaching'
         if f['phase'] == 'approaching':
             distance = math.hypot(squid.x-v['x'], squid.y-v['y'])
             if distance > 38:
@@ -770,8 +777,17 @@ class Simulation:
         if self.fight is None:
             squid = self.squid
             import uuid
-            self.fight = {"visitor_id": v["id"], "phase": "approaching",
-                          "until": squid.brain.sim_time + 3.5, "instigator": instigator,
+            now = squid.brain.sim_time
+            # What they are fighting over: a rock either of them is holding.
+            # It flashes dark red from CONTEST_LEAD before the scuffle until
+            # CONTEST_AFTER after it (the renderer draws it; nothing changes).
+            held = v.get("carried_rock") if v.get("carried_rock") is not None else (
+                squid.carried_rock_id if squid.carrying_rock else None)
+            self.contested = {"id": held, "until": None} if held is not None else None
+            self.fight = {"visitor_id": v["id"],
+                          "phase": "squaring" if held is not None else "approaching",
+                          "until": now + (self.CONTEST_LEAD if held is not None else 3.5),
+                          "instigator": instigator,
                           "why": dict(why or {}), "id": uuid.uuid4().hex}
             squid.fighting = True
             v["fighting"] = True
@@ -839,7 +855,25 @@ class Simulation:
                        importance=7.0, related=["aggression", "social_fight"])
         self.visitor_event = f"{squid.name}: {summary}"
 
+    #: A fight over an object: how long it flashes before and after the scuffle.
+    CONTEST_LEAD = 2.0
+    CONTEST_AFTER = 2.0
+
+    def contested_flash(self):
+        """The decoration id flashing dark red now, and whether this instant is
+        a lit one - or (None, False)."""
+        contest = self.contested
+        if contest is None:
+            return None, False
+        now = self.squid.brain.sim_time
+        if contest["until"] is not None and now >= contest["until"]:
+            self.contested = None
+            return None, False
+        return contest["id"], int(now * 4) % 2 == 0
+
     def _end_fight(self, v):
+        if self.contested is not None and self.contested["until"] is None:
+            self.contested["until"] = self.squid.brain.sim_time + self.CONTEST_AFTER
         self.squid.fighting = False
         if v is not None:
             v["fighting"] = False
@@ -1141,7 +1175,7 @@ class Simulation:
         self.brain_window = SimpleNamespace(brain_widget=newborn.brain)
         self.food_items, self.poop_items, self.ink_clouds = [], [], []
         self.visitors, self._visitor_minds, self.peer_visits = [], {}, []
-        self.fight, self._fight_cooldown = None, 0.0
+        self.fight, self._fight_cooldown, self.contested = None, 0.0, None
         self._rock_velocities.clear()
         self._rock_throws.clear()
         self._prev_pos = (newborn.x, newborn.y)

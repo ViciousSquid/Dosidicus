@@ -32,6 +32,18 @@ through how the squid's network was wired and what it has lived through.
 On the host, the resident's aggression is read from its brain; the visitor's
 comes with each of its intents, worked out on its own machine.
 
+**A fight over an object** - on desktop, a contest over food or a rock that
+turns into a fight; on Android, a rock either squid is holding - opens with a
+lead-in: the object flashes dark red for 2 seconds while the two square up,
+then the bodies come together under the cloud, and it keeps flashing for 2
+seconds after (`RemoteEntityManager.flash_contested`; mobile
+`Simulation.contested_flash`). A drawing only: the object and both squid are
+unchanged by it, and any tint the object had comes back.
+
+While a visitor is in the tank, host and guest always swim with both frames,
+never in step: the guest is drawn on whichever frame the resident is not, and
+turns its own over when the resident is still.
+
 ## Winning a fight - ability
 
 When the scuffle ends, each side's ability (`side`, `fighting_ability`) is:

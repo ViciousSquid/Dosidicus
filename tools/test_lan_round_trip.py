@@ -190,7 +190,9 @@ def worker(role, output):
                 state['thoughts'] = [t for _, t in getattr(brain, 'social_thoughts', [])][-8:]
         if 'home_at' in state and squid.is_sleeping:
             state['slept_at_home'] = True       # sleep is quick: 28 sleepiness a second
-        if 'home_at' in state and elapsed > state['home_at'] + 3 and not state.get('saved'):
+        # Saved as soon as it has slept at home: rested, it may well set off
+        # again by itself within seconds - its own decision, a second visit.
+        if 'home_at' in state and state.get('slept_at_home') and not state.get('saved'):
             assert window.tamagotchi_logic.save_game()
             saved = window.tamagotchi_logic.save_manager.get_latest_save()
             with zipfile.ZipFile(saved) as archive:
@@ -287,8 +289,9 @@ def run(output):
         for role in ROLES:
             assert set(r[role]['heard']) >= set(nodes.values()) - {nodes[role]}, (role, r[role]['heard'])
         # 2-3. It left by itself, asked one host, and only that host took it in.
+        # (Rested, it may set off again after coming home: a later visit.)
         assert traveller['before'] == [] and 'away_at' in traveller
-        admitted = [h for h in hosts if 'admitted_at' in h]
+        admitted = [h for h in hosts if h.get('admitted_at', 1e9) <= traveller['home_at']]
         assert len(admitted) == 1, 'admitted by more than one host'
         assert admitted[0]['node_id'] == traveller['asked']
         assert admitted[0]['visitor'] == traveller['uuid']
