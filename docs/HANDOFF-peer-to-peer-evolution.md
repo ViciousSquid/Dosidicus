@@ -96,13 +96,20 @@ becomes increasingly sociable. Same start, diverging lives.
 | `3e4a8f6`, `bfd5eb4` | Rocks: aimed (leading for drop and drag) and powered by the network; swept, replay-safe hits that are only felt; Android live visits (`UNSTABLE` merged - `plugins/multiplayer/docs/rocks.md`) |
 | `c6df2c4`, `03ae341` | Social knowledge, apart from the tank: Memory tab Social page, Laboratory social card and overview, Decisions tab social thoughts (`src/social_knowledge.py`); blank Social page "Enable Multiplayer" in every language |
 | `2405108`, `bc43c6b`, `a3e391d` | Language splash before anything else starts; the tutorial question drawn the same way |
-| this commit | Venturing out by the squid's own network (`src/venturing.py`): grown `aquarium_nearby` sense, temperament wiring, encounter lessons; the exit identity's protocol fixed (hosts had refused every self-made exit); proven in two real processes (`tools/test_venture_multiplayer.py`) |
+| `fdb7ed0`, `1a12988` | Venturing out by the squid's own network (`src/venturing.py`): grown `aquarium_nearby` sense, temperament wiring, encounter lessons; the exit identity's protocol fixed (hosts had refused every self-made exit); each departure addressed to one aquarium; proven in two real processes (`tools/test_venture_multiplayer.py`) |
+| `61e574b` | Visitors come home by fear (`act_flee`) or tiredness (`act_rest`, collapse); always home to sleep; a stubborn squid resists sleep, never indefinitely |
+| `5f26f7d` | Three-squid LAN round trip with a reload in a fresh process (`tools/test_lan_round_trip.py`), and the host-tank bugs it found |
+| `129eb16` | Poop throwing: aimed like a rock, no harm but dirtier, more anxious, unhappier; the worse mark on an encounter |
+| `e89bda0` | A squid judges whether its throw reaches the squid it aims at, and closes in if not |
+| `faa5e8c` | Throws stray by motor noise that narrows with practice (`throwing.release`) |
+| `9e439a7` | Mobile lifecycle parity: neglect/sickness/injury/starvation deaths, headstones with epitaphs (name, age, fights), succession in the same tank, Android-hosted matings with both gametes, inheritance, resident recognition; desktop headstone tooltip shows the epitaph; mobile visitors swim on the other frame |
+| this commit | `plugins/multiplayer/docs/protocol.md`: the wire, every message's shape, a visit end to end |
 
 Earlier on the branch (before this work): release workflows for all platforms
 (`e1f47c3`), shared brain interchange, the real two-instance gallery
 (`docs/canary-gallery`, now stale - see section 5).
 
-Test suite at the last commit: **743 passed**
+Test suite at the last commit: **816 passed**
 (`QT_QPA_PLATFORM=offscreen python -m pytest tests android/tests -q -p no:cacheprovider`, ~50 s).
 
 ---
@@ -299,10 +306,13 @@ Priority order agreed with the owner: big code changes first.
 
 ### Big
 
-- **Mobile parity**: mating (host-decided, 2%, 2 s contact) with egg,
-  starvation and hatch, inheritance; neglect/sickness deaths; headstones;
-  recognition percepts from mobile memory (mobile has no `PeerLedger`);
-  `src/lifecycle.py` is already shipped to mobile.
+- **Protocol problems** found while writing `protocol.md` (its review list):
+  `object_sync` broadcasts hunger and happiness; `PacketValidator` is not
+  wired in; datagrams over 1472 bytes are cut; nothing checks who sent a
+  remote-mind message (visit ids are public); the legacy `squid_return`
+  handler still acts on untrusted summaries; intent leases compare two
+  machines' clocks; `(node_id, timestamp)` de-duplication can drop
+  back-to-back messages on coarse clocks.
 
 ### Smaller
 
@@ -319,9 +329,9 @@ Priority order agreed with the owner: big code changes first.
   useful; `can_see_squid` protected (`neurogenesis.intelligent_pruning`
   currently skips anything with `represents_concept`).
 - **Host and guest always use both swim frames, never in sync** (desktop
-  `remote_entity_manager` visuals vs `Squid` frames; mobile `tankview`).
-- **Headstone tooltip**: name, age at death, fights won and lost (stored with
-  the headstone).
+  `remote_entity_manager` visuals vs `Squid` frames; mobile done).
+- **Desktop death by injury**: mobile dies at 0 health (`CAUSE_INJURED`);
+  desktop health falls with rocks and fights but ends nothing. Owner to decide.
 - **Contested object flashes dark red**: when a fight arises from a contest
   over an object, tint it dark red and flash it from 2 s before the scuffle
   (a lead-in after the fight is decided) until 2 s after. Desktop + mobile.

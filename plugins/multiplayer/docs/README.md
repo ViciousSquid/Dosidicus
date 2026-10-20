@@ -10,7 +10,8 @@ Evolution emerges from the consequences.
 | [Fights](fights.md) | Predisposition (the grown aggression neuron) versus ability (body, experience, commitment), what a fight costs, and the record kept of every one |
 | [Rocks](rocks.md) | Throw or drop from the network, aim and speed, swept hits that are only felt, and how impacts cross the wire safely |
 | [Reading a squid's social mind](reading-the-mind.md) | Where to read what a squid knows of other squid, apart from its tank: the Memory tab's Social page, the Laboratory's social cards, and the Decisions tab's social thoughts |
-| [Mating, eggs and inheritance](reproduction.md) | How a mating happens, the parent and its egg, and how a hatchling inherits half its weights from each parent |
+| [Mating, eggs and inheritance](reproduction.md) | How a mating happens, the parent and its egg, how any squid can die and what follows, and how a hatchling inherits half its weights from each parent - on desktop and Android |
+| [The protocol](protocol.md) | The wire itself: transport, envelope, every message's shape and fields, a visit from start to end, timings, and what never crosses |
 
 The rules all of it follows:
 
@@ -24,5 +25,6 @@ The rules all of it follows:
 - **Consequences persist.** Saves are permanently changed; some changes, like
   a raised resting aggression, can never go back.
 
-The plugin's own README (`../README`) covers the protocol, consent, timings and
-running two instances.
+The plugin's own README (`../README`) covers consent, timings and running two
+instances; [protocol.md](protocol.md) is the full technical description of the
+protocol.

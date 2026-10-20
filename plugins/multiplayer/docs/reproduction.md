@@ -25,6 +25,27 @@ loses health until it dies (`CIRCLE OF LIFE` achievement). Then its egg hatches 
 Game, shown by the ordinary New Game egg animation, handed over from the egg
 pixel for pixel. The parent's headstone stays in the tank.
 
+## Death, and what comes after
+
+Any squid can die, not only a parent (`src/lifecycle.py`): of **neglect**
+(left at its hungriest for 5 minutes of play), of **sickness** left 10
+minutes without medicine, of its **injuries** once rocks and fights have left
+it no health (on Android; desktop health does not yet end a life), or - a
+parent - **starved**. A headstone is laid where it died, and its epitaph keeps
+its name, how long it lived and its fights won and lost (hover on desktop,
+tap on Android). A few seconds later a new squid hatches in the same tank:
+from the parent's egg if there is one, otherwise from a fresh egg. Headstones
+are never removed.
+
+## Android
+
+The Android game lives the same life through the same code: `HostBody`
+resolves a mating on an Android host with the same chance and contact time,
+the egg carries both gametes over the Nearby link, a parent does not eat or
+go visiting, and the hatchling inherits as below
+(`android/dosidicus_mobile/engine/simulation.py`: `record_reproduction`,
+`on_squid_died`, `continue_after_death`).
+
 ## Inheritance
 
 A hatchling inherits **half its weights from each parent**
@@ -57,4 +78,5 @@ lives make of it.
 | Mating | `plugins/multiplayer/host_body.py`: `_resolve_contact`; `mp_plugin_logic.record_mating` |
 | Parent, egg, death | `src/lifecycle.py`; `src/tamagotchi_logic.py`: `record_reproduction`, `begin_egg_hatching` |
 | Inheritance | `src/inheritance.py`; `Lifecycle.add_genes`; `remote_protocol.Gamete`; `VisitorMind._send_gamete`; `MultiplayerPlugin.handle_gamete`; `main.py` `_begin_new_life` |
-| Specification | `tests/test_reproduction_lifecycle.py`, `tests/test_new_game_and_hatch.py` |
+| Android | `android/dosidicus_mobile/engine/simulation.py`, `peer_visit.py` (`_on_mating`, `_keep_gamete`) |
+| Specification | `tests/test_reproduction_lifecycle.py`, `tests/test_new_game_and_hatch.py`, `android/tests/test_mobile_lifecycle.py` |
