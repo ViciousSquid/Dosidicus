@@ -94,7 +94,9 @@ becomes increasingly sociable. Same start, diverging lives.
 | `2c49c35` | Social birth wiring taken from the experience that grew each neuron - the hard-rule tables are gone |
 | `425db91`, `9104c45` | `plugins/multiplayer/docs/` (social network, social learning, fights, reproduction) |
 | `3e4a8f6`, `bfd5eb4` | Rocks: aimed (leading for drop and drag) and powered by the network; swept, replay-safe hits that are only felt; Android live visits (`UNSTABLE` merged - `plugins/multiplayer/docs/rocks.md`) |
-| this commit | Social knowledge, apart from the tank: Memory tab Social page, Laboratory social card and overview, Decisions tab social thoughts (`src/social_knowledge.py`) |
+| `c6df2c4`, `03ae341` | Social knowledge, apart from the tank: Memory tab Social page, Laboratory social card and overview, Decisions tab social thoughts (`src/social_knowledge.py`); blank Social page "Enable Multiplayer" in every language |
+| `2405108`, `bc43c6b`, `a3e391d` | Language splash before anything else starts; the tutorial question drawn the same way |
+| this commit | Venturing out by the squid's own network (`src/venturing.py`): grown `aquarium_nearby` sense, temperament wiring, encounter lessons; the exit identity's protocol fixed (hosts had refused every self-made exit); proven in two real processes (`tools/test_venture_multiplayer.py`) |
 
 Earlier on the branch (before this work): release workflows for all platforms
 (`e1f47c3`), shared brain interchange, the real two-instance gallery
@@ -297,11 +299,6 @@ Priority order agreed with the owner: big code changes first.
 
 ### Big
 
-- **Squid senses nearby aquariums and decides itself to venture out**
-  (gameplay loop 2-3): peers discovered -> a percept -> a sense organ grown the
-  first time; exit through an edge only when its own network is driving it
-  there (exploring/moving, not fleeing, chasing food or fallback wandering).
-  Currently any edge contact with multiplayer on exits (`Squid.check_boundary_exit`).
 - **Mobile parity**: mating (host-decided, 2%, 2 s contact) with egg,
   starvation and hatch, inheritance; neglect/sickness deaths; headstones;
   recognition percepts from mobile memory (mobile has no `PeerLedger`);

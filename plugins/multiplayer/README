@@ -25,9 +25,11 @@ That notice is shown the first time multiplayer is enabled (remembered as
 **Whether to mollycoddle your squid or foster its independence is up to you.**
 Keep multiplayer off and it never meets another squid: it cannot fight, it
 cannot mate, and no egg is ever laid - reproduction has no other way to
-happen. Turn multiplayer on and it can swim off into other tanks, where its own
-brain - not you, and not the other player - decides what it does with whoever
-it meets.
+happen. Turn multiplayer on and it can swim off into other tanks - when its
+own network decides to: it grows a sense for another aquarium nearby the first
+time it hears one, and leaves only while that is driving it to explore
+(`docs/social-network.md`, section 8). Over there its own brain - not you, and
+not the other player - decides what it does with whoever it meets.
 
 What it can find out there:
 

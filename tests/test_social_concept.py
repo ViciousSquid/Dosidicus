@@ -23,7 +23,8 @@ from pathlib import Path
 import pytest
 
 from src.brain_constants import (ACTION_THRESHOLDS, BINARY_NEURONS, RETIRED_NEURONS,
-                                 SOCIAL_NEURONS, SOCIAL_SENSORS, is_learning_target,
+                                 SOCIAL_NEURONS, SOCIAL_SENSORS, SQUID_SENSORS,
+                                 is_learning_target,
                                  newborn_neurons)
 from src.decision_engine import wants
 from src.portable_brain import HeadlessBrain
@@ -166,7 +167,7 @@ def test_each_sense_grows_the_first_time_its_concept_matters_and_feeds_the_socia
     assert brain.weights['remembers_bad_encounter', 'social_fight'] > 0
     live(brain, ticks=1, squid_familiar=40., squid_recalled_good=30.)
     assert 'remembers_good_encounter' in grown(brain)
-    for sense in SOCIAL_SENSORS:
+    for sense in SQUID_SENSORS:
         assert not [edge for edge in brain.weights if edge[1] == sense]
         assert brain.ledger.origins[sense].deficit_summary
 

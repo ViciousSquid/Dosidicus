@@ -19,6 +19,7 @@ Through the senses the squid already has, and nothing else.
 | `squid_proximity` | How close the nearest other squid is, 0-100 over 400 px (`vision_cone.proximity`) - felt whichever way it is looking. |
 | `in_fight` | Its body is in a scuffle. |
 | `squid_familiar`, `squid_recalled_good`, `squid_recalled_bad` | Its **own memory** of the individual in its view cone (`PeerLedger`, section 4 of [social learning](social-learning.md)). Never something the other squid or its host says. |
+| `aquarium_heard` | Another aquarium is nearby: a peer's heartbeat heard on the network in the last 30 s (`venturing.peer_heard`). Not about a squid in view - how a squid comes to know there is somewhere to go. |
 
 These are **percepts**, not neurons (`brain.perceive(name, value)`). A percept
 does nothing to the network until the squid has grown a sense organ for it.
@@ -44,13 +45,15 @@ evidence - and at most one grows per tick.
 | `recognises_squid` | the squid in view is one it remembers | tick box |
 | `remembers_bad_encounter` | it meets one it remembers badly | how badly, 0-100 |
 | `remembers_good_encounter` | it meets one it remembers well | how well, 0-100 |
+| `aquarium_nearby` | it hears another aquarium (no squid in view needed) | tick box |
 
 Each is classified as a sensor only once grown (`ensure_grown_sensor`), so no
 synapse can ever point at it; the world writes it every tick from its percept.
 Binary ones are drawn as tick boxes, as `can_see_food` is.
 
-`can_see_squid` is the only one grown whatever the brain's size limit: without
-it a squid cannot know another squid exists. The others respect the limit.
+`can_see_squid` and `aquarium_nearby` are the only ones grown whatever the
+brain's size limit: without them a squid cannot know another squid, or another
+aquarium, exists. The others respect the limit.
 
 ### Social neurons - grown from what the squid did
 
@@ -93,7 +96,10 @@ wired to what was happening in the squid when it grew
   stubborn one's to play and a little anxiety - the same way personality tilts
   the innate pathways (`INNATE_PERSONALITY_BIAS`). That is how different
   personalities react differently to the same first sight: some approach, some
-  flee, some only watch.
+  flee, some only watch. `aquarium_nearby` is wired the same way
+  (`VENTURING_TEMPERAMENT`): an adventurous squid's excites its exploring
+  (`act_move`) and curiosity, a timid one's inhibits exploring and stirs a
+  little anxiety. That decides who ventures out (section 8).
 
 Anything beyond birth - `aggression` coming to calm anxiety, a bad memory
 coming to feed flight, a sense that turns out to matter more than another - is
@@ -147,6 +153,26 @@ parent - but only synapses between the neurons every newborn has
 ([reproduction](reproduction.md)) - so each generation grows its own social
 network from its own encounters, on a slightly different innate wiring.
 
+## 8. Venturing out
+
+Enabling multiplayer only makes visiting possible (`src/venturing.py`). A
+squid leaves its tank while, at once:
+
+- its `aquarium_nearby` sense reports another aquarium,
+- its exploring neuron, `act_move`, is firing, and
+- that sense is pushing its exploring **up**: its synapse onto `act_move` is
+  excitatory, so the other aquarium is part of why it explores.
+
+Then exploring takes it to the nearest side of the tank (left or right, never
+the surface or the sand), and there it asks the other tank's host to come in.
+Not while fleeing, chasing food or merely drifting; and the edges stop it
+otherwise, as they do with multiplayer off. A timid squid, born with the sense
+inhibiting its exploring, stays home. Encounters move these synapses as they
+move `can_see_squid`'s ([social learning](social-learning.md)): an
+adventurous squid that keeps getting hurt comes to stay home too. The squid's
+thoughts say when it leaves and why ("Another aquarium is nearby and I want to
+explore it"); `Squid.why_not_venturing()` says why it has not.
+
 ## Code
 
 | What | Where |
@@ -156,4 +182,5 @@ network from its own encounters, on a slightly different innate wiring.
 | Percepts and resting levels | `src/propagation.py`: `perceive`, `CONCEPT_PERCEPTS`, `drive_external_neurons`, `propagate(resting=...)` |
 | Vision | `src/vision_worker.py`, `src/vision_cone.py`, `Squid.notice` |
 | Recognition | `plugins/multiplayer/encounter.py`: `perceive_recognition` |
-| Specification | `tests/test_social_concept.py` |
+| Venturing out | `src/venturing.py`; `Squid.is_venturing`, `check_boundary_exit`; `MultiplayerPlugin._perceive_aquariums` |
+| Specification | `tests/test_social_concept.py`, `tests/test_venturing.py`; two real processes: `tools/test_venture_multiplayer.py` |

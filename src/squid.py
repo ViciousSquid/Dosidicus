@@ -906,9 +906,38 @@ class Squid:
                 self.anxiety_cooldown_timer.stop()
             self.tamagotchi_logic.show_message("Squid has calmed down... mostly.")
     
+    #: Seconds between departure requests while waiting at the side.
+    EXIT_RETRY_SECONDS = 3.0
+
+    def is_venturing(self) -> bool:
+        """Is its own network taking it out of the tank? (src/venturing.py)"""
+        return self.why_not_venturing() is None
+
+    def why_not_venturing(self):
+        from .venturing import why_not
+        brain = getattr(getattr(getattr(self, 'tamagotchi_logic', None), 'brain_window', None),
+                        'brain_widget', None)
+        if brain is None:
+            return 'it has no brain to decide with'
+        lifecycle = getattr(self, 'lifecycle', None)
+        return why_not(getattr(brain, 'state', {}) or {}, getattr(brain, 'weights', {}) or {},
+                       fleeing=bool(getattr(self, 'is_fleeing', False)),
+                       chasing_food=bool(getattr(self, 'pursuing_food', False)),
+                       can_visit=bool(getattr(lifecycle, 'can_visit', True)))
+
+    def _exit_identity(self):
+        """Who is asking to come in, as the host checks it - with the
+        encounter protocol this build speaks. A hard-coded protocol 1 had
+        every host refuse the squid (protocol_mismatch), so none could leave."""
+        from plugins.multiplayer.identity import SquidIdentity
+        identity = SquidIdentity.from_squid(self)
+        return identity.to_payload() if identity is not None else {}
+
     def check_boundary_exit(self):
         """
-        Comprehensive boundary exit detection with robust network node handling
+        Leave through the side the squid has reached - only while its own
+        network is taking it out (is_venturing), and through the left or
+        right side, never the surface or the sand.
         """
         try:
             # Check basic prerequisites
@@ -917,6 +946,11 @@ class Squid:
             
             # A parent stays with its egg, and a dead squid goes nowhere.
             if not self.lifecycle.can_visit:
+                return False
+
+            if not self.is_venturing():
+                return False
+            if time.time() - getattr(self, '_last_exit_request', 0.0) < self.EXIT_RETRY_SECONDS:
                 return False
 
             # Check plugin manager and multiplayer status
@@ -955,20 +989,10 @@ class Squid:
             
             exit_direction = None
             
-            print("\n===== BOUNDARY EXIT ANALYSIS =====")
-            print(f"Squid Position: ({self.squid_x}, {self.squid_y})")
-            print(f"Squid Dimensions: {self.squid_width}x{self.squid_height}")
-            print(f"Window Dimensions: {self.ui.window_width}x{self.ui.window_height}")
-            
-            # Comprehensive boundary checks
             if self.squid_x <= 0:
                 exit_direction = 'left'
             elif squid_right >= self.ui.window_width:
                 exit_direction = 'right'
-            elif self.squid_y <= 0:
-                exit_direction = 'up'
-            elif squid_bottom >= self.ui.window_height:
-                exit_direction = 'down'
             
             if exit_direction:
                 print(f"Exit Direction Detected: {exit_direction}")
@@ -989,13 +1013,7 @@ class Squid:
                     # Who is asking to come in. The host needs this to decide
                     # whether to admit the visitor at all, and to recognise it
                     # if it has been here before.
-                    'identity': {
-                        'uuid': str(getattr(self, 'uuid', '')),
-                        'name': getattr(self, 'name', 'Squid'),
-                        'personality': str(getattr(getattr(self, 'personality', None),
-                                                   'value', '') or 'unknown'),
-                        'protocol': 1,
-                    },
+                    'identity': self._exit_identity(),
                 }
                 
                 print("Exit Data Details:")
@@ -1004,11 +1022,15 @@ class Squid:
                 
                 # Broadcast exit message
                 try:
+                    self._last_exit_request = time.time()
                     network_node.send_message(
                         'squid_exit', 
                         {'payload': exit_data}
                     )
                     print("Exit message successfully broadcast")
+                    from .social_knowledge import think
+                    think(self.tamagotchi_logic, "Another aquarium is nearby and I want to "
+                          f"explore it: I am leaving through the {exit_direction} side.")
                     return True
                 except Exception as broadcast_error:
                     print(f"Broadcast error: {broadcast_error}")
@@ -1089,13 +1111,7 @@ class Squid:
                         'window_height': self.ui.window_height,
                         # See the other exit payload: the host cannot consent
                         # to, or recognise, a visitor it cannot identify.
-                        'identity': {
-                            'uuid': str(getattr(self, 'uuid', '')),
-                            'name': getattr(self, 'name', 'Squid'),
-                            'personality': str(getattr(getattr(self, 'personality', None),
-                                                       'value', '') or 'unknown'),
-                            'protocol': 1,
-                        },
+                        'identity': self._exit_identity(),
                     }
                     
                     print("Exit Data:")
@@ -1718,6 +1734,15 @@ class Squid:
         target = drive.get('target')
 
         if action == 'wander':
+            if self.is_venturing():
+                # Exploring, drawn by another aquarium: out of the nearest side.
+                from .venturing import way_out
+                _side, (tx, ty) = way_out(self.squid_x, self.squid_y, self.squid_width,
+                                          self.squid_height, self.ui.window_width)
+                self.status = "venturing out"
+                self.squid_direction = ("right" if tx > self.squid_x + self.squid_width / 2.0
+                                        else "left")
+                return True
             self.move_randomly()
             return True
 
@@ -1855,9 +1880,14 @@ class Squid:
         elif self.squid_direction == "down":
             squid_y_new += v_speed * self.animation_speed
 
-        # Boundary handling for single-player and multiplayer modes
-        if not multiplayer_enabled:
-            # Original boundary restrictions for single-player mode
+        # The tank's edges stop the squid - unless, with multiplayer on, its own
+        # network is taking it out (src/venturing.py): then it may reach the
+        # side it is heading for, and leaves there (check_boundary_exit).
+        venturing = multiplayer_enabled and self.is_venturing()
+        if venturing:
+            squid_x_new = max(0, min(self.ui.window_width - self.squid_width, squid_x_new))
+            squid_y_new = max(50, min(self.ui.window_height - 120 - self.squid_height, squid_y_new))
+        else:
             if squid_x_new < 50:
                 squid_x_new = 50
                 self.change_direction()
@@ -1871,11 +1901,6 @@ class Squid:
             elif squid_y_new > self.ui.window_height - 120 - self.squid_height:
                 squid_y_new = self.ui.window_height - 120 - self.squid_height
                 self.change_direction()
-        else:
-            # Extended boundary check for multiplayer
-            print("Multiplayer mode: Extended boundary check")
-            squid_right = squid_x_new + self.squid_width
-            squid_bottom = squid_y_new + self.squid_height
 
         # Update squid position
         self.squid_x = squid_x_new
@@ -1893,11 +1918,9 @@ class Squid:
         self.update_view_cone()
         self.update_head_icon_positions()
 
-        # Comprehensive boundary exit check in multiplayer mode
-        if multiplayer_enabled:
-            #print("Triggering boundary exit check in multiplayer mode")
-            exit_result = self.check_boundary_exit()
-            #print(f"Boundary Exit Result: {exit_result}")
+        # Leaving, if it is venturing out and has reached the side.
+        if venturing:
+            self.check_boundary_exit()
 
     def move_towards(self, x, y):
         dx = x - (self.squid_x + self.squid_width // 2)

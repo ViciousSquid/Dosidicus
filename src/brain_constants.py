@@ -677,7 +677,7 @@ ACTION_NEURON_NAMES = tuple(ACTION_NEURONS.keys())
 #: any of them. Each is written by the world from its percept, as can_see_food
 #: is, never by a synapse, and is classified as a sensor only once a brain has
 #: grown it (ensure_grown_sensor).
-SOCIAL_SENSORS = {
+SQUID_SENSORS = {
     'can_see_squid': ('squid_in_view', True),
     'squid_nearby': ('squid_proximity', False),
     'recognises_squid': ('squid_familiar', True),
@@ -685,8 +685,19 @@ SOCIAL_SENSORS = {
     'remembers_good_encounter': ('squid_recalled_good', False),
 }
 
+#: The one social sense that is not about a squid in view: that another
+#: aquarium is nearby (its peer heard on the network - multiplayer is the only
+#: way that can happen). Grown the first time one is heard; it is how a squid
+#: comes to venture out (src/venturing.py).
+AQUARIUM_SENSE = 'aquarium_nearby'
+
+SOCIAL_SENSORS = {**SQUID_SENSORS, AQUARIUM_SENSE: ('aquarium_heard', True)}
+
 #: The first of them, grown on the first sighting.
 SOCIAL_SENSOR = 'can_see_squid'
+
+#: Senses grown whatever the brain's size: nothing else can stand for them.
+REQUIRED_SOCIAL_SENSES = (SOCIAL_SENSOR, AQUARIUM_SENSE)
 
 #: The social neurons neurogenesis can grow once a squid knows other squid
 #: exist: the concepts for playing with, fighting or fleeing from one, and the

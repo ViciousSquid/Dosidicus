@@ -31,7 +31,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Set, Any
 
 from .capability import Deficit, regulation_specialisation
-from .brain_constants import (SOCIAL_SENSOR, SOCIAL_SENSORS, SOCIAL_NEURONS,
+from .brain_constants import (SOCIAL_SENSOR, SOCIAL_SENSORS, SOCIAL_NEURONS, SQUID_SENSORS,
+                              AQUARIUM_SENSE, REQUIRED_SOCIAL_SENSES,
                               ensure_grown_sensor)
 
 # Localisation. The package-relative import is the one that works when the
@@ -116,6 +117,7 @@ SOCIAL_CONCEPTS = {
     'social_fight': 'the concept of "fighting another squid"',
     'social_flee': 'the concept of "fleeing from another squid"',
     'aggression': 'the concept of "attacking another squid"',
+    'aquarium_nearby': 'the binary concept of "there is another aquarium nearby"',
 }
 
 #: When each social sense organ is grown: the first time its percept reaches
@@ -127,7 +129,12 @@ SOCIAL_SENSOR_GROWTH = {
     'recognises_squid': (0.0, 'It recognised a squid it had met before'),
     'remembers_bad_encounter': (0.0, 'It met a squid it remembered badly'),
     'remembers_good_encounter': (0.0, 'It met a squid it remembered fondly'),
+    'aquarium_nearby': (0.0, 'It sensed another aquarium nearby'),
 }
+
+#: Grown without a squid in view: news of another aquarium comes from the
+#: network, not from vision.
+UNSEEN_SENSES = (AQUARIUM_SENSE,)
 
 #: Each social neuron is grown from experience, not chosen: the first time
 #: everything listed is happening at once while another squid is in view - a
@@ -155,6 +162,22 @@ SIGHTING_TEMPERAMENT = {
     'stubborn': (('act_play', .8), ('anxiety', .2)),
     'energetic': (('curiosity', .5), ('act_play', .9)),
     'adventurous': (('curiosity', .5), ('act_play', .8)),
+}
+
+#: How aquarium_nearby is wired when it grows - like SIGHTING_TEMPERAMENT,
+#: personality entering as synapse weights: whether news of another aquarium
+#: stirs the squid to explore (act_move) or unsettles it. A squid only ever
+#: leaves while this sense is pushing its exploring up (src/venturing.py), so a
+#: bold squid ventures out and a timid one, born with it inhibitory, stays home -
+#: until its encounters move these synapses (social_learning).
+VENTURING_TEMPERAMENT = {
+    'timid': (('act_move', -.5), ('anxiety', .3)),
+    'introvert': (('act_move', -.3), ('anxiety', .2)),
+    'lazy': (('act_move', .2),),
+    'stubborn': (('act_move', .4),),
+    'greedy': (('act_move', .5), ('curiosity', .3)),
+    'energetic': (('act_move', .8), ('curiosity', .3)),
+    'adventurous': (('act_move', .9), ('curiosity', .5)),
 }
 
 #: Everything else in the social network is wired at birth from the moment
@@ -762,17 +785,20 @@ class EnhancedNeurogenesis:
         """
         bw = self.brain_widget
         percepts = getattr(bw, 'percepts', None) or {}
-        if percepts.get('squid_in_view', 0.0) <= 0.0:
-            return None
         positions = getattr(bw, 'neuron_positions', None) or {}
+        squid_in_view = percepts.get('squid_in_view', 0.0) > 0.0
         for sensor, (threshold, summary) in SOCIAL_SENSOR_GROWTH.items():
+            if not squid_in_view and sensor not in UNSEEN_SENSES:
+                continue
             percept = SOCIAL_SENSORS[sensor][0]
             if sensor not in positions and percepts.get(percept, 0.0) > threshold:
                 grown = self._grow_social_sensor(sensor, summary, percepts.get(percept))
                 if grown:
-                    self._think(f"{summary} I had no way to sense that, so I grew "
-                                f"{grown}: {SOCIAL_CONCEPTS[sensor]}.")
+                    self._think(f"{summary.rstrip('.!')}. I had no way to sense that, "
+                                f"so I grew {grown}: {SOCIAL_CONCEPTS[sensor]}.")
                 return grown
+        if not squid_in_view:
+            return None
         state = bw.state
         from .decision_engine import wants
 
@@ -803,7 +829,8 @@ class EnhancedNeurogenesis:
         percept = SOCIAL_SENSORS[sensor][0]
         deficit = Deficit(
             kind='representation', key=f'concept:{sensor}',
-            summary=summary, sources=['vision' if sensor == SOCIAL_SENSOR else percept],
+            summary=summary, sources=['vision' if sensor == SOCIAL_SENSOR
+                                      else 'network' if sensor == AQUARIUM_SENSE else percept],
             remedy=f'represent {SOCIAL_CONCEPTS[sensor]}.',
             evidence={'concept': sensor, 'event': summary,
                       percept: round(float(reading), 1),
@@ -882,10 +909,11 @@ class EnhancedNeurogenesis:
                    for drive in CORE_STAT_NEURONS
                    if drive in positions and abs(level(drive) - baseline_of(drive)) >= BIRTH_STIRRED}
         plan: List[Tuple[str, str, float, str]] = []
-        if concept == SOCIAL_SENSOR:
-            wiring = SIGHTING_TEMPERAMENT.get(self._personality(),
-                                              SIGHTING_TEMPERAMENT['adventurous'])
-            return [(neuron_name, target, weight, 'remedy') for target, weight in wiring]
+        if concept in (SOCIAL_SENSOR, AQUARIUM_SENSE):
+            table = SIGHTING_TEMPERAMENT if concept == SOCIAL_SENSOR else VENTURING_TEMPERAMENT
+            wiring = table.get(self._personality(), table['adventurous'])
+            return [(neuron_name, target, weight, 'remedy') for target, weight in wiring
+                    if target in positions]
         if concept in SOCIAL_SENSORS:
             reading = level(neuron_name) / 100.0
             for social in SOCIAL_NEURONS:
@@ -895,8 +923,10 @@ class EnhancedNeurogenesis:
                 plan.append((neuron_name, drive,
                              BIRTH_DRIVE_WEIGHT * max(-1.0, min(1.0, away / 50.0)), 'remedy'))
             return plan
-        # A social neuron: fed by what was sensed and felt, driving what was done.
-        for sense in SOCIAL_SENSORS:
+        # A social neuron: fed by what was sensed of the squid and felt,
+        # driving what was done. (Not by aquarium_nearby: that is news of a
+        # tank, not of the squid it is meeting.)
+        for sense in SQUID_SENSORS:
             if sense in positions and level(sense) > 0.0:
                 plan.append((sense, neuron_name, BIRTH_SENSE_WEIGHT * level(sense) / 100.0,
                              'remedy'))
@@ -968,7 +998,7 @@ class EnhancedNeurogenesis:
         # the brain's overall size.
         concept = deficit.evidence.get('concept', '') if deficit is not None else ''
         social = concept in SOCIAL_CONCEPTS
-        required_concept = concept == SOCIAL_SENSOR
+        required_concept = concept in REQUIRED_SOCIAL_SENSES
         grown_sensor = concept in SOCIAL_SENSORS
 
         # 0. EMERGENCY: a maximum-severity deficit is an emergency by

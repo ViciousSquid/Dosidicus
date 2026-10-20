@@ -86,6 +86,14 @@ alarm synapse to 0.6: met by a stranger, it no longer approaches. Six good ones
 (+20 each) take the pull to 1.0: it approaches straight away. The rule is the same for every squid;
 the lives are not.
 
+The same lesson reaches the squid's `aquarium_nearby` sense, if it has grown
+one: a bad encounter weakens its pull on exploring (`act_move`) and curiosity
+and strengthens its push on anxiety; a good one the opposite. A squid only
+ventures out while that sense excites its exploring
+([the social network](social-network.md), section 8), so an adventurous
+squid that keeps getting hurt stops visiting - twelve bad encounters (−20 each)
+take its pull from 0.9 to below zero.
+
 Every change goes through the brain's `apply_weight_change` with mechanism
 `encounter` and the encounter that caused it - its outcome, its valence, the
 squid it was with - so the Laboratory can show synapse by synapse how a life
@@ -120,9 +128,9 @@ that fleeing from one particular squid helps.
 | Why did a fight start, and why did it end that way? | Memory tab: `fight:` memories |
 | How aggro is it, and is that for good? | `aggression` neuron: its reading, and its resting level with every rise and cause |
 
-A dedicated Social Knowledge view in the Memory tab, an `aggression` card in
-the Laboratory, and social thoughts in the Decisions tab are planned (see
-`docs/HANDOFF-peer-to-peer-evolution.md`).
+All of it is gathered, apart from what it knows of its tank, on the Memory
+tab's Social page, the Laboratory's social cards and the Decisions tab's social
+thoughts ([reading the mind](reading-the-mind.md)).
 
 ## Code
 

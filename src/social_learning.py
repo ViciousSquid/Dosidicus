@@ -12,7 +12,9 @@ ANY squid, so the lesson generalises to squid it has never met:
 
 So two squid born alike drift apart with what happens to them: the one that
 keeps getting hurt grows wary of every squid, the one whose meetings go well
-grows sociable. What it remembers of a particular individual is separate,
+grows sociable. The same lesson reaches its aquarium_nearby sense, if it has
+grown one: hurt, it is less drawn to explore other aquariums (and so to
+venture out, src/venturing.py); welcomed, more. What it remembers of a particular individual is separate,
 and is its recognition senses' (remembers_bad_encounter and the rest).
 
 Mild encounters teach nothing, and are forgotten anyway. Every change goes
@@ -23,7 +25,7 @@ how it meets others. Qt-free: desktop and mobile share it.
 
 from typing import Any, List, Tuple
 
-from .brain_constants import SOCIAL_SENSOR
+from .brain_constants import AQUARIUM_SENSE, SOCIAL_SENSOR
 
 #: Weight change per point of encounter valence, and the most one encounter
 #: can move a synapse.
@@ -38,43 +40,59 @@ MIN_VALENCE = 2.0
 TOWARDS = ('act_play', 'curiosity', 'social_play')
 AWAY = ('anxiety', 'act_flee', 'social_flee')
 
+#: Where aquarium_nearby's synapses point when another aquarium draws the
+#: squid out, and when it unsettles it.
+VENTURE_TOWARDS = ('act_move', 'curiosity')
+VENTURE_AWAY = ('anxiety',)
+
+#: Each sense an encounter teaches, with the targets it moves.
+LESSONS = ((SOCIAL_SENSOR, TOWARDS, AWAY),
+           (AQUARIUM_SENSE, VENTURE_TOWARDS, VENTURE_AWAY))
+
 
 def learn_from_encounter(brain, valence: float, outcome: str = '',
                          peer: str = '') -> List[Tuple[Tuple[str, str], float, float]]:
-    """Move can_see_squid's synapses by how an encounter went.
+    """Move can_see_squid's (and aquarium_nearby's) synapses by how an
+    encounter went.
 
     Returns [(synapse, before, after)]. A synapse the lesson would only
     weaken is never created; one it strengthens may be.
     """
     positions = getattr(brain, 'neuron_positions', None) or {}
-    if SOCIAL_SENSOR not in positions or abs(float(valence)) < MIN_VALENCE:
+    if abs(float(valence)) < MIN_VALENCE:
         return []
     step = max(-MAX_STEP, min(MAX_STEP, float(valence) * LEARNING_RATE))
     detail = {'outcome': outcome, 'valence': round(float(valence), 2),
               'peer': peer,
               'note': f"{outcome or 'an'} encounter{' with ' + peer if peer else ''}"}
     changes = []
-    for targets, sign in ((TOWARDS, 1.0), (AWAY, -1.0)):
-        for target in targets:
-            if target not in positions:
-                continue
-            edge = (SOCIAL_SENSOR, target)
-            before = brain.weights.get(edge)
-            move = sign * step
-            if before is None and move <= 0:
-                continue
-            after = max(-1.0, min(1.0, (before or 0.0) + move))
-            if brain.apply_weight_change(edge, value=after, mechanism='encounter',
-                                         detail=detail, create=before is None):
-                changes.append((edge, before, after))
+    for sense, towards, away in LESSONS:
+        if sense not in positions:
+            continue
+        for targets, sign in ((towards, 1.0), (away, -1.0)):
+            for target in targets:
+                if target not in positions:
+                    continue
+                edge = (sense, target)
+                before = brain.weights.get(edge)
+                move = sign * step
+                if before is None and move <= 0:
+                    continue
+                after = max(-1.0, min(1.0, (before or 0.0) + move))
+                if brain.apply_weight_change(edge, value=after, mechanism='encounter',
+                                             detail=detail, create=before is None):
+                    changes.append((edge, before, after))
     if changes:
         from .social_knowledge import think
-        lesson = ('more drawn to squid' if step > 0 else 'warier of squid')
-        think(brain, f"That {outcome or ''} encounter{' with ' + peer if peer else ''} "
-                     f"went {'well' if step > 0 else 'badly'} (felt {float(valence):+.1f}): "
-                     f"I am {lesson}, even ones I do not know.".replace('That  ', 'That '))
+        lesson = 'more drawn to squid' if step > 0 else 'warier of squid'
+        tanks = any(edge[0] == AQUARIUM_SENSE for edge, _, _ in changes)
+        think(brain, f"That {outcome + ' ' if outcome else ''}encounter"
+                     f"{' with ' + peer if peer else ''} went "
+                     f"{'well' if step > 0 else 'badly'} (felt {float(valence):+.1f}): "
+                     f"I am {lesson}, even ones I do not know"
+                     + (" - and of other aquariums." if tanks else "."))
     return changes
 
 
 __all__ = ['learn_from_encounter', 'LEARNING_RATE', 'MAX_STEP', 'MIN_VALENCE',
-           'TOWARDS', 'AWAY']
+           'TOWARDS', 'AWAY', 'VENTURE_TOWARDS', 'VENTURE_AWAY', 'LESSONS']

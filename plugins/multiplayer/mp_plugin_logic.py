@@ -77,6 +77,7 @@ class MultiplayerPlugin:
         self.remote_squids: Dict[str, Dict[str, Any]] = {}
         self.remote_objects: Dict[str, Dict[str, Any]] = {}
         self._peers_heard: set = set()  # node ids a heartbeat has come from
+        self._peers_last_heard: Dict[str, float] = {}  # node id -> last heartbeat
         self._fight_starts: Dict[str, Dict[str, Any]] = {}  # fight id -> who started it, why
         self.remote_squid_controllers: Dict[str, Any] = {} # Should be RemoteSquidController
         self.pending_controller_creations: List[Dict[str, Any]] = []
@@ -358,6 +359,8 @@ class MultiplayerPlugin:
             except Exception as exc:
                 self.logger.error(f"Could not close encounter with {peer_uuid}: {exc}")
         self.conspecific_view.clear()
+        self._peers_last_heard.clear()
+        self._perceive_aquariums()          # no aquarium is nearby any more
 
         self.cleanup()
 
@@ -1200,6 +1203,18 @@ class MultiplayerPlugin:
             # squid that shares its tank for an hour accumulates experiences
             # rather than one enormous unwritten one.
             self.close_encounter(uuid_key, drives, now)
+
+    def _perceive_aquariums(self, now: float | None = None) -> None:
+        """Whether another aquarium is nearby: a peer heard on the network
+        lately (src/venturing.py). The first time, the squid grows the sense
+        for it (aquarium_nearby); whether it then ventures out is its own."""
+        from src.venturing import peer_heard
+        brain = getattr(getattr(self.tamagotchi_logic, 'brain_window', None),
+                        'brain_widget', None)
+        if hasattr(brain, 'perceive'):
+            brain.perceive('aquarium_heard',
+                           peer_heard(self._peers_last_heard,
+                                      time.time() if now is None else now))
 
     def _perceive_visitors(self, squid, present) -> None:
         """What the resident's own senses make of the squid in its tank.
@@ -2681,6 +2696,7 @@ class MultiplayerPlugin:
             # "how long was that squid here" is measured on the same clock the
             # rest of multiplayer runs on.
             try:
+                self._perceive_aquariums()
                 self.update_encounters()
             except Exception as exc:
                 self.logger.error(f"Encounter update failed: {exc}", exc_info=True)
@@ -3029,6 +3045,7 @@ class MultiplayerPlugin:
         # Update UI (status widget or bar) with known peers
         first_heard = sender_node_id not in self._peers_heard
         self._peers_heard.add(sender_node_id)
+        self._peers_last_heard[sender_node_id] = time.time()
         if self.status_widget:
             self.status_widget.update_peers(self.network_node.known_nodes) # known_nodes is updated by NetworkNode
             if first_heard:
