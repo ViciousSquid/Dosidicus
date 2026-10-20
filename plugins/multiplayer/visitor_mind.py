@@ -161,6 +161,9 @@ class VisitorMind:
         #: Told whether this squid won, once per fight it records while
         #: visiting. Used to announce the fight; it decides nothing.
         self.on_fight: Optional[Callable[[bool], None]] = None
+        #: Its half of a hatchling's weights, made once per mating and resent
+        #: with each retelling of the news.
+        self._gametes: Dict[str, Dict[str, float]] = {}
 
     # ==================================================================
     # Perception: the host's frame, through the ordinary sensor path
@@ -467,10 +470,28 @@ class VisitorMind:
             self._open_session()
         if self.session is None:
             return False
+        # Its half of the hatchling's weights, made here from its own brain.
+        # Sent every time the news comes - the host keeps it once - so a
+        # lost packet does not leave the egg with one parent.
+        self._send_gamete(mating_id)
         if self.session.note_mated(mating_id):
             self._log(f"Mating {mating_id} with {self.session.peer} noted")
             return True
         return False
+
+    def _send_gamete(self, mating_id: str) -> bool:
+        from src.inheritance import gamete
+        from .remote_protocol import Gamete, MSG_GAMETE
+        window = getattr(self.logic, 'brain_window', None)
+        brain = getattr(window, 'brain_widget', None)
+        if brain is None or not self.visit_id:
+            return False
+        if mating_id not in self._gametes:
+            self._gametes[mating_id] = gamete(getattr(brain, 'weights', {}) or {})
+        genes = self._gametes[mating_id]
+        if not genes:
+            return False
+        return bool(self.send(MSG_GAMETE, Gamete(self.visit_id, mating_id, genes).to_payload()))
 
     # ==================================================================
     # The visit

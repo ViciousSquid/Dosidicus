@@ -662,6 +662,10 @@ class MainWindow(QtWidgets.QMainWindow):
         ui = getattr(self, 'user_interface', None)
         carried_headstones = [d for d in (ui.get_decorations_data() if ui else [])
                               if d.get('deceased') is not None]
+        # An egg carries half of each parent's weights (src/inheritance.py);
+        # read them before the parent - and the egg with it - is gone.
+        lifecycle = getattr(old_squid, 'lifecycle', None)
+        genes = lifecycle.egg_genes if (egg_born and lifecycle is not None) else {}
 
         # Plugins down. unload_plugin() calls each plugin's shutdown(), which
         # for multiplayer ends every visit and closes the network node.
@@ -742,6 +746,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plugin_manager.tamagotchi_logic = self.tamagotchi_logic
         self.tamagotchi_logic.plugin_manager = self.plugin_manager
         
+        # A hatchling's brain is a newborn's, overlaid with half of each
+        # parent's weights - every one recorded as inherited, from whom.
+        if genes:
+            from src.inheritance import inherit
+            inherited = inherit(self.brain_window.brain_widget, genes)
+            parents = sorted(genes)
+            mutated = sum(1 for gene in inherited if gene['mutated'])
+            print(f"🧬 Inherited {len(inherited)} synapses from {' and '.join(parents)}"
+                  f" ({mutated} mutated)")
+            self.squid.inherited_from = parents
+
         # Create personality starter neuron if needed
         squid = self.tamagotchi_logic.squid
         brain_widget = self.brain_window.brain_widget

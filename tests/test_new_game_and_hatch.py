@@ -153,16 +153,31 @@ class Recorder:
         self.messages.append(message)
 
 
-def assert_newborn(test, parent_uuid, innate_pair, innate_value):
+def assert_newborn(test, parent_uuid, innate_pair, innate_value,
+                   parent_value=None, parent_name=None):
     squid = WINDOW.squid
     brain = WINDOW.brain_window.brain_widget
     test.assertIs(WINDOW.tamagotchi_logic.squid, squid)
     test.assertNotEqual(str(squid.uuid), str(parent_uuid))
     test.assertEqual(squid.lifecycle.stage, 'living')
     test.assertIsNone(squid.lifecycle.egg)
-    # A newborn brain: the innate value back, the grown neuron and its learned
-    # synapse gone - nothing of the previous squid's network.
-    test.assertEqual(brain.weights[innate_pair], innate_value)
+    if parent_value is None:
+        # A newborn brain: the innate value back - nothing of the previous
+        # squid's network.
+        test.assertEqual(brain.weights[innate_pair], innate_value)
+    else:
+        # An egg's hatchling inherits half of its parent's weights between
+        # newborn neurons (src/inheritance.py): this one is the newborn's, or
+        # the parent's, perhaps a little mutated - and each inherited synapse
+        # says whose it was.
+        value = brain.weights[innate_pair]
+        test.assertTrue(abs(value - innate_value) < 1e-9
+                        or abs(value - parent_value) <= 0.1 + 1e-9, value)
+        inherited = [e for e in brain.ledger._recent if e.mechanism == 'inheritance']
+        test.assertTrue(inherited, "a hatchling inherits half its parent's weights")
+        test.assertTrue(all(e.detail['parent'] == parent_name for e in inherited))
+    # The grown neuron and its learned synapse are gone: no grown neuron is
+    # ever inherited.
     test.assertNotIn('parent_grown_neuron', brain.neuron_positions)
     test.assertNotIn('parent_grown_neuron', brain.state)
     test.assertNotIn(('hunger', 'parent_grown_neuron'), brain.weights)
@@ -234,8 +249,11 @@ class HatchTests(unittest.TestCase):
         parent = WINDOW.squid
         parent_uuid = parent.uuid
         innate_pair, innate_value = give_the_squid_a_past()
+        parent_value = WINDOW.brain_window.brain_widget.weights[innate_pair]
 
         self.assertTrue(logic.record_reproduction("visit1-mate", VISITOR_UUID, "Mate"))
+        # The parent's half of the hatchling's weights went into the egg.
+        self.assertEqual(list(parent.lifecycle.egg_genes), [parent.name])
         eggs = [i for i in WINDOW.user_interface.scene.items()
                 if getattr(i, 'category', '') == 'egg']
         self.assertEqual(len(eggs), 1)
@@ -280,7 +298,8 @@ class HatchTests(unittest.TestCase):
 
         self.assertIsNot(WINDOW.squid, parent)
         self.assertEqual(len(transition_frames), 1)
-        assert_newborn(self, parent_uuid, innate_pair, innate_value)
+        assert_newborn(self, parent_uuid, innate_pair, innate_value,
+                       parent_value=parent_value, parent_name=parent.name)
         self.assertIn("An egg is hatching!", recorder.messages)
         self.assertIn("A squid has hatched and you must look after him.",
                       recorder.messages)

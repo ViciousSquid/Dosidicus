@@ -183,8 +183,35 @@ class Lifecycle:
             'laid_at': stamp,
             'x': float(x),
             'y': float(y),
+            # Half of each parent's weights (src/inheritance.py), by parent's
+            # name, carried by the egg until it hatches.
+            'genes': {},
         }
         return True
+
+    def add_genes(self, mating_id: str, parent: str, genes: Dict[str, float]) -> bool:
+        """One parent's half of the hatchling's weights, kept with the egg.
+
+        Only for this squid's own egg from that mating, once per parent, and
+        only while it has not begun to hatch. True if they were kept now.
+        """
+        from .inheritance import clean_gamete
+        egg = self.egg
+        if (not egg or egg.get('egg_id') != mating_id or egg.get('state') != EGG_INCUBATING
+                or not parent):
+            return False
+        held = egg.setdefault('genes', {})
+        parent = str(parent)[:32]
+        clean = clean_gamete(genes)
+        if parent in held or not clean:
+            return False
+        held[parent] = clean
+        return True
+
+    @property
+    def egg_genes(self) -> Dict[str, Dict[str, float]]:
+        """What the egg carries of each parent, {parent's name: gamete}."""
+        return dict((self.egg or {}).get('genes') or {})
 
     def starve(self, squid, health_loss: float, starvation_hunger: float) -> bool:
         """Apply one tick of starvation to a parent. True if it just died.
@@ -306,12 +333,16 @@ class Lifecycle:
             'at': _number(reproduction.get('at')),
         }
         if isinstance(egg, dict) and egg.get('state') in EGG_STATES:
+            from .inheritance import clean_gamete
+            genes = egg.get('genes') if isinstance(egg.get('genes'), dict) else {}
             lifecycle.egg = {
                 'egg_id': str(egg.get('egg_id') or reproduction['mating_id']),
                 'state': egg['state'],
                 'laid_at': _number(egg.get('laid_at')),
                 'x': _number(egg.get('x')),
                 'y': _number(egg.get('y')),
+                'genes': {str(parent)[:32]: clean_gamete(gamete)
+                          for parent, gamete in list(genes.items())[:2]},
             }
         return lifecycle
 

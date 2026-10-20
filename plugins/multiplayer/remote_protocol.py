@@ -46,9 +46,11 @@ MSG_PERCEPTION_FRAME = 'perception_frame'
 MSG_ACTION_INTENT = 'action_intent'
 MSG_CONSEQUENCE = 'consequence'
 MSG_VISIT_END = 'visit_end'
+#: Visitor -> host, after a mating: half of its weights, for the egg.
+MSG_GAMETE = 'gamete'
 
 REMOTE_MIND_MESSAGES = (MSG_PERCEPTION_FRAME, MSG_ACTION_INTENT,
-                        MSG_CONSEQUENCE, MSG_VISIT_END)
+                        MSG_CONSEQUENCE, MSG_VISIT_END, MSG_GAMETE)
 
 #: The behavioural cadence, in seconds. Both endpoints run on it: the host
 #: sends a frame this often and the visitor answers with an intent.
@@ -365,6 +367,50 @@ class ActionIntent:
 
 
 # ======================================================================
+# Visitor -> host, after a mating: half of its weights
+# ======================================================================
+class Gamete:
+    """Half of the visiting squid's weights, for the egg the host is keeping.
+
+    The one time any of a squid's weights leave its own machine, and only
+    this: after the host has told it of a mating, a random half of its
+    synapses between the neurons every newborn has (src/inheritance.py) -
+    no grown neuron, no state, no memory. Reduced on arrival to exactly
+    that; the host keeps it only for its own egg from that mating.
+    """
+
+    __slots__ = ('visit_id', 'mating_id', 'genes')
+
+    def __init__(self, visit_id: str, mating_id: str, genes: Dict[str, float]):
+        self.visit_id = visit_id
+        self.mating_id = mating_id
+        self.genes = dict(genes or {})
+
+    def to_payload(self) -> Dict[str, Any]:
+        return {'visit_id': self.visit_id, 'mating_id': self.mating_id,
+                'genes': dict(self.genes)}
+
+    @classmethod
+    def from_payload(cls, payload: Dict[str, Any]) -> 'Gamete':
+        from src.inheritance import clean_gamete
+        from src.lifecycle import is_valid_mating_id
+        if not isinstance(payload, dict):
+            raise ProtocolError("gamete must be a dictionary")
+        if set(payload) - {'visit_id', 'mating_id', 'genes'}:
+            raise ProtocolError("gamete carries something other than genes")
+        visit_id = payload.get('visit_id')
+        if not isinstance(visit_id, str) or not visit_id.strip():
+            raise ProtocolError("gamete has no visit id")
+        mating_id = payload.get('mating_id')
+        if not is_valid_mating_id(mating_id):
+            raise ProtocolError("gamete names no valid mating")
+        genes = clean_gamete(payload.get('genes'))
+        if not genes:
+            raise ProtocolError("gamete carries no genes")
+        return cls(visit_id.strip()[:64], mating_id, genes)
+
+
+# ======================================================================
 # Host -> visitor: what actually happened
 # ======================================================================
 class Consequence:
@@ -464,7 +510,7 @@ __all__ = [
     'PerceptionFrame', 'ActionIntent', 'Consequence', 'VisitEnd',
     'ProtocolError', 'new_visit_id',
     'MSG_PERCEPTION_FRAME', 'MSG_ACTION_INTENT', 'MSG_CONSEQUENCE',
-    'MSG_VISIT_END', 'REMOTE_MIND_MESSAGES',
+    'MSG_VISIT_END', 'MSG_GAMETE', 'Gamete', 'REMOTE_MIND_MESSAGES',
     'ROUND_TRIP_INTERVAL', 'INTENT_LEASE', 'LINK_TIMEOUT',
     'VISIT_ABANDON_TIMEOUT',
     'OBSERVABLE_SENSORS', 'FORBIDDEN_KEYS', 'HEADINGS',

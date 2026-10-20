@@ -47,6 +47,8 @@ class PacketValidator:
             # squid can see, the visiting squid's own brain answers with what
             # it decided, and the host reports what actually happened.
             'perception_frame', 'action_intent', 'consequence', 'visit_end',
+            # After a mating, the visitor's half of the hatchling's weights.
+            'gamete',
         ]
         if message['type'] not in valid_types:
             return False, f"Unknown message type: {message['type']}"

@@ -263,41 +263,29 @@ Nearby opens, remembered by a flag file in `user_data_dir`.
 
 ---
 
-## 4. In progress (uncommitted when this was written)
+## 4. In progress: inheritance
 
-Inheritance, desktop side - code written, not yet committed:
-
-- `src/inheritance.py` (new): `gamete`, `clean_gamete`, `inherit`.
-- `src/lifecycle.py`: `egg['genes']`, `add_genes`, `egg_genes`, genes
-  restored (validated) from a save.
-- `src/tamagotchi_logic.py`: resident's half taken in
-  `record_reproduction` (never blocks laying the egg); `add_mate_genes`.
-- `plugins/multiplayer/remote_protocol.py`: `MSG_GAMETE`, `Gamete`;
-  `packet_validator.py` allows `'gamete'`.
-- `plugins/multiplayer/visitor_mind.py`: sends its gamete each time it hears
-  of the mating (`_send_gamete`, cached per mating).
-- `plugins/multiplayer/mp_plugin_logic.py`: `handle_gamete`, hook
-  `on_network_gamete`; keeps it only for its own egg, from that mating, from
-  that mate.
-- `main.py` `_begin_new_life`: reads `egg_genes` before the reset and applies
-  `inherit()` to the newborn brain.
-- `android/prepare_apk.py`: `inheritance` added to `SHARED_MODULES`.
+Desktop inheritance is committed (the commit after this document's first
+version): `src/inheritance.py` (`gamete`, `clean_gamete`, `inherit`);
+`src/lifecycle.py` (`egg['genes']`, `add_genes`, `egg_genes`, validated on
+load); `src/tamagotchi_logic.py` (resident's half taken in
+`record_reproduction` - never blocks laying the egg - and `add_mate_genes`);
+`remote_protocol.Gamete` / `MSG_GAMETE` and `packet_validator` allowing
+`'gamete'`; `VisitorMind._send_gamete` (sent each time it hears of the mating,
+cached per mating); `MultiplayerPlugin.handle_gamete` (kept only for its own
+egg, from that mating, from that mate); `main.py` `_begin_new_life` applies
+`inherit()` to the hatchling; `inheritance` is in the APK's `SHARED_MODULES`.
+`tests/test_new_game_and_hatch.py` asserts the hatchling inherits with
+provenance and that nothing grown or remembered carries over.
 
 Remaining for this task:
 
-1. `tests/test_new_game_and_hatch.py::HatchTests::test_3_...` fails because
-   `assert_newborn` expects the hatchling's innate synapse to be exactly the
-   newborn value; it is now inherited from the parent. Update the test to
-   expect inheritance (value from a parent's half, ledger mechanism
-   `'inheritance'`), while still asserting no grown neuron or memory carries
-   over.
-2. New tests (`tests/test_inheritance.py`): gamete is half and only newborn
-   synapses; clean_gamete rejects bad input; add_genes once per parent, only
-   own egg/mating, survives save/load; host keeps a visitor's gamete only
-   from the mate; hatch applies both halves with provenance and mutation.
-3. Mobile inheritance (with mobile mating, section 5).
-
----
+1. Dedicated tests (`tests/test_inheritance.py`): a gamete is half, and only
+   synapses between newborn neurons; `clean_gamete` rejects bad input;
+   `add_genes` once per parent, only for its own egg/mating, survives
+   save/load; the host keeps a visitor's gamete only from the mate, through
+   `handle_gamete`; hatch combines both halves with provenance and mutation.
+2. Mobile inheritance (with mobile mating, section 5).
 
 ## 5. Left to do
 

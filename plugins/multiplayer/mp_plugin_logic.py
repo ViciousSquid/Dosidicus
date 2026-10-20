@@ -844,6 +844,33 @@ class MultiplayerPlugin:
             self.logger.error(f"Could not draw the mating heart: {exc}")
         return True
 
+    def handle_gamete(self, node=None, message=None, addr=None, **_kw) -> bool:
+        """A visitor has sent its half of the hatchling's weights.
+
+        Kept only for this tank's own egg, from that very mating, from the
+        squid this resident mated with - and once (Lifecycle.add_genes).
+        """
+        from .remote_protocol import Gamete
+        payload = (message or {}).get('payload') if isinstance(message, dict) else None
+        try:
+            gamete = Gamete.from_payload(payload)
+        except ProtocolError as exc:
+            self.logger.warning(f"Rejected a gamete: {exc}")
+            return False
+        actor = next((a for a in (self.host_body.visitors.values() if self.host_body else [])
+                      if a.visit_id == gamete.visit_id), None)
+        squid = getattr(self.tamagotchi_logic, 'squid', None)
+        lifecycle = getattr(squid, 'lifecycle', None)
+        if actor is None or lifecycle is None or lifecycle.mating_id != gamete.mating_id \
+                or lifecycle.mate_uuid != actor.uuid:
+            return False
+        keep = getattr(self.tamagotchi_logic, 'add_mate_genes', None)
+        if not callable(keep) or not keep(gamete.mating_id, actor.identity.name, gamete.genes):
+            return False
+        self.logger.info(f"Kept {actor.identity}'s half of the egg's weights "
+                         f"({len(gamete.genes)} synapses)")
+        return True
+
     def show_mating_heart(self, actor) -> bool:
         """A mating here: draw ONE beating heart over the pair.
 
@@ -2527,6 +2554,7 @@ class MultiplayerPlugin:
             "on_network_consequence": self.handle_consequence,
             "on_network_visit_end": self.handle_visit_end,
             "on_network_visit_response": self.handle_visit_response,
+            "on_network_gamete": self.handle_gamete,
             # Not a network message: the core tells plugins its squid died.
             "on_squid_died": self.handle_resident_died,
         }

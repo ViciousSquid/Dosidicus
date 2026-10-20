@@ -3020,6 +3020,18 @@ class TamagotchiLogic:
         if not squid.lifecycle.record_reproduction(mating_id, mate_uuid,
                                                    mate_name, x, y):
             return False
+        # This parent's half of the hatchling's weights, taken now, from the
+        # brain that mated (src/inheritance.py). The mate's half arrives from
+        # its own machine (add_mate_genes).
+        brain = getattr(getattr(self, 'brain_window', None), 'brain_widget', None)
+        weights = getattr(brain, 'weights', None)
+        if isinstance(weights, dict) and weights:
+            try:
+                from .inheritance import gamete
+                squid.lifecycle.add_genes(mating_id, squid.name, gamete(weights))
+            except Exception as e:
+                # The egg is laid regardless; it hatches from what it carries.
+                print(f"[Lifecycle] could not take this parent's genes: {e}")
         self._place_egg()
         try:
             self.save_game()
@@ -3029,6 +3041,18 @@ class TamagotchiLogic:
             print(f"[Lifecycle] could not save the mating immediately: {e}")
         self.show_message(f"{squid.name} and {mate_name} produced an egg. "
                           f"{squid.name} has stopped eating.")
+        return True
+
+    def add_mate_genes(self, mating_id, mate_name, genes):
+        """The mate's half of the hatchling's weights has arrived: keep it with
+        the egg and save. True if it was kept now (once, for this egg only)."""
+        squid = self.squid
+        if squid is None or not squid.lifecycle.add_genes(mating_id, mate_name, genes):
+            return False
+        try:
+            self.save_game()
+        except Exception as e:
+            print(f"[Lifecycle] could not save the mate's genes immediately: {e}")
         return True
 
     def _egg_position(self):
