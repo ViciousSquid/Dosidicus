@@ -1020,6 +1020,11 @@ class Squid:
                 for key, value in exit_data.items():
                     print(f"  {key}: {value}")
                 
+                # Addressed to the one aquarium it is visiting (the plugin
+                # picks the one heard most recently), so only that host answers.
+                plugin = (getattr(pm, 'plugins', {}) or {}).get('multiplayer', {}).get('instance')
+                if hasattr(plugin, 'address_exit') and not plugin.address_exit(exit_data):
+                    return False
                 # Broadcast exit message
                 try:
                     self._last_exit_request = time.time()

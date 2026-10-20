@@ -192,3 +192,49 @@ def test_the_exit_request_carries_the_protocol_hosts_accept():
     identity = SquidIdentity.from_payload(sent[0][1]['payload']['identity'])
     assert identity is not None and identity.is_compatible()
     assert identity.protocol == ENCOUNTER_PROTOCOL_VERSION and identity.name == 'Squiddy'
+
+
+def _plugin(node='me'):
+    from plugins.multiplayer.mp_plugin_logic import MultiplayerPlugin
+    plugin = MultiplayerPlugin()
+    plugin.logger = SimpleNamespace(info=lambda *a, **k: None, debug=lambda *a, **k: None,
+                                    warning=lambda *a, **k: None, error=lambda *a, **k: None)
+    plugin.network_node = SimpleNamespace(node_id=node, known_nodes={},
+                                          send_message=lambda *a, **k: None)
+    plugin.status_widget = plugin.status_bar = None
+    return plugin
+
+
+def test_a_departure_is_addressed_to_the_aquarium_heard_most_recently():
+    plugin = _plugin()
+    assert not plugin.address_exit({})                   # nobody heard: it cannot leave
+    plugin._peers_last_heard = {'tank_a': 100., 'tank_b': 105.}
+    assert plugin.visit_destination(now=110.) == 'tank_b'
+    assert plugin.visit_destination(now=105. + venturing.HEARD_WITHIN + 1) == ''
+    plugin._peers_last_heard = {'tank_a': __import__('time').time()}
+    exit_data = {}
+    assert plugin.address_exit(exit_data) and exit_data['to'] == 'tank_a'
+
+
+def test_only_the_addressed_host_takes_the_squid_in():
+    plugin = _plugin(node='tank_b')
+    admitted = []
+    plugin.consent_policy = SimpleNamespace(evaluate=lambda *a, **k: admitted.append(a))
+    message = {'payload': {'payload': {'node_id': 'traveller', 'to': 'tank_a',
+                                       'identity': {}}}}
+    assert plugin.handle_squid_exit_message(None, message, None) is False
+    assert not admitted                                  # never even considered
+
+
+def test_the_traveller_only_takes_the_answer_of_the_host_it_asked():
+    plugin = _plugin(node='traveller')
+    begun = []
+    plugin.visitor_mind = SimpleNamespace(begin_visit=lambda identity: begun.append(identity),
+                                          end_visit=lambda **k: begun.append('home'))
+    plugin.tamagotchi_logic = SimpleNamespace(squid=SimpleNamespace(uuid='u-1'))
+    plugin._asked_to_visit = 'tank_a'
+    answer = {'payload': {'peer_uuid': 'u-1', 'accepted': True}}
+    assert not plugin.handle_visit_response(None, dict(answer, node_id='tank_b'), None)
+    assert not begun
+    assert plugin.handle_visit_response(None, dict(answer, node_id='tank_a'), None)
+    assert len(begun) == 1

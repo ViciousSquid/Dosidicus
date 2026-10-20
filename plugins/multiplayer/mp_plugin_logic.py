@@ -78,6 +78,7 @@ class MultiplayerPlugin:
         self.remote_objects: Dict[str, Dict[str, Any]] = {}
         self._peers_heard: set = set()  # node ids a heartbeat has come from
         self._peers_last_heard: Dict[str, float] = {}  # node id -> last heartbeat
+        self._asked_to_visit = ''   # the one host this squid last asked to visit
         self._fight_starts: Dict[str, Dict[str, Any]] = {}  # fight id -> who started it, why
         self.remote_squid_controllers: Dict[str, Any] = {} # Should be RemoteSquidController
         self.pending_controller_creations: List[Dict[str, Any]] = []
@@ -734,6 +735,8 @@ class MultiplayerPlugin:
         squid = getattr(self.tamagotchi_logic, 'squid', None)
         if squid is None or payload.get('peer_uuid') != str(getattr(squid, 'uuid', '')):
             return False          # somebody else's answer
+        if self._asked_to_visit and message.get('node_id') != self._asked_to_visit:
+            return False          # a tank it did not ask to visit
 
         if payload.get('accepted'):
             host_identity = self.peer_identities.get(message.get('node_id'))
@@ -1203,6 +1206,30 @@ class MultiplayerPlugin:
             # squid that shares its tank for an hour accumulates experiences
             # rather than one enormous unwritten one.
             self.close_encounter(uuid_key, drives, now)
+
+    def visit_destination(self, now: float | None = None) -> str:
+        """The aquarium a squid venturing out asks to visit: the one heard
+        most recently, if any was heard within venturing.HEARD_WITHIN."""
+        from src.venturing import HEARD_WITHIN
+        now = time.time() if now is None else now
+        heard = {node: at for node, at in self._peers_last_heard.items()
+                 if now - at <= HEARD_WITHIN}
+        return max(heard, key=heard.get) if heard else ''
+
+    def address_exit(self, exit_data: Dict[str, Any]) -> bool:
+        """Address a departure to one host (exit_data['to']).
+
+        A squid_exit is multicast, and every host used to admit whatever it
+        heard: with three tanks or more, one squid got a body in two of them.
+        Now only the host it names takes it in, and only that host's answer is
+        taken (handle_visit_response). False when no aquarium is nearby.
+        """
+        destination = self.visit_destination()
+        if not destination:
+            return False
+        exit_data['to'] = destination
+        self._asked_to_visit = destination
+        return True
 
     def _perceive_aquariums(self, now: float | None = None) -> None:
         """Whether another aquarium is nearby: a peer heard on the network
@@ -1798,6 +1825,12 @@ class MultiplayerPlugin:
             # ignore our own broadcast
             if self.network_node and source_node_id == self.network_node.node_id:
                 self.logger.debug(f"Ignoring own squid_exit broadcast for {source_node_id}.")
+                return False
+            # ...and one addressed to another tank (address_exit). Without
+            # 'to' (an older client) any host that hears it may answer.
+            addressed_to = exit_payload_inner.get('to')
+            if addressed_to and self.network_node and addressed_to != self.network_node.node_id:
+                self.logger.debug(f"squid_exit from {source_node_id} is for {addressed_to}.")
                 return False
 
             # ---------- HOST CONSENT ----------
