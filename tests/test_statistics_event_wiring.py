@@ -620,7 +620,8 @@ class StatisticsEventWiringTests(unittest.TestCase):
         manager.throw_animation_timer.isActive.return_value = False
         manager.multiplayer_plugin = None
         manager.scene = SimpleNamespace(width=lambda: 900, height=lambda: 500,
-            items=lambda: [], sceneRect=lambda: SimpleNamespace(bottom=lambda: 500))
+            items=lambda: [], sceneRect=lambda: SimpleNamespace(
+                left=lambda: 0, right=lambda: 900, top=lambda: 0, bottom=lambda: 500))
         manager.rock_test_timer = Mock()
         manager.show_message = None
 

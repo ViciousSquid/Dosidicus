@@ -84,18 +84,55 @@ def aim(origin: Sequence[float], gaze: float,
     drop = 0.5 * gravity * steps * steps
     angle = math.atan2((ty - drop) - oy, tx - ox)
     return angle, name, {'aimed_at': name, 'distance': round(distance, 1),
-                         'lead_for_drop': round(drop, 1)}
+                         'lead_for_drop': round(drop, 1), 'target_at': (tx, ty)}
+
+
+#: A thrown thing passing this close to a squid's centre strikes it.
+REACH_RADIUS = 45.0
+
+
+def reaches(origin: Sequence[float], target: Sequence[float], vx: float, vy: float,
+            gravity: float, bounds: Optional[Sequence[float]] = None,
+            radius: float = REACH_RADIUS, steps: int = 400) -> bool:
+    """Would a throw with this velocity get to the target? Flown under the
+    same physics as the real throw (flight_step), landing included - how the
+    squid's eyes judge how far it can throw."""
+    position, velocity = (float(origin[0]), float(origin[1])), (float(vx), float(vy))
+    bounds = bounds or (-1e9, 1e9, -1e9, 1e9)
+    for _ in range(steps):
+        end, velocity, landed = flight_step(position, velocity, bounds, gravity=gravity)
+        if swept_hit(position, end, target, radius) is not None:
+            return True
+        if landed or velocity == (0.0, 0.0):
+            return False
+        position = end
+    return False
 
 
 def plan_throw(state: Dict[str, Any], origin: Sequence[float], gaze: float,
                targets: Iterable[Tuple[str, float, float]], *, slowest: float,
-               fastest: float, gravity: float, drag: float = 0.0) -> Dict[str, Any]:
-    """Everything about one throw: velocity, and the reasons for it."""
+               fastest: float, gravity: float, drag: float = 0.0,
+               bounds: Optional[Sequence[float]] = None) -> Dict[str, Any]:
+    """Everything about one throw: velocity, and the reasons for it.
+
+    With a squid to aim at, also whether the throw would reach it
+    ('reaches'): the network decides whether and how hard; whether that is
+    far enough is what the squid sees.
+    """
     speed, why_speed = throw_speed(state, slowest, fastest)
     angle, target, why_aim = aim(origin, gaze, targets, speed, gravity, drag)
-    return {'vx': speed * math.cos(angle), 'vy': speed * math.sin(angle),
+    plan = {'vx': speed * math.cos(angle), 'vy': speed * math.sin(angle),
             'angle': round(math.degrees(angle), 1), 'target': target,
             **why_speed, **why_aim}
+    if target is not None:
+        plan['reaches'] = reaches(origin, why_aim['target_at'], plan['vx'], plan['vy'],
+                                  gravity, bounds)
+    return plan
+
+
+def out_of_reach(plan: Dict[str, Any]) -> bool:
+    """A squid to aim at that this throw would not get to: close in first."""
+    return plan.get('target') is not None and plan.get('reaches') is False
 
 
 def describe(plan: Dict[str, Any]) -> str:
@@ -198,4 +235,5 @@ def flight_step(position, velocity, bounds, dt=1.0, gravity=0.3):
 
 
 __all__ = ['throw_or_drop', 'throw_drive', 'throw_speed', 'flight_steps', 'aim',
-           'plan_throw', 'describe', 'swept_hit', 'flight_step', 'HIT_EFFECTS', 'feel_hit']
+           'plan_throw', 'describe', 'swept_hit', 'flight_step', 'HIT_EFFECTS', 'feel_hit',
+           'REACH_RADIUS', 'reaches', 'out_of_reach']

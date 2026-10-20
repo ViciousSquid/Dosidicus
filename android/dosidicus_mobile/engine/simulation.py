@@ -224,7 +224,12 @@ class Simulation:
             if now >= squid._carry_until:
                 from src.throwing import throw_or_drop
                 if throw_or_drop(squid.brain.state):
-                    self._throw_rock(rock, squid)
+                    thrown = self._throw_rock(rock, squid)
+                    if thrown and thrown.get('closing_in'):
+                        squid.move_towards(*thrown['target_at'])
+                        squid._carry_until = now + 1.0
+                        self.last_status = f"closing in on {thrown['aimed_at']}"
+                        return
                 else:
                     rock['y'] = min(self.tank_size[1] - 40, squid.y + 26)
                     self._rock_cooldowns[rock['id']] = now + 10.
@@ -256,7 +261,7 @@ class Simulation:
     def _throw_rock(self, rock, owner, visitor=None, cause=None):
         """One neural actuation, using the same planner and units as desktop."""
         import uuid
-        from src.throwing import plan_throw, describe
+        from src.throwing import out_of_reach, plan_throw, describe
         from src.vision_cone import FACING_ANGLES
         x, y = (visitor['x'], visitor['y']) if visitor else (owner.x, owner.y)
         direction = visitor['dir'] if visitor else owner.direction
@@ -268,7 +273,13 @@ class Simulation:
                    if self._sees_squid_at(x, y, direction, tx, ty)]
         state = owner.brain.state if cause is None else {'act_play': cause[1]}
         plan = plan_throw(state, (x, y), FACING_ANGLES.get(direction, 0.), targets,
-                          slowest=6., fastest=20., gravity=.3, drag=.02)
+                          slowest=6., fastest=20., gravity=.3, drag=.02,
+                          bounds=(0., float(self.tank_size[0]), 0., float(self.tank_size[1] - 40)))
+        if cause is None and out_of_reach(plan):
+            # Beyond this throw: keep the rock and close in (as desktop's
+            # interactions.close_in); the caller steers and looks again.
+            return {'closing_in': True, 'target_at': plan['target_at'],
+                    'aimed_at': plan['aimed_at']}
         if cause:
             plan['driven_by'] = cause[0]
         plan.update(throw_id=uuid.uuid4().hex, hit=None,
@@ -562,9 +573,13 @@ class Simulation:
                 if now >= v.get('carry_until', now):
                     from src.throwing import throw_or_drop
                     held = self._deco_by_id(v['carried_rock'])
-                    if held is not None and throw_or_drop(mind.brain.state):
-                        self._throw_rock(held, mind, visitor=v)
-                    v['carried_rock'] = None
+                    thrown = (self._throw_rock(held, mind, visitor=v)
+                              if held is not None and throw_or_drop(mind.brain.state) else None)
+                    if thrown and thrown.get('closing_in'):
+                        self._steer(v, *thrown['target_at'], dt)
+                        v['carry_until'] = now + 1.0
+                    else:
+                        v['carried_rock'] = None
             elif rock is not None:
                 if self._steer(v, rock["x"], rock["y"], dt) < 44:
                     v["carried_rock"] = rock["id"]

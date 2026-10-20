@@ -47,6 +47,33 @@ def first_struck(scene, projectile, start, end, thrower_item, resident_item, hit
     return min(contacts, key=lambda c: c[0])[1] if contacts else None
 
 
+#: How soon a squid closing in on an out-of-reach target looks again.
+CLOSE_IN_SECONDS = 1.0
+
+
+def tank_bounds(scene, item):
+    """Where a thrown item's centre can go: inside the tank, above the sand."""
+    rect, tank = item.sceneBoundingRect(), scene.sceneRect()
+    return (tank.left() + rect.width()/2, tank.right() - rect.width()/2,
+            tank.top() + rect.height()/2, tank.bottom() - 50 - rect.height()/2)
+
+
+def close_in(squid, logic, plan):
+    """The squid it is aiming at is beyond this throw (throwing.out_of_reach):
+    keep hold of it and swim at the target instead; it looks again shortly.
+    Said once per target, as a thought."""
+    tx, ty = plan['target_at']
+    if hasattr(squid, 'set_neural_drive'):
+        squid.set_neural_drive('approach_squid', duration=2.0, target=(tx, ty),
+                               priority=getattr(squid, 'DRIVE_DECISION', 'decision'))
+    squid.status = f"closing in on {plan['target']}"
+    if getattr(squid, '_closing_in_on', None) != plan['target']:
+        squid._closing_in_on = plan['target']
+        window = getattr(logic, 'brain_window', None)
+        if hasattr(window, 'add_thought'):
+            window.add_thought(f"{plan['target']} is too far to reach: closing in.")
+
+
 class RockInteractionManager:
     def __init__(self, squid, logic, scene, message_callback, config_manager):
         self.squid = squid
@@ -288,7 +315,7 @@ class RockInteractionManager:
         aggression if that is stronger (src/throwing.py). `direction` is
         ignored; it is kept for callers that still pass one.
         """
-        from .throwing import plan_throw, throw_or_drop, describe as describe_throw
+        from .throwing import plan_throw, throw_or_drop, out_of_reach, describe as describe_throw
         # Prevent multiple throws
         if self.throw_animation_timer.isActive():
             return False
@@ -306,16 +333,26 @@ class RockInteractionManager:
             state = {'act_play': activation}
         config = self.rock_config
         rock = self.squid.carried_rock
-        
-        # Detach from squid and reset parent to scene
-        rock.setParentItem(None)
 
         rect = self.squid.squid_item.sceneBoundingRect()
         plan = plan_throw(state, (rect.center().x(), rect.center().y()),
                           float(getattr(self.squid, 'current_view_angle', 0.0)),
                           self._squids_in_view(), slowest=self.THROW_SLOWEST,
                           fastest=self.THROW_FASTEST, gravity=self.THROW_GRAVITY,
-                          drag=self.THROW_DRAG)
+                          drag=self.THROW_DRAG, bounds=tank_bounds(self.scene, rock))
+        # It can see how far the squid it is aiming at is. Beyond this throw,
+        # it keeps the rock and closes in (a bound output's throw is its
+        # neuron's decision, and goes regardless).
+        if cause is None and out_of_reach(plan):
+            close_in(self.squid, self.logic, plan)
+            self.squid.rock_decision_made = False
+            self.squid.rock_hold_start_time = time.time()
+            self.squid.rock_hold_duration = CLOSE_IN_SECONDS
+            return False
+        self.squid._closing_in_on = None
+
+        # Detach from squid and reset parent to scene
+        rock.setParentItem(None)
         if cause is not None:
             plan['driven_by'] = neuron
         self.current_throw = dict(plan, hit=None, throw_id=uuid.uuid4().hex,
@@ -459,7 +496,7 @@ class RockInteractionManager:
     def throw_from_visitor(self, actor, rock, intent, visual):
         """A body executes the remote play command; no visitor brain is built."""
         from types import SimpleNamespace
-        from .throwing import plan_throw
+        from .throwing import out_of_reach, plan_throw
         from .vision_cone import FACING_ANGLES, VIEW_CONE_ANGLE, in_view_cone
         angle = FACING_ANGLES.get(actor.facing, 0.)
         centre = visual.sceneBoundingRect().center()
@@ -478,7 +515,13 @@ class RockInteractionManager:
         plan = plan_throw({'act_play': intent.activation, 'aggression': intent.aggression},
                           origin, angle, targets, slowest=self.THROW_SLOWEST,
                           fastest=self.THROW_FASTEST, gravity=self.THROW_GRAVITY,
-                          drag=self.THROW_DRAG)
+                          drag=self.THROW_DRAG,
+                          bounds=tank_bounds(self.scene, rock) if rock.scene() else None)
+        if out_of_reach(plan):
+            # As for the resident: beyond this throw, its body keeps the rock
+            # and closes in (HostBody._do_play steps it at the target).
+            return {'closing_in': True, 'target_at': plan['target_at'],
+                    'aimed_at': plan['aimed_at']}
         plan.update(throw_id=uuid.uuid4().hex, source_uuid=actor.uuid,
                     source_identity=actor.identity.to_payload(), hit=None)
         flight = object.__new__(RockInteractionManager)

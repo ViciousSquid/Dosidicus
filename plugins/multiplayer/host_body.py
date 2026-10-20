@@ -502,7 +502,11 @@ class HostBody:
             throw = getattr(self.logic, 'throw_visitor_rock', None)
             if callable(throw):
                 plan = throw(actor, actor.held_item, intent)
-                if plan:
+                if plan and plan.get('closing_in'):
+                    # Out of reach of this throw: it keeps the rock and
+                    # swims at the squid it is aiming at.
+                    self._step_toward(actor, *plan['target_at'])
+                elif plan:
                     actor.held_item = None
                     actor.carrying = None
                     self._report(actor, CONSEQUENCE_THROWN,

@@ -135,8 +135,9 @@ class PoopInteractionManager:
     def decide_poop_action(self):
         """Throw or drop: its play neuron decides, as for a rock - not dice."""
         from .throwing import throw_or_drop
-        if throw_or_drop(self._brain_state()) and self.throw_poop():
-            return
+        if throw_or_drop(self._brain_state()):
+            if self.throw_poop() or getattr(self.squid, 'carried_poop', None) is not None:
+                return              # thrown, or held while it closes in
         self.drop_poop()
         if self.show_message:
             self.show_message("Squid dropped the poop")
@@ -192,8 +193,9 @@ class PoopInteractionManager:
         in its view cone, else along its gaze. A squid it strikes is not
         harmed, but it is splattered (throwing.HIT_EFFECTS). `direction` is
         ignored; it is kept for callers that still pass one."""
-        from .interactions import RockInteractionManager as Rock, squids_in_view
-        from .throwing import plan_throw, describe
+        from .interactions import (CLOSE_IN_SECONDS, RockInteractionManager as Rock,
+                                   close_in, squids_in_view, tank_bounds)
+        from .throwing import plan_throw, describe, out_of_reach
         # Prevent multiple throws
         if self.throw_animation_timer.isActive():
             return False
@@ -202,16 +204,26 @@ class PoopInteractionManager:
             return False
         
         poop = self.squid.carried_poop
-        
-        # Detach from squid and reset parent to scene
-        poop.setParentItem(None)
 
         rect = self.squid.squid_item.sceneBoundingRect()
+        bounds = (tank_bounds(self.scene, poop) if hasattr(poop, 'sceneBoundingRect')
+                  else None)
         plan = plan_throw(self._brain_state(), (rect.center().x(), rect.center().y()),
                           float(getattr(self.squid, 'current_view_angle', 0.0)),
                           squids_in_view(self.scene, self.squid),
                           slowest=Rock.THROW_SLOWEST, fastest=Rock.THROW_FASTEST,
-                          gravity=Rock.THROW_GRAVITY, drag=Rock.THROW_DRAG)
+                          gravity=Rock.THROW_GRAVITY, drag=Rock.THROW_DRAG, bounds=bounds)
+        # Beyond this throw: keep it, close in, look again shortly.
+        if out_of_reach(plan):
+            close_in(self.squid, self.logic, plan)
+            self.squid.poop_decision_made = False
+            self.squid.poop_hold_start_time = time.time()
+            self.squid.poop_hold_duration = CLOSE_IN_SECONDS
+            return False
+        self.squid._closing_in_on = None
+
+        # Detach from squid and reset parent to scene
+        poop.setParentItem(None)
         plan['what'] = 'poop'
         self.current_throw = dict(plan, hit=None, throw_id=uuid.uuid4().hex,
                                   source_uuid=str(getattr(self.squid, 'uuid', '')))

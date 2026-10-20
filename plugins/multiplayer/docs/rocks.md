@@ -63,6 +63,22 @@ remains available for deliberately sharing a copy. Mobile health is persisted
 in both its state and the interoperable save archive. APK staging includes the
 shared throwing and Qt-free remote-mind modules.
 
+## Range: closing in
+
+The network decides whether to throw (play) and how hard (play, or grown
+aggression if stronger); whether that is far enough is what the squid sees.
+Every plan says whether the throw would reach the squid it is aimed at
+(`throwing.reaches`: the planned throw flown under the real physics, landing
+on the sand included). A throw that would not reach is not thrown: the squid
+keeps hold of the rock (or poop), swims at its target - "Visitor is too far to
+reach: closing in" - and looks again a second later (`interactions.close_in`).
+So a calm squid only lobs at squid close by (about 300 px at play 40), while a
+fully aggro one reaches across much of the tank (about 500 px). The same holds
+for a visitor's body in a host tank (`HostBody._do_play` steps it at the
+target) and on mobile. With nobody in view it throws along its gaze as before,
+and a throw a bound output neuron fires is that neuron's decision and goes
+regardless.
+
 ## Poop
 
 A squid can throw poop at another squid exactly as it throws a rock: its play
