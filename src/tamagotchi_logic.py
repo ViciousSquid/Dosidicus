@@ -1327,7 +1327,7 @@ class TamagotchiLogic:
     #: How long an ink cloud takes to fade away.
     INK_FADE_MS = 10000
 
-    def create_ink_cloud(self):
+    def create_ink_cloud(self, position=None, *, record=True):
         """Create an ink cloud with guaranteed fade-out after 10 seconds"""
         ink_cloud_pixmap = QtGui.QPixmap(os.path.join("images", "inkcloud.png"))
         ink_cloud_item = QtWidgets.QGraphicsPixmapItem(ink_cloud_pixmap)
@@ -1336,6 +1336,8 @@ class TamagotchiLogic:
         squid = self.squid
         squid_center_x = squid.squid_x + squid.squid_width // 2
         squid_center_y = squid.squid_y + squid.squid_height // 2
+        if position is not None:
+            squid_center_x, squid_center_y = position
         ink_cloud_item.setPos(
             squid_center_x - ink_cloud_pixmap.width() // 2, 
             squid_center_y - ink_cloud_pixmap.height() // 2
@@ -1364,9 +1366,9 @@ class TamagotchiLogic:
 
         # Start the animation and deduct points
         fade_out_animation.start()
-        self.statistics_window.award(-250)
-
-        self.record_statistic_event('ink_clouds_created')
+        if record:
+            self.statistics_window.award(-250)
+            self.record_statistic_event('ink_clouds_created')
         
         
         # Backup timer to force remove it, should the animation ever fail.
@@ -3043,12 +3045,36 @@ class TamagotchiLogic:
         """A rock this squid threw struck another squid. Tell the plugins -
         the multiplayer host lets the struck squid feel it - with the fact
         only: where it was aimed and how hard, never why."""
+        own_body = target_item is self.squid.squid_item
+        felt = self.feel_rock_hit(throw) if own_body else False
         manager = getattr(self, 'plugin_manager', None)
+        results = []
         if manager is not None and hasattr(manager, 'trigger_hook'):
-            manager.trigger_hook('on_rock_hit',
+            results = manager.trigger_hook('on_rock_hit',
                                  target_uuid=(str(self.squid.uuid) if target_item is self.squid.squid_item
                                               else str(getattr(target_item, 'peer_uuid', '') or '')),
                                  throw=throw)
+        if own_body and felt and not any(result is True for result in results):
+            # Disabling the transport cannot undo a projectile already in
+            # flight. Keep the physical fact even without an active plugin.
+            self.squid.memory_manager.add_short_term_memory('social', 'rock:' + throw['throw_id'],
+                {'peer_uuid': throw.get('source_uuid', ''), 'hits_taken': 1, 'health': -2.},
+                importance=3)
+
+    def feel_rock_hit(self, throw):
+        """The resident's body owns damage/startle, once per physical impact."""
+        throw_id = (throw or {}).get('throw_id')
+        if not isinstance(throw_id, str) or not throw_id:
+            return False
+        hits = getattr(self, '_felt_rock_hits', None)
+        if hits is None:
+            self._felt_rock_hits = hits = set()
+        if throw_id in hits:
+            return False
+        hits.add(throw_id)
+        self.squid.health = max(0., self.squid.health - 2.)
+        self.startle_squid(source='rock_hit')
+        return True
 
     def throw_visitor_rock(self, actor, rock, intent):
         plugin = self.plugin_manager.plugins.get('multiplayer', {}).get('instance')
@@ -3059,6 +3085,10 @@ class TamagotchiLogic:
         if visual is None:
             return None
         return self.rock_interaction.throw_from_visitor(actor, rock, intent, visual)
+
+    def ink_visitor(self, actor):
+        self.create_ink_cloud((actor.x + self.squid.squid_width/2,
+                               actor.y + self.squid.squid_height/2), record=False)
 
     def add_mate_genes(self, mating_id, mate_name, genes):
         """The mate's half of the hatchling's weights has arrived: keep it with

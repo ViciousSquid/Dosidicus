@@ -463,7 +463,8 @@ class RockInteractionManager:
         plan = plan_throw({'act_play': intent.activation, 'aggression': intent.aggression},
                           origin, angle, targets, slowest=self.THROW_SLOWEST,
                           fastest=self.THROW_FASTEST, gravity=self.THROW_GRAVITY)
-        plan.update(throw_id=uuid.uuid4().hex, source_uuid=actor.uuid, hit=None)
+        plan.update(throw_id=uuid.uuid4().hex, source_uuid=actor.uuid,
+                    source_identity=actor.identity.to_payload(), hit=None)
         flight = object.__new__(RockInteractionManager)
         flight.squid = SimpleNamespace(squid_item=visual, status='throwing rock')
         flight.logic, flight.scene, flight.rock_config = self.logic, self.scene, self.rock_config

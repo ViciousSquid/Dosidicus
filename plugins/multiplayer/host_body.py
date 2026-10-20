@@ -349,6 +349,12 @@ class HostBody:
             return False                       # arrived after its lease ran out
 
         actor.seq_seen = intent.seq
+        if intent.action == 'act_ink':
+            ink = getattr(self.logic, 'ink_visitor', None)
+            if callable(ink):
+                ink(actor)
+            actor.last_intent_at = now
+            return True  # retain the simultaneous movement/play instruction
         actor.last_intent = intent
         actor.last_intent_at = now
         if now < actor.body_busy_until:
@@ -360,7 +366,7 @@ class HostBody:
         if handler is not None:
             handler(self, actor, intent)
         # else: a real action neuron with no bodily effect in someone else's
-        # tank (resting, collapsing, inking). Recorded as what the visitor is
+        # tank (resting, collapsing). Recorded as what the visitor is
         # doing - the resident can see it - and otherwise inert.
 
         # Wherever the visitor's own decision has left its body, the host
@@ -568,8 +574,8 @@ class HostBody:
     #: The dispatch table. Keyed by ACTION NEURON, so the host's whole
     #: vocabulary is what the squid's own network can want - there is no
     #: entry here that does not correspond to something the visiting squid's
-    #: own action neurons could have chosen. Actions absent (act_ink,
-    #: act_rest, act_collapse) are visible to the resident but have no effect
+    #: own action neurons could have chosen. Ink is handled as a parallel
+    #: reflex above. Actions absent (act_rest, act_collapse) have no effect
     #: on someone else's tank.
     _ACTIONS = {
         'act_move': _do_move,

@@ -68,13 +68,19 @@ class World:
             (actor.x, actor.y), FACING_ANGLES.get(actor.facing, 0.), targets,
             slowest=6., fastest=20., gravity=.3)
         import uuid
-        plan.update(throw_id=uuid.uuid4().hex, hit=None, owner=v['id'])
+        plan.update(throw_id=uuid.uuid4().hex, hit=None, owner=v['id'],
+                    source_uuid=actor.uuid, source_name=actor.identity.name,
+                    source_identity=actor.identity.to_payload())
         rock = item.data
         rock['x'], rock['y'] = actor.x, min(actor.y, self.sim.tank_size[1] - 40)
         self.sim._rock_throws[rock['id']] = plan
         self.sim._rock_velocities[rock['id']] = [plan['vx'], plan['vy']]
         v['carried_rock'] = None
         return plan
+
+    def ink_visitor(self, actor):
+        self.sim.ink_clouds.append({'x': actor.x, 'y': actor.y,
+                                   't': self.squid.brain.sim_time, 'ttl': 3.})
 
 
 class PeerVisit:
@@ -84,6 +90,8 @@ class PeerVisit:
         self.host = HostBody(World(sim, self), clock=clock, mating_chance=0.) if hosting else None
         self.ledger = PeerLedger(sim.squid.memory)
         self.mind = None if hosting else VisitorMind(sim, self.ledger, self.send, clock=clock)
+        if self.mind:
+            self.mind.on_fight = lambda won: sim.achievements.on_fight()
         self.actor = self.body = self.session = None
         self.closed = False
         self.elapsed = 0.
@@ -172,15 +180,20 @@ class PeerVisit:
         self.elapsed = 0.
         if self.host and self.actor:
             actor, v = self.actor, self.body
-            v.update(x=actor.x, y=actor.y, dir=actor.facing,
-                     carried_rock=actor.held_item.data['id'] if actor.held_item else None)
+            if v['fighting']:
+                actor.x, actor.y = v['x'], v['y']
+            else:
+                v.update(x=actor.x, y=actor.y, dir=actor.facing)
+            v['carried_rock'] = actor.held_item.data['id'] if actor.held_item else None
             self.sim._carry_rock(v)
             frame = self.host.build_frame(actor)
             self.send('perception_frame', frame.to_payload())
             for consequence in self.host.drain_consequences(actor):
                 self.send('consequence', consequence.to_payload())
+            if v['leaving']:
+                self.close()
         elif self.mind:
-            self.mind.decide()
+            self.mind.tick()
 
     def close(self, notify=True):
         if self.closed:
@@ -188,6 +201,8 @@ class PeerVisit:
         if self.mind:
             self.mind.end_visit(notify=notify)
         if self.host and self.actor:
+            for consequence in self.host.drain_consequences(self.actor):
+                self.send('consequence', consequence.to_payload())
             if notify:
                 self.send('visit_end', VisitEnd(self.actor.visit_id, 'departed').to_payload())
             self.host.remove(self.actor.uuid)
@@ -195,6 +210,8 @@ class PeerVisit:
                 self.sim.remove_decoration(self.actor.held_item.data['id'])
             if self.body in self.sim.visitors:
                 self.sim.visitors.remove(self.body)
+            if self.sim.fight and self.sim.fight['visitor_id'] == self.body['id']:
+                self.sim._end_fight(None)
             if self.session and self.session.is_memorable():
                 record = self.session.close(drives=drive_snapshot(self.sim.squid))
                 self.ledger.record(record)

@@ -856,7 +856,9 @@ class MultiplayerPlugin:
         source_uuid = throw.get('source_uuid', str(resident.uuid))
         target = self.host_body.visitor(target_uuid)
         source = self.host_body.visitor(source_uuid)
-        if target is None and (source is None or target_uuid != str(resident.uuid)):
+        identity = source.identity if source else SquidIdentity.from_payload(throw.get('source_identity') or {})
+        if target is None and (target_uuid != str(resident.uuid)
+                or identity is None or identity.uuid != source_uuid):
             return False
         hits = getattr(self, '_reported_rock_hits', None)
         if hits is None:
@@ -871,20 +873,32 @@ class MultiplayerPlugin:
             self.host_body._report(target, CONSEQUENCE_HIT,
                                    dict(fact, taken=True, peer_uuid=source_uuid))
         else:
-            resident.health = max(0., resident.health - 2.)
-            self.tamagotchi_logic.startle_squid(source='rock_hit')
+            feel = getattr(self.tamagotchi_logic, 'feel_rock_hit', None)
+            if callable(feel):
+                feel(throw)  # the core hook may already have delivered it
+            else:
+                resident.health = max(0., resident.health - 2.)
+                self.tamagotchi_logic.startle_squid(source='rock_hit')
         if source is not None:
             self.host_body._report(source, CONSEQUENCE_HIT,
                                    dict(fact, taken=False, peer_uuid=target_uuid))
         # Only the resident's OWN encounter is recorded here. A visitor
         # records its experience at home, never in a surrogate host brain.
-        peer = source if target is None else (target if source is None else None)
+        peer = source if target is None else (target if source_uuid == str(resident.uuid) else None)
         if peer is not None:
             session = self.open_encounters.get(peer.uuid)
             if session is None:
                 session = EncounterSession(peer.identity, drive_snapshot(resident))
                 self.open_encounters[peer.uuid] = session
             session.note_hit(taken=target is None)
+        elif target is None and identity is not None:
+            # A rock remains physical after its thrower has left. Keep this
+            # later impact against its source; do not resurrect a visit.
+            session = EncounterSession(identity, drive_snapshot(resident))
+            session.note_hit(taken=True)
+            record = session.close(drives=drive_snapshot(resident))
+            if self.peer_ledger is not None:
+                self.peer_ledger.record(record)
         return True
 
     def handle_gamete(self, node=None, message=None, addr=None, **_kw) -> bool:

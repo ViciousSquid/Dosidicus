@@ -157,3 +157,87 @@ def test_live_mobile_link_loss_restores_body_and_keeps_consequences():
     p.g.tick(.5)
     assert p.g.closed and not p.guest.squid.is_transitioning
     assert p.guest.squid.can_move and p.guest.squid.health == 98.
+
+
+def test_live_ink_is_a_remote_reflex_without_a_host_brain_or_resident_stat():
+    p = Pair()
+    quiet(p.guest, act_rest=100., act_ink=100.)
+    p.cycle(); p.cycle()
+    assert len(p.host.ink_clouds) == 1
+    assert p.guest.stats.ink_clouds_created == 1 and p.host.stats.ink_clouds_created == 0
+    assert p.h.actor.last_intent.action == 'act_rest'
+    quiet(p.guest, act_rest=100.)
+    p.cycle()
+    quiet(p.guest, act_rest=100., act_ink=100.)
+    p.cycle()
+    assert len(p.host.ink_clouds) == 2
+    assert p.host._visitor_minds == {}
+    p.g.close(); p.flush()
+
+
+def test_live_fight_owns_body_motion_and_reports_persistent_result_at_home():
+    from plugins.multiplayer.remote_protocol import ActionIntent
+    p = Pair()
+    p.host.squid.x, p.host.squid.y = 200., 250.
+    p.h.actor.x, p.h.actor.y = 220., 250.
+    quiet(p.guest, act_rest=100., aggression=90.)
+    quiet(p.host)
+    p.cycle()
+    p.host._update_fight(0.)
+    assert p.host.fight and p.host.fight['instigator'] == 'visitor'
+    assert p.h.actor.body_busy_until > p.now
+    before = (p.h.actor.x, p.h.actor.y)
+    move = ActionIntent(p.h.actor.visit_id, 'act_move', seq=100, sent_at=p.now, heading='right')
+    assert p.h.host.apply_intent(p.h.actor, move)
+    assert (p.h.actor.x, p.h.actor.y) == before
+    p.h.body['x'] = 215.
+    p.h.tick(.5); p.flush()
+    assert p.h.actor.x == p.h.body['x'] == 215.  # no render snap back
+    p.host._resolve_fight(p.host.fight, p.h.body)
+    p.h.tick(.5); p.flush()
+    assert p.guest.stats.fights_won + p.guest.stats.fights_lost == 1
+    result = next(c for c in p.g.mind.consequences if c.kind == 'fight_resolved')
+    p.g.mind.on_consequence(result.to_payload())
+    assert p.guest.stats.fights_won + p.guest.stats.fights_lost == 1
+    assert p.h.session.fights_won + p.h.session.fights_lost == 1
+    first_id = p.host.fight['id']
+    p.host._end_fight(p.h.body)
+    p.h.tick(.5); p.flush()
+    assert p.g.closed and p.guest.squid.can_move
+    assert p.host._visitor_minds == {} and p.host.fight is None
+    # A fresh host life/session must not reuse m1 and suppress a later result.
+    other = Simulation()
+    v = other.add_visitor(Simulation().to_dict())
+    other._start_fight(v)
+    assert other.fight['id'] != first_id
+
+
+def test_live_projectile_retains_source_after_visitor_disconnects():
+    p = Pair()
+    p.host.squid.x, p.host.squid.y = 240., 250.
+    p.h.actor.x, p.h.actor.y, p.h.actor.facing = 80., 250., 'right'
+    p.host.add_decoration('rock01.png', 'rock', 85., 250.)
+    quiet(p.guest, act_play=95.)
+    p.cycle(); p.cycle()
+    assert p.host._rock_throws
+    p.h.close(); p.flush()
+    assert not p.host.visitors
+    for _ in range(30):
+        p.host._fly_rocks(.05)
+    assert p.host.squid.health == 98.
+    from plugins.multiplayer.peer_ledger import PeerLedger
+    summary = PeerLedger(p.host.squid.memory).summary(p.guest.squid.uuid)
+    assert summary.hits_taken == 1
+
+
+def test_lethal_rock_damage_stays_dead_across_save_load(tmp_path):
+    sim = Simulation()
+    v = sim.add_visitor(Simulation().to_dict())
+    for i in range(50):
+        sim._rock_hit(None, dict(throw_id=f'impact-{i}', owner=v['id'], speed=18.))
+    sim.update(0.)
+    assert sim.squid.health == 0. and sim.squid.is_dead and sim.game_over
+    path = tmp_path / 'dead.zip'
+    export_squid(sim, str(path))
+    restored = import_squid(str(path))
+    assert restored.squid.health == 0. and restored.squid.is_dead and restored.game_over

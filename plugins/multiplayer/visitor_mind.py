@@ -169,6 +169,7 @@ class VisitorMind:
         # Retained for this mind's lifetime: a repeated UDP consequence must
         # never repeat an irreversible physical or remembered consequence.
         self._rock_hits = set()
+        self._inking = False
 
     # ==================================================================
     # Perception: the host's frame, through the ordinary sensor path
@@ -543,6 +544,8 @@ class VisitorMind:
         self.perception.begin(self.visit_id)
         self.consequences = []
         self._seq = 0
+        from src.decision_engine import wants
+        self._inking = wants('act_ink', float(self._brain_state().get('act_ink', 0.) or 0.))
         if squid is not None:
             squid.is_transitioning = True
             squid.can_move = False
@@ -699,7 +702,21 @@ class VisitorMind:
                 self._log(f"host silent for {silence:.1f}s - coming home")
                 self.end_visit(reason=END_LINK_LOST, notify=True)
             return None
-        return self.decide()
+        intent = self.decide()
+        # Ink is a parallel reflex, not a rival in the action competition.
+        # Transmit one firing; the host draws it without consulting a brain.
+        from src.decision_engine import wants
+        activation = float(self._brain_state().get('act_ink', 0.) or 0.)
+        firing = wants('act_ink', activation)
+        if firing and not self._inking:
+            self._seq += 1
+            self.send('action_intent', ActionIntent(self.visit_id, 'act_ink',
+                seq=self._seq, sent_at=self.clock(), activation=activation).to_payload())
+            track = getattr(self.logic, 'track_visitor_ink', None)
+            if callable(track):
+                track()
+        self._inking = firing
+        return intent
 
     def on_visit_end(self, payload: Dict[str, Any]) -> bool:
         """The host ended it."""

@@ -244,3 +244,54 @@ def test_distinct_rock_encounters_survive_reload_and_record_replay_is_idempotent
     restored = PeerLedger(MemoryManager())
     assert restored.summary(identity.uuid).hits_taken == 3
     assert restored.summary(identity.uuid).encounters == 2
+
+
+def test_departed_visitors_projectile_still_hurts_and_is_remembered_once():
+    from plugins.multiplayer.peer_ledger import PeerLedger
+    meeting = Encounter(); actor = meeting.admit()
+    plugin = object.__new__(MultiplayerPlugin)
+    plugin.host_body, plugin.tamagotchi_logic = meeting.host_body, meeting.host_tank
+    plugin.open_encounters = {}
+    plugin.peer_ledger = PeerLedger(meeting.host_squid.memory_manager)
+    meeting.host_squid.health = 100.
+    meeting.host_tank.startle_squid = Mock()
+    throw = dict(throw_id='late-impact', speed=18., source_uuid=actor.uuid,
+                 source_identity=actor.identity.to_payload())
+    meeting.host_body.remove(actor.uuid)
+    assert plugin.handle_rock_hit(target_uuid=meeting.host_squid.uuid, throw=throw)
+    assert not plugin.handle_rock_hit(target_uuid=meeting.host_squid.uuid, throw=throw)
+    assert meeting.host_squid.health == 98.
+    meeting.host_tank.startle_squid.assert_called_once_with(source='rock_hit')
+    plugin.peer_ledger.refresh()
+    assert plugin.peer_ledger.summary(actor.uuid).hits_taken == 1
+    assert not meeting.host_body.visitors
+
+
+def test_remote_ink_is_parallel_and_fires_once_per_neural_crossing():
+    meeting = Encounter(); meeting.admit(); meeting.host_sends_frame(); meeting.visitor_receives()
+    meeting.host_tank.ink_visitor = Mock()
+    meeting.set_brain(**quiet_brain(act_rest=100., act_ink=100.))
+    for _ in range(2):
+        meeting.visitor_mind.tick(); meeting.host_receives()
+    meeting.host_tank.ink_visitor.assert_called_once_with(meeting.actor)
+    assert meeting.actor.last_intent.action == 'act_rest'
+    meeting.set_brain(**quiet_brain(act_rest=100., act_ink=0.))
+    meeting.visitor_mind.tick(); meeting.host_receives()
+    meeting.set_brain(**quiet_brain(act_rest=100., act_ink=100.))
+    meeting.visitor_mind.tick(); meeting.host_receives()
+    assert meeting.host_tank.ink_visitor.call_count == 2
+
+
+def test_transport_disable_cannot_cancel_or_duplicate_resident_impact(tank):
+    from types import MethodType
+    from src.tamagotchi_logic import TamagotchiLogic
+    logic = tank.logic
+    logic.feel_rock_hit = MethodType(TamagotchiLogic.feel_rock_hit, logic)
+    logic.startle_squid = Mock()
+    logic.plugin_manager = NS(trigger_hook=lambda *a, **k: [])
+    throw = {'throw_id': 'after-disable', 'source_uuid': 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'}
+    for _ in range(2):
+        TamagotchiLogic.on_rock_hit(logic, tank.body.squid_item, throw)
+    assert tank.body.health == 98.
+    logic.startle_squid.assert_called_once_with(source='rock_hit')
+    tank.body.memory_manager.add_short_term_memory.assert_called_once()

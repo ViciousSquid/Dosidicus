@@ -272,7 +272,8 @@ class Simulation:
         if cause:
             plan['driven_by'] = cause[0]
         plan.update(throw_id=uuid.uuid4().hex, hit=None,
-                    owner=visitor['id'] if visitor else None)
+                    owner=visitor['id'] if visitor else None,
+                    source_uuid=owner.uuid, source_name=visitor['name'] if visitor else owner.name)
         self._rock_throws[rock['id']] = plan
         self._rock_velocities[rock['id']] = [plan['vx'], plan['vy']]
         rock['x'], rock['y'] = x, min(self.tank_size[1] - 40, y)
@@ -331,8 +332,9 @@ class Simulation:
         self._felt_rock_hits.add(key)
         visitor = self._visitor_by_id(visitor_id)
         owner = self._visitor_by_id(plan['owner'])
+        source_uuid = plan.get('source_uuid') or str(owner.get('uuid', '') if owner else self.squid.uuid)
         fact = {'throw_id': key, 'speed': plan['speed'], 'taken': True,
-                'peer_uuid': str(owner.get('uuid', '') if owner else self.squid.uuid)}
+                'peer_uuid': source_uuid}
         if visitor is not None and visitor.get('remote'):
             visitor['report']('hit', fact)
         else:
@@ -344,18 +346,27 @@ class Simulation:
             else:
                 self.startle('rock_hit')
             recipient.health = max(0., recipient.health - 2.)
-            name = owner['name'] if owner else self.squid.name
+            name = plan.get('source_name') or (owner['name'] if owner else self.squid.name)
             recipient.remember('social', 'rock:' + key,
                 f"Struck by a rock during an encounter with {name}",
                 dict(fact, hits_taken=1, health=-2), importance=3., related=['anxiety', 'is_startled'])
         if owner is not None and owner.get('remote'):
             owner['report']('hit', dict(fact, taken=False,
                 peer_uuid=str(visitor.get('uuid', '') if visitor else self.squid.uuid)))
-        peer = owner if visitor is None else (visitor if owner is None else None)
+        peer = owner if visitor is None else (visitor if source_uuid == self.squid.uuid else None)
         if peer is not None and peer.get('peer_visit'):
             session = peer['peer_visit'].session
             if session is not None:
                 session.note_hit(taken=visitor is None)
+        elif visitor is None and plan.get('source_identity'):
+            from plugins.multiplayer.encounter import EncounterSession, drive_snapshot
+            from plugins.multiplayer.identity import SquidIdentity
+            from plugins.multiplayer.peer_ledger import PeerLedger
+            identity = SquidIdentity.from_payload(plan['source_identity'])
+            if identity is not None:
+                session = EncounterSession(identity, drive_snapshot(self.squid))
+                session.note_hit(taken=True)
+                PeerLedger(self.squid.memory).record(session.close(drives=drive_snapshot(self.squid)))
 
     def startle_squid(self, source='unknown'):
         self.startle(source)
@@ -363,6 +374,16 @@ class Simulation:
     def track_rock_thrown(self):
         self.stats.on_rock_thrown()
         self.achievements.on_rock_throw()
+
+    def track_visitor_ink(self):
+        self.stats.on_ink_cloud()
+        self.achievements.on_ink_cloud()
+        self.squid.remember('behaviour', 'ink_cloud', 'Released ink while visiting',
+                            importance=1.5, related=['act_ink'])
+        for binding in self.squid.brain._bindings:
+            if binding.neuron_name == 'act_ink':
+                binding.last_activation = self.squid.brain.state.get('act_ink', 0.)
+                binding.last_fire_time = self.squid.brain.sim_time
 
     # --------------------------------------------------------- startle / ink
     def startle(self, source="ambient"):
@@ -727,12 +748,15 @@ class Simulation:
         """The more aggro squid in contact starts it; `why` is its aggression."""
         if self.fight is None:
             squid = self.squid
-            self._fight_seq = getattr(self, '_fight_seq', 0) + 1
+            import uuid
             self.fight = {"visitor_id": v["id"], "phase": "approaching",
                           "until": squid.brain.sim_time + 3.5, "instigator": instigator,
-                          "why": dict(why or {}), "id": f"m{self._fight_seq}"}
+                          "why": dict(why or {}), "id": uuid.uuid4().hex}
             squid.fighting = True
             v["fighting"] = True
+            peer = v.get('peer_visit')
+            if peer and peer.actor:
+                peer.actor.body_busy_until = peer.clock() + 60.
             squid.is_fleeing = squid.is_startled = False
             squid.status = "fighting!"
             if instigator == "resident":
@@ -743,10 +767,9 @@ class Simulation:
     def _resolve_fight(self, f, v):
         """Who wins, from both squid's abilities - and everything it leaves.
 
-        Both brains are here, so both sides are worked out in full
-        (src/fighting.py). The result, the reasons and the consequences are
-        filed in the resident's long-term memory; each squid's body takes
-        its outcome and its aggression neuron is marked for good.
+        A preview has a local brain; a live peer supplies its own abilities
+        in its intent. The host resolves the physical result and reports it
+        home. Each squid's own brain, body and memory take its consequences.
         """
         from src import fighting
         squid = self.squid
@@ -777,6 +800,9 @@ class Simulation:
             fighting.scar(mind.brain, not won,
                           f"{'won' if not won else 'lost'} a fight with {squid.name}")
         if v.get('remote'):
+            peer = v.get('peer_visit')
+            if peer and peer.session:
+                peer.session.note_fight(won)
             v['report']('fight_resolved', {'fight_id': record['fight_id'], 'won': not won,
                 'started': not resident_attacks, 'ability': theirs['ability'],
                 'other_ability': mine['ability'], 'chance': 1. - record['first_chance']})
@@ -796,6 +822,9 @@ class Simulation:
         self.squid.fighting = False
         if v is not None:
             v["fighting"] = False
+            peer = v.get('peer_visit')
+            if peer and peer.actor:
+                peer.actor.body_busy_until = 0.
             v["leaving"] = True        # the visitor heads home after the scrap
             v["vx"] = 110.0 if v["x"] > self.tank_size[0] * 0.5 else -110.0
         self.fight = None
@@ -939,6 +968,9 @@ class Simulation:
         squid = self.squid
 
         # Game over: the squid has died. Freeze the world.
+        if squid.health <= 0:
+            self.game_over = squid.is_dead = True
+            self.last_status = 'Your squid has died.'
         if self.game_over:
             return self.last_status
 

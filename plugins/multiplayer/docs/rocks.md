@@ -40,6 +40,9 @@ an attack or infers whether it was deliberate. Hits given carry no judgement
 about their value. Taken/given counts are remembered against the actual peer.
 Separate rock encounters retain separate memory keys, so a later impact cannot
 be lost by reinforcing an older, unchanged memory. Counts survive save/load.
+A projectile retains its source identity after departure; the resident core
+applies its impact once even if multiplayer has since been disabled. Lethal
+mobile damage remains fatal after save/load.
 
 A desktop visitor's next play intent can throw the rock it took, using the
 activation and aggression supplied by its own home brain. The host supplies
@@ -50,7 +53,10 @@ Live Android Nearby visits now use the shared remote-mind protocol through
 `engine/peer_visit.py`. Identity, perception, intents and consequences cross
 the connection. The visitor keeps its brain, learning and encounter memory on
 its own device; link loss restores its home body without undoing consequences.
-Local preview visitors remain a separate offline demonstration. Live connections
+Live ink is an edge-triggered parallel motor event, and fight animations own
+the visitor body until resolution. Fight results are applied and remembered
+at home with unique, replay-safe IDs. Local preview visitors remain a separate
+offline demonstration. Live connections
 no longer implicitly send a copied brain; the existing ZIP export/import flow
 remains available for deliberately sharing a copy. Mobile health is persisted
 in both its state and the interoperable save archive. APK staging includes the
@@ -64,7 +70,7 @@ With PyQt5, NumPy and pytest installed, run the complete suites:
 QT_QPA_PLATFORM=offscreen python -m pytest tests android/tests -q -p no:cacheprovider
 ```
 
-The reviewed tree passed **713 tests**: 662 desktop and 51 Android, plus 577
+The reviewed tree passed **720 tests**: 665 desktop and 55 Android, plus 577
 subtests. Three existing `Thread.setName` deprecation warnings remain.
 Regressions include neural competition and exact-threshold ties, custom motor
 provenance, view filtering, swept/tangent/stationary collisions, floor clipping,
