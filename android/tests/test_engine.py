@@ -449,3 +449,16 @@ def test_mobile_fight_brings_the_pair_together_before_the_shared_cloud_phase(mon
             break
     assert fight['phase'] == 'fighting'
     assert abs(sim.squid.x-visitor['x']) <= 40
+
+
+def test_mobile_fights_climb_from_fisticuffs_to_slugfest():
+    sim = Simulation()
+    visitor = sim.add_visitor(Simulation().to_dict(), name='Guest')
+    ladder = ('first_fight', 'fights_5', 'fights_20', 'fights_50')
+    expected = {1: 1, 4: 1, 5: 2, 19: 2, 20: 3, 49: 3, 50: 4}
+    for count in range(1, 51):
+        sim.fight = {'visitor_id': visitor['id'], 'phase': 'fighting', 'until': 0.0}
+        sim._resolve_fight(sim.fight, visitor)      # won or lost, it counts
+        if count in expected:
+            assert [a for a in ladder if a in sim.achievements.unlocked] == \
+                list(ladder[:expected[count]]), count

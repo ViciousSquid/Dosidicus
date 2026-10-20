@@ -229,6 +229,8 @@ class MultiplayerPlugin:
         else:
             self.logger.info("Multiplayer is already marked as set up. Re-enabling components.")
 
+        self.show_risk_notice_once()
+
         # --- BEGIN NEW/MODIFIED SECTION ---
         # Ensure network node is ready and listening
         if self.network_node:
@@ -289,6 +291,28 @@ class MultiplayerPlugin:
 
         self.enabled = True # Mark as enabled
         self.logger.info("Multiplayer enabled successfully.")
+        return True
+
+    #: Shown once, the first time multiplayer is enabled on this installation.
+    RISK_NOTICE = ("Multiplayer is optional. Enabling it exposes the squid to new "
+                   "experiences but may ultimately result in losing its life. "
+                   "The user takes this risk.")
+
+    def show_risk_notice_once(self) -> bool:
+        """Tell the player what multiplayer can cost - the first time only.
+
+        A visit can end in a mating, and a parent stops eating and dies (see
+        src/lifecycle.py). Remembered in config.ini, so it is shown once per
+        installation. Returns True if it was shown now.
+        """
+        from src.config_manager import ConfigManager
+        config = ConfigManager()
+        if config.get_multiplayer_risk_notice_shown():
+            return False
+        ui = getattr(self.tamagotchi_logic, 'user_interface', None)
+        QtWidgets.QMessageBox.warning(getattr(ui, 'window', None),
+                                      "Multiplayer", self.RISK_NOTICE)
+        config.set_multiplayer_risk_notice_shown()
         return True
 
     def disable(self):
@@ -595,6 +619,7 @@ class MultiplayerPlugin:
             tamagotchi_logic=self.tamagotchi_logic,
             peer_ledger=self.peer_ledger,
             send=self._send, logger=self.logger)
+        self.visitor_mind.on_fight = self.announce_fight
         # This tank, for when it is hosting someone else's squid. It is the
         # authority on matings in this tank and records them through the
         # core lifecycle before the visitor is told.
@@ -898,6 +923,7 @@ class MultiplayerPlugin:
         won = random.random() < .5
         if not stats.record_fight_result(fight_id, won):
             return False
+        self.announce_fight(won)
         for _ in range(3):
             self.host_body._report(actor, CONSEQUENCE_FIGHT,
                                    {'fight_id': fight_id, 'won': not won})
@@ -905,6 +931,17 @@ class MultiplayerPlugin:
         if hasattr(self.tamagotchi_logic, 'show_message'):
             self.tamagotchi_logic.show_message(message)
         return True
+
+    def announce_fight(self, won: bool) -> None:
+        """This tank's squid has fought, as host or as visitor. Once per fight.
+
+        Lets other plugins (achievements) count it; changes nothing here.
+        """
+        if self.plugin_manager is None:
+            return
+        self.plugin_manager.trigger_hook(
+            "on_fight", tamagotchi_logic=self.tamagotchi_logic,
+            squid=getattr(self.tamagotchi_logic, 'squid', None), won=bool(won))
 
     def shutdown(self) -> None:
         """Called by PluginManager.unload_plugin, e.g. on New Game.

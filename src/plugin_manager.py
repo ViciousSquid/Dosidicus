@@ -132,7 +132,12 @@ class PluginManager:
         self.register_hook("on_new_game")
         self.register_hook("on_save_game")
         self.register_hook("on_load_game")
-        
+        # A parent squid has starved after reproducing (src/lifecycle.py)
+        self.register_hook("on_squid_died")
+        # The squid fought another squid; fired once per fight by the
+        # multiplayer plugin, for both the host's resident and the visitor
+        self.register_hook("on_fight")
+
         # Simulation hooks
         self.register_hook("pre_update")
         self.register_hook("post_update")
@@ -477,6 +482,11 @@ class PluginManager:
         If a whitelist.txt exists in the plugin directory, only those plugins load.
         """
         self.logger.info("  Discovering plugins...")
+        # Unload what is already loaded rather than forgetting it: TamagotchiLogic
+        # loads and sets up plugins on this same (singleton) manager first, and a
+        # forgotten instance kept its hook subscriptions, method wrappers and
+        # timers - so every achievement was counted, logged and toasted twice.
+        self.unload_all_plugins()
         self.plugins.clear()
         self.enabled_plugins.clear()
 

@@ -273,6 +273,16 @@ class ConfigManager:
         values['starvation_hunger'] = max(0.0, min(100.0, values['starvation_hunger']))
         return values
 
+    def get_multiplayer_risk_notice_shown(self):
+        """Whether the player has been told multiplayer can cost the squid its life."""
+        return self.config.getboolean('Multiplayer', 'risk_notice_shown', fallback=False)
+
+    def set_multiplayer_risk_notice_shown(self, shown=True):
+        if not self.config.has_section('Multiplayer'):
+            self.config.add_section('Multiplayer')
+        self.config.set('Multiplayer', 'risk_notice_shown', str(bool(shown)))
+        self._save_config()
+
     def get_facts_enabled(self):
         return self.config.getboolean('Facts', 'enabled', fallback=True)
 

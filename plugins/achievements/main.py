@@ -462,6 +462,8 @@ class AchievementsPlugin:
             ("on_curiosity_change", self._hook_on_curiosity_change),
             ("on_anxiety_change", self._hook_on_anxiety_change),
             ("on_speed_change", self._hook_on_speed_change),
+            ("on_squid_died", self._hook_on_squid_died),
+            ("on_fight", self._hook_on_fight),
         ]
         
         for hook_name, callback in hook_subscriptions:
@@ -534,6 +536,17 @@ class AchievementsPlugin:
                 self.anxiety_low_since = time.time()
         else:
             self.anxiety_low_since = None
+
+    def _hook_on_fight(self, **kwargs):
+        self.on_squid_fought()
+
+    def _hook_on_squid_died(self, **kwargs):
+        # Only a parent can die (src/lifecycle.py), but check it reproduced
+        # rather than relying on that: this achievement is the egg's story.
+        squid = kwargs.get('squid') or self.squid
+        lifecycle = getattr(squid, 'lifecycle', None)
+        if lifecycle is not None and lifecycle.mating_id:
+            self.unlock_achievement("circle_of_life")
 
     def _hook_on_speed_change(self, **kwargs):
         speed = kwargs.get('speed', 1)
@@ -648,6 +661,20 @@ class AchievementsPlugin:
             self.unlock_achievement("rocks_thrown_100")
         self._update_progress("rocks_thrown_25", count)
         self._update_progress("rocks_thrown_100", count)
+
+    def on_squid_fought(self):
+        self._increment_stat("fights")
+        count = self.statistics.get("fights", 0)
+        for threshold in (5, 20, 50):
+            self._update_progress(f"fights_{threshold}", count)
+        if count >= 1:
+            self.unlock_achievement("first_fight")
+        if count >= 5:
+            self.unlock_achievement("fights_5")
+        if count >= 20:
+            self.unlock_achievement("fights_20")
+        if count >= 50:
+            self.unlock_achievement("fights_50")
 
     def on_decoration_interacted(self, decoration=None, interaction_type='push'):
         """Handle decoration interactions (push, investigate, etc.)"""
@@ -957,6 +984,10 @@ class AchievementsPlugin:
                 
                 def hooked_eat(*args, **kwargs):
                     result = original_eat(*args, **kwargs)
+                    # False is a refusal: a parent no longer eats, and the
+                    # food it keeps bumping into is still there next tick.
+                    if result is False:
+                        return result
                     try:
                         plugin_self.on_squid_fed()
                     except Exception as e:

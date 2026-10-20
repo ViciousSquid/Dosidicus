@@ -143,6 +143,11 @@ class AchievementManager:
     def on_startle(self):
         self._tiered(self._count("times_startled"), [(1, "first_startle")])
 
+    def on_fight(self):
+        """A fight with a visitor was decided, won or lost."""
+        self._tiered(self._count("fights"), [
+            (1, "first_fight"), (5, "fights_5"), (20, "fights_20"), (50, "fights_50")])
+
     def on_brain_opened(self):
         self._unlock("brain_surgeon")
 

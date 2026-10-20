@@ -550,6 +550,8 @@ translations = {
     "ach_happiness_100_desc": "快乐值达到 100%",
     "ach_all_stats_high_name": "完美平衡",
     "ach_all_stats_high_desc": "所有统计数据同时保持在 80% 以上",
+    "ach_circle_of_life_name": "生命循环",
+    "ach_circle_of_life_desc": "交配后，你的鱿鱼停止进食并死去，留下一枚等待孵化的蛋",
 
     # Cleaning
     "ach_first_clean_name": "第一次擦洗",
@@ -598,6 +600,14 @@ translations = {
     "ach_objects_investigated_25_desc": "调查 25 种不同的物体",
     "ach_objects_investigated_100_name": "大侦探",
     "ach_objects_investigated_100_desc": "调查 100 种不同的物体",
+    "ach_first_fight_name": "拳脚相向！",
+    "ach_first_fight_desc": "第一次与另一只鱿鱼打架",
+    "ach_fights_5_name": "扭打",
+    "ach_fights_5_desc": "与其他鱿鱼打架 5 次",
+    "ach_fights_20_name": "缠斗",
+    "ach_fights_20_desc": "与其他鱿鱼打架 20 次",
+    "ach_fights_50_name": "混战",
+    "ach_fights_50_desc": "与其他鱿鱼打架 50 次",
 
     # Exploration (Poop)
     "ach_first_poop_throw_name": "捣蛋鬼",

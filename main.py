@@ -256,17 +256,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Load and initialize plugins after core components
         logging.debug("Loading plugins")
         plugin_results = self.plugin_manager.load_all_plugins()
-        
-        # Setup plugins with tamagotchi_logic reference
-        for plugin_name, plugin_data in self.plugin_manager.plugins.items():
-            instance = plugin_data.get('instance')
-            if instance and hasattr(instance, 'setup') and not plugin_data.get('is_setup', False):
-                try:
-                    instance.setup(self.plugin_manager, self.tamagotchi_logic)
-                    plugin_data['is_setup'] = True
-                except Exception as e:
-                    print(f"Error setting up plugin {plugin_name}: {e}")
-        
+        self._setup_plugins()
+
         # CRITICAL FIX: Re-load achievement data since plugin instances were replaced
         # during load_all_plugins(), discarding any data loaded earlier
         if self.save_manager.save_exists():
@@ -479,6 +470,29 @@ class MainWindow(QtWidgets.QMainWindow):
         self._game_timers.append(timer)
         timer.start(delay_ms)
 
+    def _setup_plugins(self):
+        """Setup plugins with tamagotchi_logic reference"""
+        for plugin_name, plugin_data in self.plugin_manager.plugins.items():
+            instance = plugin_data.get('instance')
+            if instance and hasattr(instance, 'setup') and not plugin_data.get('is_setup', False):
+                try:
+                    instance.setup(self.plugin_manager, self.tamagotchi_logic)
+                    plugin_data['is_setup'] = True
+                except Exception as e:
+                    print(f"Error setting up plugin {plugin_name}: {e}")
+
+    def _achievements_save_data(self):
+        """The achievements plugin's data, while it is loaded, else None."""
+        plugin_data = self.plugin_manager.plugins.get('achievements') or {}
+        instance = plugin_data.get('instance')
+        if instance is None or not hasattr(instance, 'get_save_data'):
+            return None
+        try:
+            return instance.get_save_data()
+        except Exception as e:
+            print(f"[Warning] Could not collect achievements: {e}")
+            return None
+
     def _cancel_game_callbacks(self):
         for timer in self._game_timers:
             timer.stop()
@@ -621,6 +635,12 @@ class MainWindow(QtWidgets.QMainWindow):
         old_logic = getattr(self, 'tamagotchi_logic', None)
         old_squid = getattr(self, 'squid', None)
 
+        # A hatch continues the player's story, so its achievements carry on
+        # - CIRCLE OF LIFE is unlocked by the very death that lays this egg.
+        # They live in the parent's save, which is deleted below. New Game
+        # is a fresh start and keeps no achievements, as it always has.
+        carried_achievements = self._achievements_save_data() if egg_born else None
+
         # Plugins down. unload_plugin() calls each plugin's shutdown(), which
         # for multiplayer ends every visit and closes the network node.
         self.plugin_manager.unload_all_plugins()
@@ -713,9 +733,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 if neuron:
                     print(f"🧬 Personality starter neuron created: {neuron}")
         
-        # Plugins back up against the new squid. Multiplayer stays off until
-        # the player turns it on again, as it does at startup.
+        # Plugins back up against the new squid, set up as at startup so they
+        # track the newborn. Multiplayer stays off until the player turns it
+        # on again, as it does at startup.
         self.plugin_manager.load_all_plugins()
+        self._setup_plugins()
+        if carried_achievements:
+            self._restore_achievements_data(carried_achievements)
 
     def load_game(self):
         """Delegate to tamagotchi_logic"""
@@ -748,11 +772,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         """Handle window close event"""
         self._cancel_game_callbacks()
-        self.plugin_manager.unload_all_plugins()
-        # Save game before closing
+        # Save game before closing - and before the plugins come down, since
+        # the achievements are written from their loaded plugin or not at all.
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
             self.save_game()
-        
+        self.plugin_manager.unload_all_plugins()
+
         # Stop the tamagotchi logic if it has a stop method
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
             if hasattr(self.tamagotchi_logic, 'stop'):

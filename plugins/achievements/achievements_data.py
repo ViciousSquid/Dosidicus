@@ -171,7 +171,7 @@ ACHIEVEMENT_DEFINITIONS: Dict[str, Achievement] = {
     ),
 
     # =========================================================================
-    # MILESTONES CATEGORY (6)
+    # MILESTONES CATEGORY (8)
     # =========================================================================
     "age_1_hour": Achievement(
         id="age_1_hour", 
@@ -214,6 +214,15 @@ ACHIEVEMENT_DEFINITIONS: Dict[str, Achievement] = {
         name="ach_all_stats_high_name",
         description="ach_all_stats_high_desc",
         icon="⚖️", category="milestones", points=40, tier=3,
+    ),
+    # A parent stops eating after a multiplayer mating and starves, leaving
+    # its egg to hatch (src/lifecycle.py). Hidden: the mobile game has no
+    # mating, so it would otherwise list a goal it can never reach.
+    "circle_of_life": Achievement(
+        id="circle_of_life",
+        name="ach_circle_of_life_name",
+        description="ach_circle_of_life_desc",
+        icon="🥚", category="milestones", points=100, tier=4, hidden=True,
     ),
 
     # =========================================================================
@@ -350,6 +359,36 @@ ACHIEVEMENT_DEFINITIONS: Dict[str, Achievement] = {
         name="ach_objects_investigated_100_name",
         description="ach_objects_investigated_100_desc",
         icon="🕵️", category="interaction", points=50, tier=3, target_count=100,
+    ),
+
+    # =========================================================================
+    # INTERACTION - FIGHTS (4)
+    # Fights with another squid, won or lost, counted from the squid's own
+    # fight record (SquidStatistics.record_fight_result).
+    # =========================================================================
+    "first_fight": Achievement(
+        id="first_fight",
+        name="ach_first_fight_name",
+        description="ach_first_fight_desc",
+        icon="🥊", category="interaction", points=15, tier=1,
+    ),
+    "fights_5": Achievement(
+        id="fights_5",
+        name="ach_fights_5_name",
+        description="ach_fights_5_desc",
+        icon="💢", category="interaction", points=25, tier=2, target_count=5,
+    ),
+    "fights_20": Achievement(
+        id="fights_20",
+        name="ach_fights_20_name",
+        description="ach_fights_20_desc",
+        icon="🤼", category="interaction", points=50, tier=3, target_count=20,
+    ),
+    "fights_50": Achievement(
+        id="fights_50",
+        name="ach_fights_50_name",
+        description="ach_fights_50_desc",
+        icon="💥", category="interaction", points=100, tier=4, target_count=50,
     ),
 
     # =========================================================================

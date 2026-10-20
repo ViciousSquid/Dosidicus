@@ -158,6 +158,9 @@ class VisitorMind:
         self.session: Optional[EncounterSession] = None
         self._seq = 0
         self._restore: Dict[str, Callable] = {}
+        #: Told whether this squid won, once per fight it records while
+        #: visiting. Used to announce the fight; it decides nothing.
+        self.on_fight: Optional[Callable[[bool], None]] = None
 
     # ==================================================================
     # Perception: the host's frame, through the ordinary sensor path
@@ -378,6 +381,12 @@ class VisitorMind:
                 if stats.record_fight_result(fight_id, won):
                     if self.session is not None:
                         self.session.observe(action='fighting', now=self.clock())
+                    listener = self.on_fight
+                    if listener is not None:
+                        try:
+                            listener(won)
+                        except Exception as exc:
+                            self._log(f"fight listener failed: {exc}")
             return consequence
 
         if kind == CONSEQUENCE_MATED:

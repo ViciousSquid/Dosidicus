@@ -549,6 +549,8 @@ translations = {
     "ach_happiness_100_desc": "幸福度100%に到達",
     "ach_all_stats_high_name": "完全な調和",
     "ach_all_stats_high_desc": "全ステータスが同時に80%を超える",
+    "ach_circle_of_life_name": "命の循環",
+    "ach_circle_of_life_desc": "交尾の後、イカは食べるのをやめて死に、孵化を待つ卵を残した",
 
     # Cleaning
     "ach_first_clean_name": "最初の一掃き",
@@ -597,6 +599,14 @@ translations = {
     "ach_objects_investigated_25_desc": "25種類の物体を調査する",
     "ach_objects_investigated_100_name": "名探偵",
     "ach_objects_investigated_100_desc": "100種類の物体を調査する",
+    "ach_first_fight_name": "殴り合い！",
+    "ach_first_fight_desc": "初めて他のイカとケンカする",
+    "ach_fights_5_name": "小競り合い",
+    "ach_fights_5_desc": "他のイカと5回ケンカする",
+    "ach_fights_20_name": "取っ組み合い",
+    "ach_fights_20_desc": "他のイカと20回ケンカする",
+    "ach_fights_50_name": "大乱闘",
+    "ach_fights_50_desc": "他のイカと50回ケンカする",
 
     # Exploration (Poop)
     "ach_first_poop_throw_name": "いたずらっ子",

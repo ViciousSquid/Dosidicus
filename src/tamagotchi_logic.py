@@ -3059,9 +3059,10 @@ class TamagotchiLogic:
         """The starving parent has died. Called once, by the transition."""
         squid = self.squid
         self._lay_parent_to_rest()
-        self.show_message(f"{squid.name} has died.")
         # The multiplayer plugin, if it is running, ends visits to a tank
-        # whose resident is gone, so nothing is left pointing at it.
+        # whose resident is gone, so nothing is left pointing at it; the
+        # achievements plugin awards CIRCLE OF LIFE. Before the message, so
+        # nothing a plugin shows replaces the news of the death.
         plugin_manager = getattr(self, 'plugin_manager', None)
         if plugin_manager is not None:
             try:
@@ -3070,6 +3071,7 @@ class TamagotchiLogic:
                                             squid=squid)
             except Exception as e:
                 print(f"[Lifecycle] on_squid_died hook failed: {e}")
+        self.show_message(f"{squid.name} has died.")
         try:
             self.save_game()
         except Exception as e:

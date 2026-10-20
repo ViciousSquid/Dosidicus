@@ -16,11 +16,13 @@ The game runs from a temporary working directory (images and plugins linked
 in), so no test touches a real squid's saves or memories.
 """
 
+import json
 import os
 import shutil
 import sys
 import tempfile
 import unittest
+import zipfile
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -29,7 +31,7 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from PyQt5 import QtWidgets                                    # noqa: E402
+from PyQt5 import QtGui, QtWidgets                             # noqa: E402
 
 APP = None
 WINDOW = None
@@ -236,8 +238,15 @@ class HatchTests(unittest.TestCase):
         # Starvation's last tick: the parent dies through the ordinary update.
         parent.is_sleeping = False
         parent.hunger, parent.health = 100.0, 0.05
-        logic.update_statistics()
+        death_messages = Recorder()
+        with mock.patch.object(WINDOW.user_interface, 'show_message', death_messages):
+            logic.update_statistics()
         self.assertTrue(parent.lifecycle.is_dead)
+        # The death is CIRCLE OF LIFE - and the news of it is not replaced by
+        # the trophy the achievement shows.
+        achievements = WINDOW.plugin_manager.plugins['achievements']['instance']
+        self.assertIn('circle_of_life', achievements.unlocked)
+        self.assertEqual(death_messages.messages[-1], f"{parent.name} has died.")
 
         recorder = Recorder()
         transition_frames = []
@@ -289,6 +298,33 @@ class HatchTests(unittest.TestCase):
         loaded = WINDOW.save_manager.load_game()
         self.assertEqual(loaded['game_state']['lifecycle']['stage'], 'living')
         self.assertIsNone(loaded['game_state']['lifecycle']['egg'])
+
+        # The parent's achievements hatch with its egg - CIRCLE OF LIFE among
+        # them - into a plugin set up to follow the hatchling, and are saved.
+        hatched = WINDOW.plugin_manager.plugins['achievements']
+        self.assertIsNot(hatched['instance'], achievements)
+        self.assertTrue(hatched['is_setup'])
+        self.assertIs(hatched['instance'].squid, hatchling)
+        self.assertIn('circle_of_life', hatched['instance'].unlocked)
+        self.assertIn('circle_of_life', loaded['achievements']['unlocked'])
+
+
+class QuitTests(unittest.TestCase):
+    """Runs last: it closes the window."""
+
+    def test_4_quitting_keeps_the_achievements_in_the_save(self):
+        squid_uuid = WINDOW.squid.uuid
+        instance = WINDOW.plugin_manager.plugins['achievements']['instance']
+        instance.progress['quit_marker'] = 7
+
+        WINDOW.closeEvent(QtGui.QCloseEvent())
+
+        path = save_files_for(squid_uuid)[0]
+        with zipfile.ZipFile(path) as archive:
+            self.assertIn('achievements.json', archive.namelist())
+            saved = json.loads(archive.read('achievements.json'))
+        self.assertEqual(saved['progress']['quit_marker'], 7)
+        self.assertNotIn('achievements', WINDOW.plugin_manager.plugins)
 
 
 if __name__ == '__main__':

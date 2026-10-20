@@ -593,6 +593,7 @@ class Simulation:
         won = res >= vis
         f["phase"] = "result"
         f["until"] = squid.brain.sim_time + 2.0
+        self.achievements.on_fight()
         if won:
             self.stats.on_fight_won()
             squid.satisfaction = min(100.0, squid.satisfaction + 15.0)
