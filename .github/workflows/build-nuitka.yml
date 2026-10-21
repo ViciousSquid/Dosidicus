@@ -203,6 +203,45 @@ jobs:
         if: runner.os == 'macOS'
         run: codesign --verify --deep --strict --verbose=2 "release/Dosidicus.app"
 
+      - name: Assemble and sign macOS debug build
+        if: runner.os == 'macOS'
+        run: |
+          # Separate .app with a real console-enabled Mach-O executable.
+          mkdir -p debug-release
+          cp -R build-debug/main.app debug-release/Dosidicus.app
+          mkdir -p debug-release/Dosidicus.app/Contents/Resources
+          cp release/Dosidicus.app/Contents/Resources/qt.conf debug-release/Dosidicus.app/Contents/Resources/qt.conf
+          python tools/release_support.py runtime --target debug-release/Dosidicus.app/Contents/MacOS
+
+          test -x debug-release/Dosidicus.app/Contents/MacOS/Dosidicus
+          test -f debug-release/Dosidicus.app/Contents/MacOS/PyQt5/qt-plugins/platforms/libqcocoa.dylib
+          grep -Fxq 'Plugins = ../MacOS/PyQt5/qt-plugins' debug-release/Dosidicus.app/Contents/Resources/qt.conf
+          codesign --deep --force --sign - debug-release/Dosidicus.app
+          codesign --verify --deep --strict --verbose=2 debug-release/Dosidicus.app
+
+          cp tools/macos_debug.command "debug-release/Run Dosidicus Debug.command"
+          cp tools/MACOS_DEBUG_README.txt debug-release/README-DEBUG.txt
+          chmod +x "debug-release/Run Dosidicus Debug.command"
+          bash -n "debug-release/Run Dosidicus Debug.command"
+
+      - name: Package macOS diagnostic ZIP
+        if: runner.os == 'macOS'
+        run: |
+          cd debug-release
+          zip -r -y "../Dosidicus-${{ matrix.asset }}-debug.zip" \
+            Dosidicus.app "Run Dosidicus Debug.command" README-DEBUG.txt
+          cd ..
+          unzip -Z -1 "Dosidicus-${{ matrix.asset }}-debug.zip" | grep -Fxq "Run Dosidicus Debug.command"
+          unzip -Z -1 "Dosidicus-${{ matrix.asset }}-debug.zip" | grep -Fxq "Dosidicus.app/Contents/MacOS/Dosidicus"
+
+      - name: Upload macOS diagnostic build
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuitka-${{ matrix.asset }}-debug
+          path: Dosidicus-${{ matrix.asset }}-debug.zip
+          if-no-files-found: error
+
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -288,37 +327,6 @@ jobs:
           path: smoke-macos.log
           if-no-files-found: ignore
 
-      - name: Assemble and sign macOS debug build
-        if: runner.os == 'macOS'
-        run: |
-          # Separate .app with a real console-enabled Mach-O executable.
-          mkdir -p debug-release
-          cp -R build-debug/main.app debug-release/Dosidicus.app
-          mkdir -p debug-release/Dosidicus.app/Contents/Resources
-          cp release/Dosidicus.app/Contents/Resources/qt.conf debug-release/Dosidicus.app/Contents/Resources/qt.conf
-          python tools/release_support.py runtime --target debug-release/Dosidicus.app/Contents/MacOS
-
-          test -x debug-release/Dosidicus.app/Contents/MacOS/Dosidicus
-          test -f debug-release/Dosidicus.app/Contents/MacOS/PyQt5/qt-plugins/platforms/libqcocoa.dylib
-          grep -Fxq 'Plugins = ../MacOS/PyQt5/qt-plugins' debug-release/Dosidicus.app/Contents/Resources/qt.conf
-          codesign --deep --force --sign - debug-release/Dosidicus.app
-          codesign --verify --deep --strict --verbose=2 debug-release/Dosidicus.app
-
-          cp tools/macos_debug.command "debug-release/Run Dosidicus Debug.command"
-          cp tools/MACOS_DEBUG_README.txt debug-release/README-DEBUG.txt
-          chmod +x "debug-release/Run Dosidicus Debug.command"
-          bash -n "debug-release/Run Dosidicus Debug.command"
-
-      - name: Package macOS diagnostic ZIP
-        if: runner.os == 'macOS'
-        run: |
-          cd debug-release
-          zip -r -y "../Dosidicus-${{ matrix.asset }}-debug.zip" \
-            Dosidicus.app "Run Dosidicus Debug.command" README-DEBUG.txt
-          cd ..
-          unzip -Z -1 "Dosidicus-${{ matrix.asset }}-debug.zip" | grep -Fxq "Run Dosidicus Debug.command"
-          unzip -Z -1 "Dosidicus-${{ matrix.asset }}-debug.zip" | grep -Fxq "Dosidicus.app/Contents/MacOS/Dosidicus"
-
       - name: Mark Linux binary executable
         if: runner.os == 'Linux'
         run: chmod +x release/Dosidicus
@@ -343,6 +351,6 @@ jobs:
         with:
           name: nuitka-${{ matrix.asset }}
           path: |
-            Dosidicus-*.zip
-            Dosidicus-*.tar.gz
+            Dosidicus-${{ matrix.asset }}.zip
+            Dosidicus-linux.tar.gz
           if-no-files-found: error
