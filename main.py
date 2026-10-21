@@ -10,6 +10,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+# Finder may start an app with a cwd outside its bundle. Keep user settings,
+# saves and logs writable without modifying the signed .app's resources.
+if sys.platform == 'darwin':
+    from src.macos_runtime import prepare_macos_runtime
+    prepare_macos_runtime()
+
 QT_LOGGING_RULES = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
 
 _EARLY_APP = None
