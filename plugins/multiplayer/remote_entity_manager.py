@@ -164,6 +164,11 @@ class RemoteEntityManager:
 
     def _get_scaled_pixmap(self, image_file_name: str) -> tuple[QtGui.QPixmap, tuple[int, int]]:
         target_width, target_height = self.IMAGE_DIMENSIONS.get(image_file_name, self.DEFAULT_IMAGE_DIMENSION)
+        # Drawn at the resident's scale, so a visitor is not bigger than its host
+        # on a 1080p screen, nor twice its size on a Retina Mac.
+        from src.display_scaling import DisplayScaling
+        scale = DisplayScaling.squid_scale()
+        target_width, target_height = int(target_width * scale), int(target_height * scale)
         if (target_width, target_height) == self.DEFAULT_IMAGE_DIMENSION and image_file_name not in self.IMAGE_DIMENSIONS:
             if self.debug_mode: self.logger.warning(f"Image file '{image_file_name}' not in IMAGE_DIMENSIONS. Using default: {self.DEFAULT_IMAGE_DIMENSION}")
         

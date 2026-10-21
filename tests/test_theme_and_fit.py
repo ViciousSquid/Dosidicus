@@ -70,3 +70,27 @@ def test_the_brain_is_drawn_in_whatever_room_it_is_given():
         assert (brain.width(), brain.height()) == (740, 560)
     finally:
         brain.hide()
+
+
+def test_a_retina_mac_is_sized_in_real_pixels_and_drawn_in_points():
+    """A 14in MacBook Pro reports 1512x982 points at 2x. Taken as pixels it was
+    a small 1080p screen: the window shrank while sprites kept their pixel
+    size in points, twice their size on screen."""
+    from src.display_scaling import DisplayScaling as D
+    saved = (D._scale_factor, D._ratio, D._small_screen)
+    try:
+        D.initialize(1512, 982, 2.0)
+        assert not D._small_screen                       # 3024x1964 real pixels
+        assert abs(D.get_scale_factor() - (1964 / 1920) / 2) < 1e-6
+        assert (D.scale(1344), D.scale(936)) == (687, 478)   # the window, in points
+        assert D.squid_scale() == 0.5 and D.points(64) == 32
+        pixmap = QtGui.QPixmap(64, 48)
+        assert (D.to_points(pixmap).width(), D.to_points(pixmap).height()) == (32, 24)
+        # Where Qt draws in pixels nothing changes.
+        D.initialize(1920, 1080, 1.0)
+        assert D._small_screen and D.squid_scale() == 0.7 and D.points(64) == 64
+        assert D.to_points(pixmap) is pixmap
+        before = min(1920 / 2880, 1080 / 1920) * 0.85          # the factor as it always was
+        assert (D.scale(1440), D.scale(960)) == (int(1440 * before), int(960 * before))
+    finally:
+        D._scale_factor, D._ratio, D._small_screen = saved

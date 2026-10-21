@@ -101,6 +101,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # and the user can drag it larger or smaller afterwards.
         self.setMinimumSize(DisplayScaling.scale(480), DisplayScaling.scale(360))
 
+        # In real pixels, like every size in the game: in points on a Retina
+        # Mac, where the screen reports points (DisplayScaling).
+        ratio = max(1.0, screen.devicePixelRatio())
+        final_width, final_height = int(final_width / ratio), int(final_height / ratio)
+
         # Ensure the final window dimensions do not exceed the actual screen available geometry
         final_width = min(final_width, screen_geometry.width())
         final_height = min(final_height, screen_geometry.height())
@@ -129,6 +134,17 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Initialize tab widget
         self.init_tabs()
+
+        # On a Retina screen the opening size above is the design's share of
+        # the screen, in points - but the tabs and controls are in points too
+        # and do not shrink with it, so never smaller than they need.
+        if ratio > 1.0:
+            hint = self.sizeHint()
+            width = min(max(final_width, hint.width()), screen_geometry.width())
+            height = min(max(final_height, hint.height()), screen_geometry.height())
+            if (width, height) != (final_width, final_height):
+                self.resize(width, height)
+                self.move(screen_geometry.right() - width - 100, screen_geometry.top())
 
         # Set up timers
         self.init_timers()

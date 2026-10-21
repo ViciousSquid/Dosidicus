@@ -182,8 +182,9 @@ class TamagotchiLogic:
         # Initialize game objects BEFORE load_game()
         self.food_items = []
         self.max_food = 3
-        self.food_width = 64
-        self.food_height = 64
+        from .display_scaling import DisplayScaling
+        self.food_width = DisplayScaling.points(64)
+        self.food_height = DisplayScaling.points(64)
         self.poop_items = []
         self.max_poop = 3
         self.points = 0
@@ -1329,7 +1330,8 @@ class TamagotchiLogic:
 
     def create_ink_cloud(self, position=None, *, record=True):
         """Create an ink cloud with guaranteed fade-out after 10 seconds"""
-        ink_cloud_pixmap = QtGui.QPixmap(os.path.join("images", "inkcloud.png"))
+        from .display_scaling import DisplayScaling
+        ink_cloud_pixmap = DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "inkcloud.png")))
         ink_cloud_item = QtWidgets.QGraphicsPixmapItem(ink_cloud_pixmap)
         
         # Set the center of the ink cloud to match the center of the squid
@@ -2379,7 +2381,8 @@ class TamagotchiLogic:
             self.squid.status = "recovering"
 
     def display_needle_image(self):
-        needle_pixmap = QtGui.QPixmap(os.path.join("images", "needle.jpg"))
+        from .display_scaling import DisplayScaling
+        needle_pixmap = DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "needle.jpg")))
         self.needle_item = QtWidgets.QGraphicsPixmapItem(needle_pixmap)
         self.needle_item.setPos(self.user_interface.window_width // 2 - needle_pixmap.width() // 2,
                                 self.user_interface.window_height // 2 - needle_pixmap.height() // 2)
@@ -2699,12 +2702,13 @@ class TamagotchiLogic:
             return
         
         # Create only one food item
+        from .display_scaling import DisplayScaling
         if is_sushi:
-            food_pixmap = QtGui.QPixmap(os.path.join("images", "sushi.png"))
+            food_pixmap = DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "sushi.png")))
             food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
             food_item.is_sushi = True
         else:
-            food_pixmap = QtGui.QPixmap(os.path.join("images", "cheese.png"))
+            food_pixmap = DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "cheese.png")))
             food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
             food_item.is_sushi = False
 
@@ -3126,8 +3130,9 @@ class TamagotchiLogic:
             except RuntimeError:
                 pass
         self._remove_egg_item()
+        from .display_scaling import DisplayScaling
         item = QtWidgets.QGraphicsPixmapItem(
-            QtGui.QPixmap(os.path.join("images", "egg.png")))
+            DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "egg.png"))))
         # A category nothing else recognises: it is not food, a rock or a
         # decoration, so it is not eaten, carried, contested or saved twice.
         item.category = 'egg'

@@ -640,18 +640,9 @@ class Squid:
         """Load images with cache to reduce memory usage and apply resolution scaling"""
         from .display_scaling import DisplayScaling
         
-        # Get current screen resolution
-        screen = QtWidgets.QApplication.primaryScreen()
-        screen_size = screen.size()
-        
-        # Determine resolution-specific scaling
-        if screen_size.width() <= 1920 and screen_size.height() <= 1080:
-            # For 1080p resolution, reduce size by 30%
-            image_scale = 0.7
-            print("Applying 70% squid size scaling for 1080p resolution")
-        else:
-            # For higher resolutions, use normal scaling
-            image_scale = 1.0
+        # 70% on a 1080p screen, measured in real pixels; in points on a
+        # Retina Mac (DisplayScaling.squid_scale).
+        image_scale = DisplayScaling.squid_scale()
         
         # Load original images from cache
         original_images = {
@@ -773,9 +764,10 @@ class Squid:
             self.update_neurogenesis_icon_position()
 
     def load_poop_images(self):
+        from .display_scaling import DisplayScaling
         self.poop_images = [
-            QtGui.QPixmap(os.path.join("images", "poop1.png")),
-            QtGui.QPixmap(os.path.join("images", "poop2.png"))
+            DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "poop1.png"))),
+            DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "poop2.png")))
         ]
         self.poop_width = self.poop_images[0].width()
         self.poop_height = self.poop_images[0].height()
@@ -2367,7 +2359,9 @@ class Squid:
     
 
     def change_to_rps_image(self):
-        self.rps_image = QtGui.QPixmap(os.path.join("images", "squid_rps_frame.png"))
+        from .display_scaling import DisplayScaling
+        self.rps_image = DisplayScaling.to_points(
+            QtGui.QPixmap(os.path.join("images", "squid_rps_frame.png")))
         self.squid_item.setPixmap(self.rps_image)
 
     def restore_normal_image(self):
@@ -2555,7 +2549,9 @@ class Squid:
 
     def show_sick_icon(self):
         if self.sick_icon_item is None:
-            sick_icon_pixmap = QtGui.QPixmap(os.path.join("images", "sick.png"))
+            from .display_scaling import DisplayScaling
+            sick_icon_pixmap = DisplayScaling.to_points(
+                QtGui.QPixmap(os.path.join("images", "sick.png")))
             self.sick_icon_item = QtWidgets.QGraphicsPixmapItem(sick_icon_pixmap)
             self.sick_icon_item.setZValue(500)  # Below DIRTY text (z=1000) but above decorations
             self.ui.scene.addItem(self.sick_icon_item)

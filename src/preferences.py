@@ -41,7 +41,7 @@ class PreferencesWindow(QtWidgets.QDialog):
         self.config = ConfigManager()
         
         # Re-initialize scaling to ensure context is correct for this window creation
-        DisplayScaling.initialize(screen_geometry.width(), screen_geometry.height())
+        DisplayScaling.initialize_for(screen, available=True)
         
         self.setWindowTitle("Preferences")
         self.setModal(False)

@@ -441,11 +441,10 @@ class Ui:
         self.setup_decorations_shortcut()
         
         screen = QtWidgets.QApplication.primaryScreen()
-        screen_size = screen.size()
         from .display_scaling import DisplayScaling
-        DisplayScaling.initialize(screen_size.width(), screen_size.height())
+        DisplayScaling.initialize_for(screen)
         
-        if screen_size.width() <= 1920:
+        if DisplayScaling.screen_pixels(screen)[0] <= 1920:
             base_width = 1440
             base_height = 960
         else:
@@ -1472,6 +1471,9 @@ class Ui:
             pixmap = QtGui.QPixmap(file_path)
             if not pixmap.isNull():
                 filename = os.path.basename(file_path)
+                from .display_scaling import DisplayScaling
+                if 'rock01' in file_path.lower() or 'rock02' in file_path.lower():
+                    pixmap = DisplayScaling.to_points(pixmap)     # a rock keeps its pixel size
                 item = ResizablePixmapItem(pixmap, file_path)
                 item.original_pixmap = pixmap
                 if not ('rock01' in file_path.lower() or 'rock02' in file_path.lower()):
