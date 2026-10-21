@@ -45,7 +45,8 @@ def test_runtime_assembly_omits_repository_credentials_and_unrelated_builds(tmp_
 
 
 ARTIFACTS = ('Dosidicus-windows.zip', 'Dosidicus-windows-arm64.zip',
-             'Dosidicus-macos-arm64.zip', 'Dosidicus-macos-x64.zip',
+             'Dosidicus-macos-arm64.zip', 'Dosidicus-macos-arm64-debug.zip',
+             'Dosidicus-macos-x64.zip', 'Dosidicus-macos-x64-debug.zip',
              'Dosidicus-linux.tar.gz', 'dosidicus-3.2.7-arm64-release.apk')
 
 
@@ -56,9 +57,9 @@ def test_release_requires_all_architectures_and_checksums_every_asset(tmp_path):
         (source/name).write_bytes(name.encode())
     collect_artifacts(source, target, '3.2.7')
     manifest = json.loads((target/'release-info.json').read_text())
-    assert len(manifest['artifacts']) == 6
+    assert len(manifest['artifacts']) == 8
     hashes = (target/'SHA256SUMS').read_text().splitlines()
-    assert len(hashes) == 7
+    assert len(hashes) == 9
     for row in hashes:
         digest, name = row.split('  ')
         assert hashlib.sha256((target/name).read_bytes()).hexdigest() == digest
