@@ -8,6 +8,14 @@ on:
         required: false
         default: ""
   workflow_dispatch:
+  # Also produce a downloadable diagnostic artifact when packaging changes.
+  push:
+    branches:
+      - 3.2.0_LatestVersion
+    paths:
+      - ".github/workflows/build-nuitka.yml"
+      - "tools/macos_debug.command"
+      - "tools/MACOS_DEBUG_README.txt"
 
 jobs:
   build:
