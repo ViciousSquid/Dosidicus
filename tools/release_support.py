@@ -61,7 +61,9 @@ def collect_artifacts(source, target, version):
         'Dosidicus-windows.zip': 'windows-x64.zip',
         'Dosidicus-windows-arm64.zip': 'windows-arm64.zip',
         'Dosidicus-macos-arm64.zip': 'macos-arm64.zip',
+        'Dosidicus-macos-arm64-debug.zip': 'macos-arm64-debug.zip',
         'Dosidicus-macos-x64.zip': 'macos-x64.zip',
+        'Dosidicus-macos-x64-debug.zip': 'macos-x64-debug.zip',
         'Dosidicus-linux.tar.gz': 'linux-x64.tar.gz',
         f'dosidicus-{version}-arm64-release.apk': 'android-arm64.apk',
     }
