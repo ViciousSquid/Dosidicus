@@ -108,13 +108,16 @@ becomes increasingly sociable. Same start, diverging lives.
 | `063eb64` | `tests/test_inheritance.py`; a NaN gene from the wire is dropped |
 | `35a52bc` | Protocol hardening: no drives in `object_sync`; whole datagrams read, bounded inflate; de-duplication by datagram digest; remote-mind messages accepted only from the visit's own nodes; legacy `squid_return`/`rock_throw`/`squid_move` not listened for; queued consequences sent before a visitor is removed; gamete resent when a mating is retold; refusals addressed by node; intent leases immune to clock skew; a visitor drawn where its body is in the host tank |
 | `3c4fe70` | SOCIAL band in the brain (desktop and Android), only once a social member has grown; social neurons prunable, never `can_see_squid` or a scarred neuron; headless brains lay out grown neurons like the desktop |
-| this commit | Owner's calls: desktop squids die of injuries at 0 health, as on Android; `squid_nearby` reaches 1000 px; a throw (and a swim at a squid at play) goes at one the squid remembers badly before a nearer stranger. Release APK built by CI (`android-release.yml`, signed) |
+| `f5d8a83` | Owner's calls: desktop squids die of injuries at 0 health, as on Android; `squid_nearby` reaches 1000 px; a throw (and a swim at a squid at play) goes at one the squid remembers badly before a nearer stranger. Release APK built by CI (`android-release.yml`, signed) |
+| `7e0d019`, `427409b` | Crash when an egg hatched after a visit fixed (the arrival arrow's fade timer was garbage-collected, and the new-life clear removed its child lines one by one - double delete); an away squid is hidden at home and its tank says whose tank it is visiting; visitors labelled by name; `cleanup_all` fix |
+| `63db8ba` | Android: closing Nearby keeps a live visit (Disconnect ends it); the home tank says where its squid is; visitor names on chips |
+| `a85de24`, this commit | `tools/capture_story.py` (two desktops: aware, visit, fight, mate, death, new game) and `tools/capture_android.py` (two copies of the app, loopback Nearby); the story gallery in `docs/story-gallery/`, every nudge disclosed |
 
 Earlier on the branch (before this work): release workflows for all platforms
 (`e1f47c3`), shared brain interchange, the real two-instance gallery
 (`docs/canary-gallery`, now stale - see section 5).
 
-Test suite at the last commit: **869 passed**
+Test suite at the last commit: **873 passed**
 (`QT_QPA_PLATFORM=offscreen python -m pytest tests android/tests -q -p no:cacheprovider`, ~50 s).
 
 ---
@@ -330,12 +333,16 @@ Priority order agreed with the owner: big code changes first.
 
 ### Verification and release
 
-- **Real two-instance test**: run two game instances with multiplayer
-  enabled, like a user would; verify discovery, consent, a visit with both
-  squid in one tank, personality-dependent interaction (approach/flee,
-  fights with cloud, mating heart, headstones). `tools/capture_multiplayer.py`
-  exists from an earlier approach; regenerate `docs/canary-gallery` (its JSON
-  captures still show the retired `conspecific_*`/`encounter` design).
+- **Real two-instance test**: done - `docs/story-gallery/` from
+  `tools/capture_story.py` and `tools/capture_android.py`.
+  `docs/canary-gallery` still shows the retired `conspecific_*`/`encounter`
+  design; remove it when the owner agrees.
+- **Brain window crop**: `BrainWidget.resizeEvent` forces the widget to at
+  least 1280x900 whatever room the window gives it, so in a smaller window
+  the bottom of the network - the SOCIAL band - is cut off rather than
+  scaled (the renderer already scales to fit). At the opening size,
+  1300x1100, the band shows with its bottom edge trimmed; at 1200x860 it is
+  gone. Upstream behaviour; not changed.
 - **Release APK** for distribution (`.github/workflows/android-release.yml`;
   signing via repository secrets). Note: the README once mentioned a release
   key at `/workspace/dosidicus-release-signing` - a key custody concern raised

@@ -36,8 +36,11 @@ ROLES = ('ziggy', 'inky')
 NAMES = {'ziggy': 'Ziggy', 'inky': 'Inky'}
 TIMEOUT = 420.0
 # The brain window's opening size in the game (brain_tool): the whole network,
-# SOCIAL band included, as a player first sees it.
+# SOCIAL band included, as a player first sees it - for the brain shots. In
+# between it is kept smaller: a larger brain redrawn every frame in two
+# processes slowed the scene enough that the squid stopped meeting.
 BRAIN_WINDOW = (1300, 1100)
+WORKING_BRAIN = (1200, 860)
 
 
 def worker(role, output):
@@ -100,6 +103,17 @@ def worker(role, output):
     def brain():
         return window.brain_window.brain_widget
 
+    def brain_shot(name, caption, settle=1.5):
+        """The brain window at its opening size, grabbed once it has redrawn."""
+        if name in state['shots']:
+            return
+        if f'_sized_{name}' not in state:
+            window.brain_window.resize(*BRAIN_WINDOW)
+            state[f'_sized_{name}'] = elapsed()
+        if elapsed() - state[f'_sized_{name}'] >= settle:
+            shot(name, window.brain_window, caption=caption)
+            window.brain_window.resize(*WORKING_BRAIN)
+
     def pin(**values):
         b = brain()
         for name, value in values.items():
@@ -117,9 +131,11 @@ def worker(role, output):
         if AQUARIUM_SENSE in brain().neuron_positions and not mind.perception.away:
             if later('aware', .4):
                 shot('aware-tank', caption='Ziggy hears another aquarium and grows a sense for it')
-            if later('aware-brain', 1.2) and 'aware-brain' not in state['shots']:
-                shot('aware-brain', window.brain_window,
-                     caption="aquarium_nearby, the first neuron on Ziggy's SOCIAL band")
+        # Its brain stays at home: the shot is finished even if Ziggy has left.
+        if AQUARIUM_SENSE in brain().neuron_positions and 'aware-brain' not in state['shots']:
+            if later('aware-brain', .6):
+                brain_shot('aware-brain',
+                           caption="aquarium_nearby, the first neuron on Ziggy's SOCIAL band")
                 state['notes']['aware_thoughts'] = thoughts()
         if state['stage'] == 'aware' and 'aware-brain' in state['shots']:
             state['stage'] = 'restless'
@@ -153,19 +169,24 @@ def worker(role, output):
         if state['stage'] == 'night' and not mind.perception.away:
             state['stage'] = 'home'
             state['notes']['home_thoughts'] = thoughts()
-        if state['stage'] == 'home' and later('home', 3.0):
+        if state['stage'] == 'home' and later('home', .5):
             shot('home', caption='Ziggy home again, asleep - changed by what happened')
-            state['stage'] = 'home-brain'
-        if state['stage'] == 'home-brain' and later('home-brain', 3.0):
-            shot('home-brain', window.brain_window,
-                 caption="Ziggy's brain after the visit: its social band has grown")
-            state['notes']['social'] = _social_structure(brain())
-            # Rested, Ziggy would set off again within seconds - its own
-            # decision, and Inky, aggressive now, would fight it every time.
+            # Rested after a compressed night, Ziggy sets off again within
+            # seconds - its own decision, and Inky, aggressive now, would
+            # fight it every time.
             nudge("Ziggy's player switched multiplayer off once Ziggy was home, so the story "
                   "can follow Inky")
             window.plugin_manager.disable_plugin('multiplayer')
             state['plugin_off'] = True
+            state['stage'] = 'home-brain'
+
+    def ziggy_home_brain():
+        """Multiplayer is off by now: the brain the visit left behind."""
+        if later('home-brain', 2.0):
+            brain_shot('home-brain',
+                       caption="Ziggy's brain after the visit: its social band has grown")
+        if 'home-brain' in state['shots']:
+            state['notes']['social'] = _social_structure(brain())
             state['stage'] = 'waiting'
         if state['stage'] == 'waiting' and other_stage() == 'done':
             state['stage'] = 'done'
@@ -267,13 +288,14 @@ def worker(role, output):
             shot('hatching', caption='Inky’s egg hatches: a new game, with no way out')
         if (str(window.squid.uuid) != state.get('uuid') and splash is not None
                 and getattr(splash, '_ended', False)):
-            if later('hatched', 3.0):
+            if later('hatched', 3.0) and 'hatchling' not in state['shots']:
                 shot('hatchling', caption='The hatchling, beside its parent’s headstone')
-                window.brain_window.show(); window.brain_window.resize(*BRAIN_WINDOW)
+                window.brain_window.show(); window.brain_window.resize(*WORKING_BRAIN)
                 state['notes']['inherited_from'] = getattr(window.squid, 'inherited_from', [])
             if later('hatched-brain', 6.0):
-                shot('hatchling-brain', window.brain_window,
-                     caption='A newborn brain, overlaid with half of each parent’s weights')
+                brain_shot('hatchling-brain',
+                           caption='A newborn brain, overlaid with half of each parent’s weights')
+            if 'hatchling-brain' in state['shots']:
                 ledger = getattr(brain(), 'ledger', None)
                 events = [e for e in getattr(ledger, '_recent', []) if e.mechanism == 'inheritance']
                 state['notes']['inherited_synapses'] = len(events)
@@ -296,7 +318,7 @@ def worker(role, output):
                 plugin.host_body.mating_chance = 0.
                 state['node_id'] = plugin.network_node.node_id
                 window.brain_window.show()
-                window.brain_window.resize(*BRAIN_WINDOW)
+                window.brain_window.resize(*WORKING_BRAIN)
             plugin = state['plugin']
             if plugin is None:
                 return
@@ -306,7 +328,9 @@ def worker(role, output):
                     plugin.network_node.send_message('heartbeat', {'status': 'active'})
                 write()
             if role == 'ziggy' and state.get('plugin_off'):
-                if other_stage() == 'done':
+                if state['stage'] == 'home-brain':
+                    ziggy_home_brain()
+                elif other_stage() == 'done':
                     state['stage'] = 'done'
             elif role == 'ziggy':
                 ziggy(plugin, window.squid)

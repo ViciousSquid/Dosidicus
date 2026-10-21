@@ -14,6 +14,6 @@ Certificate SHA-256: `0bcffa44f72b6e368d58a38ca1c72f388ee1114f04b67fbfc7fbca6516
 
 The private key and password are kept outside the repository. Back them up securely from the build environment's `/workspace/dosidicus-release-signing` directory.
 
-[Actual app gallery and multiplayer recordings](../../docs/canary-gallery/README.md) · [Shared engine details](../ENGINE_3_1.md)
+[Story gallery: two networked desktops and an Android visit](../../docs/story-gallery/index.html) · [Shared engine details](../ENGINE_3_1.md)
 
 Validation covers the neural engine, save interchange, release signature and ZIP alignment, and native Kivy screen capture. No physical Android device was available for installation testing. The mobile nearby-player interface is separate from the desktop multiplayer protocol; desktop multiplayer lifecycle recordings do not demonstrate Android LAN protocol parity.

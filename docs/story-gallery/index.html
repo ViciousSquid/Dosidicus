@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dosidicus Story Gallery</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root {
+  --bg: #f4f3ee;
+  --surface: #ffffff;
+  --surface-2: #ecebe4;
+  --text: #1c1f23;
+  --muted: #5b6168;
+  --border: #d9d7cf;
+  --accent: #1f6f8b;
+  --accent-soft: #dcecf1;
+  --social: #b23d76;
+  --social-soft: #f6e3ec;
+  --shadow: 0 1px 2px rgba(20, 24, 28, .06), 0 6px 20px rgba(20, 24, 28, .06);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1316;
+    --surface: #171c20;
+    --surface-2: #1e252a;
+    --text: #e7e9ea;
+    --muted: #9aa3aa;
+    --border: #2c353b;
+    --accent: #6fbfd9;
+    --accent-soft: #183039;
+    --social: #ec8bbb;
+    --social-soft: #35202b;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1316;
+  --surface: #171c20;
+  --surface-2: #1e252a;
+  --text: #e7e9ea;
+  --muted: #9aa3aa;
+  --border: #2c353b;
+  --accent: #6fbfd9;
+  --accent-soft: #183039;
+  --social: #ec8bbb;
+  --social-soft: #35202b;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: 0 max(16px, env(safe-area-inset-right)) 64px max(16px, env(safe-area-inset-left));
+}
+.hero, main { max-width: 1080px; margin: 0 auto; }
+.hero { padding: 56px 0 24px; }
+.eyebrow {
+  margin: 0 0 8px; color: var(--accent); font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; font-size: 13px;
+}
+h1 { margin: 0 0 16px; font-size: clamp(32px, 6vw, 52px); line-height: 1.08; letter-spacing: -.02em; text-wrap: balance; }
+.lede { max-width: 68ch; margin: 0 0 24px; color: var(--muted); font-size: 18px; }
+.cast { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 24px; }
+.cast div {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 14px; box-shadow: var(--shadow);
+}
+.cast dt { font-weight: 700; }
+.cast dd { margin: 0; color: var(--muted); font-size: 14px; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.toc a {
+  color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 600;
+  padding: 4px 10px; border-radius: 999px; background: var(--accent-soft);
+}
+.toc a:hover, .toc a:focus-visible { text-decoration: underline; }
+
+.chapter { padding: 40px 0 8px; border-top: 1px solid var(--border); }
+.chapter > p { max-width: 72ch; }
+h2 { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; font-size: clamp(22px, 3.4vw, 30px); line-height: 1.2; text-wrap: balance; }
+h3 { margin: 32px 0 8px; font-size: 20px; }
+.num {
+  flex: none; display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 50%;
+  background: var(--accent); color: var(--bg); font-size: 17px; font-weight: 700;
+}
+.num.alt { background: var(--social); }
+code {
+  font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--surface-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere;
+}
+
+.row { display: grid; gap: 16px; margin: 20px 0; }
+.row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.row.one { grid-template-columns: minmax(0, 820px); }
+.row.minds { align-items: start; }
+@media (max-width: 720px) {
+  .row.two, .row.three { grid-template-columns: minmax(0, 1fr); }
+}
+
+.shot { margin: 0; }
+.zoom {
+  display: block; width: 100%; padding: 0; border: 1px solid var(--border); border-radius: 10px;
+  background: #fff; overflow: hidden; cursor: zoom-in; box-shadow: var(--shadow);
+}
+.zoom:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.zoom img { display: block; width: 100%; height: auto; }
+figcaption { margin-top: 8px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+
+.mind {
+  margin: 16px 0; max-width: 820px; background: var(--surface); border: 1px solid var(--border);
+  border-left: 4px solid var(--social); border-radius: 10px; padding: 12px 16px; box-shadow: var(--shadow);
+}
+.row .mind { margin: 0; }
+.mind-label { margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--social); letter-spacing: .03em; }
+.mind ul { margin: 0; padding-left: 18px; }
+.mind li { font-style: italic; }
+.game-msg {
+  display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; max-width: 820px;
+  background: var(--surface-2); border-radius: 8px; padding: 10px 14px; font-size: 15px;
+}
+.game-msg span { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 3px 9px; border-radius: 999px;
+  background: var(--social-soft); color: var(--social); border: 1px solid color-mix(in srgb, var(--social) 30%, transparent);
+}
+.epitaph {
+  margin: 8px 0 0; max-width: 320px; text-align: center; padding: 16px 20px; border-radius: 60px 60px 8px 8px;
+  background: var(--surface-2); border: 1px solid var(--border); font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px; line-height: 1.5;
+}
+
+.phones { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+@media (max-width: 860px) { .phones { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .phones { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.phones .zoom { border-radius: 16px; background: #0d1014; }
+.note {
+  max-width: 72ch; color: var(--muted); font-size: 15px; border-left: 3px solid var(--border); padding-left: 12px;
+}
+.disclosure ol { max-width: 72ch; padding-left: 22px; }
+.disclosure li { margin: 4px 0; }
+.how ul { max-width: 72ch; padding-left: 20px; }
+.how li { margin: 6px 0; }
+
+dialog#lightbox {
+  width: min(96vw, 1400px); max-height: 94vh; padding: 12px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text);
+}
+dialog#lightbox::backdrop { background: rgba(5, 8, 10, .75); }
+dialog#lightbox img {
+  display: block; max-width: 100%; max-height: calc(94vh - 90px); margin: 0 auto; object-fit: contain;
+  background: #fff; border-radius: 6px;
+}
+.lb-caption { margin: 8px 4px 0; color: var(--muted); font-size: 14px; }
+dialog#lightbox form { position: absolute; top: 8px; right: 8px; margin: 0; }
+.close {
+  width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); font-size: 22px; line-height: 1; cursor: pointer;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .zoom { transition: transform .15s ease, box-shadow .15s ease; }
+  .zoom:hover { transform: translateY(-2px); }
+}
+
+</style>
+
+</head>
+<body>
+<header class="hero">
+  <p class="eyebrow">Dosidicus · peer-to-peer evolution</p>
+  <h1>A life across two tanks</h1>
+  <p class="lede">Two copies of the desktop game, networked over the multiplayer plugin’s LAN protocol, and two copies
+  of the Android app linked for a visit, captured as they ran. One squid notices another tank, goes there, fights,
+  mates, and dies. Its egg then starts a new game. Every squid here is moved by its own network, and every
+  number and line of thought is from the run.</p>
+  <dl class="cast">
+    <div><dt>Ziggy</dt><dd>adventurous · the traveller</dd></div>
+    <div><dt>Inky</dt><dd>timid · the resident</dd></div>
+    <div><dt>Pip &amp; Nova</dt><dd>the Android pair</dd></div>
+  </dl>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#aware">1 Aware</a><a href="#visit">2 Visit</a><a href="#fight">3 Fight</a><a href="#mate">4 Mate</a>
+    <a href="#dies">5 Dies</a><a href="#new-game">6 New game</a><a href="#networked">Two desktops</a>
+    <a href="#android">Android</a><a href="#nudges">What was nudged</a>
+  </nav>
+</header>
+
+<main>
+<section id="aware" class="chapter">
+  <h2><span class="num">1</span>Ziggy becomes aware of another tank</h2>
+  <p>Inky’s game comes up on the same network. Ziggy had no way to sense another aquarium, so its brain grew one:
+  <code>aquarium_nearby</code>, the first neuron on a SOCIAL band that did not exist a moment before. Nothing is
+  pre-wired; social senses grow only from encounters.</p>
+  <div class="row two"><figure class="shot"><button class="zoom" type="button" data-full="img/ziggy-aware-tank.webp" data-caption="Ziggy hears another aquarium and grows a sense for it" aria-label="Enlarge: Ziggy hears another aquarium and grows a sense for it"><img src="img/ziggy-aware-tank.webp" width="1100" height="800" alt="Ziggy hears another aquarium and grows a sense for it" loading="lazy"></button><figcaption>Ziggy hears another aquarium and grows a sense for it</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/ziggy-aware-brain.webp" data-caption="aquarium_nearby, the first neuron on Ziggy&#x27;s SOCIAL band" aria-label="Enlarge: aquarium_nearby, the first neuron on Ziggy&#x27;s SOCIAL band"><img src="img/ziggy-aware-brain.webp" width="1300" height="1100" alt="aquarium_nearby, the first neuron on Ziggy&#x27;s SOCIAL band" loading="lazy"></button><figcaption>aquarium_nearby, the first neuron on Ziggy&#x27;s SOCIAL band</figcaption></figure></div>
+  <aside class="mind"><p class="mind-label">Ziggy’s own account</p><ul><li>It sensed another aquarium nearby. I had no way to sense that, so I grew aquarium_nearby: the binary concept of &quot;there is another aquarium nearby&quot;.</li></ul></aside>
+</section>
+
+<section id="visit" class="chapter">
+  <h2><span class="num">2</span>It decides to visit</h2>
+  <p>No rule sends it. With curiosity high, Ziggy’s own network takes it to the edge of its tank and out. Its body
+  crosses into Inky’s tank, but its brain keeps running at home. Inky’s game sends it what its body perceives,
+  and it sends back what it means to do.</p>
+  <div class="row one"><figure class="shot wide"><button class="zoom" type="button" data-full="img/ziggy-leaving.webp" data-caption="Its own network takes Ziggy to the edge of its tank" aria-label="Enlarge: Its own network takes Ziggy to the edge of its tank"><img src="img/ziggy-leaving.webp" width="1100" height="800" alt="Its own network takes Ziggy to the edge of its tank" loading="lazy"></button><figcaption>Its own network takes Ziggy to the edge of its tank</figcaption></figure></div>
+  <aside class="mind"><p class="mind-label">Ziggy’s own account</p><ul><li>Another aquarium is nearby and I want to explore it: I am leaving through the left side.</li></ul></aside>
+</section>
+
+<section id="networked" class="chapter split">
+  <h2><span class="num alt">⇄</span>Two desktop games, networked</h2>
+  <p>The same moment in two separate desktop processes, talking over UDP multicast, the same as two PCs on a LAN.
+  On the left, Ziggy’s home tank stands empty while Ziggy is away. On the right, Ziggy’s body enters Inky’s tank,
+  driven from the other process.</p>
+  <div class="row two pair">
+    <figure class="shot"><button class="zoom" type="button" data-full="img/ziggy-away-home.webp" data-caption="Ziggy’s game: its tank while Ziggy is away" aria-label="Enlarge: Ziggy’s game: its tank while Ziggy is away"><img src="img/ziggy-away-home.webp" width="1100" height="800" alt="Ziggy’s game: its tank while Ziggy is away" loading="lazy"></button><figcaption>Ziggy’s game: its tank while Ziggy is away</figcaption></figure>
+    <figure class="shot"><button class="zoom" type="button" data-full="img/inky-arrival.webp" data-caption="Inky’s game: Ziggy’s body arrives; its brain is still at home" aria-label="Enlarge: Inky’s game: Ziggy’s body arrives; its brain is still at home"><img src="img/inky-arrival.webp" width="1100" height="800" alt="Inky’s game: Ziggy’s body arrives; its brain is still at home" loading="lazy"></button><figcaption>Inky’s game: Ziggy’s body arrives; its brain is still at home</figcaption></figure>
+  </div>
+</section>
+
+<section id="fight" class="chapter">
+  <h2><span class="num">3</span>They get into a fight</h2>
+  <p>Inky is holding a rock. When Ziggy comes close, the rock between them flashes dark red: it is what they are
+  fighting over. Then the scuffle. Who starts it is each squid’s aggression, and who wins comes from each one’s
+  ability, personality, experience and condition, never a script.</p>
+  <div class="row two"><figure class="shot"><button class="zoom" type="button" data-full="img/inky-fight-leadin.webp" data-caption="The rock they are fighting over flashes dark red" aria-label="Enlarge: The rock they are fighting over flashes dark red"><img src="img/inky-fight-leadin.webp" width="1100" height="800" alt="The rock they are fighting over flashes dark red" loading="lazy"></button><figcaption>The rock they are fighting over flashes dark red</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/inky-fight-cloud.webp" data-caption="The scuffle: one cloud over the pair" aria-label="Enlarge: The scuffle: one cloud over the pair"><img src="img/inky-fight-cloud.webp" width="1100" height="800" alt="The scuffle: one cloud over the pair" loading="lazy"></button><figcaption>The scuffle: one cloud over the pair</figcaption></figure></div>
+  <div class="row two minds"><aside class="mind"><p class="mind-label">Inky’s own account</p><ul><li>I went for Ziggy: my aggression was 85, past the 50 it takes to start a fight.</li><li>I won: my ability 135 against their 50 gave me a 88% chance.</li></ul></aside><aside class="mind"><p class="mind-label">Ziggy’s own account</p><ul><li>Inky came at me. I fought back with my defence at 0.</li><li>I lost: my ability 50 against their 135 gave me a 12% chance.</li></ul></aside></div>
+  <p class="game-msg"><span>Inky’s game says</span>Inky: Won a fight it started (aggression 85): ability 135 against 50, so it had a 88% chance.</p>
+</section>
+
+<section id="mate" class="chapter">
+  <h2><span class="num">4</span>They mate</h2>
+  <p>Still in contact after the fight, the two mate: one heart beats over the pair. Inky lays an egg and, as a
+  parent, stops eating. The egg holds both parents’ weights; Ziggy’s came over the network as a gamete.</p>
+  <div class="row two"><figure class="shot"><button class="zoom" type="button" data-full="img/inky-mating.webp" data-caption="A mating: one beating heart over the pair" aria-label="Enlarge: A mating: one beating heart over the pair"><img src="img/inky-mating.webp" width="1100" height="800" alt="A mating: one beating heart over the pair" loading="lazy"></button><figcaption>A mating: one beating heart over the pair</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/inky-egg.webp" data-caption="Inky has laid an egg, and has stopped eating" aria-label="Enlarge: Inky has laid an egg, and has stopped eating"><img src="img/inky-egg.webp" width="1100" height="800" alt="Inky has laid an egg, and has stopped eating" loading="lazy"></button><figcaption>Inky has laid an egg, and has stopped eating</figcaption></figure></div>
+  <p class="game-msg"><span>Inky’s game says</span>Inky and Ziggy produced an egg. Inky has stopped eating.</p>
+  <h3>Ziggy goes home, changed</h3>
+  <p>Tired, Ziggy goes home to sleep, by its own rule. It comes back with a social network it did not have before
+  the visit:</p>
+  <p class="chips"><span class="chip social">aquarium_nearby</span><span class="chip social">can_see_squid</span><span class="chip social">social_play</span><span class="chip social">squid_nearby</span></p>
+  <div class="row two"><figure class="shot"><button class="zoom" type="button" data-full="img/ziggy-home.webp" data-caption="Ziggy home again, asleep - changed by what happened" aria-label="Enlarge: Ziggy home again, asleep - changed by what happened"><img src="img/ziggy-home.webp" width="1100" height="800" alt="Ziggy home again, asleep - changed by what happened" loading="lazy"></button><figcaption>Ziggy home again, asleep - changed by what happened</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/ziggy-home-brain.webp" data-caption="Ziggy&#x27;s brain after the visit: its social band has grown" aria-label="Enlarge: Ziggy&#x27;s brain after the visit: its social band has grown"><img src="img/ziggy-home-brain.webp" width="1300" height="1100" alt="Ziggy&#x27;s brain after the visit: its social band has grown" loading="lazy"></button><figcaption>Ziggy&#x27;s brain after the visit: its social band has grown</figcaption></figure></div>
+  <aside class="mind"><p class="mind-label">Ziggy’s own account</p><ul><li>I am tired: I went home to sleep.</li></ul></aside>
+</section>
+
+<section id="dies" class="chapter">
+  <h2><span class="num">5</span>Inky dies</h2>
+  <p>A parent keeps its egg and will not eat. Inky starves, and a
+  headstone marks the spot, beside the egg. Hovering over the headstone shows the epitaph:</p>
+  <div class="row one"><figure class="shot wide"><button class="zoom" type="button" data-full="img/inky-dead.webp" data-caption="Inky has died. A headstone marks where." aria-label="Enlarge: Inky has died. A headstone marks where."><img src="img/inky-dead.webp" width="1100" height="800" alt="Inky has died. A headstone marks where." loading="lazy"></button><figcaption>Inky has died. A headstone marks where.</figcaption></figure></div>
+  <blockquote class="epitaph">RIP Inky<br>Lived 1m 16s<br>Fights won: 1, lost: 0</blockquote>
+</section>
+
+<section id="new-game" class="chapter">
+  <h2><span class="num">6</span>A new game starts</h2>
+  <p>The egg hatches, and that is a new game. There is no way out, just as a game starts with no save. The
+  hatchling begins with a newborn brain overlaid with half of each parent’s weights:
+  <strong>24</strong> synapses inherited from Inky and Ziggy, each recorded in the brain’s ledger with the
+  parent it came from. It has no memories, and its parent’s headstone stays in the tank.</p>
+  <div class="row three"><figure class="shot"><button class="zoom" type="button" data-full="img/inky-hatching.webp" data-caption="Inky’s egg hatches: a new game, with no way out" aria-label="Enlarge: Inky’s egg hatches: a new game, with no way out"><img src="img/inky-hatching.webp" width="1100" height="800" alt="Inky’s egg hatches: a new game, with no way out" loading="lazy"></button><figcaption>Inky’s egg hatches: a new game, with no way out</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/inky-hatchling.webp" data-caption="The hatchling, beside its parent’s headstone" aria-label="Enlarge: The hatchling, beside its parent’s headstone"><img src="img/inky-hatchling.webp" width="1100" height="800" alt="The hatchling, beside its parent’s headstone" loading="lazy"></button><figcaption>The hatchling, beside its parent’s headstone</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/inky-hatchling-brain.webp" data-caption="A newborn brain, overlaid with half of each parent’s weights" aria-label="Enlarge: A newborn brain, overlaid with half of each parent’s weights"><img src="img/inky-hatchling-brain.webp" width="1300" height="1100" alt="A newborn brain, overlaid with half of each parent’s weights" loading="lazy"></button><figcaption>A newborn brain, overlaid with half of each parent’s weights</figcaption></figure></div>
+</section>
+
+<section id="android" class="chapter">
+  <h2><span class="num alt">▣</span>An Android multiplayer session</h2>
+  <p>Two copies of the Android app (its Kivy UI and engine, phone-sized), each in its own process. Pip hosts, and
+  Nova finds Pip and connects. Nova’s body swims in Pip’s tank while its brain stays on Nova’s phone, which says
+  so. Pip, spoiling for a fight, scuffles with it, and Pip’s brain grows its own SOCIAL band:</p>
+  <p class="chips"><span class="chip social">can_see_squid</span><span class="chip social">social_fight</span><span class="chip social">social_play</span><span class="chip social">squid_nearby</span></p>
+  <div class="phones">
+    <figure class="shot"><button class="zoom" type="button" data-full="img/android-nova-home.webp" data-caption="Nova at home" aria-label="Enlarge: Nova at home"><img src="img/android-nova-home.webp" width="440" height="900" alt="Nova at home" loading="lazy"></button><figcaption>Nova at home</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/android-nova-found.webp" data-caption="Nova finds Pip nearby" aria-label="Enlarge: Nova finds Pip nearby"><img src="img/android-nova-found.webp" width="440" height="900" alt="Nova finds Pip nearby" loading="lazy"></button><figcaption>Nova finds Pip nearby</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/android-nova-connected.webp" data-caption="Connected: a neural visit link" aria-label="Enlarge: Connected: a neural visit link"><img src="img/android-nova-connected.webp" width="440" height="900" alt="Connected: a neural visit link" loading="lazy"></button><figcaption>Connected: a neural visit link</figcaption></figure>
+    <figure class="shot"><button class="zoom" type="button" data-full="img/android-pip-connected.webp" data-caption="Connected: a neural visit link" aria-label="Enlarge: Connected: a neural visit link"><img src="img/android-pip-connected.webp" width="440" height="900" alt="Connected: a neural visit link" loading="lazy"></button><figcaption>Connected: a neural visit link</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/android-pip-visitor.webp" data-caption="Pip&#x27;s phone: Nova&#x27;s body in Pip&#x27;s tank" aria-label="Enlarge: Pip&#x27;s phone: Nova&#x27;s body in Pip&#x27;s tank"><img src="img/android-pip-visitor.webp" width="440" height="900" alt="Pip&#x27;s phone: Nova&#x27;s body in Pip&#x27;s tank" loading="lazy"></button><figcaption>Pip&#x27;s phone: Nova&#x27;s body in Pip&#x27;s tank</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/android-nova-away.webp" data-caption="Nova&#x27;s phone while Nova is visiting: its brain runs here, its body is in Pip&#x27;s tank" aria-label="Enlarge: Nova&#x27;s phone while Nova is visiting: its brain runs here, its body is in Pip&#x27;s tank"><img src="img/android-nova-away.webp" width="440" height="900" alt="Nova&#x27;s phone while Nova is visiting: its brain runs here, its body is in Pip&#x27;s tank" loading="lazy"></button><figcaption>Nova&#x27;s phone while Nova is visiting: its brain runs here, its body is in Pip&#x27;s tank</figcaption></figure>
+    <figure class="shot"><button class="zoom" type="button" data-full="img/android-pip-fight.webp" data-caption="A scuffle on Android: one cloud over the pair" aria-label="Enlarge: A scuffle on Android: one cloud over the pair"><img src="img/android-pip-fight.webp" width="440" height="900" alt="A scuffle on Android: one cloud over the pair" loading="lazy"></button><figcaption>A scuffle on Android: one cloud over the pair</figcaption></figure><figure class="shot"><button class="zoom" type="button" data-full="img/android-pip-brain.webp" data-caption="Pip&#x27;s brain on Android: its SOCIAL band, grown from the visit" aria-label="Enlarge: Pip&#x27;s brain on Android: its SOCIAL band, grown from the visit"><img src="img/android-pip-brain.webp" width="440" height="900" alt="Pip&#x27;s brain on Android: its SOCIAL band, grown from the visit" loading="lazy"></button><figcaption>Pip&#x27;s brain on Android: its SOCIAL band, grown from the visit</figcaption></figure>
+  </div>
+  <p class="note">Google Nearby needs two phones with real radios, so for this capture a loopback socket stands in
+  for it. It delivers the same events in the same order (peer found, connection initiated, accepted, connected,
+  bytes) behind the same <code>NearbyManager</code> calls. Everything above the transport is the app as shipped.</p>
+</section>
+
+<section id="nudges" class="chapter disclosure">
+  <h2>What was nudged</h2>
+  <p>A lifetime has to fit in a few minutes, and the scenes have to happen while the camera is on. So the capture
+  scripts set some drives and timings and log each change. They never choose an action for a squid. Every nudge,
+  as logged:</p>
+  <ol><li>Ziggy kept playful and unafraid while visiting (act_play 85, flee/rest/shelter 0, anxiety 30, fed and rested)</li><li>A night compressed: Ziggy&#x27;s sleepiness set to 100 once it had mated, so it goes home to sleep by its own rule</li><li>Ziggy&#x27;s player switched multiplayer off once Ziggy was home, so the story can follow Inky</li><li>A rock put in Inky’s tentacles and held (carry time raised to 60 s)</li><li>Inky placed mid-tank and held still, facing Ziggy, while the two are close</li><li>Inky alarmed and aggressive for the scene (anxiety 75, aggression 85)</li><li>Mating chance (2% per visit) made certain after the fight</li><li>Starvation compressed: Inky’s hunger set to 100 and health to 1.5 (a parent loses 0.1 health a second once starving)</li><li>Android: Pip&#x27;s aggression raised to 85 so the two scuffle</li><li>Android: Nova kept playful and unafraid while visiting (act_play 85, flee/rest 0, anxiety 25)</li></ol>
+</section>
+
+<section class="chapter how">
+  <h2>How these were made</h2>
+  <ul>
+    <li><strong>Desktop:</strong> <code>tools/capture_story.py</code> runs two real game processes (offscreen Qt)
+    with the multiplayer plugin on its multicast protocol, and screenshots each window.</li>
+    <li><strong>Android:</strong> <code>tools/capture_android.py</code> runs the Kivy app twice under a virtual
+    display and presses the buttons a player would: Host on one phone, Find and Connect on the other.</li>
+    <li>The game messages and thoughts quoted here are copied from each run’s log, not written for the page:
+    <code>docs/story-gallery/source/build.py</code> builds the page from the two runs’ JSON.</li>
+  </ul>
+</section>
+</main>
+
+<dialog id="lightbox" aria-label="Enlarged screenshot">
+  <form method="dialog"><button class="close" aria-label="Close">×</button></form>
+  <img alt="">
+  <p class="lb-caption"></p>
+</dialog>
+<script>
+(function () {
+  var box = document.getElementById('lightbox');
+  if (!box || typeof box.showModal !== 'function') return;
+  var img = box.querySelector('img');
+  var caption = box.querySelector('.lb-caption');
+  document.querySelectorAll('.zoom').forEach(function (button) {
+    button.addEventListener('click', function () {
+      img.src = button.dataset.full;
+      img.alt = button.dataset.caption;
+      caption.textContent = button.dataset.caption;
+      box.showModal();
+    });
+  });
+  box.addEventListener('click', function (event) {
+    if (event.target === box) box.close();
+  });
+})();
+
+</script>
+</body>
+</html>
