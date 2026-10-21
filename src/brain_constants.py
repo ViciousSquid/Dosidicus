@@ -35,6 +35,29 @@ Import from here to ensure consistency.
 #: The coordinate space every position on this page is expressed in.
 LOGICAL_CANVAS = (1024.0, 768.0)
 
+#: How far the brain network view can be zoomed out and in.
+VIEW_ZOOM_MIN = 0.5
+VIEW_ZOOM_MAX = 6.0
+
+
+def view_transform(width, height, zoom=1.0, pan=(0.0, 0.0)):
+    """Where the logical canvas lands in a widget width x height.
+
+    Returns (scale, offset_x, offset_y, fit_scale): screen = logical * scale +
+    offset. `fit_scale` is the scale that fits the whole LOGICAL_CANVAS in the
+    widget, centred horizontally; `zoom` multiplies it and `pan` (in widget
+    units) shifts the result. THE one copy of this - the render worker, the
+    widget's hit testing and overlays, and the tooltips each used to keep
+    their own, and all of them had to agree to the pixel.
+    """
+    base_w, base_h = LOGICAL_CANVAS
+    scale_x = width / base_w
+    scale_y = height / max(1.0, base_h)
+    fit = max(0.01, min(scale_x, scale_y))
+    offset_x = (width - base_w * fit) / 2 if scale_x > scale_y else 0.0
+    scale = fit * zoom
+    return scale, offset_x + pan[0], 0.0 + pan[1], fit
+
 #: The horizontal span a row is distributed across. Every row shares it, so
 #: the rows line up at both ends and read as layers rather than as three
 #: unrelated scatters.

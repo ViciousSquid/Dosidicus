@@ -28,6 +28,7 @@ from .brain_constants import (
     NEURON_RADIUS, NEURON_HIGHLIGHT_FACTOR, NEURON_HIT_FACTOR,
     BINARY_NEURONS, PURE_INPUT_NEURONS, NON_PROPAGATED_NEURONS,
     is_network_driven, normalise_activation,
+    view_transform, VIEW_ZOOM_MIN, VIEW_ZOOM_MAX,
 )
 from .personality import Personality
 from .learning import LearningConfig
@@ -394,6 +395,12 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self.drag_start_pos = None #
         self.tooltip_manager = EnhancedBrainTooltips(self)
         self.setMouseTracking(True)
+        # Zoom and pan of the network view (see _view_transform). Wheel or
+        # pinch zooms about the cursor, dragging empty space pans,
+        # double-clicking empty space puts the whole network back in view.
+        self.view_zoom = 1.0
+        self.view_pan = (0.0, 0.0)
+        self._pan_last = None
         self.show_weights = False
 
         _link_fade_speed = 3.0   # opacity units per second (tweak for faster/slower)
@@ -3562,30 +3569,92 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
             _conn_elapsed = (time.perf_counter() - _conn_start) * 1000
             perf_tracker.record("draw_connections", _conn_elapsed)
 
+    # ------------------------------------------------------------------
+    # Zoom and pan
+    # ------------------------------------------------------------------
+    def _view_transform(self):
+        """(scale, offset_x, offset_y, fit_scale) for the current view: screen
+        = logical * scale + offset. The render worker uses the same function
+        (brain_constants.view_transform), so what is hit is what is drawn."""
+        return view_transform(self.width(), self.height(),
+                              self.view_zoom, self.view_pan)
+
+    def _view_changed(self):
+        self._render_dirty = True
+        if hasattr(self, 'tooltip_manager'):
+            self.tooltip_manager.hide_tooltip()
+        self.update()
+
+    def zoom_at(self, widget_pos, factor):
+        """Zoom by `factor` keeping the logical point under widget_pos still."""
+        new_zoom = min(VIEW_ZOOM_MAX, max(VIEW_ZOOM_MIN, self.view_zoom * factor))
+        if abs(new_zoom - self.view_zoom) < 1e-9:
+            return
+        logical = self._get_logical_coords(widget_pos)
+        self.view_zoom = new_zoom
+        # Offsets with no pan, at the new zoom; the pan is whatever puts the
+        # same logical point back under the cursor.
+        scale, base_x, base_y, _fit = view_transform(
+            self.width(), self.height(), new_zoom, (0.0, 0.0))
+        self.view_pan = (widget_pos.x() - logical.x() * scale - base_x,
+                         widget_pos.y() - logical.y() * scale - base_y)
+        self._view_changed()
+
+    def pan_by(self, dx, dy):
+        if not dx and not dy:
+            return
+        self.view_pan = (self.view_pan[0] + dx, self.view_pan[1] + dy)
+        self._view_changed()
+
+    def reset_view(self):
+        """Back to the whole network fitted to the widget."""
+        if self.view_zoom == 1.0 and self.view_pan == (0.0, 0.0):
+            return
+        self.view_zoom = 1.0
+        self.view_pan = (0.0, 0.0)
+        self._view_changed()
+
+    def wheelEvent(self, event):
+        """A mouse wheel zooms about the cursor. A trackpad's two-finger
+        scroll (which arrives as pixel deltas) pans, as it does in any map;
+        with Ctrl/Cmd held it zooms instead."""
+        pixel = event.pixelDelta()
+        angle = event.angleDelta()
+        zoom_mod = event.modifiers() & (QtCore.Qt.ControlModifier | QtCore.Qt.MetaModifier)
+        if not pixel.isNull() and not zoom_mod:
+            self.pan_by(pixel.x(), pixel.y())
+        else:
+            steps = (angle.y() or angle.x()) / 120.0
+            if not steps and not pixel.isNull():
+                steps = pixel.y() / 60.0
+            if steps:
+                self.zoom_at(event.pos(), 1.15 ** steps)
+        event.accept()
+
+    def event(self, event):
+        # Trackpad pinch on macOS arrives as a native zoom gesture.
+        if event.type() == QtCore.QEvent.NativeGesture:
+            try:
+                if event.gestureType() == QtCore.Qt.ZoomNativeGesture:
+                    self.zoom_at(event.pos(), 1.0 + event.value())
+                    return True
+                if event.gestureType() == QtCore.Qt.SmartZoomNativeGesture:
+                    self.reset_view()
+                    return True
+            except AttributeError:
+                pass
+        return super().event(event)
+
     def _get_logical_coords(self, widget_pos):
         """
         Maps widget pixels back to logical neuron coordinates.
         MUST MATCH brain_render_worker.py scaling logic exactly.
         """
-        # Constants from render worker
-        indicator_space = 0 
-        base_width = 1024
-        base_height = 768 - indicator_space
-        
-        # Calculate Scale
-        scale_x = self.width() / base_width
-        scale_y = (self.height() - indicator_space) / max(1, base_height)
-        scale = max(0.01, min(scale_x, scale_y))
-        
-        # Calculate Offset (centering)
-        offset_x = 0
-        if scale_x > scale_y:
-            content_width = base_width * scale
-            offset_x = (self.width() - content_width) / 2
-            
+        scale, offset_x, offset_y, _fit = self._view_transform()
+
         # Inverse Transform: (Screen - Offset) / Scale = Logical
         lx = (widget_pos.x() - offset_x) / scale
-        ly = (widget_pos.y() - indicator_space) / scale
+        ly = (widget_pos.y() - offset_y) / scale
         
         return QtCore.QPointF(lx, ly)
 
@@ -3624,18 +3693,7 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         if u not in self.neuron_positions or v not in self.neuron_positions:
             return
 
-        indicator_space = 0
-        base_width = 1024
-        base_height = 768 - indicator_space
-        
-        scale_x = self.width() / base_width
-        scale_y = (self.height() - indicator_space) / max(1, base_height)
-        scale = max(0.01, min(scale_x, scale_y))
-        
-        offset_x = 0
-        if scale_x > scale_y:
-            content_width = base_width * scale
-            offset_x = (self.width() - content_width) / 2
+        scale, offset_x, indicator_space, _fit = self._view_transform()
 
         pos1 = self.neuron_positions[u]
         pos2 = self.neuron_positions[v]
@@ -3801,18 +3859,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
     def _draw_neurogenesis_highlight(self, painter):
         """Draw highlight around newly created neurons"""
         # Calculate scale (same as in render worker)
-        indicator_space = 0
-        base_width = 1024
-        base_height = 768 - indicator_space
-        scale_x = self.width() / base_width
-        scale_y = (self.height() - indicator_space) / max(1, base_height)
-        scale = max(0.01, min(scale_x, scale_y))
-        
-        offset_x = 0
-        if scale_x > scale_y:
-            content_width = base_width * scale
-            offset_x = (self.width() - content_width) / 2
-        
+        scale, offset_x, indicator_space, _fit = self._view_transform()
+
         nh = self.neurogenesis_highlight
         neuron_name = nh.get('neuron')
         if neuron_name and neuron_name in self.neuron_positions:
@@ -3836,13 +3884,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         if not self.dragged_neuron or self.dragged_neuron not in self.neuron_positions:
             return
 
-        # 1. Calculate Scale (Must match _draw_neurogenesis_highlight and render worker)
-        indicator_space = 0
-        base_width = 1024
-        base_height = 768 - indicator_space
-        scale_x = self.width() / base_width
-        scale_y = (self.height() - indicator_space) / max(1, base_height)
-        scale = max(0.01, min(scale_x, scale_y))
+        # 1. The view, as the render worker draws it
+        scale, offset_x, offset_y, fit = self._view_transform()
         
         # 2. Prepare single-neuron state for static drawing
         name = self.dragged_neuron
@@ -3862,12 +3905,16 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         
         x = pos[0] * scale
         y = pos[1] * scale
-        # As the render worker sizes it: logical size times max(1, scale).
-        radius = self.neuron_radius * max(1.0, scale) * scale
+        # As the render worker sizes it: logical size times max(1, fit).
+        radius = self.neuron_radius * max(1.0, fit) * scale
         
         # Temporarily set painter to high quality
         painter.save()
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        # x, y are relative to the canvas origin; the canvas sits at the
+        # view offset (it was drawn at the widget's corner, off to the left
+        # of the neuron being dragged whenever the canvas was centred).
+        painter.translate(offset_x, offset_y)
         
         # Use existing shape drawing logic
         if shape == 'diamond':
@@ -4533,6 +4580,11 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         self.capture_training_data_enabled = state
 
     def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.MiddleButton:
+            self._pan_last = event.pos()
+            self.setCursor(QtCore.Qt.ClosedHandCursor)
+            event.accept()
+            return
         if event.button() != QtCore.Qt.LeftButton:
             super().mousePressEvent(event)
             return
@@ -4543,6 +4595,9 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         if not neuron:
             self.dragged_neuron = None
             self.dragging = False
+            # Dragging empty space pans the view.
+            self._pan_last = event.pos()
+            self.setCursor(QtCore.Qt.ClosedHandCursor)
             super().mousePressEvent(event)
             return
 
@@ -4571,6 +4626,12 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
     def mouseMoveEvent(self, event):
         """Handle mouse movement for tooltips, hover tracking, and dragging"""
+        if self._pan_last is not None:
+            delta = event.pos() - self._pan_last
+            self._pan_last = event.pos()
+            self.pan_by(delta.x(), delta.y())
+            event.accept()
+            return
         if hasattr(self, 'tooltip_manager'):
             self.tooltip_manager.show_tooltip_for_position(event)
 
@@ -4622,6 +4683,12 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         if event.button() == QtCore.Qt.LeftButton:
             neuron_name = self.get_neuron_at_pos(event.pos())
             
+            if not neuron_name:
+                # Double-clicking empty space brings the whole network back.
+                self.reset_view()
+                event.accept()
+                return
+
             if neuron_name:
                 print(f"Double-clicked on neuron: {neuron_name}")
                 
@@ -4648,6 +4715,13 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         super().mouseDoubleClickEvent(event)
 
     def mouseReleaseEvent(self, event):
+        if self._pan_last is not None and event.button() in (
+                QtCore.Qt.LeftButton, QtCore.Qt.MiddleButton):
+            self._pan_last = None
+            self.unsetCursor()
+            if event.button() == QtCore.Qt.MiddleButton:
+                event.accept()
+                return
         if event.button() == QtCore.Qt.LeftButton:
             is_click = False
             if self.dragged_neuron and self.drag_start_pos:

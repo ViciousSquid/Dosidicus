@@ -103,6 +103,10 @@ class RenderState:
     #: Real pixels per point on the widget's screen (2 on a Retina Mac). The
     #: frame is rendered at this many pixels per point so it is sharp there.
     dpr: float = 1.0
+    #: The user's zoom (1.0 = whole canvas fits) and pan, in widget units.
+    zoom: float = 1.0
+    pan_x: float = 0.0
+    pan_y: float = 0.0
     
     # Hover state
     hovered_neuron: Optional[str] = None
@@ -283,20 +287,12 @@ class BrainRenderWorker(QThread):
         part-way through a fade) is drawn in the second pass, on top of the
         other links rather than among them.
         """
-        # Calculate scaling (same logic as brain_widget)
-        indicator_space = 0  # No indicator pills
-        base_width = 1024
-        base_height = 768 - indicator_space
-
-        scale_x = state.width / base_width
-        scale_y = (state.height - indicator_space) / max(1, base_height)
-        scale = max(0.01, min(scale_x, scale_y))
-
-        # Center horizontally
-        offset_x = 0
-        if scale_x > scale_y:
-            content_width = base_width * scale
-            offset_x = (state.width - content_width) / 2
+        # The view: fitted to the widget, then the user's zoom and pan
+        # (brain_constants.view_transform, shared with the widget's hit
+        # testing so a click lands on what is drawn under it).
+        from .brain_constants import view_transform
+        scale, offset_x, indicator_space, fit = view_transform(
+            state.width, state.height, state.zoom, (state.pan_x, state.pan_y))
 
         # Neurons, captions and line widths are sized in logical units on a
         # painter that is already scaled. They used to be multiplied by
@@ -305,7 +301,9 @@ class BrainRenderWorker(QThread):
         # whose window is measured in points) the neurons were dots and the
         # captions unreadable smudges. Above 1.0 nothing changes; below it
         # they keep their logical size and shrink only with the view.
-        elem = max(1.0, scale)
+        # Taken from the FITTED scale, not the zoomed one: zooming in is a
+        # magnifier, and everything grows with it once - through the painter.
+        elem = max(1.0, fit)
 
         live = self._live_links(state)
         key = self._backdrop_key(state, live)
@@ -434,6 +432,7 @@ class BrainRenderWorker(QThread):
         from .brain_constants import NEURON_ROWS, ROW_BAND_COLORS, LOGICAL_CANVAS
         return (live,
             state.width, state.height, state.dpr,
+            state.zoom, state.pan_x, state.pan_y,
             tuple(state.anim_background_colour),
             tuple(state.neuron_positions.items()),
             frozenset(state.visible_neurons), frozenset(state.excluded_neurons),
@@ -1239,6 +1238,9 @@ def create_render_state_from_widget(brain_widget) -> RenderState:
         state.dpr = max(1.0, float(brain_widget.devicePixelRatioF()))
     except (AttributeError, RuntimeError, TypeError):
         state.dpr = 1.0
+    state.zoom = float(getattr(brain_widget, 'view_zoom', 1.0))
+    pan = getattr(brain_widget, 'view_pan', (0.0, 0.0))
+    state.pan_x, state.pan_y = float(pan[0]), float(pan[1])
     
     # Hover state
     state.hovered_neuron = getattr(brain_widget, 'hovered_neuron', None)

@@ -58,28 +58,13 @@ class EnhancedBrainTooltips:
         # 1. Get neuron's logical position
         x_logic, y_logic = self.brain_widget.neuron_positions[neuron_name]
         
-        # 2. Calculate layout scale EXACTLY as paintEvent/render worker does
-        indicator_space = 0 
-        base_width = 1024
-        base_height = 768 - indicator_space
-        
-        # Use dimensions from the widget
-        widget_width = self.brain_widget.width()
-        widget_height = self.brain_widget.height()
-        
-        scale_x = widget_width / base_width
-        scale_y = (widget_height - indicator_space) / max(1, base_height)
-        scale = max(0.01, min(scale_x, scale_y))
-        
-        offset_x = 0
-        if scale_x > scale_y:
-            content_width = base_width * scale
-            offset_x = (widget_width - content_width) / 2
-        
+        # 2. The view, as the render worker draws it (zoom and pan included)
+        scale, offset_x, offset_y, _fit = self.brain_widget._view_transform()
+
         # 3. Transform logical coordinates to widget coordinates
         # Formula: Logical * Scale + Offset
         widget_x = int(x_logic * scale + offset_x)
-        widget_y = int(y_logic * scale + indicator_space)
+        widget_y = int(y_logic * scale + offset_y)
         
         # 4. Position tooltip 40px above neuron (visual offset - NOT scaled)
         tooltip_pos_widget = QtCore.QPoint(widget_x, widget_y - 40)
