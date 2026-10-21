@@ -35,10 +35,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 ROLES = ('ziggy', 'inky')
 NAMES = {'ziggy': 'Ziggy', 'inky': 'Inky'}
 TIMEOUT = 420.0
-# The brain window's opening size in the game (brain_tool): the whole network,
-# SOCIAL band included, as a player first sees it - for the brain shots. In
-# between it is kept smaller: a larger brain redrawn every frame in two
-# processes slowed the scene enough that the squid stopped meeting.
+# A large brain window for the brain shots, so the network and its labels are
+# drawn big enough to read. In between it is kept smaller: a larger brain
+# redrawn every frame in two processes slowed the scene enough that the squid
+# stopped meeting.
 BRAIN_WINDOW = (1300, 1100)
 WORKING_BRAIN = (1200, 860)
 
@@ -104,7 +104,7 @@ def worker(role, output):
         return window.brain_window.brain_widget
 
     def brain_shot(name, caption, settle=1.5):
-        """The brain window at its opening size, grabbed once it has redrawn."""
+        """The brain window at shot size, grabbed once it has redrawn."""
         if name in state['shots']:
             return
         if f'_sized_{name}' not in state:

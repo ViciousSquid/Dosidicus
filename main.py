@@ -30,6 +30,8 @@ def choose_language_first():
     os.environ['QT_LOGGING_RULES'] = QT_LOGGING_RULES
     global _EARLY_APP           # kept: main() goes on with this application
     _EARLY_APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
+    from src.theme import keep_light
+    keep_light(_EARLY_APP)          # drawn light even in a dark system theme
     from src.language_splash import choose_language
     if choose_language() is None:
         sys.exit(0)
@@ -1224,6 +1226,8 @@ def main():
 
     # Already made for the language splash (choose_language_first).
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
+    from src.theme import keep_light
+    keep_light(app)                 # drawn light even in a dark system theme
     
     try:
         personality = Personality(args.personality) if args.personality else None

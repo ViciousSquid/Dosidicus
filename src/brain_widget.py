@@ -2349,7 +2349,13 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
 
 
     def resizeEvent(self, event):
-        """Handle window resize events - startles squid and enforces minimum size"""
+        """Handle window resize events (the squid's startle is disabled).
+
+        The network is drawn scaled to whatever size the widget is given
+        (brain_render_worker); there is no minimum. One used to be forced here
+        - 1280x900 whatever room the window had - so in a smaller Brain Tool
+        the network was drawn too big and cut off at the right and bottom.
+        """
         super().resizeEvent(event)
 
         # Only trigger startle if we're actually resizing (not just moving)
@@ -2376,13 +2382,6 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
                 if self.debug_mode:
                     print(f"Squid startled by {source}")
 
-        # Enforce minimum window size (1280x900)
-        min_width, min_height = 1280, 900
-        if event.size().width() < min_width or event.size().height() < min_height:
-            self.resize(
-                max(event.size().width(), min_width),
-                max(event.size().height(), min_height)
-            )
 
     def save_brain_state(self):
         return {

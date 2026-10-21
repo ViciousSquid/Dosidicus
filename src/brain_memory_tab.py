@@ -5,6 +5,13 @@ from .localisation import Localisation  # Import Localisation
 from datetime import datetime
 
 
+def _text_colour_on(background):
+    """Near-black on a light background, white on a dark one."""
+    colour = QtGui.QColor(background)
+    luminance = 0.299 * colour.red() + 0.587 * colour.green() + 0.114 * colour.blue()
+    return '#1d1d1f' if luminance > 140 else '#ffffff'
+
+
 class MemoryTab(BrainBaseTab):
     def __init__(self, parent=None, tamagotchi_logic=None, brain_widget=None, config=None, debug_mode=False):
         # Initialize localisation
@@ -444,7 +451,8 @@ class MemoryTab(BrainBaseTab):
             pill = QtWidgets.QLabel(f"{emoji} {stat.capitalize()} {sign}{int(delta)}")
             color = '#D1FFD1' if delta > 0 else '#FFD1DC' if delta < 0 else '#FFFACD'
             pill.setStyleSheet(
-                f"background:{color}; border-radius:{scale_fn(8)}px;"
+                f"background:{color}; color:{_text_colour_on(color)};"
+                f" border-radius:{scale_fn(8)}px;"
                 f" padding:2px {scale_fn(6)}px;"
                 f" font-size:{font_size_fn(11)}px;"
             )
@@ -640,7 +648,10 @@ class MemoryTab(BrainBaseTab):
         memory_widget.setLineWidth(DisplayScaling.scale(2))
 
         bg_color = self._get_memory_color(memory)
-        memory_widget.setStyleSheet(f"background-color: {bg_color};")
+        # The text colour goes with the card, not the system theme: in a dark
+        # theme the palette's text is white, and unreadable on a pastel card.
+        memory_widget.setStyleSheet(
+            f"background-color: {bg_color}; color: {_text_colour_on(bg_color)};")
         memory_widget.setMinimumHeight(DisplayScaling.scale(200))
         memory_widget.setMinimumWidth(DisplayScaling.scale(300))
         memory_widget.setMaximumHeight(DisplayScaling.scale(250))
@@ -918,17 +929,18 @@ class MemoryTab(BrainBaseTab):
         # Import datetime correctly at the top of your function
         from datetime import datetime
         
+        # No colours of its own: the system's text colour, so it reads in a
+        # light or a dark theme (a light box behind palette-coloured text was
+        # white on white in a dark theme).
         stats_html = """
         <style>
             .stat-box { 
-                background: #f8f9fa; 
-                border-radius: 10px; 
                 padding: 15px; 
                 margin: 10px;
             }
             .stat-title { 
                 font-size: 10pt; 
-                color: #2c3e50; 
+                font-weight: bold; 
                 margin-bottom: 10px;
             }
         </style>

@@ -337,12 +337,16 @@ Priority order agreed with the owner: big code changes first.
   `tools/capture_story.py` and `tools/capture_android.py`. The old
   `docs/canary-gallery` (the retired `conspecific_*`/`encounter` design) is
   removed.
-- **Brain window crop**: `BrainWidget.resizeEvent` forces the widget to at
-  least 1280x900 whatever room the window gives it, so in a smaller window
-  the bottom of the network - the SOCIAL band - is cut off rather than
-  scaled (the renderer already scales to fit). At the opening size,
-  1300x1100, the band shows with its bottom edge trimmed; at 1200x860 it is
-  gone. Upstream behaviour; not changed.
+- **Brain window crop**: fixed. `BrainWidget.resizeEvent` forced the widget
+  to at least 1280x900 whatever room the window gave it, so in the Brain
+  Tool's 800x900 opening size (`config.ini` `[Display]`) the network was
+  drawn too big and cut off, SOCIAL band included. It now scales to the
+  window, as the renderer always could.
+- **Dark system theme**: fixed. The game is drawn light; in a dark theme
+  (macOS dark mode) only the windows and text followed the system, leaving
+  white text on pastel and white on white (memory cards, Laboratory,
+  Statistics). `src/theme.keep_light` switches to Fusion with its light
+  palette when the system palette is dark.
 - **Release APK** for distribution (`.github/workflows/android-release.yml`;
   signing via repository secrets). Note: the README once mentioned a release
   key at `/workspace/dosidicus-release-signing` - a key custody concern raised
