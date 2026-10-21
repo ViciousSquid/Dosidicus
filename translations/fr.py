@@ -1,4 +1,4 @@
-LANGUAGE_HEADER = "fr - Francais"
+LANGUAGE_HEADER = "fr - Français"
 translations = {
     # Core continuous neurons
     "hunger": "Faim",
@@ -87,6 +87,11 @@ translations = {
     "error_saving": "Erreur lors de la sauvegarde.",
     "error_loading": "Erreur lors du chargement.",
     "no_save_found": "Aucun fichier de sauvegarde trouve.",
+    "startup": "Démarrage",
+    "show_tutorial_q": "Afficher le tutoriel ?",
+    "auto_decline": "(Refus automatique dans {seconds}s)",
+    "tutorial_title": "Tutoriel",
+    "tutorial_query": "Voulez-vous voir le tutoriel ?",
 
     # ===== ONGLET A PROPOS =====
     "hello": "BONJOUR",
@@ -245,6 +250,8 @@ translations = {
     "long_term_memory": "Memoire a Long Terme",
     "no_memories": "Aucun souvenir stocke pour l'instant.",
     "overview": "Aperçu",
+    "social_knowledge": "Social",
+    "social_tab_no_neurons": "Ce calmar n'a développé aucun neurone de socialisation : Activez le mode multijoueur",
     "memory_stats": "Statistiques de Mémoire",
     "categories": "Catégories",
     "time_label": "Heure :",
@@ -545,6 +552,8 @@ translations = {
     "ach_happiness_100_desc": "Atteignez 100% de bonheur",
     "ach_all_stats_high_name": "Équilibre Parfait",
     "ach_all_stats_high_desc": "Toutes les statistiques au-dessus de 80% simultanément",
+    "ach_circle_of_life_name": "LE CYCLE DE LA VIE",
+    "ach_circle_of_life_desc": "Après l'accouplement, votre calmar a cessé de manger et est mort, laissant un œuf éclore",
 
     # Cleaning
     "ach_first_clean_name": "Premier Nettoyage",
@@ -593,6 +602,14 @@ translations = {
     "ach_objects_investigated_25_desc": "Enquêtez sur 25 objets différents",
     "ach_objects_investigated_100_name": "Maître Détective",
     "ach_objects_investigated_100_desc": "Enquêtez sur 100 objets différents",
+    "ach_first_fight_name": "À coups de poing !",
+    "ach_first_fight_desc": "Se battre pour la première fois avec un autre calmar",
+    "ach_fights_5_name": "Échauffourée",
+    "ach_fights_5_desc": "Se battre 5 fois avec d'autres calmars",
+    "ach_fights_20_name": "Empoignade",
+    "ach_fights_20_desc": "Se battre 20 fois avec d'autres calmars",
+    "ach_fights_50_name": "Mêlée générale",
+    "ach_fights_50_desc": "Se battre 50 fois avec d'autres calmars",
 
     # Exploration (Poop)
     "ach_first_poop_throw_name": "Fouteur de Trouble",

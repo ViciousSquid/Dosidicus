@@ -4,8 +4,10 @@ from datetime import datetime
 import time
 
 class MemoryManager:
-    def __init__(self):
-        self.memory_dir = '_memory'
+    def __init__(self, memory_dir="_memory", persistent=True, clock=None):
+        self.clock = clock or time.time
+        self.persistent = persistent
+        self.memory_dir = memory_dir
         self.short_term_file = os.path.join(self.memory_dir, 'ShortTerm.json')
         self.long_term_file = os.path.join(self.memory_dir, 'LongTerm.json')
         
@@ -15,12 +17,12 @@ class MemoryManager:
         
         self.short_term_limit = 50
         self.short_term_duration = 300  # 5 minutes in seconds
-        self.last_cleanup_time = time.time()
+        self.last_cleanup_time = self.clock()
         self.plant_interaction_count = {}
 
     def _load_and_convert_timestamps(self, file_path):
         """Loads memory from JSON and converts all timestamps to floats."""
-        if not os.path.exists(file_path):
+        if not self.persistent or not os.path.exists(file_path):
             return []
         try:
             with open(file_path, 'r') as file:
@@ -49,6 +51,8 @@ class MemoryManager:
             return []
 
     def save_memory(self, memory, file_path):
+        if not self.persistent:
+            return
         """Saves memory to JSON, converting float timestamps to ISO strings."""
         if not memory:
             # To clear a file, we can write an empty list
@@ -75,13 +79,13 @@ class MemoryManager:
         for memory in self.short_term_memory:
             if memory.get('key') == key and memory.get('category') == category:
                 memory['importance'] = memory.get('importance', 1.0) + 0.5
-                memory['timestamp'] = time.time()
+                memory['timestamp'] = self.clock()
                 if memory['importance'] >= 3.0:
                     self.transfer_to_long_term_memory(category, key)
                 return
 
         memory_item = {
-            "timestamp": time.time(),
+            "timestamp": self.clock(),
             "category": category,
             "key": key,
             "value": value,
@@ -95,7 +99,7 @@ class MemoryManager:
         self.save_memory(self.short_term_memory, self.short_term_file)
 
     def cleanup_short_term_memory(self):
-        current_time = time.time()
+        current_time = self.clock()
         self.short_term_memory = [m for m in self.short_term_memory if isinstance(m.get('timestamp'), (int, float)) and (current_time - m.get('timestamp', 0)) <= self.short_term_duration]
         if len(self.short_term_memory) > self.short_term_limit:
             self.short_term_memory.sort(key=lambda x: (x.get('importance', 1), x.get('access_count', 0)), reverse=True)
@@ -107,16 +111,16 @@ class MemoryManager:
             if memory.get('key') == key and memory.get('category') == category:
                 # Memory already exists, so we don't add it again.
                 # Optional: update timestamp to reflect it's a reinforced memory
-                memory['timestamp'] = time.time()
+                memory['timestamp'] = self.clock()
                 self.save_memory(self.long_term_memory, self.long_term_file)
                 return
 
-        memory = {'category': category, 'key': key, 'value': value, 'timestamp': time.time()}
+        memory = {'category': category, 'key': key, 'value': value, 'timestamp': self.clock()}
         self.long_term_memory.append(memory)
         self.save_memory(self.long_term_memory, self.long_term_file)
 
     def get_short_term_memory(self, category, key, default=None):
-        current_time = time.time()
+        current_time = self.clock()
         for memory in self.short_term_memory:
             if memory.get('category') == category and memory.get('key') == key:
                 ts = memory.get('timestamp', 0)
@@ -127,7 +131,7 @@ class MemoryManager:
 
     def get_all_short_term_memories(self, raw=False):
         """Retrieves all valid short-term memories."""
-        current_time = time.time()
+        current_time = self.clock()
         valid_memories = [
             m for m in self.short_term_memory
             if isinstance(m.get('timestamp'), (int, float)) and (current_time - m.get('timestamp', 0)) <= self.short_term_duration
@@ -168,7 +172,7 @@ class MemoryManager:
 
     def get_active_memories_data(self, count=None):
         """Return memories with human-readable time string."""
-        current_time = time.time()
+        current_time = self.clock()
         active = []
         for mem in self.short_term_memory:
             ts = mem.get('timestamp', 0)
@@ -186,7 +190,7 @@ class MemoryManager:
         return active[:count] if count else active
 
     def review_and_transfer_memories(self):
-        current_time = time.time()
+        current_time = self.clock()
         # Iterate over a copy as we may modify the list
         for memory in list(self.short_term_memory):
             timestamp = memory.get('timestamp', 0)
@@ -198,8 +202,8 @@ class MemoryManager:
         self.cleanup_short_term_memory()
         
     def periodic_memory_management(self):
-        if (time.time() - self.last_cleanup_time) > 30:
-            self.last_cleanup_time = time.time()
+        if (self.clock() - self.last_cleanup_time) > 30:
+            self.last_cleanup_time = self.clock()
             self.review_and_transfer_memories()
 
     def transfer_to_long_term_memory(self, category, key):

@@ -41,11 +41,32 @@ def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
     return max(low, min(high, float(value)))
 
 
+def memory_key_for_record(record) -> str:
+    """The memory key an encounter is filed under.
+
+    Ordinarily 'peer:<uuid>', so repeat encounters with one individual
+    reinforce one memory. An encounter that produced a mating is a different
+    experience and gets its own key, 'peer:<uuid>:mating:<id>': MemoryManager
+    keeps the first value written under a key, so filed under the plain key a
+    mating with a squid already met would be dropped - and because the id is
+    in the key, the same mating can never be stored twice.
+    """
+    mating_id = getattr(record, 'mating_id', '')
+    if mating_id:
+        return f"{record.memory_key}:mating:{mating_id}"
+    if getattr(record, 'hits_taken', 0) or getattr(record, 'hits_given', 0):
+        # A later impact must not reinforce an older, unchanged value under
+        # peer:<uuid>. Keep each physical encounter, with a stable replay key.
+        return f"{record.memory_key}:rocks:{int(record.started_at * 1000000):x}"
+    return record.memory_key
+
+
 class PeerSummary:
     """Everything this squid knows about one individual, at a glance."""
 
     __slots__ = ('uuid', 'name', 'encounters', 'good', 'bad', 'last_seen',
-                 'last_outcome')
+                 'last_outcome', 'matings', 'fights_won', 'fights_lost',
+                 'personality', 'hits_taken', 'hits_given')
 
     def __init__(self, uuid: str, name: str = "Squid"):
         self.uuid = uuid
@@ -55,6 +76,11 @@ class PeerSummary:
         self.bad = 0.0           # summed negative valence, as a positive number
         self.last_seen = 0.0
         self.last_outcome = ""
+        self.matings = set()     # mating ids remembered with this individual
+        self.fights_won = 0      # fights with this individual this squid won...
+        self.fights_lost = 0     # ...and lost
+        self.personality = ''    # as it introduced itself
+        self.hits_taken = self.hits_given = 0
 
     @property
     def familiarity(self) -> float:
@@ -85,6 +111,12 @@ class PeerSummary:
             'recalled_bad': round(self.recalled_bad, 1),
             'last_seen': self.last_seen,
             'last_outcome': self.last_outcome,
+            'matings': len(self.matings),
+            'fights_won': self.fights_won,
+            'fights_lost': self.fights_lost,
+            'hits_taken': self.hits_taken,
+            'hits_given': self.hits_given,
+            'personality': self.personality,
         }
 
 
@@ -120,6 +152,13 @@ class PeerLedger:
     def recalled_bad(self, peer_uuid: str) -> float:
         return self.summary(peer_uuid).recalled_bad
 
+    def has_mated(self, mating_id: str) -> bool:
+        """Is this mating already in memory? Keeps a retold one from counting."""
+        if not mating_id:
+            return False
+        self._ensure_loaded()
+        return any(mating_id in s.matings for s in self._summaries.values())
+
     def known_peers(self) -> List[Dict[str, Any]]:
         self._ensure_loaded()
         return [s.to_dict() for s in self._summaries.values() if s.encounters > 0]
@@ -130,6 +169,12 @@ class PeerLedger:
 
         `record` is an EncounterRecord. Returns True if it reached memory.
         """
+        key = memory_key_for_record(record)
+        manager = self.memory_manager
+        if ':rocks:' in key and manager is not None:
+            existing = manager.get_memories_by_key_prefix(MEMORY_CATEGORY, key)
+            if any(m.get('key') == key for m in existing):
+                return False
         summary = self.summary(record.peer.uuid)
         summary.name = record.peer.name or summary.name
         summary.encounters += 1
@@ -139,13 +184,21 @@ class PeerLedger:
             summary.bad += abs(float(record.valence))
         summary.last_seen = record.ended_at or time.time()
         summary.last_outcome = record.outcome
+        summary.fights_won += int(getattr(record, 'fights_won', 0) or 0)
+        summary.fights_lost += int(getattr(record, 'fights_lost', 0) or 0)
+        summary.hits_taken += int(getattr(record, 'hits_taken', 0) or 0)
+        summary.hits_given += int(getattr(record, 'hits_given', 0) or 0)
+        summary.personality = getattr(record.peer, 'personality', '') or summary.personality
+        if getattr(record, 'mating_id', ''):
+            summary.matings.add(record.mating_id)
 
         manager = self.memory_manager
         if manager is None or not hasattr(manager, 'add_short_term_memory'):
             return False
+        key = memory_key_for_record(record)
         manager.add_short_term_memory(
             category=MEMORY_CATEGORY,
-            key=record.memory_key,
+            key=key,
             value=record.to_memory_value(),
             importance=record.importance,
             related_neurons=list(record.related_neurons),
@@ -166,8 +219,7 @@ class PeerLedger:
         if hasattr(manager, 'should_transfer_to_long_term'):
             candidate = {'importance': record.importance, 'access_count': 1}
             if manager.should_transfer_to_long_term(candidate):
-                manager.transfer_to_long_term_memory(MEMORY_CATEGORY,
-                                                     record.memory_key)
+                manager.transfer_to_long_term_memory(MEMORY_CATEGORY, key)
         return True
 
     # -- cache ----------------------------------------------------------
@@ -196,7 +248,7 @@ class PeerLedger:
         key = memory.get('key') or ''
         if not key.startswith('peer:'):
             return
-        peer_uuid = key[len('peer:'):]
+        peer_uuid = key[len('peer:'):].split(':', 1)[0]
         if not peer_uuid:
             return
         summary = self._summaries.get(peer_uuid)
@@ -224,10 +276,20 @@ class PeerLedger:
         else:
             summary.bad += abs(valence)
         summary.last_outcome = str(value.get('outcome') or summary.last_outcome)
+        summary.personality = str(value.get('peer_personality') or summary.personality)
+        for field in ('fights_won', 'fights_lost', 'hits_taken', 'hits_given'):
+            try:
+                setattr(summary, field, getattr(summary, field) + int(detail.get(field, 0) or 0))
+            except (TypeError, ValueError):
+                pass
+        mating_id = detail.get('mating_id')
+        if isinstance(mating_id, str) and mating_id:
+            summary.matings.add(mating_id)
         timestamp = memory.get('timestamp')
         if isinstance(timestamp, (int, float)):
             summary.last_seen = max(summary.last_seen, float(timestamp))
 
 
 __all__ = ['PeerLedger', 'PeerSummary', 'MEMORY_CATEGORY', 'memory_key_for',
+           'memory_key_for_record',
            'SquidIdentity']

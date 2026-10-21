@@ -45,9 +45,7 @@ from src.memory_manager import MemoryManager      # noqa: E402
 from plugins.multiplayer.identity import SquidIdentity  # noqa: E402
 from plugins.multiplayer.peer_ledger import PeerLedger  # noqa: E402
 from plugins.multiplayer.encounter import EncounterSession  # noqa: E402
-from plugins.multiplayer.encounter_sensors import (  # noqa: E402
-    ConspecificView, EncounterSensors, SENSOR_NAMES, SENSOR_SPECS,
-)
+from plugins.multiplayer.encounter_sensors import ConspecificView  # noqa: E402
 from plugins.multiplayer.consent import (  # noqa: E402
     ConsentPolicy, MODE_OPEN, MODE_CLOSED, MODE_KNOWN,
     REASON_ACCEPTED, REASON_CLOSED, REASON_UNKNOWN_PEER, REASON_BAD_IDENTITY,
@@ -75,8 +73,6 @@ def setUpModule():
 def tearDownModule():
     os.chdir(_PREV_CWD)
     _TMPDIR.cleanup()
-    # These sets are module-level state shared with every other test file.
-    EncounterSensors.release_classification(bc)
 
 
 def identity(uuid, name="Peer", personality="timid"):
@@ -395,144 +391,6 @@ class EncounterMemoryTests(unittest.TestCase):
 # ===========================================================================
 # The sensors themselves
 # ===========================================================================
-class ConspecificSensorTests(unittest.TestCase):
-    """What the brain is actually told about another squid."""
-
-    def setUp(self):
-        self.now = 1000.0
-        self.view = ConspecificView(clock=lambda: self.now)
-        self.memory = FakeMemoryManager()
-        self.ledger = PeerLedger(self.memory)
-        self.sensors = EncounterSensors(self.view, self.ledger,
-                                        clock=lambda: self.now)
-
-    def _see(self, peer, x, y, facing='right', status=""):
-        return self.view.observe_peer(peer, x=x, y=y, observer_x=0.0,
-                                      observer_y=0.0, facing=facing,
-                                      status=status, now=self.now)
-
-    def test_every_sensor_reads_zero_with_no_other_squid(self):
-        for name, handler in self.sensors.handlers().items():
-            with self.subTest(sensor=name):
-                self.assertEqual(handler(), 0.0)
-
-    def test_presence_and_proximity(self):
-        self._see(identity(UUID_B), 100.0, 0.0)
-        self.assertEqual(self.sensors.visible(), 100.0)
-        near = self.sensors.proximity()
-        self.view.clear()
-        self._see(identity(UUID_B), 380.0, 0.0)
-        self.assertGreater(near, self.sensors.proximity())
-
-    def test_relative_direction_reads_high_only_when_it_is_in_front(self):
-        self._see(identity(UUID_B), 100.0, 0.0, facing='right')
-        ahead = self.sensors.ahead()
-        self.view.clear()
-        self._see(identity(UUID_B), -100.0, 0.0, facing='right')
-        behind = self.sensors.ahead()
-        self.assertGreater(ahead, 90.0)
-        self.assertLess(behind, 10.0)
-
-    def test_closing_and_receding_are_separate_sensors(self):
-        """Push-pull, because a sensor at rest must mean nothing to report.
-
-        One signed sensor would have to read 50 for 'not moving', and 50 is a
-        real mid-strength signal to signal_of() - a squid alone in its tank
-        would be born feeling half of something.
-        """
-        peer = identity(UUID_B)
-        self._see(peer, 300.0, 0.0)
-        self.now += 1.0
-        self._see(peer, 200.0, 0.0)
-        self.assertGreater(self.sensors.closing(), 0.0)
-        self.assertEqual(self.sensors.receding(), 0.0)
-
-        self.now += 1.0
-        self._see(peer, 350.0, 0.0)
-        self.assertEqual(self.sensors.closing(), 0.0)
-        self.assertGreater(self.sensors.receding(), 0.0)
-
-    def test_familiarity_distinguishes_a_stranger_from_an_acquaintance(self):
-        stranger, known = identity(UUID_B), identity(UUID_C, "Kraken")
-        session = EncounterSession(known, {'happiness': 50.0}, now=1.0)
-        self.ledger.record(session.close(drives={'happiness': 62.0}, now=9.0))
-
-        self._see(stranger, 100.0, 0.0)
-        self.assertEqual(self.sensors.familiarity(), 0.0)
-        self.view.clear()
-        self._see(known, 100.0, 0.0)
-        self.assertGreater(self.sensors.familiarity(), 0.0)
-
-    def test_a_presence_that_stops_updating_goes_away(self):
-        self._see(identity(UUID_B), 100.0, 0.0)
-        self.assertEqual(self.sensors.visible(), 100.0)
-        self.now += 10.0
-        self.assertEqual(self.sensors.visible(), 0.0)
-
-    def test_the_sensors_register_through_the_normal_paths(self):
-        """All three registrations, because all three are load-bearing."""
-        class FakePluginManager:
-            def __init__(self):
-                self.handlers = {}
-
-            def register_neuron_handler(self, neuron_name, handler,
-                                        plugin_name, metadata=None):
-                self.handlers[neuron_name] = handler
-                return True
-
-            def unregister_neuron_handler(self, neuron_name, plugin_name):
-                return self.handlers.pop(neuron_name, None) is not None
-
-        class FakeBrainWidget:
-            def __init__(self):
-                self.neuron_positions = {}
-                self.state = {}
-
-        pm, widget = FakePluginManager(), FakeBrainWidget()
-        try:
-            self.sensors.register(pm, bc, plugin_name='Multiplayer',
-                                  brain_widget=widget)
-            for name in SENSOR_NAMES:
-                with self.subTest(sensor=name):
-                    self.assertIn(name, pm.handlers)          # value
-                    self.assertIn(name, bc.PURE_INPUT_NEURONS)  # classification
-                    self.assertIn(name, widget.neuron_positions)  # neuron
-                    self.assertEqual(widget.state[name], 0.0)
-                    self.assertEqual(propagation.baseline_of(name), 0.0)
-        finally:
-            self.sensors.unregister(pm, plugin_name='Multiplayer')
-            EncounterSensors.release_classification(bc)
-
-    def test_disabling_the_plugin_leaves_the_neurons_classified(self):
-        """Un-classifying live neurons would hand them back to propagation."""
-        class FakePluginManager:
-            def __init__(self):
-                self.handlers = {}
-
-            def register_neuron_handler(self, neuron_name, handler,
-                                        plugin_name, metadata=None):
-                self.handlers[neuron_name] = handler
-                return True
-
-            def unregister_neuron_handler(self, neuron_name, plugin_name):
-                return self.handlers.pop(neuron_name, None) is not None
-
-        pm = FakePluginManager()
-        try:
-            self.sensors.register(pm, bc, plugin_name='Multiplayer')
-            self.sensors.unregister(pm, plugin_name='Multiplayer')
-            self.assertEqual(pm.handlers, {}, "values must stop")
-            for name in SENSOR_NAMES:
-                with self.subTest(sensor=name):
-                    self.assertIn(name, bc.PURE_INPUT_NEURONS)
-                    self.assertFalse(bc.is_network_driven(name))
-        finally:
-            EncounterSensors.release_classification(bc)
-
-
-# ===========================================================================
-# 5 & 6. A contest, with no contest capability
-# ===========================================================================
 class NoDedicatedContestActionTests(unittest.TestCase):
     """The squid is NOT born able to contest, because it does not need to be.
 
@@ -668,14 +526,13 @@ class ContestConsequenceTests(unittest.TestCase):
         self.assertIs(self.squid.current_rock, contested)
 
     def test_the_contest_is_perceptible_to_the_other_squid(self):
-        """The outcome has to reach a sense organ, or it teaches nobody."""
+        """The tank records the contest, which is what a fight is drawn from."""
         self._rival_at(150.0, 0.0)
         logic = FakeLogic([FakeItem(100.0, 0.0)], self.view)
-        sensors = EncounterSensors(self.view, None, clock=lambda: self.now)
 
-        self.assertEqual(sensors.contesting(), 0.0)
+        self.assertFalse(self.view.any_contesting(self.now))
         self._play(logic)
-        self.assertEqual(sensors.contesting(), 100.0)
+        self.assertTrue(self.view.any_contesting(self.now))
 
     def test_the_contest_is_recorded_for_the_encounter_to_file(self):
         self._rival_at(150.0, 0.0)

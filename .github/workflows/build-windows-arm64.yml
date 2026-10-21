@@ -1,6 +1,12 @@
 name: Native Windows ARM64 Build
 
 on:
+  workflow_call:
+    inputs:
+      release_version:
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
   push:
     branches:
@@ -30,6 +36,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up native ARM64 Python
         uses: actions/setup-python@v7
@@ -37,6 +45,15 @@ jobs:
           python-version: '3.14'
           architecture: 'arm64'
           cache: pip
+
+      - name: Apply release version
+        if: inputs.release_version != ''
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        shell: pwsh
+        run: |
+          python tools/release_support.py version --version "$env:RELEASE_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw "Invalid release version" }
 
       - name: Verify native architecture
         shell: pwsh
@@ -191,6 +208,7 @@ jobs:
             --disable-plugin=options-nanny ^
             --include-package=src ^
             --include-package=plugins ^
+            --include-package=translations ^
             --include-module=uuid ^
             --include-module=src.brain_designer ^
             --include-module=src.brain_designer_launcher ^
@@ -259,16 +277,7 @@ jobs:
           New-Item -ItemType Directory -Path $release -Force | Out-Null
           Copy-Item -Path (Join-Path $dist "*") -Destination $release -Recurse -Force
 
-          # Match the existing cross-platform Nuitka workflow: ship repository
-          # data alongside the standalone distribution for runtime-loaded assets,
-          # configuration, translations and dynamically loaded plugins.
-          $exclude = @("main.py", "build", "dist", "release", "__pycache__", "venv", "env", "qt_check.py")
-          Get-ChildItem -Path $PWD | Where-Object {
-            $_.Name -notin $exclude -and $_.Name -notlike "*.spec"
-          } | ForEach-Object {
-            $destination = Join-Path $release $_.Name
-            Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force
-          }
+          python tools/release_support.py runtime --target "$release"
 
           $required = @(
             "Dosidicus.exe",

@@ -60,8 +60,9 @@ DEFAULT_SMOOTHING = 0.5
 # Imported lazily-ish at module level because brain_constants has no imports of
 # its own and cannot cycle.
 from .brain_constants import (BINARY_NEURONS, PURE_INPUT_NEURONS,  # noqa: E402
-                              ACTION_NEURONS, action_resting_level,
-                              on_input_sensor_change)
+                              ACTION_NEURONS, SOCIAL_SENSORS, AGGRESSION_NEURON,
+                              action_resting_level,
+                              ensure_grown_sensor, on_input_sensor_change)
 
 # Action neurons rest at zero for the same reason sensors do. "I do not want to
 # do anything" is a neuron with nothing to report, and it has to be worth
@@ -70,7 +71,9 @@ from .brain_constants import (BINARY_NEURONS, PURE_INPUT_NEURONS,  # noqa: E402
 # compete with the ones it has, and a newborn would be born wanting to do
 # everything equally. Resting at zero is what makes "the squid has not learned
 # this yet" a state the network can actually be in.
-_RESTS_AT_ZERO = set(PURE_INPUT_NEURONS) | set(BINARY_NEURONS) | set(ACTION_NEURONS)
+#: The grown aggression neuron too: 0 is placid, 100 fully aggro.
+_RESTS_AT_ZERO = (set(PURE_INPUT_NEURONS) | set(BINARY_NEURONS) | set(ACTION_NEURONS)
+                  | {AGGRESSION_NEURON})
 
 
 def _follow_sensor_registration(name: str, _binary: bool, added: bool) -> None:
@@ -88,6 +91,13 @@ def _follow_sensor_registration(name: str, _binary: bool, added: bool) -> None:
 
 
 on_input_sensor_change(_follow_sensor_registration)
+
+#: Grown sense organs, each tied to the percept that drives it. Seeing another
+#: squid is the vision system's to report (squid_in_view); the can_see_squid
+#: sensor neurogenesis grows on the first sighting is that percept in the
+#: brain, written the way can_see_food is - 100 or 0, every tick. The others
+#: (brain_constants.SOCIAL_SENSORS) are written the same way from theirs.
+CONCEPT_PERCEPTS = {name: percept for name, (percept, _binary) in SOCIAL_SENSORS.items()}
 
 
 def baseline_of(name: str) -> float:
@@ -214,16 +224,21 @@ def propagate(state: Dict[str, object],
               targets: Iterable[str],
               strengths: Optional[Mapping[str, float]] = None,
               noise: Optional[Mapping[str, float]] = None,
-              smoothing: float = DEFAULT_SMOOTHING) -> Dict[str, float]:
+              smoothing: float = DEFAULT_SMOOTHING,
+              resting: Optional[Mapping[str, float]] = None) -> Dict[str, float]:
     """Compute one timestep for every target neuron, in place.
 
-    Returns the neurons whose activation actually changed.
+    `resting` overrides baseline_of() for this brain's neurons whose resting
+    level life has moved (FunctionalNeuron.resting_level) - what a neuron
+    settles to with nothing driving it. Returns the neurons whose activation
+    actually changed.
     """
     targets = [t for t in targets]
     if not targets:
         return {}
     strengths = strengths or {}
     noise = noise or {}
+    resting = resting or {}
 
     # 1. Sum weighted input from a single consistent snapshot, so all neurons
     #    step together rather than the result depending on dict order.
@@ -233,15 +248,18 @@ def propagate(state: Dict[str, object],
     changed: Dict[str, float] = {}
     for name in targets:
         strength = float(strengths.get(name, 1.0) or 1.0)
-        target_val = baseline_of(name) + net_input[name] * strength
+        rest = resting.get(name)
+        if rest is None:
+            rest = baseline_of(name)
+        target_val = rest + net_input[name] * strength
 
         jitter = float(noise.get(name, 0.0) or 0.0)
         if jitter:
             target_val += random.uniform(-jitter, jitter)
 
-        old = activation_of(state.get(name, baseline_of(name)))
+        old = activation_of(state.get(name, rest))
         if old is None:
-            old = baseline_of(name)
+            old = rest
 
         new_val = old + (target_val - old) * smoothing
         new_val = max(0.0, min(100.0, new_val))
@@ -324,9 +342,28 @@ class ExternallyDriven:
                 return action
         return ""
 
+    def perceive(self, percept: str, value: float) -> None:
+        """The world reports a percept this tick, e.g. 'squid_in_view'.
+
+        Written by whatever does the perceiving - the vision system at home,
+        the host's frame while visiting. Not a neuron: a percept only reaches
+        the network through a sense organ grown to represent it.
+        """
+        percepts = getattr(self, 'percepts', None)
+        if percepts is None:
+            percepts = self.percepts = {}
+        percepts[str(percept)] = max(0.0, min(100.0, float(value)))
+
+    def percept_neurons(self) -> Dict[str, str]:
+        """Grown sense organs the world drives, as {neuron: percept}."""
+        positions = getattr(self, 'neuron_positions', None) or {}
+        return {name: percept for name, percept in CONCEPT_PERCEPTS.items()
+                if name in positions}
+
     def drive_external_neurons(self, smoothing: float = DEFAULT_SMOOTHING
                                ) -> Dict[str, float]:
-        """Write the action neurons from what the squid is actually doing.
+        """Write the neurons the world drives: the squid's actions, from what
+        it is actually doing, and its grown percepts, from what it perceives.
 
         Called once per tick, immediately before propagation, so the rest of
         the network sees the action the same way it sees a sensor: as a fact
@@ -335,16 +372,31 @@ class ExternallyDriven:
         trace after the action ends, which is what gives spike timing and the
         eligibility traces something to work with.
         """
-        actions, _external = self._external_maps()
-        if not actions:
-            return {}
-        causal = getattr(self, 'causal_learning', None)
-        current = getattr(causal, 'current_action', "") if causal is not None else ""
+        percepts = getattr(self, 'percepts', None) or {}
+        growth = getattr(self, 'enhanced_neurogenesis', None)
+        if growth is not None:
+            growth.observe_social()
+        actions, external = self._external_maps()
         state = getattr(self, 'state', None)
         if state is None:
             return {}
 
         changed: Dict[str, float] = {}
+        for neuron, percept in self.percept_neurons().items():
+            # A sense organ, so the world writes it outright - binary ones as
+            # can_see_food is - and no synapse may point at it.
+            binary = SOCIAL_SENSORS[neuron][1]
+            ensure_grown_sensor(neuron, binary)
+            reading = percepts.get(percept, 0.0)
+            new = (100.0 if reading > 0.0 else 0.0) if binary else reading
+            if state.get(neuron) != new:
+                changed[neuron] = new
+            state[neuron] = new
+
+        if not actions:
+            return changed
+        causal = getattr(self, 'causal_learning', None)
+        current = getattr(causal, 'current_action', "") if causal is not None else ""
         for action, neuron in actions.items():
             if neuron not in state:
                 continue
@@ -358,3 +410,37 @@ class ExternallyDriven:
                 changed[neuron] = new
             state[neuron] = new
         return changed
+
+
+def compute_neural_modulation(state, weights, gain=0.30, ledger=None):
+    """Read learned physiological influences without overwriting core inputs."""
+    from .brain_constants import CORE_STAT_NEURONS
+
+    deltas = {}
+    contributions = []
+    for (src, dst), weight in weights.items():
+        if dst not in CORE_STAT_NEURONS:
+            continue
+        raw = state.get(src)
+        if isinstance(raw, bool):
+            value = 100.0 if raw else 0.0
+        elif isinstance(raw, (int, float)):
+            value = float(raw)
+        else:
+            continue
+        # Same reading of "how much is this neuron contributing" that
+        # propagation uses, from the same function - a sensor with nothing
+        # to report contributes nothing here too.
+        push = (signal_of(src, value) / 50.0) * float(weight)
+        deltas[dst] = deltas.get(dst, 0.0) + push
+        if abs(push) > 1e-4:
+            contributions.append(((src, dst), push * gain, dst))
+
+    # Record what each synapse actually did to the squid. This is the
+    # channel through which learning becomes behaviour, so it is also the
+    # honest answer to "how did this knowledge affect what it does?".
+    if ledger is not None:
+        for edge, amount, target in contributions:
+            ledger.record_influence(edge, amount, 'modulation', target)
+
+    return {k: v * gain for k, v in deltas.items()}

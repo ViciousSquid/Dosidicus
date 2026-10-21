@@ -104,6 +104,18 @@ class DecorationItem(QtWidgets.QLabel):
             drag.exec_(QtCore.Qt.CopyAction)
 
 
+#: A dead squid's headstones. Not in images/decoration, so the player cannot
+#: place one from the Decorations window.
+HEADSTONE_DIR = os.path.join("images", "headstones")
+#: Kept with a headstone in the save, beside its name ('deceased').
+HEADSTONE_FIELDS = ('age_seconds', 'fights_won', 'fights_lost', 'died_of')
+
+
+def is_headstone_file(filename) -> bool:
+    name = str(filename or '').replace('\\', '/').rsplit('/', 1)[-1]
+    return name.lower().startswith('headstone')
+
+
 class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
     def __init__(self, pixmap=None, filename=None, category=None, parent=None):
         QtWidgets.QGraphicsPixmapItem.__init__(self, parent)
@@ -137,6 +149,41 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         self.is_being_carried = False
         self.original_scale = 1.0
 
+        # Where a squid died. Seen and pushed like any other decoration, but
+        # never carried, thrown or deleted.
+        self.is_headstone = is_headstone_file(filename)
+        self.deceased = ''
+        #: What the stone keeps of the squid beneath it: age, fights won and
+        #: lost, and what it died of (src/lifecycle.py headstone_record).
+        self.headstone = {}
+        #: (width, height) this item may never grow past; None for no limit.
+        self.max_size = None
+        if self.is_headstone:
+            self.category = 'decoration'
+            self.can_be_picked_up = False
+
+    #: A headstone is never bigger than this share of the squid's size.
+    HEADSTONE_SHARE = 0.8
+
+    def limit_headstone(self, squid) -> None:
+        """Keep a headstone within 80% of the squid's (DPI-scaled) size."""
+        width = float(getattr(squid, 'squid_width', 0) or 0) * self.HEADSTONE_SHARE
+        height = float(getattr(squid, 'squid_height', 0) or 0) * self.HEADSTONE_SHARE
+        if not self.is_headstone or width < 1 or height < 1:
+            return
+        self.max_size = (int(width), int(height))
+        self.setScale(1.0)
+        pixmap = self.pixmap()
+        if pixmap.width() > self.max_size[0] or pixmap.height() > self.max_size[1]:
+            self.setPixmap(self.original_pixmap.scaled(
+                self.max_size[0], self.max_size[1],
+                QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+
+    def _within_limit(self, width, height):
+        if self.max_size is None:
+            return width, height
+        return min(width, self.max_size[0]), min(height, self.max_size[1])
+
     def boundingRect(self):
         return super().boundingRect()
 
@@ -152,6 +199,7 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
             min_size = DisplayScaling.scale(64)
             new_width = max(min_size, int(current_width * scale_factor))
             new_height = max(min_size, int(current_height * scale_factor))
+            new_width, new_height = self._within_limit(new_width, new_height)
             scaled_pixmap = self.original_pixmap.scaled(
                 new_width, new_height,
                 QtCore.Qt.KeepAspectRatio,
@@ -181,6 +229,21 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
         self.last_mouse_pos = pos
         self.resize_mode = False
         super().mousePressEvent(event)
+        if self.is_headstone:
+            QtWidgets.QToolTip.showText(event.screenPos(), self.epitaph())
+
+    def set_epitaph(self, record) -> None:
+        """Who lies here, and what the stone says of them, shown on hover."""
+        record = record if isinstance(record, dict) else {}
+        self.deceased = str(record.get('deceased') or self.deceased or '')[:32]
+        self.headstone = {key: record[key] for key in HEADSTONE_FIELDS if key in record}
+        self.setToolTip(self.epitaph())
+
+    def epitaph(self) -> str:
+        import html
+        from .lifecycle import epitaph
+        lines = epitaph(dict(self.headstone, deceased=self.deceased or 'Squid'))
+        return "<span>" + "<br>".join(html.escape(line) for line in lines) + "</span>"
 
     def mouseMoveEvent(self, event):
         current_pos = event.pos()
@@ -191,6 +254,7 @@ class ResizablePixmapItem(QtWidgets.QGraphicsPixmapItem):
             current_height = self.pixmap().height()
             new_width = max(30, current_width + delta_x)
             new_height = max(30, current_height + delta_y)
+            new_width, new_height = self._within_limit(new_width, new_height)
             scaled_pixmap = self.original_pixmap.scaled(
                 int(new_width), int(new_height),
                 QtCore.Qt.KeepAspectRatio,
@@ -377,11 +441,10 @@ class Ui:
         self.setup_decorations_shortcut()
         
         screen = QtWidgets.QApplication.primaryScreen()
-        screen_size = screen.size()
         from .display_scaling import DisplayScaling
-        DisplayScaling.initialize(screen_size.width(), screen_size.height())
+        DisplayScaling.initialize_for(screen)
         
-        if screen_size.width() <= 1920:
+        if DisplayScaling.screen_pixels(screen)[0] <= 1920:
             base_width = 1440
             base_height = 960
         else:
@@ -446,6 +509,7 @@ class Ui:
         except ImportError:
             print("Status bar component not available, skipping")
         self.optimize_animations()
+        self.mark_persistent_scene_items()
 
     def setup_neurogenesis_debug_shortcut(self):
         self.neurogenesis_debug_shortcut = QtWidgets.QShortcut(
@@ -999,6 +1063,29 @@ class Ui:
         
         self.create_action_buttons()
 
+    #: QGraphicsItem.data() key marking the window's own furniture.
+    PERSISTENT_ITEM_KEY = 0x5155  # arbitrary, unique to this app
+
+    def mark_persistent_scene_items(self):
+        """Mark everything in the scene now - the tank, the cleanliness
+        overlay, the points labels, the debug text, the compute badge and the
+        FEED / CLEAN / MEDICINE buttons - as part of the window rather than of
+        a game, so starting a new game clears around them.
+
+        Stored on the C++ item with setData rather than as a Python
+        attribute, so it survives whatever wrapper PyQt hands back from
+        scene.items().
+        """
+        for item in self.scene.items():
+            item.setData(self.PERSISTENT_ITEM_KEY, True)
+
+    def is_persistent_scene_item(self, item):
+        """True for the window's own furniture (mark_persistent_scene_items)."""
+        try:
+            return bool(item.data(self.PERSISTENT_ITEM_KEY))
+        except RuntimeError:
+            return False
+
     def custom_wheel_event(self, event):
         selected_items = self.scene.selectedItems()
         resizable_selected = [item for item in selected_items if 
@@ -1408,6 +1495,9 @@ class Ui:
             pixmap = QtGui.QPixmap(file_path)
             if not pixmap.isNull():
                 filename = os.path.basename(file_path)
+                from .display_scaling import DisplayScaling
+                if 'rock01' in file_path.lower() or 'rock02' in file_path.lower():
+                    pixmap = DisplayScaling.to_points(pixmap)     # a rock keeps its pixel size
                 item = ResizablePixmapItem(pixmap, file_path)
                 item.original_pixmap = pixmap
                 if not ('rock01' in file_path.lower() or 'rock02' in file_path.lower()):
@@ -1462,7 +1552,9 @@ class Ui:
     def delete_selected_items(self):
         for item in self.scene.selectedItems():
             if isinstance(item, ResizablePixmapItem):
-                is_poop = (hasattr(item, 'category') and item.category == 'poop') or \
+                if item.is_headstone:
+                    continue        # a headstone stays
+                is_poop =(hasattr(item, 'category') and item.category == 'poop') or \
                           (hasattr(item, 'filename') and item.filename and 'poop' in item.filename.lower())
                 if is_poop:
                     if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic and \
@@ -1881,6 +1973,9 @@ class Ui:
                         'scale': scale,
                         'filename': filename
                     }
+                    if item.is_headstone:
+                        decoration_dict['deceased'] = item.deceased
+                        decoration_dict.update(item.headstone)
                     decorations_data.append(decoration_dict)
                 except Exception as e:
                     print(f"Error serializing decoration: {e}")
@@ -1897,8 +1992,12 @@ class Ui:
                 self.scene.removeItem(item)
         if hasattr(self, 'decoration_window'):
             self.decoration_window.decoration_items.clear()
+        self.add_decorations_data(decorations_data)
+
+    def add_decorations_data(self, decorations_data):
+        """Put saved decorations into the tank, alongside what is there."""
         loaded_count = 0
-        for decoration_dict in decorations_data:
+        for decoration_dict in decorations_data or []:
             try:
                 pixmap_data = decoration_dict['pixmap_data']
                 pixmap = QtGui.QPixmap()
@@ -1911,6 +2010,13 @@ class Ui:
                 item.setPos(QtCore.QPointF(pos_tuple[0], pos_tuple[1]))
                 scale = decoration_dict.get('scale', 1.0)
                 item.setScale(scale)
+                if item.is_headstone:
+                    item.set_epitaph(decoration_dict)
+                    # Grow and shrink from the full-size stone, not the saved copy.
+                    if os.path.exists(filename):
+                        item.original_pixmap = QtGui.QPixmap(filename)
+                    item.limit_headstone(getattr(getattr(self, 'tamagotchi_logic', None),
+                                                 'squid', None))
                 self.scene.addItem(item)
                 if hasattr(self, 'decoration_window'):
                     self.decoration_window.add_decoration_item(item)

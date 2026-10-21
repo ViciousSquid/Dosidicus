@@ -4,6 +4,7 @@ import math
 import time
 import random
 import os
+import uuid
 from PyQt5 import QtCore, QtWidgets, QtGui
 
 class PoopInteractionManager:
@@ -32,6 +33,10 @@ class PoopInteractionManager:
         # Initialize throw velocity variables
         self.throw_velocity_x = 0
         self.throw_velocity_y = 0
+        # The poop in flight, and its throw (aimed and powered as a rock's:
+        # src/throwing.py) - what reaches a squid it strikes is the fact only.
+        self.flying_poop = None
+        self.current_throw = None
 
         # Add multiplayer support
         self.multiplayer_plugin = None
@@ -128,16 +133,18 @@ class PoopInteractionManager:
             self.decide_poop_action()
 
     def decide_poop_action(self):
-        """Randomly decide to throw or drop the poop"""
-        if random.random() < 0.7:  # 70% chance to throw
-            direction = "right" if random.random() < 0.5 else "left"
-            self.throw_poop(direction)
-            if self.show_message:
-                self.show_message("Squid threw the poop!")
-        else:  # 30% chance to drop
-            self.drop_poop()
-            if self.show_message:
-                self.show_message("Squid dropped the poop")
+        """Throw or drop: its play neuron decides, as for a rock - not dice."""
+        from .throwing import throw_or_drop
+        if throw_or_drop(self._brain_state()):
+            if self.throw_poop() or getattr(self.squid, 'carried_poop', None) is not None:
+                return              # thrown, or held while it closes in
+        self.drop_poop()
+        if self.show_message:
+            self.show_message("Squid dropped the poop")
+
+    def _brain_state(self):
+        brain = getattr(getattr(self.logic, 'brain_window', None), 'brain_widget', None)
+        return dict(getattr(brain, 'state', None) or {})
 
     def drop_poop(self):
         """Gently place the poop below the squid"""
@@ -180,8 +187,15 @@ class PoopInteractionManager:
         self.poop_test_timer.start(100)  # 100ms updates
         return True
 
-    def throw_poop(self, direction="right"):
-        """Initiates a poop throw with memory formation"""
+    def throw_poop(self, direction=None):
+        """Throw the carried poop - aimed and as hard as the squid's network
+        throws it, exactly as a rock (src/throwing.py): at the nearest squid
+        in its view cone, else along its gaze. A squid it strikes is not
+        harmed, but it is splattered (throwing.HIT_EFFECTS). `direction` is
+        ignored; it is kept for callers that still pass one."""
+        from .interactions import (CLOSE_IN_SECONDS, RockInteractionManager as Rock,
+                                   close_in, squids_in_view, tank_bounds)
+        from .throwing import plan_throw, describe, out_of_reach, practice_of
         # Prevent multiple throws
         if self.throw_animation_timer.isActive():
             return False
@@ -189,28 +203,51 @@ class PoopInteractionManager:
         if not hasattr(self.squid, 'carried_poop') or not self.squid.carried_poop:
             return False
         
-        config = self.poop_config
         poop = self.squid.carried_poop
-        
-        # Set squid status
-        if hasattr(self.squid, 'status'):
-            self.squid.status = "throwing poop"
-        
+
+        rect = self.squid.squid_item.sceneBoundingRect()
+        bounds = (tank_bounds(self.scene, poop) if hasattr(poop, 'sceneBoundingRect')
+                  else None)
+        plan = plan_throw(self._brain_state(), (rect.center().x(), rect.center().y()),
+                          float(getattr(self.squid, 'current_view_angle', 0.0)),
+                          squids_in_view(self.scene, self.squid),
+                          slowest=Rock.THROW_SLOWEST, fastest=Rock.THROW_FASTEST,
+                          gravity=Rock.THROW_GRAVITY, drag=Rock.THROW_DRAG, bounds=bounds,
+                          practice=practice_of(getattr(self.squid, 'statistics', None)))
+        # Beyond this throw: keep it, close in, look again shortly.
+        if out_of_reach(plan):
+            close_in(self.squid, self.logic, plan)
+            self.squid.poop_decision_made = False
+            self.squid.poop_hold_start_time = time.time()
+            self.squid.poop_hold_duration = CLOSE_IN_SECONDS
+            return False
+        self.squid._closing_in_on = None
+
         # Detach from squid and reset parent to scene
         poop.setParentItem(None)
-        
-        # Calculate throw vectors
-        throw_power = 12
-        angle = math.radians(30 if direction == "right" else 150)
-        self.throw_velocity_x = throw_power * math.cos(angle)
-        self.throw_velocity_y = -throw_power * math.sin(angle)  # Negative for upward
+        plan['what'] = 'poop'
+        self.current_throw = dict(plan, hit=None, throw_id=uuid.uuid4().hex,
+                                  source_uuid=str(getattr(self.squid, 'uuid', '')))
+        self.flying_poop = poop
+        poop.is_being_carried = False
+        self.squid.carried_poop = None
+        self.squid.is_carrying_poop = False
+        self.throw_velocity_x, self.throw_velocity_y = plan['vx'], plan['vy']
+        direction = 'right' if plan['vx'] >= 0 else 'left'
+
+        # Set squid status
+        if hasattr(self.squid, 'status'):
+            self.squid.status = (f"throwing poop at {plan['target']}" if plan['target']
+                                 else "throwing poop")
+        if self.show_message:
+            self.show_message(describe(plan))
         
         # Set position to squid's center in scene coordinates
-        squid_rect = self.squid.squid_item.sceneBoundingRect()
         poop_rect = poop.boundingRect()
         poop.setPos(
-            squid_rect.center().x() - poop_rect.width()/2,
-            squid_rect.center().y() - poop_rect.height()/2
+            rect.center().x() - poop_rect.width()/2,
+            min(rect.center().y() - poop_rect.height()/2,
+                self.scene.sceneRect().bottom() - 50 - poop_rect.height())
         )
         
         poop.setVisible(True)
@@ -230,8 +267,12 @@ class PoopInteractionManager:
                 "satisfaction": -3,
                 "anxiety": 10
             },
-            "description": "Threw a poop around!",
-            "is_positive": False
+            "description": describe(plan),
+            "is_positive": False,
+            # Where it was aimed, how hard, and what drove it.
+            "throw": {"aimed_at": plan['target'], "driven_by": plan['driven_by'],
+                      "drive": plan['drive'], "angle": plan['angle'],
+                      "speed": plan['speed'], "throw_id": self.current_throw['throw_id']},
         }
 
         # Deliver the completed throw once to the canonical statistics model.
@@ -278,42 +319,38 @@ class PoopInteractionManager:
                 self.squid.move_toward_position(poop_center)
 
     def update_throw_animation(self):
-        """Handles the physics update for thrown poops"""
-        if not hasattr(self.squid, 'carried_poop') or not self.squid.carried_poop:
+        """One step of flight (the rock's physics), then sweep the path for
+        the first squid it splatters - once per throw."""
+        from .interactions import RockInteractionManager as Rock, first_struck
+        from .throwing import flight_step
+        poop = self.flying_poop
+        if poop is None or poop.scene() is None:
             self.throw_animation_timer.stop()
             self.cleanup_after_throw()
             return
-        
-        poop = self.squid.carried_poop
-        new_x = poop.x() + self.throw_velocity_x
-        new_y = poop.y() + self.throw_velocity_y
-        
-        # Apply gravity
-        self.throw_velocity_y += 0.3
-        
-        # Boundary checks
-        scene_rect = self.scene.sceneRect()
-        poop_rect = poop.boundingRect()
-        
-        # Left/right boundaries with reduced bounce
-        if new_x < scene_rect.left():
-            new_x = scene_rect.left()
-            self.throw_velocity_x *= -0.5
-        elif new_x > scene_rect.right() - poop_rect.width():
-            new_x = scene_rect.right() - poop_rect.width()
-            self.throw_velocity_x *= -0.5
-        
-        # Top/bottom boundaries
-        if new_y < scene_rect.top():
-            new_y = scene_rect.top()
-            self.throw_velocity_y *= -0.5
-        elif new_y > scene_rect.bottom() - poop_rect.height():
-            new_y = scene_rect.bottom() - poop_rect.height()
+        rect = poop.sceneBoundingRect()
+        centre = rect.center()
+        start = (centre.x(), centre.y())
+        scene = self.scene.sceneRect()
+        bounds = (scene.left() + rect.width()/2, scene.right() - rect.width()/2,
+                  scene.top() + rect.height()/2, scene.bottom() - 50 - rect.height()/2)
+        end, velocity, landed = flight_step(start, (self.throw_velocity_x, self.throw_velocity_y),
+                                            bounds, gravity=Rock.THROW_GRAVITY)
+        poop.moveBy(end[0] - start[0], end[1] - start[1])
+        self.throw_velocity_x, self.throw_velocity_y = velocity
+        throw = self.current_throw
+        if throw and throw.get('hit') is None:
+            resident = getattr(getattr(self.logic, 'squid', None), 'squid_item', None)
+            item = first_struck(self.scene, poop, start, end, self.squid.squid_item,
+                                resident, Rock.HIT_RADIUS)
+            if item is not None:
+                throw['hit'] = str(getattr(item, 'peer_uuid', '') or id(item))
+                notify = getattr(self.logic, 'on_rock_hit', None)
+                if callable(notify):
+                    notify(item, dict(throw))
+        if landed:
             self.throw_animation_timer.stop()
             self.cleanup_after_throw()
-            return  # Stop updates when hitting bottom
-        
-        poop.setPos(new_x, new_y)
 
     def cleanup(self):
         """Reset all poop interaction state"""
@@ -330,18 +367,15 @@ class PoopInteractionManager:
             self.squid.carried_poop = None
 
     def cleanup_after_throw(self):
-        if hasattr(self.squid, 'carried_poop') and self.squid.carried_poop:
-            poop = self.squid.carried_poop
-            
-            # --- ADDED COOLDOWN APPLICATION ---
+        poop = self.flying_poop or getattr(self.squid, 'carried_poop', None)
+        if poop is not None:
             # Set cooldown on the poop so it can't be picked up immediately
             cooldown = self.poop_config.get('cooldown_after_throw', 10.0)
             poop.throw_cooldown_until = time.time() + cooldown
-            # ----------------------------------
-
-            # Make sure to reset all poop-related states
             poop.is_being_carried = False
-            self.squid.carried_poop = None
+        self.flying_poop = None
+        self.current_throw = None
+        self.squid.carried_poop = None
         
         # Reset squid states
         self.squid.is_carrying_poop = False

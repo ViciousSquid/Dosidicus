@@ -250,6 +250,8 @@ translations = {
     "long_term_memory": "Memoria a Largo Plazo",
     "no_memories": "No hay memorias almacenadas todavia.",
     "overview": "Resumen",
+    "social_knowledge": "Social",
+    "social_tab_no_neurons": "Este calamar no ha desarrollado ninguna neurona de socialización: Activa el modo multijugador",
     "memory_stats": "Estadísticas de Memoria",
     "categories": "Categorías",
     "time_label": "Hora:",
@@ -550,6 +552,8 @@ translations = {
     "ach_happiness_100_desc": "Alcanza el 100% de felicidad",
     "ach_all_stats_high_name": "Equilibrio Perfecto",
     "ach_all_stats_high_desc": "Todas las estadísticas por encima del 80% simultáneamente",
+    "ach_circle_of_life_name": "EL CICLO DE LA VIDA",
+    "ach_circle_of_life_desc": "Tras aparearse, tu calamar dejó de comer y murió, dejando un huevo por eclosionar",
 
     # Cleaning
     "ach_first_clean_name": "Primer Fregado",
@@ -598,6 +602,14 @@ translations = {
     "ach_objects_investigated_25_desc": "Investiga 25 objetos diferentes",
     "ach_objects_investigated_100_name": "Detective Maestro",
     "ach_objects_investigated_100_desc": "Investiga 100 objetos diferentes",
+    "ach_first_fight_name": "¡A puñetazos!",
+    "ach_first_fight_desc": "Pelea por primera vez con otro calamar",
+    "ach_fights_5_name": "Refriega",
+    "ach_fights_5_desc": "Pelea 5 veces con otros calamares",
+    "ach_fights_20_name": "Trifulca",
+    "ach_fights_20_desc": "Pelea 20 veces con otros calamares",
+    "ach_fights_50_name": "Batalla campal",
+    "ach_fights_50_desc": "Pelea 50 veces con otros calamares",
 
     # Exploration (Poop)
     "ach_first_poop_throw_name": "Travieso",

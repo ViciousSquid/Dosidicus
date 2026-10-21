@@ -15,6 +15,7 @@ from .decision_engine import DecisionEngine
 from .image_cache import ImageCache
 from .statistics_window import StatisticsWindow
 from .squid_statistics import SquidStatistics
+from .lifecycle import Lifecycle
 from .vision_worker import (
     VisionWorker, 
     VisionResult, 
@@ -39,6 +40,9 @@ class Squid:
         self.tint_color = None
         self.name = random.choice(SQUID_NAMES)
         self.statistics = SquidStatistics(self)
+        # Whether this squid has reproduced, is starving for it, or has died.
+        # Every squid is born living; see src/lifecycle.py.
+        self._lifecycle = Lifecycle()
 
         # Set neurogenesis cooldown (default to 180 seconds if not specified)
         self.neuro_cooldown = neuro_cooldown if neuro_cooldown is not None else 180
@@ -161,6 +165,18 @@ class Squid:
             self.personality = personality
             
         self.uuid = uuid.uuid4()
+
+    @property
+    def lifecycle(self) -> Lifecycle:
+        """Created on first use too, for a squid built without __init__."""
+        lifecycle = self.__dict__.get('_lifecycle')
+        if lifecycle is None:
+            lifecycle = self._lifecycle = Lifecycle()
+        return lifecycle
+
+    @lifecycle.setter
+    def lifecycle(self, value: Lifecycle):
+        self._lifecycle = value
 
     @property
     def carrying_rock(self):
@@ -541,11 +557,15 @@ class Squid:
 
         old_angle = self.current_view_angle
 
+        # === Something that has just appeared holds the gaze (notice) ===
+        attending = self._look_at_noticed()
+
         # === Normal scanning: random direction ===
-        self.current_view_angle = random.uniform(0, 2 * math.pi)
+        if not attending:
+            self.current_view_angle = random.uniform(0, 2 * math.pi)
 
         # === Hunger override: high chance to look toward nearest food ===
-        if self.hunger > 65 and self.tamagotchi_logic.food_items:
+        if not attending and self.hunger > 65 and self.tamagotchi_logic.food_items:
             nearest_food = min(
                 self.tamagotchi_logic.food_items,
                 key=lambda f: self.distance_to(f.pos().x(), f.pos().y()),
@@ -620,18 +640,9 @@ class Squid:
         """Load images with cache to reduce memory usage and apply resolution scaling"""
         from .display_scaling import DisplayScaling
         
-        # Get current screen resolution
-        screen = QtWidgets.QApplication.primaryScreen()
-        screen_size = screen.size()
-        
-        # Determine resolution-specific scaling
-        if screen_size.width() <= 1920 and screen_size.height() <= 1080:
-            # For 1080p resolution, reduce size by 30%
-            image_scale = 0.7
-            print("Applying 70% squid size scaling for 1080p resolution")
-        else:
-            # For higher resolutions, use normal scaling
-            image_scale = 1.0
+        # 70% on a 1080p screen, measured in real pixels; in points on a
+        # Retina Mac (DisplayScaling.squid_scale).
+        image_scale = DisplayScaling.squid_scale()
         
         # Load original images from cache
         original_images = {
@@ -682,6 +693,11 @@ class Squid:
             QtCore.Qt.KeepAspectRatio,
             QtCore.Qt.SmoothTransformation
         )
+        # The height the mental-state icons (sick, curious...) are drawn at:
+        # full size, in points. They are pinned by their top edge, so the ng
+        # icon - scaled with the squid, 70% on a 1080p screen - is dropped by
+        # the difference to put its bottom edge where theirs is.
+        self.head_icon_height = DisplayScaling.points(original_ng.height())
         
         # Update squid dimensions to match scaled size
         self.squid_width = self.images["left1"].width()
@@ -720,9 +736,12 @@ class Squid:
     def update_neurogenesis_icon_position(self):
         """Position the neurogenesis icon above the squid"""
         if self.ng_icon is not None:
+            pixmap = self.ng_icon.pixmap()
+            # Bottom edge level with the other head icons' (see load_images).
+            drop = max(0, getattr(self, 'head_icon_height', pixmap.height()) - pixmap.height())
             self.ng_icon.setPos(
-                self.squid_x + self.squid_width // 2 - self.ng_icon.pixmap().width() // 2 + self.ng_icon_offset.x(),
-                self.squid_y + self.ng_icon_offset.y()
+                self.squid_x + self.squid_width // 2 - pixmap.width() // 2 + self.ng_icon_offset.x(),
+                self.squid_y + self.ng_icon_offset.y() + drop
             )
 
     def update_startled_icon_position(self):
@@ -753,9 +772,10 @@ class Squid:
             self.update_neurogenesis_icon_position()
 
     def load_poop_images(self):
+        from .display_scaling import DisplayScaling
         self.poop_images = [
-            QtGui.QPixmap(os.path.join("images", "poop1.png")),
-            QtGui.QPixmap(os.path.join("images", "poop2.png"))
+            DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "poop1.png"))),
+            DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "poop2.png")))
         ]
         self.poop_width = self.poop_images[0].width()
         self.poop_height = self.poop_images[0].height()
@@ -886,15 +906,53 @@ class Squid:
                 self.anxiety_cooldown_timer.stop()
             self.tamagotchi_logic.show_message("Squid has calmed down... mostly.")
     
+    #: Seconds between departure requests while waiting at the side.
+    EXIT_RETRY_SECONDS = 3.0
+
+    def is_venturing(self) -> bool:
+        """Is its own network taking it out of the tank? (src/venturing.py)"""
+        return self.why_not_venturing() is None
+
+    def why_not_venturing(self):
+        from .venturing import why_not
+        brain = getattr(getattr(getattr(self, 'tamagotchi_logic', None), 'brain_window', None),
+                        'brain_widget', None)
+        if brain is None:
+            return 'it has no brain to decide with'
+        lifecycle = getattr(self, 'lifecycle', None)
+        return why_not(getattr(brain, 'state', {}) or {}, getattr(brain, 'weights', {}) or {},
+                       fleeing=bool(getattr(self, 'is_fleeing', False)),
+                       chasing_food=bool(getattr(self, 'pursuing_food', False)),
+                       can_visit=bool(getattr(lifecycle, 'can_visit', True)))
+
+    def _exit_identity(self):
+        """Who is asking to come in, as the host checks it - with the
+        encounter protocol this build speaks. A hard-coded protocol 1 had
+        every host refuse the squid (protocol_mismatch), so none could leave."""
+        from plugins.multiplayer.identity import SquidIdentity
+        identity = SquidIdentity.from_squid(self)
+        return identity.to_payload() if identity is not None else {}
+
     def check_boundary_exit(self):
         """
-        Comprehensive boundary exit detection with robust network node handling
+        Leave through the side the squid has reached - only while its own
+        network is taking it out (is_venturing), and through the left or
+        right side, never the surface or the sand.
         """
         try:
             # Check basic prerequisites
             if not hasattr(self, 'tamagotchi_logic') or not self.tamagotchi_logic:
                 return False
             
+            # A parent stays with its egg, and a dead squid goes nowhere.
+            if not self.lifecycle.can_visit:
+                return False
+
+            if not self.is_venturing():
+                return False
+            if time.time() - getattr(self, '_last_exit_request', 0.0) < self.EXIT_RETRY_SECONDS:
+                return False
+
             # Check plugin manager and multiplayer status
             pm = self.tamagotchi_logic.plugin_manager
             multiplayer_enabled = 'multiplayer' in pm.get_enabled_plugins()
@@ -931,20 +989,10 @@ class Squid:
             
             exit_direction = None
             
-            print("\n===== BOUNDARY EXIT ANALYSIS =====")
-            print(f"Squid Position: ({self.squid_x}, {self.squid_y})")
-            print(f"Squid Dimensions: {self.squid_width}x{self.squid_height}")
-            print(f"Window Dimensions: {self.ui.window_width}x{self.ui.window_height}")
-            
-            # Comprehensive boundary checks
             if self.squid_x <= 0:
                 exit_direction = 'left'
             elif squid_right >= self.ui.window_width:
                 exit_direction = 'right'
-            elif self.squid_y <= 0:
-                exit_direction = 'up'
-            elif squid_bottom >= self.ui.window_height:
-                exit_direction = 'down'
             
             if exit_direction:
                 print(f"Exit Direction Detected: {exit_direction}")
@@ -965,26 +1013,29 @@ class Squid:
                     # Who is asking to come in. The host needs this to decide
                     # whether to admit the visitor at all, and to recognise it
                     # if it has been here before.
-                    'identity': {
-                        'uuid': str(getattr(self, 'uuid', '')),
-                        'name': getattr(self, 'name', 'Squid'),
-                        'personality': str(getattr(getattr(self, 'personality', None),
-                                                   'value', '') or 'unknown'),
-                        'protocol': 1,
-                    },
+                    'identity': self._exit_identity(),
                 }
                 
                 print("Exit Data Details:")
                 for key, value in exit_data.items():
                     print(f"  {key}: {value}")
                 
+                # Addressed to the one aquarium it is visiting (the plugin
+                # picks the one heard most recently), so only that host answers.
+                plugin = (getattr(pm, 'plugins', {}) or {}).get('multiplayer', {}).get('instance')
+                if hasattr(plugin, 'address_exit') and not plugin.address_exit(exit_data):
+                    return False
                 # Broadcast exit message
                 try:
+                    self._last_exit_request = time.time()
                     network_node.send_message(
                         'squid_exit', 
                         {'payload': exit_data}
                     )
                     print("Exit message successfully broadcast")
+                    from .social_knowledge import think
+                    think(self.tamagotchi_logic, "Another aquarium is nearby and I want to "
+                          f"explore it: I am leaving through the {exit_direction} side.")
                     return True
                 except Exception as broadcast_error:
                     print(f"Broadcast error: {broadcast_error}")
@@ -1065,13 +1116,7 @@ class Squid:
                         'window_height': self.ui.window_height,
                         # See the other exit payload: the host cannot consent
                         # to, or recognise, a visitor it cannot identify.
-                        'identity': {
-                            'uuid': str(getattr(self, 'uuid', '')),
-                            'name': getattr(self, 'name', 'Squid'),
-                            'personality': str(getattr(getattr(self, 'personality', None),
-                                                       'value', '') or 'unknown'),
-                            'protocol': 1,
-                        },
+                        'identity': self._exit_identity(),
                     }
                     
                     print("Exit Data:")
@@ -1496,7 +1541,69 @@ class Squid:
         return angle_diff <= cone_angle
     
     def change_view_cone_direction(self):
+        if self._look_at_noticed():
+            return
         self.current_view_angle = random.uniform(0, 2 * math.pi)
+
+    #: How long something that has just appeared holds the squid's gaze.
+    NOTICE_SECONDS = 4.0
+    _noticed = None          # the scene item holding the gaze, if any
+    _noticed_until = 0.0
+
+    def notice(self, item, seconds=NOTICE_SECONDS):
+        """Something has just appeared: swing the view cone onto it, and hold it there.
+
+        The orienting response - a visitor arriving in the tank is the
+        multiplayer case. The cone follows the item for ``seconds``; then
+        scanning resumes. Whether the squid then sees it is still vision's
+        call (vision_worker), from where the cone points. Asleep, it notices
+        nothing. Returns whether it looked.
+        """
+        if getattr(self, 'is_sleeping', False) or item is None:
+            return False
+        self._noticed = item
+        self._noticed_until = time.time() + seconds
+        return self._look_at_noticed()
+
+    def _look_at_noticed(self):
+        """Point the view cone at what holds the gaze, where it is now.
+
+        False once the hold is over or the thing has gone from the tank.
+        """
+        item = self._noticed
+        if item is None:
+            return False
+        try:
+            gone = (time.time() >= self._noticed_until or item.scene() is None
+                    or not item.isVisible())
+            centre = item.sceneBoundingRect().center()
+        except RuntimeError:  # its Qt object has been deleted
+            gone = True
+        if gone:
+            self._noticed = None
+            return False
+        self.current_view_angle = math.atan2(
+            centre.y() - (self.squid_y + self.squid_height / 2),
+            centre.x() - (self.squid_x + self.squid_width / 2))
+        self.update_view_cone()
+        return True
+
+    def retire(self):
+        """Stop everything this squid runs on its own, before it is replaced.
+
+        A squid owns several timers and a vision thread. When a new squid
+        takes over the tank, the old one's timers would otherwise keep firing
+        against a body that is no longer in the scene.
+        """
+        for name in ('rock_interaction_timer', 'rock_animation_timer',
+                     'view_cone_timer', 'anxiety_cooldown_timer', 'poop_timer'):
+            timer = getattr(self, name, None)
+            if timer is not None:
+                try:
+                    timer.stop()
+                except RuntimeError:
+                    pass
+        self.cleanup_vision_worker()
 
     def cleanup_vision_worker(self):
         """Clean up vision worker - call before squid destruction"""
@@ -1632,6 +1739,15 @@ class Squid:
         target = drive.get('target')
 
         if action == 'wander':
+            if self.is_venturing():
+                # Exploring, drawn by another aquarium: out of the nearest side.
+                from .venturing import way_out
+                _side, (tx, ty) = way_out(self.squid_x, self.squid_y, self.squid_width,
+                                          self.squid_height, self.ui.window_width)
+                self.status = "venturing out"
+                self.squid_direction = ("right" if tx > self.squid_x + self.squid_width / 2.0
+                                        else "left")
+                return True
             self.move_randomly()
             return True
 
@@ -1769,9 +1885,14 @@ class Squid:
         elif self.squid_direction == "down":
             squid_y_new += v_speed * self.animation_speed
 
-        # Boundary handling for single-player and multiplayer modes
-        if not multiplayer_enabled:
-            # Original boundary restrictions for single-player mode
+        # The tank's edges stop the squid - unless, with multiplayer on, its own
+        # network is taking it out (src/venturing.py): then it may reach the
+        # side it is heading for, and leaves there (check_boundary_exit).
+        venturing = multiplayer_enabled and self.is_venturing()
+        if venturing:
+            squid_x_new = max(0, min(self.ui.window_width - self.squid_width, squid_x_new))
+            squid_y_new = max(50, min(self.ui.window_height - 120 - self.squid_height, squid_y_new))
+        else:
             if squid_x_new < 50:
                 squid_x_new = 50
                 self.change_direction()
@@ -1785,11 +1906,6 @@ class Squid:
             elif squid_y_new > self.ui.window_height - 120 - self.squid_height:
                 squid_y_new = self.ui.window_height - 120 - self.squid_height
                 self.change_direction()
-        else:
-            # Extended boundary check for multiplayer
-            print("Multiplayer mode: Extended boundary check")
-            squid_right = squid_x_new + self.squid_width
-            squid_bottom = squid_y_new + self.squid_height
 
         # Update squid position
         self.squid_x = squid_x_new
@@ -1807,11 +1923,9 @@ class Squid:
         self.update_view_cone()
         self.update_head_icon_positions()
 
-        # Comprehensive boundary exit check in multiplayer mode
-        if multiplayer_enabled:
-            #print("Triggering boundary exit check in multiplayer mode")
-            exit_result = self.check_boundary_exit()
-            #print(f"Boundary Exit Result: {exit_result}")
+        # Leaving, if it is venturing out and has reached the side.
+        if venturing:
+            self.check_boundary_exit()
 
     def move_towards(self, x, y):
         dx = x - (self.squid_x + self.squid_width // 2)
@@ -1849,6 +1963,16 @@ class Squid:
         self.move_squid()
 
     def eat(self, food_item):
+        """Eat a food item. Returns True if it was eaten.
+
+        A squid that has reproduced does not eat. The food stays where it is
+        and the squid's own hunger keeps rising by the ordinary rule - the
+        refusal is a fact about its body, not a decision taken for its brain,
+        which may well go on wanting the food.
+        """
+        if not self.lifecycle.can_eat:
+            return False
+
         # FIX: Force synchronous vision for a short time to prevent "ghost" food
         # This prevents the vision worker from reporting the just-eaten food as visible
         # before it has processed the scene update.
@@ -1959,6 +2083,7 @@ class Squid:
                 self.react_stubborn_eating()
             else:
                 self.tamagotchi_logic.show_message("Stubborn squid happily accepts sushi")
+        return True
 
     def eat_greedily(self, food_item):
         # Update status to show greedy eating (lowercase for consistency)
@@ -2062,7 +2187,7 @@ class Squid:
             logic = getattr(self, 'tamagotchi_logic', None)
             hooks = getattr(logic, 'brain_hooks', None)
             if hooks is not None and hasattr(hooks, 'on_object_spawned'):
-                hooks.on_object_spawned('conspecific')
+                hooks.on_object_spawned('squid')
 
             # Show that it has noticed. Purely a display, and separate from
             # the real curious state - see show_noticed_squid_icon.
@@ -2173,6 +2298,8 @@ class Squid:
         self.status = "I don't like that food"
 
     def consume_food(self, food_item):
+        if not self.lifecycle.can_eat:
+            return
         self.status = "Ate food"
         self.hunger = max(0, self.hunger - 20)
         self.happiness = min(100, self.happiness + 10)
@@ -2240,7 +2367,9 @@ class Squid:
     
 
     def change_to_rps_image(self):
-        self.rps_image = QtGui.QPixmap(os.path.join("images", "squid_rps_frame.png"))
+        from .display_scaling import DisplayScaling
+        self.rps_image = DisplayScaling.to_points(
+            QtGui.QPixmap(os.path.join("images", "squid_rps_frame.png")))
         self.squid_item.setPixmap(self.rps_image)
 
     def restore_normal_image(self):
@@ -2428,7 +2557,9 @@ class Squid:
 
     def show_sick_icon(self):
         if self.sick_icon_item is None:
-            sick_icon_pixmap = QtGui.QPixmap(os.path.join("images", "sick.png"))
+            from .display_scaling import DisplayScaling
+            sick_icon_pixmap = DisplayScaling.to_points(
+                QtGui.QPixmap(os.path.join("images", "sick.png")))
             self.sick_icon_item = QtWidgets.QGraphicsPixmapItem(sick_icon_pixmap)
             self.sick_icon_item.setZValue(500)  # Below DIRTY text (z=1000) but above decorations
             self.ui.scene.addItem(self.sick_icon_item)
@@ -2524,7 +2655,7 @@ class Squid:
             return False
         return self.tamagotchi_logic.rock_interaction.attach_rock_to_squid(item)
 
-    def throw_rock(self, direction):
+    def throw_rock(self, direction=None, *, cause=None):
         """
         Delegate to interaction manager BUT capture result for RL reward.
         Returns:  bool  True = rock landed (success), False = fell out of bounds / no effect
@@ -2533,7 +2664,7 @@ class Squid:
             return False
 
         # --- Call the existing manager ---
-        success = self.tamagotchi_logic.rock_interaction.throw_rock(direction)
+        success = self.tamagotchi_logic.rock_interaction.throw_rock(direction, cause=cause)
 
         # --- Compute RL reward ---
         reward = 0.0
@@ -2541,14 +2672,12 @@ class Squid:
             reward += 5.0                       # base success
             reward += self.happiness * 0.05     # happier squid → bigger reward
             reward += self.satisfaction * 0.05
-            if self.personality == Personality.GREEDY:
-                reward += 3.0                   # greedy squid LOVES throwing
             # memory boost
             rock_mem = self.memory_manager.get_short_term_memory('interaction', 'rock_throw')
             if rock_mem and isinstance(rock_mem, dict) and rock_mem.get('is_positive'):
                 reward += 2.0
         else:
-            reward -= 2.0                       # small penalty for miss
+            return False   # no physical action: no invented learning outcome
 
         # --- Push reward into RL ---
         if hasattr(self.tamagotchi_logic, 'give_rl_reward'):
@@ -2615,20 +2744,27 @@ class Squid:
         
         decorations = self.tamagotchi_logic.get_nearby_decorations(
             self.squid_x, self.squid_y, 150)
-        interactables = [d for d in decorations if d.category in ['rock', 'poop']]
+        interactables = [d for d in decorations if d.category == 'rock']
 
-        if (self.carrying_rock 
-                and self.rock_throw_cooldown == 0 
-                and random.random() < config['throw_prob']):
-            direction = random.choice(["left", "right"])
-            if self.throw_rock(direction):
-                return
+        # Whether to throw, and whether to pick one up, is the squid's play
+        # neuron's - not a roll of the dice (src/throwing.py).
+        from .throwing import throw_or_drop
+        brain = getattr(getattr(self.tamagotchi_logic, 'brain_window', None),
+                        'brain_widget', None)
+        playing = throw_or_drop(dict(getattr(brain, 'state', None) or {}))
+        if (self.carrying_rock
+                and self.rock_throw_cooldown == 0
+                and not self.rock_decision_made):
+            self.tamagotchi_logic.rock_interaction.check_rock_hold_time()
+            return
 
-        if (not self.carrying_rock 
-                and self.rock_throw_cooldown == 0 
+        if (not self.carrying_rock
+                and self.rock_throw_cooldown == 0
                 and interactables
-                and random.random() < config['pickup_prob']):
-            target_item = random.choice(interactables)
+                and playing):
+            target_item = min(interactables, key=lambda r: math.hypot(
+                r.sceneBoundingRect().center().x() - self.squid_x,
+                r.sceneBoundingRect().center().y() - self.squid_y))
             
             if self.pick_up_rock(target_item):
                 mem_details = {

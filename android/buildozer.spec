@@ -5,16 +5,19 @@ title = Dosidicus
 package.name = dosidicus
 package.domain = org.vicioussquid
 
-# Package the whole android/ tree (main.py, dosidicus_mobile/, assets/).
-source.dir = .
-source.include_exts = py,png,jpg,json,ttf,txt
-source.include_patterns = assets/*,dosidicus_mobile/*
+# Run python prepare_apk.py before building; stage the shared desktop engine.
+source.dir = .buildozer/mobile-source
+source.include_exts = py,png,jpg,gif,json,ttf,txt,ini
+source.include_patterns = assets/*,dosidicus_mobile/*,src/*,plugins/*,translations/*,engine_manifest.json
 
-version = 0.1.0
+version = 3.1.2
+android.numeric_version = 30102
 
 # Runtime requirements. numpy + pillow have python-for-android recipes.
-# plyer powers the "Import squid" native file picker.
-requirements = python3,kivy==2.3.1,numpy,pillow,plyer,android
+# plyer supplies mobile device integrations; document import uses Android SAF.
+# Keep this transitive requests dependency on its portable Python wheel:
+# p4a's host pip cannot install the newer Android-specific binary wheel.
+requirements = python3,kivy==2.3.1,numpy,pillow,plyer,android,charset_normalizer==3.4.2
 
 # Portrait-only touch app.
 orientation = portrait
@@ -54,6 +57,8 @@ android.release_artifact = apk
 
 # SDL2 bootstrap is what Kivy uses.
 p4a.bootstrap = sdl2
+# Pin the tested python-for-android release, including its Python/NumPy recipes.
+p4a.commit = 58d21141f17c889bf8585f5665921d72028f8831
 
 [buildozer]
 

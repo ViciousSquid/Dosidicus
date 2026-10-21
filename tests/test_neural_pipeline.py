@@ -96,6 +96,11 @@ def tearDownModule():
                 timer.stop()
             except Exception:
                 pass
+    if WINDOW is not None:
+        WINDOW._cancel_game_callbacks()
+        WINDOW.tamagotchi_logic.stop()
+        WINDOW.squid.retire()
+        WINDOW.splash.timer.stop()
     if _PREV_CWD:
         os.chdir(_PREV_CWD)
     if _TMPDIR is not None:
@@ -1182,14 +1187,13 @@ class InnateBehaviourTests(unittest.TestCase):
         self.assertGreaterEqual(acts["act_ink"], ACTION_THRESHOLDS["act_ink"],
                                 "the ink reflex must be reachable at all")
 
-    def test_the_ink_cloud_is_a_chance_not_a_certainty(self):
+    def test_act_ink_firing_always_inks(self):
+        """Whether a squid inks is its network's alone: no dice, no cooldown."""
         from src.brain_constants import innate_bindings
         ink = [row for row in innate_bindings() if row[0] == "act_ink"]
         self.assertEqual(len(ink), 1)
-        probability = ink[0][4]
-        self.assertGreater(probability, 0.0)
-        self.assertLess(probability, 1.0,
-                        "a startled squid must only SOMETIMES ink")
+        self.assertEqual(ink[0][4], 1.0, "every firing of act_ink inks")
+        self.assertEqual(ink[0][3], 0.0, "no cooldown swallows a firing")
 
     def test_a_reflex_binding_honours_its_probability(self):
         from src.brain_neuron_outputs import NeuronOutputBinding, OutputTriggerMode

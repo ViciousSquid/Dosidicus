@@ -51,17 +51,27 @@ def _build_catalog():
 DECO_CATALOG = _build_catalog()
 
 _ASPECT_CACHE = {}
+#: The tint of an object two squid are fighting over, when lit.
+CONTEST_RED = (0.55, 0.0, 0.0, 1.0)
 
 
-def _aspect(deco_type):
+def deco_source(deco):
+    """The image a decoration is drawn from. Headstones are not in the
+    palette: they come only from a death, from assets/headstones."""
+    folder = "headstones" if deco.get("category") == "headstone" else "decoration"
+    return asset(f"{folder}/{deco['type']}")
+
+
+def _aspect(deco):
     """width/height of a decoration texture (cached)."""
-    if deco_type not in _ASPECT_CACHE:
+    source = deco_source(deco)
+    if source not in _ASPECT_CACHE:
         try:
-            tex = CoreImage(asset(f"decoration/{deco_type}")).texture
-            _ASPECT_CACHE[deco_type] = (tex.width / tex.height) if tex.height else 1.0
+            tex = CoreImage(source).texture
+            _ASPECT_CACHE[source] = (tex.width / tex.height) if tex.height else 1.0
         except Exception:
-            _ASPECT_CACHE[deco_type] = 1.0
-    return _ASPECT_CACHE[deco_type]
+            _ASPECT_CACHE[source] = 1.0
+    return _ASPECT_CACHE[source]
 
 
 class _DecoScatter(Scatter):
@@ -71,14 +81,21 @@ class _DecoScatter(Scatter):
             scale_min=0.3, scale_max=3.5, size_hint=(None, None), **kwargs)
         self.layer = layer
         self.deco = deco
-        img = Image(source=asset(f"decoration/{deco['type']}"),
+        img = Image(source=deco_source(deco),
                     allow_stretch=True, keep_ratio=True,
                     size=self.size, size_hint=(None, None))
         self.bind(size=lambda *_: setattr(img, "size", self.size))
         self.add_widget(img)
+        self.img = img
 
     def on_touch_down(self, touch):
-        if self.collide_point(*touch.pos) and touch.is_double_tap:
+        if self.collide_point(*touch.pos) and self.deco.get("category") == "headstone":
+            # A headstone is never deleted; a tap reads its epitaph.
+            if callable(self.layer.on_headstone):
+                self.layer.on_headstone(self.deco)
+            if touch.is_double_tap:
+                return True
+        elif self.collide_point(*touch.pos) and touch.is_double_tap:
             self.layer.remove(self)
             return True
         return super().on_touch_down(touch)
@@ -98,6 +115,7 @@ class DecorationLayer(FloatLayout):
         super().__init__(**kwargs)
         self.sim = simulation
         self._scatters = {}
+        self.on_headstone = None   # callback(decoration) when a headstone is tapped
         self.bind(size=lambda *_: self.rebuild(), pos=lambda *_: self.rebuild())
 
     def set_simulation(self, sim):
@@ -125,7 +143,7 @@ class DecorationLayer(FloatLayout):
 
     def _place(self, scatter, deco):
         base_h = self._base_h(deco.get("category"))
-        aspect = _aspect(deco["type"])
+        aspect = _aspect(deco)
         scatter.size = (base_h * aspect, base_h)
         scatter.scale = deco.get("scale", 1.0)
         cx, cy = self._to_screen(deco["x"], deco["y"])
@@ -156,14 +174,25 @@ class DecorationLayer(FloatLayout):
 
     def sync_physics(self):
         """Reposition scatters the engine is moving (a carried or thrown rock),
-        so programmatic motion shows without the user touching them, and drop
+        so programmatic motion shows without the user touching them, drop
         scatters whose decoration the engine deleted (e.g. a rock thrown out of
-        the tank)."""
+        the tank), and add any the engine placed (a headstone)."""
         live_ids = {d["id"] for d in self.sim.decorations}
         for did, sc in list(self._scatters.items()):
             if did not in live_ids:
                 self.remove_widget(sc)
                 self._scatters.pop(did, None)
+        if self.width >= 2 and self.height >= 2:
+            for deco in self.sim.decorations:
+                if deco["id"] not in self._scatters:
+                    self.add(deco)
+
+        # The rock two squid are fighting over flashes dark red.
+        flashing, lit = self.sim.contested_flash()
+        for did, sc in self._scatters.items():
+            colour = CONTEST_RED if (did == flashing and lit) else (1, 1, 1, 1)
+            if tuple(sc.img.color) != colour:
+                sc.img.color = colour
 
         ids = set(self.sim._rock_velocities.keys())
         if self.sim.squid.carried_rock_id is not None:

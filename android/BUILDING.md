@@ -1,3 +1,8 @@
+> **3.1 update:** Run `python prepare_apk.py` from `android/` before every
+> Buildozer invocation. It stages the actual shared desktop engine into the APK.
+> See [ENGINE_3_1.md](ENGINE_3_1.md) for new brain interchange, tests and signing.
+> `build_release.sh` builds and signs without exposing passwords to build logs.
+
 # Building & developing Dosidicus Mobile
 
 A step-by-step guide to getting an Android build environment working and to the
@@ -24,7 +29,7 @@ servers).
    SDK + NDK and cross-compiles NumPy). Later runs are faster thanks to caching.
 4. **Download the APK.** When the run finishes green, open it and download the
    **`dosidicus-debug-apk`** artifact at the bottom of the run summary. Unzip it
-   to get `dosidicus-0.1.0-*-debug.apk`.
+   to get `dosidicus-3.1.0-*-debug.apk`.
 5. **Install on your phone.** Copy the APK to the device and open it (enable
    "install from unknown sources" when prompted), or use `adb install <file>.apk`.
 
@@ -105,7 +110,7 @@ buildozer android debug
 - If it prints an **Android SDK license** wall of text ending in `Accept? (y/N):`,
   type **`y`** and press Enter (repeat for each license). Non-interactive? run
   `yes | buildozer android debug`.
-- The result appears as **`android/bin/dosidicus-0.1.0-arm64-v8a_armeabi-v7a-debug.apk`**.
+- The result appears as **`android/bin/dosidicus-3.1.0-arm64-v8a_armeabi-v7a-debug.apk`**.
 
 ### Step 7 — Put the APK on your phone
 Two easy ways:
@@ -260,23 +265,10 @@ instead wants an **Android App Bundle (`.aab`)** — set
 
 ---
 
-## Roadmap — growing this from an MVP
+## Current architecture
 
-The codebase is split so features can be added without disturbing the core:
-
-* **Engine (`engine/`)** is pure Python + NumPy and fully testable. Port more of
-  the desktop STRINg engine here (STDP, the dual long/short-term memory system
-  from `memory_manager.py`, richer decision weighting). Add a test per feature.
-* **UI (`ui/`)** is Kivy. Good next steps:
-  * a **memory panel** (surface `brain.recent_events` as a scrolling log),
-  * a **neuron inspector** (tap a neuron in the brain view to see its weights),
-  * pinch-to-zoom / pan on the brain view for large grown networks,
-  * a **new-squid / personality picker** screen.
-* **Already ported** beyond the first MVP: STDP, the dual memory system,
-  richer decisions, statistics, the **achievements** plugin, **sleep
-  consolidation**, and local **peer-to-peer** visits (Nearby Connections).
-  Still open: the **Brain Designer** and custom-brain loading.
-
-Suggested workflow for each improvement: branch → add/port engine logic with a
-test → wire it into a Kivy widget → verify with `python main.py` → let the
-Actions workflow produce an APK to try on a phone.
+The Android cognitive engine delegates to desktop 3.1 shared sources. Avoid
+porting or copying another learning/decision rule into the mobile package.
+Use the Kivy presentation layer for phone-specific interactions. The mobile
+Brain Designer, JSON interchange and Knowledge/Growth inspectors are available;
+see [ENGINE_3_1.md](ENGINE_3_1.md) for the current feature and validation details.

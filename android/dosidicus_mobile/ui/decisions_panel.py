@@ -17,7 +17,10 @@ from kivy.metrics import dp, sp
 ACTION_COLORS = {
     "exploring": (0.23, 0.51, 0.96),
     "eating": (0.96, 0.51, 0.13),
-    "comfort": (0.13, 0.69, 0.38),
+    "approaching_plant": (0.13, 0.69, 0.38),
+    "fleeing": (.95, .25, .25),
+    "inking": (.4, .3, .6),
+    "idle": (.5, .5, .6),
     "playing": (0.61, 0.35, 0.91),
     "sleeping": (0.39, 0.40, 0.94),
 }
@@ -70,7 +73,7 @@ class _ActionBars(Widget):
             max_final = max(list(final.values()) + [1.0])
             pad = dp(10)
             row_h = min(dp(46), (self.height - pad) / max(1, len(names)))
-            label_w = self.width * 0.30
+            label_w = self.width * 0.39
             bar_x = self.x + label_w
             bar_w = self.width - label_w - pad - dp(46)
             for i, name in enumerate(names):
@@ -97,7 +100,7 @@ class _ActionBars(Widget):
                          width=dp(1.4))
 
                 # action label
-                tex = self._label(f"n{name}", name.capitalize(), sp(14), bold=(name == chosen))
+                tex = self._label(f"n{name}", name.replace("approaching_plant", "Sheltering").replace("_", " ").capitalize(), sp(13), bold=(name == chosen))
                 Color(0.92, 0.94, 0.97, 1)
                 Rectangle(texture=tex, pos=(self.x + pad, y + bh / 2 - tex.height / 2),
                           size=tex.size)
@@ -131,9 +134,7 @@ class DecisionsPanel(BoxLayout):
         conf = d.get("confidence", 0.0)
         clabel, ccol = _confidence(conf)
         acol = ACTION_COLORS.get(chosen, (0.7, 0.72, 0.78))
-        mem = d.get("memory_mod", {})
-        influenced = [k for k, v in mem.items() if abs(v - 1.0) > 0.02]
-        infl = ("memory boosting " + ", ".join(influenced)) if influenced else "no active memory pull"
+        infl = 'Action neurons -> threshold -> neural competition'
         self.header.text = (
             f"[b]How the squid decides[/b]  ([i]{s.personality.value}[/i])\n"
             f"Chose [b][color={_hex(acol)}]{chosen}[/color][/b] — "

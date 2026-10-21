@@ -456,6 +456,12 @@ class PlasticityEngine:
         rows.sort(key=lambda r: abs(r[1]), reverse=True)
         return rows[:top]
 
+    @property
+    def commit_count(self) -> int:
+        """How many learning cycles have been committed, over the brain's life
+        (saved with it)."""
+        return self._commit_count
+
     def get_stats(self) -> Dict:
         stats = {
             'samples_since_commit': self.samples_since_commit,

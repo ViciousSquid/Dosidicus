@@ -1,25 +1,27 @@
-"""Stage 2A: social consequences, and whether they change anything.
+"""Stage 2A: social consequences - what a squid keeps of an encounter.
 
-The question this file exists to answer:
+The question this file started from:
 
     Can what happened with ONE individual change what this squid does the
     next time it meets THAT individual, and only that individual?
 
-Three things have to hold for the answer to be yes, and each is a section
-below:
+What holds now, a section each below:
 
   1. an interaction leaves an objective record, filed against the individual;
-  2. that record reaches the brain as ordinary perception on a later meeting;
-  3. with a pathway the squid has actually learned, it changes what the squid
-     does - while a squid it has never met is unaffected.
+  2. on a later meeting the record is there, at home, before the squid acts -
+     and a record of one individual says nothing about another;
+  3. with no record, identical perception produces identical behaviour.
 
-The control condition matters as much as the result: with no relevant prior
-memory, identical perception must produce identical behaviour. If that fails,
-any difference seen elsewhere is noise rather than learning.
+What no longer holds, by design: the record does not reach the brain through
+sensor neurons of its own. There used to be per-individual recall sensors
+(conspecific_recalled_good/bad, conspecific_familiarity), and the experiment
+here showed Hebbian learning wiring them to anxiety. They were neurons added
+for other squid, and the rule now is that none are: another squid is seen by
+vision, and the only social neurons are the "social" ones neurogenesis grows
+from that (tests/test_social_concept.py). Saves with the old sensors load
+without them.
 
-Nothing here adds a social behaviour, a social neuron or a rule about what an
-encounter means. The only new thing in Stage 2A is that the visiting squid
-writes down what happened.
+Nothing here adds a social behaviour or a rule about what an encounter means.
 """
 
 import os
@@ -37,21 +39,17 @@ for _path in (_REPO_ROOT, os.path.join(_REPO_ROOT, "headless")):
 from PyQt5 import QtWidgets                                # noqa: E402
 
 from src import brain_constants as bc                      # noqa: E402
-from src.config_manager import ConfigManager               # noqa: E402
-from src.decision_engine import select_action              # noqa: E402
 
 from plugins.multiplayer.identity import SquidIdentity     # noqa: E402
 from plugins.multiplayer.peer_ledger import PeerLedger     # noqa: E402
 from plugins.multiplayer.encounter import (                # noqa: E402
     EncounterSession, drive_snapshot,
 )
-from plugins.multiplayer.encounter_sensors import (        # noqa: E402
-    ConspecificView, EncounterSensors, SENSOR_SPECS, SENSOR_NAMES,
-)
+from plugins.multiplayer.encounter_sensors import ConspecificView  # noqa: E402
 from plugins.multiplayer.remote_protocol import (          # noqa: E402
     Consequence, PerceptionFrame, ProtocolError,
     CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
-    PRIVATE_SENSORS, FORBIDDEN_KEYS,
+    FORBIDDEN_KEYS, OBSERVABLE_SENSORS,
 )
 
 from test_remote_mind_stage1 import (                      # noqa: E402
@@ -62,7 +60,6 @@ from test_remote_mind_stage1 import (                      # noqa: E402
 _APP = None
 _TMPDIR = None
 _PREV_CWD = None
-_BRAINS = []
 
 
 def setUpModule():
@@ -71,21 +68,11 @@ def setUpModule():
     _PREV_CWD = os.getcwd()
     _TMPDIR = tempfile.TemporaryDirectory(prefix="dosidicus-stage2a-")
     os.chdir(_TMPDIR.name)
-    for name, binary, position, _description in SENSOR_SPECS:
-        bc.register_input_sensor(name, binary=binary, position=position,
-                                 owner='stage2a-test')
 
 
 def tearDownModule():
-    for brain in _BRAINS:
-        try:
-            brain._cleanup_render_worker()
-        except Exception:
-            pass
-    _BRAINS.clear()
     os.chdir(_PREV_CWD)
     _TMPDIR.cleanup()
-    EncounterSensors.release_classification(bc)
 
 
 # ===========================================================================
@@ -223,7 +210,7 @@ class TheResidentRecordsItFromItsOwnSideTests(unittest.TestCase):
 
 
 # ===========================================================================
-# 2. The record reaches the brain as ordinary perception
+# 2. The record is there on a later meeting, kept at home
 # ===========================================================================
 class MemoryReachesPerceptionTests(unittest.TestCase):
 
@@ -239,7 +226,7 @@ class MemoryReachesPerceptionTests(unittest.TestCase):
             now=meeting.clock())
         return meeting.visitor_mind.close_session()
 
-    def test_a_second_meeting_carries_the_first_into_the_sensors(self):
+    def test_a_second_meeting_finds_the_first_in_the_ledger(self):
         first = Encounter()
         first.admit()
         record = self._bad_visit(first)
@@ -253,9 +240,9 @@ class MemoryReachesPerceptionTests(unittest.TestCase):
         again.host_sends_frame()
         again.visitor_receives()
 
-        self.assertGreater(again.visitor_sensors.recalled_bad(), 0.0)
-        self.assertGreater(again.visitor_sensors.familiarity(), 0.0)
-        self.assertEqual(again.visitor_sensors.recalled_good(), 0.0)
+        self.assertGreater(again.visitor_ledger.recalled_bad(HOST_UUID), 0.0)
+        self.assertGreater(again.visitor_ledger.familiarity(HOST_UUID), 0.0)
+        self.assertEqual(again.visitor_ledger.recalled_good(HOST_UUID), 0.0)
 
     def test_the_recall_is_available_before_the_squid_acts(self):
         """Order matters: perception, then decision. Not the other way round."""
@@ -270,7 +257,7 @@ class MemoryReachesPerceptionTests(unittest.TestCase):
         again.host_sends_frame()
         again.visitor_receives()
         self.assertEqual(again.visitor_mind.intents_sent, 0)
-        self.assertGreater(again.visitor_sensors.recalled_bad(), 0.0)
+        self.assertGreater(again.visitor_ledger.recalled_bad(HOST_UUID), 0.0)
 
     def test_a_good_visit_recalls_as_good(self):
         meeting = Encounter(items=[FakeItem(560.0, 400.0)])
@@ -320,26 +307,6 @@ class MemoriesDoNotBleedBetweenIndividualsTests(unittest.TestCase):
         self.assertGreater(self.ledger.recalled_good(OTHER_UUID), 0.0)
         self.assertEqual(self.ledger.recalled_bad(OTHER_UUID), 0.0)
 
-    def test_the_sensors_report_whoever_is_actually_present(self):
-        """The same squid, the same tank, a different individual in front of it."""
-        self._record(HOST_UUID, {'happiness': 15.0, 'anxiety': 95.0})
-
-        remembered = Encounter(visitor_squid=self.visitor)
-        remembered.visitor_ledger.refresh()
-        remembered.admit()
-        remembered.host_sends_frame()
-        remembered.visitor_receives()
-
-        stranger_squid = FakeSquid(OTHER_UUID, "Nobody", 600.0, 400.0)
-        stranger = Encounter(host_squid=stranger_squid, visitor_squid=self.visitor)
-        stranger.visitor_ledger.refresh()
-        stranger.admit()
-        stranger.host_sends_frame()
-        stranger.visitor_receives()
-
-        self.assertGreater(remembered.visitor_sensors.recalled_bad(), 0.0)
-        self.assertEqual(stranger.visitor_sensors.recalled_bad(), 0.0)
-
     def test_a_hundred_memories_of_others_do_not_make_a_stranger_familiar(self):
         for index in range(20):
             self._record(f"dddddddd-dddd-4ddd-8ddd-{index:012d}",
@@ -365,8 +332,8 @@ class NoMemoryMeansNoDifferenceTests(unittest.TestCase):
             meeting.admit(x=300.0, y=400.0)
             meeting.host_sends_frame()
             meeting.visitor_receives()
-            readings.append({name: handler() for name, handler
-                             in meeting.visitor_sensors.handlers().items()})
+            readings.append(dict(
+                meeting.visitor_tank.brain_window.brain_widget.percepts))
         self.assertEqual(readings[0], readings[1])
 
     def test_two_strangers_produce_an_identical_decision(self):
@@ -380,20 +347,9 @@ class NoMemoryMeansNoDifferenceTests(unittest.TestCase):
             meeting.admit(x=300.0, y=400.0)
             meeting.host_sends_frame()
             meeting.visitor_receives()
-            meeting.set_brain(**quiet_brain(act_flee=90.0))
+            meeting.set_brain(**quiet_brain(act_shelter=90.0))
             actions.append(meeting.visitor_decides().action)
         self.assertEqual(actions[0], actions[1])
-
-    def test_a_squid_with_no_history_reads_zero_on_every_recall_sensor(self):
-        meeting = Encounter()
-        meeting.admit(x=300.0, y=400.0)
-        meeting.host_sends_frame()
-        meeting.visitor_receives()
-        for name in ('conspecific_familiarity', 'conspecific_recalled_good',
-                     'conspecific_recalled_bad'):
-            with self.subTest(sensor=name):
-                self.assertEqual(
-                    meeting.visitor_mind.recalled_sensors()[name], 0.0)
 
 
 # ===========================================================================
@@ -401,7 +357,7 @@ class NoMemoryMeansNoDifferenceTests(unittest.TestCase):
 # ===========================================================================
 class InterpretationStaysAtHomeTests(unittest.TestCase):
 
-    def test_the_host_sends_no_recalled_or_familiarity_value(self):
+    def test_the_host_sends_nothing_but_what_can_be_seen(self):
         meeting = Encounter(items=[FakeItem(560.0, 400.0)])
         meeting.admit(x=500.0, y=400.0)
         meeting.set_brain(**quiet_brain(act_play=95.0))
@@ -412,19 +368,19 @@ class InterpretationStaysAtHomeTests(unittest.TestCase):
         self.assertTrue(meeting.link.sent_by_host)
         for kind, payload in meeting.link.sent_by_host:
             sensors = payload.get('sensors', {}) if kind == 'perception_frame' else {}
-            for name in PRIVATE_SENSORS:
-                with self.subTest(message=kind, sensor=name):
-                    self.assertNotIn(name, sensors)
+            self.assertLessEqual(set(sensors), set(OBSERVABLE_SENSORS))
             for key in payload:
                 self.assertNotIn(str(key).lower(), FORBIDDEN_KEYS)
 
-    def test_a_host_asserting_a_memory_is_rejected(self):
-        for name in PRIVATE_SENSORS:
-            with self.subTest(sensor=name):
-                payload = PerceptionFrame('v1').to_payload()
-                payload['sensors'][name] = 100.0
-                with self.assertRaises(ProtocolError):
-                    PerceptionFrame.from_payload(payload)
+    def test_a_host_asserting_a_memory_gets_nowhere(self):
+        """A memory sent as a sensor is dropped; sent as memory, rejected."""
+        payload = PerceptionFrame('v1').to_payload()
+        payload['sensors']['recalled_bad'] = 100.0
+        self.assertNotIn('recalled_bad', PerceptionFrame.from_payload(payload).sensors)
+        payload = PerceptionFrame('v1').to_payload()
+        payload['memories'] = [{'peer': HOST_UUID, 'valence': -1.0}]
+        with self.assertRaises(ProtocolError):
+            PerceptionFrame.from_payload(payload)
 
     def test_a_consequence_states_a_fact_not_a_conclusion(self):
         """'You did not get it', never 'that squid was hostile'."""
@@ -439,151 +395,12 @@ class InterpretationStaysAtHomeTests(unittest.TestCase):
             for key in detail:
                 self.assertIn(key, ('won', 'ok', 'what', 'reason'))
 
-    def test_the_recall_values_are_computed_from_the_local_ledger(self):
-        """Structural: unplug the ledger and the recall goes to zero."""
-        meeting = Encounter()
-        meeting.admit()
-        meeting.host_sends_frame()
-        meeting.visitor_receives()
-        meeting.visitor_mind.peer_ledger = None
-        self.assertEqual(meeting.visitor_mind.recalled_sensors(),
-                         {'conspecific_familiarity': 0.0,
-                          'conspecific_recalled_good': 0.0,
-                          'conspecific_recalled_bad': 0.0})
-
 
 # ===========================================================================
-# 3. THE EXPERIMENT: does a memory of one individual change behaviour?
+# Consequences are about events, not individuals
 # ===========================================================================
-class IndividualSpecificLearningTests(unittest.TestCase):
-    """The whole point of Stage 2A, on a real brain.
-
-    A real BrainWidget, real propagation, real Hebbian learning, the real
-    modulation path. Nothing is injected: the pathway that makes the memory
-    matter is one the squid learns from co-activation, exactly as it would
-    learn anything else.
-
-    The shape of the experiment:
-
-      * repeated encounters with ONE individual are frightening;
-      * plasticity finds conspecific_recalled_bad and anxiety co-varying and
-        wires them, because that is what Hebbian learning does;
-      * afterwards, the SAME current perception produces a different
-        physiological response depending only on which individual it is.
-
-    Note what is not claimed: that the squid should be afraid of it, or that
-    recalled_bad means danger. The synapse exists because the squid's own life
-    put those two things together.
-    """
-
-    ALONE = {name: 0.0 for name in SENSOR_NAMES}
-
-    @classmethod
-    def setUpClass(cls):
-        cls.brain = cls._trained_brain()
-
-    @staticmethod
-    def _trained_brain():
-        from src.brain_widget import BrainWidget
-        brain = BrainWidget(config=ConfigManager())
-        _BRAINS.append(brain)
-        brain.config.neurogenesis['enabled'] = False
-        for name, _binary, position, _description in SENSOR_SPECS:
-            brain.neuron_positions[name] = position
-            brain.state[name] = 0.0
-
-        candidates = list(brain.neuron_positions)
-
-        def live(sensors, drives):
-            brain.state.update({**IndividualSpecificLearningTests.ALONE,
-                                **sensors, **drives})
-            brain.propagate_activations(smoothing=0.5)
-            brain.plasticity.observe(brain.state, candidates)
-
-        # A life in which meeting THIS individual goes badly, alternating with
-        # ordinary time alone. The alternation is the point: the learning rule
-        # converges on the CORRELATION between two neurons, so two signals
-        # held constant teach nothing at all.
-        for _cycle in range(30):
-            for _ in range(12):
-                live({'conspecific_visible': 100.0, 'conspecific_proximity': 85.0,
-                      'conspecific_recalled_bad': 90.0}, {'anxiety': 85.0})
-            for _ in range(12):
-                live({}, {'anxiety': 30.0})
-            brain.perform_hebbian_learning()
-        return brain
-
-    def _modulation(self, recalled_bad):
-        """The squid's physiological response to what is in front of it."""
-        self.brain.state.update({**self.ALONE,
-                                 'conspecific_visible': 100.0,
-                                 'conspecific_proximity': 85.0,
-                                 'conspecific_recalled_bad': recalled_bad,
-                                 'conspecific_recalled_good': 0.0,
-                                 'anxiety': 50.0})
-        return self.brain.compute_neural_modulation()
-
-    def test_experience_wires_the_recall_sensor_to_something(self):
-        """The squid learned it. Nothing put this synapse there."""
-        weight = self.brain.weights.get(('conspecific_recalled_bad', 'anxiety'))
-        self.assertIsNotNone(weight,
-                             "repeated bad encounters must leave a pathway")
-        self.assertGreater(weight, 0.2)
-
-    def test_the_synapse_is_the_squids_own_and_carries_its_provenance(self):
-        explanation = self.brain.explain_weight(
-            ('conspecific_recalled_bad', 'anxiety'))
-        self.assertTrue(explanation,
-                        "a learned synapse has to be able to say where it came from")
-
-    def test_identical_perception_but_a_remembered_individual_differs(self):
-        """THE result.
-
-        The current sensory situation is byte-identical in the two cases. The
-        only difference is what this squid remembers about the individual in
-        front of it - and its physiology responds differently because of it.
-        """
-        remembered = self._modulation(90.0).get('anxiety', 0.0)
-        stranger = self._modulation(0.0).get('anxiety', 0.0)
-        self.assertGreater(remembered, stranger)
-
-    def test_a_stranger_still_gets_the_generic_response(self):
-        """The individual-specific part is a difference, not the whole thing.
-
-        Seeing any squid at all became mildly stressful too, because
-        conspecific_visible was co-active with anxiety in the same life. That
-        general lesson is not the finding; the gap between the two is.
-        """
-        stranger = self._modulation(0.0).get('anxiety', 0.0)
-        self.assertGreater(stranger, 0.0)
-        remembered = self._modulation(90.0).get('anxiety', 0.0)
-        self.assertGreater(remembered - stranger, 0.05,
-                           "an individual has to be worth more than a category")
-
-    def test_the_difference_disappears_if_the_memory_does(self):
-        """A causal check: remove the recall and the two become identical."""
-        with_memory = self._modulation(90.0).get('anxiety', 0.0)
-        without = self._modulation(0.0).get('anxiety', 0.0)
-        self.assertNotAlmostEqual(with_memory, without, places=3)
-
-        saved = self.brain.weights.pop(('conspecific_recalled_bad', 'anxiety'))
-        try:
-            self.assertAlmostEqual(self._modulation(90.0).get('anxiety', 0.0),
-                                   self._modulation(0.0).get('anxiety', 0.0),
-                                   places=6)
-        finally:
-            self.brain.weights[('conspecific_recalled_bad', 'anxiety')] = saved
-
-    def test_a_good_history_does_not_borrow_the_bad_pathway(self):
-        """recalled_good is a different sensor and this life never used it."""
-        self.brain.state.update({**self.ALONE,
-                                 'conspecific_visible': 100.0,
-                                 'conspecific_proximity': 85.0,
-                                 'conspecific_recalled_good': 90.0,
-                                 'anxiety': 50.0})
-        good = self.brain.compute_neural_modulation().get('anxiety', 0.0)
-        bad = self._modulation(90.0).get('anxiety', 0.0)
-        self.assertLess(good, bad)
+class ConsequencesAreAboutEventsTests(unittest.TestCase):
+    """Nothing turns who a squid is into what to do about it."""
 
     def test_no_module_maps_a_remembered_peer_to_a_behaviour(self):
         """Nothing decided that a remembered-bad squid should do anything.

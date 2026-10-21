@@ -7,4 +7,4 @@ decision engine and personality traits) is ported faithfully into a portable,
 GUI-free ``engine`` package so it can run inside an APK.
 """
 
-__version__ = "0.1.0-mobile"
+__version__ = "3.1.2-mobile"

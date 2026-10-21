@@ -101,7 +101,7 @@ def export_brain_state(
         
         # Write to file atomically (write to temp then rename)
         state_file = get_state_file_path()
-        temp_file = state_file.with_suffix('.tmp')
+        temp_file = state_file.with_name(f'{state_file.stem}.{os.getpid()}.tmp')
         
         with open(temp_file, 'w') as f:
             json.dump(export_data, f, indent=2)
@@ -375,7 +375,7 @@ def export_design_to_game(design_data: Dict) -> bool:
     """
     try:
         import_file = get_import_file_path()
-        temp_file = import_file.with_suffix('.tmp')
+        temp_file = import_file.with_name(f'{import_file.stem}.{os.getpid()}.tmp')
         
         # Ensure it's marked
         design_data['format'] = 'pending_import'

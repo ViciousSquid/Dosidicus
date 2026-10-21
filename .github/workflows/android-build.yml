@@ -10,8 +10,13 @@ on:
     branches:
       - "claude/android-version-**"
       - main
+      - "3.1_LatestVersion"
     paths:
       - "android/**"
+      - "src/**"
+      - "plugins/achievements/achievements_data.py"
+      - "translations/**"
+      - "config.ini"
       - ".github/workflows/android-build.yml"
   workflow_dispatch: {}
 
@@ -62,7 +67,17 @@ jobs:
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
-          pip install buildozer "Cython==0.29.37"
+          pip install buildozer==1.6.0 "Cython==0.29.37"
+
+      - name: Test shared desktop and mobile engine
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          pip install -r requirements.txt pytest
+          python -m pytest tests android/tests -q
+
+      - name: Package shared desktop engine
+        run: python android/prepare_apk.py
 
       # Cache the global buildozer dir so the SDK/NDK download only happens once.
       - name: Cache Buildozer downloads

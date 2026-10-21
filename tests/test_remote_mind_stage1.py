@@ -36,9 +36,7 @@ from src.decision_engine import select_action             # noqa: E402
 from plugins.multiplayer.identity import SquidIdentity    # noqa: E402
 from plugins.multiplayer.peer_ledger import PeerLedger    # noqa: E402
 from plugins.multiplayer.encounter import EncounterSession  # noqa: E402
-from plugins.multiplayer.encounter_sensors import (       # noqa: E402
-    ConspecificView, EncounterSensors, SENSOR_NAMES,
-)
+from plugins.multiplayer.encounter_sensors import ConspecificView  # noqa: E402
 from plugins.multiplayer.consent import (                 # noqa: E402
     ConsentPolicy, MODE_OPEN, MODE_CLOSED,
 )
@@ -52,7 +50,7 @@ from plugins.multiplayer.remote_protocol import (         # noqa: E402
     ActionIntent, Consequence, PerceptionFrame, ProtocolError, VisitEnd,
     CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
     CONSEQUENCE_EJECTED, FORBIDDEN_KEYS, INTENT_LEASE, LINK_TIMEOUT,
-    OBSERVABLE_SENSORS, PRIVATE_SENSORS, VISIT_ABANDON_TIMEOUT,
+    OBSERVABLE_SENSORS, VISIT_ABANDON_TIMEOUT,
     END_LINK_LOST, new_visit_id,
 )
 
@@ -74,7 +72,6 @@ def setUpModule():
 def tearDownModule():
     os.chdir(_PREV_CWD)
     _TMPDIR.cleanup()
-    EncounterSensors.release_classification(bc)
 
 
 # ===========================================================================
@@ -157,6 +154,10 @@ class FakeBrainWidget:
     def __init__(self):
         self.neuron_positions = {}
         self.state = {}
+        self.percepts = {}
+
+    def perceive(self, percept, value):
+        self.percepts[percept] = value
 
 
 class FakeBrainWindow:
@@ -250,9 +251,6 @@ class Encounter:
             peer_ledger=self.visitor_ledger,
             send=self.link.from_visitor,
             clock=self.clock)
-        self.visitor_sensors = EncounterSensors(
-            ConspecificView(clock=self.clock), self.visitor_ledger,
-            clock=self.clock, remote=self.visitor_mind)
 
         self.identity = SquidIdentity.from_squid(self.visitor_squid)
         self.actor = None
@@ -367,25 +365,34 @@ class AdmissionAndPerceptionTests(unittest.TestCase):
         frame = meeting.host_body.build_frame(meeting.actor)
 
         self.assertEqual(frame.sensors['can_see_food'], 100.0)
-        self.assertEqual(frame.sensors['conspecific_visible'], 100.0)
-        self.assertGreater(frame.sensors['conspecific_proximity'], 0.0)
+        self.assertEqual(frame.sensors['squid_in_view'], 100.0)
+        self.assertGreater(frame.sensors['squid_proximity'], 0.0)
         self.assertEqual(frame.resident.uuid, HOST_UUID)
 
-    def test_the_host_never_asserts_what_the_visitor_remembers(self):
-        """Familiarity and recalled valence are the visitor's, not the host's."""
+    def test_the_visitor_sees_the_resident_only_in_its_view_cone(self):
+        """With its own eyes: the resident behind it is not in view."""
+        meeting = Encounter()
+        meeting.admit(x=300.0, y=400.0)       # the resident is to its right
+        meeting.actor.facing = 'right'
+        self.assertEqual(meeting.host_body.build_frame(meeting.actor).sensors['squid_in_view'], 100.0)
+        meeting.actor.facing = 'left'
+        self.assertEqual(meeting.host_body.build_frame(meeting.actor).sensors['squid_in_view'], 0.0)
+
+    def test_the_host_sends_only_what_the_visitor_could_see(self):
         meeting = Encounter()
         meeting.admit()
         frame = meeting.host_body.build_frame(meeting.actor)
-        for name in PRIVATE_SENSORS:
-            with self.subTest(sensor=name):
-                self.assertNotIn(name, frame.sensors)
-                self.assertNotIn(name, frame.to_payload()['sensors'])
+        self.assertEqual(set(frame.to_payload()['sensors']), set(OBSERVABLE_SENSORS))
 
-    def test_a_host_claiming_to_know_the_visitors_memory_is_rejected(self):
+    def test_anything_else_a_host_sends_never_reaches_the_visitor(self):
+        """There is nothing of the visitor's a host could assert: no neuron
+        stands for another squid, and its memories stay at home. A sensor
+        name outside what can be seen is dropped on arrival."""
         payload = PerceptionFrame('v1').to_payload()
-        payload['sensors']['conspecific_familiarity'] = 100.0
-        with self.assertRaises(ProtocolError):
-            PerceptionFrame.from_payload(payload)
+        payload['sensors']['familiarity'] = 100.0
+        payload['sensors']['social'] = 100.0
+        frame = PerceptionFrame.from_payload(payload)
+        self.assertLessEqual(set(frame.sensors), set(OBSERVABLE_SENSORS))
 
 
 # ===========================================================================
@@ -399,11 +406,13 @@ class PerceptionReachesTheBrainTests(unittest.TestCase):
         self.meeting.host_sends_frame()
         self.meeting.visitor_receives()
 
-    def test_the_frame_arrives_through_the_conspecific_sensors(self):
-        """The same sense organs the squid uses at home, pointed elsewhere."""
-        sensors = self.meeting.visitor_sensors
-        self.assertEqual(sensors.visible(), 100.0)
-        self.assertGreater(sensors.proximity(), 0.0)
+    def test_the_resident_in_view_reaches_the_brain_as_a_percept_not_a_neuron(self):
+        """What its vision would report at home - and no sense organ for it."""
+        widget = self.meeting.visitor_tank.brain_window.brain_widget
+        self.assertEqual(widget.percepts['squid_in_view'], 100.0)
+        self.assertFalse(bc.RETIRED_NEURONS & set(widget.neuron_positions))
+        self.meeting.visitor_mind.end_visit(notify=False)
+        self.assertEqual(widget.percepts['squid_in_view'], 0.0)
 
     def test_the_built_in_sensors_report_the_host_tank_while_away(self):
         """can_see_food must mean the food over THERE, not the food at home."""
@@ -426,24 +435,24 @@ class PerceptionReachesTheBrainTests(unittest.TestCase):
         Not "an action that looks plausible" - the specific one the squid's
         own network wants, chosen by the engine's own rule.
         """
-        self.meeting.set_brain(**quiet_brain(act_flee=95.0))
+        # (Not flight or rest: either takes a visitor home - test_coming_home.)
+        self.meeting.set_brain(**quiet_brain(act_shelter=95.0))
         intent = self.meeting.visitor_decides()
         self.assertIsNotNone(intent)
-        self.assertEqual(intent.action, 'act_flee')
+        self.assertEqual(intent.action, 'act_shelter')
 
     def test_a_brain_that_wants_nothing_sends_no_intent(self):
         """Silence is a real answer, and the body simply stops."""
         self.meeting.set_brain(**quiet_brain())
         self.assertIsNone(self.meeting.visitor_decides())
 
-    def test_the_recalled_sensors_are_computed_at_home(self):
+    def test_the_memory_of_the_resident_is_kept_at_home(self):
         session = EncounterSession(SquidIdentity.from_squid(self.meeting.host_squid),
                                    {'happiness': 50.0}, now=1.0)
         self.meeting.visitor_ledger.record(
             session.close(drives={'happiness': 20.0, 'anxiety': 90.0}, now=9.0))
-        recalled = self.meeting.visitor_mind.recalled_sensors()
-        self.assertGreater(recalled['conspecific_familiarity'], 0.0)
-        self.assertGreater(recalled['conspecific_recalled_bad'], 0.0)
+        self.assertGreater(self.meeting.visitor_ledger.familiarity(HOST_UUID), 0.0)
+        self.assertGreater(self.meeting.visitor_ledger.recalled_bad(HOST_UUID), 0.0)
 
 
 # ===========================================================================
@@ -468,14 +477,14 @@ class PluginDoesNotChooseBehaviourTests(unittest.TestCase):
         return meeting, meeting.visitor_decides()
 
     def test_two_different_brains_produce_different_actions_from_one_frame(self):
-        frightened, flee_intent = self._visit_with_brain(act_flee=95.0)
+        shy, shelter_intent = self._visit_with_brain(act_shelter=95.0)
         hungry, eat_intent = self._visit_with_brain(act_eat=95.0)
 
-        self.assertEqual(flee_intent.action, 'act_flee')
+        self.assertEqual(shelter_intent.action, 'act_shelter')
         self.assertEqual(eat_intent.action, 'act_eat')
         # Same tank, same resident, same position, same perception.
         self.assertEqual(
-            frightened.host_body.build_frame(frightened.actor).sensors,
+            shy.host_body.build_frame(shy.actor).sensors,
             hungry.host_body.build_frame(hungry.actor).sensors)
 
     def test_the_action_is_the_one_the_engines_own_rule_chose(self):
@@ -485,8 +494,9 @@ class PluginDoesNotChooseBehaviourTests(unittest.TestCase):
         intent must name the same behaviour. If the plugin were applying any
         policy of its own, this is where the two would part company.
         """
-        for activations in ({'act_flee': 90.0}, {'act_eat': 90.0},
-                            {'act_shelter': 90.0}, {'act_play': 90.0}):
+        # (Flight and rest send a visitor home instead: test_coming_home.)
+        for activations in ({'act_eat': 90.0}, {'act_shelter': 90.0},
+                            {'act_play': 90.0}):
             with self.subTest(brain=activations):
                 meeting, intent = self._visit_with_brain(**activations)
                 state = meeting.visitor_tank.brain_window.brain_widget.state
@@ -510,7 +520,7 @@ class PluginDoesNotChooseBehaviourTests(unittest.TestCase):
             meeting.admit()
             meeting.host_sends_frame()
             meeting.visitor_receives()
-            meeting.set_brain(**quiet_brain(act_flee=90.0))
+            meeting.set_brain(**quiet_brain(act_shelter=90.0))
             actions.append(meeting.visitor_decides().action)
         self.assertEqual(actions[0], actions[1])
 
@@ -613,16 +623,14 @@ class RoundTripTests(unittest.TestCase):
         """Both squid are in the encounter, so both must be able to feel it."""
         meeting = Encounter(items=[FakeItem(560.0, 400.0)])
         meeting.admit(x=500.0, y=400.0)
-        resident_sensors = EncounterSensors(meeting.host_view, None,
-                                            clock=meeting.clock)
-        self.assertEqual(resident_sensors.contesting(), 0.0)
+        self.assertFalse(meeting.host_view.any_contesting(meeting.clock()))
 
         meeting.host_sends_frame()
         meeting.visitor_receives()
         meeting.set_brain(**quiet_brain(act_play=95.0))
         meeting.visitor_decides()
         meeting.host_receives()
-        self.assertEqual(resident_sensors.contesting(), 100.0)
+        self.assertTrue(meeting.host_view.any_contesting(meeting.clock()))
 
     def test_eating_in_the_host_tank_relieves_the_visitors_hunger(self):
         meeting = Encounter(food=[FakeItem(110.0, 400.0, category='food')])
@@ -691,9 +699,8 @@ class EncounterMemoryAcrossTheLinkTests(unittest.TestCase):
         again.host_sends_frame()
         again.visitor_receives()
 
-        recalled = again.visitor_mind.recalled_sensors()
-        self.assertGreater(recalled['conspecific_familiarity'], 0.0)
-        self.assertGreater(recalled['conspecific_recalled_bad'], 0.0)
+        self.assertGreater(again.visitor_ledger.familiarity(HOST_UUID), 0.0)
+        self.assertGreater(again.visitor_ledger.recalled_bad(HOST_UUID), 0.0)
         self.assertEqual(again.visitor_mind.intents_sent, 0,
                          "memory has to be available before the first decision")
 
@@ -711,20 +718,8 @@ class EncounterMemoryAcrossTheLinkTests(unittest.TestCase):
         elsewhere.host_sends_frame()
         elsewhere.visitor_receives()
 
-        recalled = elsewhere.visitor_mind.recalled_sensors()
-        self.assertEqual(recalled['conspecific_familiarity'], 0.0)
-        self.assertEqual(recalled['conspecific_recalled_bad'], 0.0)
-
-    def test_the_recalled_values_reach_the_sensors_the_brain_reads(self):
-        meeting = Encounter()
-        meeting.admit()
-        self._remember(meeting, {'happiness': 20.0, 'anxiety': 90.0,
-                                 'satisfaction': 25.0})
-        meeting.visitor_ledger.refresh()
-        meeting.host_sends_frame()
-        meeting.visitor_receives()
-        self.assertGreater(meeting.visitor_sensors.recalled_bad(), 0.0)
-        self.assertGreater(meeting.visitor_sensors.familiarity(), 0.0)
+        self.assertEqual(elsewhere.visitor_ledger.familiarity(OTHER_UUID), 0.0)
+        self.assertEqual(elsewhere.visitor_ledger.recalled_bad(OTHER_UUID), 0.0)
 
 
 # ===========================================================================
@@ -813,6 +808,20 @@ class LinkFailureTests(unittest.TestCase):
                 self.assertFalse(meeting.visitor_squid.is_transitioning)
                 self.assertEqual(meeting.visitor_mind.visit_id, '')
 
+    def test_a_squid_away_is_not_drawn_at_home_and_its_tank_says_where_it_is(self):
+        meeting = Encounter()
+        body = type("Item", (), {"visible": True,
+                                 "setVisible": lambda self, on: setattr(self, "visible", on)})()
+        meeting.visitor_squid.squid_item = body
+        meeting.admit()
+        self.assertFalse(body.visible)
+        meeting.host_sends_frame()          # the first frame says whose tank
+        meeting.visitor_receives()
+        self.assertIn(f"Traveller is visiting {meeting.host_squid.name}'s tank",
+                      meeting.visitor_tank.messages)
+        meeting.visitor_mind.end_visit(reason='departed', notify=False)
+        self.assertTrue(body.visible)
+
     def test_the_host_ending_a_visit_brings_the_visitor_home(self):
         meeting = Encounter()
         meeting.admit()
@@ -856,17 +865,24 @@ class PrivacyTests(unittest.TestCase):
             for index, inner in enumerate(value):
                 self._assert_clean(inner, f"{path}[{index}]")
 
-    def test_an_intent_carries_only_a_decision(self):
+    def test_an_intent_carries_only_a_decision_and_how_it_would_fight(self):
+        """The decision, plus three numbers the host needs to resolve a fight
+        (src/fighting.py) - each one figure the squid shows in a fight, worked
+        out at home, never what is in its brain."""
         meeting = Encounter()
         meeting.admit()
         meeting.host_sends_frame()
         meeting.visitor_receives()
-        meeting.set_brain(**quiet_brain(act_flee=95.0))
+        meeting.set_brain(**quiet_brain(act_shelter=95.0))
         payload = meeting.visitor_decides().to_payload()
         self.assertEqual(
             set(payload),
             {'visit_id', 'seq', 'sent_at', 'action', 'activation',
-             'confidence', 'heading', 'target_id', 'lease'})
+             'confidence', 'heading', 'target_id', 'lease',
+             'aggression', 'defence', 'fitness', 'practice'})
+        for name in ('aggression', 'defence', 'fitness'):
+            self.assertIsInstance(payload[name], float)
+        self.assertIsInstance(payload['practice'], int)     # throws made, for its aim
 
     def test_a_message_carrying_private_state_is_refused_on_arrival(self):
         for key in ('weights', 'memory', 'anxiety', 'neurogenesis'):
@@ -1051,9 +1067,11 @@ class NoticingAnotherSquidTests(unittest.TestCase):
         self.assertEqual(meeting.host_body.drain_first_sightings(), [],
                          "first sight happens once")
 
-    def test_a_visitor_too_far_away_has_not_seen_anything_yet(self):
+    def test_a_visitor_looking_away_has_not_seen_anything_yet(self):
+        """Sight is the view cone's: what is behind a squid is not seen."""
         meeting = Encounter()
-        meeting.admit(x=0.0, y=0.0)              # well outside sight range
+        meeting.admit(x=0.0, y=0.0)
+        meeting.actor.facing = 'up'              # the resident is down and right
         meeting.host_body.build_frame(meeting.actor)
         self.assertEqual(meeting.host_body.drain_first_sightings(), [])
         self.assertFalse(meeting.actor.has_seen_resident)

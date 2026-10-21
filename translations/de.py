@@ -223,6 +223,8 @@ translations = {
     "long_term_memory": "Langzeitgedächtnis",
     "no_memories": "Noch keine Erinnerungen gespeichert.",
     "overview": "Übersicht",
+    "social_knowledge": "Sozial",
+    "social_tab_no_neurons": "Dieser Tintenfisch hat noch keine Sozialisierungsneuronen gebildet: Mehrspielermodus aktivieren",
     "memory_stats": "Gedächtnis-Statistiken",
     "categories": "Kategorien",
     "time_label": "Zeit:",

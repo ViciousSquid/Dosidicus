@@ -19,6 +19,9 @@ No display is needed. If a Qt-backed test complains about a display, set
 | `test_transparency.py` | Whether the brain can account for itself: provenance of every weight and neuron. |
 | `test_learning.py` | Plasticity rules in isolation. |
 | `test_squid_statistics.py`, `test_statistics_*.py` | The lifetime statistics model, its persistence and its wiring to the UI. |
+| `test_reproduction_lifecycle.py` | Multiplayer reproduction: host authority, rarity, exactly one egg, no duplicates on retransmission or disconnect, parental starvation, save/load. |
+| `test_new_game_and_hatch.py` | New Game and egg hatching through the real main window: saves, memories, plugins and the brain all start fresh; achievements survive the hatch and quitting. |
+| `test_lifecycle_and_fight_achievements.py` | The fight ladder (Fisticuffs!, Scuffle, Tussle, Slugfest) counted once per fight on both sides of a visit, CIRCLE OF LIFE, and the one-time multiplayer risk notice. |
 
 ## Studying the brain
 

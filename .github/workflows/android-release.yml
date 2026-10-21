@@ -22,6 +22,20 @@ name: Build Android Release APK
 #   base64 -w0 dosidicus.keystore   # paste into ANDROID_KEYSTORE_BASE64
 
 on:
+  workflow_call:
+    inputs:
+      version_override:
+        type: string
+        required: true
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASSWORD:
+        required: false
   workflow_dispatch:
     inputs:
       version_override:
@@ -36,9 +50,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # Android SDK + NDK are several GB; reclaim space the runner wastes on
       # toolchains we don't need so the download has room.
@@ -74,7 +92,17 @@ jobs:
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
-          pip install buildozer "Cython==0.29.37"
+          pip install buildozer==1.6.0 "Cython==0.29.37"
+
+      - name: Test shared desktop and mobile engine
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          pip install -r requirements.txt pytest
+          python -m pytest tests android/tests -q
+
+      - name: Package shared desktop engine
+        run: python android/prepare_apk.py
 
       # Cache the global buildozer dir so the SDK/NDK download only happens once.
       - name: Cache Buildozer downloads
@@ -87,47 +115,44 @@ jobs:
 
       - name: Apply version override
         if: ${{ inputs.version_override != '' }}
-        working-directory: android
-        run: |
-          sed -i "s/^version = .*/version = ${{ inputs.version_override }}/" buildozer.spec
-          grep '^version = ' buildozer.spec
+        env:
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
+        run: python tools/release_support.py version --version "$VERSION_OVERRIDE"
 
       - name: Decode signing keystore
         id: keystore
         if: ${{ env.HAS_KEYSTORE == 'true' }}
         env:
-          HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
+          umask 077
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           echo "path=$RUNNER_TEMP/release.keystore" >> "$GITHUB_OUTPUT"
 
       - name: Build release APK
         working-directory: android
-        # Feed "y" to the Android SDK license prompts via process substitution.
-        # When the signing secrets are present, buildozer picks them up from the
-        # P4A_RELEASE_* env vars and produces a signed, zipaligned APK; otherwise
-        # it produces an unsigned release APK.
+        # Pass password files to the signer after Buildozer exits, so verbose
+        # build diagnostics never receive signing passwords in their environment.
         env:
-          P4A_RELEASE_KEYSTORE: ${{ steps.keystore.outputs.path }}
-          P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          P4A_RELEASE_KEYALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          DOSIDICUS_KEYSTORE: ${{ steps.keystore.outputs.path }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          DOSIDICUS_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          # When the signing secrets aren't configured, the P4A_RELEASE_* env
-          # vars above are still *set* by GitHub Actions, just to empty
-          # strings. python-for-android's generated build.gradle only checks
-          # these for non-null (not non-blank), so a present-but-empty
-          # P4A_RELEASE_KEYSTORE makes it try `file('')` and fail with
-          # "Cannot convert '' to File." Unset them here so buildozer falls
-          # back to producing an unsigned release APK instead.
-          if [ -z "$P4A_RELEASE_KEYSTORE" ]; then
-            unset P4A_RELEASE_KEYSTORE P4A_RELEASE_KEYSTORE_PASSWD P4A_RELEASE_KEYALIAS P4A_RELEASE_KEYALIAS_PASSWD
+          umask 077
+          if [ -n "$DOSIDICUS_KEYSTORE" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_PASSWORD" > "$RUNNER_TEMP/store-password"
+            if [ -n "$ANDROID_KEY_PASSWORD" ]; then
+              printf '%s' "$ANDROID_KEY_PASSWORD" > "$RUNNER_TEMP/key-password"
+              export DOSIDICUS_KEYPASS_FILE="$RUNNER_TEMP/key-password"
+            fi
+            export DOSIDICUS_STOREPASS_FILE="$RUNNER_TEMP/store-password"
           fi
+          unset ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD
           set -o pipefail
           for attempt in 1 2 3; do
             echo "::group::buildozer attempt $attempt"
-            if buildozer android release < <(yes) 2>&1 | tee build.log; then
+            if bash build_release.sh < <(yes) 2>&1 | tee build.log; then
               echo "::endgroup::"
               exit 0
             fi
@@ -162,3 +187,7 @@ jobs:
           name: buildozer-release-build-log
           path: android/build.log
           if-no-files-found: ignore
+
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore" "$RUNNER_TEMP/store-password" "$RUNNER_TEMP/key-password"

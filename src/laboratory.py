@@ -328,6 +328,27 @@ class NeuronLaboratory(QDialog):
             v2.addWidget(QLabel(loc("lab_none_yet", "None yet")))
         self.ov_grid.addWidget(card2, 0, 1)
         
+        # Card: the social network within its network, if it has grown one.
+        from . import social_knowledge as sk
+        network = sk.grown_network(self.bw)
+        if network:
+            social = QGroupBox(loc("lab_ov_social", "Its social network"))
+            vs = QVBoxLayout(social)
+            agg = sk.aggression(self.bw)
+            strangers = sk.towards_strangers(self.bw)
+            text = [loc("lab_ov_social_strangers", "Towards strangers: <b>{words}</b>.",
+                        words=strangers['words'])]
+            if agg['grown']:
+                text.append(loc("lab_ov_social_aggression",
+                                "Aggression {level:.0f} ({words}), resting at "
+                                "{resting:.0f}.", level=agg['level'],
+                                words=agg['words'], resting=agg['resting']))
+            text.append(", ".join(f"<b>{n['name']}</b> {n['level']:.0f}" for n in network))
+            label = QLabel("<br>".join(text))
+            label.setWordWrap(True)
+            vs.addWidget(label)
+            self.ov_grid.addWidget(social, 2, 0, 1, 2)
+
         # Card 3: Limits
         card3 = QGroupBox(loc("lab_ov_limits", "Limits & pruning"))
         v3 = QVBoxLayout(card3)
@@ -354,7 +375,7 @@ class NeuronLaboratory(QDialog):
             rediagnose.clicked.connect(monitor.evaluate)
             h.addWidget(rediagnose)
         self.ov_grid.addWidget(card4, 1, 1)
-        self.ov_grid.setRowStretch(2, 1)
+        self.ov_grid.setRowStretch(3, 1)
 
     def _inspect_neuron(self, name):
         """Explain one neuron, entirely from the brain's own record of itself.
@@ -399,7 +420,7 @@ class NeuronLaboratory(QDialog):
             if item and item.widget():
                 item.widget().deleteLater()
 
-        for builder in (self._card_identity, self._card_origin,
+        for builder in (self._card_identity, self._card_social, self._card_origin,
                         self._card_meaning, self._card_connections,
                         self._card_influence, self._card_history,
                         self._card_tip):
@@ -448,6 +469,14 @@ class NeuronLaboratory(QDialog):
                     loc("lab_role_action",
                         "An action the squid can notice itself performing"),
                     writer)
+        if name in PURE_INPUT_NEURONS and self._functional(name) is not None:
+            return ('sensor',
+                    loc("lab_role_grown_sensor",
+                        "A sense organ the squid grew for itself"),
+                    loc("lab_role_sensor_writer",
+                        "written each tick by the world; nothing the network "
+                        "does can change it, which is why no synapse is allowed "
+                        "to point at it"))
         if name in PURE_INPUT_NEURONS:
             return ('sensor', loc("lab_role_sensor", "A sense organ"),
                     loc("lab_role_sensor_writer",
@@ -507,7 +536,13 @@ class NeuronLaboratory(QDialog):
                          value=value, reading=self._reading(value)))
 
         fn = self._functional(name)
-        if fn is not None:
+        from .neurogenesis import SOCIAL_CONCEPTS
+        concept = SOCIAL_CONCEPTS.get(getattr(fn, 'represents_concept', ''))
+        if concept:
+            lines.insert(1, loc("lab_identity_represents",
+                                "This neuron was created to represent {concept}.",
+                                concept=concept))
+        if fn is not None and not concept:
             lines.append(loc("lab_identity_spec",
                              "It is a <b>{spec}</b> neuron, and it has been "
                              "meaningfully active {count} time(s) since it was "
@@ -532,6 +567,58 @@ class NeuronLaboratory(QDialog):
                                  "problem the brain has not solved:</span> "
                                  "{summary}.", summary=worst.summary))
         return self._card(loc("lab_card_identity", "What is this?"),
+                          "<br><br>".join(lines))
+
+    def _card_social(self, name):
+        """For a social sense or neuron: its place in the squid's social
+        knowledge - aggression in words with every rise and its cause, or
+        how the squid has come to meet strangers."""
+        from .brain_constants import (AGGRESSION_NEURON, SOCIAL_NEURONS,
+                                      SOCIAL_SENSOR, SOCIAL_SENSORS)
+        from . import social_knowledge as sk
+        if name not in SOCIAL_SENSORS and name not in SOCIAL_NEURONS:
+            return None
+        lines = [loc("lab_social_part",
+                     "Part of the squid's <b>social network</b>: grown from its "
+                     "own encounters with other squid, and kept apart from what "
+                     "it knows of its tank (Memory tab, Social).")]
+        if name == AGGRESSION_NEURON:
+            agg = sk.aggression(self.bw)
+            lines.append(loc("lab_social_aggression",
+                             "Aggression <b>{level:.0f}</b>: {words}. It rests at "
+                             "<b>{resting:.0f}</b> ({resting_words}).",
+                             level=agg['level'], words=agg['words'],
+                             resting=agg['resting'], resting_words=agg['resting_words']))
+            lines.append(loc("lab_social_starts", "At this level it would start a fight.")
+                         if agg['starts_fights'] else
+                         loc("lab_social_no_start",
+                             "It would not start a fight now - that takes {t:.0f}.",
+                             t=agg['threshold']))
+            if agg['rises']:
+                rows = "".join(
+                    f"<li>{sk._when(r.get('at'))}: {float(r.get('from', 0)):.0f} &rarr; "
+                    f"{float(r.get('to', 0)):.0f} - {r.get('cause', '')}</li>"
+                    for r in agg['rises'][-8:])
+                lines.append(loc("lab_social_rises",
+                                 "Its resting level only ever rises. What raised it:")
+                             + f"<ul style='margin-left:-20px;'>{rows}</ul>")
+            else:
+                lines.append(loc("lab_social_no_rises",
+                                 "Nothing has raised its resting level yet: left "
+                                 "alone, it settles back to placid."))
+        elif name == SOCIAL_SENSOR:
+            strangers = sk.towards_strangers(self.bw)
+            lines.append(loc("lab_social_strangers",
+                             "Seeing any squid, it is <b>{words}</b>: pull towards "
+                             "{towards:+.2f}, away {away:+.2f}.",
+                             words=strangers['words'], towards=strangers['towards'],
+                             away=strangers['away']))
+            if abs(strangers['learned']) >= 0.005:
+                lines.append(loc("lab_social_learned",
+                                 "{amount:+.2f} of that came from how its encounters "
+                                 "went - its life, not its birth.",
+                                 amount=strangers['learned']))
+        return self._card(loc("lab_social_title", "What does it know of other squid?"),
                           "<br><br>".join(lines))
 
     def _card_origin(self, name):

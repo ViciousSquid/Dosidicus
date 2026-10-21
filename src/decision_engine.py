@@ -95,7 +95,8 @@ def select_action(brain_state, jitter=True):
         return None, 0.0, activations
     winner = max(urgency, key=urgency.get)
     ordered = sorted(urgency.values(), reverse=True)
-    confidence = 1.0 if len(ordered) < 2 else (ordered[0] - ordered[1]) / ordered[0]
+    confidence = (1.0 if len(ordered) < 2 else
+                  (ordered[0] - ordered[1]) / ordered[0] if ordered[0] > 0 else 0.0)
     return winner, confidence, urgency
 
 
@@ -338,10 +339,10 @@ class DecisionEngine:
 
         if decision == "playing":
             if s.carrying_rock:
-                if s.throw_rock(random.choice(["left", "right"])):
+                if s.throw_rock():
                     return "playfully tossing rock"
             elif s.carrying_poop:
-                if s.throw_poop(random.choice(["left", "right"])):
+                if s.throw_poop():           # aimed: src/throwing.py
                     return "flinging poop playfully"
             toy = self._nearest_of('rock', 'poop')
             if toy is not None:
@@ -351,6 +352,21 @@ class DecisionEngine:
             return self._drift()
 
         if decision == "sleeping":
+            # A stubborn squid can hold off sleep - for a while
+            # (personality.resists_sleep). Exhaustion it cannot resist.
+            from .personality import RESISTED_SLEEP, squid_resists_sleep
+            if squid_resists_sleep(s):
+                if not getattr(s, '_resisting_sleep', False):
+                    s._resisting_sleep = True
+                    logic = getattr(s, 'tamagotchi_logic', None)
+                    window = getattr(logic, 'brain_window', None)
+                    if hasattr(window, 'add_thought'):
+                        window.add_thought(RESISTED_SLEEP)
+                    if hasattr(logic, 'show_message'):
+                        logic.show_message("😤 Stubborn squid refuses to sleep right now!")
+                self._drift()
+                return "resisting sleep"
+            s._resisting_sleep = False
             s.go_to_sleep()
             return "settling down to sleep"
 

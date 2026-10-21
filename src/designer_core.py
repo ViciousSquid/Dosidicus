@@ -166,6 +166,7 @@ class BrainDesign:
         self.connections: List[DesignerConnection] = []
         self.layers: List[DesignerLayer] = []
         self.output_bindings: List[Dict] = []
+        self._brain_document: Dict = {}
         self.metadata: Dict = {
             'name': 'Untitled', 'description': '', 'author': '',
             'version': '1.0', 'created': '', 'modified': ''
@@ -462,6 +463,22 @@ class BrainDesign:
             'layers': len(self.layers)
         }
 
+    def _preserve_brain_state(self, exported):
+        """Editing structure must not erase a trained brain's cognitive history."""
+        from copy import deepcopy
+        from .propagation import baseline_of
+        result = deepcopy(self._brain_document)
+        result.update(exported)
+        previous = self._brain_document.get('state', {})
+        result['state'] = {name: previous.get(name, baseline_of(name)) for name in self.neurons}
+        result['neuron_shapes'] = {name: neuron.shape for name, neuron in self.neurons.items()}
+        for name, attributes in result['neurons'].items():
+            original = deepcopy(self._brain_document.get('neurons', {}).get(name, {}))
+            original.update(attributes)
+            original['activation'] = result['state'][name]
+            result['neurons'][name] = original
+        return result
+
     def to_dosidicus_format(self) -> dict:
         neurons = {}
         for name, obj in self.neurons.items():
@@ -488,7 +505,7 @@ class BrainDesign:
             else:
                 state[name] = 0.0
         
-        return {
+        return self._preserve_brain_state({
             'version': '2.0',
             'format': 'dosidicus',
             'metadata': self.metadata.copy(),
@@ -504,7 +521,7 @@ class BrainDesign:
             'neuron_details': {n: obj.to_dict() for n, obj in self.neurons.items()},
             'sensors_used': self.get_sensors_in_design(),
             'required_complete': self.has_all_required_neurons()
-        }
+        })
     
     def to_designer_format(self) -> dict:
         neurons = {}
@@ -524,7 +541,7 @@ class BrainDesign:
         
         connections = [c.to_dict() for c in self.connections]
         
-        return {
+        return self._preserve_brain_state({
             'version': '2.0',
             'format': 'brain_designer',
             'metadata': self.metadata.copy(),
@@ -533,106 +550,34 @@ class BrainDesign:
             'layers': [l.to_dict() for l in self.layers],
             'excluded_neurons': [],
             'output_bindings': self.output_bindings,
-        }
+        })
     
     @classmethod
     def from_designer_format(cls, data: dict) -> 'BrainDesign':
+        from copy import deepcopy
+        from .brain_io import normalise_brain
+        payload = normalise_brain(data)
         design = cls()
-        design.metadata = data.get('metadata', {})
-        for l in data.get('layers', []):
-            design.layers.append(DesignerLayer.from_dict(l))
-        
-        neurons_data = data.get('neurons', [])
-        if isinstance(neurons_data, dict):
-            for name, n in neurons_data.items():
-                if 'name' not in n:
-                    n['name'] = name
-                neuron = DesignerNeuron.from_dict(n)
-                design.add_neuron(neuron)
-        else:
-            for n in neurons_data:
-                neuron = DesignerNeuron.from_dict(n)
-                design.add_neuron(neuron)
-        
-        for c in data.get('connections', []):
-            design.connections.append(DesignerConnection.from_dict(c))
-        
-        design.output_bindings = data.get('output_bindings', [])
+        design._brain_document = deepcopy(payload)
+        design.metadata = deepcopy(payload.get('metadata', {}))
+        for layer in payload.get('layers', payload.get('layer_structure', [])):
+            if 'y_position' in layer:
+                design.layers.append(DesignerLayer.from_dict(layer))
+        for name, attributes in payload['neurons'].items():
+            attributes = dict(attributes, name=name)
+            attributes.setdefault('neuron_type', attributes.get('type', 'hidden'))
+            attributes['shape'] = payload.get('neuron_shapes', {}).get(name, attributes.get('shape', 'circle'))
+            design.add_neuron(DesignerNeuron.from_dict(attributes))
+        design.connections = [DesignerConnection.from_dict(c) for c in payload['connections']]
+        design.output_bindings = deepcopy(payload.get('output_bindings', []))
         return design
-    
+
     @classmethod
     def from_dosidicus_format(cls, data: dict) -> 'BrainDesign':
-        design = cls()
-        design.metadata = data.get('metadata', {'name': 'Imported Brain'})
-        for l in data.get('layer_structure', []):
-            design.layers.append(DesignerLayer.from_dict(l))
-        
-        neurons_data = data.get('neurons', {})
-        shapes_data = data.get('neuron_shapes', {})
-        
-        if neurons_data and isinstance(neurons_data, dict):
-            for name, nd in neurons_data.items():
-                pos = nd.get('position', [0, 0])
-                ntype_str = nd.get('type', 'hidden').upper()
-                try:
-                    ntype = NeuronType[ntype_str]
-                except KeyError:
-                    ntype = NeuronType.CORE if is_core_neuron(name) else (
-                        NeuronType.SENSOR if is_input_sensor(name) else NeuronType.HIDDEN
-                    )
-                
-                shape = shapes_data.get(name, 'circle')
-                
-                neuron = DesignerNeuron(
-                    name=name,
-                    neuron_type=ntype,
-                    position=tuple(pos) if isinstance(pos, list) else pos,
-                    is_binary=nd.get('is_binary', False),
-                    shape=shape
-                )
-                design.add_neuron(neuron)
-        else:
-            details = data.get('neuron_details', {})
-            for name, pos in data.get('neuron_positions', {}).items():
-                if name in details:
-                    neuron = DesignerNeuron.from_dict(details[name])
-                    design.add_neuron(neuron)
-                else:
-                    ntype = NeuronType.CORE if is_core_neuron(name) else (
-                        NeuronType.SENSOR if is_input_sensor(name) else NeuronType.HIDDEN
-                    )
-                    shape = shapes_data.get(name, 'circle')
-                    neuron = DesignerNeuron(name=name, neuron_type=ntype, position=tuple(pos), shape=shape)
-                    design.add_neuron(neuron)
-        
-        connections_data = data.get('connections', {})
-        if isinstance(connections_data, dict):
-            for k, w in connections_data.items():
-                if '->' in k:
-                    s, t = k.split('->')
-                elif '|' in k:
-                    s, t = k.split('|')
-                else:
-                    continue
-                design.connections.append(DesignerConnection(s.strip(), t.strip(), w))
-        elif isinstance(connections_data, list):
-            for c in connections_data:
-                if c.get('source') and c.get('target'):
-                    design.connections.append(DesignerConnection(
-                        c['source'], c['target'], c.get('weight', 0.1)
-                    ))
-        
-        if not design.connections:
-            for k, w in data.get('weights', {}).items():
-                if '|' in k:
-                    s, t = k.split('|')
-                    design.connections.append(DesignerConnection(s, t, w))
-        
-        design.output_bindings = data.get('output_bindings', [])
-        return design
-        
+        return cls.from_designer_format(data)
+
     def save(self, filepath: str, format: str = 'designer') -> Tuple[bool, str]:
-        is_valid, issues, auto_added = self.validate(auto_fix=True)
+        is_valid, issues, auto_added = self.validate(auto_fix=False)
         if not is_valid: 
             return False, "Save blocked by validation issues."
         
@@ -648,8 +593,8 @@ class BrainDesign:
     
     @classmethod
     def load(cls, filepath: str) -> 'BrainDesign':
-        with open(filepath, 'r') as f: data = json.load(f)
-        return cls.from_dosidicus_format(data) if data.get('format') == 'dosidicus' else cls.from_designer_format(data)
+        from .brain_io import read_brain_file
+        return cls.from_designer_format(read_brain_file(filepath))
 
     def export_dosidicus(self, filepath):
         return self.save(filepath, format='dosidicus')

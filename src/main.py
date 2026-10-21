@@ -617,13 +617,32 @@ class MainWindow(QtWidgets.QMainWindow):
             items_to_remove = []
             background_item = getattr(self.user_interface, 'background', None)
             
+            is_persistent = getattr(self.user_interface, 'is_persistent_scene_item',
+                                    lambda item: False)
+
             for item in self.user_interface.scene.items():
-                # Keep the background (if it exists) and remove everything else
-                if background_item is None or item != background_item:
-                    items_to_remove.append(item)
+                # Keep the background and the window's own furniture - the
+                # tank, the labels and the FEED / CLEAN / MEDICINE buttons.
+                # Everything used to go, buttons included, and nothing put
+                # them back: the new game had no buttons to press.
+                if background_item is not None and item == background_item:
+                    continue
+                if is_persistent(item):
+                    continue
+                # A child goes with its parent; removing it separately as well
+                # would remove it from a scene it has already left.
+                if item.parentItem() is not None:
+                    continue
+                items_to_remove.append(item)
             
             for item in items_to_remove:
-                self.user_interface.scene.removeItem(item)
+                if item.scene() is self.user_interface.scene:
+                    self.user_interface.scene.removeItem(item)
+
+            # The dirt text was in the scene and is now gone with the rest.
+            if hasattr(self.user_interface, 'dirty_text_items'):
+                self.user_interface.dirty_text_items = []
+                self.user_interface.dirty_text_target_count = 0
             
             # Clear decoration tracking
             if hasattr(self.user_interface, 'awarded_decorations'):

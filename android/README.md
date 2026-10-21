@@ -1,18 +1,21 @@
-# Dosidicus Mobile (Android / Kivy port)
+# Dosidicus Mobile 3.1 (Android / Kivy)
+
+Android uses the shared desktop 3.1 cognitive core, with brain JSON interchange,
+a mobile brain designer, and recorded Knowledge/Growth views. See
+[Engine 3.1 and release notes](ENGINE_3_1.md) for the architecture, compatibility,
+validation and release-signing details.
+
 
 A touch-first Android version of **Dosidicus** 
 
-**The cognitive engine is the same.** Every bit of the brain: Hebbian
-learning, STDP, neurogenesis, the dual short/long-term memory, the neural
-decision engine, the seven personalities, statistics, achievements, sleep
-consolidation and the save format — is the same **STRINg** core the desktop app
-runs. It lives in `dosidicus_mobile/engine/` as pure Python + NumPy with **no
-Qt and no Kivy**. The *only* thing rewritten for Android is the **presentation
-layer**: the desktop's PyQt5 UI can't run on a phone, so the screens are
-rebuilt in **Kivy**. Same squid, same mind — different skin.
+**The cognitive engine is shared with desktop 3.1.** Propagation, signed Hebbian
+learning, directional STDP, action neurons, causal learning, capability-driven
+neurogenesis, recorded provenance, sleep replay and memory management execute
+the actual `src/` modules. The Kivy layer supplies touch controls and the mobile
+tank/body. APK staging packages those same sources rather than an engine fork.
 
 You raise a squid: feed it, clean its tank, add decorations, let it play and
-sleep — and its 8-neuron brain rewires itself through Hebbian learning and grows
+sleep — and its brain rewires itself through Hebbian learning and grows
 entirely new neurons through neurogenesis. Tap **Brain** to watch every neuron
 fire and every connection strengthen in real time. No two squids develop the
 same way, and the whole cognitive history is saved between launches.
@@ -46,10 +49,10 @@ could be driven headless — the Kivy layer is just one consumer of it.
 |--------------------------------------------------------|-------------------------------------|-------|
 | `brain_constants.py`                                    | `constants.py`   | Same 7 core neurons + sensors; positions kept on a virtual canvas so the brain view rescales to any screen. |
 | `personality.py`, learning modifiers in `learning.py`   | `personality.py` | Same 7 personalities and per-personality learning/stat modifiers. |
-| `learning.py` (`HebbianLearning`) + `plugins/stdp`      | `brain.py`       | `strengthen_connection`, `learn_from_*` and STDP ported; adds a continuous, framerate-independent Hebbian rule. |
-| `neurogenesis.py`                                        | `brain.py`       | Novelty/stress/reward triggers grow new neurons that wire in. Runs on an internal sim clock so tests and fast-forward behave identically. |
+| `learning.py` (`HebbianLearning`) + `plugins/stdp`      | `brain.py`       | Calls shared signed plasticity and innate reflexes at a fixed simulation cadence. |
+| `neurogenesis.py`                                        | `brain.py`       | Shared capability monitor diagnoses persistent deficits; growth records its evidence. |
 | `memory_manager.py`                                     | `memory.py`      | Dual short/long-term memory: importance boosting, promotion, decay. |
-| `decision_engine.py` (v4.0)                             | `squid.py` (`Squid.decide`) | Neural-first weighting of eat/explore/play/comfort/sleep, memory-modulated, with personality flavour. |
+| `decision_engine.py` (v5.0)                             | `squid.py` (`Squid.decide`) | Shared action-neuron thresholds and competition; no separate Android scoring formula. |
 | `tamagotchi_logic.py` (update loop, food, startle, ink) | `simulation.py`  | Needs drift, food/poop, eating, startle + ink, rock play, cleaning sweep, save/load — the Qt scene is gone. |
 | `squid_statistics.py`                                   | `statistics.py`  | Same lifetime-stat fields the desktop Statistics tab shows. |
 | `plugins/achievements`                                  | `achievements.py`| The same 57 achievements (ids, tiers, points, targets). |
@@ -140,8 +143,9 @@ via MediaStore — no buried app folder, no storage permission on modern Android
 and a **Share** button hands it to the system share sheet (Drive, messaging,
 email, another device). **Import** opens the system document picker; choose any
 squid `.zip` (yours, a friend's, or one exported from the desktop app). Mobile
-exports round-trip exactly; desktop exports are imported best-effort (stats,
-brain weights/positions, memories, achievements).
+exports round-trip exactly. Desktop brain structure and cognitive history are preserved;
+decorations remain specific to each platform. Brain-only JSON import/export is
+also available from the menu and works with the desktop Network tab and Designer.
 
 ## Local peer-to-peer visits (Nearby Connections)
 
@@ -184,7 +188,8 @@ desktop the Nearby screen offers the preview demo instead.)
 
 ```bash
 cd android
-python tests/test_engine.py        # or: python -m pytest tests
+python -m pip install pytest
+python -m pytest tests
 ```
 
 ## Build the Android APK
@@ -211,6 +216,7 @@ Local build (Linux/WSL/macOS, downloads the SDK/NDK on first run):
 ```bash
 cd android
 pip install buildozer "Cython==0.29.37"
+python prepare_apk.py
 buildozer android debug            # debug APK -> android/bin/
 buildozer android release          # release APK -> android/bin/
 buildozer android deploy run logcat   # install + launch on a connected device

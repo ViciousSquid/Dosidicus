@@ -35,6 +35,29 @@ Import from here to ensure consistency.
 #: The coordinate space every position on this page is expressed in.
 LOGICAL_CANVAS = (1024.0, 768.0)
 
+#: How far the brain network view can be zoomed out and in.
+VIEW_ZOOM_MIN = 0.5
+VIEW_ZOOM_MAX = 6.0
+
+
+def view_transform(width, height, zoom=1.0, pan=(0.0, 0.0)):
+    """Where the logical canvas lands in a widget width x height.
+
+    Returns (scale, offset_x, offset_y, fit_scale): screen = logical * scale +
+    offset. `fit_scale` is the scale that fits the whole LOGICAL_CANVAS in the
+    widget, centred horizontally; `zoom` multiplies it and `pan` (in widget
+    units) shifts the result. THE one copy of this - the render worker, the
+    widget's hit testing and overlays, and the tooltips each used to keep
+    their own, and all of them had to agree to the pixel.
+    """
+    base_w, base_h = LOGICAL_CANVAS
+    scale_x = width / base_w
+    scale_y = height / max(1.0, base_h)
+    fit = max(0.01, min(scale_x, scale_y))
+    offset_x = (width - base_w * fit) / 2 if scale_x > scale_y else 0.0
+    scale = fit * zoom
+    return scale, offset_x + pan[0], 0.0 + pan[1], fit
+
 #: The horizontal span a row is distributed across. Every row shares it, so
 #: the rows line up at both ends and read as layers rather than as three
 #: unrelated scatters.
@@ -89,6 +112,16 @@ GROWTH_ROW_YS = (530.0, 606.0, 682.0)
 #: crowded however you arrange it, and staying in ordered rows is still the
 #: most legible way to be crowded.
 GROWTH_ROW_CAPACITY = 8
+
+#: The social network a squid grows (its senses of other squid and other
+#: aquariums, and its social neurons) sits together on the bottom growth row,
+#: in a band of its own - which exists only once the first of them has grown.
+#: A squid that never meets another has no such band. The other grown
+#: neurons then use the rows above it.
+#: As tall as the newborn rows' bands, the neuron as far below its label; the
+#: two growth rows above move up a little to make room.
+SOCIAL_ROW = {'y': 694.0, 'band': (632.0, 746.0), 'label': 'SOCIAL'}
+GROWTH_ROW_YS_BESIDE_SOCIAL = (524.0, 588.0)
 
 
 # --- What sits on each row, left to right --------------------------------
@@ -433,6 +466,7 @@ ROW_COLORS = {
     'core':   (150, 150, 220),   # Soft indigo  - what the squid is
     'motor':  (216, 138, 106),   # Terracotta   - what it can do
     'sensor': (118, 190, 214),   # Pale cyan    - what it can notice
+    'social': (214, 84, 140),    # Rose         - what it has grown for others
 }
 
 #: A neuron the squid grew for itself belongs to no row, and is drawn as such.
@@ -443,6 +477,7 @@ ROW_BAND_COLORS = {
     'core':   ((150, 150, 220, 28), (150, 150, 220, 150)),
     'motor':  ((216, 138, 106, 28), (216, 138, 106, 150)),
     'sensor': ((118, 190, 214, 28), (118, 190, 214, 150)),
+    'social': ((214, 84, 140, 28), (214, 84, 140, 150)),
 }
 
 # Ring widths
@@ -667,6 +702,78 @@ INNATE_CONNECTIONS = (
 ACTION_NEURONS = dict(_MOTOR_ROW)
 
 ACTION_NEURON_NAMES = tuple(ACTION_NEURONS.keys())
+
+
+#: The sense organs neurogenesis can grow for other squid, as
+#: {name: (percept, binary)}. None is innate, unlike can_see_food: each is
+#: grown the first time its concept matters - the first sighting, the first
+#: squid close by, the first one recognised from memory - because nothing in
+#: the network can express it. A squid that never meets another never has
+#: any of them. Each is written by the world from its percept, as can_see_food
+#: is, never by a synapse, and is classified as a sensor only once a brain has
+#: grown it (ensure_grown_sensor).
+SQUID_SENSORS = {
+    'can_see_squid': ('squid_in_view', True),
+    'squid_nearby': ('squid_proximity', False),
+    'recognises_squid': ('squid_familiar', True),
+    'remembers_bad_encounter': ('squid_recalled_bad', False),
+    'remembers_good_encounter': ('squid_recalled_good', False),
+}
+
+#: The one social sense that is not about a squid in view: that another
+#: aquarium is nearby (its peer heard on the network - multiplayer is the only
+#: way that can happen). Grown the first time one is heard; it is how a squid
+#: comes to venture out (src/venturing.py).
+AQUARIUM_SENSE = 'aquarium_nearby'
+
+SOCIAL_SENSORS = {**SQUID_SENSORS, AQUARIUM_SENSE: ('aquarium_heard', True)}
+
+#: The first of them, grown on the first sighting.
+SOCIAL_SENSOR = 'can_see_squid'
+
+#: Senses grown whatever the brain's size: nothing else can stand for them.
+REQUIRED_SOCIAL_SENSES = (SOCIAL_SENSOR, AQUARIUM_SENSE)
+
+#: The social neurons neurogenesis can grow once a squid knows other squid
+#: exist: the concepts for playing with, fighting or fleeing from one, and the
+#: aggression that starts a fight - each grown from having done it. One of
+#: each at most, named for what it is for, and drawn as hexagons.
+SOCIAL_NEURONS = ('social_play', 'social_fight', 'social_flee', 'aggression')
+
+
+#: Reads 0 when the squid is placid and relaxed and 100 when it is fully
+#: aggro, so it rests at zero like a sense or an action, not at the midpoint.
+AGGRESSION_NEURON = 'aggression'
+
+
+def is_social_neuron(name: str) -> bool:
+    """A grown social concept neuron (not the can_see_squid sensor)."""
+    return name in SOCIAL_NEURONS
+
+
+def ensure_grown_sensor(name: str, binary: bool = True) -> bool:
+    """Classify a sense organ a brain has grown (once per process).
+
+    True if it was newly classified. Registering it again would re-notify
+    every listener each time it is asked, so an existing entry is left alone.
+    """
+    if is_registered_input_sensor(name) or name in PURE_INPUT_NEURONS:
+        return False
+    return register_input_sensor(name, binary=binary, owner='neurogenesis')
+
+
+#: Neurons earlier versions added and this one never does. A saved brain that
+#: still has them loses them, and every synapse touching them, when it is
+#: loaded (brain_io.normalise_brain). These were sensor neurons for another
+#: squid; seeing one is the vision system's now, and the neurons that stand
+#: for other squid are the ones neurogenesis grows (SOCIAL_SENSOR,
+#: SOCIAL_NEURONS).
+RETIRED_NEURONS = frozenset({
+    'conspecific_visible', 'conspecific_proximity', 'conspecific_ahead',
+    'conspecific_closing', 'conspecific_receding', 'conspecific_familiarity',
+    'conspecific_recalled_good', 'conspecific_recalled_bad',
+    'conspecific_contesting',
+})
 
 
 # What each action neuron settles to when nothing is driving it.
@@ -895,11 +1002,11 @@ LEARNED_ACTIONS = tuple(
 # ---------------------------------------------------------------------------
 # (neuron, output hook, threshold, cooldown seconds, probability).
 #
-# `probability` is what "a CHANCE of an ink cloud when startled" is made of:
-# the reflex fires when the neuron crosses its threshold, and then only
-# actually inks that fraction of the time. Keeping it here makes the chance a
-# property of the reflex - visible, tunable, and the same for every squid -
-# instead of a random.random() buried in a behaviour rule.
+# A binding fires when its neuron crosses its threshold. `probability` below
+# 1.0 would make that only some of the time; the innate ones are all 1.0 -
+# whether a squid inks is its network's business entirely: act_ink firing
+# always inks, every time it fires (and once per firing, not every tick it
+# stays high). The cooldown is the least time between two firings.
 # Thresholds are calibrated against what the innate wiring can actually
 # produce, which is bounded: a saturated sensor contributes half its value
 # (see propagation.signal_of), so is_startled at 100 through a 0.70 synapse is
@@ -911,8 +1018,8 @@ INNATE_ACTION_BINDINGS = (
     ("act_move",     "neuron_output_wander",         3.0, 1.00),
     ("act_eat",      "neuron_output_seek_food",      1.5, 1.00),
     ("act_flee",     "neuron_output_flee",           3.0, 1.00),
-    # Reachable on a real startle, and then only about a third of the time.
-    ("act_ink",      "neuron_output_ink_cloud",      8.0, 0.35),
+    # Reachable on a real startle; every firing inks.
+    ("act_ink",      "neuron_output_ink_cloud",      0.0, 1.00),
     # The body can always do these. What it lacks is anything driving the
     # neuron, and for a learned action nothing does until experience wires it.
     ("act_play",     "neuron_output_approach_rock",  5.0, 1.00),
@@ -1068,6 +1175,8 @@ def neuron_row(name: str):
         return 'sensor'
     if name in ACTION_NEURONS:
         return 'motor'
+    if is_social_member(name):
+        return 'social'
     if name in INPUT_SENSORS or name in PLUGIN_INPUT_SENSORS:
         return 'sensor'
     return None
@@ -1084,8 +1193,27 @@ def row_label_anchor(row: str) -> tuple:
     Above the neurons rather than beside them: the rows span nearly the whole
     canvas width, so there is no room at the left end for a word.
     """
-    top, _bottom = NEURON_ROWS[row]['band']
+    top, _bottom = (SOCIAL_ROW if row == 'social' else NEURON_ROWS[row])['band']
     return (ROW_X_FIRST - 24.0, top + 4.0)
+
+
+#: Everything a squid can grow for other squid and other aquariums, in the
+#: order the social band lays them out: its senses, then its neurons.
+SOCIAL_MEMBERS = tuple(SOCIAL_SENSORS) + tuple(SOCIAL_NEURONS)
+
+
+def is_social_member(name: str) -> bool:
+    """A grown social sense or social neuron - a member of the social band."""
+    return name in SOCIAL_SENSORS or name in SOCIAL_NEURONS
+
+
+def display_rows(names) -> dict:
+    """The rows to draw for a brain holding `names`: the newborn rows always,
+    the social band only once a member of it has grown. {row: spec}."""
+    rows = dict(NEURON_ROWS)
+    if any(is_social_member(name) for name in names):
+        rows['social'] = SOCIAL_ROW
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -1132,14 +1260,19 @@ def growth_positions(names) -> dict:
     names = tuple(names)
     if not names:
         return {}
-    rows = max(1, min(len(GROWTH_ROW_YS),
-                      -(-len(names) // GROWTH_ROW_CAPACITY)))
-    per_row = -(-len(names) // rows)
-
-    positions = {}
+    # The social network sits on its own band, in canonical order (senses,
+    # then neurons), whenever any of it has grown; the rest use the rows above.
+    social = [name for name in SOCIAL_MEMBERS if name in names]
+    others = tuple(name for name in names if not is_social_member(name))
+    row_ys = GROWTH_ROW_YS_BESIDE_SOCIAL if social else GROWTH_ROW_YS
+    positions = spread_along(social, SOCIAL_ROW['y']) if social else {}
+    if not others:
+        return positions
+    rows = max(1, min(len(row_ys), -(-len(others) // GROWTH_ROW_CAPACITY)))
+    per_row = -(-len(others) // rows)
     for row_index in range(rows):
-        chunk = names[row_index * per_row:(row_index + 1) * per_row]
-        positions.update(spread_along(chunk, GROWTH_ROW_YS[row_index]))
+        chunk = others[row_index * per_row:(row_index + 1) * per_row]
+        positions.update(spread_along(chunk, row_ys[row_index]))
     return positions
 
 

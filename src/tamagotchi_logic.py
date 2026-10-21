@@ -15,6 +15,8 @@ from .learning import HebbianLearning
 from .interactions import RockInteractionManager
 from .interactions2 import PoopInteractionManager
 from .config_manager import ConfigManager
+from .lifecycle import (Lifecycle, EGG_HATCHING, CAUSE_STARVED,
+                        CAUSE_NEGLECTED, CAUSE_SICKNESS, CAUSE_INJURED)
 from .plugin_manager import PluginManager
 from .brain_neuron_hooks import BrainNeuronHooks
 from .brain_neuron_outputs import NeuronOutputMonitor
@@ -71,6 +73,11 @@ class TamagotchiLogic:
 
         self.last_save_hash = None
         self.save_count = 0
+
+        # Reproduction, parental starvation and the egg. The state itself is
+        # the squid's (squid.lifecycle); this is the tank's side of it.
+        self.lifecycle_config = self.config_manager.get_lifecycle_config()
+        self.egg_item = None
         
         self.window_resize_cooldown = 0
         self.window_resize_cooldown_max = 20  # 20 updates before another resize can startle
@@ -175,8 +182,9 @@ class TamagotchiLogic:
         # Initialize game objects BEFORE load_game()
         self.food_items = []
         self.max_food = 3
-        self.food_width = 64
-        self.food_height = 64
+        from .display_scaling import DisplayScaling
+        self.food_width = DisplayScaling.points(64)
+        self.food_height = DisplayScaling.points(64)
         self.poop_items = []
         self.max_poop = 3
         self.points = 0
@@ -1025,12 +1033,6 @@ class TamagotchiLogic:
         # ===== PERFORMANCE FIX: Increased interval from 100ms to 200ms =====
         if hasattr(self, 'rock_interaction'):
             self.rock_interaction.setup_timers(interval=200)
-            self.rock_interaction.rock_test_timer.timeout.connect(
-                self.rock_interaction.update_rock_test
-            )
-            self.rock_interaction.throw_animation_timer.timeout.connect(
-                self.rock_interaction.update_throw_animation
-            )
 
         # Set up poop interaction
         # ===== PERFORMANCE FIX: Increased interval from 100ms to 200ms =====
@@ -1137,6 +1139,8 @@ class TamagotchiLogic:
                 self.rock_interaction.rock_test_timer.stop()
             if hasattr(self.rock_interaction, 'throw_animation_timer') and self.rock_interaction.throw_animation_timer:
                 self.rock_interaction.throw_animation_timer.stop()
+            for flight in getattr(self.rock_interaction, '_visitor_flights', []):
+                flight.throw_animation_timer.stop()
         
         # Stop poop interaction timers
         if hasattr(self, 'poop_interaction') and self.poop_interaction:
@@ -1174,10 +1178,10 @@ class TamagotchiLogic:
             self.startle_squid()
 
     def startle_squid(self, source="unknown"):
-        if not self.mental_states_enabled:
+        if not self.mental_states_enabled and source != 'rock_hit':
             return
 
-        if not getattr(self, 'initial_startle_allowed', False):
+        if not getattr(self, 'initial_startle_allowed', False) and source != 'rock_hit':
             return
 
         try:
@@ -1321,15 +1325,21 @@ class TamagotchiLogic:
             )
 
 
-    def create_ink_cloud(self):
+    #: How long an ink cloud takes to fade away.
+    INK_FADE_MS = 10000
+
+    def create_ink_cloud(self, position=None, *, record=True):
         """Create an ink cloud with guaranteed fade-out after 10 seconds"""
-        ink_cloud_pixmap = QtGui.QPixmap(os.path.join("images", "inkcloud.png"))
+        from .display_scaling import DisplayScaling
+        ink_cloud_pixmap = DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "inkcloud.png")))
         ink_cloud_item = QtWidgets.QGraphicsPixmapItem(ink_cloud_pixmap)
         
         # Set the center of the ink cloud to match the center of the squid
         squid = self.squid
         squid_center_x = squid.squid_x + squid.squid_width // 2
         squid_center_y = squid.squid_y + squid.squid_height // 2
+        if position is not None:
+            squid_center_x, squid_center_y = position
         ink_cloud_item.setPos(
             squid_center_x - ink_cloud_pixmap.width() // 2, 
             squid_center_y - ink_cloud_pixmap.height() // 2
@@ -1342,9 +1352,13 @@ class TamagotchiLogic:
         opacity_effect.setOpacity(1.0)  # Start fully visible
         ink_cloud_item.setGraphicsEffect(opacity_effect)
 
-        # Create a QPropertyAnimation for the opacity effect
-        fade_out_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity")
-        fade_out_animation.setDuration(10000)  # 10 seconds duration
+        # Parented to the effect it animates: an unparented animation held only
+        # by a local is collected the moment this returns, so the cloud never
+        # faded - it sat at full opacity until the backup timer below removed
+        # it all at once.
+        fade_out_animation = QtCore.QPropertyAnimation(opacity_effect, b"opacity",
+                                                       opacity_effect)
+        fade_out_animation.setDuration(self.INK_FADE_MS)
         fade_out_animation.setStartValue(1.0)
         fade_out_animation.setEndValue(0.0)
         fade_out_animation.setEasingCurve(QtCore.QEasingCurve.InQuad)
@@ -1354,13 +1368,14 @@ class TamagotchiLogic:
 
         # Start the animation and deduct points
         fade_out_animation.start()
-        self.statistics_window.award(-250)
-
-        self.record_statistic_event('ink_clouds_created')
+        if record:
+            self.statistics_window.award(-250)
+            self.record_statistic_event('ink_clouds_created')
         
         
-        # Backup timer to force remove after 10 seconds in case animation fails
-        QtCore.QTimer.singleShot(10000, lambda: self.force_remove_ink_cloud(ink_cloud_item))
+        # Backup timer to force remove it, should the animation ever fail.
+        QtCore.QTimer.singleShot(self.INK_FADE_MS + 500,
+                                 lambda: self.force_remove_ink_cloud(ink_cloud_item))
 
     def force_remove_ink_cloud(self, ink_cloud_item):
         """Force remove the ink cloud if it still exists after timeout"""
@@ -1368,9 +1383,10 @@ class TamagotchiLogic:
             self.squid.ui.scene.removeItem(ink_cloud_item)
 
     def remove_ink_cloud(self, ink_cloud_item):
-        """Remove the ink cloud from the scene"""
-        if ink_cloud_item in self.ui.scene.items():
-            self.ui.scene.removeItem(ink_cloud_item)
+        """Remove the ink cloud from the scene, once it has faded."""
+        scene = self.user_interface.scene
+        if ink_cloud_item in scene.items():
+            scene.removeItem(ink_cloud_item)
         if ink_cloud_item.graphicsEffect():
             ink_cloud_item.graphicsEffect().deleteLater()
         ink_cloud_item.setGraphicsEffect(None)
@@ -1476,6 +1492,9 @@ class TamagotchiLogic:
             decorations = [entry[0] for entry in self._get_cached_decorations()]
             scene_objects = extract_scene_objects(self.user_interface.scene, self.food_items, decorations)
             self.vision_worker.update_scene_objects(scene_objects)
+            # Other squid drawn in the tank, for how close one is (closeness is
+            # felt whichever way the squid looks; seeing one is the cone's).
+            self.squid_objects = [o for o in scene_objects if o.category == 'squid']
 
         if self.squid:
             # === FORCE SLEEP WHEN SLEEPINESS == 100 ===
@@ -1530,19 +1549,10 @@ class TamagotchiLogic:
                     self.user_interface.show_message("😴 The squid woke up feeling refreshed!")
                     self.sleep_frame = 0
 
-            # ── STUBBORN PERSONALITY: RESIST SLEEP WHEN OTHER NEEDS ARE STRONGER ── (from original)
-            elif self.squid.personality == Personality.STUBBORN:
-                hunger_urge = self.squid.hunger / 100.0
-                curiosity_urge = self.squid.curiosity / 100.0
-                anxiety_urge = self.squid.anxiety / 100.0
-
-                # If any competing need is > 55% and stronger than current sleepiness,
-                # stubborn squid will refuse to fall asleep (even if sleepiness is high)
-                if max(hunger_urge, curiosity_urge * 0.8, anxiety_urge * 0.6) > 0.55:
-                    if self.squid.sleepiness > 65 and random.random() < 0.22:  # 22% chance per frame to resist
-                        self.user_interface.show_message("😤 Stubborn squid refuses to sleep right now!")
-                        # Tiny happiness penalty for fighting sleep
-                        self.squid.happiness = max(15.0, self.squid.happiness - 1.8)
+            # A stubborn squid holding off sleep (personality.resists_sleep,
+            # decided where sleep is - DecisionEngine) pays a little for it.
+            elif getattr(self.squid, '_resisting_sleep', False):
+                self.squid.happiness = max(15.0, self.squid.happiness - 1.8)
 
             # Normal behavior only when NOT sleeping
             if not getattr(self.squid, 'is_sleeping', False):
@@ -1772,6 +1782,17 @@ class TamagotchiLogic:
             self._decoration_cache_time = current_time
         return self._decoration_cache
 
+    def _squid_proximity(self) -> float:
+        """How near the nearest other squid in the tank is, 0-100."""
+        from .vision_cone import proximity
+        others = getattr(self, 'squid_objects', None) or []
+        if not others or self.squid is None:
+            return 0.0
+        cx = self.squid.squid_x + self.squid.squid_width / 2
+        cy = self.squid.squid_y + self.squid.squid_height / 2
+        return proximity(min(math.hypot(o.x + o.width / 2 - cx, o.y + o.height / 2 - cy)
+                             for o in others))
+
     def apply_input_neurons_to_brain(self):
         """
         Apply real-time sensor values to the brain's input neurons.
@@ -1781,6 +1802,17 @@ class TamagotchiLogic:
             return
 
         brain_widget = self.brain_window.brain_widget
+
+        # Another squid in view, and how close one is, are percepts, not sense
+        # organs: they reach the network only through the sensors neurogenesis
+        # grows the first time they matter (brain_constants.SOCIAL_SENSORS).
+        # While the squid is away visiting, the host's frame reports them
+        # instead (plugins/multiplayer/visitor_mind.py).
+        if hasattr(brain_widget, 'perceive') and \
+                not getattr(self.squid, 'is_transitioning', False):
+            seen = getattr(self.latest_vision_result, 'can_see_squid', False)
+            brain_widget.perceive('squid_in_view', 100.0 if seen else 0.0)
+            brain_widget.perceive('squid_proximity', self._squid_proximity())
 
         # Get fresh input neuron values (this calls calculate_can_see_food(), etc.)
         input_values = self.brain_hooks.get_input_neuron_values()
@@ -2349,7 +2381,8 @@ class TamagotchiLogic:
             self.squid.status = "recovering"
 
     def display_needle_image(self):
-        needle_pixmap = QtGui.QPixmap(os.path.join("images", "needle.jpg"))
+        from .display_scaling import DisplayScaling
+        needle_pixmap = DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "needle.jpg")))
         self.needle_item = QtWidgets.QGraphicsPixmapItem(needle_pixmap)
         self.needle_item.setPos(self.user_interface.window_width // 2 - needle_pixmap.width() // 2,
                                 self.user_interface.window_height // 2 - needle_pixmap.height() // 2)
@@ -2402,10 +2435,9 @@ class TamagotchiLogic:
 
         # Directly check collision without redundant checks
         if self.squid and cheese_item.collidesWithItem(self.squid.squid_item):
-            self.squid.eat(cheese_item)
-            
-            # Reset status after a short delay
-            QtCore.QTimer.singleShot(2000, self.reset_squid_status)
+            if self.squid.eat(cheese_item):
+                # Reset status after a short delay
+                QtCore.QTimer.singleShot(2000, self.reset_squid_status)
 
     def move_sushi(self, sushi_item):
         sushi_x = sushi_item.pos().x()
@@ -2417,11 +2449,12 @@ class TamagotchiLogic:
         sushi_item.setPos(sushi_x, sushi_y)
 
         if self.squid is not None and sushi_item.collidesWithItem(self.squid.squid_item):
-            self.squid.eat(sushi_item)  # Pass the sushi_item as an argument
-            self.remove_food(sushi_item)
-            
-            # Reset status after a short delay (matching cheese behavior)
-            QtCore.QTimer.singleShot(2000, self.reset_squid_status)
+            # A squid that does not eat leaves the sushi where it is.
+            if self.squid.eat(sushi_item):
+                self.remove_food(sushi_item)
+
+                # Reset status after a short delay (matching cheese behavior)
+                QtCore.QTimer.singleShot(2000, self.reset_squid_status)
 
     def is_sushi(self, food_item):
         return getattr(food_item, 'is_sushi', False)     
@@ -2456,7 +2489,19 @@ class TamagotchiLogic:
 
         self.update_cleanliness_overlay()
 
+        # A dead squid has no metabolism. Its egg is about to take over.
+        lifecycle = getattr(self.squid, 'lifecycle', None)
+        if lifecycle is not None and lifecycle.is_dead:
+            return
+
         if self.squid is not None:
+            # A squid whose body has no health left - rocks and fights take it
+            # and nothing gives it back - dies of its injuries, asleep or
+            # awake, as on Android (src/lifecycle.py).
+            if lifecycle is not None and lifecycle.injure(self.squid):
+                self.on_squid_died()
+                return
+
             # Update squid needs
             if not self.squid.is_sleeping:
                 self.squid.hunger      = min(100, self.squid.hunger      + (0.1 * self.simulation_speed))
@@ -2515,6 +2560,23 @@ class TamagotchiLogic:
                     health_decrease = 0.2 * self.simulation_speed  # Rapid decrease
                 else:
                     health_decrease = 0.1 * self.simulation_speed 
+
+                # Only a parent, which no longer eats, actually loses this
+                # health - and only once it is starving. Every other squid's
+                # health is untouched here, exactly as before. Any squid can
+                # also die of neglect or of a sickness left untreated, counted
+                # in the same play-time as the needs above.
+                if lifecycle is not None:
+                    seconds = float(self.simulation_speed)
+                    setting = self._lifecycle_setting
+                    if (lifecycle.starve(self.squid, health_decrease,
+                                         setting('starvation_hunger'))
+                            or lifecycle.sicken(self.squid, seconds,
+                                                setting('sickness_seconds'))
+                            or lifecycle.neglect(self.squid, seconds,
+                                                 setting('neglect_hunger'),
+                                                 setting('neglect_seconds'))):
+                        self.on_squid_died()
 
     def handle_window_resize(self, event):
         new_width = event.size().width()
@@ -2640,12 +2702,13 @@ class TamagotchiLogic:
             return
         
         # Create only one food item
+        from .display_scaling import DisplayScaling
         if is_sushi:
-            food_pixmap = QtGui.QPixmap(os.path.join("images", "sushi.png"))
+            food_pixmap = DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "sushi.png")))
             food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
             food_item.is_sushi = True
         else:
-            food_pixmap = QtGui.QPixmap(os.path.join("images", "cheese.png"))
+            food_pixmap = DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "cheese.png")))
             food_item = QtWidgets.QGraphicsPixmapItem(food_pixmap)
             food_item.is_sushi = False
 
@@ -2777,6 +2840,11 @@ class TamagotchiLogic:
         self.user_interface.scene.update()
 
     def show_message(self, message):
+        display = getattr(getattr(self, 'user_interface', None), 'show_message', None)
+        if callable(display):
+            # The UI removes only its own message, preserving name badges and
+            # multiplayer labels. The old path deleted every text item.
+            return display(message)
         # Call hook if available
         if hasattr(self, 'plugin_manager'):
             # Get modified message from plugins
@@ -2814,7 +2882,10 @@ class TamagotchiLogic:
             scene.addItem(message_item)
 
             # Fade out the message after 8 seconds
-            fade_out_animation = QtCore.QPropertyAnimation(message_item, b"opacity")
+            # Parented to the message, or Python collects it on return and the
+            # message neither fades nor goes away.
+            fade_out_animation = QtCore.QPropertyAnimation(message_item, b"opacity",
+                                                           message_item)
             fade_out_animation.setDuration(8000)
             fade_out_animation.setStartValue(1.0)
             fade_out_animation.setEndValue(0.0)
@@ -2916,6 +2987,314 @@ class TamagotchiLogic:
             for index, poop_item in enumerate(self.poop_items):
                 current_frame = index % 2
                 poop_item.setPixmap(self.squid.poop_images[current_frame])
+
+    # ------------------------------------------------------------------
+    # Reproduction, parental starvation and the egg (see src/lifecycle.py)
+    # ------------------------------------------------------------------
+    #: Pause between the parent dying and its egg starting to hatch, so the
+    #: player sees the one happen before the other.
+    HATCH_DELAY_MS = 3000
+
+    def _lifecycle_setting(self, key):
+        config = getattr(self, 'lifecycle_config', None)
+        if not config:
+            from .lifecycle import DEFAULT_CONFIG
+            config = DEFAULT_CONFIG
+        return config[key]
+
+    def record_reproduction(self, mating_id, mate_uuid, mate_name="Squid"):
+        """The host has resolved a mating with this tank's resident.
+
+        One state change and one save: the resident becomes a parent and its
+        egg is laid in the same Lifecycle record, which is written in a single
+        atomic save before this returns. The caller only tells the visiting
+        squid afterwards, so a crash can lose the visitor's news of the event
+        but never the event itself, and can never write half of it.
+
+        Returns True only the first time; a repeat lays nothing.
+        """
+        squid = self.squid
+        if squid is None:
+            return False
+        x, y = self._egg_position()
+        if not squid.lifecycle.record_reproduction(mating_id, mate_uuid,
+                                                   mate_name, x, y):
+            return False
+        # This parent's half of the hatchling's weights, taken now, from the
+        # brain that mated (src/inheritance.py). The mate's half arrives from
+        # its own machine (add_mate_genes).
+        brain = getattr(getattr(self, 'brain_window', None), 'brain_widget', None)
+        weights = getattr(brain, 'weights', None)
+        if isinstance(weights, dict) and weights:
+            try:
+                from .inheritance import gamete
+                squid.lifecycle.add_genes(mating_id, squid.name, gamete(weights))
+            except Exception as e:
+                # The egg is laid regardless; it hatches from what it carries.
+                print(f"[Lifecycle] could not take this parent's genes: {e}")
+        self._place_egg()
+        try:
+            self.save_game()
+        except Exception as e:
+            # The record is still held in memory and goes out with the next
+            # save; the event is not undone because a write failed.
+            print(f"[Lifecycle] could not save the mating immediately: {e}")
+        self.show_message(f"{squid.name} and {mate_name} produced an egg. "
+                          f"{squid.name} has stopped eating.")
+        return True
+
+    def on_rock_hit(self, target_item, throw):
+        """Something thrown - a rock, or poop (throw['what']) - struck a squid.
+        Tell the plugins - the multiplayer host lets the struck squid feel it -
+        with the fact only: what, and how hard, never why."""
+        own_body = target_item is self.squid.squid_item
+        felt = self.feel_rock_hit(throw) if own_body else False
+        manager = getattr(self, 'plugin_manager', None)
+        results = []
+        if manager is not None and hasattr(manager, 'trigger_hook'):
+            results = manager.trigger_hook('on_rock_hit',
+                                 target_uuid=(str(self.squid.uuid) if target_item is self.squid.squid_item
+                                              else str(getattr(target_item, 'peer_uuid', '') or '')),
+                                 throw=throw)
+        if own_body and felt and not any(result is True for result in results):
+            # Disabling the transport cannot undo a projectile already in
+            # flight. Keep the physical fact even without an active plugin.
+            what = throw.get('what', 'rock')
+            self.squid.memory_manager.add_short_term_memory('social', f"{what}:{throw['throw_id']}",
+                dict({'peer_uuid': throw.get('source_uuid', ''), 'hits_taken': 1, 'what': what},
+                     **felt), importance=3)
+
+    def feel_rock_hit(self, throw):
+        """The resident's body owns damage/startle, once per physical impact."""
+        throw_id = (throw or {}).get('throw_id')
+        if not isinstance(throw_id, str) or not throw_id:
+            return False
+        hits = getattr(self, '_felt_rock_hits', None)
+        if hits is None:
+            self._felt_rock_hits = hits = set()
+        if throw_id in hits:
+            return False
+        hits.add(throw_id)
+        from .throwing import feel_hit
+        # What changed, or True for a strike that changed nothing it measures.
+        return feel_hit(self.squid, (throw or {}).get('what', 'rock'),
+                        startle=lambda source: self.startle_squid(source=source)) or True
+
+    def throw_visitor_rock(self, actor, rock, intent):
+        plugin = self.plugin_manager.plugins.get('multiplayer', {}).get('instance')
+        if plugin is None:
+            return None
+        node = plugin.visit_node_ids.get(actor.uuid)
+        visual = plugin.entity_manager.remote_squids.get(node, {}).get('visual')
+        if visual is None:
+            return None
+        return self.rock_interaction.throw_from_visitor(actor, rock, intent, visual)
+
+    def ink_visitor(self, actor):
+        self.create_ink_cloud((actor.x + self.squid.squid_width/2,
+                               actor.y + self.squid.squid_height/2), record=False)
+
+    def add_mate_genes(self, mating_id, mate_name, genes):
+        """The mate's half of the hatchling's weights has arrived: keep it with
+        the egg and save. True if it was kept now (once, for this egg only)."""
+        squid = self.squid
+        if squid is None or not squid.lifecycle.add_genes(mating_id, mate_name, genes):
+            return False
+        try:
+            self.save_game()
+        except Exception as e:
+            print(f"[Lifecycle] could not save the mate's genes immediately: {e}")
+        return True
+
+    def _egg_position(self):
+        """On the tank floor, below where the parent is."""
+        ui = self.user_interface
+        width = float(getattr(ui, 'window_width', 1280))
+        height = float(getattr(ui, 'window_height', 900))
+        squid = self.squid
+        x = float(getattr(squid, 'squid_x', width / 2))
+        x = max(50.0, min(width - 120.0, x))
+        y = max(50.0, height - 120.0 - 92.0)
+        return x, y
+
+    def _place_egg(self):
+        """Put the egg in the tank. Safe to call repeatedly."""
+        egg = self.squid.lifecycle.egg if self.squid else None
+        if not egg:
+            return None
+        existing = getattr(self, 'egg_item', None)
+        if existing is not None and getattr(existing, 'egg_id', None) == egg['egg_id']:
+            try:
+                if existing.scene() is not None:
+                    return existing
+            except RuntimeError:
+                pass
+        self._remove_egg_item()
+        from .display_scaling import DisplayScaling
+        item = QtWidgets.QGraphicsPixmapItem(
+            DisplayScaling.to_points(QtGui.QPixmap(os.path.join("images", "egg.png"))))
+        # A category nothing else recognises: it is not food, a rock or a
+        # decoration, so it is not eaten, carried, contested or saved twice.
+        item.category = 'egg'
+        item.egg_id = egg['egg_id']
+        item.setPos(egg['x'], egg['y'])
+        self.user_interface.scene.addItem(item)
+        self.egg_item = item
+        if hasattr(self.squid, 'mark_scene_objects_dirty'):
+            self.squid.mark_scene_objects_dirty()
+        return item
+
+    def _remove_egg_item(self):
+        item = getattr(self, 'egg_item', None)
+        self.egg_item = None
+        if item is None:
+            return
+        try:
+            scene = item.scene()
+            if scene is not None:
+                scene.removeItem(item)
+        except RuntimeError:
+            pass
+
+    def _restore_lifecycle(self, data):
+        """Bring the lifecycle back from a save, and resume where it was."""
+        squid = self.squid
+        squid.lifecycle = Lifecycle.from_dict(data)
+        self._remove_egg_item()
+        if squid.lifecycle.egg:
+            self._place_egg()
+        if squid.lifecycle.is_dead:
+            # Closed while the squid was dead or its egg was hatching. Its
+            # headstone came back with the decorations; what follows picks up
+            # from the saved state, and only once.
+            self._lay_to_rest()
+            QtCore.QTimer.singleShot(self.HATCH_DELAY_MS, self.continue_after_death)
+
+    def _lay_to_rest(self):
+        """A dead squid stops, and its body gives way to its headstone."""
+        squid = self.squid
+        squid.can_move = False
+        squid.is_fleeing = False
+        squid.pursuing_food = False
+        squid.status = "dead"
+        if hasattr(squid, 'clear_neural_drive'):
+            squid.clear_neural_drive()
+        if hasattr(squid, 'remove_view_cone'):
+            squid.remove_view_cone()
+        item = getattr(squid, 'squid_item', None)
+        if item is not None:
+            item.setVisible(False)
+
+    def _place_headstone(self):
+        """One of the stones in images/headstones, at random, on the tank
+        floor beneath where the squid died, bearing its name. A decoration
+        like any other, except that it is never carried, thrown or deleted.
+        """
+        from .ui import HEADSTONE_DIR
+        squid = self.squid
+        try:
+            stones = sorted(n for n in os.listdir(HEADSTONE_DIR)
+                            if n.lower().endswith('.png'))
+        except OSError:
+            stones = []
+        if not stones:
+            return None
+        path = os.path.join(HEADSTONE_DIR, random.choice(stones))
+        item = ResizablePixmapItem(QtGui.QPixmap(path), path)
+        # Its name, how long it lived and its fights, for its epitaph.
+        from .lifecycle import headstone_record
+        statistics = getattr(squid, 'statistics', None)
+        age = getattr(statistics, 'get_total_age_seconds', None)
+        item.set_epitaph(headstone_record(
+            squid, age() if callable(age) else 0.0,
+            getattr(statistics, 'fights_won', 0), getattr(statistics, 'fights_lost', 0)))
+        item.limit_headstone(squid)
+        stone = item.pixmap()
+        ui = self.user_interface
+        width = float(getattr(ui, 'window_width', 1280))
+        height = float(getattr(ui, 'window_height', 900))
+        centre = float(squid.squid_x) + float(getattr(squid, 'squid_width', 0)) / 2
+        item.setPos(max(0.0, min(width - stone.width(), centre - stone.width() / 2)),
+                    max(0.0, height - 120.0 - stone.height()))
+        ui.scene.addItem(item)
+        if hasattr(squid, 'mark_scene_objects_dirty'):
+            squid.mark_scene_objects_dirty()
+        return item
+
+    #: How each death is told.
+    DEATH_MESSAGES = {
+        CAUSE_STARVED: "{name} has died.",
+        CAUSE_NEGLECTED: "{name} has died of neglect.",
+        CAUSE_SICKNESS: "{name} has died of sickness.",
+        CAUSE_INJURED: "{name} has died of its injuries.",
+    }
+
+    def on_squid_died(self):
+        """The squid has died, of any cause. Called once, by the transition."""
+        squid = self.squid
+        # The multiplayer plugin, if it is running, ends visits to and by this
+        # squid, so nothing is left pointing at it; the achievements plugin
+        # awards CIRCLE OF LIFE to a parent. First: ending its own visit gives
+        # a squid its body back, and nothing a plugin shows may replace the
+        # news of the death.
+        plugin_manager = getattr(self, 'plugin_manager', None)
+        if plugin_manager is not None:
+            try:
+                plugin_manager.register_hook("on_squid_died")
+                plugin_manager.trigger_hook("on_squid_died", tamagotchi_logic=self,
+                                            squid=squid)
+            except Exception as e:
+                print(f"[Lifecycle] on_squid_died hook failed: {e}")
+        self._lay_to_rest()
+        self._place_headstone()
+        message = self.DEATH_MESSAGES.get(squid.lifecycle.death_cause,
+                                          self.DEATH_MESSAGES[CAUSE_STARVED])
+        self.show_message(message.format(name=squid.name))
+        try:
+            self.save_game()
+        except Exception as e:
+            print(f"[Lifecycle] could not save the death: {e}")
+        QtCore.QTimer.singleShot(self.HATCH_DELAY_MS, self.continue_after_death)
+
+    def continue_after_death(self):
+        """What follows a death: the parent's egg hatches, or - with no egg -
+        a new squid hatches from a fresh one. The headstone stays either way.
+        """
+        lifecycle = getattr(self.squid, 'lifecycle', None)
+        if lifecycle is None or not lifecycle.is_dead:
+            return False
+        if lifecycle.egg is not None:
+            return self.begin_egg_hatching()
+        window = getattr(self.user_interface, 'window', None)
+        replace = getattr(window, 'replace_dead_squid', None)
+        if not callable(replace):
+            return False
+        return bool(replace(str(self.squid.uuid)))
+
+    def begin_egg_hatching(self):
+        """The dead parent's egg hatches into a new game. No cancel.
+
+        The egg is marked hatching and saved before anything else, so a crash
+        from here on resumes this hatch rather than starting a second one.
+        The new game itself is the main window's, the same sequence as a
+        start with no save.
+        """
+        squid = self.squid
+        lifecycle = getattr(squid, 'lifecycle', None)
+        if lifecycle is None or not lifecycle.is_dead or lifecycle.egg is None:
+            return False
+        if lifecycle.begin_hatching():
+            try:
+                self.save_game()
+            except Exception as e:
+                print(f"[Lifecycle] could not save the hatching egg: {e}")
+        elif lifecycle.egg_state != EGG_HATCHING:
+            return False
+        window = getattr(self.user_interface, 'window', None)
+        hatch = getattr(window, 'hatch_egg', None)
+        if not callable(hatch):
+            return False
+        return bool(hatch(lifecycle.egg['egg_id']))
 
     def game_over(self):
         game_over_dialog = QtWidgets.QMessageBox()
@@ -3054,6 +3433,7 @@ class TamagotchiLogic:
             )
             self.squid.statistics.load_statistics(statistics_data)
             self._set_sickness_state(getattr(self.squid, 'is_sick', False))
+            self._restore_lifecycle(game_state.get('lifecycle'))
 
             # Load custom brain (Logic patched to load output bindings)
             custom_brain_data = data.get('custom_brain', {})
@@ -3187,7 +3567,11 @@ class TamagotchiLogic:
             'game_state': {
                 'squid': squid_data,
                 'tamagotchi_logic': tamagotchi_logic_data,
-                'decorations': decorations_data
+                'decorations': decorations_data,
+                # The parent's state and its egg, as one record, in the same
+                # atomic write as everything else.
+                'lifecycle': self.squid.lifecycle.to_dict()
+                             if hasattr(self.squid, 'lifecycle') else None,
             },
             'brain_state': brain_state,
             'statistics': statistics_data,
@@ -3290,6 +3674,7 @@ class TamagotchiLogic:
             self.squid.load_state(squid_data)
             self.squid.statistics.load_statistics(save_data.get('statistics', {}))
             self._set_sickness_state(getattr(self.squid, 'is_sick', False))
+            self._restore_lifecycle(game_state.get('lifecycle'))
             
             # Load custom brain
             custom_brain_data = save_data.get('custom_brain')
@@ -3482,10 +3867,8 @@ class TamagotchiLogic:
         elif self.squid.status == "carrying_rock":
             self.squid.rock_carry_timer -= 1
             if self.squid.rock_carry_timer <= 0:
-                direction = "left" if random.random() < 0.5 else "right"
-                if self.squid.throw_rock(direction):
-                    self.squid.status = "roaming"
-                    self.squid.current_rock_target = None
+                self.rock_interaction.decide_rock_action()
+                self.squid.current_rock_target = None
 
     def update_rock_test(self):
         """Delegate to interaction manager"""

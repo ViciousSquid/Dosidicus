@@ -1,0 +1,448 @@
+"""New Game and hatching, against the real main window.
+
+An egg hatching IS a new game - the same sequence as starting with no save -
+so the two are tested together, through MainWindow itself:
+
+  * the starter egg still hatches the way it always has;
+  * New Game deletes BOTH of the squid's save files, clears the squid's own
+    memory folder (and nothing outside the game), takes the plugins down so no
+    network session is left pointing at the old squid, and gives the new squid
+    a newborn brain rather than the old one's learned network;
+  * a parent's egg hatches through that same path, once, with no way to
+    cancel it, into a squid with a new identity, a newborn brain and no
+    memories - and with its own two messages.
+
+The game runs from a temporary working directory (images and plugins linked
+in), so no test touches a real squid's saves or memories.
+"""
+
+import json
+import os
+import shutil
+import sys
+import tempfile
+import unittest
+import zipfile
+from unittest import mock
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from PyQt5 import QtGui, QtWidgets                             # noqa: E402
+
+APP = None
+WINDOW = None
+MAIN = None
+_TMPDIR = None
+_PREV_CWD = None
+
+VISITOR_UUID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+
+
+class YesBox:
+    """TimedMessageBox, answered Yes."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def exec_(self):
+        return 0
+
+    def get_result(self):
+        return QtWidgets.QMessageBox.Yes
+
+
+def setUpModule():
+    global APP, WINDOW, MAIN, _TMPDIR, _PREV_CWD
+    _PREV_CWD = os.getcwd()
+    _TMPDIR = tempfile.TemporaryDirectory(prefix="dosidicus-newgame-")
+    for name in ("images", "plugins"):
+        os.symlink(os.path.join(_REPO_ROOT, name), os.path.join(_TMPDIR.name, name))
+    os.chdir(_TMPDIR.name)
+
+    APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    for name in ("question", "information", "critical", "warning"):
+        setattr(QtWidgets.QMessageBox, name, staticmethod(lambda *a, **k: 0))
+    QtWidgets.QDialog.exec_ = lambda self: 0
+
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('dosidicus_desktop_main_test',
+                                                os.path.join(_REPO_ROOT, 'main.py'))
+    main_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(main_module)
+    MAIN = main_module
+    main_module.TimedMessageBox = YesBox
+    WINDOW = main_module.MainWindow(specified_personality=None, debug_mode=False)
+    if hasattr(WINDOW.brain_window, "hebbian_timer"):
+        WINDOW.brain_window.hebbian_timer.stop()
+
+
+def tearDownModule():
+    brain = getattr(getattr(WINDOW, 'brain_window', None), 'brain_widget', None)
+    try:
+        if WINDOW is not None and WINDOW.tamagotchi_logic is not None:
+            WINDOW.tamagotchi_logic.stop()
+        if brain is not None:
+            brain.stop_worker()
+            brain._cleanup_render_worker()
+    except Exception:
+        pass
+    for timer_name in ('neurogenesis_timer', 'animation_timer', '_render_timer',
+                       '_brain_export_timer', '_link_fade_timer'):
+        timer = getattr(brain, timer_name, None) if brain is not None else None
+        if timer is not None:
+            try:
+                timer.stop()
+            except Exception:
+                pass
+    if WINDOW is not None:
+        WINDOW._cancel_game_callbacks()
+        WINDOW.plugin_manager.unload_all_plugins()
+        WINDOW.squid.retire()
+        WINDOW.splash.timer.stop()
+        WINDOW.brain_window.deleteLater()
+        WINDOW.deleteLater()
+    os.chdir(_PREV_CWD)
+    _TMPDIR.cleanup()
+
+
+# ---------------------------------------------------------------------------
+def save_files_for(squid_uuid):
+    """Where the live SaveManager keeps this squid's manual save and autosave.
+
+    Asked of the manager rather than assumed: another test module may have
+    pointed SaveManager somewhere else for the whole run.
+    """
+    manager = WINDOW.tamagotchi_logic.save_manager
+    return [manager._get_save_path_for_uuid(str(squid_uuid), is_autosave=False),
+            manager._get_save_path_for_uuid(str(squid_uuid), is_autosave=True)]
+
+
+def give_the_squid_a_past():
+    """A squid that has lived: saved twice, remembered things, learned and grown."""
+    logic = WINDOW.tamagotchi_logic
+    squid = WINDOW.squid
+    brain = WINDOW.brain_window.brain_widget
+    squid.memory_manager.add_short_term_memory('food', 'parent_meal', 'Ate well')
+    innate_pair = next(iter(brain.weights))
+    innate_value = brain.weights[innate_pair]
+    brain.weights[innate_pair] = 0.987 if innate_value != 0.987 else 0.5
+    brain.neuron_positions['parent_grown_neuron'] = (900, 900)
+    brain.state['parent_grown_neuron'] = 42.0
+    brain.weights[('hunger', 'parent_grown_neuron')] = 0.6
+    logic.save_game()
+    logic.save_game(is_autosave=True)
+    for path in save_files_for(squid.uuid):
+        assert os.path.exists(path), path
+    return innate_pair, innate_value
+
+
+def headstones():
+    return [item for item in WINDOW.user_interface.scene.items()
+            if getattr(item, 'is_headstone', False)]
+
+
+class Recorder:
+    def __init__(self):
+        self.messages = []
+
+    def __call__(self, message):
+        self.messages.append(message)
+
+
+def assert_newborn(test, parent_uuid, innate_pair, innate_value,
+                   parent_value=None, parent_name=None):
+    squid = WINDOW.squid
+    brain = WINDOW.brain_window.brain_widget
+    test.assertIs(WINDOW.tamagotchi_logic.squid, squid)
+    test.assertNotEqual(str(squid.uuid), str(parent_uuid))
+    test.assertEqual(squid.lifecycle.stage, 'living')
+    test.assertIsNone(squid.lifecycle.egg)
+    if parent_value is None:
+        # A newborn brain: the innate value back - nothing of the previous
+        # squid's network.
+        test.assertEqual(brain.weights[innate_pair], innate_value)
+    else:
+        # An egg's hatchling inherits half of its parent's weights between
+        # newborn neurons (src/inheritance.py): this one is the newborn's, or
+        # the parent's, perhaps a little mutated - and each inherited synapse
+        # says whose it was.
+        value = brain.weights[innate_pair]
+        test.assertTrue(abs(value - innate_value) < 1e-9
+                        or abs(value - parent_value) <= 0.1 + 1e-9, value)
+        inherited = [e for e in brain.ledger._recent if e.mechanism == 'inheritance']
+        test.assertTrue(inherited, "a hatchling inherits half its parent's weights")
+        test.assertTrue(all(e.detail['parent'] == parent_name for e in inherited))
+    # The grown neuron and its learned synapse are gone: no grown neuron is
+    # ever inherited.
+    test.assertNotIn('parent_grown_neuron', brain.neuron_positions)
+    test.assertNotIn('parent_grown_neuron', brain.state)
+    test.assertNotIn(('hunger', 'parent_grown_neuron'), brain.weights)
+    test.assertFalse(any('parent_grown_neuron' in key for key in brain.weights))
+    # No memories carried over, in the squid or on disk.
+    test.assertEqual(squid.memory_manager.short_term_memory, [])
+    test.assertEqual(squid.memory_manager.long_term_memory, [])
+    for path in save_files_for(parent_uuid):
+        test.assertFalse(os.path.exists(path), path)
+
+
+# ===========================================================================
+class StarterEggTests(unittest.TestCase):
+    """Runs first: the window was booted with no save."""
+
+    def test_1_the_starter_egg_hatches_as_it_always_has(self):
+        self.assertIsNotNone(WINDOW.squid)
+        self.assertEqual(WINDOW.squid.lifecycle.stage, 'living')
+        recorder = Recorder()
+        with mock.patch.object(WINDOW.user_interface, 'show_message', recorder):
+            WINDOW.splash.second_frame.emit()
+        self.assertEqual(recorder.messages, ["Squid is hatching!"])
+
+
+class NewGameTests(unittest.TestCase):
+
+    def test_2_new_game_starts_a_newborn_and_leaves_nothing_behind(self):
+        parent_uuid = WINDOW.squid.uuid
+        innate_pair, innate_value = give_the_squid_a_past()
+
+        class FakeNetworkPlugin:
+            shut_down = 0
+
+            def shutdown(self):
+                FakeNetworkPlugin.shut_down += 1
+
+        WINDOW.plugin_manager.plugins['fakenet'] = {'instance': FakeNetworkPlugin()}
+        removed = []
+        real_rmtree = shutil.rmtree
+
+        def recording_rmtree(path, *args, **kwargs):
+            removed.append(os.path.abspath(path))
+            return real_rmtree(path, *args, **kwargs)
+
+        recorder = Recorder()
+        with mock.patch.object(shutil, 'rmtree', recording_rmtree):
+            WINDOW.start_new_game()
+        with mock.patch.object(WINDOW.user_interface, 'show_message', recorder):
+            WINDOW.splash.second_frame.emit()
+
+        assert_newborn(self, parent_uuid, innate_pair, innate_value)
+        # The plugins came down - for multiplayer, that is the network reset.
+        self.assertEqual(FakeNetworkPlugin.shut_down, 1)
+        self.assertNotIn('fakenet', WINDOW.plugin_manager.plugins)
+        # Only the game's own memory folder was cleared - never the folder
+        # above the game, which is where the old path pointed.
+        self.assertEqual(removed, [os.path.abspath('_memory')])
+        above_the_game = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(MAIN.__file__))), '_memory')
+        self.assertNotIn(os.path.abspath(above_the_game), removed)
+        # A starter egg, so its own message.
+        self.assertEqual(recorder.messages, ["Squid is hatching!"])
+
+
+class HatchTests(unittest.TestCase):
+
+    def test_3_a_parents_egg_hatches_once_into_a_new_squid(self):
+        logic = WINDOW.tamagotchi_logic
+        parent = WINDOW.squid
+        parent_uuid = parent.uuid
+        innate_pair, innate_value = give_the_squid_a_past()
+        parent_value = WINDOW.brain_window.brain_widget.weights[innate_pair]
+
+        self.assertTrue(logic.record_reproduction("visit1-mate", VISITOR_UUID, "Mate"))
+        # The parent's half of the hatchling's weights went into the egg.
+        self.assertEqual(list(parent.lifecycle.egg_genes), [parent.name])
+        eggs = [i for i in WINDOW.user_interface.scene.items()
+                if getattr(i, 'category', '') == 'egg']
+        self.assertEqual(len(eggs), 1)
+
+        # Starvation's last tick: the parent dies through the ordinary update.
+        parent.is_sleeping = False
+        parent.hunger, parent.health = 100.0, 0.05
+        death_messages = Recorder()
+        with mock.patch.object(WINDOW.user_interface, 'show_message', death_messages):
+            logic.update_statistics()
+        self.assertTrue(parent.lifecycle.is_dead)
+        # The death is CIRCLE OF LIFE - and the news of it is not replaced by
+        # the trophy the achievement shows.
+        achievements = WINDOW.plugin_manager.plugins['achievements']['instance']
+        self.assertIn('circle_of_life', achievements.unlocked)
+        self.assertEqual(death_messages.messages[-1], f"{parent.name} has died.")
+
+        recorder = Recorder()
+        transition_frames = []
+        begin_new_life = WINDOW._begin_new_life
+        def observe_reset(*args, **kwargs):
+            cover = WINDOW._hatch_cover
+            before = cover.grab().toImage()
+            starter = MAIN.SplashScreen(WINDOW)
+            self.assertEqual(before, starter.grab().toImage(),
+                             'handoff must use the exact first frame of a new game')
+            starter.deleteLater()
+            begin_new_life(*args, **kwargs)
+            self.assertIs(WINDOW.splash, cover)
+            after = WINDOW.splash.grab().toImage()
+            self.assertEqual(before, after, 'egg/new-game handoff must be pixel-identical')
+            transition_frames.append(after)
+        with mock.patch.object(WINDOW.user_interface, 'show_message', recorder):
+            # What the death's timer calls. No dialog can intervene: the
+            # TimedMessageBox is never constructed on this path.
+            with mock.patch.object(MAIN, 'TimedMessageBox',
+                                   side_effect=AssertionError("no dialogs")), \
+                 mock.patch.object(WINDOW, '_begin_new_life', side_effect=observe_reset):
+                self.assertTrue(logic.begin_egg_hatching())
+            WINDOW.splash.second_frame.emit()
+            WINDOW.splash.finished.emit()
+
+        self.assertIsNot(WINDOW.squid, parent)
+        self.assertEqual(len(transition_frames), 1)
+        assert_newborn(self, parent_uuid, innate_pair, innate_value,
+                       parent_value=parent_value, parent_name=parent.name)
+        self.assertIn("An egg is hatching!", recorder.messages)
+        self.assertIn("A squid has hatched and you must look after him.",
+                      recorder.messages)
+        self.assertNotIn("Squid is hatching!", recorder.messages)
+        # The egg completed: gone from the tank, and the hatchling - not the
+        # parent - is what is saved now.
+        self.assertEqual([i for i in WINDOW.user_interface.scene.items()
+                          if getattr(i, 'category', '') == 'egg'], [])
+        self.assertTrue(os.path.exists(save_files_for(WINDOW.squid.uuid)[0]))
+
+        # It cannot hatch again: not from the old logic's timer, not by id.
+        hatchling = WINDOW.squid
+        self.assertFalse(logic.begin_egg_hatching())
+        self.assertFalse(WINDOW.hatch_egg("visit1-mate"))
+        self.assertIs(WINDOW.squid, hatchling)
+
+        # And a restart loads the hatchling, with no egg anywhere.
+        latest = WINDOW.save_manager.get_latest_save()
+        self.assertIn(str(hatchling.uuid).replace('-', '_'), latest)
+        loaded = WINDOW.save_manager.load_game()
+        self.assertEqual(loaded['game_state']['lifecycle']['stage'], 'living')
+        self.assertIsNone(loaded['game_state']['lifecycle']['egg'])
+
+        # The parent's achievements hatch with its egg - CIRCLE OF LIFE among
+        # them - into a plugin set up to follow the hatchling, and are saved.
+        hatched = WINDOW.plugin_manager.plugins['achievements']
+        self.assertIsNot(hatched['instance'], achievements)
+        self.assertTrue(hatched['is_setup'])
+        self.assertIs(hatched['instance'].squid, hatchling)
+        self.assertIn('circle_of_life', hatched['instance'].unlocked)
+        self.assertIn('circle_of_life', loaded['achievements']['unlocked'])
+
+        # The parent became a headstone, which the hatchling's tank keeps.
+        self.assertEqual([stone.deceased for stone in headstones()], [parent.name])
+        self.assertEqual([d['deceased'] for d in loaded['game_state']['decorations']
+                          if 'deceased' in d], [parent.name])
+
+
+class NeglectTests(unittest.TestCase):
+
+    def test_4_a_neglected_squid_becomes_a_headstone_and_a_new_squid_hatches(self):
+        logic = WINDOW.tamagotchi_logic
+        squid = WINDOW.squid
+        before = [stone.deceased for stone in headstones()]
+        logic.lifecycle_config['sickness_seconds'] = 1e9     # neglect alone
+        squid.is_sleeping = False
+        squid.hunger = 100.0
+        messages = Recorder()
+        with mock.patch.object(WINDOW.user_interface, 'show_message', messages):
+            for _ in range(int(logic.lifecycle_config['neglect_seconds'])):
+                logic.update_statistics()
+        self.assertEqual(squid.lifecycle.death_cause, 'neglected')
+        self.assertEqual(messages.messages[-1], f"{squid.name} has died of neglect.")
+        self.assertFalse(squid.squid_item.isVisible())
+        stones = headstones()
+        self.assertEqual(sorted(s.deceased for s in stones), sorted(before + [squid.name]))
+        for stone in stones:
+            self.assertLessEqual(stone.pixmap().width(), squid.squid_width * 0.8)
+            self.assertLessEqual(stone.pixmap().height(), squid.squid_height * 0.8)
+
+        # The player cannot delete one, through the real Delete action.
+        for stone in stones:
+            stone.setSelected(True)
+        WINDOW.user_interface.delete_selected_items()
+        self.assertEqual(len(headstones()), len(stones))
+
+        # With no egg, a new squid hatches from a fresh one - no dialog, once.
+        with mock.patch.object(MAIN, 'TimedMessageBox',
+                               side_effect=AssertionError("no dialogs")):
+            self.assertTrue(logic.continue_after_death())
+        newborn = WINDOW.squid
+        self.assertIsNot(newborn, squid)
+        self.assertEqual(newborn.lifecycle.stage, 'living')
+        self.assertFalse(WINDOW.replace_dead_squid(str(squid.uuid)))
+        self.assertIs(WINDOW.squid, newborn)
+        self.assertEqual(sorted(s.deceased for s in headstones()),
+                         sorted(before + [squid.name]))
+        recorder = Recorder()
+        with mock.patch.object(WINDOW.user_interface, 'show_message', recorder):
+            WINDOW.splash.second_frame.emit()
+        self.assertEqual(recorder.messages, ["Squid is hatching!"])
+
+
+class SceneClearingTests(unittest.TestCase):
+
+    def test_4b_a_new_life_never_removes_a_child_item_on_its_own(self):
+        """Removing a child item handed it back to Python while its parent
+        still owned it, so it was deleted twice: a crash when an egg hatched
+        after a visit had left items with children in the tank."""
+        scene = WINDOW.user_interface.scene
+        parent = QtWidgets.QGraphicsRectItem(0, 0, 10, 10)
+        child = QtWidgets.QGraphicsRectItem(0, 0, 5, 5, parent)
+        QtWidgets.QGraphicsRectItem(0, 0, 2, 2, child)
+        scene.addItem(parent)
+        removed = []
+        remove = scene.removeItem
+        with mock.patch.object(scene, 'removeItem',
+                               side_effect=lambda item: (removed.append(item), remove(item))):
+            WINDOW._begin_new_life(after_death=True)
+        self.assertIn(parent, removed)
+        self.assertNotIn(child, removed)
+        self.assertTrue(all(item.parentItem() is None for item in removed))
+        self.assertIsNone(parent.scene())
+
+    def test_4c_the_arrow_drawn_as_a_visitor_arrives_fades_away(self):
+        """Its fade timer was referred to only by the fade itself, so it was
+        garbage-collected and the arrow - those child items - stayed up."""
+        import gc
+        import logging
+        from types import SimpleNamespace
+        from PyQt5 import QtCore
+        from plugins.multiplayer.mp_plugin_logic import MultiplayerPlugin
+        scene = QtWidgets.QGraphicsScene()
+        plugin = MultiplayerPlugin()
+        plugin.logger = logging.getLogger('arrow-test')
+        plugin.tamagotchi_logic = SimpleNamespace(user_interface=SimpleNamespace(
+            scene=scene, window_width=800, window_height=600))
+        plugin._show_exit_arrow('left')
+        self.assertTrue(scene.items())
+        gc.collect()
+        loop = QtCore.QEventLoop()
+        QtCore.QTimer.singleShot(2500, loop.quit)
+        loop.exec_()
+        self.assertEqual(scene.items(), [])
+
+
+class QuitTests(unittest.TestCase):
+    """Runs last: it closes the window."""
+
+    def test_5_quitting_keeps_the_achievements_in_the_save(self):
+        squid_uuid = WINDOW.squid.uuid
+        instance = WINDOW.plugin_manager.plugins['achievements']['instance']
+        instance.progress['quit_marker'] = 7
+
+        WINDOW.closeEvent(QtGui.QCloseEvent())
+
+        path = save_files_for(squid_uuid)[0]
+        with zipfile.ZipFile(path) as archive:
+            self.assertIn('achievements.json', archive.namelist())
+            saved = json.loads(archive.read('achievements.json'))
+        self.assertEqual(saved['progress']['quit_marker'], 7)
+        self.assertNotIn('achievements', WINDOW.plugin_manager.plugins)
+
+
+if __name__ == '__main__':
+    unittest.main()

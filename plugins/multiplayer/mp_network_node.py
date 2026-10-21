@@ -1,5 +1,6 @@
 # File: mp_network_node.py
 
+import hashlib
 import uuid
 import time
 import socket
@@ -10,7 +11,8 @@ import traceback
 import threading
 import logging
 
-from .mp_constants import MULTICAST_GROUP, MULTICAST_PORT, MAX_PACKET_SIZE
+from .mp_constants import (MULTICAST_GROUP, MULTICAST_PORT, MAX_PACKET_SIZE,
+                           RECEIVE_BUFFER_SIZE, MAX_MESSAGE_BYTES)
 
 
 class NetworkNode:
@@ -312,7 +314,7 @@ class NetworkNode:
                     continue # Retry connection
 
             try:
-                raw_data, addr = self.socket.recvfrom(MAX_PACKET_SIZE)
+                raw_data, addr = self.socket.recvfrom(RECEIVE_BUFFER_SIZE)
 
                 if raw_data:
                     # Use the thread-safe queue for passing data to the main thread.
@@ -636,6 +638,8 @@ class NetworkNode:
                             message_dict = self.utils.decompress_message(raw_data)
                         else: # Fallback to direct zlib + json
                             data_for_json_decode = zlib.decompress(raw_data)
+                            if len(data_for_json_decode) > MAX_MESSAGE_BYTES:
+                                continue
                             message_dict = json.loads(data_for_json_decode.decode('utf-8'))
                         decoded_successfully = True
                     except (zlib.error, TypeError) as e_zlib: # TypeError if utils.decompress_message fails unexpectedly
@@ -669,16 +673,18 @@ class NetworkNode:
             # ── Deduplication ────────────────────────────────────────────────────────
             # On a single machine every multicast send is received once per membership
             # (once per NIC interface + the 0.0.0.0 catch-all join), so the same
-            # logical message can arrive 2-3× in the queue.  We key on
-            # (sender_node_id, timestamp) – every outgoing envelope already stamps a
-            # float timestamp – and silently drop copies seen within _dedup_ttl seconds.
+            # logical message can arrive 2-3× in the queue - byte for byte the same
+            # datagram. We key on (sender_node_id, digest of the datagram) and drop
+            # copies seen within _dedup_ttl seconds. Keying on the envelope's
+            # timestamp instead dropped DIFFERENT messages sent back to back on a
+            # coarse clock (a frame and its consequences; ~15 ms on Windows).
             _now = time.time()
             # Prune expired entries so the dict stays small
             self._seen_message_ids = {
                 k: v for k, v in self._seen_message_ids.items()
                 if _now - v < self._dedup_ttl
             }
-            msg_dedup_key = (final_sender_node_id, message_dict.get('timestamp'))
+            msg_dedup_key = (final_sender_node_id, hashlib.blake2b(raw_data, digest_size=16).digest())
             if msg_dedup_key in self._seen_message_ids:
                 self.packets_dropped_duplicate += 1
                 if self.debug_mode:

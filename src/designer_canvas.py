@@ -651,9 +651,10 @@ class BrainCanvas(QGraphicsView):
         shape = getattr(neuron, 'shape', 'circle')
 
         # --- CASE 1: CONNECTOR (Hexagon) ---
-        is_connector = (neuron.neuron_type == NeuronType.CONNECTOR or 
+        from .brain_constants import is_social_neuron
+        is_connector = (neuron.neuron_type == NeuronType.CONNECTOR or
                         name.startswith('connector_') or
-                        shape == 'hexagon')
+                        (shape == 'hexagon' and not is_social_neuron(name)))
         
         if is_connector:
             # Use the special ConnectorNeuronItem (black hexagon with 'c')

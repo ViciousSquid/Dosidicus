@@ -9,7 +9,7 @@ import sys
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QTabWidget, QStatusBar,
     QAction, QToolBar, QLabel, QComboBox, QPushButton, QMessageBox, QFileDialog,
-    QDialog, QInputDialog, QFrame, QSizePolicy, QToolButton, QMenu, QSplitter
+    QDialog, QInputDialog, QFrame, QSizePolicy, QToolButton, QMenu, QSplitter, QApplication
 )
 from PyQt5.QtGui import (
     QKeySequence, QIcon, QFont, QFontMetrics, QPainter, QColor, QPalette,
@@ -157,7 +157,7 @@ class BrainDesignerWindow(QMainWindow):
             self.design.add_missing_required_neurons()
 
             self.setWindowTitle("Brain Designer - Dosidicus-2")
-            self.setMinimumSize(1280, 900)
+            self._fit_to_screen(parent)
 
             with OperationLogger("Setting up UI", self.logger):
                 self.setup_ui()
@@ -192,6 +192,34 @@ class BrainDesignerWindow(QMainWindow):
     # ==========================================================================
     # INITIALIZATION AND SETUP
     # ==========================================================================
+
+    #: The size the designer was laid out for.
+    DESIGN_MIN_SIZE = (1280, 900)
+
+    def _fit_to_screen(self, parent=None):
+        """Minimum size 1280x900, or as much of the screen as leaves room
+        for the title bar, menu bar and Dock, whichever is smaller.
+
+        A fixed 1280x900 minimum is taller than a Mac's screen: Qt measures
+        it in points, and a 14" MacBook Pro has 982 of them with the menu bar
+        and Dock still to come off. The window - and the Brain Tool it is
+        embedded in - was forced past the bottom of the screen.
+        """
+        min_w, min_h = self.DESIGN_MIN_SIZE
+        screen = None
+        try:
+            if parent is not None and parent.window() is not None:
+                handle = parent.window().windowHandle()
+                screen = handle.screen() if handle is not None else None
+            if screen is None:
+                screen = QApplication.primaryScreen()
+        except Exception:
+            screen = None
+        if screen is not None:
+            avail = screen.availableGeometry()
+            min_w = min(min_w, int(avail.width() * 0.9))
+            min_h = min(min_h, int(avail.height() * 0.85))
+        self.setMinimumSize(min_w, min_h)
 
     def setup_ui(self):
         """Setup the main UI layout."""
@@ -1200,7 +1228,7 @@ class BrainDesignerWindow(QMainWindow):
         """Open a design file."""
         try:
             path, _ = QFileDialog.getOpenFileName(
-                self, "Open Design", "", "JSON (*.json)"
+                self, "Open Design", "", "Brains and saves (*.json *.zip)"
             )
             if path:
                 self.logger.info(f"Opening design from: {path}")

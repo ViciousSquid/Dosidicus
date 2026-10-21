@@ -21,75 +21,66 @@ import time
 from datetime import datetime
 
 
-class MemoryManager:
-    def __init__(self):
-        self.short_term = []
-        self.long_term = []
-        self.short_term_limit = 50
-        self.short_term_duration = 300.0   # sim seconds (5 simulated minutes)
-        self._last_cleanup = 0.0
+from . import shared
+from src.memory_manager import MemoryManager as DesktopMemoryManager
 
-    # ------------------------------------------------------------- write
+
+class MemoryManager(DesktopMemoryManager):
+    """In-memory, simulation-clock adapter over desktop memory management."""
+    def __init__(self):
+        self._now = 0.0
+        super().__init__(persistent=False, clock=lambda: self._now)
+
+    @property
+    def short_term(self):
+        return self.short_term_memory
+
+    @short_term.setter
+    def short_term(self, value):
+        self.short_term_memory = value
+
+    @property
+    def long_term(self):
+        return self.long_term_memory
+
+    @long_term.setter
+    def long_term(self, value):
+        self.long_term_memory = value
+
     def add_short_term(self, category, key, value, raw_value=None,
                        importance=1.0, related_neurons=None, now=0.0):
-        for m in self.short_term:
-            if m.get("key") == key and m.get("category") == category:
-                m["importance"] = m.get("importance", 1.0) + 0.5
-                m["timestamp"] = now
-                m["wall"] = time.time()
-                m["access_count"] = m.get("access_count", 0) + 1
-                if m["importance"] >= 3.0:
-                    self.transfer(category, key, now)
-                return
-        self.short_term.append({
-            "timestamp": now, "wall": time.time(),
-            "category": category, "key": key, "value": value,
-            "raw_value": raw_value, "importance": importance,
-            "related_neurons": related_neurons or [], "access_count": 1,
-        })
-        if len(self.short_term) > self.short_term_limit:
-            self.short_term.pop(0)
+        self._now = now
+        self.add_short_term_memory(category, key, value, importance, related_neurons)
+        for memory in self.short_term + self.long_term:
+            if memory.get('category') == category and memory.get('key') == key:
+                memory.update(raw_value=raw_value, wall=time.time())
 
     def add_long_term(self, category, key, value, raw_value=None, now=0.0):
-        for m in self.long_term:
-            if m.get("key") == key and m.get("category") == category:
-                m["timestamp"] = now
-                return
-        self.long_term.append({
-            "timestamp": now, "wall": time.time(), "category": category,
-            "key": key, "value": value, "raw_value": raw_value,
-        })
+        self._now = now
+        self.add_long_term_memory(category, key, value)
+        for memory in self.long_term:
+            if memory.get('category') == category and memory.get('key') == key:
+                memory.update(raw_value=raw_value, wall=time.time())
 
-    # ------------------------------------------------------------- promote / decay
-    def should_transfer(self, m):
-        return (m.get("importance", 1) >= 7 or
-                m.get("access_count", 0) >= 3 or
-                (m.get("importance", 1) >= 5 and m.get("access_count", 0) >= 2))
+    def should_transfer(self, memory):
+        return self.should_transfer_to_long_term(memory)
 
     def transfer(self, category, key, now=0.0):
-        for m in list(self.short_term):
-            if m.get("category") == category and m.get("key") == key:
-                self.add_long_term(category, key, m["value"], m.get("raw_value"), now)
-                self.short_term.remove(m)
-                return
+        self._now = now
+        source = next((dict(m) for m in self.short_term if m.get('category') == category and m.get('key') == key), None)
+        self.transfer_to_long_term_memory(category, key)
+        if source:
+            for memory in self.long_term:
+                if memory.get('category') == category and memory.get('key') == key:
+                    memory.update(source)
 
     def review_and_transfer(self, now):
-        for m in list(self.short_term):
-            if (now - m.get("timestamp", 0)) > self.short_term_duration:
-                if self.should_transfer(m):
-                    self.transfer(m["category"], m["key"], now)
-                else:
-                    self.short_term.remove(m)
-        if len(self.short_term) > self.short_term_limit:
-            self.short_term.sort(
-                key=lambda x: (x.get("importance", 1), x.get("access_count", 0)),
-                reverse=True)
-            self.short_term = self.short_term[:self.short_term_limit]
+        self._now = now
+        self.review_and_transfer_memories()
 
     def periodic(self, now):
-        if now - self._last_cleanup > 30.0:
-            self._last_cleanup = now
-            self.review_and_transfer(now)
+        self._now = now
+        self.periodic_memory_management()
 
     def consolidate_sleep(self, now):
         """Sleep consolidation: rehearse and promote the day's more meaningful

@@ -223,6 +223,8 @@ translations = {
     "long_term_memory": "Core Memories",
     "no_memories": "Clean slate.",
     "overview": "TL;DR",
+    "social_knowledge": "The Squad",
+    "social_tab_no_neurons": "This squid has zero social brain cells, it's giving lone wolf: Enable Multiplayer",
     "memory_stats": "Brain Stats",
     "categories": "Folders",
     "time_label": "Timestamp:",
@@ -550,6 +552,8 @@ translations = {
     "ach_happiness_100_desc": "Reach 100% Happiness",
     "ach_all_stats_high_name": "Thriving",
     "ach_all_stats_high_desc": "All stats > 80%",
+    "ach_circle_of_life_name": "CIRCLE OF LIFE",
+    "ach_circle_of_life_desc": "Mated, quit snacks, perished. Egg incoming",
 
     # Cleaning
     "ach_first_clean_name": "Maid Service",
@@ -598,6 +602,14 @@ translations = {
     "ach_objects_investigated_25_desc": "Investigate 25 things",
     "ach_objects_investigated_100_name": "Sherlock",
     "ach_objects_investigated_100_desc": "Investigate 100 things",
+    "ach_first_fight_name": "Fisticuffs!",
+    "ach_first_fight_desc": "First squid fight, no cap",
+    "ach_fights_5_name": "Scuffle",
+    "ach_fights_5_desc": "5 squid fights",
+    "ach_fights_20_name": "Tussle",
+    "ach_fights_20_desc": "20 squid fights",
+    "ach_fights_50_name": "Slugfest",
+    "ach_fights_50_desc": "50 squid fights",
 
     # Exploration (Poop)
     "ach_first_poop_throw_name": "Ew David",

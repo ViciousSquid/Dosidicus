@@ -18,6 +18,8 @@ class StatisticsTab(BrainBaseTab):
             'poops_created': 0,
             'max_poops_cleaned': 0,
             'startles_experienced': 0,
+            'fights_won': 0,
+            'fights_lost': 0,
             'ink_clouds_created': 0,
             'times_colour_changed': 0,
             'rocks_thrown': 0,
@@ -75,6 +77,8 @@ class StatisticsTab(BrainBaseTab):
         if not squid_stats:
             return
 
+        self.statistics['fights_won'] = getattr(squid_stats, 'fights_won', 0)
+        self.statistics['fights_lost'] = getattr(squid_stats, 'fights_lost', 0)
         self.statistics['distance_swam'] = getattr(squid_stats, 'distance_swam', self.statistics['distance_swam'])
         self.statistics['cheese_eaten'] = getattr(squid_stats, 'cheese_consumed', self.statistics['cheese_eaten'])
         self.statistics['sushi_eaten'] = getattr(squid_stats, 'sushi_consumed', self.statistics['sushi_eaten'])
@@ -141,6 +145,8 @@ class StatisticsTab(BrainBaseTab):
             ('poops_created', loc.get('stat_poops')),
             ('max_poops_cleaned', loc.get('stat_max_poops')),
             ('startles_experienced', loc.get('stat_startles')),
+            ('fights_won', loc.get('stat_fights_won', 'Fights won')),
+            ('fights_lost', loc.get('stat_fights_lost', 'Fights lost')),
             ('ink_clouds_created', loc.get('stat_ink')),
             ('times_colour_changed', loc.get('stat_colour_change')),
             ('rocks_thrown', loc.get('stat_rocks')),

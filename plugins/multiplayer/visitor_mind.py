@@ -35,7 +35,9 @@ from .identity import SquidIdentity
 from .remote_protocol import (
     ActionIntent, Consequence, PerceptionFrame, ProtocolError, VisitEnd,
     CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
-    CONSEQUENCE_EJECTED, END_DEPARTED, END_LINK_LOST, HEADINGS,
+    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, CONSEQUENCE_FIGHT, CONSEQUENCE_HIT,
+    CONSEQUENCE_THROWN,
+    END_DEPARTED, END_LINK_LOST, HEADINGS,
     INTENT_LEASE, LINK_TIMEOUT, OBSERVABLE_SENSORS, new_visit_id,
 )
 
@@ -52,6 +54,17 @@ _ATE_HUNGER_RELIEF = 12.0
 _CONTEST_WON_SATISFACTION = 8.0
 _CONTEST_LOST_ANXIETY = 6.0
 _BLOCKED_SATISFACTION = 2.0
+
+
+#: What brings a visiting squid home, when its own network chooses it: flight
+#: (a frightened squid swims home) or rest (it goes home to sleep - always: a
+#: squid that is asleep while away comes home on the next tick, however it
+#: fell asleep). With the thought it has about it.
+HOMEWARD = {
+    'act_flee': "I was frightened, so I swam home.",
+    'act_rest': "I am tired: I went home to sleep.",
+    'act_collapse': "I am exhausted: I went home to sleep.",
+}
 
 
 class RemotePerception:
@@ -158,6 +171,17 @@ class VisitorMind:
         self.session: Optional[EncounterSession] = None
         self._seq = 0
         self._restore: Dict[str, Callable] = {}
+        #: Told whether this squid won, once per fight it records while
+        #: visiting. Used to announce the fight; it decides nothing.
+        self.on_fight: Optional[Callable[[bool], None]] = None
+        #: Its half of a hatchling's weights, made once per mating and resent
+        #: with each retelling of the news.
+        self._gametes: Dict[str, Dict[str, float]] = {}
+        # Retained for this mind's lifetime: a repeated UDP consequence must
+        # never repeat an irreversible physical or remembered consequence.
+        self._rock_hits = set()
+        self._inking = False
+        self._resisting_sleep = False     # a stubborn squid holding off sleep
 
     # ==================================================================
     # Perception: the host's frame, through the ordinary sensor path
@@ -205,7 +229,26 @@ class VisitorMind:
             # squid has had a chance to decide anything.
             self.visit_id = self.perception.visit_id
             self._open_session()
+            # What its senses report in the host tank, as they would at home:
+            # the resident in view or not, how close, a scuffle - and, from
+            # its own memory, whether it knows the squid it is looking at.
+            self._perceive_host_tank()
         return accepted
+
+    def _perceive_host_tank(self, away: bool = True) -> None:
+        from .encounter import perceive_recognition
+        window = getattr(self.logic, 'brain_window', None)
+        widget = getattr(window, 'brain_widget', None)
+        if not hasattr(widget, 'perceive'):
+            return
+        sense = (lambda name: self.perception.sensor(name, 0.0)) if away else (lambda name: 0.0)
+        in_view = sense('squid_in_view')
+        widget.perceive('squid_in_view', in_view)
+        widget.perceive('squid_proximity', sense('squid_proximity'))
+        widget.perceive('in_fight', sense('in_fight'))
+        resident = self.perception.resident if away and in_view > 0 else None
+        perceive_recognition(widget, self.peer_ledger,
+                             getattr(resident, 'uuid', '') if resident else '')
 
     def _open_session(self) -> None:
         """Start recording the experience, once we know whose tank this is.
@@ -227,6 +270,10 @@ class VisitorMind:
             first_meeting=first_meeting, now=self.clock(), clock=self.clock)
         self._log(f"Encounter opened with {self.perception.resident} "
                   f"(first meeting: {first_meeting})")
+        say = getattr(self.logic, 'show_message', None)
+        if callable(say):               # its own tank says where it has gone
+            say(f"{getattr(squid, 'name', 'Your squid')} is visiting "
+                f"{self.perception.resident.name}'s tank")
 
     # ==================================================================
     # Decision: the squid's own network, and the engine's own rule
@@ -253,6 +300,12 @@ class VisitorMind:
         from src.brain_constants import (ACTION_BEHAVIOURS, FALLBACK_ACTION,
                                          ACTION_THRESHOLDS)
 
+        # Exhaustion is a reflex, outside the competition, and nothing resists
+        # it: an exhausted squid goes home to sleep.
+        if wants('act_collapse', float(brain_state.get('act_collapse', 0.0) or 0.0)):
+            self.go_home('act_collapse')
+            return None
+
         behaviour, confidence, _urgency = select_action(brain_state)
         if behaviour is None:
             # Nothing cleared its own threshold. Locomotion is the fallback,
@@ -269,6 +322,29 @@ class VisitorMind:
         if action is None:
             return None
 
+        # Fear or tiredness takes it home: its own network's flight, or its
+        # rest, winning the competition ends the visit - no timer, no host.
+        # A stubborn squid can hold off sleep for a while (never exhaustion,
+        # never past personality.STUBBORN_SLEEP_LIMIT) and does the next thing
+        # its network wants instead.
+        from src.personality import RESISTED_SLEEP, squid_resists_sleep
+        squid = getattr(self.logic, 'squid', None)
+        resisting = action == 'act_rest' and squid_resists_sleep(squid)
+        if resisting and not self._resisting_sleep:
+            window = getattr(self.logic, 'brain_window', None)
+            if hasattr(window, 'add_thought'):
+                window.add_thought(RESISTED_SLEEP)
+        self._resisting_sleep = resisting
+        if resisting:
+            awake = {b: u for b, u in (_urgency or {}).items() if b != behaviour}
+            behaviour = max(awake, key=awake.get) if awake else ACTION_BEHAVIOURS[FALLBACK_ACTION]
+            action = self._neuron_for(behaviour)
+            if action is None or action in HOMEWARD:
+                return None
+        elif action in HOMEWARD:
+            self.go_home(action)
+            return None
+
         # The encounter is being had, not just transacted: what this squid did
         # and how its drives moved while it was here are what the record is
         # made of when the visit ends.
@@ -276,10 +352,16 @@ class VisitorMind:
             self.session.observe(
                 drives=drive_snapshot(getattr(self.logic, 'squid', None)),
                 action=behaviour,
-                proximity=self.perception.sensor('conspecific_proximity', 0.0),
-                visible=bool(self.perception.sensor('conspecific_visible', 0.0)),
+                proximity=self.perception.sensor('squid_proximity', 0.0),
+                visible=bool(self.perception.sensor('squid_in_view', 0.0)),
                 now=self.clock())
 
+        # How it would fight, from its own brain and body, for the host to
+        # resolve a fight with: its aggression neuron, how hard it would
+        # fight back, and its fitness (src/fighting.py).
+        from src.fighting import commitment, fight_predisposition, squid_fitness
+        from src.throwing import practice_of
+        squid = getattr(self.logic, 'squid', None)
         self._seq += 1
         intent = ActionIntent(
             visit_id=self.visit_id,
@@ -291,6 +373,13 @@ class VisitorMind:
             heading=self._heading_for(action, brain_state),
             target_id=self._target_for(action),
             lease=INTENT_LEASE,
+            aggression=fight_predisposition(brain_state)[0],
+            defence=commitment(brain_state, attacking=False)[0],
+            fitness=squid_fitness(squid)[0] if squid is not None else 1.0,
+            # Its own throwing record at home: the squid's statistics on
+            # desktop, the game's on mobile.
+            practice=practice_of(getattr(squid, 'statistics', None),
+                                 getattr(self.logic, 'stats', None)),
         )
         self.last_intent = intent
         self.intents_sent += 1
@@ -363,12 +452,66 @@ class VisitorMind:
         if consequence.visit_id != self.visit_id:
             return None
 
+        if consequence.kind in (CONSEQUENCE_HIT, CONSEQUENCE_THROWN):
+            throw_id = consequence.detail.get('throw_id')
+            if not isinstance(throw_id, str) or not throw_id.strip():
+                return None
+            key = (consequence.visit_id, throw_id, consequence.kind,
+                   consequence.detail.get('taken', True))
+            if key in self._rock_hits:
+                return None
+            self._rock_hits.add(key)
         self.consequences.append(consequence)
         squid = getattr(self.logic, 'squid', None)
         if squid is None:
             return consequence
 
         kind, detail = consequence.kind, consequence.detail
+
+        if kind == CONSEQUENCE_FIGHT:
+            fight_id, won = detail.get('fight_id'), detail.get('won')
+            stats = getattr(squid, 'statistics', None)
+            if (isinstance(fight_id, str) and 0 < len(fight_id) <= 64
+                    and isinstance(won, bool) and stats is not None):
+                if stats.record_fight_result(fight_id, won):
+                    self._live_through_fight(squid, fight_id, won, detail)
+                    if self.session is not None:
+                        self.session.observe(action='fighting', now=self.clock())
+                        self.session.note_fight(won)   # remembered against the resident
+                    listener = self.on_fight
+                    if listener is not None:
+                        try:
+                            listener(won)
+                        except Exception as exc:
+                            self._log(f"fight listener failed: {exc}")
+            return consequence
+
+        if kind == CONSEQUENCE_MATED:
+            self._note_mated(detail.get('mating_id'))
+            return consequence
+
+        if kind == CONSEQUENCE_HIT:
+            if detail.get('taken', True):
+                self._feel_hit(squid, detail)
+            elif self.session is not None and (not detail.get('peer_uuid')
+                    or detail['peer_uuid'] == self.session.peer.uuid):
+                self.session.note_hit(taken=False,
+                                      what='poop' if detail.get('what') == 'poop' else 'rock')
+            elif detail.get('peer_uuid'):
+                memory = getattr(squid, 'memory_manager', None)
+                if memory is not None:
+                    memory.add_short_term_memory('social', 'rock:' + detail['throw_id'],
+                        {'peer_uuid': detail['peer_uuid'], 'hits_given': 1}, importance=3)
+            return consequence
+
+        if kind == CONSEQUENCE_THROWN:
+            memory = getattr(squid, 'memory_manager', None)
+            if memory is not None:
+                memory.add_short_term_memory('play', 'rock_throw', dict(detail), importance=2)
+            track = getattr(self.logic, 'track_rock_thrown', None)
+            if callable(track):
+                track()
+            return consequence
 
         # File the objective fact against this individual. What went into the
         # tank's ledger is what HAPPENED - an object changed hands, food was
@@ -380,7 +523,9 @@ class VisitorMind:
                 self.session.observe(action='contesting', now=self.clock())
             elif kind == CONSEQUENCE_ATE and detail.get('ok'):
                 self.session.observe(action='eating', now=self.clock())
-        if kind == CONSEQUENCE_ATE and detail.get('ok'):
+        lifecycle = getattr(squid, 'lifecycle', None)
+        can_eat = lifecycle is None or lifecycle.can_eat
+        if kind == CONSEQUENCE_ATE and detail.get('ok') and can_eat:
             squid.hunger = max(0.0, float(getattr(squid, 'hunger', 50.0))
                                - _ATE_HUNGER_RELIEF)
         elif kind == CONSEQUENCE_CONTEST:
@@ -394,6 +539,49 @@ class VisitorMind:
             squid.satisfaction = max(0.0, float(getattr(squid, 'satisfaction', 50.0))
                                      - _BLOCKED_SATISFACTION)
         return consequence
+
+    def _note_mated(self, mating_id) -> bool:
+        """The host says this visit's contact was a mating.
+
+        Only remembered. The egg is in the host's tank and the parent that
+        starves for it is the host's resident; nothing in this squid's body
+        or lifecycle changes, and no drive is nudged to say how it should feel.
+        The host repeats the news, so it is filed once by its id: a mating
+        already in this visit's record, or already in memory, is ignored.
+        """
+        from src.lifecycle import is_valid_mating_id
+        if not is_valid_mating_id(mating_id):
+            return False
+        # Its half of the hatchling's weights, made here from its own brain.
+        # Sent every time the news comes - the host keeps it once - so a
+        # lost packet does not leave the egg with one parent: the host retells
+        # a mating when the same squid comes back, and the gamete goes again
+        # then too, though the mating itself is already remembered.
+        self._send_gamete(mating_id)
+        if self.peer_ledger is not None and self.peer_ledger.has_mated(mating_id):
+            return False
+        if self.session is None:
+            self._open_session()
+        if self.session is None:
+            return False
+        if self.session.note_mated(mating_id):
+            self._log(f"Mating {mating_id} with {self.session.peer} noted")
+            return True
+        return False
+
+    def _send_gamete(self, mating_id: str) -> bool:
+        from src.inheritance import gamete
+        from .remote_protocol import Gamete, MSG_GAMETE
+        window = getattr(self.logic, 'brain_window', None)
+        brain = getattr(window, 'brain_widget', None)
+        if brain is None or not self.visit_id:
+            return False
+        if mating_id not in self._gametes:
+            self._gametes[mating_id] = gamete(getattr(brain, 'weights', {}) or {})
+        genes = self._gametes[mating_id]
+        if not genes:
+            return False
+        return bool(self.send(MSG_GAMETE, Gamete(self.visit_id, mating_id, genes).to_payload()))
 
     # ==================================================================
     # The visit
@@ -409,10 +597,27 @@ class VisitorMind:
         self.perception.begin(self.visit_id)
         self.consequences = []
         self._seq = 0
+        from src.decision_engine import wants
+        self._inking = wants('act_ink', float(self._brain_state().get('act_ink', 0.) or 0.))
+        self._resisting_sleep = False
         if squid is not None:
             squid.is_transitioning = True
             squid.can_move = False
+            # Its body is in the host's tank, not this one: hidden here until
+            # end_visit. Whose tank, the first frame says (_open_session).
+            if getattr(squid, 'squid_item', None) is not None:
+                try:
+                    squid.squid_item.setVisible(False)
+                except Exception:
+                    pass
         return self.visit_id
+
+    def go_home(self, action: str) -> None:
+        """Come home because its own network chose to (HOMEWARD), and say why."""
+        from src.social_knowledge import think
+        think(self.logic, HOMEWARD[action])
+        self._log(f"going home: {action} won")
+        self.end_visit(reason=END_DEPARTED, notify=True)
 
     def end_visit(self, reason: str = END_DEPARTED, notify: bool = True) -> None:
         """Come home. Always safe to call, and always leaves the squid usable.
@@ -429,6 +634,7 @@ class VisitorMind:
                 self._log(f"could not announce departure: {exc}")
         self.close_session()
         self.perception.end()
+        self._perceive_host_tank(away=False)   # home again: its own senses take over
         self.visit_id = ''
         self.host_uuid = ''
         self.last_intent = None
@@ -461,22 +667,101 @@ class VisitorMind:
         record = session.close(
             drives=drive_snapshot(getattr(self.logic, 'squid', None)),
             now=self.clock(),
-            related_neurons=self._active_conspecific_neurons())
+            related_neurons=self._active_social_neurons())
         if self.peer_ledger.record(record):
             self._log(f"Visit remembered: {record.describe()}")
+            self._learn_from(record)
             return record
         return None
 
-    def _active_conspecific_neurons(self) -> List[str]:
-        """Which conspecific sensors were reporting during this.
+    def _learn_from(self, record) -> None:
+        """How the visit went moves how this squid meets ANY squid
+        (src/social_learning.py), recorded on each synapse it moves."""
+        from src.social_learning import learn_from_encounter
+        window = getattr(self.logic, 'brain_window', None)
+        brain = getattr(window, 'brain_widget', None)
+        if brain is not None and hasattr(brain, 'apply_weight_change'):
+            learn_from_encounter(brain, record.valence, record.outcome, record.peer.name)
+
+    #: What a rock strike does to the body: a knock.
+    HIT_HEALTH_COST = 2.0
+
+    def _feel_hit(self, squid, detail=None) -> None:
+        """Struck by something thrown in the host's tank - a rock (a knock and
+        a startle) or poop (no harm, but anxiety up and happiness down: see
+        throwing.HIT_EFFECTS). Felt, at home. Nothing says whether it was play
+        or an attack; the squid's own network decides what to make of it."""
+        from src.throwing import feel_hit
+        detail = detail or {}
+        what = 'poop' if detail.get('what') == 'poop' else 'rock'
+
+        def startle(source):
+            hook = getattr(self.logic, 'startle_squid', None)
+            if callable(hook):
+                try:
+                    hook(source=source)
+                except Exception as exc:
+                    self._log(f"could not startle on a hit: {exc}")
+        felt = feel_hit(squid, what, startle=startle)
+        peer_uuid = detail.get('peer_uuid')
+        if self.session is not None and (not peer_uuid or peer_uuid == self.session.peer.uuid):
+            self.session.note_hit(taken=True, what=what)
+        elif peer_uuid:
+            memory = getattr(squid, 'memory_manager', None)
+            if memory is not None:
+                memory.add_short_term_memory('social', f"{what}:{detail['throw_id']}",
+                    dict({'peer_uuid': peer_uuid, 'hits_taken': 1, 'what': what}, **felt),
+                    importance=3)
+
+    def _live_through_fight(self, squid, fight_id: str, won: bool,
+                            detail: Dict[str, Any]) -> Dict[str, Any]:
+        """What a fight the host resolved does to this squid, at home.
+
+        Its body and drives take the outcome (src/fighting.py CONSEQUENCES),
+        its aggression neuron is marked for good (fighting.scar), and the
+        fight is filed in its long-term memory with everything behind it:
+        whether it started it, the aggression or defence it fought with and
+        its fitness (what its intent carried), both abilities and its chance.
+        """
+        from src import fighting
+        from .encounter import remember_fight
+        intent = self.last_intent
+        started = bool(detail.get('you_started'))
+        commit = getattr(intent, 'aggression' if started else 'defence', 0.0) if intent else 0.0
+        mine = {'role': 'attacker' if started else 'defender',
+                'fitness': getattr(intent, 'fitness', 1.0) if intent else 1.0,
+                'commitment': round(float(commit or 0.0), 1),
+                'committed_by': 'aggression' if started else 'defence',
+                'ability': float(detail.get('your_ability', 0.0) or 0.0)}
+        theirs = {'role': 'defender' if started else 'attacker',
+                  'ability': float(detail.get('their_ability', 0.0) or 0.0)}
+        resident = self.perception.resident
+        record = {'first_won': bool(won), 'first_chance': float(detail.get('chance', .5) or .5),
+                  'first': mine, 'second': theirs, 'fight_id': fight_id,
+                  'opponent': getattr(resident, 'name', 'the resident'),
+                  'opponent_uuid': getattr(resident, 'uuid', ''),
+                  'why': {'aggression': mine['commitment']} if started else {},
+                  'consequences': fighting.apply_consequences(squid, won)}
+        window = getattr(self.logic, 'brain_window', None)
+        brain = getattr(window, 'brain_widget', None)
+        from src.social_knowledge import fight_thoughts, think
+        for thought in fight_thoughts(record, 'first'):
+            think(self.logic, thought)
+        if brain is not None:
+            record['aggression_rose'] = fighting.scar(
+                brain, won, f"{'won' if won else 'lost'} a fight with {record['opponent']}")
+        remember_fight(getattr(squid, 'memory_manager', None), record, me='first')
+        return record
+
+    def _active_social_neurons(self) -> List[str]:
+        """The social senses and neurons it grew, if active during this.
 
         Stored on the memory as related_neurons, so the record points at the
         structure that was involved in having the experience.
         """
-        from .encounter_sensors import SENSOR_NAMES
-        state = self._brain_state()
-        return [name for name in SENSOR_NAMES
-                if float(state.get(name, 0) or 0) > 20.0]
+        from .encounter import active_social_neurons
+        window = getattr(self.logic, 'brain_window', None)
+        return active_social_neurons(getattr(window, 'brain_widget', None))
 
     def tick(self) -> Optional[ActionIntent]:
         """One behavioural cadence. Returns the intent sent, if any.
@@ -488,13 +773,32 @@ class VisitorMind:
         """
         if not self.perception.away:
             return None
+        # A squid away from home always comes home to sleep, however it
+        # came to be asleep - it never sleeps in another squid's tank.
+        if getattr(getattr(self.logic, 'squid', None), 'is_sleeping', False):
+            self.go_home('act_rest')
+            return None
         if not self.perception.linked:
             silence = self.clock() - self.perception.received_at
             if silence >= LINK_TIMEOUT:
                 self._log(f"host silent for {silence:.1f}s - coming home")
                 self.end_visit(reason=END_LINK_LOST, notify=True)
             return None
-        return self.decide()
+        intent = self.decide()
+        # Ink is a parallel reflex, not a rival in the action competition.
+        # Transmit one firing; the host draws it without consulting a brain.
+        from src.decision_engine import wants
+        activation = float(self._brain_state().get('act_ink', 0.) or 0.)
+        firing = wants('act_ink', activation)
+        if firing and not self._inking:
+            self._seq += 1
+            self.send('action_intent', ActionIntent(self.visit_id, 'act_ink',
+                seq=self._seq, sent_at=self.clock(), activation=activation).to_payload())
+            track = getattr(self.logic, 'track_visitor_ink', None)
+            if callable(track):
+                track()
+        self._inking = firing
+        return intent
 
     def on_visit_end(self, payload: Dict[str, Any]) -> bool:
         """The host ended it."""
@@ -508,28 +812,6 @@ class VisitorMind:
         return True
 
     # ==================================================================
-    def recalled_sensors(self) -> Dict[str, float]:
-        """This squid's own memory of the resident it is looking at.
-
-        Computed HERE, never received. The host has no access to this squid's
-        PeerLedger and could not compute these if it wanted to, which is why
-        the protocol refuses to carry them: an encounter is coloured by what
-        this squid remembers, and only this machine knows that.
-        """
-        blank = {'conspecific_familiarity': 0.0,
-                 'conspecific_recalled_good': 0.0,
-                 'conspecific_recalled_bad': 0.0}
-        if not self.perception.linked or self.peer_ledger is None:
-            return blank
-        uuid = self.perception.resident_uuid()
-        if not uuid:
-            return blank
-        return {
-            'conspecific_familiarity': self.peer_ledger.familiarity(uuid),
-            'conspecific_recalled_good': self.peer_ledger.recalled_good(uuid),
-            'conspecific_recalled_bad': self.peer_ledger.recalled_bad(uuid),
-        }
-
     def _brain_state(self) -> Dict[str, float]:
         window = getattr(self.logic, 'brain_window', None)
         widget = getattr(window, 'brain_widget', None)
@@ -540,4 +822,4 @@ class VisitorMind:
             self.logger.info(f"[VisitorMind] {message}")
 
 
-__all__ = ['VisitorMind', 'RemotePerception', 'REMOTE_DRIVEN_SENSORS']
+__all__ = ['VisitorMind', 'RemotePerception', 'REMOTE_DRIVEN_SENSORS', 'HOMEWARD']

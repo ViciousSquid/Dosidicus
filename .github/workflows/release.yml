@@ -1,0 +1,141 @@
+name: Release all platforms
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "New release tag, e.g. v3.1.3 or v3.1.3-canary.1"
+        type: string
+        required: true
+      prerelease:
+        description: "Publish as a prerelease"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - 'v[0-9]*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate release tag and signing configuration
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate tag and Android signing prerequisites
+        id: release
+        env:
+          REQUESTED_TAG: ${{ inputs.tag || github.ref_name }}
+          REQUESTED_PRERELEASE: ${{ inputs.prerelease }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          from tools.release_support import validate_version
+          tag = os.environ['REQUESTED_TAG']
+          if not tag.startswith('v'):
+              raise SystemExit('Release tags must start with v')
+          version = tag[1:]
+          validate_version(version)
+          existing = subprocess.run(['git', 'rev-parse', '--verify', f'refs/tags/{tag}^{{commit}}'], capture_output=True, text=True)
+          if existing.returncode == 0 and existing.stdout.strip() != os.environ['GITHUB_SHA']:
+              raise SystemExit('This tag already points to a different commit')
+          for name in ('ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD'):
+              if not os.environ.get(name):
+                  raise SystemExit(f'Configure repository secret {name} before releasing. No unsigned APK will be published.')
+          prerelease = os.environ.get('REQUESTED_PRERELEASE') == 'true' or '-' in version
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'tag={tag}\nversion={version}\nprerelease={str(prerelease).lower()}\n')
+          PY
+
+  desktop:
+    name: Windows x64, macOS Intel/Apple Silicon and Linux
+    needs: prepare
+    uses: ./.github/workflows/build-nuitka.yml
+    with:
+      release_version: ${{ needs.prepare.outputs.version }}
+
+  windows-arm64:
+    name: Native Windows ARM64
+    needs: prepare
+    uses: ./.github/workflows/build-windows-arm64.yml
+    with:
+      release_version: ${{ needs.prepare.outputs.version }}
+
+  android:
+    name: Signed Android ARM64 APK
+    needs: prepare
+    uses: ./.github/workflows/android-release.yml
+    with:
+      version_override: ${{ needs.prepare.outputs.version }}
+    secrets:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+  publish:
+    name: Checksum and publish one tagged release
+    needs: [prepare, desktop, windows-arm64, android]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+      IS_PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Require every platform and architecture and write checksums
+        run: python tools/release_support.py collect --source artifacts --target release-assets --version "$RELEASE_VERSION"
+      - name: Stage a draft release at the exact source commit
+        run: |
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$GITHUB_SHA"
+          fi
+          gh release create "$RELEASE_TAG" release-assets/* \
+            --target "$GITHUB_SHA" --title "Dosidicus $RELEASE_TAG" \
+            --generate-notes --draft --prerelease="$IS_PRERELEASE"
+      - name: Verify uploaded assets before publishing
+        run: |
+          gh release view "$RELEASE_TAG" --json assets > uploaded-assets.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          expected = {p.name: p.stat().st_size for p in Path('release-assets').iterdir()}
+          actual = {a['name']: a['size'] for a in json.loads(Path('uploaded-assets.json').read_text())['assets']}
+          if actual != expected:
+              raise SystemExit('Uploaded assets do not match; the release remains a draft')
+          PY
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$IS_PRERELEASE"
+          echo "Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"

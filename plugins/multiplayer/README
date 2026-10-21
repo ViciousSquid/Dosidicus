@@ -8,6 +8,89 @@ individual afterwards.
 traversal. Not enabled at startup (`auto_load_blacklist` in `plugin_manager.py`);
 turn it on from the Plugin manager.
 
+## Rules and risks
+
+> **Enable peer-to-peer evolution?**
+>
+> Enabling multiplayer introduces new experiences that may permanently alter
+> your squid's behaviour, neural development and life.
+>
+> Encounters may result in fights, reproduction or even death.
+>
+> Changes to your squid and its saved state cannot be undone.
+
+That notice is shown the first time multiplayer is enabled (remembered as
+`[Multiplayer] risk_notice_shown` in `config.ini`). It is the whole bargain.
+
+**Whether to mollycoddle your squid or foster its independence is up to you.**
+Keep multiplayer off and it never meets another squid: it cannot fight, it
+cannot mate, and no egg is ever laid - reproduction has no other way to
+happen. Turn multiplayer on and it can swim off into other tanks - when its
+own network decides to: it grows a sense for another aquarium nearby the first
+time it hears one, and leaves only while that is driving it to explore
+(`docs/social-network.md`, section 8). Over there its own brain - not you, and
+not the other player - decides what it does with whoever it meets.
+
+What it can find out there:
+
+- **Other squid.** A squid arriving in the tank catches the resident's eye.
+  Meeting others grows lasting structure in the brain - senses for other squid
+  and social neurons for playing with, fighting or fleeing from them - and each
+  individual it meets, if the meeting mattered, is remembered as that
+  individual.
+- **Contests and fights.** Two squid can compete for the same object. A
+  fight starts when two squid are in contact and one of them is more aggro
+  than placid - its own grown `aggression` neuron, never its personality
+  label - and is won by ability: body, experience and how hard each network
+  commits, so a timid squid that rarely fights can be formidable when
+  attacked. One cloud over both; a winner and a loser, with lasting
+  consequences, counted in each squid's statistics and towards the
+  Fisticuffs!, Scuffle, Tussle and Slugfest achievements (see
+  [docs/fights.md](docs/fights.md)).
+- **A mate.** Two squid that stay in contact for 2 seconds during a visit get
+  one 2% roll for that visit (see [Reproduction](#reproduction)). Only the
+  host tank's resident is affected: it lays an egg and becomes a parent.
+
+The risk, in full:
+
+1. **A parent stops eating.** It will not touch food again, stays home with its
+   egg, grows hungry on the ordinary metabolism and, once starving, loses
+   health until it dies. Starting from a fed squid that takes roughly 20-30
+   minutes of play at normal speed; sleep pauses it, medicine only delays it.
+2. **When it dies, its egg hatches** into a new squid with a newborn brain. The
+   parent's save, memories and learning are gone; its achievements carry on,
+   CIRCLE OF LIFE among them.
+
+Neither risk can be undone once the roll has gone against you - which is why
+the choice is made before the first visit, not after.
+
+### Any squid can die
+
+These have nothing to do with multiplayer and apply to every squid, plugin on
+or off:
+
+| Cause | When |
+|---|---|
+| Neglect | hunger stays at 100 (the hungriest) for 5 minutes of play; any meal resets it |
+| Sickness | it stays sick for 10 minutes of play without medicine; medicine resets it |
+| Starvation | a parent, as above |
+
+Every dead squid becomes a **headstone** - one of ten, at random - on the tank
+floor where it died. Click it to read "RIP *name*". The squid can see it and
+push it like any decoration; it can never be picked up, thrown or deleted, and
+it is never bigger than 80% of a squid. Headstones stay through hatches and New
+Games. After a death, the parent's egg hatches - or, with no egg, a new squid
+hatches from a fresh one.
+
+| Setting (`config.ini` `[Lifecycle]`) | Default | Meaning |
+|---|---|---|
+| `mating_chance` | 0.02 | chance of the one roll a visit gets |
+| `mating_contact_seconds` | 2.0 | sustained contact before that roll |
+| `starvation_hunger` | 90 | hunger at which a parent starts losing health |
+| `neglect_hunger` | 100 | hunger counted as neglect |
+| `neglect_seconds` | 300 | seconds of play at that hunger before death |
+| `sickness_seconds` | 600 | seconds of play sick, untreated, before death |
+
 ## The invariant
 
 > A visiting squid's brain stays on its own machine. The host runs its body,
@@ -35,19 +118,20 @@ actually observe**, and **private cognitive state never leaves home**.
 
 | Direction | Message | Carries |
 |-----------|---------|---------|
-| host → visitor | `perception_frame` | position, tank bounds, facing, nine observable sensor values, the resident's identity, host-issued item ids |
-| visitor → host | `action_intent` | an action **neuron name**, its activation, confidence, heading, target id, lease |
-| host → visitor | `consequence` | what happened: a contest resolved, food eaten, an action blocked |
-| either | `visit_request` / `visit_response` / `visit_end` | consent, and the end of a visit |
+| host → visitor | `perception_frame` | position, tank bounds, facing, six observable sensor values (`can_see_food`, `plant_proximity`, `external_stimulus`, `squid_in_view`, `squid_proximity`, `in_fight`), the resident's identity, host-issued item ids |
+| visitor → host | `action_intent` | an action **neuron name**, its activation, confidence, heading, target id, lease; for a fight or a throw its `aggression`, `defence`, `fitness` and `practice` (throws made) |
+| host → visitor | `consequence` | what happened: a contest resolved, food eaten, an action blocked, a hit, its own throw, a fight's result, an ejection, a mating (its id only) |
+| visitor → host | `gamete` | after a mating only: half its innate synapses, for the egg |
+| either | `squid_exit` / `visit_response` / `visit_end` | asking to come in (addressed to one tank), consent, and the end of a visit |
 
 **Never crosses:** weights, neuron activations, drives, memories, the capability
 ledger, neurogenesis state, scene contents, or any filesystem path. A message
 containing any of them is rejected on arrival at any nesting depth
 (`FORBIDDEN_KEYS` in `remote_protocol.py`).
 
-A host also may **not** assert `conspecific_familiarity`, `conspecific_recalled_good`
-or `conspecific_recalled_bad`. Those are the visitor's own memory of the resident,
-computed at home from its own `PeerLedger`. A frame carrying one raises.
+A frame carries only those six; any other sensor name a host sends is dropped
+on arrival. Every shape, field and limit is in [docs/protocol.md](docs/protocol.md). There is nothing of the visitor's a host could assert: no neuron
+stands for another squid, and its memories never leave home.
 
 ### An intent is a lease, not a command
 
@@ -58,34 +142,57 @@ it looking alive. Both would be the host inventing behaviour.
 
 ## Encounters
 
-Another squid reaches the brain as **ordinary input sensors**, registered through
-`plugin_manager.register_neuron_handler` and classified through
-`brain_constants.register_input_sensor` so that propagation, the capability
-monitor, the causal ledger and the plasticity rules all treat them as sense
-organs.
+How squid sense each other, grow a social network, learn from encounters,
+fight and inherit is documented in [docs/](docs/README.md). In short:
 
-| Sensor | Reads |
-|--------|-------|
-| `conspecific_visible` | another squid is in view |
-| `conspecific_proximity` | how close it is |
-| `conspecific_ahead` | how squarely it sits in front |
-| `conspecific_closing` / `conspecific_receding` | whether it is approaching or leaving |
-| `conspecific_familiarity` | how well this **individual** is known |
-| `conspecific_recalled_good` / `conspecific_recalled_bad` | how past encounters with this individual went |
-| `conspecific_contesting` | it is contesting an object with this squid |
+**No neuron is added for another squid.** A squid sees another squid the way it
+sees food: with its own vision (`src/vision_worker.py`). A visitor is drawn in
+the tank as category `squid`, and the squid's view cone (72°, shared by desktop,
+host and mobile in `src/vision_cone.py`) decides whether it is in view. That
+reaches the brain as one **percept**, `squid_in_view` — a value the world sets,
+not a neuron.
 
-Every one rests at **zero**, and zero always means "nothing to report". That is
-why anything with two directions is two sensors in push-pull rather than one
-signed sensor: a neutral reading of 50 would be indistinguishable from a real
-mid-strength signal, and a squid that had never met anyone would be born with
-half a sensation of something. A stranger reads zero everywhere, which is what
-uncertainty about an unfamiliar individual is in this engine's own units.
+- **Arrival catches the eye.** When the host admits a visitor, the resident's
+  view cone swings onto it and follows it for a few seconds
+  (`Squid.notice`) — the orienting response — then scanning resumes. Whether
+  it is seen is still vision's call. Asleep, it notices nothing. On mobile,
+  where a squid sees the way it faces, the resident turns to face it.
+- **Nothing for other squid is innate, and nothing is chosen for the squid.**
+  Neurogenesis grows what it needs the first time it matters, each with its
+  cause on record:
+  - **sense organs**, written by the world like `can_see_food`:
+    `can_see_squid` (a tick box) on the first sighting, `squid_nearby` the first
+    time one comes close, `recognises_squid` (a tick box) the first time it
+    meets one it remembers, and `remembers_bad_encounter` /
+    `remembers_good_encounter` the first time that memory is good or bad;
+  - **social neurons**, hexagons named for their purpose, the first time the
+    squid's own network does the thing with another squid in view:
+    `social_play` (its play neuron fired), `social_flee` (its flight neuron
+    fired), `social_fight` (it was in a fight) or `aggression` (it went at
+    another squid while alarmed). Each is wired to the moment it grew - fed
+    by the senses and drives active then, driving what it was doing then -
+    and learning moves every synapse.
+- **Personality is wiring.** It enters only as how `can_see_squid` is wired
+  when it grows — towards the other squid for most, away for a timid one —
+  so what a squid first does on seeing another is its network's response.
+- **Recognition is memory.** What a squid remembers of the individual in its
+  view cone comes from its own long-term memory (`PeerLedger`), never from
+  the other squid or its host. Encounters that mattered (fights, thefts,
+  matings, ones that moved its drives) are kept; mild ones are forgotten.
+- **`act_play` at a squid in view** swims at it, if it is nearer than any rock;
+  face to face, that is contact, which becomes a fight only if one of them is
+  aggro. A visitor's play
+  intent does the same on the host. Nothing here maps "another squid" to an
+  action: the grown neurons drive the squid's own action neurons, and the
+  decision engine reads the winner.
 
-**There is no social behaviour here.** Nothing in this plugin maps "another
-squid" to an action, and there is no social neuron type. The sensors report, the
-action neurons compete, the decision engine reads the winner. There is also no
-contest action: a squid swimming at an object it wants is `act_play`, and whether
-another squid had a claim to that object is a fact about the tank.
+Saves from earlier versions had nine `conspecific_*` sensor neurons. They are
+dropped, with their synapses, as such a save loads
+(`brain_constants.RETIRED_NEURONS`).
+
+`encounter_sensors.py` keeps the tank's record of who is present and what passed
+between them (positions, contests), which encounters, memories, fights and the
+fight cloud are built from. It registers no neuron.
 
 ### Memory
 
@@ -104,6 +211,48 @@ store. Long-term memory already persists, already promotes what matters, and
 already raises the importance of a repeated experience; a parallel database
 would drift from it. What gets recorded is objective — an object changed hands,
 food was eaten, how the squid's drives moved — never a verdict about the peer.
+
+## Reproduction
+
+Reproduction happens only here, during a visit, and only the **host** decides
+it - the same way it resolves a contest. There is no mating action, here or in
+either brain: the visitor's own decisions move its body, the resident's move
+its own, and the host works out what that means in its tank.
+
+1. If the visitor's body stays within reach of the resident
+   (`MATING_CONTACT_RANGE`) for `mating_contact_seconds`, the host makes **one
+   roll for the whole visit** at `mating_chance` (2% by default). Brief
+   contact never rolls, so reproduction is rare and never routine.
+2. Only a resident that is at home, alive and has never reproduced can mate.
+   The visitor's state is not consulted - the host does not have it.
+3. On success the host records it in the **core** lifecycle
+   (`src/lifecycle.py`, via `TamagotchiLogic.record_reproduction`): the
+   resident becomes a parent and its egg is laid in its own tank, as **one
+   record in one atomic save**. Only then is the visitor told.
+4. The visitor is sent `consequence` `mated` with the mating id
+   (`<visit id>-mate`) and nothing else, on three round trips in a row (UDP),
+   and again whenever that same individual visits later. It files the mating
+   once, by id, as an ordinary encounter memory
+   (`peer:<uuid>:mating:<id>`) - its body and lifecycle are untouched.
+
+What follows is not a multiplayer concern and keeps happening with the plugin
+off: the parent stops eating, starves on the ordinary metabolism (or dies
+sooner of a sickness left untreated), dies once, becomes a headstone, and its
+egg hatches into a new game (see `src/lifecycle.py` and [Rules and
+risks](#rules-and-risks)). A dead resident ends every visit, its own included
+(`on_squid_died`), and refuses new ones.
+
+## The fight cloud
+
+When a fight starts between two squid that are both in the tank and
+within `FIGHT_CLOUD_RANGE` of each other, **one** animated cloud
+(`images/fight_cloud.gif`) is drawn between them for a couple of seconds. It
+is a drawing and nothing else. If the GIF is not installed, nothing is drawn.
+
+When the host records a mating, **one** beating pixel heart
+(`images/mating_heart.gif`) is drawn over the pair the same way, for about
+three seconds. It is shown only once the mating is recorded and saved, and like
+the cloud it is a drawing and nothing else.
 
 ## Consent
 
@@ -141,7 +290,7 @@ autopilot, so it cannot enter.
 
 | File | What it owns |
 |------|--------------|
-| `encounter_sensors.py` | the nine sensors, and where they point (home tank or host frame) |
+| `encounter_sensors.py` | who is present in the tank and what passed between them (no neurons) |
 | `encounter.py` | an encounter as a bout with an outcome, measured from drives |
 | `peer_ledger.py` | what this squid remembers about individuals, over `MemoryManager` |
 | `identity.py` | `SquidIdentity` — persistent, wire-safe |
@@ -196,9 +345,12 @@ at all.
 | File | Covers |
 |------|--------|
 | `tests/test_peer_discovery.py` | real sockets: two nodes on one machine must hear each other |
-| `tests/test_encounter_stage0.py` | the sensor seam, identity, encounter memory, safe asset paths, consent |
+| `tests/test_social_concept.py` | vision sees other squid, arrival catches the eye, the grown social neurons, old saves |
+| `tests/test_encounter_stage0.py` | identity, encounter memory, safe asset paths, consent |
 | `tests/test_remote_mind_stage1.py` | the round trip, and that the plugin does not choose the visitor's behaviour |
-| `tests/test_social_consequences_stage2a.py` | that a memory of one individual can change what the squid does |
+| `tests/test_social_consequences_stage2a.py` | what a squid keeps of an encounter, filed against that individual only |
+| `tests/test_reproduction_lifecycle.py` | mating authority, rarity, one egg, retransmission and disconnects, starvation, save/load, the fight cloud |
+| `tests/test_new_game_and_hatch.py` | New Game and the hatch, through the real main window |
 
 The load-bearing one is `PluginDoesNotChooseBehaviourTests` in the Stage 1 file.
 Every other test could pass while this plugin quietly decided what a visitor did;
@@ -207,4 +359,8 @@ that one fails if it does.
 ## Not built yet
 
 Signalling, gossip, asynchronous visits to offline tanks, internet transport,
-and any social behaviour beyond individual-specific memory.
+and any social behaviour beyond individual-specific memory and the
+host-resolved consequences above.
+
+Neural rock throwing, impact replay protection, protocol 4 and Android remote-mind visits:
+see [docs/rocks.md](docs/rocks.md).

@@ -57,6 +57,8 @@ class SquidStatistics:
         'lowest_happiness': 'lowest_happiness',
         'highest_satisfaction': 'highest_satisfaction',
         'other_squids_encountered': 'other_squids_encountered',
+        'fights_won': 'fights_won',
+        'fights_lost': 'fights_lost',
         'rocks_thrown': 'total_rocks_thrown',
         'poops_thrown': 'total_poops_thrown',
         'total_env_interactions': 'total_env_interactions',
@@ -115,6 +117,9 @@ class SquidStatistics:
         # (and the SaveViewer) do not trip over a missing key.
         self.distance_swam_multiplier = 1
         self.other_squids_encountered = 0
+        self.fights_won = 0
+        self.fights_lost = 0
+        self._fight_results = set()
         self.total_rocks_thrown = 0
         self.total_poops_thrown = 0
         self.total_env_interactions = 0
@@ -317,6 +322,17 @@ class SquidStatistics:
             return False
 
         setattr(self, attribute_name, getattr(self, attribute_name) + amount)
+        return True
+
+    def record_fight_result(self, fight_id, won):
+        """Record one outcome; repeated network reports do not double count."""
+        if not fight_id or fight_id in self._fight_results:
+            return False
+        self._fight_results.add(fight_id)
+        if won:
+            self.fights_won += 1
+        else:
+            self.fights_lost += 1
         return True
 
     def record_sickness_state(self, is_sick):

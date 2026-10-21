@@ -223,6 +223,8 @@ translations = {
     "long_term_memory": "Long-term Memory",
     "no_memories": "No memories stored yet.",
     "overview": "Overview",
+    "social_knowledge": "Social",
+    "social_tab_no_neurons": "This squid has not grown any socialisation neurons: Enable Multiplayer",
     "memory_stats": "Memory Statistics",
     "categories": "Categories",
     "time_label": "Time:",
@@ -550,6 +552,8 @@ translations = {
     "ach_happiness_100_desc": "Reach 100% happiness",
     "ach_all_stats_high_name": "Perfect Balance",
     "ach_all_stats_high_desc": "All stats above 80% simultaneously",
+    "ach_circle_of_life_name": "CIRCLE OF LIFE",
+    "ach_circle_of_life_desc": "After mating, your squid stopped eating and died, leaving an egg to hatch",
 
     # Cleaning
     "ach_first_clean_name": "First Scrub",
@@ -598,6 +602,14 @@ translations = {
     "ach_objects_investigated_25_desc": "Investigate 25 different objects",
     "ach_objects_investigated_100_name": "Master Detective",
     "ach_objects_investigated_100_desc": "Investigate 100 different objects",
+    "ach_first_fight_name": "Fisticuffs!",
+    "ach_first_fight_desc": "Get into a fight with another squid for the first time",
+    "ach_fights_5_name": "Scuffle",
+    "ach_fights_5_desc": "Get into 5 fights with other squid",
+    "ach_fights_20_name": "Tussle",
+    "ach_fights_20_desc": "Get into 20 fights with other squid",
+    "ach_fights_50_name": "Slugfest",
+    "ach_fights_50_desc": "Get into 50 fights with other squid",
 
     # Exploration (Poop)
     "ach_first_poop_throw_name": "Mischief Maker",

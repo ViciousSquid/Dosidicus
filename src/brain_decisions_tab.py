@@ -76,6 +76,8 @@ def _action_color(name):
     if key in ACTION_META:
         r, g, b = ACTION_META[key][1]
         return QtGui.QColor(r, g, b)
+    if key == 'squid':                   # the social hexagons' pink, deepened
+        return QtGui.QColor(214, 84, 140)
     # Stable pseudo-random hue for any unknown / outcome string
     h = (abs(hash(key)) % 360) / 360.0
     col = QtGui.QColor()
@@ -846,6 +848,20 @@ class DecisionsTab(BrainBaseTab):
         thoughts_lay.addWidget(self.thought_log_text)
         root.addWidget(thoughts_card)
 
+        # ---- Social thoughts: what it made of other squid, and why ----
+        self.social_card, social_lay = self._section(
+            "Social thoughts",
+            "Why it grew each social neuron, why each fight started and ended, "
+            "and what its encounters taught it."
+        )
+        self.social_thoughts_text = QtWidgets.QTextEdit()
+        self.social_thoughts_text.setReadOnly(True)
+        self.social_thoughts_text.setMaximumHeight(DisplayScaling.scale(130))
+        self.social_thoughts_text.setStyleSheet(self.thought_log_text.styleSheet())
+        social_lay.addWidget(self.social_thoughts_text)
+        root.addWidget(self.social_card)
+        self.social_card.hide()             # until it has met another squid
+
         root.addStretch(1)
 
     def add_thought(self, thought):
@@ -927,6 +943,11 @@ class DecisionsTab(BrainBaseTab):
             "Poop": _seen(inputs.get('has_poop_visible'),
                           getattr(squid, 'carrying_poop', False) if squid else False),
         }
+        # Another squid - only once the squid has grown the sense for one.
+        brain = getattr(self, 'brain_widget', None)
+        if 'can_see_squid' in (getattr(brain, 'neuron_positions', None) or {}):
+            seen = (getattr(brain, 'state', None) or {}).get('can_see_squid', 0) or 0
+            perception["Squid"] = float(seen) > 50
 
         personality = raw.get('personality') or raw.get('personality_influence')
         if hasattr(personality, 'value'):
@@ -996,3 +1017,19 @@ class DecisionsTab(BrainBaseTab):
         # History – only on an actual new decision
         if changed:
             self.history.push(win or vm['final_decision'], vm['confidence'])
+        self._show_social_thoughts()
+
+    def _show_social_thoughts(self):
+        """The brain's recent social thoughts (src/social_knowledge.think)."""
+        import time as _time
+        kept = list(getattr(getattr(self, 'brain_widget', None), 'social_thoughts', None) or ())
+        if not kept or getattr(self, 'social_thoughts_text', None) is None:
+            return
+        if kept[-1] == getattr(self, '_last_social_thought', None):
+            return
+        self._last_social_thought = kept[-1]
+        self.social_thoughts_text.setPlainText("\n".join(
+            f"{_time.strftime('%H:%M:%S', _time.localtime(at))}  {text}" for at, text in kept))
+        bar = self.social_thoughts_text.verticalScrollBar()
+        bar.setValue(bar.maximum())
+        self.social_card.show()

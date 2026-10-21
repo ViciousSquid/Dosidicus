@@ -46,9 +46,11 @@ MSG_PERCEPTION_FRAME = 'perception_frame'
 MSG_ACTION_INTENT = 'action_intent'
 MSG_CONSEQUENCE = 'consequence'
 MSG_VISIT_END = 'visit_end'
+#: Visitor -> host, after a mating: half of its weights, for the egg.
+MSG_GAMETE = 'gamete'
 
 REMOTE_MIND_MESSAGES = (MSG_PERCEPTION_FRAME, MSG_ACTION_INTENT,
-                        MSG_CONSEQUENCE, MSG_VISIT_END)
+                        MSG_CONSEQUENCE, MSG_VISIT_END, MSG_GAMETE)
 
 #: The behavioural cadence, in seconds. Both endpoints run on it: the host
 #: sends a frame this often and the visitor answers with an intent.
@@ -65,32 +67,25 @@ LINK_TIMEOUT = 4.0
 #: ...and this long, and the host ends the visit outright.
 VISIT_ABANDON_TIMEOUT = 12.0
 
-#: The sensors a HOST is allowed to compute for a visitor. Everything here is
+#: The values a HOST is allowed to compute for a visitor. Everything here is
 #: something the host can see from its own tank.
 #:
-#: Note what is absent: conspecific_familiarity, conspecific_recalled_good and
-#: conspecific_recalled_bad. Those are the visitor's memory of the resident,
-#: and they are computed at home from the visitor's own PeerLedger. A host
-#: cannot know them and must never assert them.
+#: The first three feed the visitor's own built-in sensors. The rest are
+#: percepts, not neurons, which reach the visitor's network only through the
+#: social senses it grows (src.brain_constants.SOCIAL_SENSORS): squid_in_view
+#: is its vision of the resident, by the same view cone its own vision uses
+#: (src.vision_cone); squid_proximity how close the resident is; in_fight that
+#: its body is in a scuffle.
+#:
+#: Nothing here is the visitor's memory of the resident: that stays at home,
+#: and a host cannot know it.
 OBSERVABLE_SENSORS = (
     'can_see_food',
     'plant_proximity',
     'external_stimulus',
-    'conspecific_visible',
-    'conspecific_proximity',
-    'conspecific_ahead',
-    'conspecific_closing',
-    'conspecific_receding',
-    'conspecific_contesting',
-)
-
-#: Sensors the host is never permitted to send, even if it somehow had them.
-#: Checked on arrival, so a hostile or buggy host cannot inject a memory the
-#: visiting squid does not have.
-PRIVATE_SENSORS = (
-    'conspecific_familiarity',
-    'conspecific_recalled_good',
-    'conspecific_recalled_bad',
+    'squid_in_view',
+    'squid_proximity',
+    'in_fight',
 )
 
 #: Keys that would carry private cognitive state. A message containing any of
@@ -113,9 +108,22 @@ CONSEQUENCE_CONTEST = 'contest_resolved'
 CONSEQUENCE_ATE = 'ate'
 CONSEQUENCE_BLOCKED = 'blocked'
 CONSEQUENCE_EJECTED = 'ejected'
+#: The two bodies' contact during this visit was a mating, and the egg is in
+#: the host's tank. The host decided it and has already recorded it; this only
+#: tells the visitor, carrying the mating id and nothing else, so the visitor
+#: can remember it once however many times it is told.
+CONSEQUENCE_MATED = 'mated'
+CONSEQUENCE_FIGHT = 'fight_resolved'
+#: A thrown rock struck the visitor. Only that, and how hard - never why: the
+#: thrower might have been playing or attacking, and the struck squid's own
+#: brain makes of it what it will.
+CONSEQUENCE_HIT = 'hit'
+CONSEQUENCE_THROWN = 'rock_thrown'
 
 CONSEQUENCE_KINDS = (CONSEQUENCE_CONTEST, CONSEQUENCE_ATE,
-                     CONSEQUENCE_BLOCKED, CONSEQUENCE_EJECTED)
+                     CONSEQUENCE_BLOCKED, CONSEQUENCE_EJECTED,
+                     CONSEQUENCE_MATED, CONSEQUENCE_FIGHT, CONSEQUENCE_HIT,
+                     CONSEQUENCE_THROWN)
 
 _MAX_ITEM_ID = 40
 _MAX_ITEMS_IN_FRAME = 8
@@ -233,10 +241,6 @@ class PerceptionFrame:
         sensors = payload.get('sensors')
         if not isinstance(sensors, dict):
             raise ProtocolError("perception frame has no sensors")
-        for name in PRIVATE_SENSORS:
-            if name in sensors:
-                raise ProtocolError(
-                    f"a host may not assert '{name}' - it is the visitor's own memory")
         frame.sensors = {name: _clamp(value, 0.0, 100.0)
                          for name, value in sensors.items()
                          if name in OBSERVABLE_SENSORS}
@@ -279,12 +283,15 @@ class ActionIntent:
     """
 
     __slots__ = ('visit_id', 'seq', 'sent_at', 'action', 'activation',
-                 'confidence', 'heading', 'target_id', 'lease')
+                 'confidence', 'heading', 'target_id', 'lease',
+                 'aggression', 'defence', 'fitness', 'practice')
 
     def __init__(self, visit_id: str, action: str, seq: int = 0,
                  sent_at: float = 0.0, activation: float = 0.0,
                  confidence: float = 0.0, heading: str = '',
-                 target_id: str = '', lease: float = INTENT_LEASE):
+                 target_id: str = '', lease: float = INTENT_LEASE,
+                 aggression: float = 0.0, defence: float = 0.0,
+                 fitness: float = 1.0, practice: int = 0):
         self.visit_id = visit_id
         self.seq = int(seq)
         self.sent_at = float(sent_at or time.time())
@@ -294,6 +301,16 @@ class ActionIntent:
         self.heading = heading
         self.target_id = target_id
         self.lease = float(lease)
+        # How this squid would fight, worked out at home from its own brain
+        # and body (src/fighting.py): its aggression neuron, how hard it
+        # would fight back, and its fitness. What it shows in a fight, not
+        # what is in its brain - the host needs them only to resolve one.
+        self.aggression = float(aggression)
+        self.defence = float(defence)
+        self.fitness = float(fitness)
+        # How practised a thrower it is (throws made, from its own record at
+        # home): how far its throws stray in the host's tank (src/throwing.py).
+        self.practice = int(practice)
 
     @property
     def expires_at(self) -> float:
@@ -313,6 +330,10 @@ class ActionIntent:
             'heading': self.heading,
             'target_id': self.target_id,
             'lease': self.lease,
+            'aggression': round(self.aggression, 1),
+            'defence': round(self.defence, 1),
+            'fitness': round(self.fitness, 3),
+            'practice': self.practice,
         }
 
     @classmethod
@@ -348,7 +369,56 @@ class ActionIntent:
             # body: the host caps it at the protocol's value.
             lease=_clamp(payload.get('lease', INTENT_LEASE), 0.0, INTENT_LEASE,
                          INTENT_LEASE),
+            aggression=_clamp(payload.get('aggression', 0.0), 0.0, 100.0, 0.0),
+            defence=_clamp(payload.get('defence', 0.0), 0.0, 100.0, 0.0),
+            # An honest squid at its best is about 2; nothing claims more than 3.
+            fitness=_clamp(payload.get('fitness', 1.0), 0.0, 3.0, 1.0),
+            practice=int(_clamp(payload.get('practice', 0), 0, 100000, 0)),
         )
+
+
+# ======================================================================
+# Visitor -> host, after a mating: half of its weights
+# ======================================================================
+class Gamete:
+    """Half of the visiting squid's weights, for the egg the host is keeping.
+
+    The one time any of a squid's weights leave its own machine, and only
+    this: after the host has told it of a mating, a random half of its
+    synapses between the neurons every newborn has (src/inheritance.py) -
+    no grown neuron, no state, no memory. Reduced on arrival to exactly
+    that; the host keeps it only for its own egg from that mating.
+    """
+
+    __slots__ = ('visit_id', 'mating_id', 'genes')
+
+    def __init__(self, visit_id: str, mating_id: str, genes: Dict[str, float]):
+        self.visit_id = visit_id
+        self.mating_id = mating_id
+        self.genes = dict(genes or {})
+
+    def to_payload(self) -> Dict[str, Any]:
+        return {'visit_id': self.visit_id, 'mating_id': self.mating_id,
+                'genes': dict(self.genes)}
+
+    @classmethod
+    def from_payload(cls, payload: Dict[str, Any]) -> 'Gamete':
+        from src.inheritance import clean_gamete
+        from src.lifecycle import is_valid_mating_id
+        if not isinstance(payload, dict):
+            raise ProtocolError("gamete must be a dictionary")
+        if set(payload) - {'visit_id', 'mating_id', 'genes'}:
+            raise ProtocolError("gamete carries something other than genes")
+        visit_id = payload.get('visit_id')
+        if not isinstance(visit_id, str) or not visit_id.strip():
+            raise ProtocolError("gamete has no visit id")
+        mating_id = payload.get('mating_id')
+        if not is_valid_mating_id(mating_id):
+            raise ProtocolError("gamete names no valid mating")
+        genes = clean_gamete(payload.get('genes'))
+        if not genes:
+            raise ProtocolError("gamete carries no genes")
+        return cls(visit_id.strip()[:64], mating_id, genes)
 
 
 # ======================================================================
@@ -437,16 +507,29 @@ def new_visit_id(local_uuid: str, peer_uuid: str, now: Optional[float] = None) -
     return f"{str(local_uuid)[:8]}-{str(peer_uuid)[:8]}-{stamp:x}"
 
 
+def mating_id_for(visit_id: str) -> str:
+    """The name of the one mating a visit can produce.
+
+    Derived from the visit, which the host named, so the same event always has
+    the same id however often it is reported, and a visit can never produce
+    two.
+    """
+    return f"{str(visit_id)[:58]}-mate"
+
+
 __all__ = [
     'PerceptionFrame', 'ActionIntent', 'Consequence', 'VisitEnd',
     'ProtocolError', 'new_visit_id',
     'MSG_PERCEPTION_FRAME', 'MSG_ACTION_INTENT', 'MSG_CONSEQUENCE',
-    'MSG_VISIT_END', 'REMOTE_MIND_MESSAGES',
+    'MSG_VISIT_END', 'MSG_GAMETE', 'Gamete', 'REMOTE_MIND_MESSAGES',
     'ROUND_TRIP_INTERVAL', 'INTENT_LEASE', 'LINK_TIMEOUT',
     'VISIT_ABANDON_TIMEOUT',
-    'OBSERVABLE_SENSORS', 'PRIVATE_SENSORS', 'FORBIDDEN_KEYS', 'HEADINGS',
+    'OBSERVABLE_SENSORS', 'FORBIDDEN_KEYS', 'HEADINGS',
     'CONSEQUENCE_CONTEST', 'CONSEQUENCE_ATE', 'CONSEQUENCE_BLOCKED',
-    'CONSEQUENCE_EJECTED', 'CONSEQUENCE_KINDS',
+    'CONSEQUENCE_EJECTED', 'CONSEQUENCE_MATED', 'CONSEQUENCE_FIGHT', 'CONSEQUENCE_HIT',
+    'CONSEQUENCE_THROWN',
+    'CONSEQUENCE_KINDS',
+    'mating_id_for',
     'END_DEPARTED', 'END_EJECTED', 'END_LINK_LOST', 'END_REASONS',
     'ENCOUNTER_PROTOCOL_VERSION',
 ]

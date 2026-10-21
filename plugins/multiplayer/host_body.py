@@ -24,15 +24,18 @@ brain; it stops, and is eventually sent home.
 """
 
 import math
+import random
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from src.vision_cone import FACING_ANGLES, VIEW_CONE_ANGLE, in_view_cone, proximity
 
 from .identity import SquidIdentity
 from .remote_protocol import (
     ActionIntent, Consequence, PerceptionFrame, ProtocolError,
     CONSEQUENCE_ATE, CONSEQUENCE_BLOCKED, CONSEQUENCE_CONTEST,
-    CONSEQUENCE_EJECTED, HEADINGS, INTENT_LEASE, LINK_TIMEOUT,
-    OBSERVABLE_SENSORS, VISIT_ABANDON_TIMEOUT,
+    CONSEQUENCE_EJECTED, CONSEQUENCE_MATED, CONSEQUENCE_THROWN, HEADINGS, INTENT_LEASE,
+    LINK_TIMEOUT, OBSERVABLE_SENSORS, VISIT_ABANDON_TIMEOUT, mating_id_for,
 )
 
 #: How far a visitor moves per applied intent, in pixels. The visitor asks for
@@ -47,6 +50,23 @@ SIGHT_RANGE = 400.0
 
 #: A contest is over an object nearer the resident than the visitor.
 CONTEST_RANGE = 400.0
+
+#: Two bodies within this distance are in contact. The same reach as taking
+#: or eating something: it is the distance at which one body can act on
+#: another.
+MATING_CONTACT_RANGE = GRASP_RANGE
+
+#: Defaults for the mating roll; the plugin passes config.ini [Lifecycle].
+DEFAULT_MATING_CHANCE = 0.02
+DEFAULT_MATING_CONTACT_SECONDS = 2.0
+
+#: How many round trips in a row a mating is reported to the visitor. The
+#: link is UDP and a single consequence can be lost; the visitor remembers the
+#: mating id, so hearing it again changes nothing.
+MATED_ANNOUNCEMENTS = 3
+
+
+_OPPOSITE = {'left': 'right', 'right': 'left', 'up': 'down', 'down': 'up'}
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -65,7 +85,9 @@ class VisitorActor:
     __slots__ = ('identity', 'visit_id', 'x', 'y', 'facing', 'carrying',
                  'arrived_at', 'last_intent', 'last_intent_at', 'action',
                  'items_taken', 'pending_consequences', 'seq_seen',
-                 'has_seen_resident')
+                 'has_seen_resident', 'contact_since', 'mating_rolled',
+                 'mated_id', 'mating_announcements', 'body_busy_until', 'held_item',
+                 'clock_offset')
 
     def __init__(self, identity: SquidIdentity, visit_id: str,
                  x: float, y: float, now: float):
@@ -75,6 +97,7 @@ class VisitorActor:
         self.y = float(y)
         self.facing = 'right'
         self.carrying: Optional[str] = None      # item id, host-issued
+        self.held_item = None
         self.arrived_at = now
         self.last_intent: Optional[ActionIntent] = None
         self.last_intent_at = now
@@ -85,6 +108,18 @@ class VisitorActor:
         #: Whether this visitor has yet been in a position to see the
         #: resident. Observable, and the host is the only party that knows it.
         self.has_seen_resident = False
+        #: When the two bodies came into contact, if they are in contact now.
+        self.contact_since: Optional[float] = None
+        #: A visit gets one chance at a mating, however long it lasts.
+        self.mating_rolled = False
+        #: The mating this visitor is being told about, and how many more
+        #: times to tell it.
+        self.mated_id = ''
+        self.mating_announcements = 0
+        self.body_busy_until = 0.0
+        #: This host's clock minus the visitor's, as best seen so far: the
+        #: least delay any of its intents has arrived with.
+        self.clock_offset: Optional[float] = None
 
     @property
     def uuid(self) -> str:
@@ -108,11 +143,22 @@ class HostBody:
     """
 
     def __init__(self, tamagotchi_logic=None, conspecific_view=None,
-                 clock=time.time, logger=None):
+                 clock=time.time, logger=None,
+                 mating_chance: float = DEFAULT_MATING_CHANCE,
+                 mating_contact_seconds: float = DEFAULT_MATING_CONTACT_SECONDS,
+                 rng: Callable[[], float] = random.random,
+                 on_mating: Optional[Callable[[VisitorActor, str], bool]] = None):
         self.logic = tamagotchi_logic
         self.conspecific_view = conspecific_view
         self.clock = clock
         self.logger = logger
+        self.mating_chance = float(mating_chance)
+        self.mating_contact_seconds = float(mating_contact_seconds)
+        self.rng = rng
+        #: Records a mating in this tank. Returns True if it was recorded -
+        #: and only then is the visitor told. The host's own world is the
+        #: authority; a mating this tank did not record did not happen.
+        self.on_mating = on_mating
         self.visitors: Dict[str, VisitorActor] = {}     # peer uuid -> actor
         self._item_ids: Dict[str, Any] = {}             # host-issued id -> item
         self._frame_seq = 0
@@ -128,6 +174,8 @@ class HostBody:
               x: float, y: float) -> VisitorActor:
         """Give an accepted visitor a body. Consent is decided before this."""
         actor = VisitorActor(identity, visit_id, x, y, self.clock())
+        # It arrives at a side of the tank, facing in - not into the wall.
+        actor.facing = 'left' if x > self._tank_size()[0] / 2.0 else 'right'
         self.visitors[identity.uuid] = actor
         self.publish_presence(actor)
         return actor
@@ -137,9 +185,9 @@ class HostBody:
 
         Perception has to run both ways or only one squid is in the encounter.
         The host is already telling the visitor where the resident is; this is
-        the same fact in the other direction, and it is what lets the
-        resident's own conspecific sensors - and therefore its own network -
-        respond to having a guest.
+        the same fact in the other direction: the tank's record of who is
+        present, which contests, fights and the resident's own first-sight
+        reaction are built from. (Seeing it is the resident's vision's job.)
 
         Returns True the first time this visitor is seen, which is the only
         moment a first-sight reaction makes sense.
@@ -181,10 +229,10 @@ class HostBody:
         """Everything the visiting squid can observe from where it is.
 
         Note what this does not do: it does not consult the visitor's memory,
-        because the host does not have it, and it does not compute
-        conspecific_familiarity or the recalled-valence sensors. Those are the
-        visitor's own record of this resident and are filled in at home. A
-        host asserting them would be telling a squid what it remembers.
+        because the host does not have it, and it reports nothing a memory
+        would - familiarity, how past meetings went. Those are the visitor's
+        own record of this resident and stay at home. A host asserting them
+        would be telling a squid what it remembers.
         """
         now = self.clock()
         # Keep the resident's view of this visitor current on the same tick
@@ -205,7 +253,7 @@ class HostBody:
         # The moment the visitor could first see the resident. Purely
         # observable - the host computed the sensor itself - so noting it here
         # tells us nothing about what the visitor thinks of what it saw.
-        if not actor.has_seen_resident and frame.sensors.get('conspecific_visible'):
+        if not actor.has_seen_resident and frame.sensors.get('squid_in_view'):
             actor.has_seen_resident = True
             self.first_sightings.append(actor)
         return frame
@@ -232,26 +280,34 @@ class HostBody:
             float(len(self._scene_items('food'))) * 12.0, 0.0, 60.0)
 
         if resident is not None:
-            rx = float(getattr(resident, 'squid_x', 0.0))
-            ry = float(getattr(resident, 'squid_y', 0.0))
-            dx, dy = rx - actor.x, ry - actor.y
-            distance = math.hypot(dx, dy)
-            if distance <= SIGHT_RANGE:
-                sensors['conspecific_visible'] = 100.0
-                sensors['conspecific_proximity'] = _clamp(
-                    100.0 - distance / SIGHT_RANGE * 100.0, 0.0, 100.0)
-                sensors['conspecific_ahead'] = self._ahead(dx, dy, actor.facing)
-                closing = self._resident_closing(actor, distance)
-                if closing > 0:
-                    sensors['conspecific_closing'] = _clamp(closing / 60.0 * 100.0,
-                                                            0.0, 100.0)
-                elif closing < 0:
-                    sensors['conspecific_receding'] = _clamp(-closing / 60.0 * 100.0,
-                                                             0.0, 100.0)
-            view = self.conspecific_view
-            if view is not None and view.any_contesting(self.clock()):
-                sensors['conspecific_contesting'] = 100.0
+            if self._resident_in_view(actor, resident):
+                sensors['squid_in_view'] = 100.0
+            distance = math.hypot(float(getattr(resident, 'squid_x', 0.0)) - actor.x,
+                                  float(getattr(resident, 'squid_y', 0.0)) - actor.y)
+            sensors['squid_proximity'] = proximity(distance)
+        # Being in a scuffle is something the visitor's body feels.
+        if self.clock() < actor.body_busy_until:
+            sensors['in_fight'] = 100.0
         return sensors
+
+    def _resident_in_view(self, actor: VisitorActor, resident) -> bool:
+        """Would the visitor see the resident with its own eyes?
+
+        The same view cone the squid's vision uses at home
+        (vision_worker.in_view_cone), pointed the way the visitor is facing.
+        The visitor's body is the resident's size - they are both squid. A
+        resident that is itself away is not in the tank to be seen.
+        """
+        if resident is None or getattr(resident, 'is_transitioning', False):
+            return False
+        half_w = float(getattr(resident, 'squid_width', 0.0)) / 2
+        half_h = float(getattr(resident, 'squid_height', 0.0)) / 2
+        width, height = self._tank_size()
+        return in_view_cone(actor.x + half_w, actor.y + half_h,
+                            FACING_ANGLES.get(actor.facing, 0.0), VIEW_CONE_ANGLE,
+                            math.hypot(width, height),
+                            float(getattr(resident, 'squid_x', 0.0)) + half_w,
+                            float(getattr(resident, 'squid_y', 0.0)) + half_h)
 
     def _observable_items(self, actor: VisitorActor, resident) -> List[Dict[str, Any]]:
         """Objects the visitor can see, with host-issued ids.
@@ -297,23 +353,113 @@ class HostBody:
         if intent.seq <= actor.seq_seen:
             self.rejected_intents += 1
             return False                       # duplicate or out of order
+        # The visitor stamped this with its own machine's clock. Measured
+        # against this one, a skew of more than a lease made every intent
+        # arrive "expired" and stalled the visit; taken relative to the least
+        # delay seen yet, a constant skew cancels and a late packet is still late.
+        observed = now - intent.sent_at
+        if actor.clock_offset is None or observed < actor.clock_offset:
+            actor.clock_offset = observed
+        intent.sent_at += actor.clock_offset
         if not intent.is_live(now):
             self.rejected_intents += 1
             return False                       # arrived after its lease ran out
 
         actor.seq_seen = intent.seq
+        if intent.action == 'act_ink':
+            ink = getattr(self.logic, 'ink_visitor', None)
+            if callable(ink):
+                ink(actor)
+            actor.last_intent_at = now
+            return True  # retain the simultaneous movement/play instruction
         actor.last_intent = intent
         actor.last_intent_at = now
+        if now < actor.body_busy_until:
+            actor.action = 'fighting'
+            return True
         actor.action = intent.action
 
         handler = self._ACTIONS.get(intent.action)
-        if handler is None:
-            # A real action neuron with no bodily effect in someone else's
-            # tank (resting, collapsing, inking). Recorded as what the visitor
-            # is doing - the resident can see it - and otherwise inert.
-            return True
-        handler(self, actor, intent)
+        if handler is not None:
+            handler(self, actor, intent)
+        # else: a real action neuron with no bodily effect in someone else's
+        # tank (resting, collapsing). Recorded as what the visitor is
+        # doing - the resident can see it - and otherwise inert.
+
+        # Wherever the visitor's own decision has left its body, the host
+        # works out what that means in this tank - including being in
+        # contact with the resident.
+        self._resolve_contact(actor, now)
         return True
+
+    # ------------------------------------------------------------------
+    # Reproduction: a fact about two bodies in this tank
+    # ------------------------------------------------------------------
+    def _resolve_contact(self, actor: VisitorActor, now: float) -> None:
+        """Is the visitor in sustained contact with the resident, and is it
+        a mating?
+
+        Like the contest, this is the host resolving what happened to bodies
+        its own tank contains. Neither squid chose to mate - there is no
+        action for it, here or in either brain. The visitor's network moved
+        its body; the resident's moved its own; if the two stay within reach
+        for long enough, one roll is made for the whole visit, and it is
+        rarely a mating.
+
+        No branch here reads the visitor's state, because the host has none
+        of it. Eligibility is about the RESIDENT, whose world this is: at
+        home, alive, and not already a parent.
+        """
+        if actor.mating_rolled:
+            return
+        resident = self._resident()
+        if resident is None or not self._resident_can_mate(resident):
+            actor.contact_since = None
+            return
+        distance = math.hypot(float(getattr(resident, 'squid_x', 0.0)) - actor.x,
+                              float(getattr(resident, 'squid_y', 0.0)) - actor.y)
+        if distance > MATING_CONTACT_RANGE:
+            actor.contact_since = None
+            return
+        if actor.contact_since is None:
+            actor.contact_since = now
+            return
+        if now - actor.contact_since < self.mating_contact_seconds:
+            return
+
+        actor.mating_rolled = True
+        if self.rng() >= self.mating_chance:
+            return
+        mating_id = mating_id_for(actor.visit_id)
+        recorded = False
+        if self.on_mating is not None:
+            try:
+                recorded = bool(self.on_mating(actor, mating_id))
+            except Exception as exc:
+                self._log(f"could not record a mating: {exc}")
+        if recorded:
+            self.announce_mating(actor, mating_id)
+
+    @staticmethod
+    def _resident_can_mate(resident) -> bool:
+        lifecycle = getattr(resident, 'lifecycle', None)
+        if lifecycle is None or not getattr(lifecycle, 'can_reproduce', False):
+            return False
+        # A resident that is itself away visiting is not in this tank.
+        if getattr(resident, 'is_transitioning', False):
+            return False
+        return bool(getattr(resident, 'can_move', True))
+
+    def announce_mating(self, actor: VisitorActor, mating_id: str) -> None:
+        """Tell this visitor about a mating, over the next few round trips.
+
+        Used when the mating happens, and again when the same individual
+        comes back later - which is how a visitor that never heard about it
+        (a lost packet, a crash on either side) still finds out.
+        """
+        actor.mated_id = mating_id
+        actor.mating_rolled = True
+        actor.mating_announcements = MATED_ANNOUNCEMENTS
 
     def _do_move(self, actor: VisitorActor, intent: ActionIntent) -> None:
         self._step(actor, intent.heading or actor.facing)
@@ -364,14 +510,36 @@ class HostBody:
         interpretation. The environmental change IS the learning signal, at
         both ends.
         """
+        if actor.held_item is not None:
+            throw = getattr(self.logic, 'throw_visitor_rock', None)
+            if callable(throw):
+                plan = throw(actor, actor.held_item, intent)
+                if plan and plan.get('closing_in'):
+                    # Out of reach of this throw: it keeps the rock and
+                    # swims at the squid it is aiming at.
+                    self._step_toward(actor, *plan['target_at'])
+                elif plan:
+                    actor.held_item = None
+                    actor.carrying = None
+                    self._report(actor, CONSEQUENCE_THROWN,
+                        {k: plan[k] for k in ('throw_id', 'aimed_at', 'driven_by',
+                                              'drive', 'speed', 'angle') if plan.get(k) is not None})
+            return
+        # Play goes at the nearest thing the visitor can see: the resident,
+        # if it is in view and nearer than the object it asked for.
+        resident = self._resident()
         item = self._resolve_target(actor, intent, contested_only=False)
+        if self._resident_in_view(actor, resident):
+            to_resident = math.hypot(float(getattr(resident, 'squid_x', 0.0)) - actor.x,
+                                     float(getattr(resident, 'squid_y', 0.0)) - actor.y)
+            if item is None or to_resident < math.hypot(_centre(item)[0] - actor.x,
+                                                         _centre(item)[1] - actor.y):
+                self._go_at_resident(actor, resident)
+                return
         if item is None:
             return
         contested = self._is_contested(item, actor)
         cx, cy = _centre(item)
-        if not contested:
-            self._step_toward(actor, cx, cy)
-            return
         distance = math.hypot(cx - actor.x, cy - actor.y)
         if distance > GRASP_RANGE:
             self._step_toward(actor, cx, cy)
@@ -379,7 +547,8 @@ class HostBody:
 
         resident = self._resident()
         held_by_resident = bool(getattr(resident, 'carrying_rock', False) and
-                                getattr(resident, 'current_rock', None) is item)
+                                (getattr(resident, 'carried_rock', None) is item
+                                 or getattr(resident, 'current_rock', None) is item))
         if held_by_resident:
             # It is in the resident's grasp. The resident keeps it, and both
             # squid have now been in a contest.
@@ -389,10 +558,29 @@ class HostBody:
             return
 
         actor.carrying = intent.target_id or getattr(item, 'filename', 'item')
+        actor.held_item = item
         actor.items_taken += 1
         self._take_from_scene(item)
         self._report(actor, CONSEQUENCE_CONTEST, {'won': True})
-        self._note_contest(actor, item, taken=True)
+        if contested:
+            self._note_contest(actor, item, taken=True)
+
+    def _go_at_resident(self, actor: VisitorActor, resident) -> None:
+        """Play aimed at the resident, the nearest thing in view.
+
+        The visitor swims to it; on reaching it the two are face to face, and
+        that confrontation goes the way every contest here goes - through the
+        resident's senses (note_contest). What it becomes is the tank's rules,
+        not this method's: a fight if the visitor is a squid that starts them
+        (MultiplayerPlugin.show_fight_cloud), otherwise simply contact, which is
+        where a mating can happen (_resolve_contact).
+        """
+        rx = float(getattr(resident, 'squid_x', 0.0))
+        ry = float(getattr(resident, 'squid_y', 0.0))
+        if math.hypot(rx - actor.x, ry - actor.y) > GRASP_RANGE:
+            self._step_toward(actor, rx, ry)
+            return
+        self._note_contest(actor, None, taken=False)
 
     def _is_contested(self, item, actor: VisitorActor) -> bool:
         """Is this object nearer the resident than the visitor?"""
@@ -407,8 +595,8 @@ class HostBody:
     #: The dispatch table. Keyed by ACTION NEURON, so the host's whole
     #: vocabulary is what the squid's own network can want - there is no
     #: entry here that does not correspond to something the visiting squid's
-    #: own action neurons could have chosen. Actions absent (act_ink,
-    #: act_rest, act_collapse) are visible to the resident but have no effect
+    #: own action neurons could have chosen. Ink is handled as a parallel
+    #: reflex above. Actions absent (act_rest, act_collapse) have no effect
     #: on someone else's tank.
     _ACTIONS = {
         'act_move': _do_move,
@@ -433,6 +621,10 @@ class HostBody:
         now = self.clock()
         ending = []
         for actor in list(self.visitors.values()):
+            if actor.mated_id and actor.mating_announcements > 0:
+                actor.mating_announcements -= 1
+                self._report(actor, CONSEQUENCE_MATED,
+                             {'mating_id': actor.mated_id})
             silence = actor.silence(now)
             if silence >= VISIT_ABANDON_TIMEOUT:
                 self._report(actor, CONSEQUENCE_EJECTED, {'reason': 'link_lost'})
@@ -468,7 +660,10 @@ class HostBody:
             return []
         try:
             return [i for i in scene.items()
-                    if getattr(i, 'category', '') == category]
+                    if getattr(i, 'category', '') == category
+                    and not getattr(i, 'is_projectile', False)
+                    and not getattr(i, 'carried_by_peer_uuid', '')
+                    and getattr(i, 'throw_cooldown_until', 0.) <= self.clock()]
         except Exception:
             return []
 
@@ -548,8 +743,8 @@ class HostBody:
         """Make the contest perceptible to the RESIDENT, through its senses.
 
         The resident learns about this the same way it learns about anything:
-        its conspecific_contesting sensor comes on, and whatever that does to
-        its drives is what its own network has to work with.
+        through what happens to it next, which its own network has to work
+        with. The contest is also what can turn into a fight.
         """
         view = self.conspecific_view
         if view is None or not hasattr(view, 'note_contest'):
@@ -570,9 +765,13 @@ class HostBody:
         dx = {'left': -VISITOR_STEP, 'right': VISITOR_STEP}.get(heading, 0.0)
         dy = {'up': -VISITOR_STEP, 'down': VISITOR_STEP}.get(heading, 0.0)
         width, height = self._tank_size()
-        actor.x = _clamp(actor.x + dx, 0.0, width)
-        actor.y = _clamp(actor.y + dy, 0.0, height)
-        actor.facing = heading
+        x, y = _clamp(actor.x + dx, 0.0, width), _clamp(actor.y + dy, 0.0, height)
+        blocked = (x, y) == (actor.x, actor.y)
+        actor.x, actor.y = x, y
+        # A wall turns a squid, as the edges of its own tank do at home
+        # (Squid.change_direction): one swimming on would otherwise press
+        # against the glass for as long as it kept exploring.
+        actor.facing = _OPPOSITE[heading] if blocked else heading
 
     def _step_toward(self, actor: VisitorActor, x: float, y: float) -> None:
         dx, dy = x - actor.x, y - actor.y
@@ -589,28 +788,12 @@ class HostBody:
         actor.pending_consequences.append(consequence)
         return consequence
 
-    @staticmethod
-    def _ahead(dx: float, dy: float, facing: str) -> float:
-        vectors = {'right': (1.0, 0.0), 'left': (-1.0, 0.0),
-                   'up': (0.0, -1.0), 'down': (0.0, 1.0)}
-        vector = vectors.get(facing)
-        length = math.hypot(dx, dy)
-        if vector is None or length < 1e-6:
-            return 0.0
-        cosine = (dx * vector[0] + dy * vector[1]) / length
-        return _clamp((cosine + 1.0) * 50.0, 0.0, 100.0)
-
-    def _resident_closing(self, actor: VisitorActor, distance: float) -> float:
-        view = self.conspecific_view
-        if view is None:
-            return 0.0
-        presence = view.presences.get(actor.uuid)
-        return float(getattr(presence, 'closing_rate', 0.0) or 0.0)
-
     def _log(self, message: str) -> None:
         if self.logger is not None:
             self.logger.debug(f"[HostBody] {message}")
 
 
 __all__ = ['HostBody', 'VisitorActor', 'VISITOR_STEP', 'GRASP_RANGE',
-           'SIGHT_RANGE', 'CONTEST_RANGE']
+           'SIGHT_RANGE', 'CONTEST_RANGE', 'MATING_CONTACT_RANGE',
+           'DEFAULT_MATING_CHANCE', 'DEFAULT_MATING_CONTACT_SECONDS',
+           'MATED_ANNOUNCEMENTS']

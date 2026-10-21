@@ -109,7 +109,7 @@ class TutorialManager:
                 background-color: #45a049;
             }
         """)
-        dismiss_button.clicked.connect(self.advance_to_next_step)
+        dismiss_button.clicked.connect(lambda: self._after_click(self.advance_to_next_step))
         
         dismiss_proxy = self.ui.scene.addWidget(dismiss_button)
         dismiss_proxy.setPos(win_width - 120, banner_y + 35)
@@ -194,7 +194,7 @@ class TutorialManager:
                     background-color: #4169E1;
                 }
             """))
-            dismiss_button.clicked.connect(self.advance_to_next_step)
+            dismiss_button.clicked.connect(lambda: self._after_click(self.advance_to_next_step))
 
             dismiss_proxy = self.ui.scene.addWidget(dismiss_button)
             dismiss_proxy.setPos(win_width - 120, banner_y + 35)
@@ -262,7 +262,7 @@ class TutorialManager:
                 background-color: #9932CC;
             }
         """)
-        dismiss_button.clicked.connect(self.advance_to_next_step)
+        dismiss_button.clicked.connect(lambda: self._after_click(self.advance_to_next_step))
         
         dismiss_proxy = self.ui.scene.addWidget(dismiss_button)
         dismiss_proxy.setPos(win_width - 120, banner_y + 35)
@@ -343,7 +343,7 @@ class TutorialManager:
                 background-color: #32CD32;
             }
         """)
-        dismiss_button.clicked.connect(self.advance_to_next_step)
+        dismiss_button.clicked.connect(lambda: self._after_click(self.advance_to_next_step))
         
         dismiss_proxy = self.ui.scene.addWidget(dismiss_button)
         dismiss_proxy.setPos(win_width - 120, banner_y + 35)
@@ -418,7 +418,7 @@ class TutorialManager:
                 background-color: #A0522D;
             }
         """)
-        dismiss_button.clicked.connect(self.advance_to_next_step)
+        dismiss_button.clicked.connect(lambda: self._after_click(self.advance_to_next_step))
         
         dismiss_proxy = self.ui.scene.addWidget(dismiss_button)
         dismiss_proxy.setPos(win_width - 120, banner_y + 35)
@@ -498,7 +498,7 @@ class TutorialManager:
                 background-color: #5F9EA0;
             }
         """)
-        dismiss_button.clicked.connect(self.advance_to_next_step)
+        dismiss_button.clicked.connect(lambda: self._after_click(self.advance_to_next_step))
         
         dismiss_proxy = self.ui.scene.addWidget(dismiss_button)
         dismiss_proxy.setPos(win_width - 120, banner_y + 35)
@@ -562,7 +562,7 @@ class TutorialManager:
                 background-color: #8A2BE2;
             }
         """)
-        dismiss_button.clicked.connect(self.end_tutorial)
+        dismiss_button.clicked.connect(lambda: self._after_click(self.end_tutorial))
         
         dismiss_proxy = self.ui.scene.addWidget(dismiss_button)
         dismiss_proxy.setPos(win_width - 120, banner_y + 35)
@@ -581,6 +581,27 @@ class TutorialManager:
         else:
             QtCore.QTimer.singleShot(500, self.check_brain_window_ready)
     
+    def _after_click(self, callback):
+        """Run a dismiss button's action once its click has finished.
+
+        The buttons live in the scene as QGraphicsProxyWidgets, and QPushButton
+        emits clicked() from inside the scene's mouse-release handling for the
+        proxy. Acting there removed the proxy from the scene and dropped the
+        last reference to it, so Qt deleted it while
+        QGraphicsScene::mouseReleaseEvent was still delivering to it - a
+        segfault (seen on macOS) on every tutorial button press. Deferred to
+        the next turn of the event loop, the release is over before anything
+        is removed. Bound to the step it was clicked on, so a double click or
+        the auto-dismiss timer firing in between cannot skip a step.
+        """
+        step = self.current_step
+
+        def run():
+            if self.current_step == step:
+                callback()
+
+        QtCore.QTimer.singleShot(0, run)
+
     def advance_to_next_step(self):
         logging.debug(f"Advancing to tutorial step {self.current_step + 1}")
         self.cancel_auto_dismiss_timer()
@@ -682,6 +703,11 @@ class TutorialManager:
         for item in self.tutorial_elements[:]:
             if item and item.scene():
                 item.scene().removeItem(item)
+            # removeItem hands ownership back to Python; a QObject item (the
+            # button proxies) is deleted by Qt when it is next safe instead of
+            # whenever Python drops this list.
+            if isinstance(item, QtCore.QObject):
+                item.deleteLater()
         
         self.tutorial_elements = []
         self.ui.scene.update()

@@ -14,6 +14,12 @@ _current_custom_brain_name: Optional[str] = None
 _current_custom_brain_file: Optional[str] = None
 
 
+def clear_custom_brain_tracking():
+    """A new life must not save the previous squid's custom architecture."""
+    global _current_custom_brain, _current_custom_brain_name, _current_custom_brain_file
+    _current_custom_brain = _current_custom_brain_name = _current_custom_brain_file = None
+
+
 def add_load_brain_button(network_tab, checkbox_layout):
     """
     Add a Load Brain button to the NetworkTab.
@@ -297,9 +303,8 @@ class BrainLoader:
         try:
             print(f"🧠 Loading brain: {filepath}")
             
-            with open(filepath, 'r') as f:
-                data = json.load(f)
-            
+            from .brain_io import read_brain_file
+            data = read_brain_file(filepath)
             brain = self._parse(data)
             if not brain:
                 raise ValueError("Could not parse brain format")
@@ -442,62 +447,21 @@ class BrainLoader:
     
     def _parse(self, data: Dict) -> Optional[Dict]:
         """Parse brain file to standard format."""
-        result = {'positions': {}, 'weights': {}, 'state': {}, 'excluded': set(), 'output_bindings': []}
-        
-        # Format 1: Dosidicus format (connections as dict with "->")
-        if 'neurons' in data and isinstance(data.get('connections'), dict):
-            for name, nd in data['neurons'].items():
-                pos = nd.get('position', [0, 0])
-                result['positions'][name] = tuple(pos) if isinstance(pos, list) else pos
-            for key, w in data.get('connections', {}).items():
-                if '->' in str(key):
-                    s, t = str(key).split('->')
-                    result['weights'][(s, t)] = w
-            result['state'] = data.get('state', {})
-            result['excluded'] = set(data.get('excluded_neurons', []))
-        
-        # Format 2: Designer format (connections as list)
-        elif 'neurons' in data and isinstance(data.get('connections'), list):
-            for name, nd in data['neurons'].items():
-                pos = nd.get('position', [0, 0])
-                result['positions'][name] = tuple(pos) if isinstance(pos, list) else pos
-                result['state'][name] = nd.get('activation', 50.0)
-            for c in data.get('connections', []):
-                if c.get('source') and c.get('target'):
-                    result['weights'][(c['source'], c['target'])] = c.get('weight', 0.1)
-            result['excluded'] = set(data.get('excluded_neurons', []))
-        
-        # Format 3: Layer format
-        elif 'layers' in data:
-            for i, layer in enumerate(data['layers']):
-                neurons = layer.get('neurons', [])
-                y = 80 + i * 150
-                for j, name in enumerate(neurons):
-                    x = 100 + (j + 1) * (700 // (len(neurons) + 1))
-                    result['positions'][name] = (x, y)
-                    result['state'][name] = 50.0
-            for c in data.get('custom_connections', []):
-                if c.get('source') and c.get('target'):
-                    result['weights'][(c['source'], c['target'])] = c.get('weight', 0.1)
-        else:
-            return None
-        
-        # Parse output bindings
-        result['output_bindings'] = data.get('output_bindings', [])
-        
-        # Defaults
-        for n in result['positions']:
-            if n not in result['state']:
-                result['state'][n] = 50.0
-        
-        status = {'is_sick', 'is_eating', 'is_sleeping', 'pursuing_food', 'direction'}
-        result['excluded'].update(status)
-        
-        return result if result['positions'] else None
-    
+        from .brain_io import normalise_brain
+        data = normalise_brain(data)
+        return {
+            'positions': {n: tuple(nd['position']) for n, nd in data['neurons'].items()},
+            'weights': {(e['source'], e['target']): e['weight'] for e in data['connections']},
+            'state': dict(data['state']),
+            'excluded': set(data.get('excluded_neurons', [])),
+            'output_bindings': data.get('output_bindings', []),
+            'cognitive_state': data,
+        }
+
     def _apply(self, brain: dict):
         """Apply parsed brain data to the current brain widget."""
         bw = self.brain_widget
+        bw._brain_document = brain.get("cognitive_state", {})
         
         # Apply positions
         if 'positions' in brain:
@@ -508,11 +472,8 @@ class BrainLoader:
         # --- FIX: Ensure mandatory sensors are present ---
         # If the custom brain deleted core sensors, the game logic will break.
         # We restore them using original positions (or default) so inputs still work.
-        MANDATORY_SENSORS = {
-            'can_see_food', 'external_stimulus', 'plant_proximity', 
-            'is_eating', 'is_sleeping', 'is_sick', 'is_fleeing', 'is_startled', 
-            'pursuing_food'
-        }
+        from .brain_constants import REQUIRED_NEURONS
+        MANDATORY_SENSORS = set(REQUIRED_NEURONS)
         
         restored_sensors = 0
         if hasattr(bw, 'original_neuron_positions'):
@@ -606,6 +567,31 @@ class BrainLoader:
         
         # Keep a copy on the widget for saving/exporting later
         bw.output_bindings = output_bindings_data
+        from .brain_clock import rebase_cognitive_state
+        target_now = getattr(getattr(bw, 'plasticity', None), 'clock', time.time)()
+        cognitive = rebase_cognitive_state(brain.get('cognitive_state', {}), target_now, kind='wall')
+        for key, attribute in (('provenance', 'ledger'), ('causal_learning', 'causal_learning'),
+                               ('capability', 'capability'), ('plasticity', 'plasticity'),
+                               ('consolidation', 'consolidation'),
+                               ('enhanced_neurogenesis', 'enhanced_neurogenesis')):
+            owner = getattr(bw, attribute, None)
+            if key in cognitive and owner is not None:
+                owner.from_dict(cognitive[key])
+        if 'action_representations' in cognitive:
+            bw.action_representations = {}
+            bw.externally_driven = set()
+            for action, neuron in cognitive['action_representations'].items():
+                if neuron in bw.neuron_positions:
+                    bw.represent_action(action, neuron)
+        if 'neuron_shapes' in cognitive:
+            bw.neuron_shapes = dict(cognitive['neuron_shapes'])
+        growth = getattr(bw, 'enhanced_neurogenesis', None)
+        if growth is not None:
+            bw.experience_buffer = growth.experience_buffer
+            for key, attribute in (('last_growth_at', '_last_growth_at'),
+                                   ('first_real_tick', '_first_real_tick')):
+                if key in cognitive.get('growth_clock', {}):
+                    setattr(growth, attribute, cognitive['growth_clock'][key])
         
         # Update related attributes safely
         if hasattr(bw, 'connections'):

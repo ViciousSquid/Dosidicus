@@ -10,6 +10,36 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+QT_LOGGING_RULES = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
+
+_EARLY_APP = None
+
+#: Launches that never show the game, and so never ask for a language.
+NO_SPLASH_FLAGS = ('-c', '--clean', '-designer', '--designer', '-h', '--help')
+
+
+def choose_language_first():
+    """As early as possible - before the game is even imported - show the
+    splash with its language picker. Nothing else starts until a language
+    is chosen (src/language_splash.py), so everything after it, the
+    tutorial question included, is in that language. Closing it quits."""
+    import multiprocessing
+    multiprocessing.freeze_support()        # a frozen child process stops here
+    if any(flag in sys.argv[1:] for flag in NO_SPLASH_FLAGS):
+        return
+    os.environ['QT_LOGGING_RULES'] = QT_LOGGING_RULES
+    global _EARLY_APP           # kept: main() goes on with this application
+    _EARLY_APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
+    from src.theme import keep_light
+    keep_light(_EARLY_APP)          # drawn light even in a dark system theme
+    from src.language_splash import choose_language
+    if choose_language() is None:
+        sys.exit(0)
+
+
+if __name__ == '__main__':
+    choose_language_first()
+
 import time
 import sys
 import json
@@ -41,7 +71,7 @@ def launch_brain_designer_process():
 
 def setup_logging_configuration():
     """Initialize logging configuration"""
-    os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false;qt.style.*=false'
+    os.environ['QT_LOGGING_RULES'] = QT_LOGGING_RULES
     os.makedirs('logs', exist_ok=True)
 
     logging.basicConfig(
@@ -97,48 +127,65 @@ class TeeStream:
         self.file_stream.flush()
 
 class TimedMessageBox(QtWidgets.QDialog):
-    """A message box that auto-closes after a timeout with a default choice"""
+    """A yes/no question that declines itself after a timeout.
+
+    Drawn like the language splash (src/language_splash.py): the question on
+    the grey bar in bold monospace; below it, on white, the countdown and the
+    Yes in dark green and No in dark red.
+    """
     def __init__(self, parent, title, message, timeout_seconds=5):
-        super().__init__(parent)
+        from src.language_splash import (GREEN, RED, centre_on, grey_bar, scale_factor,
+                                         splash_button, splash_font, white_foot)
+        super().__init__(parent, QtCore.Qt.Dialog | QtCore.Qt.FramelessWindowHint)
         self.setWindowTitle(title)
+        self.setModal(True)
         self.timeout_seconds = timeout_seconds
         self.remaining_seconds = timeout_seconds
         self.result_value = QtWidgets.QMessageBox.No  # Default to No
         self.loc = Localisation.instance()
-        
-        # Setup UI
-        layout = QtWidgets.QVBoxLayout()
-        
-        self.message_label = QtWidgets.QLabel(message)
-        self.message_label.setStyleSheet(f"font-size: {DisplayScaling.font_size(13)}pt;")
-        layout.addWidget(self.message_label)
-        
+        f = scale_factor()
+
+        self.message_label = grey_bar(message, f)
+
         # Auto-decline message
         self.timer_label = QtWidgets.QLabel(self.loc.get("auto_decline", seconds=self.remaining_seconds))
-        self.timer_label.setStyleSheet(f"color: gray; font-size: {DisplayScaling.font_size(11)}pt;")
-        layout.addWidget(self.timer_label)
-        
-        # Buttons
-        self.button_box = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Yes | QtWidgets.QDialogButtonBox.No
-        )
-        # Localise buttons manually since we use a custom dict system
-        self.button_box.button(QtWidgets.QDialogButtonBox.Yes).setText(self.loc.get("yes"))
-        self.button_box.button(QtWidgets.QDialogButtonBox.No).setText(self.loc.get("no"))
+        self.timer_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.timer_label.setFont(splash_font(14 * f, bold=False))
+        self.timer_label.setStyleSheet("color: #666666;")
 
-        self.button_box.accepted.connect(self.accept_yes)
-        self.button_box.rejected.connect(self.reject_no)
-        layout.addWidget(self.button_box)
-        
-        self.setLayout(layout)
+        # Buttons, localised from our own table
+        self.yes_button = splash_button(self.loc.get("yes"), f, GREEN, width=140)
+        self.no_button = splash_button(self.loc.get("no"), f, RED, width=140)
+        self.yes_button.setDefault(True)
+        self.yes_button.clicked.connect(self.accept_yes)
+        self.no_button.clicked.connect(self.reject_no)
+
+        foot = white_foot(f)
+        foot_layout = QtWidgets.QVBoxLayout(foot)
+        foot_layout.setContentsMargins(0, int(8 * f), 0, int(12 * f))
+        foot_layout.setSpacing(int(8 * f))
+        foot_layout.addWidget(self.timer_label)
+        buttons = QtWidgets.QHBoxLayout()
+        buttons.setSpacing(int(20 * f))
+        buttons.addStretch(1)
+        buttons.addWidget(self.yes_button)
+        buttons.addWidget(self.no_button)
+        buttons.addStretch(1)
+        foot_layout.addLayout(buttons)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.message_label)
+        layout.addWidget(foot)
+        self.setFixedSize(self.sizeHint())
+        centre_on(self, parent)
         
         # Setup timer
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.update_countdown)
         self.timer.start(1000)  # Update every second
 
-
-        
     def update_countdown(self):
         """Update the countdown and auto-close when time runs out"""
         self.remaining_seconds -= 1
@@ -156,9 +203,13 @@ class TimedMessageBox(QtWidgets.QDialog):
     
     def reject_no(self):
         """User clicked No or timeout occurred"""
+        self.reject()
+
+    def reject(self):
+        """No, however it came: the button, the timeout or Escape."""
         self.timer.stop()
         self.result_value = QtWidgets.QMessageBox.No
-        self.reject()
+        super().reject()
     
     def get_result(self):
         """Get the result after dialog closes"""
@@ -169,6 +220,7 @@ class TimedMessageBox(QtWidgets.QDialog):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, specified_personality=None, debug_mode=False, neuro_cooldown=None):
         super().__init__()
+        self._game_timers = []
         
         # Apply configured language from config.ini
         config_manager = ConfigManager()
@@ -201,7 +253,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._brain_window_ref = self.brain_window
         
         # Explicitly force creation of all tab contents
-        QtCore.QTimer.singleShot(100, self.preload_brain_window_tabs)
+        self._schedule_for_game(100, self.preload_brain_window_tabs)
         
         # Continue with normal initialization
         self.brain_window.set_tamagotchi_logic(None)  # Placeholder to ensure initialization
@@ -255,17 +307,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Load and initialize plugins after core components
         logging.debug("Loading plugins")
         plugin_results = self.plugin_manager.load_all_plugins()
-        
-        # Setup plugins with tamagotchi_logic reference
-        for plugin_name, plugin_data in self.plugin_manager.plugins.items():
-            instance = plugin_data.get('instance')
-            if instance and hasattr(instance, 'setup') and not plugin_data.get('is_setup', False):
-                try:
-                    instance.setup(self.plugin_manager, self.tamagotchi_logic)
-                    plugin_data['is_setup'] = True
-                except Exception as e:
-                    print(f"Error setting up plugin {plugin_name}: {e}")
-        
+        self._setup_plugins()
+
         # CRITICAL FIX: Re-load achievement data since plugin instances were replaced
         # during load_all_plugins(), discarding any data loaded earlier
         if self.save_manager.save_exists():
@@ -446,7 +489,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.brain_window.set_tamagotchi_logic(self.tamagotchi_logic)
 
             if not self.save_manager.save_exists():
-                QtCore.QTimer.singleShot(500, self.delayed_tutorial_check)
+                self._schedule_for_game(500, self.delayed_tutorial_check)
 
         self._initialization_complete = True
 
@@ -464,9 +507,50 @@ class MainWindow(QtWidgets.QMainWindow):
             pass
         else:
             # Just open initial windows if no tutorial
-            QtCore.QTimer.singleShot(500, self.open_initial_windows)
+            self._schedule_for_game(500, self.open_initial_windows)
 
-    def create_new_game(self, specified_personality=None):
+    def _schedule_for_game(self, delay_ms, callback):
+        timer = QtCore.QTimer(self)
+        timer.setSingleShot(True)
+        def run():
+            if timer in self._game_timers:
+                self._game_timers.remove(timer)
+            timer.deleteLater()
+            callback()
+        timer.timeout.connect(run)
+        self._game_timers.append(timer)
+        timer.start(delay_ms)
+
+    def _setup_plugins(self):
+        """Setup plugins with tamagotchi_logic reference"""
+        for plugin_name, plugin_data in self.plugin_manager.plugins.items():
+            instance = plugin_data.get('instance')
+            if instance and hasattr(instance, 'setup') and not plugin_data.get('is_setup', False):
+                try:
+                    instance.setup(self.plugin_manager, self.tamagotchi_logic)
+                    plugin_data['is_setup'] = True
+                except Exception as e:
+                    print(f"Error setting up plugin {plugin_name}: {e}")
+
+    def _achievements_save_data(self):
+        """The achievements plugin's data, while it is loaded, else None."""
+        plugin_data = self.plugin_manager.plugins.get('achievements') or {}
+        instance = plugin_data.get('instance')
+        if instance is None or not hasattr(instance, 'get_save_data'):
+            return None
+        try:
+            return instance.get_save_data()
+        except Exception as e:
+            print(f"[Warning] Could not collect achievements: {e}")
+            return None
+
+    def _cancel_game_callbacks(self):
+        for timer in self._game_timers:
+            timer.stop()
+            timer.deleteLater()
+        self._game_timers.clear()
+
+    def create_new_game(self, specified_personality=None, egg_born=False):
         """Create a new game instance"""
         # Delete any existing save to ensure clean start
         if self.save_manager.save_exists():
@@ -493,7 +577,7 @@ class MainWindow(QtWidgets.QMainWindow):
             print(f"\x1b[43m Neurogenesis cooldown:\033[0m {self.neuro_cooldown}")
         
         self.squid.memory_manager.clear_all_memories()
-        self.show_splash_screen()
+        self.show_splash_screen(egg_born=egg_born)
 
     def check_tutorial_preference(self):
         """Show a dialog asking if the user wants to see the tutorial with 5-second timeout"""
@@ -556,54 +640,125 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         tutorial_dialog.exec_()
         self.show_tutorial = (tutorial_dialog.get_result() == QtWidgets.QMessageBox.Yes)
-        
+
+        self._begin_new_life()
+        print("New game created successfully!")
+
+    def hatch_egg(self, egg_id):
+        """A dead parent's egg hatches: the same new game, with no way out.
+
+        Called by TamagotchiLogic.begin_egg_hatching once the egg has been
+        saved as hatching. There is no confirmation and no tutorial question,
+        because the player cannot decline a hatch. The parent's saves are
+        deleted inside _begin_new_life - which is the egg completing, since
+        the egg lived in them - and the hatchling is saved straight away, so
+        from here on there is no egg anywhere to hatch a second time.
+        """
+        if not egg_id or getattr(self, '_hatched_egg_id', None) == egg_id:
+            return False
+        self._hatched_egg_id = egg_id
+        print(f"🥚 Egg {egg_id} is hatching")
+        return self._succeed_dead_squid(egg_born=True)
+
+    def replace_dead_squid(self, death_id):
+        """A squid died with no egg to follow it - of neglect or sickness.
+
+        A new squid hatches from a fresh egg, as at the start of a game, with
+        no way out, the way a parent's egg hatches. Its headstone stays.
+        Called by TamagotchiLogic.continue_after_death, once per death.
+        """
+        if not death_id or getattr(self, '_replaced_death_id', None) == death_id:
+            return False
+        self._replaced_death_id = death_id
+        print(f"🪦 {death_id} is succeeded by a new squid")
+        return self._succeed_dead_squid(egg_born=False)
+
+    def _succeed_dead_squid(self, egg_born):
+        self.show_tutorial = False
+        # Paint the exact first frame of a new game before retiring the dead
+        # squid. The same cover survives the reset, so no empty tank or
+        # newborn flashes.
+        self._hatch_cover = SplashScreen(self)
+        self._hatch_cover.show()
+        self._hatch_cover.raise_()
+        self._hatch_cover.repaint()
+        QtWidgets.QApplication.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+        self._begin_new_life(egg_born=egg_born, after_death=True)
+        try:
+            self.tamagotchi_logic.save_game()
+        except Exception as e:
+            print(f"[Hatch] could not save the hatchling yet: {e}")
+        return True
+
+    def _begin_new_life(self, egg_born=False, after_death=False):
+        """Replace the squid in this tank with a newborn. Shared by New Game,
+        by an egg hatching and by a squid that died with no egg, so all three
+        are the same sequence.
+
+        Order matters: plugins come down first, while the squid they refer to
+        still exists, so the multiplayer plugin can end its visits on both
+        sides and close its socket instead of carrying on against a squid that
+        has been replaced.
+        """
+        self._cancel_game_callbacks()
+        old_logic = getattr(self, 'tamagotchi_logic', None)
+        old_squid = getattr(self, 'squid', None)
+
+        # A death continues the player's story, so its achievements carry on
+        # - CIRCLE OF LIFE is unlocked by the very death that lays an egg.
+        # They live in the dead squid's save, which is deleted below. New
+        # Game is a fresh start and keeps no achievements, as it always has.
+        carried_achievements = self._achievements_save_data() if after_death else None
+        # Headstones are never removed: every reset keeps the tank's dead.
+        ui = getattr(self, 'user_interface', None)
+        carried_headstones = [d for d in (ui.get_decorations_data() if ui else [])
+                              if d.get('deceased') is not None]
+        # An egg carries half of each parent's weights (src/inheritance.py);
+        # read them before the parent - and the egg with it - is gone.
+        lifecycle = getattr(old_squid, 'lifecycle', None)
+        genes = lifecycle.egg_genes if (egg_born and lifecycle is not None) else {}
+
+        # Plugins down. unload_plugin() calls each plugin's shutdown(), which
+        # for multiplayer ends every visit and closes the network node.
+        self.plugin_manager.unload_all_plugins()
+
         # Stop current simulation if running
-        if hasattr(self, 'tamagotchi_logic'):
-            self.tamagotchi_logic.stop()
+        if old_logic is not None:
+            old_logic.stop()
             # Stop autosave timer if it exists
-            if hasattr(self.tamagotchi_logic, 'autosave_timer'):
-                self.tamagotchi_logic.autosave_timer.stop()
-        
-        # Delete all save files (both autosave and manual save)
-        if self.save_manager.save_exists():
-            self.save_manager.delete_save(is_autosave=True)  # Delete autosave
-            self.save_manager.delete_save(is_autosave=False)  # Delete manual save
-            print("All save files deleted")
-        
-        # Clear memory files
-        memory_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '_memory')
-        if os.path.exists(memory_dir):
+            if hasattr(old_logic, 'autosave_timer'):
+                old_logic.autosave_timer.stop()
+            if hasattr(old_logic, '_remove_egg_item'):
+                old_logic._remove_egg_item()
+        if old_squid is not None and hasattr(old_squid, 'retire'):
+            old_squid.retire()
+
+        # Delete this squid's save files: the manual save AND its autosave.
+        # delete_save() only removed the newest manual save, so the autosave
+        # survived and the replaced squid could come back on the next start.
+        if old_squid is not None:
+            removed = self.save_manager.delete_saves_for(str(old_squid.uuid))
+            print(f"Deleted {removed} save file(s)")
+        elif self.save_manager.save_exists():
+            self.save_manager.delete_save(is_autosave=True)
+            self.save_manager.delete_save(is_autosave=False)
+
+        # Clear the squid's own memory files, where its MemoryManager keeps
+        # them. This used to be computed from this file's parent directory,
+        # which is the folder ABOVE the game - so it never cleared the game's
+        # memories and could have removed an unrelated _memory folder.
+        memory_manager = getattr(old_squid, 'memory_manager', None)
+        memory_dir = os.path.abspath(getattr(memory_manager, 'memory_dir', '_memory'))
+        if os.path.isdir(memory_dir):
             import shutil
             shutil.rmtree(memory_dir)
             print("Memory directory cleared")
         
-        # Clear all neurons and state from brain window
+        # A newborn brain: innate synapses only, nothing grown, no history.
         if hasattr(self, 'brain_window') and hasattr(self.brain_window, 'brain_widget'):
-            brain_widget = self.brain_window.brain_widget
-            
-            # Clear visible neurons
-            brain_widget.visible_neurons = set()
-            
-            # Clear neurogenesis data
-            if hasattr(brain_widget, 'neurogenesis_data'):
-                brain_widget.neurogenesis_data = {
-                    'new_neurons': [],
-                    'new_neurons_details': {},
-                    'new_synapses': []
-                }
-            
-            # Clear enhanced neurogenesis tracking
-            if hasattr(brain_widget, 'enhanced_neurogenesis'):
-                brain_widget.enhanced_neurogenesis.reset_state()
-            
-            # Reset brain widget state
-            if hasattr(brain_widget, 'state'):
-                brain_widget.state = brain_widget.create_initial_state()
-            
-            # Clear hebbian learning state
-            if hasattr(brain_widget, 'hebbian'):
-                brain_widget.hebbian.reset()
-            
+            self.brain_window.brain_widget.reset_to_newborn()
+            from src.custom_brain_loader import clear_custom_brain_tracking
+            clear_custom_brain_tracking()
             print("Brain state cleared")
         
         # Clear all decorations and items from the scene
@@ -613,6 +768,13 @@ class MainWindow(QtWidgets.QMainWindow):
             background_item = getattr(self.user_interface, 'background', None)
             
             for item in self.user_interface.scene.items():
+                # Only items with no parent: removing one takes its children
+                # with it. Removing a child itself handed it back to Python
+                # while its parent still owned it, so it was deleted twice -
+                # a crash when an egg hatched after a visit while the arrow
+                # drawn as a visitor arrives (a group of lines) was still up.
+                if item.parentItem() is not None:
+                    continue
                 # Keep the background (if it exists) and remove everything else
                 if background_item is None or item != background_item:
                     items_to_remove.append(item)
@@ -627,7 +789,7 @@ class MainWindow(QtWidgets.QMainWindow):
             print("Scene cleared")
         
         # Create new game (creates squid but not tamagotchi_logic)
-        self.create_new_game(self.specified_personality)
+        self.create_new_game(self.specified_personality, egg_born=egg_born)
         
         # Create TamagotchiLogic
         self.tamagotchi_logic = TamagotchiLogic(self.user_interface, self.squid, self.brain_window)
@@ -642,6 +804,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plugin_manager.tamagotchi_logic = self.tamagotchi_logic
         self.tamagotchi_logic.plugin_manager = self.plugin_manager
         
+        # A hatchling's brain is a newborn's, overlaid with half of each
+        # parent's weights - every one recorded as inherited, from whom.
+        if genes:
+            from src.inheritance import inherit
+            inherited = inherit(self.brain_window.brain_widget, genes)
+            parents = sorted(genes)
+            mutated = sum(1 for gene in inherited if gene['mutated'])
+            print(f"🧬 Inherited {len(inherited)} synapses from {' and '.join(parents)}"
+                  f" ({mutated} mutated)")
+            self.squid.inherited_from = parents
+
         # Create personality starter neuron if needed
         squid = self.tamagotchi_logic.squid
         brain_widget = self.brain_window.brain_widget
@@ -655,10 +828,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 if neuron:
                     print(f"🧬 Personality starter neuron created: {neuron}")
         
-        # Reload plugins to ensure they get the new tamagotchi_logic
-        self.plugin_manager.reload_all_plugins()
-        
-        print("New game created successfully!")
+        # Plugins back up against the new squid, set up as at startup so they
+        # track the newborn. Multiplayer stays off until the player turns it
+        # on again, as it does at startup.
+        self.plugin_manager.load_all_plugins()
+        self._setup_plugins()
+        if carried_achievements:
+            self._restore_achievements_data(carried_achievements)
+        if carried_headstones:
+            self.user_interface.add_decorations_data(carried_headstones)
 
     def load_game(self):
         """Delegate to tamagotchi_logic"""
@@ -690,10 +868,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event):
         """Handle window close event"""
-        # Save game before closing
+        self._cancel_game_callbacks()
+        # Save game before closing - and before the plugins come down, since
+        # the achievements are written from their loaded plugin or not at all.
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
             self.save_game()
-        
+        self.plugin_manager.unload_all_plugins()
+
         # Stop the tamagotchi logic if it has a stop method
         if hasattr(self, 'tamagotchi_logic') and self.tamagotchi_logic:
             if hasattr(self.tamagotchi_logic, 'stop'):
@@ -714,12 +895,23 @@ class MainWindow(QtWidgets.QMainWindow):
         
         event.accept()
 
-    def show_splash_screen(self):
-        """Display splash screen animation with synchronized neuron reveal"""
-        self.splash = SplashScreen(self)
+    def show_splash_screen(self, egg_born=False):
+        """Display splash screen animation with synchronized neuron reveal
+
+        egg_born: the squid is hatching from an egg its parent laid after a
+        multiplayer mating. The sequence is the same as any new game; only
+        the two messages differ, and the starter egg keeps its own.
+        """
+        cover = getattr(self, '_hatch_cover', None)
+        self.splash = cover if cover is not None else SplashScreen(self)
+        self._hatch_cover = None
+        splash = self.splash
         self.splash.finished.connect(self.start_simulation)
-        self.splash.finished.connect(lambda: self.tamagotchi_logic.statistics_window.award(1000))
-        self.splash.second_frame.connect(self.show_hatching_notification)
+        if egg_born:
+            self.splash.second_frame.connect(self.show_egg_hatching_notification)
+            self.splash.finished.connect(self.show_egg_hatched_notification)
+        else:
+            self.splash.second_frame.connect(self.show_hatching_notification)
 
         # NEW: award 1000 points the instant the splash ends
         self.splash.finished.connect(
@@ -727,7 +919,9 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
        # After splash ends, wait 3 s then show the normal feeding hint
-        self.splash.finished.connect(lambda: QtCore.QTimer.singleShot(3000, self.show_feeding_hint))
+        self.splash.finished.connect(lambda: self._schedule_for_game(3000, self.show_feeding_hint))
+        self.splash.show()
+        self.splash.raise_()
 
         # Check if this is a brand new game (no save exists)
         is_new_game = not self.save_manager.save_exists()
@@ -746,7 +940,8 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QApplication.processEvents()
             
             # Give the brain window time to fully render (longer delay)
-            QtCore.QTimer.singleShot(1500, lambda: self._start_splash_with_reveals())
+            self._schedule_for_game(1500, lambda: self._start_splash_with_reveals(splash)
+                                    if self.splash is splash else None)
         else:
             # For loaded games, show brain window with all neurons visible
             if hasattr(self.brain_window, 'brain_widget') and hasattr(self.brain_window.brain_widget, 'visible_neurons'):
@@ -769,15 +964,19 @@ class MainWindow(QtWidgets.QMainWindow):
             
             # Show splash normally (no animated reveals needed for loaded games)
             self.splash.show()
-            QtCore.QTimer.singleShot(1000, self.splash.start_animation)
+            self._schedule_for_game(1000, lambda: splash.start_animation()
+                                    if self.splash is splash else None)
 
 
     def show_feeding_hint(self):
         """Use the same strip as every other message."""
         self.user_interface.show_message("Press D to open the Decorations window")
     
-    def _start_splash_with_reveals(self):
+    def _start_splash_with_reveals(self, splash=None):
         """Start splash screen with neuron reveal synchronization (called after brain window is ready)"""
+        if splash is not None and self.splash is not splash:
+            return
+        splash = self.splash
         print("     🥚 A squid is hatching...")
         
         # Connect frame changes to neuron reveals
@@ -785,7 +984,8 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Show and start the splash screen animation
         self.splash.show()
-        QtCore.QTimer.singleShot(500, self.splash.start_animation)  # Small delay for splash to show
+        self._schedule_for_game(500, lambda: splash.start_animation()
+                                if self.splash is splash else None)
 
     def _reveal_neuron_for_frame(self, frame_index):
         """Reveal core neurons in sequence with animation frames"""
@@ -815,7 +1015,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def show_hatching_notification(self):
         """Display hatching message"""
+        self.splash.set_caption('Hatching!')
         self.user_interface.show_message("Squid is hatching!")
+
+    EGG_HATCHING_MESSAGE = "An egg is hatching!"
+    EGG_HATCHED_MESSAGE = "A squid has hatched and you must look after him."
+
+    def show_egg_hatching_notification(self):
+        """An egg laid by a parent squid has started to hatch."""
+        self.splash.set_caption('Hatching!')
+        self.user_interface.show_message(self.EGG_HATCHING_MESSAGE)
+
+    def show_egg_hatched_notification(self):
+        """The squid from that egg is ready."""
+        self.user_interface.show_message(self.EGG_HATCHED_MESSAGE)
 
     def start_simulation(self):
         """Begin the simulation - brain window is already visible for new games"""
@@ -828,7 +1041,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Show tutorial if enabled
         if self.show_tutorial:
-            QtCore.QTimer.singleShot(1000, self.user_interface.show_tutorial_overlay)
+            self._schedule_for_game(1000, self.user_interface.show_tutorial_overlay)
         else:
             # === FIX START: Manual cleanup if tutorial is skipped ===
             if hasattr(brain_widget, 'is_tutorial_mode'):
@@ -842,7 +1055,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # === FIX END ===
 
             # Only open decoration window automatically (brain window already visible for new games)
-            QtCore.QTimer.singleShot(500, self.position_and_show_decoration_window)
+            self._schedule_for_game(500, self.position_and_show_decoration_window)
 
     def show_tutorial_overlay(self):
         """Delegate to UI layer and ensure no duplicates remain"""
@@ -1011,7 +1224,10 @@ def main():
     # wait short at a negligible cost in switching.
     sys.setswitchinterval(0.001)
 
-    app = QtWidgets.QApplication(sys.argv)
+    # Already made for the language splash (choose_language_first).
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
+    from src.theme import keep_light
+    keep_light(app)                 # drawn light even in a dark system theme
     
     try:
         personality = Personality(args.personality) if args.personality else None

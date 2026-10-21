@@ -534,7 +534,7 @@ class StatisticsEventWiringTests(unittest.TestCase):
         logic.statistics_window.award.assert_called_once_with(-250)
         squid.ui.scene.addItem.assert_called_once_with(ink_cloud_item)
         single_shot.assert_called_once()
-        self.assertEqual(single_shot.call_args.args[0], 10000)
+        self.assertEqual(single_shot.call_args.args[0], TamagotchiLogic.INK_FADE_MS + 500)
 
     def test_legacy_peak_memory_and_age_updates_are_model_owned(self):
         squid = FakeSquid()
@@ -573,10 +573,12 @@ class StatisticsEventWiringTests(unittest.TestCase):
             filename="rock.png",
             setParentItem=Mock(),
             boundingRect=lambda: rock_rect,
+            sceneBoundingRect=lambda: rock_rect,
             setPos=Mock(),
             setVisible=Mock(),
         )
         squid.carried_rock = rock
+        squid.uuid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
         squid.status = "roaming"
         squid.happiness = 50
         squid.satisfaction = 50
@@ -602,7 +604,8 @@ class StatisticsEventWiringTests(unittest.TestCase):
         )
         logic = object.__new__(TamagotchiLogic)
         logic.squid = squid
-        logic.brain_window = SimpleNamespace(statistics_tab=statistics_tab)
+        logic.brain_window = SimpleNamespace(statistics_tab=statistics_tab,
+            brain_widget=SimpleNamespace(state={'act_play': 100.}))
         logic.statistics_window = SimpleNamespace(award=Mock())
 
         manager = object.__new__(RockInteractionManager)
@@ -616,6 +619,11 @@ class StatisticsEventWiringTests(unittest.TestCase):
         manager.throw_animation_timer = Mock()
         manager.throw_animation_timer.isActive.return_value = False
         manager.multiplayer_plugin = None
+        manager.scene = SimpleNamespace(width=lambda: 900, height=lambda: 500,
+            items=lambda: [], sceneRect=lambda: SimpleNamespace(
+                left=lambda: 0, right=lambda: 900, top=lambda: 0, bottom=lambda: 500))
+        manager.rock_test_timer = Mock()
+        manager.show_message = None
 
         self.assertTrue(manager.throw_rock())
         self.assertEqual(squid.statistics.total_rocks_thrown, 1)
@@ -661,6 +669,12 @@ class StatisticsEventWiringTests(unittest.TestCase):
         manager.squid = squid
         manager.logic = logic
         manager.poop_config = {}
+        # An empty tank to aim in (src/throwing.py): nobody in view.
+        manager.scene = SimpleNamespace(
+            items=lambda: [], width=lambda: 900, height=lambda: 500,
+            sceneRect=lambda: SimpleNamespace(bottom=lambda: 500))
+        manager.show_message = None
+        manager.flying_poop = manager.current_throw = None
         manager.throw_animation_timer = Mock()
         manager.throw_animation_timer.isActive.return_value = False
         manager.multiplayer_plugin = None

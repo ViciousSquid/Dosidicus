@@ -101,6 +101,11 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # and the user can drag it larger or smaller afterwards.
         self.setMinimumSize(DisplayScaling.scale(480), DisplayScaling.scale(360))
 
+        # In real pixels, like every size in the game: in points on a Retina
+        # Mac, where the screen reports points (DisplayScaling).
+        ratio = max(1.0, screen.devicePixelRatio())
+        final_width, final_height = int(final_width / ratio), int(final_height / ratio)
+
         # Ensure the final window dimensions do not exceed the actual screen available geometry
         final_width = min(final_width, screen_geometry.width())
         final_height = min(final_height, screen_geometry.height())
@@ -129,6 +134,17 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
 
         # Initialize tab widget
         self.init_tabs()
+
+        # On a Retina screen the opening size above is the design's share of
+        # the screen, in points - but the tabs and controls are in points too
+        # and do not shrink with it, so never smaller than they need.
+        if ratio > 1.0:
+            hint = self.sizeHint()
+            width = min(max(final_width, hint.width()), screen_geometry.width())
+            height = min(max(final_height, hint.height()), screen_geometry.height())
+            if (width, height) != (final_width, final_height):
+                self.resize(width, height)
+                self.move(screen_geometry.right() - width - 100, screen_geometry.top())
 
         # Set up timers
         self.init_timers()
@@ -878,8 +894,14 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 print(f"Warning: could not serialize {attr}: {e}")
                 return {}
 
-        return {
+        from .brain_io import desktop_brain_state
+        return desktop_brain_state({
+            **getattr(self.brain_widget, '_brain_document', {}),
             'weights_list': weights_list,
+            'clock': {'kind': 'wall', 'now': self.brain_widget.plasticity.clock()},
+            'growth_clock': {'last_growth_at': self.brain_widget.enhanced_neurogenesis._last_growth_at,
+                             'first_real_tick': self.brain_widget.enhanced_neurogenesis._first_real_tick},
+            'neuron_shapes': dict(self.brain_widget.neuron_shapes),
             'neuron_positions': {str(k): v for k, v in self.brain_widget.neuron_positions.items()},
             'neuron_states': non_core_states,  # Only non-core states
             'neurogenesis_data': self.brain_widget.neurogenesis_data,
@@ -899,7 +921,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             'consolidation': _dump('consolidation'),
             # Legacy key for backward compatibility (subset of enhanced_neurogenesis)
             'functional_neurons': enhanced_neurogenesis_data.get('functional_neurons', {})
-        }
+        })
 
     def set_brain_state(self, state):
         """
@@ -909,6 +931,18 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         IMPORTANT: Core neuron values (hunger, happiness, etc.) are NOT loaded here.
         Call sync_state_from_squid() after this method to populate them from the squid.
         """
+        from .brain_io import desktop_brain_state, normalise_brain
+        from .brain_clock import rebase_cognitive_state
+        if any(key in state for key in ('neurons', 'positions', 'neuron_positions')):
+            state = rebase_cognitive_state(desktop_brain_state(state), self.brain_widget.plasticity.clock(), kind='wall')
+            self.brain_widget._brain_document = normalise_brain(state)
+            self.brain_widget.neuron_shapes = dict(state.get('neuron_shapes', {}))
+            self.brain_widget.output_bindings = state.get('output_bindings', [])
+            growth = self.brain_widget.enhanced_neurogenesis
+            for key, attr in (('last_growth_at', '_last_growth_at'), ('first_real_tick', '_first_real_tick')):
+                if key in state.get('growth_clock', {}):
+                    setattr(growth, attr, state['growth_clock'][key])
+
         # Load weights (handle new list format and potentially old dict format)
         if 'weights_list' in state:
             weights = {}
@@ -989,6 +1023,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # FORCIBLY REBUILD NEUROGENESIS NEURONS FROM functional_neurons OR state
         # =====================================================================
         self._force_rebuild_neurogenesis_neurons(state)
+        self.brain_widget.experience_buffer = self.brain_widget.enhanced_neurogenesis.experience_buffer
 
         # Restore the cognitive history. Without this a loaded squid would have
         # an evolved brain and no idea why - "every save file becomes a
@@ -1047,7 +1082,8 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
                 self.brain_widget.state_colors[neuron] = color
 
         # Ensure all core neurons have their original positions if missing
-        for name, pos in self.brain_widget.original_neuron_positions.items():
+        from .brain_constants import REQUIRED_NEURONS
+        for name, pos in REQUIRED_NEURONS.items():
             if name not in self.brain_widget.neuron_positions:
                 self.brain_widget.neuron_positions[name] = pos
 
@@ -3093,7 +3129,7 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
         # report every neuron in the newborn layout, which since the motor
         # bank landed there meant a newborn was described as having nineteen
         # core neurons - and the whole design claim is eight.
-        by_row = {'core': [], 'motor': [], 'sensor': [], None: []}
+        by_row = {'core': [], 'motor': [], 'sensor': [], 'social': [], None: []}
         for n in neurons:
             by_row[neuron_row(n)].append(n)
 
@@ -3114,6 +3150,10 @@ class SquidBrainWindow(QtWidgets.QMainWindow):
             <tr>
                 <td style='padding:3px;'><b>Sense Neurons:</b></td>
                 <td style='padding:3px;'>{len(by_row['sensor'])}</td>
+            </tr>
+            <tr>
+                <td style='padding:3px;'><b>Social Network (grown):</b></td>
+                <td style='padding:3px;'>{len(by_row['social'])}</td>
             </tr>
             <tr>
                 <td style='padding:3px;'><b>Neurons from Neurogenesis:</b></td>

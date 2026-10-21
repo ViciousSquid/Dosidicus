@@ -5,13 +5,7 @@ import shutil
 from datetime import datetime
 from uuid import UUID
 
-class DateTimeEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        if isinstance(obj, UUID):
-            return str(obj)
-        return super().default(obj)
+from .save_archive import DateTimeEncoder, write_save_archive
 
 class SaveManager:
     def __init__(self, save_directory="saves"):
@@ -131,10 +125,7 @@ class SaveManager:
 
             # Write to temp file
             temp_path = target_path + ".tmp"
-            with zipfile.ZipFile(temp_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
-                for key, data in save_data.items():
-                    zf.writestr(f"{key}.json", json.dumps(data, indent=4, cls=DateTimeEncoder))
-                zf.writestr("uuid.txt", f"SquidSignature    {squid_uuid}")
+            write_save_archive(temp_path, save_data, squid_uuid)
 
             # Atomic replace
             if os.path.exists(target_path):
@@ -296,6 +287,31 @@ class SaveManager:
             os.remove(path)
             return True
         return False
+
+    def delete_saves_for(self, uuid_str: str) -> int:
+        """Delete every save this squid has: manual, autosave and leftovers.
+
+        Saves are named after the squid ({uuid}.zip, {uuid}_autosave.zip), so
+        deleting "the" save with delete_save() missed the autosave, and a
+        stale copy of a squid that had been replaced could be loaded again on
+        the next start. Returns how many files were removed.
+        """
+        removed = 0
+        if not uuid_str:
+            return removed
+        candidates = []
+        for is_autosave in (False, True):
+            path = self._get_save_path_for_uuid(uuid_str, is_autosave=is_autosave)
+            candidates.extend([path, path + ".backup", path + ".old", path + ".tmp"])
+        candidates.append(self.autosave_path)     # the pre-uuid autosave name
+        for path in candidates:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+                    removed += 1
+            except OSError as e:
+                print(f"[SaveManager] Could not delete {path}: {e}")
+        return removed
 
     def get_save_timestamp(self, is_autosave: bool = False) -> float | None:
         if is_autosave:

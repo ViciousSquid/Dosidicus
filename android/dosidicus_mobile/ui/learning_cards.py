@@ -37,12 +37,11 @@ class LearningCards(ScrollView):
 
     def _header(self):
         b = self.sim.squid.brain
-        boost = "ACTIVE x1.5" if b.neurogenesis_active else "off"
-        txt = (f"[b][color=b39ddb]Hebbian + STDP learning[/color][/b]\n"
-               f"Rate [b]{b.config['base_learning_rate']}[/b]/s   "
-               f"threshold [b]{int(b.config['co_activation_threshold']*100)}%[/b]   "
-               f"neurogenesis boost [b]{boost}[/b]\n"
-               f"[color=b39ddb]STDP[/color] timing-strengthenings: [b]{b.stdp_potentiations}[/b]")
+        txt = (f"[b][color=b39ddb]Desktop 3.1 plasticity[/color][/b]\n"
+               f"Learning rate [b]{b.config.learning_rate}[/b] · commits every "
+               f"[b]{b.config.hebbian_interval}s[/b]\n"
+               f"Signed Hebbian + directional STDP · {b.stdp_potentiations} timing updates\n"
+               f"Growth responds to persistent capability deficits.")
         lbl = Label(text=txt, markup=True, size_hint_y=None, halign="left",
                     valign="top", color=(0.9, 0.92, 0.95, 1), font_size=sp(14))
         lbl.bind(width=lambda *_: setattr(lbl, "text_size", (lbl.width, None)),
@@ -61,7 +60,7 @@ class LearningCards(ScrollView):
         potentiation = dw >= 0
         bg, fg = (_GREEN if potentiation else _PINK)
         kind = "LTP" if potentiation else "LTD"
-        rule = "STDP" if e.get("stdp") else "Hebbian"
+        rule = e.get("mechanism", "STDP" if e.get("stdp") else "Hebbian").capitalize()
         sign = "+" if dw >= 0 else ""
         arrow = "->"
         text = (f"[b]{e['a']}[/b]  {arrow}  [b]{e['b']}[/b]\n"

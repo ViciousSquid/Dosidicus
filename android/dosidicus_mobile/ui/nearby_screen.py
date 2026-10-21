@@ -1,9 +1,8 @@
 """The 'Nearby squids' screen: local peer-to-peer visits via Nearby Connections.
 
-Host (be discoverable) or Find nearby players; on connect, both sides swap a
-compact squid snapshot and each spawns the other's squid as a guest visitor that
-swims around for a couple of minutes. A received squid can also be imported as a
-full copy.
+Host (be discoverable) or Find nearby players. The finding squid visits the
+host's tank through the shared perception/intent protocol; its brain and
+learning stay on its own device. ZIP export/import handles deliberate copies.
 
 Off-device (or a build without Play Services) the transport is unavailable, so
 the screen shows why and offers a "Preview a visitor" demo that spawns a guest
@@ -22,8 +21,48 @@ from ..engine import portability as P
 from . import nearby
 
 
+#: Remembered once the player has accepted the multiplayer risk on this device.
+NOTICE_FLAG = "multiplayer_risk_notice_shown"
+
+
 def open_nearby(app):
-    NearbyView(app).open()
+    """Nearby squids - only once the player has said yes to the risk (as on desktop).
+
+    Asked until accepted; Cancel leaves Nearby closed.
+    """
+    import os
+    live = getattr(app, "_nearby_view", None)
+    if live is not None and live.live_visits():
+        live.open()                 # the visit carried on with the screen closed
+        return
+    flag = os.path.join(getattr(app, "user_data_dir", "") or ".", NOTICE_FLAG)
+    if os.path.exists(flag):
+        NearbyView(app).open()
+        return
+    from ..engine import shared  # noqa: F401 - locate the desktop source package
+    from src.lifecycle import MULTIPLAYER_RISK_NOTICE, MULTIPLAYER_RISK_TITLE
+    body = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(12))
+    text = Label(text=MULTIPLAYER_RISK_NOTICE, font_size=sp(16), halign="center",
+                 valign="middle", color=(0.92, 0.92, 0.95, 1))
+    text.bind(size=lambda *_: setattr(text, "text_size", text.size))
+    body.add_widget(text)
+    notice = Popup(title=MULTIPLAYER_RISK_TITLE, content=body, size_hint=(0.92, 0.66),
+                   title_size=sp(18), auto_dismiss=False)
+
+    def accept(*_):
+        try:
+            with open(flag, "w") as handle:
+                handle.write("1")
+        except OSError:
+            pass
+        notice.dismiss()
+        NearbyView(app).open()
+
+    row = BoxLayout(size_hint_y=None, height=dp(56), spacing=dp(8))
+    row.add_widget(_btn("Cancel", lambda *_: notice.dismiss(), (0.3, 0.3, 0.34, 1)))
+    row.add_widget(_btn("Enable", accept, (0.13, 0.42, 0.18, 1)))
+    body.add_widget(row)
+    notice.open()
 
 
 def _btn(text, cb, color=(0.2, 0.3, 0.42, 1), h=54):
@@ -41,7 +80,9 @@ class NearbyView(Popup):
         self.peer_names = {}          # endpoint_id -> display name
         self.peer_buttons = {}        # endpoint_id -> Button
         self.pending_bytes = {}       # endpoint_id -> received bytes (for import)
-        self.my_name = f"{app.sim.squid.personality.value} squid"
+        self.visits = {}
+        self.hosting = False
+        self.my_name = app.sim.squid.name
 
         root = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(10))
         super().__init__(title="Nearby squids", content=root, size_hint=(0.94, 0.9),
@@ -75,9 +116,12 @@ class NearbyView(Popup):
 
         root.add_widget(_btn("Preview a visitor", lambda *_: self._preview(),
                              (0.5, 0.28, 0.72, 1)))
-        root.add_widget(_btn("Close", lambda *_: self.dismiss(), (0.3, 0.3, 0.34, 1)))
+        row = BoxLayout(size_hint_y=None, height=dp(54), spacing=dp(8))
+        row.add_widget(_btn("Disconnect", lambda *_: self._disconnect(), (0.55, 0.14, 0.14, 1)))
+        row.add_widget(_btn("Close", lambda *_: self.dismiss(), (0.3, 0.3, 0.34, 1)))
+        root.add_widget(row)
 
-        self.bind(on_dismiss=lambda *_: self._teardown())
+        self.bind(on_dismiss=lambda *_: self._on_dismiss())
         if self.available:
             self._connect_manager()
 
@@ -101,10 +145,12 @@ class NearbyView(Popup):
         }
 
     def _host(self):
+        self.hosting = True
         self._set_status("Hosting — waiting for a nearby squid to connect…")
         self.mgr.host(self.my_name)
 
     def _find(self):
+        self.hosting = False
         self._set_status("Looking for nearby squids…")
         self.mgr.find()
 
@@ -133,14 +179,17 @@ class NearbyView(Popup):
 
     def _on_connected(self, endpoint_id):
         name = self.peer_names.get(endpoint_id, "a friend")
-        data = P.snapshot_bytes(self.app.sim)
-        if len(data) > P.SNAPSHOT_MAX_BYTES:
-            self._set_status("Your squid is too complex to send over this link.")
-            return
-        self.mgr.send(endpoint_id, data)
-        self._set_status(f"Connected to {name} — sent your squid for a visit.")
+        from ..engine.peer_visit import PeerVisit
+        visit = PeerVisit(self.app.sim,
+                          lambda data: self.mgr.send(endpoint_id, data), hosting=self.hosting)
+        self.visits[endpoint_id] = visit
+        visit.begin()
+        self._set_status(f"Connected to {name} — neural visit link active.")
 
     def _on_disconnected(self, endpoint_id):
+        visit = self.visits.pop(endpoint_id, None)
+        if visit:
+            visit.close(notify=False)
         name = self.peer_names.get(endpoint_id, "a friend")
         self._set_status(f"{name} disconnected.")
         self._on_peer_lost(endpoint_id)
@@ -148,16 +197,12 @@ class NearbyView(Popup):
     def _on_bytes(self, endpoint_id, base64_data):
         try:
             data = nearby.NearbyManager.decode(base64_data)
-            snap = P.snapshot_dict(data)
         except Exception as e:
-            self._set_status(f"Received an unreadable squid ({e}).")
+            self._set_status(f"Received an unreadable visit packet ({e}).")
             return
-        self.pending_bytes[endpoint_id] = data
-        name = self.peer_names.get(endpoint_id, "a friend")
-        self.app.sim.add_visitor(snap, name=name)
-        self.app._flash(f"[color=b39ddb]{name}'s squid is visiting your tank![/color]",
-                        seconds=3.5)
-        self._offer_import(name, data)
+        visit = self.visits.get(endpoint_id)
+        if visit is not None and not visit.receive(data):
+            self._set_status('Incompatible or invalid visit packet; both devices need protocol 4.')
 
     # ------------------------------------------------------------- preview/import
     def _preview(self):
@@ -194,6 +239,28 @@ class NearbyView(Popup):
         self.app.save_now()
         self.app._flash("[color=88ff88]Imported the visiting squid![/color]")
 
+    def live_visits(self):
+        return [visit for visit in self.visits.values() if not visit.closed]
+
+    def _on_dismiss(self):
+        """Closing the screen does not end a visit: the player watches it in
+        the tank, and Disconnect (or the link dropping) ends it. With nothing
+        live, the transport stops as before."""
+        if self.live_visits():
+            self.app._nearby_view = self
+            return
+        self._teardown()
+
+    def _disconnect(self):
+        self._teardown()
+        if getattr(self.app, "_nearby_view", None) is self:
+            self.app._nearby_view = None
+        self._set_status("Disconnected.")
+        self.dismiss()
+
     def _teardown(self):
+        for visit in list(self.visits.values()):
+            visit.close()
+        self.visits.clear()
         if self.mgr:
             self.mgr.stop()
