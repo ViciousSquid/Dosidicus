@@ -100,6 +100,9 @@ class RenderState:
     # Widget size
     width: int = 1024
     height: int = 768
+    #: Real pixels per point on the widget's screen (2 on a Retina Mac). The
+    #: frame is rendered at this many pixels per point so it is sharp there.
+    dpr: float = 1.0
     
     # Hover state
     hovered_neuron: Optional[str] = None
@@ -295,6 +298,15 @@ class BrainRenderWorker(QThread):
             content_width = base_width * scale
             offset_x = (state.width - content_width) / 2
 
+        # Neurons, captions and line widths are sized in logical units on a
+        # painter that is already scaled. They used to be multiplied by
+        # `scale` a second time, so they grew and shrank with the SQUARE of
+        # the view scale: fine in a big window, and in a small one (a Mac,
+        # whose window is measured in points) the neurons were dots and the
+        # captions unreadable smudges. Above 1.0 nothing changes; below it
+        # they keep their logical size and shrink only with the view.
+        elem = max(1.0, scale)
+
         live = self._live_links(state)
         key = self._backdrop_key(state, live)
         weights = tuple(state.weights.items())
@@ -311,14 +323,14 @@ class BrainRenderWorker(QThread):
             added = frozenset(link for link, _ in weights[len(old):]) - live
             painter = self._begin_painter(image, offset_x, indicator_space, scale)
             try:
-                self._draw_connections(painter, state, scale, only=added)
+                self._draw_connections(painter, state, elem, only=added)
             finally:
                 painter.end()
             self._backdrop = image.copy()
             self._backdrop_weights = weights
         else:
             # Create image with proper size
-            image = QImage(state.width, state.height, QImage.Format_ARGB32)
+            image = self._new_frame(state)
             image.fill(QColor(*state.anim_background_colour))
 
             painter = self._begin_painter(image, offset_x, indicator_space, scale)
@@ -334,7 +346,7 @@ class BrainRenderWorker(QThread):
 
                 # Draw connections - all but the live ones, which change
                 # every frame and go on top in the second pass
-                self._draw_connections(painter, state, scale, skip=live)
+                self._draw_connections(painter, state, elem, skip=live)
             finally:
                 painter.end()
 
@@ -345,10 +357,10 @@ class BrainRenderWorker(QThread):
         painter = self._begin_painter(image, offset_x, indicator_space, scale)
         try:
             if live:
-                self._draw_connections(painter, state, scale, only=live)
+                self._draw_connections(painter, state, elem, only=live)
 
             # Draw neurons
-            self._draw_neurons(painter, state, scale)
+            self._draw_neurons(painter, state, elem)
 
             # Row labels go on LAST. They started out drawn with the bands,
             # where a single connection crossing a row was enough to strike
@@ -358,6 +370,24 @@ class BrainRenderWorker(QThread):
         finally:
             painter.end()
 
+        return image
+
+    #: Every frame resolves font point sizes at 96 dpi, as Windows and Linux
+    #: do. A QImage otherwise takes the platform default, 72 dpi on a Mac,
+    #: where every label came out three quarters of its size elsewhere.
+    _FRAME_DOTS_PER_METER = round(96 / 0.0254)
+
+    @classmethod
+    def _new_frame(cls, state: RenderState) -> QImage:
+        """A blank frame state.width x state.height points in size, with
+        state.dpr real pixels per point so it is sharp on a Retina screen."""
+        dpr = max(1.0, float(state.dpr or 1.0))
+        image = QImage(max(1, int(round(state.width * dpr))),
+                       max(1, int(round(state.height * dpr))),
+                       QImage.Format_ARGB32)
+        image.setDevicePixelRatio(dpr)
+        image.setDotsPerMeterX(cls._FRAME_DOTS_PER_METER)
+        image.setDotsPerMeterY(cls._FRAME_DOTS_PER_METER)
         return image
 
     @staticmethod
@@ -403,7 +433,8 @@ class BrainRenderWorker(QThread):
         """Everything the backdrop pass reads, apart from the weights."""
         from .brain_constants import NEURON_ROWS, ROW_BAND_COLORS, LOGICAL_CANVAS
         return (live,
-            state.width, state.height, tuple(state.anim_background_colour),
+            state.width, state.height, state.dpr,
+            tuple(state.anim_background_colour),
             tuple(state.neuron_positions.items()),
             frozenset(state.visible_neurons), frozenset(state.excluded_neurons),
             tuple(item for item in state.link_opacities.items()
@@ -981,6 +1012,10 @@ class BrainRenderWorker(QThread):
             self._draw_caption(painter, state, name, x, y, radius, scale)
             painter.setFont(font)      # restore base font for the next neuron
 
+    #: The smallest a neuron's caption is drawn, in on-screen pixels (points
+    #: on a Mac).
+    MIN_CAPTION_PX = 11.0
+
     def _draw_caption(self, painter: QPainter, state: RenderState, name: str,
                       x: float, y: float, clearance: float, scale: float):
         """Draw a neuron's name in a pill under it.
@@ -1001,7 +1036,15 @@ class BrainRenderWorker(QThread):
         base = state.neuron_label_font_size
         effective_size = base * 0.75 if is_grown_neuron(name) else base
 
-        label_font = QFont("Arial", int(effective_size * scale))
+        # Never smaller on screen than MIN_CAPTION_PX (a grown neuron's
+        # caption three quarters of that), however small the view: a caption
+        # nobody can read is not a caption. The painter's own scale is the
+        # view scale - the frame's pixel ratio is not part of it.
+        view = abs(painter.worldTransform().m11()) or 1.0
+        floor_px = self.MIN_CAPTION_PX * (0.75 if is_grown_neuron(name) else 1.0)
+        floor_pt = floor_px * 72.0 / 96.0 / view
+        label_font = QFont("Arial")
+        label_font.setPointSizeF(max(effective_size * scale, floor_pt))
         label_font.setBold(True)
         painter.setFont(label_font)
         local_fm = painter.fontMetrics()
@@ -1192,6 +1235,10 @@ def create_render_state_from_widget(brain_widget) -> RenderState:
     # Widget size
     state.width = brain_widget.width()
     state.height = brain_widget.height()
+    try:
+        state.dpr = max(1.0, float(brain_widget.devicePixelRatioF()))
+    except (AttributeError, RuntimeError, TypeError):
+        state.dpr = 1.0
     
     # Hover state
     state.hovered_neuron = getattr(brain_widget, 'hovered_neuron', None)

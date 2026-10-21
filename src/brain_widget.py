@@ -3728,20 +3728,27 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         
         # Draw cached render if available
         if self._cached_render and not self._cached_render.isNull():
-            # Scale cached image to widget size if needed
-            if (self._cached_render.width() != self.width() or 
-                self._cached_render.height() != self.height()):
+            # The frame is rendered at the screen's pixel ratio (2 on a Retina
+            # Mac), so its own width and height are in pixels; its size in
+            # points is what has to match the widget.
+            cached = self._cached_render
+            dpr = max(1.0, float(self.devicePixelRatioF()))
+            img_dpr = max(1.0, float(cached.devicePixelRatio()))
+            if (int(round(cached.width() / img_dpr)) != self.width() or
+                int(round(cached.height() / img_dpr)) != self.height() or
+                abs(img_dpr - dpr) > 1e-3):
                 # Request new render at correct size
                 self._render_dirty = True
                 # Draw scaled version for now
-                scaled = self._cached_render.scaled(
-                    self.width(), self.height(),
+                scaled = cached.scaled(
+                    int(round(self.width() * dpr)), int(round(self.height() * dpr)),
                     QtCore.Qt.KeepAspectRatio,
                     QtCore.Qt.SmoothTransformation
                 )
+                scaled.setDevicePixelRatio(dpr)
                 painter.drawImage(0, 0, scaled)
             else:
-                painter.drawImage(0, 0, self._cached_render)
+                painter.drawImage(0, 0, cached)
         else:
             # No cached render yet - draw background and request render
             bg_color = QtGui.QColor(*self.anim_background_colour)
@@ -3855,7 +3862,8 @@ class BrainWidget(RecordedSynapses, ExternallyDriven, QtWidgets.QWidget):
         
         x = pos[0] * scale
         y = pos[1] * scale
-        radius = self.neuron_radius * scale
+        # As the render worker sizes it: logical size times max(1, scale).
+        radius = self.neuron_radius * max(1.0, scale) * scale
         
         # Temporarily set painter to high quality
         painter.save()
