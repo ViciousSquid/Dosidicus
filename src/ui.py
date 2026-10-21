@@ -509,6 +509,7 @@ class Ui:
         except ImportError:
             print("Status bar component not available, skipping")
         self.optimize_animations()
+        self.mark_persistent_scene_items()
 
     def setup_neurogenesis_debug_shortcut(self):
         self.neurogenesis_debug_shortcut = QtWidgets.QShortcut(
@@ -1061,6 +1062,29 @@ class Ui:
             self.debug_text.setVisible(getattr(self.tamagotchi_logic, 'debug_mode', False))
         
         self.create_action_buttons()
+
+    #: QGraphicsItem.data() key marking the window's own furniture.
+    PERSISTENT_ITEM_KEY = 0x5155  # arbitrary, unique to this app
+
+    def mark_persistent_scene_items(self):
+        """Mark everything in the scene now - the tank, the cleanliness
+        overlay, the points labels, the debug text, the compute badge and the
+        FEED / CLEAN / MEDICINE buttons - as part of the window rather than of
+        a game, so starting a new game clears around them.
+
+        Stored on the C++ item with setData rather than as a Python
+        attribute, so it survives whatever wrapper PyQt hands back from
+        scene.items().
+        """
+        for item in self.scene.items():
+            item.setData(self.PERSISTENT_ITEM_KEY, True)
+
+    def is_persistent_scene_item(self, item):
+        """True for the window's own furniture (mark_persistent_scene_items)."""
+        try:
+            return bool(item.data(self.PERSISTENT_ITEM_KEY))
+        except RuntimeError:
+            return False
 
     def custom_wheel_event(self, event):
         selected_items = self.scene.selectedItems()
