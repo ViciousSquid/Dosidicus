@@ -693,6 +693,11 @@ class Squid:
             QtCore.Qt.KeepAspectRatio,
             QtCore.Qt.SmoothTransformation
         )
+        # The height the mental-state icons (sick, curious...) are drawn at:
+        # full size, in points. They are pinned by their top edge, so the ng
+        # icon - scaled with the squid, 70% on a 1080p screen - is dropped by
+        # the difference to put its bottom edge where theirs is.
+        self.head_icon_height = DisplayScaling.points(original_ng.height())
         
         # Update squid dimensions to match scaled size
         self.squid_width = self.images["left1"].width()
@@ -731,9 +736,12 @@ class Squid:
     def update_neurogenesis_icon_position(self):
         """Position the neurogenesis icon above the squid"""
         if self.ng_icon is not None:
+            pixmap = self.ng_icon.pixmap()
+            # Bottom edge level with the other head icons' (see load_images).
+            drop = max(0, getattr(self, 'head_icon_height', pixmap.height()) - pixmap.height())
             self.ng_icon.setPos(
-                self.squid_x + self.squid_width // 2 - self.ng_icon.pixmap().width() // 2 + self.ng_icon_offset.x(),
-                self.squid_y + self.ng_icon_offset.y()
+                self.squid_x + self.squid_width // 2 - pixmap.width() // 2 + self.ng_icon_offset.x(),
+                self.squid_y + self.ng_icon_offset.y() + drop
             )
 
     def update_startled_icon_position(self):
