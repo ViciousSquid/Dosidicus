@@ -112,7 +112,7 @@ class NetworkTab(BrainBaseTab):
         timer_font = QtGui.QFont()
         timer_font.setPointSize(font_size_timers)
 
-        self.hebbian_timer_label = QtWidgets.QLabel(f"{loc.get('hebbian_cycle')}: XX")
+        self.hebbian_timer_label = QtWidgets.QLabel(f"{loc.get('hebbian_cycle')}: 0")
         self.hebbian_timer_label.setStyleSheet("color: white;")
         self.hebbian_timer_label.setFont(timer_font)
         timers_layout.addWidget(self.hebbian_timer_label)
@@ -318,8 +318,7 @@ class NetworkTab(BrainBaseTab):
 
     def setup_timers(self):
         # QTimer fires every second for global-cooldown updates and label refresh.
-        # The Hebbian countdown value is NOT owned here – it is read from
-        # brain_widget.hebbian_countdown_seconds (same source as the Learning tab).
+        # The Hebbian cycle count is read from the brain's plasticity engine.
         self.hebbian_countdown = QtCore.QTimer(self)
         self.hebbian_countdown.timeout.connect(self._on_every_second)
         self.hebbian_countdown.start(1000)
@@ -327,13 +326,8 @@ class NetworkTab(BrainBaseTab):
         self._update_global_cooldown_label()
 
     def _on_every_second(self):
-        """Called every second by the QTimer.
-
-        The Hebbian countdown is read from brain_widget.hebbian_countdown_seconds
-        – the same source the Learning tab uses – so both displays are always in sync.
-        This method no longer owns or mutates the counter value.
-        """
-        # 1. Refresh Hebbian label from the authoritative source
+        """Called every second by the QTimer."""
+        # 1. Refresh the Hebbian cycle count
         self.update_hebbian_label()
 
         # 2. Update global-cooldown counter
@@ -345,30 +339,15 @@ class NetworkTab(BrainBaseTab):
         self.update_hebbian_label()
 
     def update_hebbian_label(self):
-        """Refresh the Hebbian countdown label from brain_widget.hebbian_countdown_seconds
-        – the same source the Learning tab uses – ensuring both are always in sync."""
+        """How many Hebbian cycles this brain has been through - the plasticity
+        engine's committed cycles, saved with the brain. The countdown to the
+        next one is on the Learning tab."""
         loc = Localisation.instance()
         if not hasattr(self, 'hebbian_timer_label'):
             return
-
-        # Pause state check (mirrors Learning tab behaviour exactly)
-        is_paused = (
-            self.tamagotchi_logic is not None
-            and hasattr(self.tamagotchi_logic, 'simulation_speed')
-            and self.tamagotchi_logic.simulation_speed == 0
-        )
-        if is_paused:
-            self.hebbian_timer_label.setText(
-                f"{loc.get('hebbian_cycle')}: {loc.get('hebbian_paused')}"
-            )
-            return
-
-        # Read the authoritative value from brain_widget
-        value = getattr(
-            self.brain_widget, 'hebbian_countdown_seconds',
-            getattr(self.config, 'hebbian_cycle_seconds', 30)
-        )
-        self.hebbian_timer_label.setText(f"{loc.get('hebbian_cycle')}: {value}")
+        engine = getattr(self.brain_widget, 'plasticity', None)
+        cycles = getattr(engine, 'commit_count', 0)
+        self.hebbian_timer_label.setText(f"{loc.get('hebbian_cycle')}: {cycles}")
 
     def update_metrics_display(self):
         '''Update the metrics bar with current network statistics - single source of truth'''
