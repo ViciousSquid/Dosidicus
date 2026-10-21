@@ -115,7 +115,7 @@ becomes increasingly sociable. Same start, diverging lives.
 
 Earlier on the branch (before this work): release workflows for all platforms
 (`e1f47c3`), shared brain interchange, the real two-instance gallery
-(`docs/canary-gallery`, now stale - see section 5).
+(`docs/canary-gallery`, since removed: it showed the retired design).
 
 Test suite at the last commit: **873 passed**
 (`QT_QPA_PLATFORM=offscreen python -m pytest tests android/tests -q -p no:cacheprovider`, ~50 s).
@@ -334,9 +334,9 @@ Priority order agreed with the owner: big code changes first.
 ### Verification and release
 
 - **Real two-instance test**: done - `docs/story-gallery/` from
-  `tools/capture_story.py` and `tools/capture_android.py`.
-  `docs/canary-gallery` still shows the retired `conspecific_*`/`encounter`
-  design; remove it when the owner agrees.
+  `tools/capture_story.py` and `tools/capture_android.py`. The old
+  `docs/canary-gallery` (the retired `conspecific_*`/`encounter` design) is
+  removed.
 - **Brain window crop**: `BrainWidget.resizeEvent` forces the widget to at
   least 1280x900 whatever room the window gives it, so in a smaller window
   the bottom of the network - the SOCIAL band - is cut off rather than
