@@ -145,6 +145,23 @@ class TankView(Widget):
         y = self.y + (1.0 - ty / th) * self.height
         return x, y
 
+    def _draw_name_chip(self, name, cx, below_y, alpha=1.0):
+        """A squid's name on a dark chip, centred under it - resident and
+        visitor alike."""
+        tag = self._name_texture(name)
+        if not tag:
+            return
+        th = dp(18)
+        tw = min(self.width-dp(20), dp(210), th * tag.width / max(1, tag.height))
+        left = max(self.x+dp(6), min(cx-tw/2, self.right-tw-dp(6)))
+        bottom = max(self.y+dp(8), below_y-th-dp(12))
+        Color(.04, .07, .13, .85 * alpha)
+        RoundedRectangle(pos=(left-dp(6), bottom-dp(4)),
+                         size=(tw+dp(12), th+dp(8)), radius=[dp(7)])
+        Color(1, 1, 1, alpha)
+        Rectangle(texture=tag, pos=(left, bottom), size=(tw, th))
+        Color(1, 1, 1, 1)
+
     def _draw_squid(self, squid, squid_w, squid_h, icon_sz):
         """The resident: sprite, tint, name tag and mental-state icon."""
         # Squid sprite (aspect-correct; swim frames swap once per second).
@@ -174,17 +191,7 @@ class TankView(Widget):
             Color(0.9, 0.5, 0.8, 1)
             Rectangle(pos=sq_pos, size=(squid_w, squid_h))
 
-        tag = self._name_texture(squid.name)
-        if tag:
-            th = dp(18)
-            tw = min(self.width-dp(20), dp(210), th * tag.width / max(1, tag.height))
-            left = max(self.x+dp(6), min(sx-tw/2, self.right-tw-dp(6)))
-            bottom = max(self.y+dp(8), sy-squid_h/2-th-dp(12))
-            Color(.04, .07, .13, .85)
-            RoundedRectangle(pos=(left-dp(6), bottom-dp(4)),
-                             size=(tw+dp(12), th+dp(8)), radius=[dp(7)])
-            Color(1, 1, 1, 1)
-            Rectangle(texture=tag, pos=(left, bottom), size=(tw, th))
+        self._draw_name_chip(squid.name, sx, sy - squid_h / 2)
 
         # Above the head: while asleep show a "Zzz"; otherwise a mental-state
         # icon mirroring the desktop set — startled "!" (takes priority — a
@@ -296,14 +303,7 @@ class TankView(Widget):
                 else:
                     Color(0.7, 0.8, 0.95, 0.7)
                     Rectangle(pos=vpos, size=(vis_w, vis_h))
-                tag = self._name_texture(v.get("name", "visitor"))
-                if tag:
-                    tw = min(vis_w * 1.4, dp(120))
-                    th = tw * (tag.height / tag.width) if tag.width else tw * 0.3
-                    Color(1, 1, 1, 0.9)
-                    Rectangle(texture=tag, pos=(vx - tw / 2, vy + vis_h / 2),
-                              size=(tw, th))
-                Color(1, 1, 1, 1)
+                self._draw_name_chip(v.get("name", "visitor"), vx, vy - vis_h / 2, alpha=.9)
 
             # The egg a parent is keeping, on the floor where it was laid.
             egg = getattr(getattr(squid, 'lifecycle', None), 'egg', None)
@@ -315,8 +315,21 @@ class TankView(Widget):
                 Color(1, 1, 1, 1)
                 Rectangle(texture=etex, pos=(ex - ew / 2, ey - eh / 2), size=(ew, eh))
 
-            # A dead squid's body has given way to its headstone.
-            if not getattr(getattr(squid, 'lifecycle', None), 'is_dead', False):
+            # A dead squid's body has given way to its headstone; a squid away
+            # visiting is not in this tank, and the tank says where it is.
+            visiting = sim.visiting() if hasattr(sim, 'visiting') else None
+            if visiting is not None:
+                note = self._name_texture(sim.visiting_text())
+                if note:
+                    nh = dp(22)
+                    nw = min(self.width - dp(24), nh * note.width / max(1, note.height))
+                    Color(.04, .07, .13, .8)
+                    RoundedRectangle(pos=(self.center_x - nw / 2 - dp(10), self.center_y - nh / 2 - dp(6)),
+                                     size=(nw + dp(20), nh + dp(12)), radius=[dp(9)])
+                    Color(1, 1, 1, 1)
+                    Rectangle(texture=note, pos=(self.center_x - nw / 2, self.center_y - nh / 2),
+                              size=(nw, nh))
+            elif not getattr(getattr(squid, 'lifecycle', None), 'is_dead', False):
                 self._draw_squid(squid, squid_w, squid_h, icon_sz)
 
             fight = getattr(sim, 'fight', None)

@@ -31,6 +31,10 @@ def open_nearby(app):
     Asked until accepted; Cancel leaves Nearby closed.
     """
     import os
+    live = getattr(app, "_nearby_view", None)
+    if live is not None and live.live_visits():
+        live.open()                 # the visit carried on with the screen closed
+        return
     flag = os.path.join(getattr(app, "user_data_dir", "") or ".", NOTICE_FLAG)
     if os.path.exists(flag):
         NearbyView(app).open()
@@ -112,9 +116,12 @@ class NearbyView(Popup):
 
         root.add_widget(_btn("Preview a visitor", lambda *_: self._preview(),
                              (0.5, 0.28, 0.72, 1)))
-        root.add_widget(_btn("Close", lambda *_: self.dismiss(), (0.3, 0.3, 0.34, 1)))
+        row = BoxLayout(size_hint_y=None, height=dp(54), spacing=dp(8))
+        row.add_widget(_btn("Disconnect", lambda *_: self._disconnect(), (0.55, 0.14, 0.14, 1)))
+        row.add_widget(_btn("Close", lambda *_: self.dismiss(), (0.3, 0.3, 0.34, 1)))
+        root.add_widget(row)
 
-        self.bind(on_dismiss=lambda *_: self._teardown())
+        self.bind(on_dismiss=lambda *_: self._on_dismiss())
         if self.available:
             self._connect_manager()
 
@@ -231,6 +238,25 @@ class NearbyView(Popup):
         self.app.set_simulation(sim)
         self.app.save_now()
         self.app._flash("[color=88ff88]Imported the visiting squid![/color]")
+
+    def live_visits(self):
+        return [visit for visit in self.visits.values() if not visit.closed]
+
+    def _on_dismiss(self):
+        """Closing the screen does not end a visit: the player watches it in
+        the tank, and Disconnect (or the link dropping) ends it. With nothing
+        live, the transport stops as before."""
+        if self.live_visits():
+            self.app._nearby_view = self
+            return
+        self._teardown()
+
+    def _disconnect(self):
+        self._teardown()
+        if getattr(self.app, "_nearby_view", None) is self:
+            self.app._nearby_view = None
+        self._set_status("Disconnected.")
+        self.dismiss()
 
     def _teardown(self):
         for visit in list(self.visits.values()):

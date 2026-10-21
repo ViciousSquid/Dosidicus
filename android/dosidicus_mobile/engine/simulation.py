@@ -184,6 +184,18 @@ class Simulation:
     def _rock_decorations(self):
         return [d for d in self.decorations if d.get("category") == "rock"]
 
+    def visiting(self):
+        """The visit this squid is away on, if it is away - or None."""
+        return next((v for v in self.peer_visits if v.away), None)
+
+    def visiting_text(self):
+        """What the home tank says while its squid is away."""
+        away = self.visiting()
+        resident = getattr(getattr(getattr(away, 'mind', None), 'perception', None),
+                           'resident', None) if away else None
+        host = f"{resident.name}'s tank" if resident is not None else 'another tank'
+        return f"{self.squid.name} is visiting {host}"
+
     def _grudge(self, v):
         """How badly the resident remembers visitor `v`, 0-100, from its own memory."""
         from src.throwing import recalled_bad
@@ -1292,7 +1304,8 @@ class Simulation:
             for visit in list(self.peer_visits):
                 visit.tick(dt)
             self._update_startle(dt)
-            return 'visiting another tank'
+            self.last_status = self.visiting_text()
+            return self.last_status
         self._process_neural_outputs()
         squid.play_at = self._squid_to_play_at(
             squid.x, squid.y, squid.direction,
