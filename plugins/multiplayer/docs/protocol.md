@@ -800,8 +800,8 @@ visitor learns the name from that first frame.
 The visitor accepts a `visit_response` only if `peer_uuid` is its own squid's
 uuid and the sender is the node it addressed. Accepted, `VisitorMind.begin_visit`
 freezes its body at home (`can_move = False`, `is_transitioning = True`), hides
-it there (the tank says whose tank the squid is visiting; `end_visit` shows it
-again) and points its three remote-driven senses at the host's frames. Refused, it stays
+it there (`end_visit` shows it again; once the first frame names the resident,
+the tank says whose tank its squid is visiting) and points its three remote-driven senses at the host's frames. Refused, it stays
 home (no `visit_end`, since no visit exists) and, if it is still venturing,
 asks again 3 s later.
 

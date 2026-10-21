@@ -270,6 +270,10 @@ class VisitorMind:
             first_meeting=first_meeting, now=self.clock(), clock=self.clock)
         self._log(f"Encounter opened with {self.perception.resident} "
                   f"(first meeting: {first_meeting})")
+        say = getattr(self.logic, 'show_message', None)
+        if callable(say):               # its own tank says where it has gone
+            say(f"{getattr(squid, 'name', 'Your squid')} is visiting "
+                f"{self.perception.resident.name}'s tank")
 
     # ==================================================================
     # Decision: the squid's own network, and the engine's own rule
@@ -600,16 +604,12 @@ class VisitorMind:
             squid.is_transitioning = True
             squid.can_move = False
             # Its body is in the host's tank, not this one: hidden here until
-            # end_visit, and the tank says where it has gone.
+            # end_visit. Whose tank, the first frame says (_open_session).
             if getattr(squid, 'squid_item', None) is not None:
                 try:
                     squid.squid_item.setVisible(False)
                 except Exception:
                     pass
-            host = f"{host_identity.name}'s tank" if host_identity else 'another tank'
-            say = getattr(self.logic, 'show_message', None)
-            if callable(say):
-                say(f"{getattr(squid, 'name', 'Your squid')} is visiting {host}")
         return self.visit_id
 
     def go_home(self, action: str) -> None:

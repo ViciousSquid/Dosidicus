@@ -815,8 +815,10 @@ class LinkFailureTests(unittest.TestCase):
         meeting.visitor_squid.squid_item = body
         meeting.admit()
         self.assertFalse(body.visible)
-        self.assertIn("Traveller is visiting", meeting.visitor_tank.messages[-1])
-        self.assertIn(meeting.host_squid.name, meeting.visitor_tank.messages[-1])
+        meeting.host_sends_frame()          # the first frame says whose tank
+        meeting.visitor_receives()
+        self.assertIn(f"Traveller is visiting {meeting.host_squid.name}'s tank",
+                      meeting.visitor_tank.messages)
         meeting.visitor_mind.end_visit(reason='departed', notify=False)
         self.assertTrue(body.visible)
 
