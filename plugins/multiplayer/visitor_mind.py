@@ -599,6 +599,17 @@ class VisitorMind:
         if squid is not None:
             squid.is_transitioning = True
             squid.can_move = False
+            # Its body is in the host's tank, not this one: hidden here until
+            # end_visit, and the tank says where it has gone.
+            if getattr(squid, 'squid_item', None) is not None:
+                try:
+                    squid.squid_item.setVisible(False)
+                except Exception:
+                    pass
+            host = f"{host_identity.name}'s tank" if host_identity else 'another tank'
+            say = getattr(self.logic, 'show_message', None)
+            if callable(say):
+                say(f"{getattr(squid, 'name', 'Your squid')} is visiting {host}")
         return self.visit_id
 
     def go_home(self, action: str) -> None:

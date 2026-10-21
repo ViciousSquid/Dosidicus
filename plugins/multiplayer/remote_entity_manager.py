@@ -6,6 +6,8 @@ from typing import Dict, Any, Optional, List
 import logging
 import base64
 
+from .identity import SquidIdentity
+
 # Keep one Qt base: combining QGraphicsPixmapItem and QObject gives the
 # same wrapper two C++ owners and can crash when a departed visitor is freed.
 class AnimatableGraphicsItem(QtWidgets.QGraphicsPixmapItem):
@@ -291,6 +293,12 @@ class RemoteEntityManager:
             self._update_dependent_items_position(remote_squid_info, new_pos.x(), new_pos.y())
             # No debug log here by default to avoid spam, enable if needed
 
+    @staticmethod
+    def _label(node_id, payload):
+        """The visitor's name, as cleaned by SquidIdentity; its node otherwise."""
+        identity = SquidIdentity.from_payload((payload or {}).get('identity'))
+        return identity.name if identity else f"Remote ({node_id[-4:]})"
+
     def _handle_new_squid_arrival(self, node_id, squid_data_payload, entry_x, entry_y, entry_direction_on_this_screen):
         if self.debug_mode:
             self.logger.debug(f"_handle_new_squid_arrival: NodeID='{node_id}', EntryPos=({entry_x:.1f},{entry_y:.1f}), EntryDir='{entry_direction_on_this_screen}'")
@@ -325,7 +333,7 @@ class RemoteEntityManager:
         if id_text.scene() != self.scene: 
             if id_text.scene(): id_text.scene().removeItem(id_text)
             self.scene.addItem(id_text)
-        id_text.setPlainText(f"Remote ({node_id[-4:]})")
+        id_text.setPlainText(self._label(node_id, squid_data_payload))
         id_text.setDefaultTextColor(QtGui.QColor(200,200,200,200))
         id_text.setFont(QtGui.QFont("Arial", 8))
         id_text.setZValue(6) 
@@ -935,7 +943,7 @@ class RemoteEntityManager:
         for oid in list(self.remote_objects.keys()):self.remove_remote_object(oid)
         for line_id in list(self.connection_lines.keys()):
             line=self.connection_lines.pop(line_id)
-            if line.scene():self.scene().removeItem(line)
+            if line.scene():self.scene.removeItem(line)
         if hasattr(self,'text_pool'):self.text_pool.clear()
         if self.debug_mode:self.logger.info("RemoteEntityManager: All entities cleaned up.")
 

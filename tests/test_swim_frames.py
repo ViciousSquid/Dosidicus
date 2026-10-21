@@ -75,3 +75,15 @@ def test_without_a_resident_a_guest_still_swims():
     info['swum_at'] = 0.
     entities._swim()
     assert frame(info) == 3 - first
+
+
+def test_a_guest_is_labelled_with_its_own_name_cleaned():
+    entities = RemoteEntityManager(QtWidgets.QGraphicsScene(), 1280, 900)
+    entities.position_update_timer.stop()
+    entities.swim_timer.stop()
+    identity = {'uuid': '11111111-1111-4111-8111-111111111111', 'name': 'Zig<gy>'}
+    for node, payload in (('squid_aaaa01', {'identity': identity}), ('squid_bbbb02', {})):
+        entities.update_remote_squid(node, dict(payload, x=100., y=300., direction='right'),
+                                     is_new_arrival=True)
+    labels = {node: info['id_text'].toPlainText() for node, info in entities.remote_squids.items()}
+    assert labels == {'squid_aaaa01': 'Ziggy', 'squid_bbbb02': 'Remote (bb02)'}

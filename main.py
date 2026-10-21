@@ -766,6 +766,13 @@ class MainWindow(QtWidgets.QMainWindow):
             background_item = getattr(self.user_interface, 'background', None)
             
             for item in self.user_interface.scene.items():
+                # Only items with no parent: removing one takes its children
+                # with it. Removing a child itself handed it back to Python
+                # while its parent still owned it, so it was deleted twice -
+                # a crash when an egg hatched after a visit while the arrow
+                # drawn as a visitor arrives (a group of lines) was still up.
+                if item.parentItem() is not None:
+                    continue
                 # Keep the background (if it exists) and remove everything else
                 if background_item is None or item != background_item:
                     items_to_remove.append(item)

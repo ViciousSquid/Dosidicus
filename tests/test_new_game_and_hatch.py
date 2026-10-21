@@ -383,6 +383,49 @@ class NeglectTests(unittest.TestCase):
         self.assertEqual(recorder.messages, ["Squid is hatching!"])
 
 
+class SceneClearingTests(unittest.TestCase):
+
+    def test_4b_a_new_life_never_removes_a_child_item_on_its_own(self):
+        """Removing a child item handed it back to Python while its parent
+        still owned it, so it was deleted twice: a crash when an egg hatched
+        after a visit had left items with children in the tank."""
+        scene = WINDOW.user_interface.scene
+        parent = QtWidgets.QGraphicsRectItem(0, 0, 10, 10)
+        child = QtWidgets.QGraphicsRectItem(0, 0, 5, 5, parent)
+        QtWidgets.QGraphicsRectItem(0, 0, 2, 2, child)
+        scene.addItem(parent)
+        removed = []
+        remove = scene.removeItem
+        with mock.patch.object(scene, 'removeItem',
+                               side_effect=lambda item: (removed.append(item), remove(item))):
+            WINDOW._begin_new_life(after_death=True)
+        self.assertIn(parent, removed)
+        self.assertNotIn(child, removed)
+        self.assertTrue(all(item.parentItem() is None for item in removed))
+        self.assertIsNone(parent.scene())
+
+    def test_4c_the_arrow_drawn_as_a_visitor_arrives_fades_away(self):
+        """Its fade timer was referred to only by the fade itself, so it was
+        garbage-collected and the arrow - those child items - stayed up."""
+        import gc
+        import logging
+        from types import SimpleNamespace
+        from PyQt5 import QtCore
+        from plugins.multiplayer.mp_plugin_logic import MultiplayerPlugin
+        scene = QtWidgets.QGraphicsScene()
+        plugin = MultiplayerPlugin()
+        plugin.logger = logging.getLogger('arrow-test')
+        plugin.tamagotchi_logic = SimpleNamespace(user_interface=SimpleNamespace(
+            scene=scene, window_width=800, window_height=600))
+        plugin._show_exit_arrow('left')
+        self.assertTrue(scene.items())
+        gc.collect()
+        loop = QtCore.QEventLoop()
+        QtCore.QTimer.singleShot(2500, loop.quit)
+        loop.exec_()
+        self.assertEqual(scene.items(), [])
+
+
 class QuitTests(unittest.TestCase):
     """Runs last: it closes the window."""
 

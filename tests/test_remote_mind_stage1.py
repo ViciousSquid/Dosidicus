@@ -808,6 +808,18 @@ class LinkFailureTests(unittest.TestCase):
                 self.assertFalse(meeting.visitor_squid.is_transitioning)
                 self.assertEqual(meeting.visitor_mind.visit_id, '')
 
+    def test_a_squid_away_is_not_drawn_at_home_and_its_tank_says_where_it_is(self):
+        meeting = Encounter()
+        body = type("Item", (), {"visible": True,
+                                 "setVisible": lambda self, on: setattr(self, "visible", on)})()
+        meeting.visitor_squid.squid_item = body
+        meeting.admit()
+        self.assertFalse(body.visible)
+        self.assertIn("Traveller is visiting", meeting.visitor_tank.messages[-1])
+        self.assertIn(meeting.host_squid.name, meeting.visitor_tank.messages[-1])
+        meeting.visitor_mind.end_visit(reason='departed', notify=False)
+        self.assertTrue(body.visible)
+
     def test_the_host_ending_a_visit_brings_the_visitor_home(self):
         meeting = Encounter()
         meeting.admit()

@@ -2154,8 +2154,11 @@ class MultiplayerPlugin:
             else:
                 scene.removeItem(group)
                 fade_timer.stop()
+                fade_timer.deleteLater()
 
-        fade_timer = QtCore.QTimer()
+        # Parented to the scene: a timer only this closure referred to was
+        # garbage-collected, and the arrow stayed up for good.
+        fade_timer = QtCore.QTimer(scene)
         fade_timer.timeout.connect(fade)
         fade_timer.start(40)  # ~25 fps → gone in ~2 s
 
