@@ -128,11 +128,12 @@ jobs:
       - name: Insert compiled executable & configure bundle
         run: |
           if [[ "${{ runner.os }}" == "macOS" ]]; then
-            # Fix PyQt5 plugin paths inside the generated bundle
+            # Nuitka places Qt platform plugins in PyQt5/qt-plugins, not Qt5/plugins.
+            # qt.conf lives in Contents/Resources and resolves paths from Contents.
             mkdir -p build/main.app/Contents/Resources
             cat > build/main.app/Contents/Resources/qt.conf << 'EOF'
           [Paths]
-          Plugins = ../MacOS/PyQt5/Qt5/plugins
+          Plugins = ../MacOS/PyQt5/qt-plugins
           EOF
             
             # Move the clean app bundle base straight to the release folder
@@ -152,6 +153,18 @@ jobs:
           fi
 
           python tools/release_support.py runtime --target "$TARGET_DIR"
+
+      - name: Validate macOS Qt plugin bundle
+        if: runner.os == 'macOS'
+        run: |
+          APP="release/Dosidicus.app"
+          CONF="$APP/Contents/Resources/qt.conf"
+          PLUGINS="$APP/Contents/MacOS/PyQt5/qt-plugins"
+          test -x "$APP/Contents/MacOS/Dosidicus"
+          test -f "$CONF"
+          test -f "$PLUGINS/platforms/libqcocoa.dylib"
+          grep -Fxq 'Plugins = ../MacOS/PyQt5/qt-plugins' "$CONF"
+          echo "macOS Cocoa Qt platform plugin and qt.conf verified"
 
       - name: Ad-hoc sign for macOS
         if: runner.os == 'macOS'
