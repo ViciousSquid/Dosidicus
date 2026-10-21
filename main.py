@@ -27,6 +27,10 @@ def choose_language_first():
     multiprocessing.freeze_support()        # a frozen child process stops here
     if any(flag in sys.argv[1:] for flag in NO_SPLASH_FLAGS):
         return
+    # Unattended launches (the CI smoke tests) keep the configured language:
+    # the splash would wait for a click forever.
+    if os.environ.get('DOSIDICUS_SKIP_LANGUAGE_SPLASH') == '1':
+        return
     os.environ['QT_LOGGING_RULES'] = QT_LOGGING_RULES
     global _EARLY_APP           # kept: main() goes on with this application
     _EARLY_APP = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
@@ -226,7 +230,9 @@ class MainWindow(QtWidgets.QMainWindow):
         config_manager = ConfigManager()
         language = config_manager.get_language()
         Localisation.instance().set_language(language)
-        print(f"📄 Applied language from config: {language}")
+        # Flushed: the CI smoke tests watch for this line through a pipe,
+        # where print is block-buffered and it would otherwise sit unseen.
+        print(f"📄 Applied language from config: {language}", flush=True)
         
         # Initialize configuration
         self.config = LearningConfig()
