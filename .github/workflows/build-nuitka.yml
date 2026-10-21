@@ -62,6 +62,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install "nuitka==4.2.2" -r requirements.txt zstandard
 
+      - name: Test macOS writable runtime bootstrap
+        if: runner.os == 'macOS'
+        run: python -m unittest discover -s tests -p 'test_macos_runtime.py' -v
+
       - name: Install macOS icon dependency
         if: runner.os == 'macOS'
         run: pip install imageio
@@ -171,6 +175,10 @@ jobs:
         run: |
           codesign --deep --force --sign - "release/Dosidicus.app"
 
+      - name: Verify macOS code signature
+        if: runner.os == 'macOS'
+        run: codesign --verify --deep --strict --verbose=2 "release/Dosidicus.app"
+
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -207,41 +215,54 @@ jobs:
           kill $PID 2>/dev/null || true
           exit 1
 
-      - name: Smoke test (macOS)
+      - name: Smoke test (macOS — Finder-style launch)
         if: runner.os == 'macOS'
-        env:
-          # The language splash waits for a click; nobody is here to give one.
-          DOSIDICUS_SKIP_LANGUAGE_SPLASH: "1"
         run: |
-          if [ -d "release/Dosidicus.app" ]; then
-            BIN="release/Dosidicus.app/Contents/MacOS/Dosidicus"
-          else
-            BIN="release/Dosidicus"
-          fi
-
-          "$BIN" > smoke.log 2>&1 &
+          # Test from /, not the writable checkout: Finder does not guarantee
+          # the working directory and users install signed apps elsewhere.
+          BIN="$GITHUB_WORKSPACE/release/Dosidicus.app/Contents/MacOS/Dosidicus"
+          LOG="$GITHUB_WORKSPACE/smoke-macos.log"
+          export DOSIDICUS_DATA_DIR="$RUNNER_TEMP/dosidicus-smoke-profile"
+          export DOSIDICUS_SKIP_LANGUAGE_SPLASH=1
+          mkdir -p "$DOSIDICUS_DATA_DIR"
+          cd /
+          QT_DEBUG_PLUGINS=1 "$BIN" > "$LOG" 2>&1 &
           PID=$!
-          echo "Started PID $PID"
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
 
-          for i in $(seq 1 30); do
+          # "Applied language" is printed near the BEGINNING of MainWindow
+          # construction. Requiring 15 more seconds catches subsequent
+          # exceptions, native Qt crashes and missing user-write permissions.
+          READY=0
+          for i in $(seq 1 60); do
             sleep 1
-            if grep -q "Applied language from config" smoke.log 2>/dev/null; then
-              echo "✅ Startup confirmed at ${i}s"
-              cat smoke.log
-              kill $PID 2>/dev/null || true
-              exit 0
-            fi
-            if ! kill -0 $PID 2>/dev/null; then
-              echo "❌ Process exited before printing startup line"
-              cat smoke.log
+            if ! kill -0 "$PID" 2>/dev/null; then
+              echo "::error::macOS app exited before stable startup"
+              cat "$LOG"
+              wait "$PID" || true
               exit 1
             fi
+            if grep -q "Applied language from config" "$LOG"; then
+              READY=$((READY + 1))
+              if [ "$READY" -ge 15 ]; then
+                test -f "$DOSIDICUS_DATA_DIR/config.ini"
+                test -L "$DOSIDICUS_DATA_DIR/images"
+                echo "macOS app stayed alive through initialization and created writable user data"
+                exit 0
+              fi
+            fi
           done
-
-          echo "❌ Startup line not seen after 30s"
-          cat smoke.log
-          kill $PID 2>/dev/null || true
+          echo "::error::macOS startup did not finish in 60 seconds"
+          cat "$LOG"
           exit 1
+
+      - name: Upload macOS startup log (on failure)
+        if: failure() && runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-startup-log-${{ matrix.architecture }}
+          path: smoke-macos.log
+          if-no-files-found: ignore
 
       - name: Mark Linux binary executable
         if: runner.os == 'Linux'
