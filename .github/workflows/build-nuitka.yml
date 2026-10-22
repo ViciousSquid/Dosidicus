@@ -16,6 +16,7 @@ on:
       - ".github/workflows/build-nuitka.yml"
       - "tools/macos_debug.command"
       - "tools/MACOS_DEBUG_README.txt"
+      - "tools/build_macos_dmg.sh"
 
 jobs:
   build:
@@ -331,6 +332,18 @@ jobs:
         if: runner.os == 'Linux'
         run: chmod +x release/Dosidicus
 
+      - name: Create and verify macOS DMG installer
+        if: runner.os == 'macOS'
+        run: bash tools/build_macos_dmg.sh release/Dosidicus.app "Dosidicus-${{ matrix.asset }}.dmg"
+
+      - name: Upload macOS DMG installer
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuitka-${{ matrix.asset }}-dmg
+          path: Dosidicus-${{ matrix.asset }}.dmg
+          if-no-files-found: error
+
       - name: Create zip
         run: |
           OS_NAME="${{ matrix.asset }}"
@@ -354,3 +367,4 @@ jobs:
             Dosidicus-${{ matrix.asset }}.zip
             Dosidicus-linux.tar.gz
           if-no-files-found: error
+

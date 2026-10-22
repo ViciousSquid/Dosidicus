@@ -46,6 +46,7 @@ def test_runtime_assembly_omits_repository_credentials_and_unrelated_builds(tmp_
 
 ARTIFACTS = ('Dosidicus-windows.zip', 'Dosidicus-windows-arm64.zip',
              'Dosidicus-macos-arm64.zip', 'Dosidicus-macos-arm64-debug.zip',
+             'Dosidicus-macos-arm64.dmg', 'Dosidicus-macos-x64.dmg',
              'Dosidicus-macos-x64.zip', 'Dosidicus-macos-x64-debug.zip',
              'Dosidicus-linux.tar.gz', 'dosidicus-3.2.7-arm64-release.apk')
 
@@ -57,12 +58,24 @@ def test_release_requires_all_architectures_and_checksums_every_asset(tmp_path):
         (source/name).write_bytes(name.encode())
     collect_artifacts(source, target, '3.2.7')
     manifest = json.loads((target/'release-info.json').read_text())
-    assert len(manifest['artifacts']) == 8
+    assert len(manifest['artifacts']) == 10
+    assert (target/'Dosidicus-3.2.7-macos-arm64.dmg').is_file()
+    assert (target/'Dosidicus-3.2.7-macos-x64.dmg').is_file()
     hashes = (target/'SHA256SUMS').read_text().splitlines()
-    assert len(hashes) == 9
+    assert len(hashes) == 11
     for row in hashes:
         digest, name = row.split('  ')
         assert hashlib.sha256((target/name).read_bytes()).hexdigest() == digest
+
+
+@pytest.mark.parametrize('missing', ['Dosidicus-macos-arm64.dmg', 'Dosidicus-macos-x64.dmg'])
+def test_release_requires_both_macos_installers(tmp_path, missing):
+    source = tmp_path/'builds'; source.mkdir()
+    for name in ARTIFACTS:
+        if name != missing:
+            (source/name).write_bytes(b'artifact')
+    with pytest.raises(ValueError, match=missing):
+        collect_artifacts(source, tmp_path/'release', '3.2.7')
 
 
 def test_unsigned_android_output_cannot_satisfy_a_release(tmp_path):
@@ -72,3 +85,4 @@ def test_unsigned_android_output_cannot_satisfy_a_release(tmp_path):
     (source/'dosidicus-3.2.7-arm64-release-unsigned.apk').write_bytes(b'unsigned')
     with pytest.raises(ValueError, match='release.apk'):
         collect_artifacts(source, tmp_path/'release', '3.2.7')
+

@@ -163,6 +163,22 @@ Troubleshooting (quick):
 
 ## Technical Overview
 
+### Build a macOS DMG installer
+
+In GitHub **Actions**, select **Build (Nuitka)**, then **Run workflow** on
+`3.2.0_LatestVersion`. The workflow builds native Apple Silicon and Intel apps,
+checks their signatures and startup, then creates and verifies compressed DMGs.
+Download `nuitka-macos-arm64-dmg` (Apple Silicon) or `nuitka-macos-x64-dmg`
+(Intel) from the run's **Artifacts** section and extract the `.dmg` file.
+Open it and drag **Dosidicus.app** onto the **Applications** shortcut, then
+eject the disk image and launch the app from Applications.
+
+The **Release all platforms** workflow also includes both versioned DMGs and
+their SHA-256 checksums in the release assets. The apps are ad-hoc signed;
+Developer ID signing and Apple notarization are not configured. macOS may
+require approval under **System Settings → Privacy & Security → Open Anyway**.
+Saves and settings are stored in `~/Library/Application Support/Dosidicus`.
+
 - **Dependencies:**
   - Python ^3.9
   - PyQt5 ^5.15 (GUI framework)
@@ -187,3 +203,4 @@ Troubleshooting (quick):
 ---
 
 ![Visitors](https://api.visitorbadge.io/api/visitors?path=ViciousSquid&label=UNIQUE%20VISITORS&countColor=%2326313f&style=flat)
+
