@@ -11,7 +11,9 @@ from src.macos_runtime import prepare_macos_runtime
 class MacOSRuntimeTests(unittest.TestCase):
     def test_bundled_resources_and_user_data_are_separated(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            # macOS temp dirs live under /var, a symlink to /private/var, and
+            # Path.cwd() reports the resolved path after chdir.
+            root = Path(temp).resolve()
             resources = root / "Dosidicus.app" / "Contents" / "MacOS"
             resources.mkdir(parents=True)
             binary = resources / "Dosidicus"
