@@ -7,7 +7,7 @@ if [[ "$(uname -s)" != Darwin ]]; then
   exit 1
 fi
 MACOS_PYTHON="${MACOS_PYTHON:-/Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11}"
-lipo -verify_arch x86_64 arm64 "$MACOS_PYTHON"
+lipo "$MACOS_PYTHON" -verify_arch x86_64 arm64
 mkdir -p work/macos dist
 "$MACOS_PYTHON" -m venv work/macos/venv
 MACOS_VENV_PYTHON="$PWD/work/macos/venv/bin/python"

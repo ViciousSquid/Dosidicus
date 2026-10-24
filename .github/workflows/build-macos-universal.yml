@@ -36,7 +36,7 @@ jobs:
           if-no-files-found: error
   test-apple-silicon:
     needs: build
-    runs-on: macos-15-arm64
+    runs-on: macos-15
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
