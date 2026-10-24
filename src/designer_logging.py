@@ -51,6 +51,9 @@ class CrashReporter:
 
 def get_log_directory() -> str:
     """Get the directory for log files."""
+    from src.runtime_paths import is_macos_bundle, runtime_data_dir
+    if is_macos_bundle():
+        return str(runtime_data_dir() / "logs")
     # Logs go in the root folder's logs/ directory (one level up from src/)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(script_dir)  # Go up one level from src/

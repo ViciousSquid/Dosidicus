@@ -300,7 +300,9 @@ class DesignerConfig:
     """Manages designer preferences."""
     def __init__(self, config_path=None):
         if config_path is None:
-            config_dir = os.path.expanduser("~/.dosidicus")
+            from src.runtime_paths import is_macos_bundle, runtime_data_dir
+            config_dir = (str(runtime_data_dir()) if is_macos_bundle() else
+                          os.path.expanduser("~/.dosidicus"))
             os.makedirs(config_dir, exist_ok=True)
             config_path = os.path.join(config_dir, "designer_config.json")
         self.config_path = config_path

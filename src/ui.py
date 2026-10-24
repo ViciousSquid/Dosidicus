@@ -484,9 +484,12 @@ class Ui:
     # ── Export helpers ────────────────────────────────────────────────────
 
     def _get_exports_dir(self):
+        from src.runtime_paths import is_macos_bundle, runtime_data_dir
         exports_dir = os.path.normpath(
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "exports")
         )
+        if is_macos_bundle():
+            exports_dir = str(runtime_data_dir() / 'exports')
         os.makedirs(exports_dir, exist_ok=True)
         return exports_dir
 

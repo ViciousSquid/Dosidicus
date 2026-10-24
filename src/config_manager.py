@@ -4,6 +4,7 @@ import random
 import sys
 from PyQt5 import QtCore
 from ast import literal_eval
+from src.runtime_paths import is_macos_bundle, runtime_data_dir
 
 class ConfigManager:
     """
@@ -18,7 +19,9 @@ class ConfigManager:
     
     def __init__(self, config_filename="config.ini"):
         # Check if we are running as a frozen executable (Auto-Py-To-Exe)
-        if getattr(sys, 'frozen', False):
+        if is_macos_bundle():
+            base_path = str(runtime_data_dir())
+        elif getattr(sys, 'frozen', False):
             # If frozen, the config file should be next to the .exe
             base_path = os.path.dirname(sys.executable)
         else:

@@ -325,7 +325,10 @@ def _read_backend_from_config() -> str:
 
         config = configparser.ConfigParser()
 
-        if getattr(sys, 'frozen', False):
+        from src.runtime_paths import is_macos_bundle, runtime_data_dir
+        if is_macos_bundle():
+            base_path = str(runtime_data_dir())
+        elif getattr(sys, 'frozen', False):
             base_path = os.path.dirname(sys.executable)
         else:
             # __file__ is  src/compute_backend.py  → go up one level

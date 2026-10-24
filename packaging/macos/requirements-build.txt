@@ -1,0 +1,2 @@
+PyInstaller==6.16.0
+delocate==0.13.0

@@ -25,3 +25,6 @@ learning_events.json
 neurogenesis_log.txt
 network_evolution_*.json
 training_data/
+
+# Local installer build workspace
+work/

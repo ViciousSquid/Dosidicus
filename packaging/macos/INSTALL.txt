@@ -1,0 +1,10 @@
+Drag Dosidicus.app onto Applications, then launch Dosidicus from Applications.
+
+The app supports Intel and Apple Silicon Macs running macOS 11 or later.
+Python and Qt are bundled; no separate Python installation is required.
+
+Saves, settings, memories, logs and exports are stored in:
+~/Library/Application Support/Dosidicus/
+
+This development build is ad-hoc signed and is not Apple-notarized.
+macOS may require approval in System Settings > Privacy & Security.

@@ -1,0 +1,65 @@
+name: Build macOS universal DMG
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/macos-universal-dmg]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install universal2 framework Python
+        run: |
+          curl --fail --location --retry 3 https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg -o "$RUNNER_TEMP/python.pkg"
+          pkgutil --check-signature "$RUNNER_TEMP/python.pkg"
+          sudo installer -pkg "$RUNNER_TEMP/python.pkg" -target /
+      - name: Build and verify universal DMG
+        run: bash packaging/macos/build.sh
+      - name: Test Intel startup from read-only disk image
+        run: |
+          mkdir -p work/macos/mount
+          hdiutil attach -readonly -nobrowse -mountpoint "$PWD/work/macos/mount" dist/Dosidicus-macos-universal2.dmg
+          trap 'hdiutil detach "$PWD/work/macos/mount"' EXIT
+          work/macos/venv/bin/python packaging/macos/smoke_test.py work/macos/mount/Dosidicus.app x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dosidicus-macos-universal2-candidate
+          path: |
+            dist/Dosidicus-macos-universal2.dmg
+            dist/Dosidicus-macos-universal2.dmg.sha256
+          if-no-files-found: error
+  test-apple-silicon:
+    needs: build
+    runs-on: macos-15-arm64
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dosidicus-macos-universal2-candidate
+          path: dist
+      - name: Verify and test Apple Silicon startup from read-only disk image
+        run: |
+          test "$(uname -m)" = arm64
+          cd dist
+          shasum -a 256 -c Dosidicus-macos-universal2.dmg.sha256
+          cd ..
+          mkdir -p work/macos/mount
+          hdiutil verify dist/Dosidicus-macos-universal2.dmg
+          hdiutil attach -readonly -nobrowse -mountpoint "$PWD/work/macos/mount" dist/Dosidicus-macos-universal2.dmg
+          trap 'hdiutil detach "$PWD/work/macos/mount"' EXIT
+          python3 packaging/macos/verify_bundle.py work/macos/mount/Dosidicus.app
+          python3 packaging/macos/smoke_test.py work/macos/mount/Dosidicus.app arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dosidicus-macos-universal2
+          path: |
+            dist/Dosidicus-macos-universal2.dmg
+            dist/Dosidicus-macos-universal2.dmg.sha256
+          if-no-files-found: error

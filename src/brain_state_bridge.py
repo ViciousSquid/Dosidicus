@@ -21,7 +21,9 @@ from dataclasses import dataclass
 def get_bridge_directory() -> Path:
     """Get the directory for bridge files."""
     # Use a hidden directory in the user's home folder
-    bridge_dir = Path.home() / ".dosidicus" / "bridge"
+    from src.runtime_paths import is_macos_bundle, runtime_data_dir
+    bridge_dir = ((runtime_data_dir() / "bridge") if is_macos_bundle() else
+                  Path.home() / ".dosidicus" / "bridge")
     bridge_dir.mkdir(parents=True, exist_ok=True)
     return bridge_dir
 

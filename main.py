@@ -33,6 +33,7 @@ from src.plugin_manager import PluginManager
 from src.brain_worker import BrainWorker
 from src.config_manager import ConfigManager
 from src.localisation import Localisation
+from src.runtime_paths import is_macos_bundle, runtime_data_dir
 
 def launch_brain_designer_process():
     """Entry point for Brain Designer in a separate process"""
@@ -53,7 +54,7 @@ def setup_logging_configuration():
 def perform_cleanup_and_exit():
     """Recursively delete __pycache__ and logs directories."""
     print("🧹 Cleaning environment...")
-    root_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = str(runtime_data_dir()) if is_macos_bundle() else os.path.dirname(os.path.abspath(__file__))
     
     deleted_count = 0
     
@@ -77,8 +78,11 @@ def global_exception_handler(exctype, value, tb):
     """Global exception handler to log unhandled exceptions"""
     error_message = ''.join(traceback.format_exception(exctype, value, tb))
     logging.error("Unhandled exception:\n%s", error_message)
-    QtWidgets.QMessageBox.critical(None, "Error", 
-                                 "An unexpected error occurred. Please check dosidicus_log.txt for details.")
+    if QtWidgets.QApplication.instance() is not None:
+        QtWidgets.QMessageBox.critical(None, "Error",
+                                     "An unexpected error occurred. Please check dosidicus_log.txt for details.")
+    else:
+        sys.stderr.write(error_message)
 
 
 class TeeStream:
@@ -571,7 +575,8 @@ class MainWindow(QtWidgets.QMainWindow):
             print("All save files deleted")
         
         # Clear memory files
-        memory_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '_memory')
+        memory_dir = (str(runtime_data_dir() / '_memory') if is_macos_bundle() else
+                      os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '_memory'))
         if os.path.exists(memory_dir):
             import shutil
             shutil.rmtree(memory_dir)
@@ -702,11 +707,11 @@ class MainWindow(QtWidgets.QMainWindow):
             elif hasattr(self.tamagotchi_logic, 'timer') and self.tamagotchi_logic.timer:
                 self.tamagotchi_logic.timer.stop()
         
-        # Clean up brain state bridge for designer sync
+        # Close the child explicitly: closing its parent window does not send
+        # it a closeEvent, leaving its rendering thread alive during teardown.
         if hasattr(self, 'brain_window') and self.brain_window:
             if hasattr(self.brain_window, 'brain_widget') and self.brain_window.brain_widget:
-                if hasattr(self.brain_window.brain_widget, 'cleanup_brain_bridge'):
-                    self.brain_window.brain_widget.cleanup_brain_bridge()
+                self.brain_window.brain_widget.close()
         
         # Close brain window
         if hasattr(self, 'brain_window') and self.brain_window:
@@ -969,7 +974,16 @@ def main():
                        help='Clean __pycache__ and logs folders before starting')
     parser.add_argument('-designer', '--designer', action='store_true',
                        help='Launch Brain Designer standalone')
+    parser.add_argument('--smoke-test', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
+
+    if args.smoke_test:
+        def smoke_exception_handler(exctype, value, tb):
+            traceback.print_exception(exctype, value, tb)
+            application = QtWidgets.QApplication.instance()
+            if application is not None:
+                application.exit(1)
+        sys.excepthook = smoke_exception_handler
 
     # Perform cleanup if requested before logging setup
     if args.clean:
@@ -1017,11 +1031,32 @@ def main():
         personality = Personality(args.personality) if args.personality else None
         main_window = MainWindow(personality, args.debug, args.neurocooldown)
         main_window.show()
-        sys.exit(app.exec_())
+        smoke_complete = False
+        if args.smoke_test:
+            def finish_smoke_test():
+                nonlocal smoke_complete
+                if (not main_window._initialization_complete or
+                        QtGui.QPixmap('images/poop1.png').isNull() or
+                        not Localisation.instance().translations):
+                    app.exit(1)
+                    return
+                main_window.close()
+                smoke_complete = True
+                app.quit()
+            QtCore.QTimer.singleShot(10000, finish_smoke_test)
+        result = app.exec_()
+        if args.smoke_test and not smoke_complete:
+            result = 1
+        if args.smoke_test and result == 0:
+            print('DOSIDICUS_SMOKE_OK', flush=True)
+        sys.exit(result)
     except Exception as e:
         logging.exception("Fatal error in main")
+        if args.smoke_test:
+            raise
         QtWidgets.QMessageBox.critical(None, "Error", 
                                      f"Critical error: {str(e)}\nSee dosidicus_log.txt for details.")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
