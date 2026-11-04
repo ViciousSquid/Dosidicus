@@ -100,6 +100,13 @@ class Aquarium:
         }
 
 def simulate(brain, world_name, seed, ticks=TICKS, learn=False):
+    # A non-learning arm must NOT call the hidden experience bookkeeping
+    # inside HeadlessBrain.propagate(), which can otherwise update causal
+    # weights even without perform_hebbian_learning(). Keep identical neural
+    # propagation/decision machinery but suppress observation of learning.
+    original_observe = brain.observe_for_learning
+    if not learn:
+        brain.observe_for_learning = lambda: 0
     world = WORLDS[world_name]
     rng = random.Random(seed)
     tank = Aquarium()
@@ -204,6 +211,8 @@ def simulate(brain, world_name, seed, ticks=TICKS, learn=False):
              - 0.12 * tank.false_flees
              - 0.18 * tank.excess_hunger
              - 0.5 * tank.collapses)
+    if not learn:
+        brain.observe_for_learning = original_observe
     return {
         "ticks_alive": tank.active_ticks, "health": round(max(0.0, tank.health), 4),
         "food_eaten": tank.food_eaten, "attacks_suffered": tank.attacks,
@@ -217,6 +226,23 @@ def simulate(brain, world_name, seed, ticks=TICKS, learn=False):
         "final_neurons": len(brain.positions),
         "score": round(score, 4), "actions": actions,
     }
+
+def copy_synapses_only(trained, profile):
+    """Transfer precisely the learned directed weights, not episodic memories.
+
+    This tests whether learned *weights* themselves explain any retained gain.
+    Built-in neuron positions are identical because neurogenesis is disabled.
+    """
+    output = make_brain(profile)
+    assert output.positions == trained.positions
+    for edge in set(output.weights) - set(trained.weights):
+        output.remove_weight(edge, mechanism="transfer", reason="absent in trained brain")
+    for edge, weight in trained.weights.items():
+        output.apply_weight_change(edge, value=weight,
+                                   mechanism="transfer", create=True)
+    assert output.weights == trained.weights
+    return output
+
 
 def evaluate():
     report = {
@@ -249,7 +275,7 @@ def evaluate():
                              "damage", "successful_escapes", "false_flees", "excess_hunger_ticks")}
         # Learning experiment: retain weights between training and new eval.
         # Training episodes see a different fixed set of seeds than evaluation.
-        train_rows, transfer_rows, untrained_transfer_rows = [], [], []
+        train_rows, transfer_rows, weight_only_rows, untrained_transfer_rows = [], [], [], []
         for seed in TRAIN_SEEDS:
             brain = make_brain(profile)
             for world in WORLDS:
@@ -257,11 +283,14 @@ def evaluate():
                 # correlation-learning and consolidation.
                 data = simulate(brain, world, seed, ticks=TRAIN_TICKS, learn=True)
                 train_rows.append({"profile": profile, "world": world, "seed": seed, **data})
-            # Evaluate retained weights on an unseen seed / world.
-            # Reset volatile activations, but not weights or learner state.
+            # Compare untrained, weights-only transfer, and full retained
+            # cognitive machinery on precisely the same unseen episode.
+            target_seed = 80_000 + seed
+            transferred = copy_synapses_only(brain, profile)
+            transferred_result = simulate(transferred, "balanced", target_seed, learn=False)
+            weight_only_rows.append({"profile": profile, "seed": seed, **transferred_result})
             from src.propagation import baseline_of
             brain.state = {name: baseline_of(name) for name in brain.positions}
-            target_seed = 80_000 + seed
             data = simulate(brain, "balanced", target_seed, learn=False)
             transfer_rows.append({"profile": profile, "seed": seed, **data})
             # True within-profile causal comparison: trained vs fresh untrained
@@ -271,12 +300,15 @@ def evaluate():
         report["summary"].setdefault("learning_transfer", {})[profile] = {
             "mean_score": round(sum(r["score"] for r in transfer_rows) / len(transfer_rows), 4),
             "untrained_mean_score": round(sum(r["score"] for r in untrained_transfer_rows) / len(untrained_transfer_rows), 4),
+            "weights_only_mean_score": round(sum(r["score"] for r in weight_only_rows) / len(weight_only_rows), 4),
+            "weights_only_gain": round(sum(w["score"] - u["score"] for w, u in zip(weight_only_rows, untrained_transfer_rows)) / len(weight_only_rows), 4),
             "training_gain_vs_untrained": round(sum(t["score"] - u["score"] for t, u in zip(transfer_rows, untrained_transfer_rows)) / len(transfer_rows), 4),
             "mean_learned_updates": round(sum(r["synaptic_learning_updates"]
                                                for r in train_rows) / len(TRAIN_SEEDS), 4),
         }
         report["runs"].extend({**r, "split": "train", "training": True} for r in train_rows)
         report["runs"].extend({**r, "split": "transfer", "training": False} for r in transfer_rows)
+        report["runs"].extend({**r, "split": "transfer_weights_only", "training": False} for r in weight_only_rows)
         report["runs"].extend({**r, "split": "transfer_untrained", "training": False} for r in untrained_transfer_rows)
     return report
 
