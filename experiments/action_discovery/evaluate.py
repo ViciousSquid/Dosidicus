@@ -30,7 +30,8 @@ from experiments.weight_space.trainer_transfer import (
 PROFILES = ("ordinary_learning", "motor_probes_only", "motor_probe_teaching")
 TRAIN_SEEDS = (11, 29, 53, 71)
 EVAL_SEEDS = (101, 103, 107, 109)
-BOUTS = 22
+BOUTS = 32
+TRAIN_FATIGUE_LEVELS = (94.0, 22.0, 94.0, 65.0)
 TICKS_PER_BOUT = 32
 EVAL_TICKS = 48
 
@@ -60,9 +61,12 @@ def train(seed, profile, bouts=BOUTS, ticks_per_bout=TICKS_PER_BOUT):
         # pending credit before the change as in the normal scenario events.
         sim.brain.causal_learning.discard_pending_outcomes(
             reason="fatigue_curriculum_new_bout")
-        sim.squid.sleepiness = 94.0
+        # Include both cue-present and cue-absent attempts, including
+        # rested nights that produce no need-driven benefit from sleep.
+        sim.squid.sleepiness = TRAIN_FATIGUE_LEVELS[bout % len(TRAIN_FATIGUE_LEVELS)]
         sim.squid.anxiety = 10.0
         sim.squid.hunger = 50.0
+        sim.squid.cleanliness = 80.0
         sim.squid.is_sleeping = False
         sim.squid.sleep_ticks = 0
         sim.squid.status = "roaming"
@@ -117,6 +121,7 @@ def experiment(train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS,
         "description": "Weight-only transfer after causal motor exploration",
         "train_seeds": list(train_seeds), "eval_seeds": list(eval_seeds),
         "bouts": bouts, "ticks_per_bout": ticks_per_bout,
+        "training_fatigue_curriculum": list(TRAIN_FATIGUE_LEVELS),
         "eval_ticks": eval_ticks, "arms": list(PROFILES),
         "controls": "same original innate priors; matched seed; frozen evaluation",
         "runs": [], "summary": {},
