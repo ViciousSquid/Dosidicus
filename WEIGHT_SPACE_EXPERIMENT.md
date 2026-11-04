@@ -8,6 +8,8 @@ This branch directly changes three innate synaptic weights, runs a paired A/B ne
 
 **Final experiment finding:** [The action-coupled test and weight-only learning-transfer comparison](experiments/weight_space/CLOSED_LOOP_RESULTS.md) did **not** demonstrate a smarter squid. It documents the existing trainer's random food-reward flaw and a likely sensor-to-action latency bottleneck. The full [methodology](experiments/weight_space/CLOSED_LOOP.md), [static results](experiments/weight_space/RESULTS.md) and [out-of-sample sweep](experiments/weight_space/GRID_RESULTS.md) are preserved. Production is unchanged.
 
+**Continuation:** The real headless trainer has now been corrected so the squid can obtain meals and avoid startles **only through its own neural decisions**. The latest [full native trainer study](experiments/weight_space/REAL_TRAINER_RESULTS.md) documents the code changes, three matched training/evaluation worlds, learning-transfer observations, and limitations. [CI run #41747621480](https://github.com/ViciousSquid/Dosidicus/actions/runs/41747621480) passed 63 tests and 124 subtests; [raw JSON](https://github.com/ViciousSquid/Dosidicus/actions/runs/41747621480/artifacts/13283539696). **No general intelligence improvement has been demonstrated**; the unsuccessful three edited birth weights remain experimental and unmerged.
+
 To rerun: `python -m pytest -q tests/test_weight_space_experiment.py` then `python -m experiments.weight_space.experiment --json experiments/weight_space/results.json`.
 
 This test measures action activation and threshold crossings. It **does not establish general intelligence, survival improvement or long-term learning gains**.
