@@ -351,6 +351,10 @@ class HeadlessSimulation:
         # Environment
         self.food_items: List[Dict] = []
         self.poop_items: List[Dict] = []
+        # Optional *persistent spatial* plants for causal behaviour research.
+        # None preserves the original stochastic headless environment. An
+        # explicitly empty list is the no-shelter negative control.
+        self.plant_items: Optional[List[Dict]] = None
         
         # Statistics
         self.stats = {
@@ -361,6 +365,9 @@ class HeadlessSimulation:
             'manual_feedings': 0,   # scenario injection; not a learned success
             'food_approaches': 0,
             'food_seen_ticks': 0,
+            'shelter_approaches': 0,
+            'shelter_arrivals': 0,
+            'shelter_relief': 0.0,
             'flee_actions': 0,
             'escaped_startles': 0,
             'unavoided_startle_ticks': 0,
@@ -461,6 +468,38 @@ class HeadlessSimulation:
     FOOD_SIGHT_RADIUS = 0.32
     FOOD_BITE_RADIUS = 0.055
     FOOD_SWIM_STEP = 0.085
+    PLANT_SIGHT_RADIUS = 0.40
+    PLANT_SHELTER_RADIUS = 0.085
+    PLANT_SWIM_STEP = 0.075
+
+    def set_plants(self, positions):
+        """Opt into fixed, geometric plant positions for headless research.
+
+        In the regular trainer plant proximity remains its preexisting
+        stochastic input. Explicit [] disables all plant affordances.
+        """
+        self.plant_items = [
+            {'x': float(p['x']), 'y': float(p['y'])} for p in positions
+        ]
+        self._refresh_plant_sense()
+
+    def _nearest_visible_plant(self):
+        if not self.plant_items:
+            return None
+        x, y = self.squid.x, self.squid.y
+        plant = min(self.plant_items,
+                    key=lambda p: math.hypot(p['x'] - x, p['y'] - y))
+        return (plant if math.hypot(plant['x'] - x, plant['y'] - y)
+                <= self.PLANT_SIGHT_RADIUS else None)
+
+    def _refresh_plant_sense(self):
+        if self.plant_items is None:
+            return
+        self.squid.plant_nearby = bool(
+            any(math.hypot(p['x'] - self.squid.x, p['y'] - self.squid.y)
+                <= self.PLANT_SHELTER_RADIUS
+                for p in self.plant_items)
+        )
 
     def _nearest_visible_food(self):
         if not self.food_items:
@@ -520,8 +559,30 @@ class HeadlessSimulation:
             squid.status = "sleeping" if action == "sleeping" else "exhausted"
         elif action == "exploring":
             self._move_randomly()
-        elif action == "approaching_plant" and squid.plant_nearby:
-            squid.anxiety = max(0.0, squid.anxiety - 1.0)
+        elif action == "approaching_plant":
+            if self.plant_items is None:
+                # Legacy stochastic headless plants (not used in the spatial
+                # research curriculum).
+                if squid.plant_nearby:
+                    squid.anxiety = max(0.0, squid.anxiety - 1.0)
+            else:
+                # An action needs a *real, reachable* plant, not a convenient
+                # reduction in anxiety whenever this output neuron fires.
+                plant = self._nearest_visible_plant()
+                if plant is not None:
+                    dx, dy = plant['x'] - squid.x, plant['y'] - squid.y
+                    distance = math.hypot(dx, dy)
+                    if distance > self.PLANT_SHELTER_RADIUS:
+                        step = min(self.PLANT_SWIM_STEP, distance)
+                        squid.x += dx / distance * step
+                        squid.y += dy / distance * step
+                        self.stats['shelter_approaches'] += 1
+                    if math.hypot(plant['x'] - squid.x,
+                                  plant['y'] - squid.y) <= self.PLANT_SHELTER_RADIUS:
+                        before_anxiety = squid.anxiety
+                        squid.anxiety = max(0.0, squid.anxiety - 16.0)
+                        self.stats['shelter_relief'] += before_anxiety - squid.anxiety
+                        self.stats['shelter_arrivals'] += 1
 
         # A startle that the animal does not flee from has a consequence,
         # rather than being merely an inert set of sensor bits.
@@ -531,6 +592,7 @@ class HeadlessSimulation:
             self.stats['unavoided_startle_ticks'] += 1
 
         self._refresh_food_sense()
+        self._refresh_plant_sense()
 
     def _simulation_step(self):
         """Advance world -> perception -> brain -> action -> body consequence.
@@ -541,6 +603,7 @@ class HeadlessSimulation:
         self.squid.update()
         self._update_environment()
         self._refresh_food_sense()
+        self._refresh_plant_sense()
         if self.squid.food_visible:
             self.stats['food_seen_ticks'] += 1
         self.brain.advance_clock(1.0)
@@ -611,7 +674,8 @@ class HeadlessSimulation:
         if random.random() < self.config.startle_chance:
             self.squid.startle()
             self.stats['startles'] += 1
-        self.squid.plant_nearby = random.random() < 0.2
+        if self.plant_items is None:
+            self.squid.plant_nearby = random.random() < 0.2
 
     def _process_events(self):
         """Process queued scenario events"""
