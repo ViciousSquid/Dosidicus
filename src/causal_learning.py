@@ -276,6 +276,25 @@ class ActionOutcomeLedger:
             cue[name] = value
         return dict(list(cue.items())[:self.config.cue_size])
 
+    def discard_pending_outcomes(self, *, reason: str = "external_intervention") -> int:
+        """Discard only unresolved causal windows after an external state jump.
+
+        A scripted/user-issued feeding or cleaning event is not the squid's
+        own action. Without this boundary, a previous exploration or play
+        episode can falsely learn that *it* caused the externally injected
+        improvement in hunger or cleanliness. Preserve settled experience,
+        learned weights and contingencies; only pending attribution windows
+        and their idle-probe baseline are invalidated.
+
+        This is an intervention marker, not an algorithm that chooses an
+        action for the animal.
+        """
+        discarded = len(self._open)
+        self._open.clear()
+        self._idle_probe = None
+        self._current_action = ""
+        return discarded
+
     # ------------------------------------------------------------------
     # Recording
     # ------------------------------------------------------------------
