@@ -5,7 +5,8 @@ on:
     paths:
       - 'src/brain_constants.py'
       - 'src/propagation.py'
-      - 'experiments/weight_space/**'
+      - 'experiments/weight_space/experiment.py'
+      - 'experiments/weight_space/grid_scan.py'
       - 'tests/test_weight_space_experiment.py'
       - '.github/workflows/weight-space-experiment.yml'
   workflow_dispatch:
