@@ -604,8 +604,13 @@ class HeadlessSimulation:
             self.event_queue.remove(event)
             
     def _execute_event(self, event: Dict):
-        """Execute a scenario event"""
+        """Apply a scripted event, marking non-neural interventions."""
         event_type = event.get('type', '')
+        if event_type in ('feed', 'clean', 'set_state'):
+            # Drop only unresolved credit assignments. Settled knowledge
+            # persists, but a prior squid action cannot claim this reward.
+            self.brain.causal_learning.discard_pending_outcomes(
+                reason='scripted_' + event_type)
         
         if event_type == 'set_state':
             state = event.get('state', {})
