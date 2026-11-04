@@ -517,7 +517,8 @@ class HeadlessSimulation:
 
         # A startle that the animal does not flee from has a consequence,
         # rather than being merely an inert set of sensor bits.
-        if squid.is_startled and not squid.is_sleeping:
+        if squid.is_startled:
+            # Sleep is not an invulnerability frame during a startle.
             squid.health = max(0.0, squid.health - 0.75)
             self.stats['unavoided_startle_ticks'] += 1
 
@@ -532,6 +533,8 @@ class HeadlessSimulation:
         self.squid.update()
         self._update_environment()
         self._refresh_food_sense()
+        if self.squid.food_visible:
+            self.stats['food_seen_ticks'] += 1
         self.brain.advance_clock(1.0)
         before = self.squid.get_state_dict()
         self.brain.update_state(before)
