@@ -1,0 +1,40 @@
+name: Learned action discovery research
+
+on:
+  push:
+    branches:
+      - research/learned-actions-and-credit-20261104
+    paths:
+      - 'headless/**'
+      - 'src/action_discovery.py'
+      - 'src/portable_brain.py'
+      - 'src/causal_learning.py'
+      - 'src/brain_constants.py'
+      - 'src/decision_engine.py'
+      - 'tests/test_action_discovery.py'
+      - 'tests/test_headless_training.py'
+      - 'tests/test_headless_causal_training.py'
+      - 'experiments/action_discovery/**'
+      - '.github/workflows/action-discovery-research.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  causal-motor-discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout research commit
+        uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: python -m pip install numpy pytest PyQt5 Pillow platformdirs
+      - name: Regression and new causal-motor tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q tests/test_headless_training.py tests/test_headless_causal_training.py tests/test_action_discovery.py
