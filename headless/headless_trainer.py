@@ -506,8 +506,9 @@ class HeadlessSimulation:
                 squid.anxiety = max(0.0, squid.anxiety - 7.0)
                 self.stats['escaped_startles'] += 1
         elif action in ("sleeping", "exhausted"):
+            if not squid.is_sleeping:
+                squid.sleep_ticks = 20
             squid.is_sleeping = True
-            squid.sleep_ticks = 20
             squid.status = "sleeping" if action == "sleeping" else "exhausted"
         elif action == "exploring":
             self._move_randomly()
