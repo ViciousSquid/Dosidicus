@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Dependencies
-        run: python -m pip install numpy pytest
+        run: python -m pip install numpy pytest PyQt5 Pillow platformdirs
       - name: Existing mechanism suite plus experiment tests
         run: python -m pytest -q tests/test_headless_training.py tests/test_weight_space_experiment.py
       - name: Full paired A/B report
