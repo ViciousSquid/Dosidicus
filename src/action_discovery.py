@@ -21,6 +21,7 @@ from .brain_constants import (
     LEARNED_ACTIONS, PURE_INPUT_NEURONS,
 )
 from .causal_learning import VALENCE_WEIGHTS
+from .propagation import signal_of
 
 # Only voluntary, previously unwired motor neurons can be explored.
 _EXPLORE_ACTIONS = tuple(x for x in LEARNED_ACTIONS if x in (
@@ -83,19 +84,21 @@ class ActionDiscovery:
             if state.get(name, 0.0) >= ACTION_THRESHOLDS[name]:
                 return None
 
-        # A weak connection is not a usable skill. Do not stop exploring
-        # just because a single edge exceeded an arbitrary weight threshold:
-        # synaptic input must have enough physical headroom (50 per saturated
-        # sensor/drive) to reach the motor's actual firing threshold.
+        # A weak connection is not a usable skill. Evaluate the *current*
+        # cue-drive contribution via the engine's own signal function. Using
+        # a theoretical saturated 100-point input prematurely declared a
+        # sleepiness->rest edge "learned" even though real fatigue could not
+        # fire the motor before the innate exhaustion reflex took over.
         actionable = {}
         for motor in _EXPLORE_ACTIONS:
             incoming = sum(
-                50.0 * max(0.0, float(weight))
+                max(0.0, signal_of(src, float(state.get(src, 0.0)))
+                    * float(weight))
                 for (src, dst), weight in self.brain.weights.items()
                 if dst == motor and (src in CORE_STAT_NEURONS or
                                      src in PURE_INPUT_NEURONS)
             )
-            actionable[motor] = incoming >= ACTION_THRESHOLDS[motor]
+            actionable[motor] = incoming >= ACTION_THRESHOLDS[motor] + 1.0
         actions = [a for a in _EXPLORE_ACTIONS
                    if a in self.brain.positions and not actionable[a]]
         if not actions:
