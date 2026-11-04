@@ -4,6 +4,16 @@
 
 The point of this experiment is to test whether a tiny, direct edit to the *weights of the actual neural network* makes the newborn's action bank resolve a high-threat/food conflict more appropriately, without compromising safe feeding, sleep or basic behaviour. It is **not** a reproduction of the GPT/Qwen paper or a full proof of smarter animals.
 
+## Latest milestone — real trainer learning is now action-coupled
+
+The headless trainer now routes decisions from the **actual shared neural network** into feeding, food approach, movement, startle avoidance, health and sleep. Exogenous `feed`/`clean`/`set_state` interventions cancel pending causal credit, preventing a scripted reward from being claimed as the squid's own learning. Paired evaluation can now freeze every recorded synaptic learning step and transfer only directed weights into a fresh brain.
+
+**[Read the full implementation, test protocol, per-world learning outcomes and limitations](REAL_TRAINER_RESULTS.md)**. [Successful GitHub CI run](https://github.com/ViciousSquid/Dosidicus/actions/runs/41747621480) verified **63 tests and 124 subtests**, and published the [complete raw experiment artefact](https://github.com/ViciousSquid/Dosidicus/actions/runs/41747621480/artifacts/13283539696).
+
+After 450 simulated training ticks, the original newborn profile's learned synapses improved health by **+2.67** and reduced unavoided startle exposure by **3.56 ticks** per 300-tick evaluation episode in the deliberately stressful headless world; however, the effects were small, variable and not consistently positive in balanced or food-scarce worlds. The original profile still cannot be said to be generally smarter. The three-weight edited profile did **not** demonstrate a reliable benefit.
+
+The original weight-space work remains useful as a *negative result*: action-readiness thresholds are not a substitute for behaviour and causal learning.
+
 ## Final outcome — direct edits did NOT demonstrate smarter squids
 
 After a separate action-coupled test of actual neural decisions changing food, injury, health, threat escape and later states, the original three-weight edit **failed to produce a meaningful behavioural improvement**. Across 16 holdout episodes per profile, both original and edited ate the same **53 meals**, neither selected a single flight action, and their average survival was effectively identical.
