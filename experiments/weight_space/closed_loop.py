@@ -75,6 +75,7 @@ class Aquarium:
     sleep_timer: int = 0
     food_eaten: int = 0
     attacks: int = 0
+    threat_exposure_ticks: int = 0
     damage: float = 0
     successful_escapes: int = 0
     false_flees: int = 0
@@ -150,20 +151,25 @@ def simulate(brain, world_name, seed, ticks=TICKS, learn=False):
             tank.false_flees += 1
             tank.hunger = min(100.0, tank.hunger + 0.18)
         if tank.threat_timer:
+            tank.threat_exposure_ticks += 1
             if action == "fleeing":
                 if flee_draw >= 0.12:
                     tank.successful_escapes += 1
                     tank.threat_timer = 0
                 else:
+                    tank.attacks += 1
                     tank.damage += 1.0
                     tank.health -= 1.0
             elif action == "sleeping":
+                tank.attacks += 1
                 tank.damage += 7.0
                 tank.health -= 7.0
             elif action == "eating":
+                tank.attacks += 1
                 tank.damage += 6.0
                 tank.health -= 6.0
             else:
+                tank.attacks += 1
                 tank.damage += 4.0
                 tank.health -= 4.0
 
@@ -201,6 +207,7 @@ def simulate(brain, world_name, seed, ticks=TICKS, learn=False):
     return {
         "ticks_alive": tank.active_ticks, "health": round(max(0.0, tank.health), 4),
         "food_eaten": tank.food_eaten, "attacks_suffered": tank.attacks,
+        "threat_exposure_ticks": tank.threat_exposure_ticks,
         "damage": round(tank.damage, 4),
         "successful_escapes": tank.successful_escapes,
         "false_flees": tank.false_flees,
@@ -242,7 +249,7 @@ def evaluate():
                              "damage", "successful_escapes", "false_flees", "excess_hunger_ticks")}
         # Learning experiment: retain weights between training and new eval.
         # Training episodes see a different fixed set of seeds than evaluation.
-        train_rows, transfer_rows = [], []
+        train_rows, transfer_rows, untrained_transfer_rows = [], [], []
         for seed in TRAIN_SEEDS:
             brain = make_brain(profile)
             for world in WORLDS:
@@ -254,15 +261,23 @@ def evaluate():
             # Reset volatile activations, but not weights or learner state.
             from src.propagation import baseline_of
             brain.state = {name: baseline_of(name) for name in brain.positions}
-            data = simulate(brain, "balanced", 80_000 + seed, learn=False)
+            target_seed = 80_000 + seed
+            data = simulate(brain, "balanced", target_seed, learn=False)
             transfer_rows.append({"profile": profile, "seed": seed, **data})
+            # True within-profile causal comparison: trained vs fresh untrained
+            # on the exact same unseen event stream.
+            untrained = simulate(make_brain(profile), "balanced", target_seed, learn=False)
+            untrained_transfer_rows.append({"profile": profile, "seed": seed, **untrained})
         report["summary"].setdefault("learning_transfer", {})[profile] = {
             "mean_score": round(sum(r["score"] for r in transfer_rows) / len(transfer_rows), 4),
+            "untrained_mean_score": round(sum(r["score"] for r in untrained_transfer_rows) / len(untrained_transfer_rows), 4),
+            "training_gain_vs_untrained": round(sum(t["score"] - u["score"] for t, u in zip(transfer_rows, untrained_transfer_rows)) / len(transfer_rows), 4),
             "mean_learned_updates": round(sum(r["synaptic_learning_updates"]
                                                for r in train_rows) / len(TRAIN_SEEDS), 4),
         }
         report["runs"].extend({**r, "split": "train", "training": True} for r in train_rows)
         report["runs"].extend({**r, "split": "transfer", "training": False} for r in transfer_rows)
+        report["runs"].extend({**r, "split": "transfer_untrained", "training": False} for r in untrained_transfer_rows)
     return report
 
 def main():
