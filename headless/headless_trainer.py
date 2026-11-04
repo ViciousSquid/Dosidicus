@@ -341,6 +341,7 @@ class HeadlessSimulation:
             self.action_discovery = ActionDiscovery(
                 self.brain, rate=self.config.action_discovery_rate,
                 seed=(self.config.seed if self.config.seed is not None else 0),
+                teaching=self.config.action_discovery_teaching,
             )
         
         # Simulation state
@@ -553,8 +554,7 @@ class HeadlessSimulation:
         # network action contest still selects the behaviour.
         exploratory_neuron = None
         if self.action_discovery is not None:
-            if self.config.action_discovery_teaching:
-                self.action_discovery.process_closed()
+            self.action_discovery.process_closed()
             exploratory_neuron = self.action_discovery.excite(self.brain.state)
 
         if self.squid.is_sleeping:
