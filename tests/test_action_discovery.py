@@ -23,6 +23,7 @@ def settle_trial(b, learner, *, action="sleeping", neuron="act_rest",
     """
     state = dict(b.state)
     state["sleepiness"] = sleepy_before
+    state["cleanliness"] = 80.0  # Always present: must not be credited as causal
     episode_id = b.causal_learning.on_action(action, state, now=moment)
     assert episode_id is not None
     learner.committed(episode_id, neuron, action, state)
@@ -90,12 +91,19 @@ def test_motor_trial_with_no_reward_creates_no_skill_connection():
 def test_positive_repeated_outcomes_build_a_directed_skill_synapse():
     b = brain()
     learner = ActionDiscovery(b, rate=0.0)
+    # Low-fatigue counterfactuals: sleeping here is not useful, even though
+    # the sleepiness number decreases during the simulated sleep bout.
+    for i in range(3):
+        settle_trial(b, learner, sleepy_before=22.0, sleepy_after=0.0,
+                     moment=10 + i * 10)
     for i in range(6):
-        settle_trial(b, learner, moment=10 + i * 10)
+        settle_trial(b, learner, moment=50 + i * 10)
     edge = ("sleepiness", "act_rest")
     assert b.weights.get(edge, 0.0) > 0
-    assert learner.trials_closed == 6
+    assert learner.trials_closed == 9
     assert learner.connections_taught >= 1
+    # Constant cleanliness is a confound, not a learned reason to sleep.
+    assert ("cleanliness", "act_rest") not in b.weights
     events = [e for e in b.ledger.weight_history(edge, limit=30)
               if e.mechanism == "causal_motor_discovery"]
     assert events
@@ -156,3 +164,26 @@ def test_real_headless_integration_executes_opt_in_motor_trial():
     assert any(sim.stats["actions_selected"].get(action, 0) == 1
                for action in ("sleeping", "approaching_plant", "playing"))
     assert not sim.action_discovery.connections_taught
+
+
+def test_cue_present_only_cannot_become_a_spurious_skill():
+    b = brain()
+    learner = ActionDiscovery(b, rate=0.0)
+    # The action may be beneficial, but without any cue-absent observations
+    # it is impossible to attribute that benefit specifically to the cue.
+    for i in range(8):
+        settle_trial(b, learner, moment=10 + i * 10)
+    assert ("sleepiness", "act_rest") not in b.weights
+    assert ("cleanliness", "act_rest") not in b.weights
+    assert learner.connections_taught == 0
+
+
+def test_satiated_sleepiness_reduction_is_not_a_reward():
+    b = brain()
+    learner = ActionDiscovery(b, rate=0.0)
+    for i in range(8):
+        settle_trial(b, learner, sleepy_before=22.0, sleepy_after=0.0,
+                     moment=10 + i * 10)
+    assert ("sleepiness", "act_rest") not in b.weights
+    assert ("cleanliness", "act_rest") not in b.weights
+    assert learner.connections_taught == 0
