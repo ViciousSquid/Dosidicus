@@ -134,6 +134,9 @@ def test_manual_feed_interrupts_only_pending_credit_not_settled_learning():
     tank._execute_event({"type": "feed"})
     assert not ledger._open
     assert ledger.current_action == ""
+    assert ledger.interrupted_episodes == 1
+    assert ledger.last_intervention_reason == "scripted_feed"
+    assert ledger.to_dict()["interrupted_episodes"] == 1
     assert tank.stats["manual_feedings"] == 1
     assert tank.stats["food_eaten"] == 0
     assert dict(tank.brain.weights) == before
