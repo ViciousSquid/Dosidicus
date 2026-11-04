@@ -93,11 +93,10 @@ def test_positive_repeated_outcomes_build_a_directed_skill_synapse():
     for i in range(6):
         settle_trial(b, learner, moment=10 + i * 10)
     edge = ("sleepiness", "act_rest")
-    assert edge not in [("hunger", "act_rest")]
     assert b.weights.get(edge, 0.0) > 0
     assert learner.trials_closed == 6
     assert learner.connections_taught >= 1
-    events = [e for e in b.ledger.weight_events
+    events = [e for e in b.ledger.weight_history(edge, limit=30)
               if e.mechanism == "causal_motor_discovery"]
     assert events
     assert all(e.episode_id is not None for e in events)
