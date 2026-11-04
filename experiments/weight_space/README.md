@@ -90,7 +90,16 @@ GitHub Actions workflow: `.github/workflows/weight-space-experiment.yml`. It run
 
 **GitHub Actions run:** [Newborn weight-space experiment](https://github.com/ViciousSquid/Dosidicus/actions/workflows/weight-space-experiment.yml?query=branch%3Aexperiment%2Fnewborn-weight-space-2026-11).
 
-The result of the CI run and its individual probe outcomes must be recorded here from runner logs or the JSON. No trial results are claimed unless the test actually ran. The source diff, registered workflow and machine-readable results give a reproducible audit trail.
+**VERIFIED RESULTS:** The [successful CI run](https://github.com/ViciousSquid/Dosidicus/actions/runs/41744349842) executed **46 tests and 108 subtests**, then ran the full paired protocol at commit `850f833281f15a3cdfedfb63f2cc06c374bdd546`.
+
+| Split | Baseline | Edited | Net improvement |
+| --- | ---: | ---: | ---: |
+| Development (352 paired trials) | 253 correct | 349 correct | **+96** |
+| Holdout (352 paired trials) | 256 correct | 352 correct | **+96** |
+
+The three target-threat probes improved from **0/32 to 32/32 each** in both splits; safety scenarios had no observed regressions. The exhaustion-collapse check still failed **3/32 development trials in both brains** (unrelated to the edit). An important caution: anxiety without threat boosted mean flee activation from approximately 11 to 29, although it remained below the threshold in these trials.
+
+**[Read the complete per-probe results, activation values, observed failures and interpretation in RESULTS.md](RESULTS.md).** The [raw JSON artefact](https://github.com/ViciousSquid/Dosidicus/actions/runs/41744349842/artifacts/13282437823) contains machine-readable seeds and values; its retention depends on GitHub settings. These scores demonstrate performance on specified threshold probes, **not greater general intelligence or actual survival**.
 
 | Test | Observed status |
 | --- | --- |
