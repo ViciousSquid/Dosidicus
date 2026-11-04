@@ -99,14 +99,24 @@ def evaluate_frozen(source, seed, ticks=EVAL_TICKS):
     sim.squid.sleepiness = 94.0
     transfer_weights_only(source.brain, sim.brain)
     before = dict(sim.brain.weights)
+    voluntary_rest_starts = 0
     for i in range(ticks):
+        was_sleeping = sim.squid.is_sleeping
         sim.tick = i
         sim._simulation_step()
+        # A sleeping tick after an involuntary collapse is NOT a learned
+        # voluntary rest. Count only awake -> resting transitions initiated
+        # by act_rest; the stricter specificity experiment checks all fatigue
+        # levels with the same criterion.
+        if (not was_sleeping and sim.squid.is_sleeping
+                and sim.squid.status == "sleeping"):
+            voluntary_rest_starts += 1
     assert before == dict(sim.brain.weights)
     assert sim.stats["hebbian_updates"] == 0
     assert sim.brain.causal_learning.closed_episodes == 0
     return {
-        "rest_actions": sim.stats["actions_selected"].get("sleeping", 0),
+        "sleeping_ticks": sim.stats["actions_selected"].get("sleeping", 0),
+        "voluntary_rest_starts": voluntary_rest_starts,
         "collapse_actions": sim.stats["actions_selected"].get("exhausted", 0),
         "final_sleepiness": round(sim.squid.sleepiness, 4),
         "selected_actions": dict(sim.stats["actions_selected"]),
@@ -146,10 +156,10 @@ def experiment(train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS,
         result["summary"][arm] = {
             "mean_new_rest_edge": round(
                 sum(r["rest_weight"] for r in train_rows) / len(train_rows), 5),
-            "mean_frozen_rest_actions": round(
-                sum(r["rest_actions"] for r in eval_rows) / len(eval_rows), 5),
+            "mean_frozen_voluntary_rest_starts": round(
+                sum(r["voluntary_rest_starts"] for r in eval_rows) / len(eval_rows), 5),
             "frozen_episodes_with_voluntary_rest": sum(
-                r["rest_actions"] > 0 for r in eval_rows),
+                r["voluntary_rest_starts"] > 0 for r in eval_rows),
             "total_frozen_episodes": len(eval_rows),
             "mean_final_sleepiness": round(
                 sum(r["final_sleepiness"] for r in eval_rows) / len(eval_rows), 5),
@@ -177,7 +187,7 @@ def main():
               f"frozen resting episodes="
               f"{metrics['frozen_episodes_with_voluntary_rest']}/"
               f"{metrics['total_frozen_episodes']} "
-              f"mean rest actions={metrics['mean_frozen_rest_actions']:.2f} "
+              f"mean voluntary rest initiations={metrics['mean_frozen_voluntary_rest_starts']:.2f} "
               f"final sleepiness={metrics['mean_final_sleepiness']:.2f}")
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
