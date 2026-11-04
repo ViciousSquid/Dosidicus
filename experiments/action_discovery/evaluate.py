@@ -105,7 +105,6 @@ def evaluate_frozen(source, seed, ticks=EVAL_TICKS):
         "rest_actions": sim.stats["actions_selected"].get("sleeping", 0),
         "collapse_actions": sim.stats["actions_selected"].get("exhausted", 0),
         "final_sleepiness": round(sim.squid.sleepiness, 4),
-        "first_rest_tick": None,  # filled below from action trace if available
         "selected_actions": dict(sim.stats["actions_selected"]),
         "final_health": round(sim.squid.health, 4),
     }
