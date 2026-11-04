@@ -27,6 +27,8 @@ INPUT_SENSORS = set(_INPUT_SENSOR_POSITIONS) | {"can_see_food"}
 class TrainingConfig:
     """Configuration for headless training"""
     # Learning parameters
+    # Evaluation runs must disable learning while retaining action selection.
+    learning_enabled: bool = True
     learning_rate: float = 0.1
     weight_decay: float = 0.01
     max_hebbian_pairs: int = 2
@@ -548,13 +550,16 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
                 elif isinstance(value, (int, float)):
                     self.state[key] = float(value)
                     
-    def propagate(self):
-        """One timestep, through the project's single transfer function."""
-        # Neurons the world writes go first, then learning evidence, exactly
-        # as BrainWidget does it, so a brief event contributes to the next
-        # commit instead of being invisible.
+    def propagate(self, observe_learning: bool = True):
+        """One timestep, through the project's single transfer function.
+
+        When observe_learning=False, evaluation keeps forward propagation
+        but does not record new plasticity/causal-credit evidence.
+        The default preserves normal training and game behaviour.
+        """
         self.drive_external_neurons()
-        self.observe_for_learning()
+        if observe_learning:
+            self.observe_for_learning()
 
         targets = [n for n in self.positions
                    if is_network_driven(n) and n not in self.excluded_neurons
