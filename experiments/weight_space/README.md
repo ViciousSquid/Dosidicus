@@ -115,6 +115,14 @@ The three target-threat probes improved from **0/32 to 32/32 each** in both spli
 
 Do not substitute a hypothetical score for a missing or failed CI result. Unexpected failures are scientific outcomes and should be reported explicitly rather than changing the acceptance criteria post hoc.
 
+## Exploratory robustness sweep: a substantive negative finding
+
+After the preregistered test, a separate **144-state unlabelled grid** varied six threat levels, four anxiety levels, three hunger levels and food visibility. It found **14 states** that moved from eating to neither eating nor fleeing; one had **zero threat**. Specifically, with threat 0, anxiety 80, hunger 40, food visible, eating fell from **38.13645** to **36.80028**, crossing below the eating threshold of 38. This is a **regression** not covered by the original safeguards. The grid also identified 20 transitions from neither to flee and 9 transitions from eat to flee. At maximum threat with visible food, only six of twelve candidate states activated flight.
+
+**[Complete sweep methodology, all 144-case aggregate outcomes, exact regression and source JSON: GRID_RESULTS.md](GRID_RESULTS.md).**
+
+The strong result on the predefined cases must therefore not be summarised as an unconditional improvement in intelligence or even in feeding/flight policy. This version is **not suitable for merging into the production default**. Any new tuning after this observed regression must use fresh evaluation states; the previously inspected holdout is no longer untouched.
+
 ## Interpretation and threats to validity
 
 1. The tests ask whether activation levels meet **human-defined desired thresholds** on a narrow family of states; satisfying them is *not* proof of intelligence or generalisation.
