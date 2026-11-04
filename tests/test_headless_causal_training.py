@@ -122,3 +122,35 @@ def test_headless_training_same_seed_same_behavioural_outcomes():
               "escaped_startles", "actions_selected")
     assert {k: first.stats[k] for k in fields} == {
         k: second.stats[k] for k in fields}
+
+
+def test_manual_feed_interrupts_only_pending_credit_not_settled_learning():
+    tank = sim()
+    ledger = tank.brain.causal_learning
+    ledger.on_action("exploring", tank.brain.state)
+    assert len(ledger._open) == 1
+    before = dict(tank.brain.weights)
+    tank.tick = 0
+    tank._execute_event({"type": "feed"})
+    assert not ledger._open
+    assert ledger.current_action == ""
+    assert tank.stats["manual_feedings"] == 1
+    assert tank.stats["food_eaten"] == 0
+    assert dict(tank.brain.weights) == before
+    ledger.on_action("exploring", tank.brain.state)
+    assert len(ledger._open) == 1
+    tank._execute_event({"type": "set_state", "state": {"hunger": 10}})
+    assert not ledger._open
+
+
+def test_neurally_earned_food_does_not_discard_its_outcome_window():
+    tank = sim()
+    ledger = tank.brain.causal_learning
+    tank.food_items = [{"x": 0.5, "y": 0.5}]
+    tank._refresh_food_sense()
+    ledger.on_action("eating", tank.brain.state)
+    assert len(ledger._open) == 1
+    tank._act_on_neural_decision("eating")
+    assert tank.stats["food_eaten"] == 1
+    assert len(ledger._open) == 1, (
+        "a real action must keep its causal learning window")
