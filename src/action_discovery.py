@@ -32,12 +32,25 @@ _BY_BEHAVIOUR = {ACTION_BEHAVIOURS[x]: x for x in _EXPLORE_ACTIONS}
 
 @dataclass
 class _Evidence:
+    # Paired opportunity evidence: a cue must be observed both present and
+    # absent for a learned cue->action association to be identifiable.
     count: int = 0
     total_benefit: float = 0.0
+    absent_count: int = 0
+    absent_benefit: float = 0.0
 
     @property
     def mean(self):
         return self.total_benefit / self.count if self.count else 0.0
+
+    @property
+    def absent_mean(self):
+        return (self.absent_benefit / self.absent_count
+                if self.absent_count else 0.0)
+
+    @property
+    def contrast(self):
+        return self.mean - self.absent_mean
 
 
 class ActionDiscovery:
@@ -58,6 +71,7 @@ class ActionDiscovery:
         self.rate = rate
         self.rng = random.Random(seed)
         self.trials_to_learn = max(2, int(trials_to_learn))
+        self.minimum_absent_trials = 2
         self.minimum_benefit = float(minimum_benefit)
         self.learning_step = float(learning_step)
         self.teaching = bool(teaching)
@@ -149,39 +163,58 @@ class ActionDiscovery:
             benefit = 0.0
             for stat, delta in episode.consequence.items():
                 importance = VALENCE_WEIGHTS.get(stat)
-                if importance:
-                    background = ledger.baseline_drift(stat, episode.action)
-                    benefit += importance * (delta - background) / 100.0
+                if not importance:
+                    continue
+                background = ledger.baseline_drift(stat, episode.action)
+                contribution = importance * (delta - background) / 100.0
+                if importance < 0.0:
+                    # A drive that is already low has no further beneficial
+                    # "need reduction" to discover. Rewarding sleepiness
+                    # reductions when the animal is fully rested trained an
+                    # inappropriate sleep-anytime motor association.
+                    pressure = max(0.0, min(
+                        1.0, (context.get(stat, 50.0) - 50.0) / 50.0))
+                    contribution *= pressure
+                benefit += contribution
 
-            cues = []
+            # Do NOT blindly wire every cue present during a good trial.
+            # E.g. cleanliness happened to be high across every previous
+            # training night. Without a cue-absent comparison the learner
+            # credited cleanliness for the benefit of voluntary rest.
             for cue, activation in context.items():
                 if cue not in self.brain.positions or cue == motor:
                     continue
-                if cue in PURE_INPUT_NEURONS:
-                    if activation >= 70:
-                        cues.append(cue)
-                elif cue in CORE_STAT_NEURONS and activation >= 70:
-                    cues.append(cue)
-
-            for cue in cues:
+                if cue not in CORE_STAT_NEURONS and cue not in PURE_INPUT_NEURONS:
+                    continue
+                present = activation >= 70.0
                 key = (cue, motor)
                 record = self.evidence.setdefault(key, _Evidence())
-                record.count += 1
-                record.total_benefit += benefit
-                if record.count < self.trials_to_learn:
+                if present:
+                    record.count += 1
+                    record.total_benefit += benefit
+                else:
+                    record.absent_count += 1
+                    record.absent_benefit += benefit
+
+                # A learnable contingency needs observations from BOTH
+                # conditions, not merely two co-activations of a sensor.
+                if (not present or record.count < self.trials_to_learn
+                        or record.absent_count < self.minimum_absent_trials):
                     continue
-                if record.mean <= self.minimum_benefit:
-                    # Neutral/negative trials do not grow a positive reflex.
+                if (record.mean <= self.minimum_benefit or
+                        record.contrast <= self.minimum_benefit):
                     continue
-                # Repeated benefit, not a one-off surprising correlation,
-                # progressively builds an ordinary excitatory synapse.
                 if self.brain.apply_weight_change(
-                    key, delta=self.learning_step * min(1.0, record.mean / 0.10),
+                    key,
+                    delta=self.learning_step * min(1.0, record.contrast / 0.10),
                     mechanism="causal_motor_discovery",
                     detail={
-                        "note": "repeated beneficial self-initiated motor trials",
-                        "mean_baseline_corrected_benefit": round(record.mean, 5),
-                        "trials": record.count,
+                        "note": "beneficial self-initiated trials with cue present versus absent",
+                        "mean_benefit_cue_present": round(record.mean, 5),
+                        "mean_benefit_cue_absent": round(record.absent_mean, 5),
+                        "benefit_contrast": round(record.contrast, 5),
+                        "present_trials": record.count,
+                        "absent_trials": record.absent_count,
                         "action": episode.action,
                     },
                     episode_id=episode.episode_id,
