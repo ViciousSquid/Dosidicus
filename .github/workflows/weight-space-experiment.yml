@@ -5,11 +5,14 @@ on:
     paths:
       - 'src/brain_constants.py'
       - 'src/propagation.py'
+      - 'src/portable_brain.py'
+      - 'headless/headless_trainer.py'
       - 'experiments/weight_space/experiment.py'
       - 'experiments/weight_space/grid_scan.py'
       - 'experiments/weight_space/closed_loop.py'
       - 'tests/test_weight_space_experiment.py'
       - 'tests/test_weight_space_closed_loop.py'
+      - 'tests/test_headless_causal_training.py'
       - '.github/workflows/weight-space-experiment.yml'
   workflow_dispatch:
 permissions:
@@ -28,7 +31,7 @@ jobs:
       - name: Dependencies
         run: python -m pip install numpy pytest PyQt5 Pillow platformdirs
       - name: Existing mechanism suite plus experiment tests
-        run: QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_headless_training.py tests/test_weight_space_experiment.py tests/test_weight_space_closed_loop.py
+        run: QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_headless_training.py tests/test_weight_space_experiment.py tests/test_weight_space_closed_loop.py tests/test_headless_causal_training.py
       - name: Full paired A/B report
         run: python -m experiments.weight_space.experiment --json experiments/weight_space/results.json
       - name: Descriptive 144-state robustness sweep
