@@ -29,6 +29,10 @@ class TrainingConfig:
     # Learning parameters
     # Evaluation runs must disable learning while retaining action selection.
     learning_enabled: bool = True
+    # Experimental: off by default, so desktop/headless behaviour and
+    # existing reproduction baselines are unchanged unless enabled.
+    action_discovery_rate: float = 0.0
+    action_discovery_teaching: bool = True
     learning_rate: float = 0.1
     weight_decay: float = 0.01
     max_hebbian_pairs: int = 2
