@@ -48,7 +48,7 @@ def evaluate_fatigue(brain, seed, initial_sleepiness, ticks=EVAL_TICKS):
 
 
 def run_experiment(train_seeds=TRAIN_SEEDS, eval_seeds=EVAL_SEEDS,
-                   fatigue_levels=FATIGUE_LEVELS, bouts=22, ticks_per_bout=32,
+                   fatigue_levels=FATIGUE_LEVELS, bouts=32, ticks_per_bout=32,
                    eval_ticks=EVAL_TICKS):
     rows = []
     learned_paths = []
