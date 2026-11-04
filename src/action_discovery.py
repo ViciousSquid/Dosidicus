@@ -50,7 +50,7 @@ class ActionDiscovery:
 
     def __init__(self, brain, *, rate: float = 0.08, seed: int = 0,
                  trials_to_learn: int = 3, minimum_benefit: float = 0.025,
-                 learning_step: float = 0.18):
+                 learning_step: float = 0.18, teaching: bool = True):
         if not 0.0 <= rate <= 1.0:
             raise ValueError("rate must be in [0, 1]")
         self.brain = brain
@@ -59,6 +59,7 @@ class ActionDiscovery:
         self.trials_to_learn = max(2, int(trials_to_learn))
         self.minimum_benefit = float(minimum_benefit)
         self.learning_step = float(learning_step)
+        self.teaching = bool(teaching)
 
         self.pending = {}  # episode_id -> (motor_neuron, copy of pre-action state)
         self.evidence: Dict[Tuple[str, str], _Evidence] = {}
@@ -66,6 +67,8 @@ class ActionDiscovery:
         self.executed_probes = 0
         self.trials_closed = 0
         self.connections_taught = 0
+        self.aborted_trials = 0
+        self._closed_seen = 0
 
     def excite(self, state: dict) -> Optional[str]:
         """Stochastically stimulate an unlearned motor; no body action chosen."""
@@ -103,17 +106,27 @@ class ActionDiscovery:
         """Only executed trial actions get causal credit eligibility."""
         if not episode_id or neuron is None or _BY_BEHAVIOUR.get(behaviour) != neuron:
             return
+        self.executed_probes += 1
+        if not self.teaching:
+            return
         self.pending[episode_id] = (
             neuron, {k: float(v) for k, v in pre_action_state.items()
                      if isinstance(v, (int, float))},
         )
-        self.executed_probes += 1
 
     def process_closed(self) -> int:
         """Turn genuine settled experiences into *recorded* synaptic updates."""
+        if not self.teaching:
+            return 0
         ledger = self.brain.causal_learning
         changes = 0
-        for episode in ledger.history:
+        # Process only newly closed outcomes. Rescanning the entire rolling
+        # history (up to 400 episodes) every simulation tick made a small
+        # experimental feature grow costly with age.
+        freshly_closed = max(0, ledger.closed_episodes - self._closed_seen)
+        self._closed_seen = ledger.closed_episodes
+        new_episodes = list(ledger.history)[-freshly_closed:] if freshly_closed else ()
+        for episode in new_episodes:
             trial = self.pending.pop(episode.episode_id, None)
             if trial is None:
                 continue
@@ -166,6 +179,15 @@ class ActionDiscovery:
                 ):
                     changes += 1
                     self.connections_taught += 1
+
+        # Scripted feed/clean/set_state events deliberately invalidate
+        # currently open causal windows. Their probes must never remain
+        # eligible for future unrelated episodes or accumulate indefinitely.
+        still_open = {e.episode_id for e in ledger._open}
+        for episode_id in tuple(self.pending):
+            if episode_id not in still_open:
+                self.pending.pop(episode_id)
+                self.aborted_trials += 1
         return changes
 
     def statistics(self):
@@ -175,4 +197,6 @@ class ActionDiscovery:
             "motor_trials_closed": self.trials_closed,
             "motor_connections_taught": self.connections_taught,
             "motor_evidence_pairs": len(self.evidence),
+            "motor_aborted_trials": self.aborted_trials,
+            "motor_pending_trials": len(self.pending),
         }
