@@ -876,6 +876,10 @@ ACTION_FIRING_THRESHOLDS = {
 # mechanism 'innate', so they show up in the Knowledge tab like any other, and
 # ordinary learning can strengthen, weaken or invert them from experience. An
 # instinct here is a starting point, not a law.
+# EXPERIMENT (2026-11): These newborn synaptic priors are under a controlled
+# A/B study: https://github.com/ViciousSquid/Dosidicus/tree/experiment/newborn-weight-space-2026-11/experiments/weight_space
+# This is not a validated intelligence enhancement. Do not cherry-pick these
+# three weight edits into the release branch without closed-loop evaluation.
 INNATE_ACTION_WIRING = (
     # --- SENSORIMOTOR PRIORS -------------------------------------------
     # The squid is born already wired from a sense to the action that sense is
@@ -889,12 +893,15 @@ INNATE_ACTION_WIRING = (
     # threshold: a squid that has just been frightened should not need
     # corroborating evidence to run. Threat sustains what startle begins.
     ("is_startled",    "act_flee",     1.00),
-    ("threat_level",   "act_flee",     0.55),
+    ("threat_level",   "act_flee",     1.00),
     # Inking runs from the same startle, in parallel with flight rather than
     # instead of it - see REFLEX_ACTIONS. The probability on its binding is
     # what makes it a CHANCE of inking rather than a certainty.
     ("is_startled",    "act_ink",      0.80),
     ("threat_level",   "act_ink",      0.35),
+    # EXPERIMENT ONLY: direct inhibitory threat->feeding pathway.
+    # See experiments/weight_space/README.md before merging these priors.
+    ("threat_level",   "act_eat",     -0.55),
 
     # --- HOMEOSTATIC DRIVES --------------------------------------------
     # A drive away from its comfortable level pushes the action that would
@@ -908,7 +915,7 @@ INNATE_ACTION_WIRING = (
     # so that it can.
     ("hunger",         "act_eat",      0.40),
     ("sleepiness",     "act_collapse", 0.95),
-    ("anxiety",        "act_flee",     0.25),
+    ("anxiety",        "act_flee",     0.65),
 
     # --- TONIC BIAS ----------------------------------------------------
     # Locomotion has a resting level of its own (ACTION_RESTING_LEVELS), so a
