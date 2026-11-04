@@ -63,6 +63,8 @@ from src.consolidation import ConsolidationManager  # noqa: E402
 from src.neurogenesis import EnhancedNeurogenesis  # noqa: E402
 from src.learning import LearningConfig  # noqa: E402
 from src.portable_brain import HeadlessBrain, TrainingConfig  # noqa: E402
+from src.decision_engine import select_action  # noqa: E402
+from src.brain_constants import ACTION_THRESHOLDS  # noqa: E402
 
 INPUT_SENSORS = set(_INPUT_SENSOR_POSITIONS) | {"can_see_food"}
 
@@ -181,6 +183,7 @@ class HeadlessSquid:
         self.is_fleeing = False
         self.is_startled = False
         self.pursuing_food = False
+        self.sleep_ticks = 0
         
         # Position (normalized 0-1)
         self.x = 0.5
@@ -212,6 +215,7 @@ class HeadlessSquid:
             "pursuing_food": self.pursuing_food,
             "is_fleeing": self.is_fleeing,
             "is_startled": self.is_startled,
+            "threat_level": 100.0 if self.is_startled else 0.0,
             "can_see_food": 100.0 if self.food_visible else 0.0,
             "plant_proximity": 100.0 if self.plant_nearby else 0.0,
             "external_stimulus": 0.0,
@@ -264,32 +268,25 @@ class HeadlessSquid:
         self.curiosity += random.uniform(-0.5, 0.5) * dt
         self.curiosity = max(0, min(100, self.curiosity))
         
-        # Clear temporary states
-        if self.is_startled:
-            if random.random() < 0.1:
-                self.is_startled = False
-                self.is_fleeing = False
-                
-        if self.is_eating:
-            if random.random() < 0.2:
-                self.is_eating = False
-                self.pursuing_food = False
-                
-        # Sleep behavior
-        if self.sleepiness > 90 and not self.is_sleeping:
-            self.is_sleeping = True
-            self.status = "sleeping"
-        elif self.is_sleeping and self.sleepiness < 20:
-            self.is_sleeping = False
-            self.time_since_slept = 0
-            self.status = "roaming"
-            
-        # Movement simulation
-        if not self.is_sleeping and not self.is_eating:
-            self.x += random.uniform(-0.02, 0.02)
-            self.y += random.uniform(-0.02, 0.02)
-            self.x = max(0, min(1, self.x))
-            self.y = max(0, min(1, self.y))
+        # The world does not invent eating, fleeing or movement. These flags
+        # describe the action chosen by the brain in this simulation tick.
+        self.is_eating = False
+        self.is_fleeing = False
+        self.pursuing_food = False
+        if self.is_startled and random.random() < 0.1:
+            self.is_startled = False
+
+        # Sleep was entered through act_rest / act_collapse, not a hidden
+        # sleepiness threshold. A sleeping body recovers across ticks.
+        if self.is_sleeping:
+            self.sleepiness = max(0.0, self.sleepiness - 4.0 * dt)
+            self.sleep_ticks -= 1
+            if self.sleep_ticks <= 0 or self.sleepiness < 20:
+                self.is_sleeping = False
+                self.time_since_slept = 0
+                self.status = "roaming"
+
+        # Position changes only when the neural action bank drives movement.
             
     def feed(self):
         """Feed the squid"""
@@ -303,10 +300,9 @@ class HeadlessSquid:
     def startle(self):
         """Startle the squid"""
         self.is_startled = True
-        self.is_fleeing = True
         self.anxiety = min(100, self.anxiety + 20)
         self.happiness = max(0, self.happiness - 10)
-        self.status = "fleeing!"
+        self.status = "startled"
         
     def clean(self):
         """Clean the environment"""
@@ -353,7 +349,14 @@ class HeadlessSimulation:
             'ticks_completed': 0,
             'neurons_created': 0,
             'hebbian_updates': 0,
-            'food_eaten': 0,
+            'food_eaten': 0,        # ONLY food obtained through a neural action
+            'manual_feedings': 0,   # scenario injection; not a learned success
+            'food_approaches': 0,
+            'food_seen_ticks': 0,
+            'flee_actions': 0,
+            'escaped_startles': 0,
+            'unavoided_startle_ticks': 0,
+            'actions_selected': {},
             'startles': 0,
             'peak_anxiety': 0,
             'peak_happiness': 0,
@@ -445,73 +448,149 @@ class HeadlessSimulation:
         
         return {**self.stats, **brain_stats}
         
-    def _simulation_step(self):
-        """Execute one simulation tick"""
-        # 1. Update squid state
-        self.squid.update()
-        
-        # 2. Environment events
-        self._update_environment()
-        
-        # 3. Update brain with squid state. One tick is one second of the
-        #    squid's life, and every pacing rule reads that clock.
-        self.brain.advance_clock(1.0)
-        squid_state = self.squid.get_state_dict()
-        self.brain.update_state(squid_state)
+    # The perceptual sensor is local: food somewhere else in the tank does not
+    # produce the same signal as food within reach. Positions are normalised.
+    FOOD_SIGHT_RADIUS = 0.32
+    FOOD_BITE_RADIUS = 0.055
+    FOOD_SWIM_STEP = 0.085
 
-        # Open a causal episode for whatever the squid has committed to doing,
-        # exactly as TamagotchiLogic does in the game. Without this the trainer
-        # ran the causal machinery with no actions in it, so a brain trained
-        # headlessly could never learn what its own behaviour does.
-        self.brain.causal_learning.on_action(str(squid_state.get('status', '')))
-        
-        # 4. Propagate brain activations
-        self.brain.propagate()
-        
-        # 5. Hebbian learning (periodic)
-        if self.tick % self.config.hebbian_interval == 0:
-            updated = self.brain.perform_hebbian_learning()
-            if updated:
-                self.stats['hebbian_updates'] += len(updated)
-                
-        # 6. Neurogenesis check
-        new_neuron = self.brain.check_neurogenesis(squid_state, self.tick)
-        if new_neuron:
-            self.stats['neurons_created'] += 1
-            print(f"  🧠 Tick {self.tick}: Created neuron '{new_neuron}'")
-            
-        # 7. Track statistics
+    def _nearest_visible_food(self):
+        if not self.food_items:
+            return None
+        x, y = self.squid.x, self.squid.y
+        item = min(self.food_items,
+                   key=lambda food: math.hypot(food['x'] - x, food['y'] - y))
+        if math.hypot(item['x'] - x, item['y'] - y) <= self.FOOD_SIGHT_RADIUS:
+            return item
+        return None
+
+    def _refresh_food_sense(self):
+        self.squid.food_visible = self._nearest_visible_food() is not None
+
+    def _move_randomly(self, distance=0.055):
+        self.squid.x = max(0.0, min(1.0, self.squid.x + random.uniform(-distance, distance)))
+        self.squid.y = max(0.0, min(1.0, self.squid.y + random.uniform(-distance, distance)))
+
+    def _act_on_neural_decision(self, action):
+        """Apply the decision to the *body* before observing its consequences.
+
+        This is deliberately a small geometric aquarium, not a second
+        behaviour policy. Action selection comes solely from the shared
+        decision_engine.select_action function and actual neuron activations.
+        """
+        squid = self.squid
+        squid.status = action
+
+        if action == "eating":
+            food = self._nearest_visible_food()
+            if food is not None:
+                dx, dy = food['x'] - squid.x, food['y'] - squid.y
+                distance = math.hypot(dx, dy)
+                if distance > self.FOOD_BITE_RADIUS:
+                    step = min(self.FOOD_SWIM_STEP, distance)
+                    squid.x += (dx / distance) * step
+                    squid.y += (dy / distance) * step
+                    squid.pursuing_food = True
+                    self.stats['food_approaches'] += 1
+                if math.hypot(food['x'] - squid.x, food['y'] - squid.y) <= self.FOOD_BITE_RADIUS:
+                    self.food_items.remove(food)
+                    squid.feed()
+                    self.stats['food_eaten'] += 1
+            # Desire to eat with nothing in sight never creates free food.
+        elif action == "fleeing":
+            squid.is_fleeing = True
+            self.stats['flee_actions'] += 1
+            self._move_randomly(distance=0.09)
+            if squid.is_startled:
+                squid.is_startled = False
+                squid.anxiety = max(0.0, squid.anxiety - 7.0)
+                self.stats['escaped_startles'] += 1
+        elif action in ("sleeping", "exhausted"):
+            if not squid.is_sleeping:
+                squid.sleep_ticks = 20
+            squid.is_sleeping = True
+            squid.status = "sleeping" if action == "sleeping" else "exhausted"
+        elif action == "exploring":
+            self._move_randomly()
+        elif action == "approaching_plant" and squid.plant_nearby:
+            squid.anxiety = max(0.0, squid.anxiety - 1.0)
+
+        # A startle that the animal does not flee from has a consequence,
+        # rather than being merely an inert set of sensor bits.
+        if squid.is_startled:
+            # Sleep is not an invulnerability frame during a startle.
+            squid.health = max(0.0, squid.health - 0.75)
+            self.stats['unavoided_startle_ticks'] += 1
+
+        self._refresh_food_sense()
+
+    def _simulation_step(self):
+        """Advance world -> perception -> brain -> action -> body consequence.
+
+        New learning evidence at the following tick sees the outcome of this
+        action. It cannot learn from randomly awarded food.
+        """
+        self.squid.update()
+        self._update_environment()
+        self._refresh_food_sense()
+        if self.squid.food_visible:
+            self.stats['food_seen_ticks'] += 1
+        self.brain.advance_clock(1.0)
+        before = self.squid.get_state_dict()
+        self.brain.update_state(before)
+        self.brain.propagate(observe_learning=self.config.learning_enabled)
+
+        if self.squid.is_sleeping:
+            chosen = "sleeping"
+        elif (self.brain.state.get("act_collapse", 0.0)
+              >= ACTION_THRESHOLDS["act_collapse"]):
+            chosen = "exhausted"
+        else:
+            chosen, _confidence, _urgency = select_action(
+                self.brain.state, jitter=False)
+            if chosen is None:
+                # Only a brain with an active motor pathway gets to swim.
+                motor = self.brain.state.get("act_move", 0.0)
+                chosen = ("exploring" if "act_move" in self.brain.positions
+                          and motor >= ACTION_THRESHOLDS["act_move"]
+                          else "idle")
+
+        # Record an action episode *before* its consequence. The causal
+        # learner compares this pre-action state to a subsequent observed
+        # state, rather than crediting the squid for a random food event.
+        if self.config.learning_enabled:
+            self.brain.causal_learning.on_action(chosen, self.brain.state)
+        counts = self.stats['actions_selected']
+        counts[chosen] = counts.get(chosen, 0) + 1
+        self._act_on_neural_decision(chosen)
+
+        if self.config.learning_enabled:
+            if self.tick % self.config.hebbian_interval == 0:
+                updated = self.brain.perform_hebbian_learning()
+                if updated:
+                    self.stats['hebbian_updates'] += len(updated)
+            self.brain.consolidate(self.squid.is_sleeping)
+            new_neuron = self.brain.check_neurogenesis(
+                self.squid.get_state_dict(), self.tick)
+            if new_neuron:
+                self.stats['neurons_created'] += 1
+                print(f"  🧠 Tick {self.tick}: Created neuron '{new_neuron}'")
+
         self.stats['peak_anxiety'] = max(self.stats['peak_anxiety'], self.squid.anxiety)
         self.stats['peak_happiness'] = max(self.stats['peak_happiness'], self.squid.happiness)
-        
+
     def _update_environment(self):
-        """Update environment (spawn/despawn items, random events)"""
-        # Food spawning
+        """Spawn percepts and hazards, never hand the squid a free meal."""
         if random.random() < self.config.food_spawn_chance:
             self.food_items.append({'x': random.random(), 'y': random.random()})
-            self.squid.food_visible = True
-            
-        # Food consumption
-        if self.squid.food_visible and random.random() < 0.1:
-            self.squid.feed()
-            self.stats['food_eaten'] += 1
-            if self.food_items:
-                self.food_items.pop(0)
-            self.squid.food_visible = len(self.food_items) > 0
-            
-        # Poop spawning
         if random.random() < self.config.poop_spawn_chance:
             self.poop_items.append({'x': random.random(), 'y': random.random()})
             self.squid.cleanliness = max(0, self.squid.cleanliness - 5)
-            
-        # Random startle
         if random.random() < self.config.startle_chance:
             self.squid.startle()
             self.stats['startles'] += 1
-            
-        # Plant proximity (random for now)
         self.squid.plant_nearby = random.random() < 0.2
-        
+
     def _process_events(self):
         """Process queued scenario events"""
         events_to_remove = []
@@ -525,8 +604,13 @@ class HeadlessSimulation:
             self.event_queue.remove(event)
             
     def _execute_event(self, event: Dict):
-        """Execute a scenario event"""
+        """Apply a scripted event, marking non-neural interventions."""
         event_type = event.get('type', '')
+        if event_type in ('feed', 'clean', 'set_state'):
+            # Drop only unresolved credit assignments. Settled knowledge
+            # persists, but a prior squid action cannot claim this reward.
+            self.brain.causal_learning.discard_pending_outcomes(
+                reason='scripted_' + event_type)
         
         if event_type == 'set_state':
             state = event.get('state', {})
@@ -536,9 +620,10 @@ class HeadlessSimulation:
             print(f"  📋 Tick {self.tick}: Set state {state}")
             
         elif event_type == 'feed':
+            # Explicit human/environment intervention is not an earned meal.
             self.squid.feed()
-            self.stats['food_eaten'] += 1
-            print(f"  🍕 Tick {self.tick}: Fed squid")
+            self.stats['manual_feedings'] += 1
+            print(f"  🍕 Tick {self.tick}: Fed squid (external intervention)")
             
         elif event_type == 'startle':
             self.squid.startle()
