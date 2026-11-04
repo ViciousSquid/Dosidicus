@@ -1,0 +1,39 @@
+name: Headless trainer correctness
+
+on:
+  push:
+    branches:
+      - '3.2.0.0'
+    paths:
+      - 'headless/**'
+      - 'src/portable_brain.py'
+      - 'src/causal_learning.py'
+      - 'src/decision_engine.py'
+      - 'src/brain_constants.py'
+      - 'src/propagation.py'
+      - 'src/plasticity.py'
+      - 'tests/test_headless_training.py'
+      - 'tests/test_headless_causal_training.py'
+      - '.github/workflows/headless-correctness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  headless-causal-behaviour:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout 3.2.0.0
+        uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: python -m pip install numpy pytest PyQt5 Pillow platformdirs
+      - name: Verify headless training and causal correctness
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q tests/test_headless_training.py tests/test_headless_causal_training.py
