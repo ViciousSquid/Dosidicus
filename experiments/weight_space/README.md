@@ -4,6 +4,14 @@
 
 The point of this experiment is to test whether a tiny, direct edit to the *weights of the actual neural network* makes the newborn's action bank resolve a high-threat/food conflict more appropriately, without compromising safe feeding, sleep or basic behaviour. It is **not** a reproduction of the GPT/Qwen paper or a full proof of smarter animals.
 
+## Final outcome — direct edits did NOT demonstrate smarter squids
+
+After a separate action-coupled test of actual neural decisions changing food, injury, health, threat escape and later states, the original three-weight edit **failed to produce a meaningful behavioural improvement**. Across 16 holdout episodes per profile, both original and edited ate the same **53 meals**, neither selected a single flight action, and their average survival was effectively identical.
+
+When learning was enabled and learned weights were copied into a fresh brain for an unseen episode, the **original profile's mean transfer score was 46.80 versus 44.55 for the three-edit profile** (four small transfer samples; not a general benchmark). Neither is evidence that one squid is broadly smarter.
+
+**[Read the final closed-loop negative result and actual weight-transfer analysis](CLOSED_LOOP_RESULTS.md)**, followed by the [full causal-world methodology](CLOSED_LOOP.md). The first static probe scores below are narrow threshold metrics, **not** an intelligence result.
+
 ## Research hypothesis
 
 Original innate wiring drives eating from `can_see_food` (+0.85), flight from `threat_level` (+0.55), and flight from `anxiety` (+0.25). Because the eating threshold is 38 and the flight threshold 50, it is possible for food to be above its action threshold while sustained threat still leaves flight below threshold.
