@@ -38,3 +38,12 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest -q tests/test_headless_training.py tests/test_headless_causal_training.py tests/test_action_discovery.py
+      - name: Matched-seed voluntary-rest training, placebo and weight transfer
+        run: python -m experiments.action_discovery.evaluate --json experiments/action_discovery/results.json
+      - name: Upload raw matched-pair results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: learned-actions-experiment
+          path: experiments/action_discovery/results.json
+          if-no-files-found: warn
