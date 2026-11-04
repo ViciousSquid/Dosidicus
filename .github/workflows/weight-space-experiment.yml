@@ -6,6 +6,7 @@ on:
       - 'src/brain_constants.py'
       - 'src/propagation.py'
       - 'src/portable_brain.py'
+      - 'src/causal_learning.py'
       - 'headless/headless_trainer.py'
       - 'experiments/weight_space/experiment.py'
       - 'experiments/weight_space/grid_scan.py'
