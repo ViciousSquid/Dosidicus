@@ -28,10 +28,14 @@ jobs:
         run: python -m pytest -q tests/test_headless_training.py tests/test_weight_space_experiment.py
       - name: Full paired A/B report
         run: python -m experiments.weight_space.experiment --json experiments/weight_space/results.json
+      - name: Descriptive 144-state robustness sweep
+        run: python -m experiments.weight_space.grid_scan --json experiments/weight_space/grid_results.json
       - name: Upload complete results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: newborn-weight-space-report
-          path: experiments/weight_space/results.json
+          path: |
+            experiments/weight_space/results.json
+            experiments/weight_space/grid_results.json
           if-no-files-found: warn
