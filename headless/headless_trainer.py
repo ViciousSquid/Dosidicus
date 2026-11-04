@@ -64,6 +64,7 @@ from src.neurogenesis import EnhancedNeurogenesis  # noqa: E402
 from src.learning import LearningConfig  # noqa: E402
 from src.portable_brain import HeadlessBrain, TrainingConfig  # noqa: E402
 from src.decision_engine import select_action  # noqa: E402
+from src.action_discovery import ActionDiscovery  # noqa: E402
 from src.brain_constants import ACTION_THRESHOLDS  # noqa: E402
 
 INPUT_SENSORS = set(_INPUT_SENSOR_POSITIONS) | {"can_see_food"}
@@ -335,6 +336,12 @@ class HeadlessSimulation:
             random.seed(self.config.seed)
         self.brain = HeadlessBrain(self.config)
         self.squid = HeadlessSquid()
+        self.action_discovery = None
+        if self.config.learning_enabled and self.config.action_discovery_rate > 0:
+            self.action_discovery = ActionDiscovery(
+                self.brain, rate=self.config.action_discovery_rate,
+                seed=(self.config.seed if self.config.seed is not None else 0),
+            )
         
         # Simulation state
         self.tick = 0
@@ -540,6 +547,16 @@ class HeadlessSimulation:
         self.brain.update_state(before)
         self.brain.propagate(observe_learning=self.config.learning_enabled)
 
+        # The neural learner observes *settled* outcomes before any next
+        # spontaneous action. There is no new body behaviour rule here:
+        # motor exploration merely stimulates a motor neuron. The normal
+        # network action contest still selects the behaviour.
+        exploratory_neuron = None
+        if self.action_discovery is not None:
+            if self.config.action_discovery_teaching:
+                self.action_discovery.process_closed()
+            exploratory_neuron = self.action_discovery.excite(self.brain.state)
+
         if self.squid.is_sleeping:
             chosen = "sleeping"
         elif (self.brain.state.get("act_collapse", 0.0)
@@ -559,7 +576,12 @@ class HeadlessSimulation:
         # learner compares this pre-action state to a subsequent observed
         # state, rather than crediting the squid for a random food event.
         if self.config.learning_enabled:
-            self.brain.causal_learning.on_action(chosen, self.brain.state)
+            episode_id = self.brain.causal_learning.on_action(
+                chosen, self.brain.state)
+            if self.action_discovery is not None:
+                self.action_discovery.committed(
+                    episode_id, exploratory_neuron, chosen, before)
+                self.stats.update(self.action_discovery.statistics())
         counts = self.stats['actions_selected']
         counts[chosen] = counts.get(chosen, 0) + 1
         self._act_on_neural_decision(chosen)
