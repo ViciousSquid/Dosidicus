@@ -137,6 +137,8 @@ def test_weak_learned_motor_pathway_does_not_stop_exploration():
                           mechanism="test")
     learner = ActionDiscovery(b, rate=1.0, seed=42)
     state = dict(b.state)
+    # Only at high fatigue can a 0.90 synapse carry sufficient activation.
+    state["sleepiness"] = 95.0
     for key in ("act_flee", "act_eat", "act_collapse"):
         state[key] = 0.0
     assert learner.excite(state) == "act_rest"
