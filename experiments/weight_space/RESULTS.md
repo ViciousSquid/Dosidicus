@@ -63,6 +63,12 @@ Numbers are means over 32 trials. Each action is out of 100; the actual threshol
 4. These are stationary sensor snapshots stepped through the real neural transfer function. No body actions, food collection, predator evasion, health trajectories, synaptic plasticity, or lifespan were simulated or measured by these specific probes.
 5. The labels are human-designed *desiderata*. Measuring agreement with them does not independently validate the desiderata or make a statistically valid claim about all game situations.
 
+## Subsequent out-of-suite robustness test
+
+**The preregistered safeguard scores were not sufficient to rule out regressions.** A later 144-state unlabelled sweep found 14 transitions from feeding to neither feeding nor fleeing, including a zero-threat case where an anxious squid loses an above-threshold feeding response. Other states gained flight as intended. This negative finding changes the overall engineering disposition: **do not merge this candidate** on the basis of the original 704 paired trials.
+
+Read [GRID_RESULTS.md](GRID_RESULTS.md) and its linked raw JSON for the exact combinations and counts. The earlier scores remain valid only on their specified scenarios.
+
 ### Exact reproduction
 
 ```bash
