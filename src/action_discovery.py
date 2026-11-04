@@ -83,14 +83,21 @@ class ActionDiscovery:
             if state.get(name, 0.0) >= ACTION_THRESHOLDS[name]:
                 return None
 
-        # A motor with a functional learned excitatory pathway is no longer a
-        # candidate for random exploration.
+        # A weak connection is not a usable skill. Do not stop exploring
+        # just because a single edge exceeded an arbitrary weight threshold:
+        # synaptic input must have enough physical headroom (50 per saturated
+        # sensor/drive) to reach the motor's actual firing threshold.
+        actionable = {}
+        for motor in _EXPLORE_ACTIONS:
+            incoming = sum(
+                50.0 * max(0.0, float(weight))
+                for (src, dst), weight in self.brain.weights.items()
+                if dst == motor and (src in CORE_STAT_NEURONS or
+                                     src in PURE_INPUT_NEURONS)
+            )
+            actionable[motor] = incoming >= ACTION_THRESHOLDS[motor]
         actions = [a for a in _EXPLORE_ACTIONS
-                   if a in self.brain.positions
-                   and not any(dst == a and weight >= 0.30
-                               for (src, dst), weight
-                               in self.brain.weights.items()
-                               if src != a)]
+                   if a in self.brain.positions and not actionable[a]]
         if not actions:
             return None
 
