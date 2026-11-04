@@ -179,6 +179,8 @@ class ActionOutcomeLedger:
         self._current_action: str = ""
         self.closed_episodes = 0
         self.rewarded_episodes = 0
+        self.interrupted_episodes = 0
+        self.last_intervention_reason = ""
 
         # action -> stat -> Contingency
         self.contingencies: Dict[str, Dict[str, Contingency]] = defaultdict(dict)
@@ -275,6 +277,27 @@ class ActionOutcomeLedger:
                 break
             cue[name] = value
         return dict(list(cue.items())[:self.config.cue_size])
+
+    def discard_pending_outcomes(self, *, reason: str = "external_intervention") -> int:
+        """Discard only unresolved causal windows after an external state jump.
+
+        A scripted/user-issued feeding or cleaning event is not the squid's
+        own action. Without this boundary, a previous exploration or play
+        episode can falsely learn that *it* caused the externally injected
+        improvement in hunger or cleanliness. Preserve settled experience,
+        learned weights and contingencies; only pending attribution windows
+        and their idle-probe baseline are invalidated.
+
+        This is an intervention marker, not an algorithm that chooses an
+        action for the animal.
+        """
+        discarded = len(self._open)
+        self.interrupted_episodes += discarded
+        self.last_intervention_reason = str(reason)
+        self._open.clear()
+        self._idle_probe = None
+        self._current_action = ""
+        return discarded
 
     # ------------------------------------------------------------------
     # Recording
@@ -876,6 +899,8 @@ class ActionOutcomeLedger:
         return {
             'episodes_closed': self.closed_episodes,
             'episodes_open': len(self._open),
+            'interrupted_episodes': self.interrupted_episodes,
+            'last_intervention_reason': self.last_intervention_reason,
             'rewarded': self.rewarded_episodes,
             'actions_tracked': len(self.contingencies),
             'confident_contingencies': len(self.known_contingencies()),
@@ -890,6 +915,8 @@ class ActionOutcomeLedger:
         return {
             'closed_episodes': self.closed_episodes,
             'rewarded_episodes': self.rewarded_episodes,
+            'interrupted_episodes': self.interrupted_episodes,
+            'last_intervention_reason': self.last_intervention_reason,
             'contingencies': [c.to_dict() for table in self.contingencies.values()
                               for c in table.values()],
             'all_windows': [c.to_dict() for c in self._all_windows.values()],
@@ -905,6 +932,8 @@ class ActionOutcomeLedger:
             return
         self.closed_episodes = int(data.get('closed_episodes', 0))
         self.rewarded_episodes = int(data.get('rewarded_episodes', 0))
+        self.interrupted_episodes = int(data.get('interrupted_episodes', 0))
+        self.last_intervention_reason = str(data.get('last_intervention_reason', ''))
         self.contingencies = defaultdict(dict)
         for raw in data.get('contingencies') or []:
             try:
@@ -951,6 +980,8 @@ class ActionOutcomeLedger:
         self._current_action = ""
         self.closed_episodes = 0
         self.rewarded_episodes = 0
+        self.interrupted_episodes = 0
+        self.last_intervention_reason = ""
         self.contingencies = defaultdict(dict)
         self._all_windows = {}
         self._raw = {}
