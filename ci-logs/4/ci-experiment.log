@@ -1,0 +1,15 @@
+Predictive-cognition experiment: 3 modes x 2 seeds x 1500 training ticks
+Configuration loaded from config.ini
+Traceback (most recent call last):
+  File "/home/runner/work/Dosidicus/Dosidicus/experiments/predictive_cognition_experiments.py", line 551, in <module>
+    main()
+  File "/home/runner/work/Dosidicus/Dosidicus/experiments/predictive_cognition_experiments.py", line 539, in main
+    results = run_experiment(seeds, ticks, quick=args.quick)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/Dosidicus/Dosidicus/experiments/predictive_cognition_experiments.py", line 403, in run_experiment
+    record['delayed_consequence'] = eval_delayed_consequence(
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/Dosidicus/Dosidicus/experiments/predictive_cognition_experiments.py", line 274, in eval_delayed_consequence
+    anti_ahead = (sum(window) / len(window) if window else None)
+                  ^^^^^^^^^^^
+TypeError: unsupported operand type(s) for +: 'int' and 'NoneType'
