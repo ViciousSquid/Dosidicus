@@ -397,18 +397,21 @@ def run_experiment(seeds, train_ticks, quick=False):
         for seed in seeds:
             sim, train = train_condition(mode, seed, train_ticks, quick)
             record = {'train': train}
-            if not quick:
-                record['object_permanence'] = eval_object_permanence(sim)
-                record['delayed_consequence'] = eval_delayed_consequence(sim)
-            else:
-                record['object_permanence'] = eval_object_permanence(
-                    sim, show_ticks=8, blind_ticks=15, refeed_limit=80)
-                record['delayed_consequence'] = eval_delayed_consequence(
-                    sim, trials=3)
-            record['adaptation'] = eval_adaptation(
-                sim, ticks=600 if quick else 1500)
-            record['retention'] = eval_retention(
-                sim, ticks=800 if quick else 2500)
+            # Evaluations run the same engine loop and so produce the
+            # same chatter; keep it out of the published logs.
+            with quiet():
+                if not quick:
+                    record['object_permanence'] = eval_object_permanence(sim)
+                    record['delayed_consequence'] = eval_delayed_consequence(sim)
+                else:
+                    record['object_permanence'] = eval_object_permanence(
+                        sim, show_ticks=8, blind_ticks=15, refeed_limit=80)
+                    record['delayed_consequence'] = eval_delayed_consequence(
+                        sim, trials=3)
+                record['adaptation'] = eval_adaptation(
+                    sim, ticks=600 if quick else 1500)
+                record['retention'] = eval_retention(
+                    sim, ticks=800 if quick else 2500)
             results['runs'][mode][str(seed)] = record
             print(f"  {mode:12s} seed {seed}: "
                   f"trained {train['food_eaten']} eaten, "

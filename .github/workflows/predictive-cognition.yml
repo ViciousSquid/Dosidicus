@@ -37,7 +37,7 @@ permissions:
 jobs:
   tests-and-experiments:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Checkout research branch
         uses: actions/checkout@v4
@@ -73,14 +73,21 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           grep -E '^(FAILED|ERROR) ' ci-baseline-tests.log | head -10 | sed 's/^/::error::/' || true
           exit $status
-      - name: Run the smoke experiment (3 modes x 2 seeds)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.depth == 'quick' }}
+      - name: Decide experiment depth
         run: |
-          python experiments/predictive_cognition_experiments.py --quick --output experiments/results/quick_results.json 2>&1 | tee ci-experiment.log
-      - name: Run the full experiment (3 modes x 6 seeds x 12k ticks)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.depth == 'full' }}
+          depth="${{ github.event.inputs.depth || 'quick' }}"
+          if git log -1 --pretty=%B | grep -q '\[full\]'; then
+            depth="full"
+          fi
+          echo "DEPTH=$depth" >> "$GITHUB_ENV"
+          echo "Experiment depth: $depth"
+      - name: Run the experiment
         run: |
-          python experiments/predictive_cognition_experiments.py --full --output experiments/results/full_results.json 2>&1 | tee ci-experiment.log
+          if [ "$DEPTH" = "full" ]; then
+            python experiments/predictive_cognition_experiments.py --full --output experiments/results/full_results.json 2>&1 | tee ci-experiment.log
+          else
+            python experiments/predictive_cognition_experiments.py --quick --output experiments/results/quick_results.json 2>&1 | tee ci-experiment.log
+          fi
       - name: Publish diagnostics and results to the branch
         if: always()
         run: |
