@@ -120,12 +120,159 @@ receives information the squid has not perceived.
 
 CI: `.github/workflows/predictive-cognition.yml` runs the unit suite
 and the quick experiment on every push to this branch, and the full
-experiment on `workflow_dispatch`.
+experiment on `workflow_dispatch` or when the head commit message
+carries `[full]`. Every run publishes its logs and raw result JSON to
+`ci-logs/<run>/` and `experiments/results/` on this branch.
 
 ## Results
 
-*This section is filled from the actual CI experiment runs - including
-failures and overhead - not from expectations. See the workflow runs on
-this branch for the raw JSON.*
+*Every number below is measured, from the runs this branch's CI actually
+executed: the full run is 3 conditions x 6 seeds x 12,000 training ticks
+(workflow run 6, commit `ce53125f`); the smoke run is 2 seeds x 1,500
+ticks (run 5). Raw JSON: `experiments/results/full_results.json` and
+`quick_results.json` on this branch. The run that produced the full
+numbers also passed all 35 predictive tests and all 51 baseline tests
+(123 subtests). Failures and overhead are reported as measured.*
 
-- Pending first full run.
+### Headline table (means over 6 seeds, full run)
+
+| metric | off | linear | transformer |
+|---|---|---|---|
+| train: food eaten | 2.667 | 2.833 | 2.000 |
+| train: escape ratio | 0.012 | 0.026 | 0.015 |
+| train: neurons created | 14.5 | 15.8 | 15.3 |
+| train: ticks/sec | 285.9 | 210.1 | 154.8 |
+| object permanence: alignment | - | 0.853 | -0.080 |
+| object permanence: coverage | - | 0.883 | 0.983 |
+| delayed consequence: pred_food_ahead rise | - | 0.000 | -1.027 |
+| delayed consequence: eat rate (held-out) | 0.000 | 0.000 | 0.000 |
+| adaptation: escape ratio | 0.000 | 0.000 | 0.000 |
+| retention: food eaten (frozen, 2500 ticks) | 0.000 | 0.000 | 0.000 |
+| prediction: action top-1 | - | 0.991 | 0.957 |
+| synapses grown from predictions | - | 64.3 | 64.3 |
+
+Metrics shown as `-` are undefined for the off control, which has no
+prediction senses by design. The smoke run (2 seeds) agrees
+directionally with every row.
+
+### What worked
+
+**The transformer really learned its experience.** Loss EMA settled at
+0.005-0.006 after 374 gradient steps (plus up to 40 sleep-replay steps
+on nights the squid slept). Held-out prediction error (MAE per channel
+group), transformer vs the linear control:
+
+| channel group | linear | transformer |
+|---|---|---|
+| drives | 0.0005 | 0.0122 |
+| flags | 0.0115 | 0.0085 |
+| senses | 0.0948 | 0.0918 |
+| position | 0.0066 | 0.0223 |
+| food | 0.0086 | 0.0146 |
+| action | 0.0026 | 0.0076 |
+| neural (own activity) | 0.0030 | 0.0073 |
+
+The transformer beat the smoothing control on the discrete state flags
+and on the raw senses; exponential smoothing is a genuinely strong
+baseline for one-step-ahead prediction of slow continuous channels
+(drives, position) and it won those. Both predictors anticipated the
+squid's own next action well (top-1: 0.991 linear, 0.957 transformer).
+
+**The brain really wired itself to the predictions.** In every
+linear- and transformer-mode run, plasticity grew about 64 synapses
+whose source is a prediction sensor, and zero synapses into them, as
+the sensor interface forbids. Examples from the trained runs:
+`pred_food_east -> act_eat` (+0.33, transformer seed 11),
+`pred_threat_soon -> act_move` (-1.0, linear seed 11). Neurogenesis ran
+comparably in all three conditions (14.5 / 15.8 / 15.3 neurons created).
+
+**Compatibility held.** Off-mode runs the baseline path; all baseline
+tests passed on every CI run of this branch; saves and the vanilla brain
+export still work; the transformer needs only NumPy. The full
+18-population experiment finished in under 20 minutes of CI time.
+
+### What failed
+
+**No behavioural benefit was demonstrated, for any condition.** The
+behavioural metrics are at the floor everywhere: 2-3 foods eaten per
+12,000 training ticks (out of ~78 placed), zero food eaten in the
+frozen 2500-tick retention phase, zero eats in the held-out
+delayed-consequence trials, escape ratios of 0-3%. With every
+condition at the floor, no condition difference can be resolved. The
+transformer population ate slightly less during training (2.0 vs 2.67 /
+2.83), within seed-level noise (per-seed food eaten: off 1,6,3,1,2,3;
+linear 1,3,4,1,2,6; transformer 1,2,3,1,3,2).
+
+**Delayed-consequence anticipation did not emerge.** The transformer's
+`pred_food_ahead` did not rise after a startle (change -1.03 on a 0-100
+scale; the linear control sits saturated at 100, rise 0.000). The root
+cause looks perceptual rather than a modelling failure: food was always
+placed at a fixed spot in the east while the squid wanders, its sight
+radius is 0.32, and only ~6 approaches happened per run - the food was
+seen in a small fraction of the 78 training repetitions. As the squid
+actually perceived the world, "startle, then visible food" almost never
+happened, and the transformer correctly learned that startles are not
+followed by visible food. The contingency has to be perceivable before
+any predictor can anticipate it.
+
+**Object permanence was unstable in the transformer.** Teleported out
+of sight of food, the linear control's decaying food trace kept pointing
+at it (alignment 0.853 with the true direction). The transformer's mean
+alignment was -0.080, but per-seed it ranged from +0.96 to -0.89: some
+seeds kept a usable spatial memory, others confidently pointed the wrong
+way (coverage 0.983 - it almost always reports "food somewhere"). A
+learned spatial memory must integrate the squid's own motion across the
+blind window; with 374 gradient steps over 12k ticks of mostly-empty
+food channels, half the seeds had not converged to that. The hand-coded
+trace wins this round.
+
+**A real telemetry bug was found by the first full run.** `delta_mae`
+read exactly 0.0 in every run: each tick's new delta prediction
+overwrote the pending one before its 5-tick horizon arrived, so delta
+scoring never executed. Fixed in the follow-up commit (predictions now
+queue in a small FIFO and are scored when their future arrives) with a
+regression test that fails if the telemetry ever sticks at 0.0 again.
+The bug affected telemetry only - no sensor value or behaviour depended
+on it, so the run-6 results above stand; the delta MAE is reported
+truthfully by CI runs that include the fix.
+
+**A design confound affected all conditions equally.** The training
+contingency startled the squid every 150 ticks, which kept anxiety at
+its ceiling (100) for effectively the whole run, with the emergency
+neurogenesis path firing constantly. Chronic stress suppressed feeding
+behaviour in every population, which is the most likely reason all
+behavioural metrics sit at the floor. This is a property of the
+experiment's world, not of any predictor.
+
+### Overhead (honest numbers)
+
+- Throughput: 285.9 ticks/sec (off) -> 210.1 (linear, 0.73x) -> 154.8
+  (transformer, 0.54x), measured over the full 12k-tick training runs
+  on the CI runner.
+- Transformer cost per 12k-tick run: 8.27 s inference + 4.10 s training
+  (374 steps), plus per-tick sensor writes. The linear control costs
+  ~0.13 s + ~0.22 s.
+- The predictive module is off by default and costs nothing in the
+  baseline engine (verified by test).
+
+### Answer to the central research question, at this scale
+
+The mechanism is sound: the cortex delivers learned predictions as
+ordinary senses, the existing plasticity grows synapses from them (and
+only from them), neurogenesis is not blocked, the original network
+keeps behavioural control, and the whole thing is optional, Qt-free and
+save-compatible. But no emergent cognitive benefit was demonstrated at
+this scale, and the one clean spatial-memory signal came from the linear
+control's hand-coded decaying trace rather than the transformer. The
+binding constraints were perceptual and behavioural: the training
+world's key contingency was mostly invisible to the squid, and chronic
+startle stress suppressed feeding in every population, so the
+behavioural measures had no dynamic range.
+
+For a fairer next test: place the food within sight of the squid (or
+relative to it), space the startles far enough apart that anxiety can
+recover between them, train for more gradient steps, and evaluate
+anticipation over a horizon longer than one tick. The infrastructure to
+do all of this - seeds, held-out scenarios, per-condition telemetry,
+automatic publication of results to the branch - now exists and is
+verified end to end.

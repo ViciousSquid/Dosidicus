@@ -136,6 +136,18 @@ Use the "Load Brain" button in the [Network tab](https://github.com/ViciousSquid
 4. **Long training (50k+ ticks)** allows more sophisticated weight patterns to develop
 5. **Multiple training rounds** with different scenarios can create well-rounded brains
 
+## Optional: the predictive cortex (research)
+
+`TrainingConfig` accepts a `predictive_mode` (`off` by default;
+`linear` and `transformer` also available) that attaches a small
+temporal predictor alongside the brain. Its predictions arrive as
+ordinary input sensors (`pred_food_ahead`, `pred_food_east`, ...)
+that the existing plasticity, neurogenesis and causal-learning
+mechanisms are free to use or ignore - the trainer itself is unchanged.
+See `docs/predictive_cognition.md` on the
+`research/transformer-predictive-cognition` branch for the
+architecture, the experiment protocol and the measured results.
+
 ## Performance
 
 On modern hardware, expect:

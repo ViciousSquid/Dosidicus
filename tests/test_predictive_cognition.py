@@ -56,6 +56,7 @@ sys.path.insert(0, os.path.join(
 from headless_trainer import HeadlessSimulation, TrainingConfig  # noqa: E402
 from src.predictive_cognition import (  # noqa: E402
     CHANNEL_INDEX,
+    DELTA_HORIZON,
     LinearPredictor,
     OBS_DIM,
     PREDICTION_SENSORS,
@@ -368,6 +369,22 @@ class CortexProtocolTests(unittest.TestCase):
         cortex = self.sim.predictive
         self.assertGreater(cortex._action_top1_n, 50,
                            "predictions were never scored")
+
+    def test_delta_predictions_are_scored(self):
+        # The delta head predicts a DELTA_HORIZON-tick change, so a
+        # prediction matures several ticks after it is made: the queue
+        # must drain and the telemetry must leave its initial 0.0.
+        # Regression test for the bug that froze delta_mae at exactly
+        # 0.0 for a whole run (each tick's new prediction overwrote
+        # the previous one before its horizon arrived, so scoring
+        # never ran).
+        cortex = self.sim.predictive
+        self.assertLessEqual(
+            len(cortex._pending_deltas), DELTA_HORIZON + 1,
+            "queued delta predictions never matured")
+        self.assertGreater(
+            cortex._delta_mae, 0.0,
+            "delta telemetry never left its initial 0.0")
 
     def test_window_shape_matches_context(self):
         cortex = self.sim.predictive

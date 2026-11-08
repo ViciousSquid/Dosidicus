@@ -751,7 +751,13 @@ class PredictiveCortex:
         self._buffer: deque = deque(maxlen=4096)
         self._pending: Optional[Dict[str, Any]] = None
         self._pending_pred: Optional[Tuple[np.ndarray, np.ndarray]] = None
-        self._pending_delta: Optional[Tuple[np.ndarray, np.ndarray, int]] = None
+        # A small FIFO of in-flight delta predictions: one is queued per
+        # tick and each matures DELTA_HORIZON ticks later, so up to
+        # DELTA_HORIZON predictions can await scoring at once. (A single
+        # slot is overwritten by the next tick's prediction before its
+        # horizon arrives - the bug that froze delta_mae at exactly 0.0
+        # in the first full run.)
+        self._pending_deltas: deque = deque()
 
         # telemetry
         self._ticks = 0
@@ -796,8 +802,9 @@ class PredictiveCortex:
         # happened.
         if self._pending_pred is not None and self._buffer:
             self._score(self._buffer[-1])
-        if self._pending_delta is not None and self._buffer:
-            self._score_delta()
+        while self._pending_deltas and self._buffer:
+            if not self._score_delta():
+                break
         # Capture the percept half of THIS tick's experience; the action
         # and the network's own activations complete it at end_tick.
         self._pending = {'squid_state': squid_state,
@@ -818,12 +825,13 @@ class PredictiveCortex:
         if window is not None and len(window) >= 2 and self._buffer:
             # The delta head predicts the drive change over the next
             # DELTA_HORIZON ticks, measured from the last complete
-            # experience. Score it only once that future has actually
-            # arrived (see _score_delta), never against an arbitrary
-            # window of the past.
-            self._pending_delta = (np.array(self._buffer[-1], copy=True),
-                                   pred_delta,
-                                   self._ticks + DELTA_HORIZON)
+            # experience. Queue the prediction; it is scored only once
+            # that future has actually arrived (see _score_delta),
+            # never against an arbitrary window of the past.
+            self._pending_deltas.append(
+                (np.array(self._buffer[-1], copy=True),
+                 pred_delta,
+                 self._ticks + DELTA_HORIZON))
         self._last_prediction = pred_next
         self._write_sensors(pred_next, pred_delta)
 
@@ -862,16 +870,17 @@ class PredictiveCortex:
         # DELTA_HORIZON-tick change, which only becomes observable
         # DELTA_HORIZON ticks after the prediction was made.
 
-    def _score_delta(self) -> None:
-        """Score the pending delta prediction once its horizon arrives.
+    def _score_delta(self) -> bool:
+        """Score the oldest queued delta prediction if its horizon has
+        arrived. Returns True if a prediction was scored and popped.
 
         The prediction was conditioned on the last complete experience
         (buffer position due_at - DELTA_HORIZON); it is scored against the
         experience DELTA_HORIZON ticks later, and not before.
         """
-        base, pred_delta, due_at = self._pending_delta
+        base, pred_delta, due_at = self._pending_deltas[0]
         if self._ticks < due_at:
-            return
+            return False
         actual = self._buffer[-1]
         drive_idx = [CHANNEL_INDEX[d] for d in DELTA_SOURCES]
         actual_delta = np.tanh(
@@ -879,7 +888,8 @@ class PredictiveCortex:
         ).astype(np.float32)
         err = float(np.abs(pred_delta - actual_delta).mean())
         self._delta_mae = 0.98 * self._delta_mae + 0.02 * err
-        self._pending_delta = None
+        self._pending_deltas.popleft()
+        return True
 
     def _window(self) -> Optional[np.ndarray]:
         if not self._buffer:
