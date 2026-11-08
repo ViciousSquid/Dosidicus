@@ -17,8 +17,9 @@ Research design (branch research/transformer-predictive-cognition):
                 perceptual experience only
 
   Each condition x seed pair is trained on the same delayed-reward
-  contingency (a startle is followed 8 ticks later by food appearing in
-  the east), then evaluated on HELD-OUT scenarios the transformer never
+  contingency (a startle is followed 16 ticks later by food
+  appearing within sight, just east of the squid), then evaluated on
+  HELD-OUT scenarios the transformer never
   trained on:
 
     object permanence    food seen, then the squid is teleported away;
@@ -59,11 +60,16 @@ MODES = ('off', 'linear', 'transformer')
 FULL_SEEDS = [11, 22, 33, 44, 55, 66]
 QUICK_SEEDS = [11, 22]
 
-# The training contingency: a startle, then food 8 ticks later, forever.
+# The training contingency: a startle, then food 16 ticks later.
+# Run-6 post-mortem: startles every 150 ticks pinned anxiety at 100 (no
+# behavioural dynamic range), and food at a fixed far spot (0.8, 0.5)
+# was almost never inside the 0.32 sight radius, so the contingency the
+# experiment trains on barely existed in the squid's own percept
+# stream. This world fixes both confounds.
 CONTINGENCY_START = 150
-CONTINGENCY_INTERVAL = 150
-FOOD_DELAY = 8
-FOOD_X, FOOD_Y = 0.8, 0.5
+CONTINGENCY_INTERVAL = 700      # spaced: anxiety decays between events
+FOOD_DELAY = 16                # a longer horizon to anticipate
+NEAR_SIGHT_OFFSET = 0.2        # food lands inside the 0.32 sight radius
 
 
 @contextmanager
@@ -87,16 +93,34 @@ class ExperimentSimulation(HeadlessSimulation):
 
     def _execute_event(self, event):
         if event.get('type') == 'place_food':
-            self.food_items.append({'x': float(event.get('x', 0.5)),
-                                    'y': float(event.get('y', 0.5))})
+            if event.get('near_squid'):
+                self.food_items.append(self._nearby_food_spot())
+            else:
+                self.food_items.append({'x': float(event.get('x', 0.5)),
+                                        'y': float(event.get('y', 0.5))})
             return
         super()._execute_event(event)
 
+    def _nearby_food_spot(self):
+        """A deterministic food spot INSIDE the squid's sight radius
+        (run-6 fix: food at a fixed far spot was almost never
+        perceivable). Prefers east of the squid, west near the east
+        wall; never outside the tank."""
+        x, y = float(self.squid.x), float(self.squid.y)
+        if x + NEAR_SIGHT_OFFSET <= 1.0:
+            fx = x + NEAR_SIGHT_OFFSET
+        else:
+            fx = x - NEAR_SIGHT_OFFSET
+        return {'x': fx, 'y': min(1.0, max(0.0, y))}
+
 
 def make_sim(mode, seed, learning=True, **overrides):
+    # Run-6 post-mortem: 374 gradient steps left the transformer's
+    # object-permanence signal unstable across seeds. Halve the train
+    # interval on top of the doubled tick budget (~1500 steps).
     config = TrainingConfig(learning_enabled=learning, seed=seed,
                             predictive_mode=mode, predictive_seed=seed,
-                            predictive_train_interval=64)
+                            predictive_train_interval=32)
     for key, value in overrides.items():
         setattr(config, key, value)
     return ExperimentSimulation(config)
@@ -109,7 +133,7 @@ def contingency_events(from_tick, to_tick):
         if t >= from_tick:
             events.append({'tick': t, 'type': 'startle'})
             events.append({'tick': t + FOOD_DELAY, 'type': 'place_food',
-                           'x': FOOD_X, 'y': FOOD_Y})
+                           'near_squid': True})
         t += CONTINGENCY_INTERVAL
     return events
 
@@ -236,18 +260,21 @@ def eval_object_permanence(sim, show_ticks=12, blind_ticks=30,
 # Held-out evaluation 2: delayed consequences
 # ---------------------------------------------------------------------------
 
-def eval_delayed_consequence(sim, trials=5, anticipation=(4, 7),
-                             baseline_ticks=20):
+def eval_delayed_consequence(sim, trials=5, baseline_ticks=20):
     """A held-out schedule of the training contingency's structure:
-    startle at t0, food 8 ticks later. Does pred_food_ahead rise in the
-    window t0+4..t0+7, BEFORE the food exists? And is the food eaten
-    faster than a startled animal would otherwise manage?
+    startle at t0, food FOOD_DELAY (16) ticks later. Does pred_food_ahead
+    rise BEFORE the food exists, in an early (t0+1..t0+7) and a late
+    (t0+8..t0+14) anticipation window? And is the now-visible food
+    eaten, and how fast?
+
+    Run-6 fix: this eval used to queue its startle/food events without
+    ever calling _process_events(), so the trials silently ran in an
+    empty world and eat rate was structurally zero.
     """
     sim.config.learning_enabled = False
     sim.config.food_spawn_chance = 0.0
     sim.config.startle_chance = 0.0
     sim.event_queue = []
-    lo, hi = anticipation
 
     records = []
     for trial in range(trials):
@@ -256,51 +283,65 @@ def eval_delayed_consequence(sim, trials=5, anticipation=(4, 7),
         # baseline window: no events, nothing to anticipate
         for _ in range(baseline_ticks):
             sim.tick += 1
+            sim._process_events()
             sim._simulation_step()
         base_ahead = _pred_now(sim, 'pred_food_ahead')
-        # the trial: a startle, then food FOOD_DELAY ticks later
+        # the trial: a startle, then food FOOD_DELAY ticks later,
+        # placed within sight of the squid. The tick loop mirrors the
+        # real engine loop: process events, then step.
         t0 = sim.tick + 1
         sim.event_queue.extend([
             {'tick': t0, 'type': 'startle'},
             {'tick': t0 + FOOD_DELAY, 'type': 'place_food',
-             'x': FOOD_X, 'y': FOOD_Y},
+             'near_squid': True},
         ])
-        window = []
-        for i in range(FOOD_DELAY):
+        timecourse = []
+        for _ in range(FOOD_DELAY):
             sim.tick += 1
+            sim._process_events()
             sim._simulation_step()
-            if lo <= i <= hi:
-                window.append(_pred_now(sim, 'pred_food_ahead'))
+            timecourse.append(_pred_now(sim, 'pred_food_ahead'))
         # An off-mode squid has no prediction senses at all, so the
-        # window can contain None values; _mean() treats those as
+        # timecourse can contain None values; _mean() treats those as
         # missing observations rather than crashing.
-        anti_ahead = (_mean(window) if window else None)
-        # wait out the food; measure the eat latency
+        anti_early = _mean(timecourse[1:8])    # ticks t0+1 .. t0+7
+        anti_late = _mean(timecourse[8:15])    # ticks t0+8 .. t0+14
+        # the food appears now; measure the eat latency
         eaten_at = None
         for i in range(80):
             eaten_before = sim.stats['food_eaten']
             sim.tick += 1
+            sim._process_events()
             sim._simulation_step()
             if sim.stats['food_eaten'] > eaten_before:
                 eaten_at = i + 1
                 break
         records.append({
             'baseline_ahead': base_ahead,
-            'anticipation_ahead': anti_ahead,
+            'anticipation_early': anti_early,
+            'anticipation_late': anti_late,
             'eat_latency': eaten_at,
         })
     # only trials where the food was eventually eaten contribute latency
     latencies = [r['eat_latency'] for r in records if r['eat_latency']]
-    rises = []
+    rises_early, rises_late = [], []
     for r in records:
-        if r['baseline_ahead'] is not None and r['anticipation_ahead'] is not None:
-            rises.append(r['anticipation_ahead'] - r['baseline_ahead'])
+        if r['baseline_ahead'] is not None:
+            if r['anticipation_early'] is not None:
+                rises_early.append(r['anticipation_early']
+                                   - r['baseline_ahead'])
+            if r['anticipation_late'] is not None:
+                rises_late.append(r['anticipation_late']
+                                  - r['baseline_ahead'])
     return {
         'mean_baseline_pred_food_ahead': _mean(
             [r['baseline_ahead'] for r in records]),
-        'mean_anticipation_pred_food_ahead': _mean(
-            [r['anticipation_ahead'] for r in records]),
-        'mean_rise': _mean(rises),
+        'mean_anticipation_early': _mean(
+            [r['anticipation_early'] for r in records]),
+        'mean_anticipation_late': _mean(
+            [r['anticipation_late'] for r in records]),
+        'mean_rise_early': _mean(rises_early),
+        'mean_rise_late': _mean(rises_late),
         'mean_eat_latency': _mean(latencies),
         'eat_rate': len(latencies) / max(1, len(records)),
         'trials': records,
@@ -388,7 +429,8 @@ def run_experiment(seeds, train_ticks, quick=False):
             'start': CONTINGENCY_START,
             'interval': CONTINGENCY_INTERVAL,
             'food_delay': FOOD_DELAY,
-            'food_position': [FOOD_X, FOOD_Y],
+            'food_placement': 'near_squid',
+            'near_sight_offset': NEAR_SIGHT_OFFSET,
         },
         'quick': quick,
     }, 'runs': {}}
@@ -448,7 +490,10 @@ def summarise(results):
             'op_alignment': agg(('object_permanence', 'mean_alignment')),
             'op_coverage': agg(('object_permanence', 'coverage')),
             'op_refeed_ticks': agg(('object_permanence', 'refeed_ticks')),
-            'dc_rise': agg(('delayed_consequence', 'mean_rise')),
+            'dc_rise_early': agg(('delayed_consequence', 'mean_rise_early')),
+            'dc_rise_late': agg(('delayed_consequence', 'mean_rise_late')),
+            'dc_anticipation_late': agg(
+                ('delayed_consequence', 'mean_anticipation_late')),
             'dc_eat_latency': agg(('delayed_consequence', 'mean_eat_latency')),
             'dc_eat_rate': agg(('delayed_consequence', 'eat_rate')),
             'adapt_escape_ratio': agg(('adaptation', 'escape_ratio')),
@@ -503,7 +548,8 @@ def print_markdown_summary(results):
         ('object permanence: alignment', 'op_alignment'),
         ('object permanence: coverage', 'op_coverage'),
         ('object permanence: refeed ticks', 'op_refeed_ticks'),
-        ('delayed consequence: pred_food_ahead rise', 'dc_rise'),
+        ('delayed consequence: rise early (t+1..t+7)', 'dc_rise_early'),
+        ('delayed consequence: rise late (t+8..t+14)', 'dc_rise_late'),
         ('delayed consequence: eat latency', 'dc_eat_latency'),
         ('delayed consequence: eat rate', 'dc_eat_rate'),
         ('adaptation: escape ratio', 'adapt_escape_ratio'),
@@ -527,7 +573,7 @@ def main():
     mode.add_argument('--quick', action='store_true',
                       help='Smoke run: 2 seeds, short phases (CI)')
     mode.add_argument('--full', action='store_true',
-                      help='Full run: 6 seeds x 12k ticks (the paper run)')
+                      help='Full run: 6 seeds x 24k ticks (the paper run)')
     parser.add_argument('--seeds', type=int, nargs='*', default=None)
     parser.add_argument('--ticks', type=int, default=None)
     parser.add_argument('--output', '-o', type=str,
@@ -538,7 +584,7 @@ def main():
         seeds, ticks = QUICK_SEEDS, 1500
     else:
         seeds = args.seeds or FULL_SEEDS
-        ticks = args.ticks or 12000
+        ticks = args.ticks or 24000
 
     print(f"Predictive-cognition experiment: {len(MODES)} modes x "
           f"{len(seeds)} seeds x {ticks} training ticks")

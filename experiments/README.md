@@ -21,10 +21,17 @@ engine, same brain.
 
 ## Training phase
 
-Every condition trains for 12,000 ticks on the same delayed-reward
-contingency: **a startle every 150 ticks, followed 8 ticks later by food
-appearing at a fixed position in the east.** Food must still be seen,
-swum to and eaten; placing it is an environmental act, not a reward.
+Every condition trains for 24,000 ticks on the same delayed-reward
+contingency: **a startle every 700 ticks, followed 16 ticks later by
+food appearing within sight of the squid (0.2 east of wherever it is
+when the timer fires).** Food must still be seen, swum to and eaten;
+placing it is an environmental act, not a reward.
+
+Run-6 post-mortem: the original world fired a startle every 150 ticks,
+which pinned anxiety at 100 and left the behavioural metrics no dynamic
+range, and placed food at a fixed far spot that was almost never inside
+the squid's 0.32 sight radius, so the contingency barely existed in
+its own percept stream. Both confounds are fixed here.
 
 ## Held-out evaluations
 
@@ -38,9 +45,10 @@ Scored OUTSIDE the squid (the squid itself only ever receives unsigned
    non-silent prediction), and the time to eat once the food is
    re-sighted (frozen brain).
 2. **Delayed consequences.** A held-out schedule of the training
-   contingency's structure. Does `pred_food_ahead` rise in the window
-   between the startle and the food's appearance (t0+4..t0+7), before
-   the food exists? How quickly is the food eaten?
+   contingency's structure. Does `pred_food_ahead` rise between the
+   startle and the food's appearance, in an early (t0+1..t0+7) and a
+   late (t0+8..t0+14) window, before the food exists? How quickly is
+   the food eaten?
 3. **Adaptation.** A 1,500-tick stress phase (5% startle chance) with
    learning live: escape ratio, anxiety, feeding.
 4. **Retention.** 2,500 ticks with a frozen brain and ordinary food
@@ -56,13 +64,14 @@ From the repository root (numpy only; no Qt, no torch):
 
 ```bash
 python experiments/predictive_cognition_experiments.py --quick   # smoke: 2 seeds
-python experiments/predictive_cognition_experiments.py --full    # 6 seeds x 12k ticks
+python experiments/predictive_cognition_experiments.py --full    # 6 seeds x 24k ticks
 ```
 
-Results are written to `experiments/results/predictive_cognition_results.json`
-and a markdown summary is printed. GitHub Actions runs the quick mode on
-every push to this branch (`.github/workflows/predictive-cognition.yml`)
-and the full mode on `workflow_dispatch`.
+Results are written to `experiments/results/full_results.json` (full)
+or `experiments/results/quick_results.json` (quick) and a markdown
+summary is printed. GitHub Actions runs the quick mode on every push to
+this branch (`.github/workflows/predictive-cognition.yml`) and the full
+mode when the pushed commit message contains `[full]`.
 
 ## Integrity rules
 
