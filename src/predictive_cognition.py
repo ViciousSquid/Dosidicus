@@ -751,6 +751,7 @@ class PredictiveCortex:
         self._buffer: deque = deque(maxlen=4096)
         self._pending: Optional[Dict[str, Any]] = None
         self._pending_pred: Optional[Tuple[np.ndarray, np.ndarray]] = None
+        self._pending_delta: Optional[Tuple[np.ndarray, np.ndarray, int]] = None
 
         # telemetry
         self._ticks = 0
@@ -795,6 +796,8 @@ class PredictiveCortex:
         # happened.
         if self._pending_pred is not None and self._buffer:
             self._score(self._buffer[-1])
+        if self._pending_delta is not None and self._buffer:
+            self._score_delta()
         # Capture the percept half of THIS tick's experience; the action
         # and the network's own activations complete it at end_tick.
         self._pending = {'squid_state': squid_state,
@@ -812,6 +815,15 @@ class PredictiveCortex:
             pred_next = np.zeros(OBS_DIM, dtype=np.float32)
             pred_delta = np.zeros(len(DELTA_CHANNELS), dtype=np.float32)
         self._pending_pred = (pred_next, pred_delta)
+        if window is not None and len(window) >= 2 and self._buffer:
+            # The delta head predicts the drive change over the next
+            # DELTA_HORIZON ticks, measured from the last complete
+            # experience. Score it only once that future has actually
+            # arrived (see _score_delta), never against an arbitrary
+            # window of the past.
+            self._pending_delta = (np.array(self._buffer[-1], copy=True),
+                                   pred_delta,
+                                   self._ticks + DELTA_HORIZON)
         self._last_prediction = pred_next
         self._write_sensors(pred_next, pred_delta)
 
@@ -829,7 +841,7 @@ class PredictiveCortex:
         self._pending = None
 
     def _score(self, actual: np.ndarray) -> None:
-        pred_next, pred_delta = self._pending_pred
+        pred_next = self._pending_pred[0]
         total_sq = 0.0
         for group, channels in CHANNEL_GROUPS:
             lo, hi = CHANNEL_INDEX[channels[0]], CHANNEL_INDEX[channels[-1]] + 1
@@ -846,15 +858,28 @@ class PredictiveCortex:
         n = self._action_top1_n
         self._action_top1 = (self._action_top1 * n + hit) / (n + 1)
         self._action_top1_n = n + 1
-        # delta scoring against the real 5-tick change, when available
-        if len(self._buffer) >= DELTA_HORIZON:
-            base = self._buffer[-DELTA_HORIZON]
-            drive_idx = [CHANNEL_INDEX[d] for d in DELTA_SOURCES]
-            actual_delta = np.tanh(
-                (actual[drive_idx] - base[drive_idx]) / DELTA_SCALE
-            ).astype(np.float32)
-            err = float(np.abs(pred_delta - actual_delta).mean())
-            self._delta_mae = 0.98 * self._delta_mae + 0.02 * err
+        # Delta scoring lives in _score_delta(): the delta head predicts a
+        # DELTA_HORIZON-tick change, which only becomes observable
+        # DELTA_HORIZON ticks after the prediction was made.
+
+    def _score_delta(self) -> None:
+        """Score the pending delta prediction once its horizon arrives.
+
+        The prediction was conditioned on the last complete experience
+        (buffer position due_at - DELTA_HORIZON); it is scored against the
+        experience DELTA_HORIZON ticks later, and not before.
+        """
+        base, pred_delta, due_at = self._pending_delta
+        if self._ticks < due_at:
+            return
+        actual = self._buffer[-1]
+        drive_idx = [CHANNEL_INDEX[d] for d in DELTA_SOURCES]
+        actual_delta = np.tanh(
+            (actual[drive_idx] - base[drive_idx]) / DELTA_SCALE
+        ).astype(np.float32)
+        err = float(np.abs(pred_delta - actual_delta).mean())
+        self._delta_mae = 0.98 * self._delta_mae + 0.02 * err
+        self._pending_delta = None
 
     def _window(self) -> Optional[np.ndarray]:
         if not self._buffer:
@@ -876,7 +901,12 @@ class PredictiveCortex:
         involved, and the transformer's gradients do not touch the
         squid's synapses.
         """
-        if not self.enabled or len(self._buffer) < self.context + DELTA_HORIZON + 1:
+        # A frozen evaluation (learning_enabled=False) freezes the
+        # transformer too: no training step may change its weights while
+        # the host network is being evaluated, even if asked directly.
+        learning_on = bool(getattr(self.config, 'learning_enabled', True))
+        if (not self.enabled or not learning_on
+                or len(self._buffer) < self.context + DELTA_HORIZON + 1):
             return {'loss': 0.0, 'steps': 0}
         losses = []
         t0 = time.perf_counter()

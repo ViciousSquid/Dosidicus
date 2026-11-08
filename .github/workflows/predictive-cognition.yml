@@ -1,10 +1,14 @@
 name: Predictive cognition experiments
 
 # Research pipeline for the temporal-transformer predictive cortex
-# (src/predictive_cognition.py). Note the dependency install for the
-# first test step: numpy and pytest ONLY - no PyQt5, no torch. The
-# research module is Qt-free by construction, and this workflow is the
-# proof.
+# (src/predictive_cognition.py). The dependency install for the first
+# test step is numpy and pytest ONLY - no PyQt5, no torch. The research
+# module is Qt-free by construction, and this workflow is the proof.
+#
+# Diagnostics: each step tees its output to a log file, and a final step
+# commits those logs plus the experiment results to this branch under
+# ci-logs/<run>/ and experiments/results/. Those paths are excluded from
+# the push trigger, so publishing diagnostics cannot re-trigger a run.
 
 on:
   push:
@@ -17,6 +21,9 @@ on:
       - 'experiments/**'
       - 'tests/test_predictive_cognition.py'
       - '.github/workflows/predictive-cognition.yml'
+    paths-ignore:
+      - 'ci-logs/**'
+      - 'experiments/results/**'
   workflow_dispatch:
     inputs:
       depth:
@@ -28,7 +35,7 @@ on:
           - 'full'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   tests-and-experiments:
@@ -37,6 +44,8 @@ jobs:
     steps:
       - name: Checkout research branch
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -44,21 +53,66 @@ jobs:
       - name: Install dependencies (numpy + pytest only - no Qt, no torch)
         run: python -m pip install numpy pytest
       - name: Verify the predictive cortex (unit + integration tests)
-        run: python -m pytest -q tests/test_predictive_cognition.py
+        run: |
+          set +e
+          python -m pytest -v tests/test_predictive_cognition.py --tb=short > ci-pytest.log 2>&1
+          status=$?
+          echo "### Predictive cortex tests (exit $status)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -c 24000 ci-pytest.log >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^(FAILED|ERROR) ' ci-pytest.log | head -10 | sed 's/^/::error::/' || true
+          exit $status
       - name: Install baseline test dependencies
         run: python -m pip install PyQt5 Pillow platformdirs
       - name: Verify baseline headless tests still pass (compatibility)
-        run: python -m pytest -q tests/test_headless_training.py tests/test_headless_causal_training.py
+        run: |
+          set +e
+          python -m pytest -q tests/test_headless_training.py tests/test_headless_causal_training.py --tb=short > ci-baseline-tests.log 2>&1
+          status=$?
+          echo "### Baseline headless tests (exit $status)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -c 16000 ci-baseline-tests.log >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^(FAILED|ERROR) ' ci-baseline-tests.log | head -10 | sed 's/^/::error::/' || true
+          exit $status
       - name: Run the smoke experiment (3 modes x 2 seeds)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.depth == 'quick' }}
-        run: python experiments/predictive_cognition_experiments.py --quick --output experiments/results/quick_results.json
+        run: |
+          python experiments/predictive_cognition_experiments.py --quick --output experiments/results/quick_results.json 2>&1 | tee ci-experiment.log
       - name: Run the full experiment (3 modes x 6 seeds x 12k ticks)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.depth == 'full' }}
-        run: python experiments/predictive_cognition_experiments.py --full --output experiments/results/full_results.json
+        run: |
+          python experiments/predictive_cognition_experiments.py --full --output experiments/results/full_results.json 2>&1 | tee ci-experiment.log
+      - name: Publish diagnostics and results to the branch
+        if: always()
+        run: |
+          set -e
+          dest="ci-logs/${GITHUB_RUN_NUMBER}"
+          mkdir -p "$dest"
+          for f in ci-pytest.log ci-baseline-tests.log ci-experiment.log; do
+            if [ -f "$f" ]; then tail -c 300000 "$f" > "$dest/$f"; fi
+          done
+          if [ -d experiments/results ]; then
+            mkdir -p "$dest/results"
+            cp -r experiments/results/. "$dest/results/" 2>/dev/null || true
+          fi
+          git config user.name "predictive-cortex-ci"
+          git config user.email "actions@github.com"
+          git add ci-logs experiments/results 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "Nothing new to publish."
+            exit 0
+          fi
+          git commit -m "ci: publish run ${GITHUB_RUN_NUMBER} diagnostics and results [skip ci]"
+          git pull --rebase=true origin "research/transformer-predictive-cognition" || true
+          git push origin "HEAD:research/transformer-predictive-cognition"
       - name: Upload experiment results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: predictive-cognition-results
-          path: experiments/results/
+          path: |
+            experiments/results/
+            ci-*.log
           if-no-files-found: ignore
