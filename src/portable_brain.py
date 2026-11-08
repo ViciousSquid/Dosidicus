@@ -61,6 +61,19 @@ class TrainingConfig:
     # the full newborn brain with its innate reflexes. A blank brain is the
     # control condition: anything it ends up knowing, it learned here.
     blank: bool = False
+
+    # Predictive-cognition research module (branch
+    # research/transformer-predictive-cognition). OFF by default: with
+    # 'off' nothing in src/predictive_cognition.py runs and behaviour is
+    # byte-identical to the baseline. 'transformer' attaches a small
+    # temporal transformer that predicts the next experience and exposes
+    # its predictions as ordinary input sensors; 'linear' attaches a
+    # simple exponential-smoothing control through the same interface.
+    predictive_mode: str = 'off'
+    predictive_context: int = 32       # ticks of experience per window
+    predictive_train_interval: int = 64  # ticks between training batches
+    predictive_lr: float = 0.003
+    predictive_seed: Optional[int] = None
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'TrainingConfig':

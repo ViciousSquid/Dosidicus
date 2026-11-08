@@ -65,6 +65,7 @@ from src.learning import LearningConfig  # noqa: E402
 from src.portable_brain import HeadlessBrain, TrainingConfig  # noqa: E402
 from src.decision_engine import select_action  # noqa: E402
 from src.brain_constants import ACTION_THRESHOLDS  # noqa: E402
+from src.predictive_cognition import PredictiveCortex  # noqa: E402
 
 INPUT_SENSORS = set(_INPUT_SENSOR_POSITIONS) | {"can_see_food"}
 
@@ -335,6 +336,14 @@ class HeadlessSimulation:
             random.seed(self.config.seed)
         self.brain = HeadlessBrain(self.config)
         self.squid = HeadlessSquid()
+
+        # Optional predictive-cognition research module (branch
+        # research/transformer-predictive-cognition). Constructed after
+        # the brain so it can register its prediction sensors through the
+        # standard sensor interface. With predictive_mode='off' (the
+        # default) it enables nothing, registers nothing and runs
+        # nothing, and the engine behaves byte-identically to baseline.
+        self.predictive = PredictiveCortex(self.brain, self.config)
         
         # Simulation state
         self.tick = 0
@@ -433,12 +442,25 @@ class HeadlessSimulation:
         self.stats['ticks_completed'] = self.tick + 1
         self.stats['elapsed_seconds'] = elapsed
         self.stats['ticks_per_second'] = (self.tick + 1) / elapsed if elapsed > 0 else 0
+        self.stats['predictive'] = self.predictive.get_stats()
         
         print(f"\n✓ Training complete!")
         print(f"  Ticks: {self.stats['ticks_completed']}")
         print(f"  Time: {elapsed:.2f}s ({self.stats['ticks_per_second']:.1f} ticks/sec)")
         print(f"  Neurons created: {self.stats['neurons_created']}")
         print(f"  Hebbian updates: {self.stats['hebbian_updates']}")
+        p = self.stats.get('predictive') or {}
+        if p.get('enabled'):
+            print(f"  Predictive cortex ({p.get('mode')}): "
+                  f"train_steps={p.get('train_steps', 0)}, "
+                  f"loss_ema={p.get('loss_ema')}, "
+                  f"action_top1={p.get('action_top1')}")
+            print(f"    next-experience MAE: {p.get('mae')}")
+            print(f"    inference={p.get('inference_seconds')}s, "
+                  f"train={p.get('train_seconds')}s")
+            effect = p.get('brain_effect') or {}
+            print(f"    synapses grown FROM predictions: "
+                  f"{effect.get('synapses_from_predictions', 0)}")
         
         brain_stats = self.brain.get_statistics()
         print(f"\n  Brain Statistics:")
@@ -466,6 +488,20 @@ class HeadlessSimulation:
 
     def _refresh_food_sense(self):
         self.squid.food_visible = self._nearest_visible_food() is not None
+
+    def _food_percept(self):
+        """Egocentric food percept for the predictive cortex: the
+        direction of the nearest VISIBLE food normalised by the sight
+        radius (so +1.0 = one sight-radius east), or (0, 0, 0) when
+        nothing is visible. Derived from the same perceptual test as
+        can_see_food, so the cortex never receives information the squid
+        has not perceived."""
+        food = self._nearest_visible_food()
+        if food is None:
+            return (0.0, 0.0, 0.0)
+        return ((food['x'] - self.squid.x) / self.FOOD_SIGHT_RADIUS,
+                (food['y'] - self.squid.y) / self.FOOD_SIGHT_RADIUS,
+                1.0)
 
     def _move_randomly(self, distance=0.055):
         self.squid.x = max(0.0, min(1.0, self.squid.x + random.uniform(-distance, distance)))
@@ -538,6 +574,13 @@ class HeadlessSimulation:
         self.brain.advance_clock(1.0)
         before = self.squid.get_state_dict()
         self.brain.update_state(before)
+        # The predictive cortex (research module; no-op when disabled)
+        # scores the previous prediction, records this tick's percept, and
+        # writes its prediction sensors BEFORE propagation, so the network
+        # can act on anticipation rather than reaction. Registered sensors
+        # are never overwritten by propagation.
+        if self.predictive.enabled:
+            self.predictive.begin_tick(self.tick, before, self._food_percept())
         self.brain.propagate(observe_learning=self.config.learning_enabled)
 
         if self.squid.is_sleeping:
@@ -563,6 +606,21 @@ class HeadlessSimulation:
         counts = self.stats['actions_selected']
         counts[chosen] = counts.get(chosen, 0) + 1
         self._act_on_neural_decision(chosen)
+
+        # Complete the predictive cortex's experience record for this tick:
+        # the action actually taken and the network's own activations.
+        # Training happens only while learning is enabled (a frozen
+        # evaluation freezes the transformer too); sleep replay piggybacks
+        # on the brain's own consolidation window.
+        if self.predictive.enabled:
+            self.predictive.end_tick(chosen, self.brain.state)
+            if self.config.learning_enabled:
+                if self.tick % self.config.predictive_train_interval == 0:
+                    self.predictive.train()
+                if self.squid.is_sleeping:
+                    self.predictive.sleep_replay()
+                else:
+                    self.predictive.on_wake()
 
         if self.config.learning_enabled:
             if self.tick % self.config.hebbian_interval == 0:
@@ -700,6 +758,23 @@ Examples:
     parser.add_argument('--learning-rate', type=float, help='Hebbian learning rate')
     parser.add_argument('--neurogenesis', type=bool, help='Enable neurogenesis')
     parser.add_argument('--max-neurons', type=int, help='Maximum neurons allowed')
+
+    # Predictive-cognition research module (off by default)
+    parser.add_argument('--predictive', type=str, default='off',
+                        choices=['off', 'linear', 'transformer'],
+                        help="Attach the predictive cortex: 'off' (default, "
+                             "baseline-identical), 'linear' (simple "
+                             "smoothing control) or 'transformer' (small "
+                             "temporal transformer predicting the next "
+                             "experience and exposing predictions as senses)")
+    parser.add_argument('--predictive-train-interval', type=int, default=64,
+                        help='Ticks between predictive-cortex training batches')
+    parser.add_argument('--predictive-save', type=str,
+                        help='Save predictive-cortex weights to a JSON file after training')
+    parser.add_argument('--predictive-load', type=str,
+                        help='Load predictive-cortex weights from a JSON file before running')
+    parser.add_argument('--predictive-report', type=str,
+                        help='Write the predictive-cortex telemetry report to a JSON file')
     
     args = parser.parse_args()
     
@@ -726,11 +801,22 @@ Examples:
         config.max_neurons = args.max_neurons
     if args.seed is not None:
         config.seed = args.seed
+    if args.predictive:
+        config.predictive_mode = args.predictive
+    if args.predictive_train_interval:
+        config.predictive_train_interval = args.predictive_train_interval
     if args.blank:
         config.blank = True
         
     # Create simulation
     sim = HeadlessSimulation(config)
+
+    # Load predictive-cortex weights (after the cortex exists; must match
+    # the observation layout the weights were trained on)
+    if args.predictive_load and sim.predictive.enabled:
+        if not sim.predictive.load_weights(args.predictive_load):
+            print(f"✗ Could not load predictive weights: {args.predictive_load}")
+            sys.exit(1)
     
     # Load brain
     if args.brain:
@@ -771,7 +857,12 @@ Examples:
         timestamp = time.strftime('%Y%m%d_%H%M%S')
         output_name = f"trained_brain_{timestamp}.json"
         sim.brain.save_brain(output_name)
-        
+
+    if args.predictive_save and sim.predictive.enabled:
+        sim.predictive.save_weights(args.predictive_save)
+    if args.predictive_report and sim.predictive.enabled:
+        sim.predictive.save_report(args.predictive_report)
+
     print("\n✓ Done!")
 
 
