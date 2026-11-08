@@ -430,18 +430,37 @@ class ReproducibilityTests(unittest.TestCase):
     """Same seed, same run. That is what makes a result checkable."""
 
     def test_identical_seed_identical_run(self):
+        # The FULL brain export is deliberately not compared: the baseline
+        # provenance ledger stamps wall-clock timestamps and random
+        # episode ids into every recorded weight change (see
+        # src/neural_provenance.py) and the export metadata carries the
+        # export time, so no two runs can ever be byte-identical that
+        # way - a baseline property, not something this module
+        # introduced. What a seed must pin down is the organism itself:
+        # the same network state, the same learned weights, the same
+        # behaviour statistics and the same trained transformer.
         results = []
         for _ in range(2):
             sim = HeadlessSimulation(
                 make_config(predictive_mode='transformer', seed=123,
                             predictive_train_interval=32))
             run_quiet(sim, 200)
+            brain = sim.brain
             results.append((
-                json.dumps(sim.brain.export_brain(), sort_keys=True),
-                sim.predictive._model.state_dict()))
-        self.assertEqual(results[0][0], results[1][0])
-        self.assertEqual(json.dumps(results[0][1], sort_keys=True),
-                         json.dumps(results[1][1], sort_keys=True))
+                json.dumps(brain.state, sort_keys=True),
+                json.dumps(
+                    [[list(edge), w] for edge, w in brain.weights.items()],
+                    sort_keys=True),
+                json.dumps(brain.positions, sort_keys=True),
+                json.dumps(sim.predictive._model.state_dict(),
+                           sort_keys=True),
+                sim.stats['food_eaten'],
+                sim.stats['food_approaches'],
+                sim.stats['neurons_created'],
+                sim.stats['hebbian_updates'],
+                json.dumps(sim.stats['actions_selected'], sort_keys=True),
+            ))
+        self.assertEqual(results[0], results[1])
 
     def test_save_load_roundtrip(self):
         sim = HeadlessSimulation(
