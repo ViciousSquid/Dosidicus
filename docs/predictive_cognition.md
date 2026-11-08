@@ -234,7 +234,10 @@ queue in a small FIFO and are scored when their future arrives) with a
 regression test that fails if the telemetry ever sticks at 0.0 again.
 The bug affected telemetry only - no sensor value or behaviour depended
 on it, so the run-6 results above stand; the delta MAE is reported
-truthfully by CI runs that include the fix.
+truthfully by CI runs that include the fix. Verified on the follow-up
+run (run 7, quick experiment, commit `8cd648dc`): delta MAE 0.00003 /
+0.00003 (linear, seeds 11 / 22) and 0.018 / 0.051 (transformer), with
+all 36 predictive and 51 baseline tests passing.
 
 **A design confound affected all conditions equally.** The training
 contingency startled the squid every 150 ticks, which kept anxiety at
