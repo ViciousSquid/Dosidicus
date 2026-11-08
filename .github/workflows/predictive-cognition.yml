@@ -7,8 +7,8 @@ name: Predictive cognition experiments
 #
 # Diagnostics: each step tees its output to a log file, and a final step
 # commits those logs plus the experiment results to this branch under
-# ci-logs/<run>/ and experiments/results/. Those paths are excluded from
-# the push trigger, so publishing diagnostics cannot re-trigger a run.
+# ci-logs/<run>/ and experiments/results/. The publish commit carries
+# [skip ci], so publishing diagnostics cannot re-trigger a run.
 
 on:
   push:
@@ -21,9 +21,6 @@ on:
       - 'experiments/**'
       - 'tests/test_predictive_cognition.py'
       - '.github/workflows/predictive-cognition.yml'
-    paths-ignore:
-      - 'ci-logs/**'
-      - 'experiments/results/**'
   workflow_dispatch:
     inputs:
       depth:
@@ -99,7 +96,8 @@ jobs:
           fi
           git config user.name "predictive-cortex-ci"
           git config user.email "actions@github.com"
-          git add ci-logs experiments/results 2>/dev/null || true
+          git add ci-logs 2>/dev/null || true
+          git add experiments/results 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "Nothing new to publish."
             exit 0
