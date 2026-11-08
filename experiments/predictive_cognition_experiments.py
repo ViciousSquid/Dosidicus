@@ -271,7 +271,10 @@ def eval_delayed_consequence(sim, trials=5, anticipation=(4, 7),
             sim._simulation_step()
             if lo <= i <= hi:
                 window.append(_pred_now(sim, 'pred_food_ahead'))
-        anti_ahead = (sum(window) / len(window) if window else None)
+        # An off-mode squid has no prediction senses at all, so the
+        # window can contain None values; _mean() treats those as
+        # missing observations rather than crashing.
+        anti_ahead = (_mean(window) if window else None)
         # wait out the food; measure the eat latency
         eaten_at = None
         for i in range(80):
