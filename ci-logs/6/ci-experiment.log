@@ -1,0 +1,60 @@
+Predictive-cognition experiment: 3 modes x 6 seeds x 12000 training ticks
+Configuration loaded from config.ini
+  off          seed 11: trained 1 eaten, op=None, retain=0
+Configuration loaded from config.ini
+  off          seed 22: trained 6 eaten, op=None, retain=0
+Configuration loaded from config.ini
+  off          seed 33: trained 3 eaten, op=None, retain=0
+Configuration loaded from config.ini
+  off          seed 44: trained 1 eaten, op=None, retain=0
+Configuration loaded from config.ini
+  off          seed 55: trained 2 eaten, op=None, retain=0
+Configuration loaded from config.ini
+  off          seed 66: trained 3 eaten, op=None, retain=0
+Configuration loaded from config.ini
+  linear       seed 11: trained 1 eaten, op=0.8265482999661182, retain=0
+Configuration loaded from config.ini
+  linear       seed 22: trained 3 eaten, op=0.8417579303630672, retain=0
+Configuration loaded from config.ini
+  linear       seed 33: trained 4 eaten, op=0.8411784753765541, retain=0
+Configuration loaded from config.ini
+  linear       seed 44: trained 1 eaten, op=0.8411784753765541, retain=0
+Configuration loaded from config.ini
+  linear       seed 55: trained 2 eaten, op=0.8411784753765541, retain=0
+Configuration loaded from config.ini
+  linear       seed 66: trained 6 eaten, op=0.9244711608876991, retain=0
+Configuration loaded from config.ini
+  transformer  seed 11: trained 1 eaten, op=0.9583240166350027, retain=0
+Configuration loaded from config.ini
+  transformer  seed 22: trained 2 eaten, op=-0.8948772991296738, retain=0
+Configuration loaded from config.ini
+  transformer  seed 33: trained 3 eaten, op=-0.4554298473285628, retain=0
+Configuration loaded from config.ini
+  transformer  seed 44: trained 1 eaten, op=-0.886300837218193, retain=0
+Configuration loaded from config.ini
+  transformer  seed 55: trained 3 eaten, op=0.05513934726599223, retain=0
+Configuration loaded from config.ini
+  transformer  seed 66: trained 2 eaten, op=0.7447669098591254, retain=0
+
+Results written to experiments/results/full_results.json
+
+## Predictive-cognition experiment results
+
+| metric | off | linear | transformer |
+|---|---|---|---|
+| train: food eaten | 2.667 | 2.833 | 2.000 |
+| train: escape ratio | 0.012 | 0.026 | 0.015 |
+| train: neurons created | 14.500 | 15.833 | 15.333 |
+| train: ticks/sec | 285.867 | 210.050 | 154.833 |
+| object permanence: alignment | - | 0.853 | -0.080 |
+| object permanence: coverage | - | 0.883 | 0.983 |
+| object permanence: refeed ticks | - | - | - |
+| delayed consequence: pred_food_ahead rise | - | 0.000 | -1.027 |
+| delayed consequence: eat latency | - | - | - |
+| delayed consequence: eat rate | 0.000 | 0.000 | 0.000 |
+| adaptation: escape ratio | 0.000 | 0.000 | 0.000 |
+| adaptation: peak anxiety rise | 0.000 | 0.000 | 0.000 |
+| adaptation: food eaten | 0.000 | 0.000 | 0.000 |
+| retention: food eaten | 0.000 | 0.000 | 0.000 |
+| prediction: action top-1 | - | 0.991 | 0.957 |
+| synapses grown from predictions | - | 64.333 | 64.333 |
