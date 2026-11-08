@@ -1,0 +1,64 @@
+name: Predictive cognition experiments
+
+# Research pipeline for the temporal-transformer predictive cortex
+# (src/predictive_cognition.py). Note the dependency install for the
+# first test step: numpy and pytest ONLY - no PyQt5, no torch. The
+# research module is Qt-free by construction, and this workflow is the
+# proof.
+
+on:
+  push:
+    branches:
+      - 'research/transformer-predictive-cognition'
+    paths:
+      - 'src/predictive_cognition.py'
+      - 'src/portable_brain.py'
+      - 'headless/**'
+      - 'experiments/**'
+      - 'tests/test_predictive_cognition.py'
+      - '.github/workflows/predictive-cognition.yml'
+  workflow_dispatch:
+    inputs:
+      depth:
+        description: 'Experiment depth'
+        type: choice
+        default: 'quick'
+        options:
+          - 'quick'
+          - 'full'
+
+permissions:
+  contents: read
+
+jobs:
+  tests-and-experiments:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies (numpy + pytest only - no Qt, no torch)
+        run: python -m pip install numpy pytest
+      - name: Verify the predictive cortex (unit + integration tests)
+        run: python -m pytest -q tests/test_predictive_cognition.py
+      - name: Install baseline test dependencies
+        run: python -m pip install PyQt5 Pillow platformdirs
+      - name: Verify baseline headless tests still pass (compatibility)
+        run: python -m pytest -q tests/test_headless_training.py tests/test_headless_causal_training.py
+      - name: Run the smoke experiment (3 modes x 2 seeds)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.depth == 'quick' }}
+        run: python experiments/predictive_cognition_experiments.py --quick --output experiments/results/quick_results.json
+      - name: Run the full experiment (3 modes x 6 seeds x 12k ticks)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.depth == 'full' }}
+        run: python experiments/predictive_cognition_experiments.py --full --output experiments/results/full_results.json
+      - name: Upload experiment results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: predictive-cognition-results
+          path: experiments/results/
+          if-no-files-found: ignore
