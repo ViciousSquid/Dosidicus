@@ -577,3 +577,35 @@ class HostNetworkIntegrationTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+
+class IncidentalMotorBirthWiringTests(unittest.TestCase):
+    """Controlled motor wiring intervention must not alter default birth wiring."""
+
+    def test_context_motor_connections_can_be_omitted_but_other_context_remains(self):
+        from src.neurogenesis import FunctionalNeuron, ExperienceContext
+        ctx = ExperienceContext(
+            trigger_type='novelty',
+            active_neurons={'act_eat': 0.0, 'act_move': 0.0, 'hunger': 100.0},
+            recent_actions=[], environmental_state={}, outcome='neutral',
+            timestamp=0.0)
+        neuron = FunctionalNeuron('probe', 'novelty', ctx)
+        all_neurons = ['act_eat', 'act_move', 'hunger', 'curiosity', 'satisfaction']
+        default = neuron.get_functional_connections(all_neurons)
+        intervention = neuron.get_functional_connections(
+            all_neurons, include_context_motor_targets=False)
+        self.assertEqual(default['act_eat'], -0.8)
+        self.assertEqual(default['act_move'], -0.8)
+        self.assertNotIn('act_eat', intervention)
+        self.assertNotIn('act_move', intervention)
+        self.assertEqual(intervention['hunger'], 0.8)
+
+    def test_headless_flag_is_opt_in(self):
+        normal = HeadlessSimulation(make_config(seed=3))
+        blocked = HeadlessSimulation(make_config(
+            seed=3, context_motor_autowiring=False))
+        self.assertTrue(normal.brain.learning_config.neurogenesis[
+            'context_motor_autowiring'])
+        self.assertFalse(blocked.brain.learning_config.neurogenesis[
+            'context_motor_autowiring'])

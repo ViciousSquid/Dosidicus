@@ -17,6 +17,7 @@ on:
     paths:
       - 'src/predictive_cognition.py'
       - 'src/portable_brain.py'
+      - 'src/neurogenesis.py'
       - 'headless/**'
       - 'experiments/**'
       - 'tests/test_predictive_cognition.py'
@@ -85,12 +86,17 @@ jobs:
           if git log -1 --pretty=%B | grep -q '\[save-squid\]'; then
             depth="squid"
           fi
+          if git log -1 --pretty=%B | grep -q '\[motor-study\]'; then
+            depth="motor-study"
+          fi
           echo "DEPTH=$depth" >> "$GITHUB_ENV"
           echo "Experiment depth: $depth"
       - name: Run the experiment
         run: |
           if [ "$DEPTH" = "growth" ]; then
             python experiments/growth_experiment.py --full --output experiments/results/growth_results.json 2>&1 | tee ci-experiment.log
+          elif [ "$DEPTH" = "motor-study" ]; then
+            python experiments/motor_wiring_intervention.py --ticks 6000 --output experiments/results/motor_wiring_study.json 2>&1 | tee ci-experiment.log
           elif [ "$DEPTH" = "squid" ]; then
             python experiments/save_special_squid.py --full 2>&1 | tee ci-experiment.log
           elif [ "$DEPTH" = "full" ]; then

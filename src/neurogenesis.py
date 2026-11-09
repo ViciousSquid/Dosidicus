@@ -33,7 +33,7 @@ from typing import Dict, List, Tuple, Optional, Set, Any
 from .capability import Deficit, regulation_specialisation
 from .brain_constants import (SOCIAL_SENSOR, SOCIAL_SENSORS, SOCIAL_NEURONS, SQUID_SENSORS,
                               AQUARIUM_SENSE, REQUIRED_SOCIAL_SENSES,
-                              ensure_grown_sensor)
+                              ensure_grown_sensor, ACTION_NEURONS)
 
 # Localisation. The package-relative import is the one that works when the
 # game runs; the flat fallback covers running this module standalone. The old
@@ -449,10 +449,18 @@ class FunctionalNeuron:
             else: return 'general_novelty_processing'
         return 'undefined'
     
-    def get_functional_connections(self, all_neurons: List[str]) -> Dict[str, float]:
+    def get_functional_connections(self, all_neurons: List[str],
+                                   include_context_motor_targets: bool = True) -> Dict[str, float]:
+        """Build birth-context outputs; opt-in study omits INCIDENTAL motor targets.
+
+        The explicit deficit remedy is assembled separately and is not filtered.
+        The default remains the existing engine behaviour for strict controls.
+        """
         connections = {}
         ctx = self.creation_context
         for neuron, activation in ctx.active_neurons.items():
+            if not include_context_motor_targets and neuron in ACTION_NEURONS:
+                continue
             if neuron in all_neurons:
                 try: activation_value = float(activation) if isinstance(activation, (int, float, str)) else 50.0
                 except (ValueError, TypeError): activation_value = 50.0
@@ -1108,7 +1116,10 @@ class EnhancedNeurogenesis:
         #    permanent record.
         plan: Dict[Tuple[str, str], Tuple[float, str]] = {}
         connections = ({} if social else
-                       func_neuron.get_functional_connections(list(self.brain_widget.neuron_positions.keys())))
+                       func_neuron.get_functional_connections(
+                           list(self.brain_widget.neuron_positions.keys()),
+                           include_context_motor_targets=bool(
+                               self.config.neurogenesis.get('context_motor_autowiring', True))))
         for target, weight in connections.items():
             if abs(weight) < 0.05: continue
             plan[(neuron_name, target)] = (float(weight), 'specialisation')
