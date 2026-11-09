@@ -2,8 +2,8 @@
 
 Protocol, code and results for the research question this branch exists
 to answer: **can a small transformer provide predictive cognition that
-Dosidicus's existing plasticity, neurogenesis and memory systems let the
-organism continually learn from?**
+Dosidicus's existing plasticity, neurogenesis and memory systems let
+the organism continually learn from?**
 
 The runner is `predictive_cognition_experiments.py`. It uses the real
 headless trainer and the real brain, no mocks, no scripted behaviours.
@@ -107,8 +107,8 @@ measurement, not an interpretation:
 | fouling | 120k-180k | east again, heavily fouled water (a new problem: cleanliness regulation) |
 | retention | 180k-240k | clean water again: does the east behaviour survive? |
 
-Growth permission in this engine is per-type caps (stress 5, novelty 6,
-reward 6, connector 10 grown neurons), a global ceiling of 100 neurons
+Growth permission in this engine is per-type caps (stress 5, novelty
+6, reward 6, connector 10 grown neurons), a global ceiling of 100 neurons
 and a 60 sim-second cooldown. A plateau with none of those binding
 while synaptic churn continues is evidence of need-regulated growth; a
 plateau coinciding with a binding cap plus stand-downs citing it is a
@@ -123,6 +123,21 @@ python experiments/growth_experiment.py --full
 CI runs the quick smoke on every push and the 240k-tick study when the
 commit message contains `[growth]`. Results land in
 `experiments/results/growth_results.json`.
+
+**Status (run 10 quick smoke, publish `b4151c5d`):** all three
+conditions completed their 6,000-tick lives; growth stopped early in
+every condition (last births at tick 800 / 1000 / 1500) with the
+permission structure nowhere near binding (12-15 grown neurons against
+type caps 5/6/6/10 and the ceiling of 100), while weight churn
+continued after the last birth everywhere (transformer: 53 weight
+updates after its final birth). The full 240k-tick study is launched
+by the commit carrying this status line. Beside the full
+`growth_results.json` record it publishes a summary-only
+`growth_summary.json`, per-mode `growth_timeseries_*.csv` (tick,
+phase, live neurons, synapses, churn, drives) and per-mode
+`growth_events_*.json` (births, stand-downs, resolutions), so the
+live-growth curve can be analysed without downloading the
+multi-megabyte full record.
 
 ## Integrity rules
 
