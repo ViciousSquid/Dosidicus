@@ -666,3 +666,74 @@ independent seeds with the same opt-in ablation. If the survival
 rescue replicates, investigate a separate controlled hypothesis
 for the transformer's remaining feeding deficit. Do not silently
 change the baseline, force eating, or erase squid 222.
+
+
+## Results: run 24 — provenance proves a second, distinct motor-pathway disruption
+
+Run 24 (commit `1d190d61`, successful workflow
+[42656891829](https://github.com/ViciousSquid/Dosidicus/actions/runs/42656891829))
+re-ran the paired 6,000-tick seed-11 study from run 22 with
+**read-only** per-edge provenance from the existing
+`CausalLedger`. The outcomes repeated exactly: off
+1→132 meals, linear 1→46, and transformer 4→4;
+transformer exploration 510→4,559 ticks.
+The measurements are in `ci-logs/24/results/motor_wiring_study.json`.
+
+The lifetime ledger resolves the open run-21 question:
+
+| Condition | Fate of innate `hunger → act_eat` |
+|---|---|
+| Off, historical | Survives; final weight ≈+0.3553 |
+| Off, no incidental motor wiring | **Removed by neurogenesis**; handed over to `role_separation`; nevertheless eats 132 meals |
+| Linear, historical | Survives; final weight ≈+0.4007 |
+| Linear, no incidental motor wiring | Survives, strengthened to ≈+0.7499; eats 46 |
+| Transformer, historical | **Removed by neurogenesis**; handed over to `role_separation`; eats 4 |
+| Transformer, no incidental motor wiring | **Removed by neurogenesis**; handed over to `second_opinion`; eats 4 |
+
+These are **explicit ledger events**, not assumptions inferred from
+a missing weight. In the transformer intervention the old weight
+was **+0.3994**, then removed by
+`mechanism: neurogenesis`,
+`note: handed over to second_opinion`.
+The differentiation remedy in `src/neurogenesis.py` calls
+`_retire_edge((offload, target))` after wiring the new neuron.
+The original drive-to-motor path is literally deleted.
+
+At tick 6,000 the transformer intervention's
+`second_opinion → act_eat` link retains a positive weight
+of about +0.3994, but because the *source* is below its
+resting level, it contributes approximately **−19.97**
+inhibitory units to the eating neuron. The direct
+`can_see_food → act_eat` pathway remains near +1 and
+contributes approximately +50 when food is visible;
+other negative contributors also exist. Observed
+`act_eat ≈32.18` at tick 6,000 is below its firing
+threshold 38.
+
+**Crucial distinction:** this innate-hunger offload is **not
+unique to transformer**: the off intervention also retires
+`hunger → act_eat` yet feeds successfully. Offloading is
+therefore a verified secondary structural alteration, but
+**not by itself a demonstrated unique cause** of
+transformer feeding failure. A bad *replacement* signal or
+its interactions with predictive inputs may matter.
+
+### Follow-up: Run 25, controlled innate-route preservation
+
+Commit `8cca376a` starts a new **opt-in** paired intervention:
+both arms first block the incidental newborn-to-motor
+edges from run 22. In one arm, differentiation transfers
+still create the normal remedy connection but no longer
+delete an existing **innate direct motor synapse**.
+The control arm retains the historical offload. No action,
+feeding policy, innate weight, motor threshold or food
+count is directly forced; default production behaviour
+is unchanged (`preserve_innate_motor_offload=False`).
+
+The test is falsifiable: if transformer feeding increases
+from four meals when the direct hunger connection survives,
+then the loss of the innate pathway contributes causally to
+its residual deficit. An increase in both arms or no
+increase would require a different interpretation.
+The first test remains **n=1**, so any positive result
+will still require independent-seed confirmation.
