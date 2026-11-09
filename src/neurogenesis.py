@@ -2006,7 +2006,14 @@ class EnhancedNeurogenesis:
             #    neuron behaved differently for no reason anyone could see.
             #    All that remains here is bookkeeping and the regulatory
             #    feedback below, which propagation deliberately does not do.
-            now_ts = time.time()
+            # The deterministic simulation clock. The headless trainer
+            # supplies brain.sim_seconds through this handle; the GUI's
+            # BrainWidget does not, and keeps wall time. A wall-clock
+            # stamp here leaked into the brain's export (a grown
+            # neuron's last_activated is part of to_dict), which made
+            # two identical seeded runs export different brains.
+            clock = getattr(self, 'clock', None)
+            now_ts = clock() if callable(clock) else time.time()
             for name, func_neuron in self.functional_neurons.items():
                 value = self.brain_widget.state.get(name)
                 if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -2017,11 +2024,33 @@ class EnhancedNeurogenesis:
             # 3. === SCALED STRESS REDUCTION MECHANIC ===
             # Each stress neuron contributes to anxiety suppression, with scaling based on count
             if 'anxiety' in brain_state:
-                current_anxiety = brain_state['anxiety']
+                # The anxiety the squid actually feels, before any cap.
+                # Driving the suppression neurons from the post-cap value
+                # starves the mechanic exactly when it is most needed
+                # (see the driven computation below).
+                raw_anxiety = float(brain_state['anxiety'])
                 stress_count = self._get_stress_neuron_count()
                 anxiety_cap = self._get_anxiety_cap()
+
+                # The suppression network holds the line it grew to hold:
+                # the cap binds the squid's body itself, not only the
+                # brain's record of it. Without this the two run in
+                # parallel forever - brain state clamped every tick,
+                # body never relieved - which is the deadlock the run-13
+                # growth study exposed: anxiety pinned at 100 for
+                # 240,000 ticks next to five fully-grown stress neurons
+                # whose cap said 50.
+                squid = None
+                if (hasattr(self.brain_widget, 'tamagotchi_logic') and
+                    self.brain_widget.tamagotchi_logic and
+                    hasattr(self.brain_widget.tamagotchi_logic, 'squid') and
+                    self.brain_widget.tamagotchi_logic.squid):
+                    squid = self.brain_widget.tamagotchi_logic.squid
+                    if squid.anxiety > anxiety_cap:
+                        squid.anxiety = anxiety_cap
                 
                 # First, enforce the cap - anxiety should never exceed the cap
+                current_anxiety = raw_anxiety
                 if current_anxiety > anxiety_cap:
                     current_anxiety = anxiety_cap
                     brain_state['anxiety'] = anxiety_cap
@@ -2033,8 +2062,13 @@ class EnhancedNeurogenesis:
                     if getattr(fn, 'neuron_type', '') == 'stress':
                         multiplier = getattr(fn, 'strength_multiplier', 1.0)
                         
-                        # Force stress neuron to activate proportionally to anxiety
-                        driven = 50.0 + (current_anxiety - 50.0) * 1.2
+                        # Force stress neuron to activate proportionally to
+                        # the anxiety the squid actually feels (pre-cap).
+                        # From the clamped value, a cap of 50 drives the
+                        # neuron to exactly 50 - below the 55 threshold -
+                        # so no reduction is ever computed and the body
+                        # is never written: the deadlock.
+                        driven = 50.0 + (raw_anxiety - 50.0) * 1.2
                         driven = max(50.0, min(100.0, driven))
                         
                         current_val = self.brain_widget.state.get(name, 50.0)
@@ -2070,17 +2104,9 @@ class EnhancedNeurogenesis:
                     brain_state['anxiety'] = new_anxiety
                     self.brain_widget.state['anxiety'] = new_anxiety
                     
-                    # CRITICAL: Also apply to the actual squid!
-                    if (hasattr(self.brain_widget, 'tamagotchi_logic') and 
-                        self.brain_widget.tamagotchi_logic and
-                        hasattr(self.brain_widget.tamagotchi_logic, 'squid') and
-                        self.brain_widget.tamagotchi_logic.squid):
-                        squid = self.brain_widget.tamagotchi_logic.squid
-                        
-                        # Also enforce cap on squid's current anxiety before we compare
-                        if squid.anxiety > anxiety_cap:
-                            squid.anxiety = anxiety_cap
-                        
+                    # CRITICAL: Also apply to the actual squid! (Already
+                    # clamped to the cap above, this tick.)
+                    if squid is not None:
                         old_squid_anxiety = squid.anxiety
                         squid.anxiety = new_anxiety
                         

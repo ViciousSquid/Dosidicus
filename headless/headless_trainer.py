@@ -336,8 +336,6 @@ class HeadlessSimulation:
             random.seed(self.config.seed)
         self.brain = HeadlessBrain(self.config)
         self.squid = HeadlessSquid()
-        self.brain = HeadlessBrain(self.config)
-        self.squid = HeadlessSquid()
 
         # The engine's regulatory feedback reaches the body through this
         # handle (a BrainWidget holds the game's TamagotchiLogic). Giving

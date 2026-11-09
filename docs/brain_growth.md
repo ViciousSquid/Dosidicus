@@ -259,3 +259,37 @@ Honest caveats:
   transformer - so the study's comparisons remain fair.
 * The stress type cap itself is unchanged (5). The fix makes the five
   permitted neurons do their job; it does not permit a sixth.
+
+### Post-run-17 correction: two real bugs in the first fix
+
+CI run 17 (repair commit 9060d37a) was honest about the first fix and
+found it wanting: 52 of 55 baseline tests passed, but the two new
+suppression tests failed and the seeded-reproducibility test broke.
+Both failures were real bugs, and the reproducibility break was two.
+
+1. The repair commit duplicated the trainer's constructor
+   (`HeadlessBrain` and `HeadlessSquid` were each built twice), and
+   the squid draws its personality from the seeded random stream - so
+   the extra draw shifted every subsequent random number and the two
+   seeded runs in the reproducibility test diverged.
+2. The engine's relief loop had a deadlock all along, which is why the
+   new suppression tests failed: `update_neuron_activations` clamps
+   anxiety to the suppression cap *before* computing the stress
+   neurons' driven activation. With the cap at 50 the driven value is
+   exactly 50, never crosses the 55 activation threshold, no reduction
+   is ever computed - and the squid's body, which is only written
+   inside that reduction branch, is never relieved. The brain's state
+   was clamped every tick while the body sat at 95+, forever.
+3. The relief loop stamps grown neurons' `last_activated` with the
+   wall clock, and that timestamp is part of a brain's export - so two
+   identical seeded runs exported different brains even with the
+   constructor fixed.
+
+The follow-up commit fixes all three: the duplicated constructor is
+removed; the relief loop drives the neurons from the anxiety the squid
+actually feels (pre-cap) and clamps the body to the cap even on ticks
+when no neuron is hot; and the activation stamp reads the deterministic
+simulation clock the engine is already given (falling back to wall time
+only where no clock was supplied, i.e. the GUI, whose behaviour is
+unchanged). Run 13's verdict stands for the code that ran it; whether
+the plateau dissolves is for the re-run.
