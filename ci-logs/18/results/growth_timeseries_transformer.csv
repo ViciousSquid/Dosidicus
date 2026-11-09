@@ -1,0 +1,16 @@
+# tick,phase,neurons,synapses,grown,deepened,strength_sum,weight_updates,food_eaten,food_approaches,anxiety,cleanliness,active_count,top_actionable
+100,0,30,80,1,0,1.0,8,1,3,10.0,78.0,8,connectivity:pred_food_south
+500,0,36,243,7,0,7.0,100,4,13,0.0,60.0,3,-
+900,0,42,446,13,1,13.5,137,4,13,0.0,27.0,13,differentiation:happiness:ro
+1300,0,42,448,13,1,16.0,141,4,13,0.0,4.0,15,differentiation:happiness:ro
+1700,1,42,449,13,1,16.0,144,4,13,0.0,0.0,16,differentiation:happiness:ro
+2100,1,44,542,15,1,18.0,149,4,13,0.0,0.0,15,differentiation:act_flee:rol
+2500,1,44,542,15,1,18.0,151,4,13,0.0,0.0,20,differentiation:filth_avoida
+2900,1,44,542,15,1,18.0,151,4,13,0.0,0.0,20,differentiation:filth_avoida
+3300,2,44,542,15,1,18.0,153,4,13,0.0,0.0,6,differentiation:filth_avoida
+3700,2,45,593,16,2,19.5,160,4,13,0.0,0.0,8,regulation:hunger:down
+4100,2,45,593,16,2,22.0,160,4,13,0.0,0.0,6,regulation:hunger:down
+4500,3,45,593,16,2,22.0,162,4,13,0.0,0.0,7,regulation:hunger:down
+4900,3,45,593,16,2,22.0,162,4,13,0.0,0.0,7,regulation:hunger:down
+5300,3,45,593,16,2,22.0,164,4,13,0.0,0.0,5,regulation:hunger:down
+5700,3,45,593,16,2,22.0,164,4,13,0.0,0.0,4,regulation:hunger:down

@@ -1,0 +1,16 @@
+# tick,phase,neurons,synapses,grown,deepened,strength_sum,weight_updates,food_eaten,food_approaches,anxiety,cleanliness,active_count,top_actionable
+100,0,30,78,1,0,1.0,8,1,3,10.0,78.0,10,connectivity:pred_food_west
+500,0,36,207,7,0,7.0,26,1,3,0.0,55.0,3,expression:pred_food_south->
+900,0,43,462,14,0,14.0,89,1,3,0.0,7.0,3,regulation:hunger:down
+1300,0,44,502,15,1,18.0,114,1,3,0.0,0.0,17,regulation:hunger:down
+1700,1,44,507,15,1,18.0,165,1,3,0.0,0.0,16,regulation:hunger:down
+2100,1,44,507,15,1,18.0,188,1,3,0.0,0.0,16,regulation:hunger:down
+2500,1,44,511,15,1,18.0,219,1,3,0.0,0.0,17,regulation:hunger:down
+2900,1,44,511,15,1,18.0,236,1,3,0.0,0.0,17,regulation:hunger:down
+3300,2,44,511,15,1,18.0,250,1,3,0.0,0.0,18,regulation:hunger:down
+3700,2,44,512,15,1,18.0,276,1,3,0.0,0.0,17,regulation:hunger:down
+4100,2,44,512,15,1,18.0,284,1,3,0.0,0.0,18,regulation:hunger:down
+4500,3,44,513,15,1,18.0,317,1,3,0.0,0.0,18,regulation:hunger:down
+4900,3,44,513,15,1,18.0,341,1,3,0.0,0.0,18,regulation:hunger:down
+5300,3,44,513,15,1,18.0,378,1,3,0.0,0.0,18,regulation:hunger:down
+5700,3,44,513,15,1,18.0,390,1,3,0.0,0.0,18,regulation:hunger:down
