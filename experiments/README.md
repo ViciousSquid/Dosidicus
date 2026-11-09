@@ -139,6 +139,27 @@ phase, live neurons, synapses, churn, drives) and per-mode
 live-growth curve can be analysed without downloading the
 multi-megabyte full record.
 
+## Preserved organisms
+
+`save_special_squid.py` re-trains a chosen (mode, seed, world) through
+the real trainer and commits the organism itself - not just its
+metrics - to `experiments/results/`.
+
+**Squid 222, the run-9 supernova** - the only run of any condition
+ever to eat during the frozen evaluations (463 foods on 880 approaches
+in training, all five held-out delayed-consequence trials within 2
+ticks of the food appearing, 131 foods in frozen retention) - is
+preserved at `experiments/results/squid_222/`: its brain in the
+standard game format, its transformer's weights, its cortex telemetry,
+and `metadata.json` recording provenance and the field-by-field
+verification of the rebuild against run 9's published record. Strict
+fields (the training record and the deterministic evaluations) must
+match; the adaptation and retention evaluations roll chance on a
+process-history-dependent tape and are reported, not counted. The
+cortex's experience buffer is not preserved: a restored cortex resumes
+predicting after two ticks of fresh experience. Trigger a rebuild
+with a commit message containing `[save-squid]`.
+
 ## Integrity rules
 
 - Identical seeds and tick counts; the transformer seed follows the run
