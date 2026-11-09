@@ -56,6 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.portable_brain import TrainingConfig  # noqa: E402
+from src.propagation import signal_of  # noqa: E402
 from predictive_cognition_experiments import (  # noqa: E402
     ExperimentSimulation, MODES, NEAR_SIGHT_OFFSET, contingency_events)
 
@@ -145,6 +146,41 @@ def _mean(values):
     return round(sum(values) / len(values), 3) if values else None
 
 
+
+def _motor_synaptic_probe(brain, target):
+    """Read-only, post-step approximation of signed inputs to one motor.
+
+    No inference or propagation is rerun.  The source states are those
+    recorded *after* this tick's update, so these contributions diagnose
+    persistent inhibition, not exact same-tick propagation arithmetic.
+    """
+    positive, negative = [], []
+    for pair, weight in brain.weights.items():
+        if not isinstance(pair, tuple) or len(pair) != 2:
+            continue
+        source, destination = pair
+        if destination != target:
+            continue
+        activation = brain.state.get(source)
+        if not isinstance(activation, (int, float)):
+            continue
+        contribution = float(signal_of(source, activation)) * float(weight)
+        record = (str(source), round(float(weight), 4),
+                  round(contribution, 3))
+        if contribution > 0.01:
+            positive.append(record)
+        elif contribution < -0.01:
+            negative.append(record)
+    positive.sort(key=lambda item: item[2], reverse=True)
+    negative.sort(key=lambda item: item[2])
+    return {
+        'positive_total': round(sum(p[2] for p in positive), 2),
+        'negative_total': round(sum(p[2] for p in negative), 2),
+        'top_positive': positive[:3],
+        'top_negative': negative[:3],
+    }
+
+
 def sample_growth(sim, tick, phase_idx):
     """One row of the live time series, read straight from the engine."""
     brain = sim.brain
@@ -164,6 +200,10 @@ def sample_growth(sim, tick, phase_idx):
     cap = brain.capability
     active = sorted(cap.active.values(), key=lambda d: -d.severity)
     squid = sim.squid
+    motor_inputs = {
+        name: _motor_synaptic_probe(brain, name)
+        for name in ('act_eat', 'act_move')
+    }
     return {
         'tick': tick,
         'phase': phase_idx,
@@ -199,6 +239,15 @@ def sample_growth(sim, tick, phase_idx):
             name: round(float(brain.state.get(name, 0.0)), 3)
             for name in ('act_eat', 'act_move', 'act_collapse',
                          'act_rest', 'act_flee')
+        },
+        'motor_synaptic_inputs': motor_inputs,
+        'innate_motor_weights': {
+            'food_eat': round(float(brain.weights.get(
+                ('can_see_food', 'act_eat'), 0.0)), 4),
+            'hunger_eat': round(float(brain.weights.get(
+                ('hunger', 'act_eat'), 0.0)), 4),
+            'curiosity_move': round(float(brain.weights.get(
+                ('curiosity', 'act_move'), 0.0)), 4),
         },
     }
 
@@ -489,7 +538,10 @@ def write_compact_outputs(results, out_path):
                 'top_actionable,food_seen_ticks,food_items,food_visible,'
                 'act_eat,act_move,act_collapse,act_rest,act_flee,'
                 'count_idle,count_exploring,count_eating,'
-                'count_exhausted,count_sleeping']
+                'count_exhausted,count_sleeping,'
+                'w_food_eat,w_hunger_eat,w_curiosity_move,'
+                'eat_pos,eat_neg,eat_top_pos,eat_top_neg,'
+                'move_pos,move_neg,move_top_pos,move_top_neg']
         events = {'births': [], 'stood_down': _empty_flow(),
                   'resolutions': _empty_flow()}
         for seed, r in sorted(runs.items()):
@@ -515,7 +567,22 @@ def write_compact_outputs(results, out_path):
                                    'act_rest', 'act_flee')],
                     *[str((s.get('action_counts') or {}).get(name, 0))
                       for name in ('idle', 'exploring', 'eating',
-                                   'exhausted', 'sleeping')]]))
+                                   'exhausted', 'sleeping')],
+                    *[str((s.get('innate_motor_weights') or {}).get(k, 0))
+                      for k in ('food_eat', 'hunger_eat', 'curiosity_move')],
+                    *[value for motor in ('act_eat', 'act_move')
+                      for value in (
+                          str((s.get('motor_synaptic_inputs') or {})
+                              .get(motor, {}).get('positive_total', 0)),
+                          str((s.get('motor_synaptic_inputs') or {})
+                              .get(motor, {}).get('negative_total', 0)),
+                          '|'.join(':'.join(str(v) for v in triple)
+                                   for triple in (s.get('motor_synaptic_inputs') or {})
+                                   .get(motor, {}).get('top_positive', [])),
+                          '|'.join(':'.join(str(v) for v in triple)
+                                   for triple in (s.get('motor_synaptic_inputs') or {})
+                                   .get(motor, {}).get('top_negative', []))
+                      )]]))
             for b in r.get('births') or []:
                 events['births'].append([
                     b.get('tick'), _trunc(str(b.get('neuron')), 16),
