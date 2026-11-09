@@ -30,8 +30,8 @@ placing it is an environmental act, not a reward.
 Run-6 post-mortem: the original world fired a startle every 150 ticks,
 which pinned anxiety at 100 and left the behavioural metrics no dynamic
 range, and placed food at a fixed far spot that was almost never inside
-the squid's 0.32 sight radius, so the contingency barely existed in
-its own percept stream. Both confounds are fixed here.
+its 0.32 sight radius, so the contingency barely existed in its own
+percept stream. Both confounds are fixed here.
 
 Run-8 post-mortem: spacing the scripted contingency was not enough -
 the trainer's ambient random startle chance (0.005/tick, ~120 fires
@@ -79,6 +79,50 @@ or `experiments/results/quick_results.json` (quick) and a markdown
 summary is printed. GitHub Actions runs the quick mode on every push to
 this branch (`.github/workflows/predictive-cognition.yml`) and the full
 mode when the pushed commit message contains `[full]`.
+
+## Growth study (run 10+)
+
+`growth_experiment.py` answers a different question from the
+conditions comparison: **does the brain stop growing because it is
+forbidden to, or because it no longer needs to?** Full design,
+mechanisms and honest findings in `docs/brain_growth.md`.
+
+The runner gives each condition one long life (240,000 ticks, 10x the
+standard training; one seed per condition - growth dynamics, not
+statistics) in the runs-8/9 world, and samples the live neuron count
+every 250 ticks alongside everything the growth machinery decides:
+open and actionable deficits, every birth with the deficit that
+justified it, every declined growth with the engine's reason, every
+deficit that ordinary learning closed on its own, Hebbian updates and
+total weight-update churn.
+
+The world changes under the squid mid-life, so "solving new problems by
+modifying existing synapses rather than adding neurons" is a
+measurement, not an interpretation:
+
+| phase | ticks | world |
+|---|---|---|
+| east | 0-60k | the runs-8/9 contingency, unchanged |
+| west | 60k-120k | the same contingency mirrored: food lands 0.2 west |
+| fouling | 120k-180k | east again, heavily fouled water (a new problem: cleanliness regulation) |
+| retention | 180k-240k | clean water again: does the east behaviour survive? |
+
+Growth permission in this engine is per-type caps (stress 5, novelty 6,
+reward 6, connector 10 grown neurons), a global ceiling of 100 neurons
+and a 60 sim-second cooldown. A plateau with none of those binding
+while synaptic churn continues is evidence of need-regulated growth; a
+plateau coinciding with a binding cap plus stand-downs citing it is a
+forbidden plateau. A 40-minute soft deadline per run guarantees the
+study always publishes.
+
+```bash
+python experiments/growth_experiment.py --quick
+python experiments/growth_experiment.py --full
+```
+
+CI runs the quick smoke on every push and the 240k-tick study when the
+commit message contains `[growth]`. Results land in
+`experiments/results/growth_results.json`.
 
 ## Integrity rules
 
