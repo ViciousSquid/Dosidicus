@@ -388,6 +388,8 @@ def growth_curve_summary(record):
         'final_synapses': last['synapses'],
         'total_weight_updates': last['weight_updates'],
         'births': len(births),
+        'standdowns': len(record.get('stood_down') or []),
+        'resolutions': len(record.get('resolutions') or []),
         'last_birth_tick': last_birth,
         'last_neuron_change_tick': (change_ticks[-1] if change_ticks
                                     else samples[0]['tick']),
@@ -422,7 +424,12 @@ def summarise(results):
             'n': len(rows),
             'final_neurons': _mean([r.get('final_neurons') for r in rows]),
             'final_grown': _mean([r.get('final_grown') for r in rows]),
+            'final_deepened': _mean([r.get('final_deepened') for r in rows]),
             'births': _mean([r.get('births') for r in rows]),
+            'standdowns': _mean(
+                [r.get('standdowns') for r in rows]),
+            'resolutions': _mean(
+                [r.get('resolutions') for r in rows]),
             'last_birth_tick': _mean([r.get('last_birth_tick') for r in rows]),
             'final_synapses': _mean([r.get('final_synapses') for r in rows]),
             'total_weight_updates': _mean(
@@ -438,6 +445,77 @@ def summarise(results):
     return summary
 
 
+def write_compact_outputs(results, out_path):
+    """Downloadable-size siblings of the full JSON: a per-mode CSV time
+    series (every 4th stored sample), per-mode event lists, and a
+    summary-only JSON. The full JSON stays the record of everything;
+    these exist so the analysis can fetch the curve without paging
+    through a multi-megabyte file."""
+    out = Path(out_path)
+    base = out.parent
+    base.mkdir(parents=True, exist_ok=True)
+
+    for mode, runs in results['runs'].items():
+        rows = ['# tick,phase,neurons,synapses,grown,deepened,'
+                'strength_sum,weight_updates,food_eaten,'
+                'food_approaches,anxiety,cleanliness,active_count,'
+                'top_actionable']
+        events = {'births': [], 'stood_down': [], 'resolutions': []}
+        for seed, r in sorted(runs.items()):
+            for s in (r.get('samples') or [])[::4]:
+                act = '-'
+                if s.get('actionable'):
+                    act = str(s['actionable'][0])[:28].replace(',', ';')
+                rows.append(','.join([
+                    str(s.get('tick')), str(s.get('phase')),
+                    str(s.get('neurons')), str(s.get('synapses')),
+                    str(s.get('grown')), str(s.get('deepened')),
+                    str(s.get('strength_sum')),
+                    str(s.get('weight_updates')),
+                    str(s.get('food_eaten')),
+                    str(s.get('food_approaches')),
+                    str(s.get('anxiety')), str(s.get('cleanliness')),
+                    str(s.get('active_count')), act]))
+            for b in r.get('births') or []:
+                events['births'].append([
+                    b.get('tick'), _trunc(str(b.get('neuron')), 16),
+                    _trunc(str(b.get('deficit')), 48),
+                    _trunc(str(b.get('because')), 64)])
+            for sd in r.get('stood_down') or []:
+                events['stood_down'].append([
+                    sd.get('tick'), _trunc(str(sd.get('deficit')), 32),
+                    _trunc(str(sd.get('because')), 64)])
+            for rs in r.get('resolutions') or []:
+                events['resolutions'].append([
+                    rs.get('tick'), _trunc(str(rs.get('kind')), 24),
+                    _trunc(str(rs.get('why')), 64)])
+        (base / f'growth_timeseries_{mode}.csv').write_text(
+            '\n'.join(rows) + '\n')
+        (base / f'growth_events_{mode}.json').write_text(
+            json.dumps(events))
+
+    compact = {
+        'meta': results['meta'],
+        'summary': results['summary'],
+        'per_run': {},
+    }
+    for mode, runs in results['runs'].items():
+        compact['per_run'][mode] = {}
+        for seed, r in sorted(runs.items()):
+            curve = growth_curve_summary(r)
+            curve['phases'] = r.get('phases')
+            curve['final_grown_census'] = r.get(
+                'final', {}).get('grown_neurons')
+            curve['growth_report'] = r.get('final', {}).get('growth_report')
+            curve['final_stats'] = r.get('final', {}).get('stats')
+            curve['elapsed_seconds'] = r.get('elapsed_seconds')
+            curve['ticks_completed'] = r.get('ticks_completed')
+            compact['per_run'][mode][str(seed)] = curve
+    (base / 'growth_summary.json').write_text(json.dumps(compact))
+    print(f"Compact outputs written beside {out}: growth_summary.json, "
+          f"per-mode timeseries CSVs and event lists")
+
+
 def print_markdown_summary(results):
     s = results['summary']
     print("\n## Growth-study results\n")
@@ -446,7 +524,10 @@ def print_markdown_summary(results):
     rows = [
         ('final neuron count', 'final_neurons', '{:.0f}'),
         ('grown tissue (of type caps 5/6/6/10)', 'final_grown', '{:.1f}'),
+        ('deepened (strength-multiplied) neurons', 'final_deepened', '{:.1f}'),
         ('births during life', 'births', '{:.1f}'),
+        ('growth proposals stood down', 'standdowns', '{:.0f}'),
+        ('deficits resolved without growth', 'resolutions', '{:.0f}'),
         ('tick of last birth', 'last_birth_tick', '{:.0f}'),
         ('synapses at end', 'final_synapses', '{:.0f}'),
         ('weight updates (total)', 'total_weight_updates', '{:.0f}'),
@@ -483,7 +564,7 @@ def main():
     parser.add_argument('--seeds', type=int, nargs='*', default=None)
     parser.add_argument('--ticks', type=int, default=None)
     parser.add_argument('--output', '-o', type=str,
-                        default='experiments/results/growth_results.json')
+                       default='experiments/results/growth_results.json')
     args = parser.parse_args()
 
     if args.quick:
@@ -522,6 +603,7 @@ def main():
     with open(out, 'w') as f:
         json.dump(results, f, indent=2)
     print(f"\nResults written to {out}")
+    write_compact_outputs(results, out)
     print_markdown_summary(results)
 
 
