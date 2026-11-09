@@ -527,3 +527,76 @@ inhibition, or an unexpected read/propagation path.
 The diagnostic must remain read-only and use the same seed and
 cortex conditions. Only after identifying the mechanism should
 we change the motor network or plasticity.
+
+
+## Results: run 21 (synaptic provenance of behavioural collapse)
+
+Run 21 (commit `db7f7e32`, published `a21b75a3`; workflow
+`42653677042`) passed its tests and completed the same 6k-tick
+three-mode seed-11 quick study. Its additional read-only
+`motor_synaptic_inputs` probes record signed incoming contributions
+to `act_eat` and `act_move`, together with the weights of three
+innate motor pathways. The telemetry uses **post-step source
+activation**, not a replay of the exact pre-propagation snapshot;
+these are diagnostic approximate sums, not exact predicted motor
+activations.
+
+At tick 900 (food visible in all modes):
+
+| Input | Off | Linear | Transformer |
+|---|---:|---:|---:|
+| `act_eat` positive contribution | +63.20 | +78.39 | +52.62 |
+| `act_eat` negative contribution | -337.04 | -348.29 | -228.93 |
+| `act_eat` motor activation | 0 | 0 | 0 |
+| `can_see_food -> act_eat` weight | +0.9098 | +0.9097 | +1.0000 |
+| `act_move` positive contribution | 0 | +0.92 | 0 |
+| `act_move` negative contribution | -0.10 | 0 | -70.23 |
+| `act_move` activation | 49.92 | 50.94 | **0** |
+| `curiosity -> act_move` weight | +0.45 | +0.45 | +0.45 |
+
+The food-to-eat synapse **survives and is positive** in all three
+conditions, yet many large negative inputs overwhelm it. The most
+negative `act_eat` inputs in off come from newly grown
+`tension_release`, `role_separation`, and `second_opinion`
+neurons at approximately -0.8 apiece; linear receives -0.8
+from `relay_bridge`, `waypoint`, and `learned_expectation`;
+transformer receives -0.8 from `play_reward`,
+`investigation_drive` and `curiosity_spark`.
+
+In transformer the motor shutdown has an additional structural
+source: `novelty_role_separation_2 -> act_move` contributes -31.32,
+`novelty_role_separation -> act_move` contributes -16.68,
+and **`can_see_food -> act_move` contributes -15.60** (weight -0.3121).
+Further stress-neuron inhibitory motor inputs appear later. In off
+and linear, `act_move` remains near its innate resting level (50).
+
+### The likely construction defect, located in source code
+
+`FunctionalNeuron.get_functional_connections`
+(`src/neurogenesis.py`) loops over **all**
+`creation_context.active_neurons`. When any neuron's value deviates
+from 50 by more than 20, it creates an output from the newborn to
+that neuron, signed by its deviation:
+`weight = +/- abs(value-50)/50*0.8`. The context includes action
+neurons as well as sensory/stat neurons. Consequently, a motor
+neuron at 0 during birth receives an **incidental newborn -> motor
+weight of -0.8**, even if that newborn is needed for an entirely
+different deficit. The creation path merges this ambient-context
+wiring with its *intentional* deficit-remedy wiring, then records the
+edges as neurogenesis. This mechanism accounts for the cluster of
+-0.8 weights actually observed and explains how early growth
+could suppress later actions; it is stronger evidence than a
+mere correlation, but a controlled ablation must establish how much
+of the behavioural collapse it causes.
+
+**Falsifiable next experiment:** compare unmodified neurogenesis with
+a version that excludes motor neurons only from the *incidental*
+birth-context output list, keeping the explicitly planned
+deficit-remedy and innate motor synapses untouched. Use matched
+seed-11 quick runs in all three cortex modes; measure earned
+feeding, locomotion, motor activations and new-neuron counts,
+and do not infer a population effect from one seed. If deleting
+these unwanted edges does not restore feeding, investigate
+intentional differentiation-remedy offloads and other inhibitory
+motor connections. Do not replace the squid's decisions with
+a hand-authored behaviour rule.
