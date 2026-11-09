@@ -32,7 +32,7 @@
           "unavoided_startle_ticks": 5,
           "neurons_created": 10,
           "hebbian_updates": 467,
-          "ticks_per_second": 758.1,
+          "ticks_per_second": 1144.8,
           "predictive": {
             "mode": "off",
             "train_steps": 0,
@@ -105,7 +105,7 @@
           "unavoided_startle_ticks": 5,
           "neurons_created": 10,
           "hebbian_updates": 239,
-          "ticks_per_second": 804.9,
+          "ticks_per_second": 1200.6,
           "predictive": {
             "mode": "off",
             "train_steps": 0,
@@ -180,7 +180,7 @@
           "unavoided_startle_ticks": 6,
           "neurons_created": 13,
           "hebbian_updates": 70,
-          "ticks_per_second": 548.1,
+          "ticks_per_second": 826.3,
           "predictive": {
             "mode": "linear",
             "train_steps": 90,
@@ -198,8 +198,8 @@
             "delta_mae": 2.804504772943375e-05,
             "action_top1": 0.9959973315543695,
             "uncertainty": 0.05783384252615341,
-            "inference_seconds": 0.01,
-            "train_seconds": 0.032,
+            "inference_seconds": 0.005,
+            "train_seconds": 0.02,
             "brain_effect": {
               "synapses_from_predictions": 45,
               "synapses_into_predictions": 0,
@@ -292,7 +292,7 @@
           "unavoided_startle_ticks": 4,
           "neurons_created": 16,
           "hebbian_updates": 170,
-          "ticks_per_second": 509.2,
+          "ticks_per_second": 766.2,
           "predictive": {
             "mode": "linear",
             "train_steps": 90,
@@ -310,8 +310,8 @@
             "delta_mae": 0.0001603825677641599,
             "action_top1": 0.9599733155436958,
             "uncertainty": 0.02964059317747949,
-            "inference_seconds": 0.01,
-            "train_seconds": 0.031,
+            "inference_seconds": 0.005,
+            "train_seconds": 0.02,
             "brain_effect": {
               "synapses_from_predictions": 69,
               "synapses_into_predictions": 0,
@@ -406,7 +406,7 @@
           "unavoided_startle_ticks": 1,
           "neurons_created": 12,
           "hebbian_updates": 175,
-          "ticks_per_second": 213.6,
+          "ticks_per_second": 303.6,
           "predictive": {
             "mode": "transformer",
             "train_steps": 130,
@@ -424,8 +424,8 @@
             "delta_mae": 0.012438842475333965,
             "action_top1": 0.7718478985990656,
             "uncertainty": 0.2656123324565263,
-            "inference_seconds": 1.424,
-            "train_seconds": 1.903,
+            "inference_seconds": 0.982,
+            "train_seconds": 1.302,
             "brain_effect": {
               "synapses_from_predictions": 68,
               "synapses_into_predictions": 0,
@@ -518,7 +518,7 @@
           "unavoided_startle_ticks": 5,
           "neurons_created": 16,
           "hebbian_updates": 133,
-          "ticks_per_second": 222.4,
+          "ticks_per_second": 324.9,
           "predictive": {
             "mode": "transformer",
             "train_steps": 90,
@@ -536,8 +536,8 @@
             "delta_mae": 0.011290467681177056,
             "action_top1": 0.9166110740493663,
             "uncertainty": 0.2886771558338916,
-            "inference_seconds": 1.445,
-            "train_seconds": 1.393,
+            "inference_seconds": 0.983,
+            "train_seconds": 0.929,
             "brain_effect": {
               "synapses_from_predictions": 57,
               "synapses_into_predictions": 0,
@@ -629,7 +629,7 @@
       "train_food_approaches": 20.5,
       "train_escape_ratio": 0.25,
       "train_neurons_created": 10.0,
-      "ticks_per_second": 781.5,
+      "ticks_per_second": 1172.7,
       "op_alignment": null,
       "op_coverage": null,
       "op_refeed_ticks": null,
@@ -655,7 +655,7 @@
       "train_food_approaches": 4.5,
       "train_escape_ratio": 0.25,
       "train_neurons_created": 14.5,
-      "ticks_per_second": 528.65,
+      "ticks_per_second": 796.25,
       "op_alignment": 0.912,
       "op_coverage": 1.0,
       "op_refeed_ticks": null,
@@ -680,8 +680,8 @@
       },
       "pred_action_top1": 0.978,
       "synapses_from_predictions": 57.0,
-      "inference_seconds": 0.01,
-      "train_seconds_predictive": 0.0315
+      "inference_seconds": 0.005,
+      "train_seconds_predictive": 0.02
     },
     "transformer": {
       "n": 2,
@@ -689,7 +689,7 @@
       "train_food_approaches": 7.0,
       "train_escape_ratio": 0.25,
       "train_neurons_created": 14.0,
-      "ticks_per_second": 218.0,
+      "ticks_per_second": 314.25,
       "op_alignment": -0.3099,
       "op_coverage": 1.0,
       "op_refeed_ticks": null,
@@ -714,8 +714,8 @@
       },
       "pred_action_top1": 0.8442,
       "synapses_from_predictions": 62.5,
-      "inference_seconds": 1.4345,
-      "train_seconds_predictive": 1.648
+      "inference_seconds": 0.9825,
+      "train_seconds_predictive": 1.1155
     }
   }
 }
