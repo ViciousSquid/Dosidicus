@@ -79,14 +79,20 @@ jobs:
           if git log -1 --pretty=%B | grep -q '\[full\]'; then
             depth="full"
           fi
+          if git log -1 --pretty=%B | grep -q '\[growth\]'; then
+            depth="growth"
+          fi
           echo "DEPTH=$depth" >> "$GITHUB_ENV"
           echo "Experiment depth: $depth"
       - name: Run the experiment
         run: |
-          if [ "$DEPTH" = "full" ]; then
+          if [ "$DEPTH" = "growth" ]; then
+            python experiments/growth_experiment.py --full --output experiments/results/growth_results.json 2>&1 | tee ci-experiment.log
+          elif [ "$DEPTH" = "full" ]; then
             python experiments/predictive_cognition_experiments.py --full --output experiments/results/full_results.json 2>&1 | tee ci-experiment.log
           else
             python experiments/predictive_cognition_experiments.py --quick --output experiments/results/quick_results.json 2>&1 | tee ci-experiment.log
+            python experiments/growth_experiment.py --quick --output experiments/results/growth_quick_results.json 2>&1 | tee -a ci-experiment.log
           fi
       - name: Publish diagnostics and results to the branch
         if: always()
