@@ -1,76 +1,25 @@
 # HANDOFF — Dosidicus predictive-cognition research branch
 
-## Current status — 9 November 2026, after run 22
+## Latest verified status — 9 November 2026, through run 25
 
-**The run-21 task below is completed; this section takes precedence over older
-status headings.** Work only on `research/transformer-predictive-cognition`.
-The next active workflow is [run 23](https://github.com/ViciousSquid/Dosidicus/actions/runs/42656767125);
-check its current outcome before drawing conclusions.
+**All runs 19–25 have completed successfully** in their GitHub Actions
+workflows, with results published to this branch. The work is still
+**experimental**, and normal neural behaviour is unchanged unless
+explicitly opted into one of two research guards. Always recheck
+Actions/HEAD before claiming any newer status.
 
-**Run 21:** successful, `ci-logs/21/results/`. The original
-`can_see_food → act_eat` innate synapse survived, but its positive
-contribution was overwhelmed by huge negative inputs from grown neurons;
-the transformer also received severe negative input to `act_move`.
-The cause was traced to `FunctionalNeuron.get_functional_connections`:
-each new neuron automatically connects negatively to any low-activation
-motor neuron in its birth-time context even when that motor is irrelevant
-to the neuron’s diagnosed purpose.
+The most important conclusion: the original early neurogenesis
+plateau was *not* evidence of a completed/intelligent brain.
+Newborn neurons were accidentally generating strong inhibitory
+synapses into inactive motor neurons. Read-only diagnosis and
+paired ablation confirmed this mechanism. Some feeding and
+locomotion were restored, including many transformer squids,
+but two distinct rescue approaches have also **harmed controls**.
+Neither is ready as a universal engine default.
 
-**Run 22:** controlled *opt-in* deletion of incidental birth-context
-outputs *into motor targets only*, leaving explicit remedy connections,
-innate synapses, learning and action selection intact. Commit
-`12cdb21e`, published `7e75ab09`, CI [success](https://github.com/ViciousSquid/Dosidicus/actions/runs/42655419535);
-data `ci-logs/22/results/motor_wiring_study.json`.
-38 predictive and 55 baseline tests (114 subtests) passed.
-
-| Mode, 6,000 ticks, seed 11 | Original meals | Intervention meals | Original exploring | Intervention exploring |
-|---|---:|---:|---:|---:|
-| Off | 1 | **132** | 5,996 | 1,482 |
-| Linear | 1 | **46** | 5,997 | 724 |
-| Transformer | 4 | **4** | 510 | 4,559 |
-
-This is **strong single-seed evidence of motor poisoning by incidental
-birth wiring**, not a general population-level feeding claim. Off and
-linear feeding are rescued; transformer movement is rescued but feeding
-remains impaired. Grown-source negative `act_eat` edges in controls:
-11/15/12 off/linear/transformer, **zero** in all three corrected arms.
-The transformer is therefore **not fixed**. Detailed interpretation:
-`docs/brain_growth.md`, “Results: run 22”.
-
-**Run 23:** launched as commit `711cbf08` using the `[motor-repl]`
-depth. It reruns the paired original / no-incidental-motor study across
-**three independent seeds 22, 33, 44** (seed 11 remains the discovery
-run, and historically exceptional seed 222 is excluded from the
-confirmatory set). Results will publish to
-`ci-logs/23/results/motor_wiring_replication.json` on success.
-The new per-edge provenance from `CausalLedger.weight_history` traces
-whether differentiation or plasticity removed the transformer's
-`hunger → act_eat` innate connection. Report any failures and
-non-replication without downplaying them. Run both test suites; check
-actual CI conclusion and not merely the existence of published files.
-
-**Scientific caveat:** Each arm resets the seed, but diverging motor
-actions change consumption of the shared Python RNG, so random
-ambient world events are not a perfectly frozen common tape.
-Scheduled startle→food contingency timing is the same. Treat paired
-differences as outcomes of the intervention *in the stochastic
-simulation*, not a stepwise environment-matched replay.
-
-**Next after Run 23:** analyse the paired per-seed feeding and movement
-deltas; inspect the three innate-edge histories and actual removal
-mechanisms. If the poor transformer feeding persists and the ledger
-names `neurogenesis` (“handed over to …”), test a narrowly scoped,
-opt-in innate-synapse-preservation counterfactual, with its own control.
-Do not force feeding, alter motor action rules, silently change
-default behaviour, expand caps as a substitute for correction, or
-overwrite the preserved historical seed-222 organism.
-
----
-
-
-Last updated: 2026-11-09 after **Run 22 completed successfully**.
-**This file is a snapshot, not a live CI status.** Check branch HEAD and
-Actions on resumption.
+The preserved special transformer squid **222 is untouched**.
+See `docs/brain_growth.md` Results runs 19–25 and
+`ci-logs/{19,20,21,22,23,24,25}/results/` for raw evidence.
 
 ## Rules / scope
 
@@ -252,26 +201,95 @@ Actions on resumption.
   feeding problem is unresolved. Other research files and original
   behaviour have not been overwritten.
 
-## NEXT: isolate transformer-specific loss of eating
+## Run 23 — independent-seed replication (COMPLETE, CI green)
 
-1. The historical Run 21 transformer lost its innate
-   `hunger -> act_eat` weight (0 by tick 500), unlike off/linear.
-   Check whether this also happens in the **Run 22 intervention arm**.
-   One hypothesis is `_remedy_wiring` for differentiation,
-   which calls `_retire_edge((offload, target))` without protecting
-   an innate connection. It is NOT confirmed.
-2. Add **read-only provenance telemetry** for changes to the
-   `hunger -> act_eat` and `can_see_food -> act_eat`
-   weights, with exact mechanism/deficit/event source from
-   `CausalLedger`. Also record top negative and positive
-   contributors to `act_eat` at important ticks under
-   `context_motor_autowiring=False`. Do not confuse
-   action suppression with absence of visible food.
-3. Only after source is located, run a matched intervention
-   to test the cause; never silently force eating or change
-   baseline behaviour. Replicate corrected runs across seeds,
-   including exceptional seed 222, before claiming a general
-   predictive benefit. Continue preserving squid 222.
+- Workflow https://github.com/ViciousSquid/Dosidicus/actions/runs/42656767125
+  Data: `ci-logs/23/results/motor_wiring_replication.json`.
+  18 simulations, three modes × independent seeds 22/33/44 ×
+  historical versus no incidental newborn-to-motor edges,
+  6,000 ticks each; seed 11 and special seed 222 excluded.
+- **Earned food (historical → intervention):**
+  - Off: seed 22 **102→21** (regression!), 33 **4→136**,
+    44 **2→128**.
+  - Linear: 22 **2→117**, 33 **9→119**, 44 **0→141**.
+  - Transformer: 22 **3→120**, 33 **2→111**, 44 **2→3**.
+- Broad motor-autowiring exclusion therefore rescues many
+  transformer squids, unlike seed 11, but is NOT universally safe:
+  it harmed a previously capable off-mode individual. The guard
+  prevents *both excitatory and inhibitory* newborn-to-motor
+  context edges. Later environmental RNG sequences can diverge
+  after interventions change behaviour; a fixed external event
+  tape would tighten causal comparison.
+- n=3 confirmatory seeds, not statistically conclusive.
+  See `docs/brain_growth.md` for full caveats.
+
+## Run 24 — ledger identifies innate connection handover (COMPLETE)
+
+- Workflow https://github.com/ViciousSquid/Dosidicus/actions/runs/42656891829
+  Data `ci-logs/24/results/motor_wiring_study.json`.
+- `CausalLedger` confirms transformer `hunger → act_eat`
+  is **deleted by neurogenesis differentiation** (original weight
+  ≈+0.3994), handed over to `second_opinion` in the
+  no-incidental-motor intervention. This replacement supplies about
+  **−20** inhibitory motor input at tick 6k. Historical transformer
+  hands it to `role_separation`. Its innate food-sight → eat
+  connection stays strongly positive.
+- This is not exclusively a transformer problem: off-mode
+  intervention also retires hunger → eat, yet feeds 132 times;
+  linear keeps it and feeds 46. The HANDOVER itself is therefore
+  not a sufficient single explanation.
+
+## Run 25 — preserve innate motor pathway in differentiation (COMPLETE)
+
+- Code commit `8cca376a`, successful workflow
+  https://github.com/ViciousSquid/Dosidicus/actions/runs/42657961796,
+  data `ci-logs/25/results/innate_offload_study.json`.
+  **40 predictive tests and 55 baseline tests passed**.
+- All six arms use `context_motor_autowiring=False` (the
+  earlier guard). Intervention also sets
+  `preserve_innate_motor_offload=True`, making differentiation
+  leave the original innate synapse in place while still creating
+  its planned remedy connection. Flags default to the historical
+  behaviour in all ordinary simulations.
+- **Earned feeding after 6,000 ticks, seed 11:**
+  - Off: **132→23** (another serious regression).
+  - Linear: **46→46** (its original innate edge was not retired).
+  - Transformer: **4→118** (large rescue).
+- The result causally implicates this handover in transformer
+  seed 11, but *preserving innate edges indiscriminately is
+  harmful to another squid*. At low hunger, a retained positive
+  hunger→eat weight can produce inhibitory input because
+  `signal_of` is relative to a 50 baseline. With preservation,
+  off-mode's direct hunger synapse reached +1 and contributed
+  ~−39.6 at tick 6,000. Do not enable this flag as a global fix.
+- The mechanistic specificity is useful but still n=1; transformer
+  superiority and stable life-long cognition are **not** proven.
+
+## NEXT: find a selective, safe wiring policy; then replicate
+
+1. **Do not merge either broad research guard into the default.**
+   The system needs evidence that neurons attached to the
+   motor bank can actually drive the intended behaviour, not
+   simple blanket protection/retirement.
+2. Investigate a narrower intervention: suppress *only the
+   negative/unjustified* automatic newborn-to-motor context
+   edges, preserving intentional/positive wiring. The broad
+   guard suppresses both and harmed off seed 22.
+3. Independently investigate differentiation handovers of
+   **innate** motor synapses: preserving them wholesale
+   rescues transformer 11 but harms off 11. Test a
+   condition-based handover, or require the replacement path
+   to be demonstrably functional before retiring the old
+   path. Record exact provenance and onset of failure.
+4. **Use independent environment RNG / replay** to remove
+   stochastic event-order confounds when actions diverge.
+   Expand seed count well beyond 3, test other life phases
+   and 240k-tick survival, and include preserved squid 222
+   only in a specifically designed diagnostic.
+5. Keep raw null/negative results alongside positives. The
+   transformer cortex is still a sensor, not an imposed
+   behaviour policy; neither more neurons nor more synapses
+   proves better learned behaviour.
 
 ## Other research: seed 222 preserved; population gain NOT replicated
 
