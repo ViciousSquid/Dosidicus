@@ -1,0 +1,4133 @@
+{
+  "meta": {
+    "modes": [
+      "off",
+      "linear",
+      "transformer"
+    ],
+    "seeds": [
+      11,
+      22,
+      33,
+      44,
+      55,
+      66,
+      77,
+      88,
+      99,
+      111,
+      222,
+      333
+    ],
+    "train_ticks": 24000,
+    "contingency": {
+      "start": 150,
+      "interval": 700,
+      "food_delay": 16,
+      "food_placement": "near_squid",
+      "near_sight_offset": 0.2,
+      "ambient_startle_chance": 0.0
+    },
+    "quick": false
+  },
+  "runs": {
+    "off": {
+      "11": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 4,
+          "food_approaches": 9,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 296,
+          "neurons_created": 12,
+          "hebbian_updates": 498,
+          "ticks_per_second": 405.3,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 68,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "22": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 15,
+          "food_approaches": 34,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 273,
+          "neurons_created": 13,
+          "hebbian_updates": 280,
+          "ticks_per_second": 366.1,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 77,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "33": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 1,
+          "food_approaches": 1,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 282,
+          "neurons_created": 15,
+          "hebbian_updates": 370,
+          "ticks_per_second": 416.2,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 78,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 12.050000000001631,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "44": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 2,
+          "food_approaches": 4,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 269,
+          "neurons_created": 12,
+          "hebbian_updates": 125,
+          "ticks_per_second": 424.4,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 65,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "55": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 2,
+          "food_approaches": 5,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 305,
+          "neurons_created": 15,
+          "hebbian_updates": 94,
+          "ticks_per_second": 348.8,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 70,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "66": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 3,
+          "food_approaches": 8,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 214,
+          "neurons_created": 15,
+          "hebbian_updates": 153,
+          "ticks_per_second": 341.0,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 93,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "77": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 4,
+          "food_approaches": 8,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 270,
+          "neurons_created": 11,
+          "hebbian_updates": 78,
+          "ticks_per_second": 499.8,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 73,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "88": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 2,
+          "food_approaches": 4,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 343,
+          "neurons_created": 11,
+          "hebbian_updates": 51,
+          "ticks_per_second": 468.4,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 74,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "99": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 5,
+          "food_approaches": 9,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 430,
+          "neurons_created": 13,
+          "hebbian_updates": 107,
+          "ticks_per_second": 384.7,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 74,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "111": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 3,
+          "food_approaches": 5,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 326,
+          "neurons_created": 11,
+          "hebbian_updates": 101,
+          "ticks_per_second": 481.1,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 72,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "222": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 6,
+          "food_approaches": 19,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 302,
+          "neurons_created": 11,
+          "hebbian_updates": 104,
+          "ticks_per_second": 492.1,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 95,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "333": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 2,
+          "food_approaches": 4,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 261,
+          "neurons_created": 11,
+          "hebbian_updates": 59,
+          "ticks_per_second": 469.1,
+          "predictive": {
+            "mode": "off",
+            "train_steps": 0,
+            "sleep_train_steps": 0,
+            "loss_ema": null,
+            "mae": null,
+            "delta_mae": null,
+            "action_top1": null,
+            "uncertainty": null,
+            "inference_seconds": null,
+            "train_seconds": null,
+            "brain_effect": null
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": null,
+          "coverage": null,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": null,
+          "mean_anticipation_early": null,
+          "mean_anticipation_late": null,
+          "mean_rise_early": null,
+          "mean_rise_late": null,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": null,
+              "anticipation_early": null,
+              "anticipation_late": null,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 71,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      }
+    },
+    "linear": {
+      "11": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 1,
+          "food_approaches": 3,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 299,
+          "neurons_created": 13,
+          "hebbian_updates": 70,
+          "ticks_per_second": 320.1,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.0004912840185354047,
+              "flags": 0.009932928471401174,
+              "senses": 0.08967032723309432,
+              "position": 0.03694394136288784,
+              "food": 0.03513769518832521,
+              "action": 1.3245476715439955e-08,
+              "neural": 0.00016566152816505512
+            },
+            "delta_mae": 2.959725813352161e-185,
+            "action_top1": 0.9997499895828993,
+            "uncertainty": 0.06177889744903802,
+            "inference_seconds": 0.168,
+            "train_seconds": 0.614,
+            "brain_effect": {
+              "synapses_from_predictions": 45,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 8.7029,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_hunger_rise",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_anxiety_rise",
+                  "target": "connector_connectivity_bridge_2",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.9512192300032394,
+          "coverage": 0.9666666666666667,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 65,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "22": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 3,
+          "food_approaches": 6,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 342,
+          "neurons_created": 16,
+          "hebbian_updates": 185,
+          "ticks_per_second": 263.5,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.0005214348614595059,
+              "flags": 0.009300981552284846,
+              "senses": 0.08060644225897723,
+              "position": 1.4901161193847656e-07,
+              "food": 3.5571378188180764e-176,
+              "action": 1.3245476715439955e-08,
+              "neural": 0.00029319973310706665
+            },
+            "delta_mae": 3.36043970689865e-174,
+            "action_top1": 0.9969998749947915,
+            "uncertainty": 0.03940797130642536,
+            "inference_seconds": 0.171,
+            "train_seconds": 0.602,
+            "brain_effect": {
+              "synapses_from_predictions": 69,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 14.9444,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_south",
+                  "target": "act_move",
+                  "weight": -1.0
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "learned_expectation",
+                  "weight": 0.8
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_hunger_rise",
+                  "target": "junction",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.8411784753765541,
+          "coverage": 0.9,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 61,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "33": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 4,
+          "food_approaches": 9,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 379,
+          "neurons_created": 18,
+          "hebbian_updates": 197,
+          "ticks_per_second": 240.0,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.000532345126524372,
+              "flags": 0.0026378114169256085,
+              "senses": 0.08534462298370922,
+              "position": 0.04125259291552304,
+              "food": 0.03819460229258968,
+              "action": 0.0012365203190156247,
+              "neural": 0.00020223181535716954
+            },
+            "delta_mae": 1.0886175085171563e-166,
+            "action_top1": 0.9956248177007375,
+            "uncertainty": 0.05854023695014698,
+            "inference_seconds": 0.175,
+            "train_seconds": 0.622,
+            "brain_effect": {
+              "synapses_from_predictions": 83,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 15.8494,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_ahead",
+                  "target": "safety_signal",
+                  "weight": 0.8
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "anticipation",
+                  "weight": 0.8
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "role_separation",
+                  "weight": 0.7389
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_south",
+                  "target": "waypoint",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.5924652740773114,
+          "coverage": 0.9666666666666667,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 80,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "44": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 0,
+          "food_approaches": 0,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 289,
+          "neurons_created": 18,
+          "hebbian_updates": 47,
+          "ticks_per_second": 264.3,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.0005720244695221848,
+              "flags": 0.006279590971864032,
+              "senses": 0.09804667348004699,
+              "position": 0.03605633310026622,
+              "food": 0.048967187805657175,
+              "action": 1.3245476715439955e-08,
+              "neural": 0.00020830301929836788
+            },
+            "delta_mae": 6.096301196408356e-194,
+            "action_top1": 0.9870411267136131,
+            "uncertainty": 0.0671332494416269,
+            "inference_seconds": 0.172,
+            "train_seconds": 0.619,
+            "brain_effect": {
+              "synapses_from_predictions": 41,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 10.4595,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_hunger_rise",
+                  "target": "connector_connectivity_bridge_2",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.7608399970416546,
+          "coverage": 0.9,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 78,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "55": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 4,
+          "food_approaches": 11,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 326,
+          "neurons_created": 17,
+          "hebbian_updates": 135,
+          "ticks_per_second": 254.2,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.00046126072562268386,
+              "flags": 9.66939677247192e-09,
+              "senses": 0.05095184717393271,
+              "position": 0.03809186926723378,
+              "food": 0.03791414904680673,
+              "action": 1.3245476715439955e-08,
+              "neural": 0.00015425839562907968
+            },
+            "delta_mae": 1.7669413215298398e-167,
+            "action_top1": 0.9993749739572482,
+            "uncertainty": 0.04084068152496341,
+            "inference_seconds": 0.173,
+            "train_seconds": 0.618,
+            "brain_effect": {
+              "synapses_from_predictions": 60,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 15.0946,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_north",
+                  "target": "role_separation",
+                  "weight": -0.7432
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_hunger_rise",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.8156471423898816,
+          "coverage": 0.6666666666666666,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 69,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "66": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 0,
+          "food_approaches": 0,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 285,
+          "neurons_created": 16,
+          "hebbian_updates": 78,
+          "ticks_per_second": 287.3,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.0004459915082055405,
+              "flags": 0.004684584951484694,
+              "senses": 0.0791177793130642,
+              "position": 0.03857398221752926,
+              "food": 0.03987268673755966,
+              "action": 1.3245476715439955e-08,
+              "neural": 0.00013889965197095097
+            },
+            "delta_mae": 6.096301196408833e-194,
+            "action_top1": 0.9999166631942997,
+            "uncertainty": 0.05595670917685808,
+            "inference_seconds": 0.172,
+            "train_seconds": 0.621,
+            "brain_effect": {
+              "synapses_from_predictions": 53,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 12.7989,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_south",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "connector_connectivity_bridge_2",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.7169702454439904,
+          "coverage": 0.6666666666666666,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 75,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "77": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 0,
+          "food_approaches": 0,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 340,
+          "neurons_created": 15,
+          "hebbian_updates": 68,
+          "ticks_per_second": 289.0,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.0004689416672764427,
+              "flags": 0.004684582041238538,
+              "senses": 0.06578069173986743,
+              "position": 0.03522398195489875,
+              "food": 0.04503593916544382,
+              "action": 0.004848425486105681,
+              "neural": 0.00015449137149117155
+            },
+            "delta_mae": 6.096301196408165e-194,
+            "action_top1": 0.9859994166423601,
+            "uncertainty": 0.05589132191375057,
+            "inference_seconds": 0.17,
+            "train_seconds": 0.617,
+            "brain_effect": {
+              "synapses_from_predictions": 39,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 8.6346,
+              "strongest_synapses": [
+                {
+                  "source": "pred_uncertainty",
+                  "target": "curiosity_spark",
+                  "weight": 0.8
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_hunger_rise",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_anxiety_rise",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.5539889660340465,
+          "coverage": 0.8333333333333334,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 76,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "88": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 2,
+          "food_approaches": 4,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 347,
+          "neurons_created": 16,
+          "hebbian_updates": 162,
+          "ticks_per_second": 258.3,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.00044726544966241193,
+              "flags": 0.010874825361388825,
+              "senses": 0.0957911710300122,
+              "position": 0.03489848641858754,
+              "food": 0.04596555994344211,
+              "action": 1.3245476715439955e-08,
+              "neural": 0.00014221597376626693
+            },
+            "delta_mae": 8.191402407600839e-170,
+            "action_top1": 0.9997083211800492,
+            "uncertainty": 0.06773087123072374,
+            "inference_seconds": 0.171,
+            "train_seconds": 0.617,
+            "brain_effect": {
+              "synapses_from_predictions": 72,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 17.9364,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_east",
+                  "target": "learned_expectation",
+                  "weight": 1.0
+                },
+                {
+                  "source": "pred_food_south",
+                  "target": "learned_expectation",
+                  "weight": -1.0
+                },
+                {
+                  "source": "pred_food_south",
+                  "target": "anticipation",
+                  "weight": 1.0
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "learned_expectation",
+                  "weight": -0.8006
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "learned_expectation",
+                  "weight": -0.7228
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.5125821922671624,
+          "coverage": 0.8666666666666667,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 72,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "99": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 1,
+          "food_approaches": 2,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 304,
+          "neurons_created": 14,
+          "hebbian_updates": 729,
+          "ticks_per_second": 294.2,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.0004166210205317485,
+              "flags": 0.002637817449657823,
+              "senses": 0.09470519297341924,
+              "position": 0.03571117157095947,
+              "food": 0.049742313087734163,
+              "action": 1.3245476715439955e-08,
+              "neural": 0.00013278521874479722
+            },
+            "delta_mae": 1.6136389931709567e-186,
+            "action_top1": 0.9968748697862411,
+            "uncertainty": 0.06351545742527848,
+            "inference_seconds": 0.169,
+            "train_seconds": 0.622,
+            "brain_effect": {
+              "synapses_from_predictions": 55,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 15.4841,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_north",
+                  "target": "anticipation",
+                  "weight": 1.0
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "role_separation",
+                  "weight": -1.0
+                },
+                {
+                  "source": "pred_threat_soon",
+                  "target": "role_separation",
+                  "weight": 1.0
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "achievement_signal",
+                  "weight": 0.8677
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "role_separation",
+                  "weight": 0.8262
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.9673515834624964,
+          "coverage": 0.8666666666666667,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 92,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "111": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 7,
+          "food_approaches": 16,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 326,
+          "neurons_created": 15,
+          "hebbian_updates": 486,
+          "ticks_per_second": 264.3,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.0005297733917542631,
+              "flags": 0.0046845745025119725,
+              "senses": 0.10861355673672203,
+              "position": 7.508788257837345e-09,
+              "food": 4.5546005118187075e-65,
+              "action": 1.3245476715439955e-08,
+              "neural": 0.00039691236805978124
+            },
+            "delta_mae": 8.191402407600839e-170,
+            "action_top1": 0.9939164131838827,
+            "uncertainty": 0.04814825882532525,
+            "inference_seconds": 0.172,
+            "train_seconds": 0.617,
+            "brain_effect": {
+              "synapses_from_predictions": 50,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 12.7354,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_west",
+                  "target": "act_move",
+                  "weight": -1.0
+                },
+                {
+                  "source": "pred_threat_soon",
+                  "target": "act_move",
+                  "weight": -1.0
+                },
+                {
+                  "source": "pred_food_south",
+                  "target": "act_move",
+                  "weight": -0.9898
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "act_move",
+                  "weight": 0.9145
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.9962262623910497,
+          "coverage": 0.9666666666666667,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 84,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "222": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 1,
+          "food_approaches": 3,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 290,
+          "neurons_created": 15,
+          "hebbian_updates": 113,
+          "ticks_per_second": 277.3,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.0004909592492506258,
+              "flags": 8.968340297027461e-15,
+              "senses": 0.0707864120110087,
+              "position": 0.035006059916784384,
+              "food": 0.03825157149113005,
+              "action": 1.3245476715439955e-08,
+              "neural": 0.00016682911176883885
+            },
+            "delta_mae": 1.4316766677934325e-183,
+            "action_top1": 0.9977082378432435,
+            "uncertainty": 0.04848040492229141,
+            "inference_seconds": 0.171,
+            "train_seconds": 0.626,
+            "brain_effect": {
+              "synapses_from_predictions": 54,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 12.363,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_west",
+                  "target": "role_separation",
+                  "weight": 0.839
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "role_separation",
+                  "weight": -0.8
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "food_reward",
+                  "weight": 0.7994
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_hunger_rise",
+                  "target": "waypoint",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.7935363969052442,
+          "coverage": 0.6,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 69,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "333": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 0,
+          "food_approaches": 0,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 300,
+          "neurons_created": 15,
+          "hebbian_updates": 150,
+          "ticks_per_second": 287.4,
+          "predictive": {
+            "mode": "linear",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0,
+            "mae": {
+              "drives": 0.0004711466030268649,
+              "flags": 0.002637818759840196,
+              "senses": 0.08457358579503589,
+              "position": 7.450580596923828e-08,
+              "food": 2.2177976120260486e-67,
+              "action": 1.3245476715439955e-08,
+              "neural": 0.0012160745229486845
+            },
+            "delta_mae": 6.096301196408356e-194,
+            "action_top1": 0.9942914288095337,
+            "uncertainty": 0.03765621946801821,
+            "inference_seconds": 0.17,
+            "train_seconds": 0.621,
+            "brain_effect": {
+              "synapses_from_predictions": 52,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 12.5636,
+              "strongest_synapses": [
+                {
+                  "source": "pred_threat_soon",
+                  "target": "act_move",
+                  "weight": -1.0
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_hunger_rise",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_anxiety_rise",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.8411784753765541,
+          "coverage": 0.9,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 100.0,
+          "mean_anticipation_early": 100.0,
+          "mean_anticipation_late": 100.0,
+          "mean_rise_early": 0.0,
+          "mean_rise_late": 0.0,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 100.0,
+              "anticipation_early": 100.0,
+              "anticipation_late": 100.0,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 74,
+          "escaped_startles": 1,
+          "escape_ratio": 0.013513513513513514,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      }
+    },
+    "transformer": {
+      "11": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 3,
+          "food_approaches": 8,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 359,
+          "neurons_created": 16,
+          "hebbian_updates": 178,
+          "ticks_per_second": 159.4,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1536,
+            "sleep_train_steps": 40,
+            "loss_ema": 0.004299131657334194,
+            "mae": {
+              "drives": 0.005759157506963944,
+              "flags": 0.0057291374287362674,
+              "senses": 0.08807569633457399,
+              "position": 0.0022346400411559736,
+              "food": 0.006508801561399963,
+              "action": 0.0038923009043918488,
+              "neural": 0.0026096890181889773
+            },
+            "delta_mae": 0.00220604012466962,
+            "action_top1": 0.9857494062252594,
+            "uncertainty": 0.05198929442959164,
+            "inference_seconds": 22.658,
+            "train_seconds": 21.997,
+            "brain_effect": {
+              "synapses_from_predictions": 74,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 13.9436,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_west",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_south",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_reward_soon",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_threat_soon",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_uncertainty",
+                  "target": "connector_connectivity_bridge_2",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.8896751553688877,
+          "coverage": 1.0,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 87.17886000000001,
+          "mean_anticipation_early": 72.73358,
+          "mean_anticipation_late": 62.17321428571429,
+          "mean_rise_early": -14.445280000000002,
+          "mean_rise_late": -25.005645714285713,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 85.4431,
+              "anticipation_early": 66.3189142857143,
+              "anticipation_late": 60.33484285714285,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 88.0956,
+              "anticipation_early": 77.8292857142857,
+              "anticipation_late": 62.46732857142856,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 86.9087,
+              "anticipation_early": 77.29585714285713,
+              "anticipation_late": 60.2589,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 88.2481,
+              "anticipation_early": 75.99861428571428,
+              "anticipation_late": 62.29467142857144,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 87.1988,
+              "anticipation_early": 66.22522857142857,
+              "anticipation_late": 65.51032857142857,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 63,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "22": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 2,
+          "food_approaches": 6,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 287,
+          "neurons_created": 16,
+          "hebbian_updates": 135,
+          "ticks_per_second": 157.9,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.004689273015043227,
+            "mae": {
+              "drives": 0.005523592503260701,
+              "flags": 0.006257889756733544,
+              "senses": 0.0871432276646586,
+              "position": 0.02074327015686548,
+              "food": 0.026339756155022053,
+              "action": 0.015394386006347738,
+              "neural": 0.004247363726220675
+            },
+            "delta_mae": 0.0017840014446305426,
+            "action_top1": 0.9846660277511563,
+            "uncertainty": 0.07362252163245447,
+            "inference_seconds": 22.703,
+            "train_seconds": 22.518,
+            "brain_effect": {
+              "synapses_from_predictions": 57,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 10.8148,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_ahead",
+                  "target": "tension_release",
+                  "weight": 0.9531
+                },
+                {
+                  "source": "pred_uncertainty",
+                  "target": "stress_learned_expectation",
+                  "weight": 0.8
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_threat_soon",
+                  "target": "junction",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": -0.012065162560895498,
+          "coverage": 1.0,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 75.72756000000001,
+          "mean_anticipation_early": 77.81574285714285,
+          "mean_anticipation_late": 75.3869,
+          "mean_rise_early": 2.0881828571428516,
+          "mean_rise_late": -0.34065999999999974,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 79.2526,
+              "anticipation_early": 79.30717142857142,
+              "anticipation_late": 77.03337142857143,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 74.6604,
+              "anticipation_early": 75.1482,
+              "anticipation_late": 74.43474285714287,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 74.876,
+              "anticipation_early": 78.09751428571428,
+              "anticipation_late": 74.79159999999999,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 74.4658,
+              "anticipation_early": 78.48721428571427,
+              "anticipation_late": 75.76164285714286,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 75.383,
+              "anticipation_early": 78.03861428571427,
+              "anticipation_late": 74.91314285714286,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 74,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "33": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 2,
+          "food_approaches": 3,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 283,
+          "neurons_created": 17,
+          "hebbian_updates": 106,
+          "ticks_per_second": 151.4,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.004272883619506463,
+            "mae": {
+              "drives": 0.005777151822216867,
+              "flags": 0.009554673629569126,
+              "senses": 0.09090060271989867,
+              "position": 0.028283854969438377,
+              "food": 0.03403549895745722,
+              "action": 0.003388141332038265,
+              "neural": 0.005454400436933401
+            },
+            "delta_mae": 0.002128633208956516,
+            "action_top1": 0.9848743697654065,
+            "uncertainty": 0.07119725153992248,
+            "inference_seconds": 23.738,
+            "train_seconds": 23.489,
+            "brain_effect": {
+              "synapses_from_predictions": 53,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 8.7798,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_west",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_hunger_rise",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_uncertainty",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "role_separation",
+                  "weight": 0.3019
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.371042881173798,
+          "coverage": 1.0,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 60.168420000000005,
+          "mean_anticipation_early": 57.60568285714286,
+          "mean_anticipation_late": 60.48667428571429,
+          "mean_rise_early": -2.5627371428571424,
+          "mean_rise_late": 0.3182542857142849,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 60.9172,
+              "anticipation_early": 59.255585714285715,
+              "anticipation_late": 62.35228571428571,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 62.9539,
+              "anticipation_early": 59.2503,
+              "anticipation_late": 61.754714285714286,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 58.9037,
+              "anticipation_early": 56.34054285714285,
+              "anticipation_late": 57.46505714285714,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 58.5616,
+              "anticipation_early": 57.33192857142857,
+              "anticipation_late": 59.03708571428571,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 59.5057,
+              "anticipation_early": 55.850057142857146,
+              "anticipation_late": 61.82422857142857,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 79,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "44": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 1,
+          "food_approaches": 1,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 340,
+          "neurons_created": 11,
+          "hebbian_updates": 46,
+          "ticks_per_second": 185.1,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.004772304270776053,
+            "mae": {
+              "drives": 0.004039696594742607,
+              "flags": 0.005448254705764839,
+              "senses": 0.09044854524375699,
+              "position": 0.030387417586215833,
+              "food": 0.03586463275864168,
+              "action": 0.002745676061569106,
+              "neural": 0.0032563941029460234
+            },
+            "delta_mae": 0.0026967805474348372,
+            "action_top1": 0.9972498854118922,
+            "uncertainty": 0.06583513469761762,
+            "inference_seconds": 23.319,
+            "train_seconds": 22.788,
+            "brain_effect": {
+              "synapses_from_predictions": 34,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 7.4909,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_south",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_threat_soon",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_uncertainty",
+                  "target": "connector_connectivity_bridge_2",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.9277815431624852,
+          "coverage": 1.0,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 54.673140000000004,
+          "mean_anticipation_early": 58.92540857142857,
+          "mean_anticipation_late": 54.98507428571429,
+          "mean_rise_early": 4.252268571428573,
+          "mean_rise_late": 0.31193428571428256,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 51.9115,
+              "anticipation_early": 51.81967142857143,
+              "anticipation_late": 51.980999999999995,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 54.648,
+              "anticipation_early": 61.245914285714285,
+              "anticipation_late": 53.47372857142857,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 57.8414,
+              "anticipation_early": 63.587328571428564,
+              "anticipation_late": 61.92768571428571,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 56.7518,
+              "anticipation_early": 56.494085714285724,
+              "anticipation_late": 53.638242857142856,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 52.213,
+              "anticipation_early": 61.48004285714286,
+              "anticipation_late": 53.904714285714284,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 63,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "55": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 11,
+          "food_approaches": 21,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 335,
+          "neurons_created": 16,
+          "hebbian_updates": 133,
+          "ticks_per_second": 156.5,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.004509986399477409,
+            "mae": {
+              "drives": 0.004883546302495029,
+              "flags": 0.007405297311960571,
+              "senses": 0.08664315822853717,
+              "position": 0.03747519606066362,
+              "food": 0.031785752895061255,
+              "action": 0.004136546839923024,
+              "neural": 0.0033742003286023102
+            },
+            "delta_mae": 0.002274179986407459,
+            "action_top1": 0.9795408142005911,
+            "uncertainty": 0.06766352941472811,
+            "inference_seconds": 23.958,
+            "train_seconds": 23.597,
+            "brain_effect": {
+              "synapses_from_predictions": 53,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 12.0731,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_west",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_south",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_hunger_rise",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_threat_soon",
+                  "target": "connector_connectivity_bridge_2",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": -0.7498394950102163,
+          "coverage": 0.06666666666666667,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 55.13396,
+          "mean_anticipation_early": 55.07347142857143,
+          "mean_anticipation_late": 55.198554285714295,
+          "mean_rise_early": -0.06048857142857145,
+          "mean_rise_late": 0.06459428571428986,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 54.5209,
+              "anticipation_early": 54.14828571428571,
+              "anticipation_late": 54.53252857142858,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 54.938,
+              "anticipation_early": 55.18508571428572,
+              "anticipation_late": 55.18891428571429,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 55.4784,
+              "anticipation_early": 55.524800000000006,
+              "anticipation_late": 55.96881428571428,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 55.7869,
+              "anticipation_early": 55.72802857142857,
+              "anticipation_late": 55.269542857142866,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 54.9456,
+              "anticipation_early": 54.78115714285714,
+              "anticipation_late": 55.032971428571436,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 81,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "66": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 2,
+          "food_approaches": 4,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 324,
+          "neurons_created": 15,
+          "hebbian_updates": 112,
+          "ticks_per_second": 160.2,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.004517655782696042,
+            "mae": {
+              "drives": 0.004842612217138455,
+              "flags": 0.0049969283035372755,
+              "senses": 0.08678366088839241,
+              "position": 0.028006434056925014,
+              "food": 0.02753335851931023,
+              "action": 0.002901909539929678,
+              "neural": 0.0028469515361411106
+            },
+            "delta_mae": 0.0020239719890565566,
+            "action_top1": 0.990874619775824,
+            "uncertainty": 0.06138669005234253,
+            "inference_seconds": 23.555,
+            "train_seconds": 23.102,
+            "brain_effect": {
+              "synapses_from_predictions": 57,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 9.0684,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_uncertainty",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "learned_expectation",
+                  "weight": 0.3473
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.3589972666779728,
+          "coverage": 0.8666666666666667,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 59.33154,
+          "mean_anticipation_early": 64.56554285714284,
+          "mean_anticipation_late": 59.758834285714286,
+          "mean_rise_early": 5.234002857142859,
+          "mean_rise_late": 0.42729428571428374,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 59.3962,
+              "anticipation_early": 65.56077142857143,
+              "anticipation_late": 59.58464285714286,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 59.9517,
+              "anticipation_early": 61.751514285714286,
+              "anticipation_late": 59.29237142857142,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 58.899,
+              "anticipation_early": 66.53611428571428,
+              "anticipation_late": 62.06148571428571,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 58.9047,
+              "anticipation_early": 64.23707142857144,
+              "anticipation_late": 58.78745714285714,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 59.5061,
+              "anticipation_early": 64.74224285714287,
+              "anticipation_late": 59.06821428571429,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 87,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "77": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 4,
+          "food_approaches": 10,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 210,
+          "neurons_created": 18,
+          "hebbian_updates": 182,
+          "ticks_per_second": 148.3,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.0047363643728151284,
+            "mae": {
+              "drives": 0.006851010234788434,
+              "flags": 0.011539964446988285,
+              "senses": 0.09768418971979852,
+              "position": 0.018776684159690037,
+              "food": 0.005206742576032036,
+              "action": 0.011651117373520212,
+              "neural": 0.004964339824501272
+            },
+            "delta_mae": 0.002869227676906024,
+            "action_top1": 0.9749156214842286,
+            "uncertainty": 0.07237764025886484,
+            "inference_seconds": 22.522,
+            "train_seconds": 21.251,
+            "brain_effect": {
+              "synapses_from_predictions": 79,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 14.2128,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_ahead",
+                  "target": "reward_learned_expectation",
+                  "weight": 0.8
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_threat_soon",
+                  "target": "connector_connectivity_bridge",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.7321561194292712,
+          "coverage": 0.7666666666666667,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 75.02522,
+          "mean_anticipation_early": 73.21108000000001,
+          "mean_anticipation_late": 72.36452285714286,
+          "mean_rise_early": -1.8141400000000032,
+          "mean_rise_late": -2.660697142857143,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 77.1407,
+              "anticipation_early": 73.23024285714284,
+              "anticipation_late": 70.06185714285714,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 80.2159,
+              "anticipation_early": 74.23238571428571,
+              "anticipation_late": 72.06337142857143,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 74.7157,
+              "anticipation_early": 74.90057142857144,
+              "anticipation_late": 75.51414285714286,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 72.0456,
+              "anticipation_early": 72.20327142857143,
+              "anticipation_late": 72.74448571428572,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 71.0082,
+              "anticipation_early": 71.48892857142856,
+              "anticipation_late": 71.43875714285714,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 81,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "88": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 2,
+          "food_approaches": 4,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 414,
+          "neurons_created": 17,
+          "hebbian_updates": 104,
+          "ticks_per_second": 160.3,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.004909330640680093,
+            "mae": {
+              "drives": 0.011899891386810461,
+              "flags": 0.010767792247277244,
+              "senses": 0.08515475233623415,
+              "position": 0.036326791818980374,
+              "food": 0.04047061386587394,
+              "action": 0.0891459771126759,
+              "neural": 0.0064640773878923054
+            },
+            "delta_mae": 0.00531880249000753,
+            "action_top1": 0.9716238176590691,
+            "uncertainty": 0.15760172766965314,
+            "inference_seconds": 23.127,
+            "train_seconds": 21.685,
+            "brain_effect": {
+              "synapses_from_predictions": 47,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 10.6465,
+              "strongest_synapses": [
+                {
+                  "source": "pred_threat_soon",
+                  "target": "act_move",
+                  "weight": -1.0
+                },
+                {
+                  "source": "pred_uncertainty",
+                  "target": "learned_expectation",
+                  "weight": 0.8
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_south",
+                  "target": "junction",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.9505199002867504,
+          "coverage": 1.0,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 57.0269,
+          "mean_anticipation_early": 63.61250857142858,
+          "mean_anticipation_late": 59.041931428571424,
+          "mean_rise_early": 6.585608571428573,
+          "mean_rise_late": 2.015031428571426,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 54.6365,
+              "anticipation_early": 65.56632857142857,
+              "anticipation_late": 63.20955714285713,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 54.9852,
+              "anticipation_early": 64.70688571428572,
+              "anticipation_late": 54.8885,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 52.8419,
+              "anticipation_early": 65.05282857142856,
+              "anticipation_late": 64.10207142857142,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 64.7237,
+              "anticipation_early": 62.715271428571434,
+              "anticipation_late": 57.360214285714285,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 57.9472,
+              "anticipation_early": 60.02122857142857,
+              "anticipation_late": 55.64931428571429,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 73,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "99": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 2,
+          "food_approaches": 5,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 391,
+          "neurons_created": 14,
+          "hebbian_updates": 212,
+          "ticks_per_second": 160.1,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1541,
+            "sleep_train_steps": 45,
+            "loss_ema": 0.004353443437233234,
+            "mae": {
+              "drives": 0.0030175271742408963,
+              "flags": 0.005671966738123739,
+              "senses": 0.08318395552056886,
+              "position": 0.0023792742718329813,
+              "food": 0.0026748464111475815,
+              "action": 0.002212553118636227,
+              "neural": 0.0025845964737910075
+            },
+            "delta_mae": 0.0030348237524993947,
+            "action_top1": 0.9911662985957749,
+            "uncertainty": 0.04525775855757841,
+            "inference_seconds": 21.927,
+            "train_seconds": 22.572,
+            "brain_effect": {
+              "synapses_from_predictions": 81,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 13.8102,
+              "strongest_synapses": [
+                {
+                  "source": "pred_uncertainty",
+                  "target": "learned_expectation",
+                  "weight": 0.992
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.9388
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_threat_soon",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "safety_signal",
+                  "weight": 0.695
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.9590230574747246,
+          "coverage": 1.0,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 71.71462,
+          "mean_anticipation_early": 63.39598285714286,
+          "mean_anticipation_late": 48.22604,
+          "mean_rise_early": -8.318637142857146,
+          "mean_rise_late": -23.488580000000002,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 70.6929,
+              "anticipation_early": 63.640771428571426,
+              "anticipation_late": 46.126485714285714,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 71.5553,
+              "anticipation_early": 62.500614285714285,
+              "anticipation_late": 50.83671428571428,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 72.9773,
+              "anticipation_early": 65.06365714285714,
+              "anticipation_late": 46.130214285714274,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 71.1201,
+              "anticipation_early": 62.87152857142856,
+              "anticipation_late": 46.83992857142857,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 72.2275,
+              "anticipation_early": 62.90334285714285,
+              "anticipation_late": 51.19685714285715,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 74,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "111": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 6,
+          "food_approaches": 15,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 344,
+          "neurons_created": 16,
+          "hebbian_updates": 199,
+          "ticks_per_second": 148.6,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.004529388348229261,
+            "mae": {
+              "drives": 0.004985300502776373,
+              "flags": 0.0067495567910205116,
+              "senses": 0.0916629896959144,
+              "position": 0.0028721516044630806,
+              "food": 0.002348393262780873,
+              "action": 0.004480550896594646,
+              "neural": 0.0025919297231774274
+            },
+            "delta_mae": 0.005220191297097495,
+            "action_top1": 0.9884161840076668,
+            "uncertainty": 0.05291243921131185,
+            "inference_seconds": 23.042,
+            "train_seconds": 23.161,
+            "brain_effect": {
+              "synapses_from_predictions": 72,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 12.5154,
+              "strongest_synapses": [
+                {
+                  "source": "pred_uncertainty",
+                  "target": "play_reward",
+                  "weight": 0.8
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_anxiety_rise",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_west",
+                  "target": "anticipation",
+                  "weight": -0.5724
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.6958358005372609,
+          "coverage": 1.0,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 43.747139999999995,
+          "mean_anticipation_early": 44.92002000000001,
+          "mean_anticipation_late": 41.75675428571429,
+          "mean_rise_early": 1.1728800000000006,
+          "mean_rise_late": -1.990385714285712,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 44.9527,
+              "anticipation_early": 46.9028,
+              "anticipation_late": 41.22331428571429,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 43.1989,
+              "anticipation_early": 46.01617142857143,
+              "anticipation_late": 39.077757142857145,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 43.3845,
+              "anticipation_early": 43.06988571428572,
+              "anticipation_late": 39.14611428571429,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 43.4798,
+              "anticipation_early": 42.10001428571429,
+              "anticipation_late": 39.79812857142857,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 43.7198,
+              "anticipation_early": 46.51122857142857,
+              "anticipation_late": 49.53845714285715,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 61,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      },
+      "222": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 463,
+          "food_approaches": 880,
+          "startles": 35,
+          "escaped_startles": 0,
+          "unavoided_startle_ticks": 287,
+          "neurons_created": 16,
+          "hebbian_updates": 696,
+          "ticks_per_second": 158.1,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1511,
+            "sleep_train_steps": 15,
+            "loss_ema": 0.004899731908861104,
+            "mae": {
+              "drives": 0.021253798277602202,
+              "flags": 0.008103675859339663,
+              "senses": 0.08309237211912564,
+              "position": 0.01695884704076173,
+              "food": 0.022955662661132085,
+              "action": 0.00606525947776699,
+              "neural": 0.006573526692805045
+            },
+            "delta_mae": 0.004667022031764457,
+            "action_top1": 0.9785407725321889,
+            "uncertainty": 0.07586957565268074,
+            "inference_seconds": 23.458,
+            "train_seconds": 23.185,
+            "brain_effect": {
+              "synapses_from_predictions": 73,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 18.9894,
+              "strongest_synapses": [
+                {
+                  "source": "pred_food_ahead",
+                  "target": "satisfaction",
+                  "weight": 1.0
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "hunger",
+                  "weight": -1.0
+                },
+                {
+                  "source": "pred_threat_soon",
+                  "target": "happiness",
+                  "weight": -1.0
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "happiness",
+                  "weight": 0.9452
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.644209940139006,
+          "coverage": 0.03333333333333333,
+          "refeed_ticks": 2
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 0.0,
+          "mean_anticipation_early": 0.5990857142857143,
+          "mean_anticipation_late": 0.6889371428571429,
+          "mean_rise_early": 0.5990857142857143,
+          "mean_rise_late": 0.6889371428571429,
+          "mean_eat_latency": 2.0,
+          "eat_rate": 1.0,
+          "trials": [
+            {
+              "baseline_ahead": 0.0,
+              "anticipation_early": 0.7686857142857144,
+              "anticipation_late": 1.1624571428571429,
+              "eat_latency": 2
+            },
+            {
+              "baseline_ahead": 0.0,
+              "anticipation_early": 1.1741,
+              "anticipation_late": 1.2265714285714286,
+              "eat_latency": 2
+            },
+            {
+              "baseline_ahead": 0.0,
+              "anticipation_early": 1.052642857142857,
+              "anticipation_late": 1.0556571428571428,
+              "eat_latency": 2
+            },
+            {
+              "baseline_ahead": 0.0,
+              "anticipation_early": 0.0,
+              "anticipation_late": 0.0,
+              "eat_latency": 2
+            },
+            {
+              "baseline_ahead": 0.0,
+              "anticipation_early": 0.0,
+              "anticipation_late": 0.0,
+              "eat_latency": 2
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 88,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 18,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 131,
+          "food_approaches": 222
+        }
+      },
+      "333": {
+        "train": {
+          "ticks": 24000,
+          "food_eaten": 1,
+          "food_approaches": 2,
+          "startles": 35,
+          "escaped_startles": 1,
+          "unavoided_startle_ticks": 244,
+          "neurons_created": 11,
+          "hebbian_updates": 79,
+          "ticks_per_second": 176.6,
+          "predictive": {
+            "mode": "transformer",
+            "train_steps": 1496,
+            "sleep_train_steps": 0,
+            "loss_ema": 0.004044440287342807,
+            "mae": {
+              "drives": 0.0031884698302807706,
+              "flags": 0.0047695921770656855,
+              "senses": 0.09064365205265772,
+              "position": 0.004499062515335137,
+              "food": 0.0028119435340008205,
+              "action": 0.0022265977957847422,
+              "neural": 0.0022060653469393025
+            },
+            "delta_mae": 0.0008989400250707884,
+            "action_top1": 0.9917496562356767,
+            "uncertainty": 0.04806495539013261,
+            "inference_seconds": 23.851,
+            "train_seconds": 22.288,
+            "brain_effect": {
+              "synapses_from_predictions": 57,
+              "synapses_into_predictions": 0,
+              "total_abs_weight_from_predictions": 7.7886,
+              "strongest_synapses": [
+                {
+                  "source": "pred_uncertainty",
+                  "target": "safety_signal",
+                  "weight": 0.8
+                },
+                {
+                  "source": "pred_food_ahead",
+                  "target": "relay_bridge",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_east",
+                  "target": "waypoint",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_south",
+                  "target": "junction",
+                  "weight": 0.7
+                },
+                {
+                  "source": "pred_food_north",
+                  "target": "anticipation",
+                  "weight": 0.2005
+                }
+              ]
+            }
+          }
+        },
+        "object_permanence": {
+          "mean_alignment": 0.7439198861605972,
+          "coverage": 1.0,
+          "refeed_ticks": null
+        },
+        "delayed_consequence": {
+          "mean_baseline_pred_food_ahead": 68.40322,
+          "mean_anticipation_early": 58.534054285714284,
+          "mean_anticipation_late": 58.95846285714286,
+          "mean_rise_early": -9.869165714285717,
+          "mean_rise_late": -9.444757142857146,
+          "mean_eat_latency": null,
+          "eat_rate": 0.0,
+          "trials": [
+            {
+              "baseline_ahead": 67.2875,
+              "anticipation_early": 58.313657142857146,
+              "anticipation_late": 57.771428571428565,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 67.6879,
+              "anticipation_early": 57.95764285714285,
+              "anticipation_late": 57.98341428571428,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 68.2587,
+              "anticipation_early": 58.712042857142855,
+              "anticipation_late": 60.50727142857143,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 69.5755,
+              "anticipation_early": 59.129985714285716,
+              "anticipation_late": 58.68627142857143,
+              "eat_latency": null
+            },
+            {
+              "baseline_ahead": 69.2065,
+              "anticipation_early": 58.55694285714286,
+              "anticipation_late": 59.84392857142857,
+              "eat_latency": null
+            }
+          ]
+        },
+        "adaptation": {
+          "startles": 70,
+          "escaped_startles": 0,
+          "escape_ratio": 0.0,
+          "peak_anxiety_rise": 0,
+          "final_anxiety": 100,
+          "food_eaten": 0,
+          "neurons_created": 0
+        },
+        "retention": {
+          "food_eaten": 0,
+          "food_approaches": 0
+        }
+      }
+    }
+  },
+  "summary": {
+    "off": {
+      "n": 12,
+      "train_food_eaten": 4.0833,
+      "train_food_approaches": 9.1667,
+      "train_escape_ratio": 0.0167,
+      "train_neurons_created": 12.5,
+      "ticks_per_second": 424.75,
+      "op_alignment": null,
+      "op_coverage": null,
+      "op_refeed_ticks": null,
+      "dc_rise_early": null,
+      "dc_rise_late": null,
+      "dc_anticipation_late": null,
+      "dc_eat_latency": null,
+      "dc_eat_rate": 0.0,
+      "adapt_escape_ratio": 0.0,
+      "adapt_peak_anxiety_rise": 1.0042,
+      "adapt_food_eaten": 0.0,
+      "retention_food_eaten": 0.0,
+      "retention_food_approaches": 0.0,
+      "pred_mae": {},
+      "pred_action_top1": null,
+      "synapses_from_predictions": null,
+      "inference_seconds": null,
+      "train_seconds_predictive": null
+    },
+    "linear": {
+      "n": 12,
+      "train_food_eaten": 1.9167,
+      "train_food_approaches": 4.5,
+      "train_escape_ratio": 0.0048,
+      "train_neurons_created": 15.6667,
+      "ticks_per_second": 274.9917,
+      "op_alignment": 0.7786,
+      "op_coverage": 0.8417,
+      "op_refeed_ticks": null,
+      "dc_rise_early": 0.0,
+      "dc_rise_late": 0.0,
+      "dc_anticipation_late": 100.0,
+      "dc_eat_latency": null,
+      "dc_eat_rate": 0.0,
+      "adapt_escape_ratio": 0.0011,
+      "adapt_peak_anxiety_rise": 0.0,
+      "adapt_food_eaten": 0.0,
+      "retention_food_eaten": 0.0,
+      "retention_food_approaches": 0.0,
+      "pred_mae": {
+        "drives": 0.00048742067428100415,
+        "flags": 0.004862960429000288,
+        "senses": 0.08366569189407418,
+        "position": 0.027646554145906374,
+        "food": 0.03159014206322406,
+        "action": 0.000507089854990705,
+        "neural": 0.0002809885591922692
+      },
+      "pred_action_top1": 0.9956,
+      "synapses_from_predictions": 56.083333333333336,
+      "inference_seconds": 0.1712,
+      "train_seconds_predictive": 0.618
+    },
+    "transformer": {
+      "n": 12,
+      "train_food_eaten": 41.5833,
+      "train_food_approaches": 79.9167,
+      "train_escape_ratio": 0.0167,
+      "train_neurons_created": 15.25,
+      "ticks_per_second": 160.2083,
+      "op_alignment": 0.5426,
+      "op_coverage": 0.8111,
+      "op_refeed_ticks": 2.0,
+      "dc_rise_early": -1.4282,
+      "dc_rise_late": -4.9254,
+      "dc_anticipation_late": 54.0855,
+      "dc_eat_latency": 2.0,
+      "dc_eat_rate": 0.0833,
+      "adapt_escape_ratio": 0.0,
+      "adapt_peak_anxiety_rise": 0.0,
+      "adapt_food_eaten": 1.5,
+      "retention_food_eaten": 10.9167,
+      "retention_food_approaches": 18.5,
+      "pred_mae": {
+        "drives": 0.006835146196109729,
+        "flags": 0.0072495607830097295,
+        "senses": 0.0884514002103431,
+        "position": 0.01907863535686064,
+        "food": 0.01987800026315498,
+        "action": 0.012353418038264863,
+        "neural": 0.003931127883178238
+      },
+      "pred_action_top1": 0.9849,
+      "synapses_from_predictions": 61.416666666666664,
+      "inference_seconds": 23.1548,
+      "train_seconds_predictive": 22.6361
+    }
+  }
+}

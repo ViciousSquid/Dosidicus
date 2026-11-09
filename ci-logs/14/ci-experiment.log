@@ -1,0 +1,81 @@
+Preserving squid 222: mode=transformer seed=222 ticks=24000 output=/home/runner/work/Dosidicus/Dosidicus/experiments/results/squid_222
+Configuration loaded from config.ini
+trained: 463 eaten, 880 approaches, 696 hebbian updates, 136.3 t/s
+✓ Saved brain to /home/runner/work/Dosidicus/Dosidicus/experiments/results/squid_222/brain_222.json
+saved: brain=True weights=True report=True
+Configuration loaded from config.ini
+✓ Loaded predictive weights (transformer) from /home/runner/work/Dosidicus/Dosidicus/experiments/results/squid_222/predictive_cortex_222.json
+artifact validation: {
+ "brain_json_parses": true,
+ "brain_top_level_keys": [
+  "action_representations",
+  "capability",
+  "causal_learning",
+  "clock",
+  "connections",
+  "consolidation",
+  "enhanced_neurogenesis",
+  "format",
+  "functional_neurons",
+  "growth_clock",
+  "last_neurogenesis_tick",
+  "metadata",
+  "neurogenesis_data",
+  "neuron_shapes",
+  "neurons",
+  "output_bindings",
+  "plasticity",
+  "provenance",
+  "sim_time",
+  "state"
+ ],
+ "brain_neuron_count": 45,
+ "weights_reload_ok": true,
+ "weights_checksum_saved": 313.006211,
+ "weights_checksum_reloaded": 313.006211,
+ "weights_round_trip_exact": true,
+ "weights_train_steps": 1511
+}
+held-out: op=0.6490121394549112, dc eat_rate=1.0, adapt food=4, retention=132
+
+## Squid 222 verification against run 9
+
+| field | run 9 | this run | status |
+|---|---|---|---|
+| train.food_eaten | 463 | 463 | match |
+| train.food_approaches | 880 | 880 | match |
+| train.startles | 35 | 35 | match |
+| train.escaped_startles | 0 | 0 | match |
+| train.unavoided_startle_ticks | 287 | 287 | match |
+| train.neurons_created | 16 | 16 | match |
+| train.hebbian_updates | 696 | 696 | match |
+| train.predictive.train_steps | 1511 | 1511 | match |
+| train.predictive.sleep_train_steps | 15 | 15 | match |
+| train.predictive.loss_ema | 0.00489973 | 0.00489973 | match |
+| train.predictive.delta_mae | 0.00466702 | 0.00466702 | match |
+| train.predictive.action_top1 | 0.978541 | 0.978541 | match |
+| train.predictive.uncertainty | 0.0758696 | 0.0758696 | match |
+| train.predictive.brain_effect.synapses_from_predictions | 73 | 73 | match |
+| train.predictive.brain_effect.total_abs_weight_from_predictions | 18.9894 | 18.9894 | match |
+| object_permanence.mean_alignment | 0.64421 | 0.649012 | MISMATCH |
+| object_permanence.coverage | 0.0333333 | 0.0333333 | match |
+| object_permanence.refeed_ticks | 2 | 2 | match |
+| delayed_consequence.mean_baseline_pred_food_ahead | 0 | 0.894 | MISMATCH |
+| delayed_consequence.mean_anticipation_early | 0.599086 | 0.326837 | MISMATCH |
+| delayed_consequence.mean_anticipation_late | 0.688937 | 0.524017 | MISMATCH |
+| delayed_consequence.mean_rise_early | 0.599086 | -0.567163 | MISMATCH |
+| delayed_consequence.mean_eat_latency | 2 | 2 | match |
+| delayed_consequence.eat_rate | 1 | 1 | match |
+| adaptation.startles | 88 | 79 | MISMATCH |
+| adaptation.escaped_startles | 0 | 0 | match |
+| adaptation.escape_ratio | 0 | 0 | match |
+| adaptation.peak_anxiety_rise | 0 | 0 | match |
+| adaptation.final_anxiety | 100 | 100 | match |
+| adaptation.food_eaten | 18 | 4 | MISMATCH |
+| retention.food_eaten | 131 | 132 | MISMATCH |
+| retention.food_approaches | 222 | 230 | MISMATCH |
+
+23 match, 9 mismatch, 0 missing
+metadata written to /home/runner/work/Dosidicus/Dosidicus/experiments/results/squid_222/metadata.json
+
+Verdict: DIVERGED (23 fields match, 9 mismatch, 0 missing)
