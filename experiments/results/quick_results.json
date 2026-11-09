@@ -32,7 +32,7 @@
           "unavoided_startle_ticks": 5,
           "neurons_created": 10,
           "hebbian_updates": 467,
-          "ticks_per_second": 1144.8,
+          "ticks_per_second": 561.4,
           "predictive": {
             "mode": "off",
             "train_steps": 0,
@@ -105,7 +105,7 @@
           "unavoided_startle_ticks": 5,
           "neurons_created": 10,
           "hebbian_updates": 239,
-          "ticks_per_second": 1200.6,
+          "ticks_per_second": 589.5,
           "predictive": {
             "mode": "off",
             "train_steps": 0,
@@ -180,7 +180,7 @@
           "unavoided_startle_ticks": 6,
           "neurons_created": 13,
           "hebbian_updates": 70,
-          "ticks_per_second": 826.3,
+          "ticks_per_second": 408.7,
           "predictive": {
             "mode": "linear",
             "train_steps": 90,
@@ -198,8 +198,8 @@
             "delta_mae": 2.804504772943375e-05,
             "action_top1": 0.9959973315543695,
             "uncertainty": 0.05783384252615341,
-            "inference_seconds": 0.005,
-            "train_seconds": 0.02,
+            "inference_seconds": 0.014,
+            "train_seconds": 0.045,
             "brain_effect": {
               "synapses_from_predictions": 45,
               "synapses_into_predictions": 0,
@@ -292,7 +292,7 @@
           "unavoided_startle_ticks": 4,
           "neurons_created": 16,
           "hebbian_updates": 170,
-          "ticks_per_second": 766.2,
+          "ticks_per_second": 380.1,
           "predictive": {
             "mode": "linear",
             "train_steps": 90,
@@ -310,8 +310,8 @@
             "delta_mae": 0.0001603825677641599,
             "action_top1": 0.9599733155436958,
             "uncertainty": 0.02964059317747949,
-            "inference_seconds": 0.005,
-            "train_seconds": 0.02,
+            "inference_seconds": 0.014,
+            "train_seconds": 0.045,
             "brain_effect": {
               "synapses_from_predictions": 69,
               "synapses_into_predictions": 0,
@@ -406,26 +406,26 @@
           "unavoided_startle_ticks": 1,
           "neurons_created": 12,
           "hebbian_updates": 175,
-          "ticks_per_second": 303.6,
+          "ticks_per_second": 199.5,
           "predictive": {
             "mode": "transformer",
             "train_steps": 130,
             "sleep_train_steps": 40,
-            "loss_ema": 0.013921038978803028,
+            "loss_ema": 0.013921038408236656,
             "mae": {
-              "drives": 0.1652784899709671,
-              "flags": 0.018254904293180562,
-              "senses": 0.10191915517080842,
-              "position": 0.027839237638276566,
-              "food": 0.08232952655266669,
-              "action": 0.027406406996117596,
-              "neural": 0.045780010311411094
+              "drives": 0.16527848740689072,
+              "flags": 0.018254903865310226,
+              "senses": 0.10191916436453971,
+              "position": 0.027839257477697752,
+              "food": 0.08232955614414658,
+              "action": 0.027406410363580585,
+              "neural": 0.04578001086260718
             },
-            "delta_mae": 0.012438842475333965,
+            "delta_mae": 0.012438847993388149,
             "action_top1": 0.7718478985990656,
-            "uncertainty": 0.2656123324565263,
-            "inference_seconds": 0.982,
-            "train_seconds": 1.302,
+            "uncertainty": 0.26561235093163865,
+            "inference_seconds": 1.208,
+            "train_seconds": 1.329,
             "brain_effect": {
               "synapses_from_predictions": 68,
               "synapses_into_predictions": 0,
@@ -461,34 +461,34 @@
           }
         },
         "object_permanence": {
-          "mean_alignment": 0.23624925192723775,
+          "mean_alignment": 0.23624935056491267,
           "coverage": 1.0,
           "refeed_ticks": null
         },
         "delayed_consequence": {
           "mean_baseline_pred_food_ahead": 61.264766666666674,
-          "mean_anticipation_early": 51.58229047619048,
-          "mean_anticipation_late": 34.822204761904764,
-          "mean_rise_early": -9.682476190476189,
-          "mean_rise_late": -26.442561904761902,
+          "mean_anticipation_early": 51.582276190476186,
+          "mean_anticipation_late": 34.8222,
+          "mean_rise_early": -9.68249047619048,
+          "mean_rise_late": -26.442566666666664,
           "mean_eat_latency": null,
           "eat_rate": 0.0,
           "trials": [
             {
               "baseline_ahead": 58.4685,
-              "anticipation_early": 48.76200000000001,
+              "anticipation_early": 48.76198571428571,
               "anticipation_late": 32.20004285714286,
               "eat_latency": null
             },
             {
               "baseline_ahead": 60.0248,
               "anticipation_early": 50.925042857142856,
-              "anticipation_late": 35.841857142857144,
+              "anticipation_late": 35.84184285714285,
               "eat_latency": null
             },
             {
               "baseline_ahead": 65.301,
-              "anticipation_early": 55.05982857142857,
+              "anticipation_early": 55.059799999999996,
               "anticipation_late": 36.42471428571429,
               "eat_latency": null
             }
@@ -517,31 +517,31 @@
           "escaped_startles": 1,
           "unavoided_startle_ticks": 5,
           "neurons_created": 16,
-          "hebbian_updates": 133,
-          "ticks_per_second": 324.9,
+          "hebbian_updates": 134,
+          "ticks_per_second": 204.9,
           "predictive": {
             "mode": "transformer",
             "train_steps": 90,
             "sleep_train_steps": 0,
-            "loss_ema": 0.02514093652292593,
+            "loss_ema": 0.02514093732335754,
             "mae": {
-              "drives": 0.14157565573257924,
-              "flags": 0.041758158822268486,
-              "senses": 0.09848973574073035,
-              "position": 0.11349414966718223,
-              "food": 0.11402043556047856,
-              "action": 0.03774626104641187,
-              "neural": 0.033787349020544935
+              "drives": 0.14157567069251545,
+              "flags": 0.04175815671113961,
+              "senses": 0.0984897479833358,
+              "position": 0.11349416503168244,
+              "food": 0.11402042867335843,
+              "action": 0.037746256816023074,
+              "neural": 0.033787362260601035
             },
-            "delta_mae": 0.011290467681177056,
+            "delta_mae": 0.011290449244743496,
             "action_top1": 0.9166110740493663,
-            "uncertainty": 0.2886771558338916,
-            "inference_seconds": 0.983,
-            "train_seconds": 0.929,
+            "uncertainty": 0.2886771729730994,
+            "inference_seconds": 1.212,
+            "train_seconds": 0.953,
             "brain_effect": {
-              "synapses_from_predictions": 57,
+              "synapses_from_predictions": 58,
               "synapses_into_predictions": 0,
-              "total_abs_weight_from_predictions": 10.8164,
+              "total_abs_weight_from_predictions": 10.8601,
               "strongest_synapses": [
                 {
                   "source": "pred_food_ahead",
@@ -573,35 +573,35 @@
           }
         },
         "object_permanence": {
-          "mean_alignment": -0.8560735619573213,
+          "mean_alignment": -0.8560735358357418,
           "coverage": 1.0,
           "refeed_ticks": null
         },
         "delayed_consequence": {
           "mean_baseline_pred_food_ahead": 38.14146666666667,
-          "mean_anticipation_early": 37.76579047619048,
-          "mean_anticipation_late": 30.871609523809525,
-          "mean_rise_early": -0.375676190476194,
-          "mean_rise_late": -7.269857142857144,
+          "mean_anticipation_early": 37.765800000000006,
+          "mean_anticipation_late": 30.87162380952381,
+          "mean_rise_early": -0.3756666666666675,
+          "mean_rise_late": -7.2698428571428595,
           "mean_eat_latency": null,
           "eat_rate": 0.0,
           "trials": [
             {
               "baseline_ahead": 39.6362,
-              "anticipation_early": 40.31882857142857,
-              "anticipation_late": 32.12484285714286,
+              "anticipation_early": 40.318842857142855,
+              "anticipation_late": 32.124857142857145,
               "eat_latency": null
             },
             {
               "baseline_ahead": 42.7622,
-              "anticipation_early": 40.746314285714284,
-              "anticipation_late": 32.86008571428572,
+              "anticipation_early": 40.74632857142858,
+              "anticipation_late": 32.860099999999996,
               "eat_latency": null
             },
             {
               "baseline_ahead": 32.026,
               "anticipation_early": 32.23222857142857,
-              "anticipation_late": 27.6299,
+              "anticipation_late": 27.629914285714285,
               "eat_latency": null
             }
           ]
@@ -629,7 +629,7 @@
       "train_food_approaches": 20.5,
       "train_escape_ratio": 0.25,
       "train_neurons_created": 10.0,
-      "ticks_per_second": 1172.7,
+      "ticks_per_second": 575.45,
       "op_alignment": null,
       "op_coverage": null,
       "op_refeed_ticks": null,
@@ -655,7 +655,7 @@
       "train_food_approaches": 4.5,
       "train_escape_ratio": 0.25,
       "train_neurons_created": 14.5,
-      "ticks_per_second": 796.25,
+      "ticks_per_second": 394.4,
       "op_alignment": 0.912,
       "op_coverage": 1.0,
       "op_refeed_ticks": null,
@@ -680,8 +680,8 @@
       },
       "pred_action_top1": 0.978,
       "synapses_from_predictions": 57.0,
-      "inference_seconds": 0.005,
-      "train_seconds_predictive": 0.02
+      "inference_seconds": 0.014,
+      "train_seconds_predictive": 0.045
     },
     "transformer": {
       "n": 2,
@@ -689,7 +689,7 @@
       "train_food_approaches": 7.0,
       "train_escape_ratio": 0.25,
       "train_neurons_created": 14.0,
-      "ticks_per_second": 314.25,
+      "ticks_per_second": 202.2,
       "op_alignment": -0.3099,
       "op_coverage": 1.0,
       "op_refeed_ticks": null,
@@ -704,18 +704,18 @@
       "retention_food_eaten": 0.0,
       "retention_food_approaches": 0.0,
       "pred_mae": {
-        "drives": 0.15342707285177318,
-        "flags": 0.030006531557724522,
-        "senses": 0.10020444545576938,
-        "position": 0.0706666936527294,
-        "food": 0.09817498105657263,
-        "action": 0.03257633402126473,
-        "neural": 0.03978367966597801
+        "drives": 0.1534270790497031,
+        "flags": 0.03000653028822492,
+        "senses": 0.10020445617393775,
+        "position": 0.0706667112546901,
+        "food": 0.0981749924087525,
+        "action": 0.03257633358980183,
+        "neural": 0.03978368656160411
       },
       "pred_action_top1": 0.8442,
-      "synapses_from_predictions": 62.5,
-      "inference_seconds": 0.9825,
-      "train_seconds_predictive": 1.1155
+      "synapses_from_predictions": 63.0,
+      "inference_seconds": 1.21,
+      "train_seconds_predictive": 1.141
     }
   }
 }

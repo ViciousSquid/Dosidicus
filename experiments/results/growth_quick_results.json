@@ -59,8 +59,8 @@
       "11": {
         "ticks_completed": 6000,
         "truncated_at": null,
-        "elapsed_seconds": 8.2,
-        "ticks_per_second": 735.1,
+        "elapsed_seconds": 16.5,
+        "ticks_per_second": 364.3,
         "samples": [
           {
             "tick": 100,
@@ -10791,32 +10791,32 @@
             "cooldown_remaining": 31.0,
             "stood_down": [
               {
-                "at": 1794189128.241947,
+                "at": 1794189390.1024222,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 36s into the 60s growth cooldown"
               },
               {
-                "at": 1794189128.2433863,
+                "at": 1794189390.1053643,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 35s into the 60s growth cooldown"
               },
               {
-                "at": 1794189128.2447872,
+                "at": 1794189390.1081555,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 34s into the 60s growth cooldown"
               },
               {
-                "at": 1794189128.2462282,
+                "at": 1794189390.1110754,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 33s into the 60s growth cooldown"
               },
               {
-                "at": 1794189128.2475896,
+                "at": 1794189390.1138773,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 32s into the 60s growth cooldown"
               },
               {
-                "at": 1794189128.2492414,
+                "at": 1794189390.117229,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 31s into the 60s growth cooldown"
               }
@@ -10824,73 +10824,73 @@
             "grown": [
               {
                 "neuron": "learned_expectation",
-                "at": 1794189120.1227455,
+                "at": 1794189373.7022457,
                 "deficit": "expression",
                 "because": "the squid has worked out that can see food plus eating sends hunger down by 19 (42% confident), but there is no pathway in the network from can see food to hunger that could act on it"
               },
               {
                 "neuron": "anticipation",
-                "at": 1794189120.1401286,
+                "at": 1794189373.737332,
                 "deficit": "expression",
                 "because": "the squid has worked out that anxiety plus eating sends hunger down by 19 (42% confident), but there is no pathway in the network from anxiety to hunger that could act on it"
               },
               {
                 "neuron": "play_reward",
-                "at": 1794189120.1582344,
+                "at": 1794189373.7768967,
                 "deficit": "expression",
                 "because": "the squid has worked out that cleanliness plus fleeing sends hunger up by 1 (42% confident), but there is no pathway in the network from cleanliness to hunger that could act on it"
               },
               {
                 "neuron": "safety_signal",
-                "at": 1794189120.1758153,
+                "at": 1794189373.8152668,
                 "deficit": "expression",
                 "because": "the squid has worked out that sleepiness plus eating sends hunger down by 19 (42% confident), but there is no pathway in the network from sleepiness to hunger that could act on it"
               },
               {
                 "neuron": "role_separation",
-                "at": 1794189120.194591,
+                "at": 1794189373.855411,
                 "deficit": "differentiation",
                 "because": "satisfaction is pushed the same way by both learned expectation and anticipation, which are almost never active at the same time (correlation -0.97); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "tension_release",
-                "at": 1794189120.2176998,
+                "at": 1794189373.9040015,
                 "deficit": "expression",
                 "because": "the squid has worked out that is startled plus fleeing sends anxiety down by 17 (42% confident), but there is no pathway in the network from is startled to anxiety that could act on it"
               },
               {
                 "neuron": "stress_learned_expectation",
-                "at": 1794189120.2409382,
+                "at": 1794189373.954138,
                 "deficit": "expression",
                 "because": "the squid has worked out that threat level plus fleeing sends anxiety down by 17 (42% confident), but there is no pathway in the network from threat level to anxiety that could act on it"
               },
               {
                 "neuron": "second_opinion",
-                "at": 1794189120.2655113,
+                "at": 1794189374.0068605,
                 "deficit": "differentiation",
                 "because": "act eat is pushed the same way by both act collapse and safety signal, which are almost never active at the same time (correlation -1.00); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "investigation_drive",
-                "at": 1794189120.2899506,
+                "at": 1794189374.0600054,
                 "deficit": "differentiation",
                 "because": "act flee is pushed the same way by both act collapse and safety signal, which are almost never active at the same time (correlation -1.00); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "curiosity_spark",
-                "at": 1794189120.3159227,
+                "at": 1794189374.116222,
                 "deficit": "differentiation",
                 "because": "act play is pushed the same way by both act collapse and safety signal, which are almost never active at the same time (correlation -1.00); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "novelty_role_separation",
-                "at": 1794189120.3429024,
+                "at": 1794189374.1751828,
                 "deficit": "differentiation",
                 "because": "act shelter is pushed the same way by both act collapse and safety signal, which are almost never active at the same time (correlation -1.00); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "novelty_role_separation_2",
-                "at": 1794189120.370832,
+                "at": 1794189374.235675,
                 "deficit": "differentiation",
                 "because": "act rest is pushed the same way by both act collapse and safety signal, which are almost never active at the same time (correlation -1.00); one neuron cannot stand for both situations at once"
               }
@@ -10922,8 +10922,8 @@
       "11": {
         "ticks_completed": 6000,
         "truncated_at": null,
-        "elapsed_seconds": 11.4,
-        "ticks_per_second": 524.9,
+        "elapsed_seconds": 22.5,
+        "ticks_per_second": 266.5,
         "samples": [
           {
             "tick": 100,
@@ -21590,32 +21590,32 @@
             "cooldown_remaining": 45.0,
             "stood_down": [
               {
-                "at": 1794189139.6761723,
+                "at": 1794189412.6189985,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 50s into the 60s growth cooldown"
               },
               {
-                "at": 1794189139.6783857,
+                "at": 1794189412.623363,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 49s into the 60s growth cooldown"
               },
               {
-                "at": 1794189139.6804307,
+                "at": 1794189412.6273544,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 48s into the 60s growth cooldown"
               },
               {
-                "at": 1794189139.682474,
+                "at": 1794189412.6313612,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 47s into the 60s growth cooldown"
               },
               {
-                "at": 1794189139.684527,
+                "at": 1794189412.6353471,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 46s into the 60s growth cooldown"
               },
               {
-                "at": 1794189139.6870122,
+                "at": 1794189412.6402335,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 45s into the 60s growth cooldown"
               }
@@ -21623,79 +21623,79 @@
             "grown": [
               {
                 "neuron": "relay_bridge",
-                "at": 1794189128.3093565,
+                "at": 1794189390.240378,
                 "deficit": "connectivity",
                 "because": "pred food ahead has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "waypoint",
-                "at": 1794189128.349288,
+                "at": 1794189390.3263824,
                 "deficit": "connectivity",
                 "because": "pred food west has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "junction",
-                "at": 1794189128.3859782,
+                "at": 1794189390.4072943,
                 "deficit": "connectivity",
                 "because": "pred food north has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "connector_connectivity_bridge",
-                "at": 1794189128.4196227,
+                "at": 1794189390.480865,
                 "deficit": "connectivity",
                 "because": "pred hunger rise has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "connector_connectivity_bridge_2",
-                "at": 1794189128.454662,
+                "at": 1794189390.5568843,
                 "deficit": "connectivity",
                 "because": "pred anxiety rise has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "connector_connectivity_bridge_3",
-                "at": 1794189128.489257,
+                "at": 1794189390.63215,
                 "deficit": "connectivity",
                 "because": "pred reward soon has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "learned_expectation",
-                "at": 1794189128.5239356,
+                "at": 1794189390.7074234,
                 "deficit": "expression",
                 "because": "the squid has worked out that can see food plus eating sends hunger down by 19 (42% confident), but there is no pathway in the network from can see food to hunger that could act on it"
               },
               {
                 "neuron": "role_separation",
-                "at": 1794189128.5604248,
+                "at": 1794189390.7872295,
                 "deficit": "differentiation",
                 "because": "happiness is pushed the same way by both curiosity and can see food, which are almost never active at the same time (correlation -0.54); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "anticipation",
-                "at": 1794189128.5983882,
+                "at": 1794189390.8689864,
                 "deficit": "expression",
                 "because": "the squid has worked out that anxiety plus eating sends hunger down by 19 (42% confident), but there is no pathway in the network from anxiety to hunger that could act on it"
               },
               {
                 "neuron": "hunger_alarm",
-                "at": 1794189128.6676815,
+                "at": 1794189391.0149367,
                 "deficit": "regulation",
                 "because": "hunger has been outside its comfortable range for 82% of the last 240 ticks (currently 84), and the existing synapses supply 1.17 of corrective push and it is still not coming back"
               },
               {
                 "neuron": "foraging_urgency",
-                "at": 1794189128.7158835,
+                "at": 1794189391.117368,
                 "deficit": "regulation",
                 "because": "hunger is pinned at 90 and the 1 synapse(s) pulling it back are already at full strength and it is still stuck"
               },
               {
                 "neuron": "safety_signal",
-                "at": 1794189128.767191,
+                "at": 1794189391.2266006,
                 "deficit": "regulation",
                 "because": "hunger is pinned at 96 and the 2 synapse(s) pulling it back are already at full strength and it is still stuck"
               },
               {
                 "neuron": "second_opinion",
-                "at": 1794189129.0381262,
+                "at": 1794189391.7740843,
                 "deficit": "differentiation",
                 "because": "hunger alarm is pushed the same way by both cleanliness and sleepiness, which are almost never active at the same time (correlation -0.98); one neuron cannot stand for both situations at once"
               }
@@ -21738,8 +21738,8 @@
           "action_top1": 0.9839973328888149,
           "action_top1_samples": 5999,
           "uncertainty": 0.03652001096693751,
-          "inference_seconds": 0.025,
-          "train_seconds": 0.102,
+          "inference_seconds": 0.06,
+          "train_seconds": 0.205,
           "brain_effect": {
             "synapses_from_predictions": 42,
             "synapses_into_predictions": 0,
@@ -21791,8 +21791,8 @@
       "11": {
         "ticks_completed": 6000,
         "truncated_at": null,
-        "elapsed_seconds": 24.3,
-        "ticks_per_second": 247.4,
+        "elapsed_seconds": 39.0,
+        "ticks_per_second": 153.9,
         "samples": [
           {
             "tick": 100,
@@ -33128,32 +33128,32 @@
             "cooldown_remaining": 26.0,
             "stood_down": [
               {
-                "at": 1794189163.9222076,
+                "at": 1794189451.6084707,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 31s into the 60s growth cooldown"
               },
               {
-                "at": 1794189163.9262748,
+                "at": 1794189451.6162763,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 30s into the 60s growth cooldown"
               },
               {
-                "at": 1794189163.9301069,
+                "at": 1794189451.6235821,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 29s into the 60s growth cooldown"
               },
               {
-                "at": 1794189163.9339259,
+                "at": 1794189451.6306846,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 28s into the 60s growth cooldown"
               },
               {
-                "at": 1794189163.9377553,
+                "at": 1794189451.6359046,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 27s into the 60s growth cooldown"
               },
               {
-                "at": 1794189163.9423351,
+                "at": 1794189451.6421292,
                 "deficit": "regulation:anxiety:down",
                 "because": "only 26s into the 60s growth cooldown"
               }
@@ -33161,91 +33161,91 @@
             "grown": [
               {
                 "neuron": "relay_bridge",
-                "at": 1794189139.8098965,
+                "at": 1794189412.8445513,
                 "deficit": "connectivity",
                 "because": "pred food west has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "waypoint",
-                "at": 1794189139.9434419,
+                "at": 1794189413.059851,
                 "deficit": "connectivity",
                 "because": "pred food south has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "junction",
-                "at": 1794189140.0745842,
+                "at": 1794189413.271583,
                 "deficit": "connectivity",
                 "because": "pred reward soon has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "connector_connectivity_bridge",
-                "at": 1794189140.2000992,
+                "at": 1794189413.472609,
                 "deficit": "connectivity",
                 "because": "pred threat soon has no working connections, so nothing it computes can reach the rest of the brain"
               },
               {
                 "neuron": "learned_expectation",
-                "at": 1794189140.3356795,
+                "at": 1794189413.680908,
                 "deficit": "expression",
                 "because": "the squid has worked out that can see food plus eating sends hunger down by 23 (55% confident), but there is no pathway in the network from can see food to hunger that could act on it"
               },
               {
                 "neuron": "anticipation",
-                "at": 1794189140.4782848,
+                "at": 1794189413.905599,
                 "deficit": "expression",
                 "because": "the squid has worked out that anxiety plus eating sends hunger down by 23 (55% confident), but there is no pathway in the network from anxiety to hunger that could act on it"
               },
               {
                 "neuron": "role_separation",
-                "at": 1794189140.601514,
+                "at": 1794189414.1117647,
                 "deficit": "differentiation",
                 "because": "act flee is pushed the same way by both relay bridge and learned expectation, which are almost never active at the same time (correlation -0.61); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "second_opinion",
-                "at": 1794189140.7337613,
+                "at": 1794189414.3207064,
                 "deficit": "differentiation",
                 "because": "happiness is pushed the same way by both curiosity and learned expectation, which are almost never active at the same time (correlation -0.66); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "investigation_drive",
-                "at": 1794189140.879842,
+                "at": 1794189414.5496948,
                 "deficit": "differentiation",
                 "because": "act ink is pushed the same way by both relay bridge and learned expectation, which are almost never active at the same time (correlation -0.67); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "curiosity_spark",
-                "at": 1794189141.0324438,
+                "at": 1794189414.798181,
                 "deficit": "differentiation",
                 "because": "act collapse is pushed the same way by both relay bridge and learned expectation, which are almost never active at the same time (correlation -0.73); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "novelty_role_separation",
-                "at": 1794189141.1823719,
+                "at": 1794189415.037091,
                 "deficit": "differentiation",
                 "because": "act play is pushed the same way by both relay bridge and learned expectation, which are almost never active at the same time (correlation -0.77); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "novelty_role_separation_2",
-                "at": 1794189141.3340838,
+                "at": 1794189415.2814727,
                 "deficit": "differentiation",
                 "because": "act shelter is pushed the same way by both relay bridge and learned expectation, which are almost never active at the same time (correlation -0.80); one neuron cannot stand for both situations at once"
               },
               {
                 "neuron": "filth_avoidance",
-                "at": 1794189142.1772366,
+                "at": 1794189416.5980155,
                 "deficit": "regulation",
                 "because": "cleanliness has been outside its comfortable range for 100% of the last 240 ticks (currently 15), and the existing synapses only supply 0.10 of corrective push and it is not coming back"
               },
               {
                 "neuron": "anxiety_reduction",
-                "at": 1794189143.6182833,
+                "at": 1794189418.882155,
                 "deficit": "regulation",
                 "because": "anxiety has been outside its comfortable range for 100% of the last 240 ticks (currently 100), and the 1 synapse(s) that push it that way are already at full strength and it is not coming back"
               },
               {
                 "neuron": "calm_restore",
-                "at": 1794189144.0408404,
+                "at": 1794189419.5597396,
                 "deficit": "regulation",
                 "because": "anxiety has been outside its comfortable range for 100% of the last 240 ticks (currently 100), and the 2 synapse(s) that push it that way are already at full strength and it is not coming back"
               }
@@ -33274,22 +33274,22 @@
           "train_calls": 186,
           "train_steps": 372,
           "sleep_train_steps": 0,
-          "loss_ema": 0.006188550206961712,
+          "loss_ema": 0.006188550115838245,
           "mae": {
-            "drives": 0.05979186432861713,
-            "flags": 0.01378391646422123,
-            "senses": 0.06884748844141671,
-            "position": 0.06734774524974407,
-            "food": 0.052259413878411244,
-            "action": 0.021332862488005745,
-            "neural": 0.01819252761287445
+            "drives": 0.05979186690994843,
+            "flags": 0.013783914371917288,
+            "senses": 0.06884749409128485,
+            "position": 0.06734773358606853,
+            "food": 0.05225943639072028,
+            "action": 0.021332881092409404,
+            "neural": 0.018192520461276045
           },
-          "delta_mae": 0.005023474060538021,
+          "delta_mae": 0.005023452531938186,
           "action_top1": 0.9709951658609768,
           "action_top1_samples": 5999,
-          "uncertainty": 0.14416884590747958,
-          "inference_seconds": 3.937,
-          "train_seconds": 3.691,
+          "uncertainty": 0.14416886132164194,
+          "inference_seconds": 4.603,
+          "train_seconds": 3.802,
           "brain_effect": {
             "synapses_from_predictions": 53,
             "synapses_into_predictions": 0,
@@ -33352,7 +33352,7 @@
       "total_weight_updates": 106.0,
       "weight_updates_after_last_birth": 0.0,
       "food_eaten_after_last_birth": 0.0,
-      "ticks_per_second": 735.1,
+      "ticks_per_second": 364.3,
       "phases": [
         {
           "name": "east",
@@ -33406,7 +33406,7 @@
           "weight_updates_after_last_birth": 0,
           "food_eaten_after_last_birth": 0,
           "food_eaten_total": 1,
-          "ticks_per_second": 735.1,
+          "ticks_per_second": 364.3,
           "truncated_at": null
         }
       ]
@@ -33424,7 +33424,7 @@
       "total_weight_updates": 78.0,
       "weight_updates_after_last_birth": 0.0,
       "food_eaten_after_last_birth": 0.0,
-      "ticks_per_second": 524.9,
+      "ticks_per_second": 266.5,
       "phases": [
         {
           "name": "east",
@@ -33478,7 +33478,7 @@
           "weight_updates_after_last_birth": 0,
           "food_eaten_after_last_birth": 0,
           "food_eaten_total": 1,
-          "ticks_per_second": 524.9,
+          "ticks_per_second": 266.5,
           "truncated_at": null
         }
       ]
@@ -33496,7 +33496,7 @@
       "total_weight_updates": 158.0,
       "weight_updates_after_last_birth": 53.0,
       "food_eaten_after_last_birth": 0.0,
-      "ticks_per_second": 247.4,
+      "ticks_per_second": 153.9,
       "phases": [
         {
           "name": "east",
@@ -33550,7 +33550,7 @@
           "weight_updates_after_last_birth": 53,
           "food_eaten_after_last_birth": 0,
           "food_eaten_total": 3,
-          "ticks_per_second": 247.4,
+          "ticks_per_second": 153.9,
           "truncated_at": null
         }
       ]
