@@ -1,0 +1,19 @@
+[innate-study] off/offload_historical seed 11: begin
+Configuration loaded from config.ini
+  earned_food=132 exploring=1482 idle=4152 hunger_link=None neurons=31
+[innate-study] off/preserve_innate seed 11: begin
+Configuration loaded from config.ini
+  earned_food=23 exploring=457 idle=5444 hunger_link=1.0 neurons=31
+[innate-study] linear/offload_historical seed 11: begin
+Configuration loaded from config.ini
+  earned_food=46 exploring=724 idle=5132 hunger_link=0.749921 neurons=46
+[innate-study] linear/preserve_innate seed 11: begin
+Configuration loaded from config.ini
+  earned_food=46 exploring=724 idle=5132 hunger_link=0.749921 neurons=46
+[innate-study] transformer/offload_historical seed 11: begin
+Configuration loaded from config.ini
+  earned_food=4 exploring=4559 idle=1365 hunger_link=None neurons=44
+[innate-study] transformer/preserve_innate seed 11: begin
+Configuration loaded from config.ini
+  earned_food=118 exploring=426 idle=5251 hunger_link=0.382838 neurons=44
+[innate-study] saved experiments/results/innate_offload_study.json
