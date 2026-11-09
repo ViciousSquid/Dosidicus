@@ -1,0 +1,120 @@
+........F................................FF............                                               [100%]
+=================================== FAILURES ===================================
+_______ ReproducibilityTests.test_the_same_seed_produces_the_same_brain ________
+tests/test_headless_training.py:159: in test_the_same_seed_produces_the_same_brain
+    self.assertEqual(first, second,
+E   AssertionError: {'act[6677 chars]5889.8658137, 'name': 'relay_bridge', 'neuron_[7796 chars]931}} != {'act[6677 chars]5889.9341083, 'name': 'relay_bridge', 'neuron_[7796 chars]931}}
+E   Diff is 51316 characters long. Set self.maxDiff to None to see it. : a seeded run is not reproducible, so no experiment run with this trainer can be checked by anyone else
+----------------------------- Captured stdout call -----------------------------
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+
+🚀 Starting headless training: 250 ticks
+   Brain: 8 neurons, 0 connections
+
+🔧 SET NEURON APPEARANCE: relay_bridge -> type=connector, shape=hexagon
+   🔗 Reciprocal links added: cleanliness→relay_bridge:+0.07, sleepiness→relay_bridge:-0.06, anxiety→relay_bridge:-0.10
+  🧠 Tick 85: Created neuron 'relay_bridge'
+🔧 SET NEURON APPEARANCE: waypoint -> type=connector, shape=hexagon
+   🔗 Reciprocal links added: cleanliness→waypoint:+0.06, sleepiness→waypoint:-0.05, anxiety→waypoint:-0.10
+  🧠 Tick 145: Created neuron 'waypoint'
+🔧 SET NEURON APPEARANCE: junction -> type=connector, shape=hexagon
+   🔗 Reciprocal links added: hunger→junction:+0.05, cleanliness→junction:+0.05, anxiety→junction:-0.10, relay_bridge→junction:+0.05
+  🧠 Tick 205: Created neuron 'junction'
+
+✓ Training complete!
+  Ticks: 250
+  Time: 0.07s (3774.5 ticks/sec)
+  Neurons created: 3
+  Hebbian updates: 0
+
+  Brain Statistics:
+    Total neurons: 11
+    Connections: 26
+    Custom neurons: 3
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+
+🚀 Starting headless training: 250 ticks
+   Brain: 8 neurons, 0 connections
+
+🔧 SET NEURON APPEARANCE: relay_bridge -> type=connector, shape=hexagon
+   🔗 Reciprocal links added: cleanliness→relay_bridge:+0.07, sleepiness→relay_bridge:-0.06, anxiety→relay_bridge:-0.10
+  🧠 Tick 85: Created neuron 'relay_bridge'
+🔧 SET NEURON APPEARANCE: waypoint -> type=connector, shape=hexagon
+   🔗 Reciprocal links added: cleanliness→waypoint:+0.06, sleepiness→waypoint:-0.05, anxiety→waypoint:-0.10
+  🧠 Tick 145: Created neuron 'waypoint'
+🔧 SET NEURON APPEARANCE: junction -> type=connector, shape=hexagon
+   🔗 Reciprocal links added: hunger→junction:+0.05, cleanliness→junction:+0.05, anxiety→junction:-0.10, relay_bridge→junction:+0.05
+  🧠 Tick 205: Created neuron 'junction'
+
+✓ Training complete!
+  Ticks: 250
+  Time: 0.07s (3811.3 ticks/sec)
+  Neurons created: 3
+  Hebbian updates: 0
+
+  Brain Statistics:
+    Total neurons: 11
+    Connections: 26
+    Custom neurons: 3
+_________ StressSuppressionTests.test_one_tick_after_a_spike_is_enough _________
+tests/test_headless_training.py:659: in test_one_tick_after_a_spike_is_enough
+    self.assertLess(sim.squid.anxiety, 90.0,
+E   AssertionError: 95.0 not less than 90.0 : the relief clamps anxiety to the cap (50 with five stress neurons) within a single tick
+----------------------------- Captured stdout call -----------------------------
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+🔧 SET NEURON APPEARANCE: comfort_seeking -> type=stress, shape=square
+   ✅ Stress Neuron 'comfort_seeking' created: Anxiety 50.0 → 27.5 (drop: -22.5, cap: 90, neurons: 1)
+   📉 Stress Neuron Created: Anxiety now at 27.5 (cap: 90)
+   🔗 Reciprocal links added: act_eat→comfort_seeking:-0.12, act_flee→comfort_seeking:-0.12, act_play→comfort_seeking:-0.12, act_shelter→comfort_seeking:-0.12, act_rest→comfort_seeking:-0.12, act_ink→comfort_seeking:-0.12, act_collapse→comfort_seeking:-0.12, anxiety→comfort_seeking:-0.14
+🔧 SET NEURON APPEARANCE: fear_dampener -> type=stress, shape=square
+   ✅ Stress Neuron 'fear_dampener' created: Anxiety 27.5 → 0.0 (drop: -30.0, cap: 80, neurons: 2)
+   📉 Stress Neuron Created: Anxiety now at 0.0 (cap: 80)
+   🔗 Reciprocal links added: anxiety→fear_dampener:-0.14, act_eat→fear_dampener:-0.12, act_flee→fear_dampener:-0.12, act_play→fear_dampener:-0.12, act_shelter→fear_dampener:-0.12, act_rest→fear_dampener:-0.12, act_ink→fear_dampener:-0.12, act_collapse→fear_dampener:-0.12
+🔧 SET NEURON APPEARANCE: safety_signal -> type=stress, shape=square
+   ✅ Stress Neuron 'safety_signal' created: Anxiety 0.0 → 0.0 (drop: -37.5, cap: 70, neurons: 3)
+   📉 Stress Neuron Created: Anxiety now at 0.0 (cap: 70)
+   🔗 Reciprocal links added: anxiety→safety_signal:-0.14, act_eat→safety_signal:-0.12, act_flee→safety_signal:-0.12, act_play→safety_signal:-0.12, act_shelter→safety_signal:-0.12, act_rest→safety_signal:-0.12, act_ink→safety_signal:-0.12, act_collapse→safety_signal:-0.12
+🔧 SET NEURON APPEARANCE: tension_release -> type=stress, shape=square
+   ✅ Stress Neuron 'tension_release' created: Anxiety 0.0 → 0.0 (drop: -45.0, cap: 60, neurons: 4)
+   📉 Stress Neuron Created: Anxiety now at 0.0 (cap: 60)
+   🔗 Reciprocal links added: anxiety→tension_release:-0.14, act_eat→tension_release:-0.12, act_flee→tension_release:-0.12, act_play→tension_release:-0.12, act_shelter→tension_release:-0.12, act_rest→tension_release:-0.12, act_ink→tension_release:-0.12, act_collapse→tension_release:-0.12
+🔧 SET NEURON APPEARANCE: stress_general_stress_coping -> type=stress, shape=square
+   ✅ Stress Neuron 'stress_general_stress_coping' created: Anxiety 0.0 → 0.0 (drop: -52.5, cap: 50, neurons: 5)
+   📉 Stress Neuron Created: Anxiety now at 0.0 (cap: 50)
+   🔗 Reciprocal links added: anxiety→stress_general_stress_coping:-0.14, act_eat→stress_general_stress_coping:-0.12, act_flee→stress_general_stress_coping:-0.12, act_play→stress_general_stress_coping:-0.12, act_shelter→stress_general_stress_coping:-0.12, act_rest→stress_general_stress_coping:-0.12, act_ink→stress_general_stress_coping:-0.12, act_collapse→stress_general_stress_coping:-0.12
+_ StressSuppressionTests.test_suppression_neurons_force_anxiety_below_the_cap __
+tests/test_headless_training.py:648: in test_suppression_neurons_force_anxiety_below_the_cap
+    self.assertLessEqual(sim.squid.anxiety,
+E   AssertionError: 95.0 not less than or equal to 50.000001 : anxiety must be forced under the cap the stress neurons define
+----------------------------- Captured stdout call -----------------------------
+Configuration loaded from config.ini
+Configuration loaded from config.ini
+🔧 SET NEURON APPEARANCE: comfort_seeking -> type=stress, shape=square
+   ✅ Stress Neuron 'comfort_seeking' created: Anxiety 50.0 → 27.5 (drop: -22.5, cap: 90, neurons: 1)
+   📉 Stress Neuron Created: Anxiety now at 27.5 (cap: 90)
+   🔗 Reciprocal links added: act_eat→comfort_seeking:-0.12, act_flee→comfort_seeking:-0.12, act_play→comfort_seeking:-0.12, act_shelter→comfort_seeking:-0.12, act_rest→comfort_seeking:-0.12, act_ink→comfort_seeking:-0.12, act_collapse→comfort_seeking:-0.12, anxiety→comfort_seeking:-0.14
+🔧 SET NEURON APPEARANCE: fear_dampener -> type=stress, shape=square
+   ✅ Stress Neuron 'fear_dampener' created: Anxiety 27.5 → 0.0 (drop: -30.0, cap: 80, neurons: 2)
+   📉 Stress Neuron Created: Anxiety now at 0.0 (cap: 80)
+   🔗 Reciprocal links added: anxiety→fear_dampener:-0.14, act_eat→fear_dampener:-0.12, act_flee→fear_dampener:-0.12, act_play→fear_dampener:-0.12, act_shelter→fear_dampener:-0.12, act_rest→fear_dampener:-0.12, act_ink→fear_dampener:-0.12, act_collapse→fear_dampener:-0.12
+🔧 SET NEURON APPEARANCE: safety_signal -> type=stress, shape=square
+   ✅ Stress Neuron 'safety_signal' created: Anxiety 0.0 → 0.0 (drop: -37.5, cap: 70, neurons: 3)
+   📉 Stress Neuron Created: Anxiety now at 0.0 (cap: 70)
+   🔗 Reciprocal links added: anxiety→safety_signal:-0.14, act_eat→safety_signal:-0.12, act_flee→safety_signal:-0.12, act_play→safety_signal:-0.12, act_shelter→safety_signal:-0.12, act_rest→safety_signal:-0.12, act_ink→safety_signal:-0.12, act_collapse→safety_signal:-0.12
+🔧 SET NEURON APPEARANCE: tension_release -> type=stress, shape=square
+   ✅ Stress Neuron 'tension_release' created: Anxiety 0.0 → 0.0 (drop: -45.0, cap: 60, neurons: 4)
+   📉 Stress Neuron Created: Anxiety now at 0.0 (cap: 60)
+   🔗 Reciprocal links added: anxiety→tension_release:-0.14, act_eat→tension_release:-0.12, act_flee→tension_release:-0.12, act_play→tension_release:-0.12, act_shelter→tension_release:-0.12, act_rest→tension_release:-0.12, act_ink→tension_release:-0.12, act_collapse→tension_release:-0.12
+🔧 SET NEURON APPEARANCE: stress_general_stress_coping -> type=stress, shape=square
+   ✅ Stress Neuron 'stress_general_stress_coping' created: Anxiety 0.0 → 0.0 (drop: -52.5, cap: 50, neurons: 5)
+   📉 Stress Neuron Created: Anxiety now at 0.0 (cap: 50)
+   🔗 Reciprocal links added: anxiety→stress_general_stress_coping:-0.14, act_eat→stress_general_stress_coping:-0.12, act_flee→stress_general_stress_coping:-0.12, act_play→stress_general_stress_coping:-0.12, act_shelter→stress_general_stress_coping:-0.12, act_rest→stress_general_stress_coping:-0.12, act_ink→stress_general_stress_coping:-0.12, act_collapse→stress_general_stress_coping:-0.12
+=========================== short test summary info ============================
+FAILED tests/test_headless_training.py::ReproducibilityTests::test_the_same_seed_produces_the_same_brain - AssertionError: {'act[6677 chars]5889.8658137, 'name': 'relay_bridge', 'neuron_[7796 chars]931}} != {'act[6677 chars]5889.9341083, 'name': 'relay_bridge', 'neuron_[7796 chars]931}}
+Diff is 51316 characters long. Set self.maxDiff to None to see it. : a seeded run is not reproducible, so no experiment run with this trainer can be checked by anyone else
+FAILED tests/test_headless_training.py::StressSuppressionTests::test_one_tick_after_a_spike_is_enough - AssertionError: 95.0 not less than 90.0 : the relief clamps anxiety to the cap (50 with five stress neurons) within a single tick
+FAILED tests/test_headless_training.py::StressSuppressionTests::test_suppression_neurons_force_anxiety_below_the_cap - AssertionError: 95.0 not less than or equal to 50.000001 : anxiety must be forced under the cap the stress neurons define
+3 failed, 52 passed, 115 subtests passed in 4.24s
