@@ -37,7 +37,8 @@ dependencies), plus additive wiring in the trainer and config:
   to sequence modelling, not plumbing.
 - a **PredictiveCortex** orchestrator: the experience ring buffer
   (4096 ticks), the per-tick protocol, training, sleep replay,
-  telemetry and persistence.
+  telemetry and per
+sistence.
 
 ## 2. How predictions reach the brain
 
@@ -83,7 +84,8 @@ no-ops when off):
    activations) and appends it to the ring buffer.
 
 Training runs every `predictive_train_interval` ticks (default 64),
-**only while learning is enabled** - a frozen evaluation freezes the
+**only while learning is enabled** - a frozen evaluation free
+zes the
 transformer too, though its predictions still flow. While the squid
 sleeps, `sleep_replay()` runs bounded extra offline replay steps over
 the buffer, the transformer's analogue of the consolidation the rest of
@@ -123,7 +125,8 @@ receives information the squid has not perceived.
 
 CI: `.github/workflows/predictive-cognition.yml` runs the unit suite
 and the quick experiment on every push to this branch, and the full
-experiment on `workflow_dispatch` or when the head commit message
+experiment
+ on `workflow_dispatch` or when the head commit message
 carries `[full]`. Every run publishes its logs and raw result JSON to
 `ci-logs/<run>/` and `experiments/results/` on this branch.
 
@@ -169,6 +172,7 @@ group), transformer vs the linear control:
 |---|---|---|
 | drives | 0.0005 | 0.0122 |
 | flags | 0.0115 | 0.0085 |
+
 | senses | 0.0948 | 0.0918 |
 | position | 0.0066 | 0.0223 |
 | food | 0.0086 | 0.0146 |
@@ -208,7 +212,8 @@ linear 1,3,4,1,2,6; transformer 1,2,3,1,3,2).
 
 **Delayed-consequence anticipation did not emerge.** The transformer's
 `pred_food_ahead` did not rise after a startle (change -1.03 on a 0-100
-scale; the linear control sits saturated at 100, rise 0.000). The root
+scale; the l
+inear control sits saturated at 100, rise 0.000). The root
 cause looks perceptual rather than a modelling failure: food was always
 placed at a fixed spot in the east while the squid wanders, its sight
 radius is 0.32, and only ~6 approaches happened per run - the food was
@@ -239,7 +244,8 @@ The bug affected telemetry only - no sensor value or behaviour depended
 on it, so the run-6 results above stand; the delta MAE is reported
 truthfully by CI runs that include the fix. Verified on the follow-up
 run (run 7, quick experiment, commit `8cd648dc`): delta MAE 0.00003 /
-0.00003 (linear, seeds 11 / 22) and 0.018 / 0.051 (transformer), with
+0.00003 (linear, seeds 11 / 22) and 0.018 / 0.051 (t
+ransformer), with
 all 36 predictive and 51 baseline tests passing.
 
 **A design confound affected all conditions equally.** The training
@@ -278,7 +284,8 @@ behavioural measures had no dynamic range.
 For a fairer next test: place the food within sight of the squid (or
 relative to it), space the startles far enough apart that anxiety can
 recover between them, train for more gradient steps, and evaluate
-anticipation over a horizon longer than one tick. The infrastructure to
+anticipation over a hori
+zon longer than one tick. The infrastructure to
 do all of this - seeds, held-out scenarios, per-condition telemetry,
 automatic publication of results to the branch - now exists and is
 verified end to end.
@@ -321,7 +328,8 @@ passing). The world changes:
 
 **The transformer population ate more.** 4.67 vs 2.50 foods per run
 (the two controls are identical), on 9.83 approaches vs ~5.4. Per-seed
-against the linear control the transformer was ahead in 4 of 6 seeds
+against the linear contr
+ol the transformer was ahead in 4 of 6 seeds
 and tied in 2 (diffs +3, 0, +3, 0, +2, +5; paired t = 2.7, p = 0.04,
 n = 6); against off, ahead in 4 of 6 (+2, -2, +4, 0, +3, +6; t = 2.0,
 p = 0.10). This is the first behavioural separation between
@@ -355,7 +363,8 @@ eval confirms: final anxiety 100 everywhere, zero feeding). The
 delayed-consequence eat rate stayed 0 everywhere for the same reason:
 a startled, frozen squid does not choose to eat within the 80-tick
 window. The world still lacks behavioural dynamic range - the run-6
-diagnosis was right about the mechanism but incomplete about the
+diagnosis was right a
+bout the mechanism but incomplete about the
 channel.
 
 ### Overhead (run 8)
@@ -401,7 +410,8 @@ tests passing, publish `5e4cd2f0`). The world changes:
 | train: ticks/sec | 424.8 | 275.0 | 160.2 |
 | object permanence: alignment | - | 0.779 | 0.543 |
 | object permanence: coverage | - | 0.842 | 0.811 |
-| delayed consequence: rise, early window | - | 0.000 | -1.428 |
+| delayed consequence: rise, early window | - | 0
+.000 | -1.428 |
 | delayed consequence: rise, late window | - | 0.000 | -4.925 |
 | delayed consequence: eat rate | 0.000 | 0.000 | 0.083 |
 | adaptation: food eaten (live learning) | 0.000 | 0.000 | 1.500 |
@@ -448,7 +458,8 @@ held-out trials sat at 0 - its predictions were precise where the
 other transformer seeds sit chronically elevated (44-87). Its Hebbian
 wiring ran hot too (696 updates vs 79-212 in the other transformer
 seeds), and it was the only seed whose synaptic top-5 is dominated by
-food-directed prediction synapses. The same seed under the controls
+food-d
+irected prediction synapses. The same seed under the controls
 ate 6 (off) and 1 (linear). This is the first end-to-end existence
 proof of the architecture doing what it was built to do - but at 1 in
 12 seeds it is a lottery ticket, not an effect.
@@ -482,7 +493,8 @@ held-out trial within 2 ticks of the food appearing.
 
 **Anxiety still does not recover in the adaptation eval.** Final
 anxiety 100 in every seed of every condition; escape ratios ~0. The
-5%-startle phase still overwhelms regulation within 1,500 ticks; the
+5%-startle phase still overwhelms regulation within 1,500 ticks; t
+he
 eval measures the ceiling, not recovery. The only feeding during it is
 seed 222's 18 foods.
 
@@ -508,3 +520,26 @@ architecture: 240,000-tick lives that watch the live neuron count
 against the capability monitor's decisions, to distinguish a brain
 that stops growing because it is forbidden to from one that stops
 because it no longer needs to.
+
+### The supernova is preserved
+
+Seed 222's brain no longer exists only as run-9 JSON metrics. CI runs
+14-15 rebuilt it deterministically through the real trainer and
+committed the organism itself to `experiments/results/squid_222/`:
+its 45-neuron brain in the standard game format, its transformer's
+weights, its cortex telemetry and `metadata.json` recording the
+field-by-field verification of the rebuild against run 9's published
+record. Run 15's verdict: **REPRODUCED** - all 24 strict fields (the
+full training record, object permanence and the delayed-consequence
+evaluation) match run 9 bit-for-bit: 463 foods on 880 approaches, 696
+Hebbian updates, train_steps 1511, loss_ema 0.00489973, 73 synapses
+grown from predictions, and a weights checksum that round-trips exactly
+at 313.006211. Even the eight stochastic-tape fields matched (18 foods
+in adaptation, 131 in retention on 222 approaches): run 14's only
+divergence had been self-inflicted - the artifact-validation step ran
+an extra simulation between training and evaluations and consumed
+shared RNG; with validation moved after the evaluations, the whole
+tape reproduces. The preservation pipeline is
+`experiments/save_special_squid.py`, triggered by a `[save-squid]`
+commit; a restored cortex resumes predicting after two ticks of fresh
+experience (the experience buffer is deliberately not preserved).
