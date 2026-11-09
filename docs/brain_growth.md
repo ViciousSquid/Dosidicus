@@ -668,6 +668,59 @@ for the transformer's remaining feeding deficit. Do not silently
 change the baseline, force eating, or erase squid 222.
 
 
+
+
+## Results: run 23 — independent-seed replication of birth-to-motor intervention
+
+Run 23 (commit `711cbf08`, published `c3ac5a6b`,
+[GitHub Actions](https://github.com/ViciousSquid/Dosidicus/actions/runs/42656767125))
+completed **18** fresh 6,000-tick simulations: off/linear/transformer,
+each at **independent seeds 22, 33, 44**, historical versus
+`context_motor_autowiring=False`. These three seeds explicitly
+exclude discovery seed 11 and exceptional seed 222. The source
+results are `ci-logs/23/results/motor_wiring_replication.json`.
+
+| Mode | Seed | Historical earned foods | Intervention earned foods | Difference |
+|---|---:|---:|---:|---:|
+| Off | 22 | 102 | 21 | **−81** |
+| Off | 33 | 4 | 136 | +132 |
+| Off | 44 | 2 | 128 | +126 |
+| Linear | 22 | 2 | 117 | +115 |
+| Linear | 33 | 9 | 119 | +110 |
+| Linear | 44 | 0 | 141 | +141 |
+| Transformer | 22 | 3 | **120** | +117 |
+| Transformer | 33 | 2 | **111** | +109 |
+| Transformer | 44 | 2 | 3 | +1 |
+
+- Transformer feeding recovery **does generalise to some new
+  seeds**: strong positive response in two of three, small
+  positive response in one. Run 22's seed-11 failure to rescue
+  transformer feeding is therefore **not universal**.
+- Linear improved in **3/3** and off in **2/3**.
+  The **off seed-22 intervention reduced eating from 102 to 21**:
+  removing all incidental motor-autowiring can genuinely
+  worsen a reasonably functional squid. Do not declare this
+  broad ablation safe for production.
+- The intervention omits **both positive and negative**
+  context-to-motor outputs; its effect is more than removing
+  the harmful negative edges. A next mechanism-specific
+  comparison should test blocking *only harmful negative
+  context-motor edges* while preserving potential useful
+  positive edges. That may or may not explain seed 22.
+- This is `n=3` confirmatory seeds, not population-level
+  proof. Each matched pair starts with the same seed, but
+  changed behaviour can consume global random numbers in a
+  different order later, making stochastic environmental
+  events diverge. A later experiment should separate
+  environment RNG from action/brain RNG, or replay the
+  same environment event tape across both arms.
+
+**Result:** A substantial subset of transformer squids is
+rescuable by preventing harmful neurogenesis-to-motor
+interference. This does not demonstrate general superiority
+of transformer prediction over the other modes, and a
+final safe wiring policy still needs testing.
+
 ## Results: run 24 — provenance proves a second, distinct motor-pathway disruption
 
 Run 24 (commit `1d190d61`, successful workflow
