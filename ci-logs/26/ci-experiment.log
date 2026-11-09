@@ -1,0 +1,56 @@
+[innate-repl] off/seed22/offload_historical
+Configuration loaded from config.ini
+  eaten=21, exploring=4963, idle=940
+[innate-repl] off/seed22/preserve_innate
+Configuration loaded from config.ini
+  eaten=21, exploring=4963, idle=940
+[innate-repl] off/seed33/offload_historical
+Configuration loaded from config.ini
+  eaten=136, exploring=5725, idle=3
+[innate-repl] off/seed33/preserve_innate
+Configuration loaded from config.ini
+  eaten=20, exploring=5934, idle=0
+[innate-repl] off/seed44/offload_historical
+Configuration loaded from config.ini
+  eaten=128, exploring=329, idle=5353
+[innate-repl] off/seed44/preserve_innate
+Configuration loaded from config.ini
+  eaten=110, exploring=2495, idle=1387
+[innate-repl] linear/seed22/offload_historical
+Configuration loaded from config.ini
+  eaten=117, exploring=1315, idle=4360
+[innate-repl] linear/seed22/preserve_innate
+Configuration loaded from config.ini
+  eaten=117, exploring=1315, idle=4360
+[innate-repl] linear/seed33/offload_historical
+Configuration loaded from config.ini
+  eaten=119, exploring=4994, idle=527
+[innate-repl] linear/seed33/preserve_innate
+Configuration loaded from config.ini
+  eaten=20, exploring=1172, idle=4749
+[innate-repl] linear/seed44/offload_historical
+Configuration loaded from config.ini
+  eaten=141, exploring=4485, idle=1086
+[innate-repl] linear/seed44/preserve_innate
+Configuration loaded from config.ini
+  eaten=118, exploring=4562, idle=999
+[innate-repl] transformer/seed22/offload_historical
+Configuration loaded from config.ini
+  eaten=120, exploring=4199, idle=1385
+[innate-repl] transformer/seed22/preserve_innate
+Configuration loaded from config.ini
+  eaten=107, exploring=836, idle=4828
+[innate-repl] transformer/seed33/offload_historical
+Configuration loaded from config.ini
+  eaten=111, exploring=745, idle=4951
+[innate-repl] transformer/seed33/preserve_innate
+Configuration loaded from config.ini
+  eaten=40, exploring=2027, idle=3883
+[innate-repl] transformer/seed44/offload_historical
+Configuration loaded from config.ini
+  eaten=3, exploring=1387, idle=4543
+[innate-repl] transformer/seed44/preserve_innate
+Configuration loaded from config.ini
+  eaten=21, exploring=2713, idle=3195
+[innate-repl] aggregate: {"linear": {"control_food": [117, 119, 141], "delta": [0, -99, -23], "harmed": 2, "helped": 0, "mean_delta": -40.667, "median_delta": -23, "preserved_food": [117, 20, 118], "unchanged": 1}, "off": {"control_food": [21, 136, 128], "delta": [0, -116, -18], "harmed": 2, "helped": 0, "mean_delta": -44.667, "median_delta": -18, "preserved_food": [21, 20, 110], "unchanged": 1}, "transformer": {"control_food": [120, 111, 3], "delta": [-13, -71, 18], "harmed": 2, "helped": 1, "mean_delta": -22, "median_delta": -13, "preserved_food": [107, 40, 21], "unchanged": 0}}
+[innate-repl] saved experiments/results/innate_offload_replication.json

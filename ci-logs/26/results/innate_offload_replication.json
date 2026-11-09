@@ -1,0 +1,2066 @@
+{
+  "design": {
+    "seeds": [
+      22,
+      33,
+      44
+    ],
+    "ticks": 6000,
+    "discovery_seed_excluded": 11,
+    "special_seed_excluded": 222,
+    "base_guard_all_arms": "context_motor_autowiring=False",
+    "isolated_intervention": "preserve_innate_motor_offload=True",
+    "no_artificial_food": true,
+    "caveat": "Simulation uses shared seeded random stream, not frozen environmental random tape. Diverging actions may change later environmental draws; biological outcomes are measured, not assumed to be unchanged between arms."
+  },
+  "aggregates": {
+    "off": {
+      "control_food": [
+        21,
+        136,
+        128
+      ],
+      "preserved_food": [
+        21,
+        20,
+        110
+      ],
+      "delta": [
+        0,
+        -116,
+        -18
+      ],
+      "mean_delta": -44.667,
+      "median_delta": -18,
+      "helped": 0,
+      "harmed": 2,
+      "unchanged": 1
+    },
+    "linear": {
+      "control_food": [
+        117,
+        119,
+        141
+      ],
+      "preserved_food": [
+        117,
+        20,
+        118
+      ],
+      "delta": [
+        0,
+        -99,
+        -23
+      ],
+      "mean_delta": -40.667,
+      "median_delta": -23,
+      "helped": 0,
+      "harmed": 2,
+      "unchanged": 1
+    },
+    "transformer": {
+      "control_food": [
+        120,
+        111,
+        3
+      ],
+      "preserved_food": [
+        107,
+        40,
+        21
+      ],
+      "delta": [
+        -13,
+        -71,
+        18
+      ],
+      "mean_delta": -22,
+      "median_delta": -13,
+      "helped": 1,
+      "harmed": 2,
+      "unchanged": 0
+    }
+  },
+  "runs": {
+    "off": {
+      "22": {
+        "offload_historical": {
+          "food_eaten": 21,
+          "food_approaches": 20,
+          "food_seen_ticks": 5410,
+          "actions": {
+            "exploring": 4963,
+            "fleeing": 8,
+            "eating": 29,
+            "idle": 940,
+            "exhausted": 3,
+            "sleeping": 57
+          },
+          "final_neurons": 31,
+          "grown_neurons": 12,
+          "innate_hunger_to_eat": {
+            "present": true,
+            "final_weight": 0.999952,
+            "neurogenesis_events": []
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 51.046,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 2,
+              "eat_activation": 0.0,
+              "move_activation": 51.693,
+              "food_visible": false,
+              "eat_negative": -11.99,
+              "move_negative": 0
+            },
+            {
+              "tick": 500,
+              "food": 3,
+              "eat_activation": 0.0,
+              "move_activation": 51.566,
+              "food_visible": false,
+              "eat_negative": -15.96,
+              "move_negative": 0
+            },
+            {
+              "tick": 700,
+              "food": 3,
+              "eat_activation": 36.897,
+              "move_activation": 40.283,
+              "food_visible": true,
+              "eat_negative": -9.04,
+              "move_negative": -9.69
+            },
+            {
+              "tick": 900,
+              "food": 4,
+              "eat_activation": 28.172,
+              "move_activation": 43.134,
+              "food_visible": true,
+              "eat_negative": -17.75,
+              "move_negative": -9.76
+            },
+            {
+              "tick": 1500,
+              "food": 5,
+              "eat_activation": 36.315,
+              "move_activation": 36.855,
+              "food_visible": true,
+              "eat_negative": -9.61,
+              "move_negative": -18.07
+            },
+            {
+              "tick": 3000,
+              "food": 11,
+              "eat_activation": 19.865,
+              "move_activation": 51.121,
+              "food_visible": true,
+              "eat_negative": -27.51,
+              "move_negative": -6.62
+            },
+            {
+              "tick": 6000,
+              "food": 21,
+              "eat_activation": 17.362,
+              "move_activation": 62.269,
+              "food_visible": true,
+              "eat_negative": -30.0,
+              "move_negative": 0
+            }
+          ]
+        },
+        "preserve_innate": {
+          "food_eaten": 21,
+          "food_approaches": 20,
+          "food_seen_ticks": 5410,
+          "actions": {
+            "exploring": 4963,
+            "fleeing": 8,
+            "eating": 29,
+            "idle": 940,
+            "exhausted": 3,
+            "sleeping": 57
+          },
+          "final_neurons": 31,
+          "grown_neurons": 12,
+          "innate_hunger_to_eat": {
+            "present": true,
+            "final_weight": 0.999952,
+            "neurogenesis_events": []
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 51.046,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 2,
+              "eat_activation": 0.0,
+              "move_activation": 51.693,
+              "food_visible": false,
+              "eat_negative": -11.99,
+              "move_negative": 0
+            },
+            {
+              "tick": 500,
+              "food": 3,
+              "eat_activation": 0.0,
+              "move_activation": 51.566,
+              "food_visible": false,
+              "eat_negative": -15.96,
+              "move_negative": 0
+            },
+            {
+              "tick": 700,
+              "food": 3,
+              "eat_activation": 36.897,
+              "move_activation": 40.283,
+              "food_visible": true,
+              "eat_negative": -9.04,
+              "move_negative": -9.69
+            },
+            {
+              "tick": 900,
+              "food": 4,
+              "eat_activation": 28.172,
+              "move_activation": 43.134,
+              "food_visible": true,
+              "eat_negative": -17.75,
+              "move_negative": -9.76
+            },
+            {
+              "tick": 1500,
+              "food": 5,
+              "eat_activation": 36.315,
+              "move_activation": 36.855,
+              "food_visible": true,
+              "eat_negative": -9.61,
+              "move_negative": -18.07
+            },
+            {
+              "tick": 3000,
+              "food": 11,
+              "eat_activation": 19.865,
+              "move_activation": 51.121,
+              "food_visible": true,
+              "eat_negative": -27.51,
+              "move_negative": -6.62
+            },
+            {
+              "tick": 6000,
+              "food": 21,
+              "eat_activation": 17.362,
+              "move_activation": 62.269,
+              "food_visible": true,
+              "eat_negative": -30.0,
+              "move_negative": 0
+            }
+          ]
+        }
+      },
+      "33": {
+        "offload_historical": {
+          "food_eaten": 136,
+          "food_approaches": 217,
+          "food_seen_ticks": 3675,
+          "actions": {
+            "exploring": 5725,
+            "eating": 225,
+            "fleeing": 7,
+            "idle": 3,
+            "exhausted": 2,
+            "sleeping": 38
+          },
+          "final_neurons": 36,
+          "grown_neurons": 17,
+          "innate_hunger_to_eat": {
+            "present": false,
+            "final_weight": null,
+            "neurogenesis_events": [
+              {
+                "mechanism": "neurogenesis",
+                "note": "handed over to second_opinion",
+                "old": 0.40004,
+                "new": 0.0
+              }
+            ]
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 2,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 1,
+              "grown_source_negative_edges": 1,
+              "grown_source_negative_weight_sum": -0.5423
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 1,
+              "eat_activation": 18.542,
+              "move_activation": 52.199,
+              "food_visible": false,
+              "eat_negative": -7.99,
+              "move_negative": -2.78
+            },
+            {
+              "tick": 300,
+              "food": 2,
+              "eat_activation": 36.704,
+              "move_activation": 45.825,
+              "food_visible": true,
+              "eat_negative": -14.46,
+              "move_negative": -7.13
+            },
+            {
+              "tick": 500,
+              "food": 6,
+              "eat_activation": 0.0,
+              "move_activation": 61.654,
+              "food_visible": false,
+              "eat_negative": -10.73,
+              "move_negative": 0
+            },
+            {
+              "tick": 700,
+              "food": 7,
+              "eat_activation": 15.116,
+              "move_activation": 72.793,
+              "food_visible": true,
+              "eat_negative": -34.83,
+              "move_negative": -4.27
+            },
+            {
+              "tick": 900,
+              "food": 7,
+              "eat_activation": 17.282,
+              "move_activation": 69.164,
+              "food_visible": true,
+              "eat_negative": -31.69,
+              "move_negative": -7.9
+            },
+            {
+              "tick": 1500,
+              "food": 9,
+              "eat_activation": 25.463,
+              "move_activation": 63.814,
+              "food_visible": true,
+              "eat_negative": -32.08,
+              "move_negative": -13.32
+            },
+            {
+              "tick": 3000,
+              "food": 66,
+              "eat_activation": 0.0,
+              "move_activation": 78.725,
+              "food_visible": false,
+              "eat_negative": -28.92,
+              "move_negative": 0
+            },
+            {
+              "tick": 6000,
+              "food": 136,
+              "eat_activation": 0.0,
+              "move_activation": 78.989,
+              "food_visible": false,
+              "eat_negative": -40.46,
+              "move_negative": 0
+            }
+          ]
+        },
+        "preserve_innate": {
+          "food_eaten": 20,
+          "food_approaches": 11,
+          "food_seen_ticks": 5727,
+          "actions": {
+            "exploring": 5934,
+            "eating": 20,
+            "fleeing": 6,
+            "exhausted": 2,
+            "sleeping": 38
+          },
+          "final_neurons": 36,
+          "grown_neurons": 17,
+          "innate_hunger_to_eat": {
+            "present": true,
+            "final_weight": 0.627429,
+            "neurogenesis_events": []
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 3,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 1,
+              "grown_source_negative_edges": 1,
+              "grown_source_negative_weight_sum": -0.5277
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 1,
+              "eat_activation": 18.542,
+              "move_activation": 52.199,
+              "food_visible": false,
+              "eat_negative": -7.99,
+              "move_negative": -2.78
+            },
+            {
+              "tick": 300,
+              "food": 2,
+              "eat_activation": 36.704,
+              "move_activation": 45.825,
+              "food_visible": true,
+              "eat_negative": -14.46,
+              "move_negative": -7.13
+            },
+            {
+              "tick": 500,
+              "food": 3,
+              "eat_activation": 28.558,
+              "move_activation": 46.299,
+              "food_visible": true,
+              "eat_negative": -21.31,
+              "move_negative": -5.55
+            },
+            {
+              "tick": 700,
+              "food": 3,
+              "eat_activation": 32.018,
+              "move_activation": 68.142,
+              "food_visible": true,
+              "eat_negative": -37.89,
+              "move_negative": -8.29
+            },
+            {
+              "tick": 900,
+              "food": 4,
+              "eat_activation": 14.53,
+              "move_activation": 72.732,
+              "food_visible": true,
+              "eat_negative": -55.36,
+              "move_negative": -3.78
+            },
+            {
+              "tick": 1500,
+              "food": 5,
+              "eat_activation": 35.669,
+              "move_activation": 63.32,
+              "food_visible": true,
+              "eat_negative": -35.97,
+              "move_negative": -13.21
+            },
+            {
+              "tick": 3000,
+              "food": 10,
+              "eat_activation": 33.351,
+              "move_activation": 67.602,
+              "food_visible": true,
+              "eat_negative": -38.51,
+              "move_negative": -11.32
+            },
+            {
+              "tick": 6000,
+              "food": 20,
+              "eat_activation": 22.726,
+              "move_activation": 80.085,
+              "food_visible": true,
+              "eat_negative": -49.08,
+              "move_negative": -11.14
+            }
+          ]
+        }
+      },
+      "44": {
+        "offload_historical": {
+          "food_eaten": 128,
+          "food_approaches": 222,
+          "food_seen_ticks": 390,
+          "actions": {
+            "exploring": 329,
+            "eating": 250,
+            "fleeing": 8,
+            "idle": 5353,
+            "exhausted": 3,
+            "sleeping": 57
+          },
+          "final_neurons": 32,
+          "grown_neurons": 13,
+          "innate_hunger_to_eat": {
+            "present": false,
+            "final_weight": null,
+            "neurogenesis_events": [
+              {
+                "mechanism": "neurogenesis",
+                "note": "handed over to role_separation",
+                "old": 0.39511,
+                "new": 0.0
+              }
+            ]
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 1,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 51.23,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 2,
+              "eat_activation": 38.079,
+              "move_activation": 43.144,
+              "food_visible": true,
+              "eat_negative": -11.88,
+              "move_negative": -9.15
+            },
+            {
+              "tick": 500,
+              "food": 7,
+              "eat_activation": 20.141,
+              "move_activation": 41.711,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -7.57
+            },
+            {
+              "tick": 700,
+              "food": 8,
+              "eat_activation": 18.712,
+              "move_activation": 38.007,
+              "food_visible": false,
+              "eat_negative": -1.07,
+              "move_negative": -12.15
+            },
+            {
+              "tick": 900,
+              "food": 21,
+              "eat_activation": 16.552,
+              "move_activation": 34.279,
+              "food_visible": false,
+              "eat_negative": -3.23,
+              "move_negative": -15.76
+            },
+            {
+              "tick": 1500,
+              "food": 29,
+              "eat_activation": 10.069,
+              "move_activation": 30.957,
+              "food_visible": false,
+              "eat_negative": -9.71,
+              "move_negative": -19.18
+            },
+            {
+              "tick": 3000,
+              "food": 72,
+              "eat_activation": 10.687,
+              "move_activation": 21.54,
+              "food_visible": false,
+              "eat_negative": -9.09,
+              "move_negative": -28.49
+            },
+            {
+              "tick": 6000,
+              "food": 128,
+              "eat_activation": 59.773,
+              "move_activation": 0.0,
+              "food_visible": true,
+              "eat_negative": -3.75,
+              "move_negative": -66.7
+            }
+          ]
+        },
+        "preserve_innate": {
+          "food_eaten": 110,
+          "food_approaches": 246,
+          "food_seen_ticks": 781,
+          "actions": {
+            "exploring": 2495,
+            "eating": 2050,
+            "fleeing": 8,
+            "idle": 1387,
+            "exhausted": 3,
+            "sleeping": 57
+          },
+          "final_neurons": 31,
+          "grown_neurons": 12,
+          "innate_hunger_to_eat": {
+            "present": true,
+            "final_weight": 0.343647,
+            "neurogenesis_events": []
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 2,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 51.23,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 2,
+              "eat_activation": 38.079,
+              "move_activation": 43.144,
+              "food_visible": true,
+              "eat_negative": -11.88,
+              "move_negative": -9.15
+            },
+            {
+              "tick": 500,
+              "food": 4,
+              "eat_activation": 36.703,
+              "move_activation": 36.984,
+              "food_visible": true,
+              "eat_negative": -19.2,
+              "move_negative": -13.16
+            },
+            {
+              "tick": 700,
+              "food": 18,
+              "eat_activation": 6.588,
+              "move_activation": 36.965,
+              "food_visible": false,
+              "eat_negative": -26.43,
+              "move_negative": -5.7
+            },
+            {
+              "tick": 900,
+              "food": 22,
+              "eat_activation": 0.0,
+              "move_activation": 47.343,
+              "food_visible": false,
+              "eat_negative": -41.99,
+              "move_negative": -3.19
+            },
+            {
+              "tick": 1500,
+              "food": 29,
+              "eat_activation": 0.0,
+              "move_activation": 43.129,
+              "food_visible": false,
+              "eat_negative": -55.08,
+              "move_negative": -9.61
+            },
+            {
+              "tick": 3000,
+              "food": 58,
+              "eat_activation": 0.0,
+              "move_activation": 49.554,
+              "food_visible": false,
+              "eat_negative": -51.37,
+              "move_negative": -6.9
+            },
+            {
+              "tick": 6000,
+              "food": 110,
+              "eat_activation": 53.904,
+              "move_activation": 23.711,
+              "food_visible": false,
+              "eat_negative": -19.78,
+              "move_negative": -27.72
+            }
+          ]
+        }
+      }
+    },
+    "linear": {
+      "22": {
+        "offload_historical": {
+          "food_eaten": 117,
+          "food_approaches": 240,
+          "food_seen_ticks": 334,
+          "actions": {
+            "exploring": 1315,
+            "eating": 258,
+            "idle": 4360,
+            "fleeing": 7,
+            "exhausted": 3,
+            "sleeping": 57
+          },
+          "final_neurons": 45,
+          "grown_neurons": 16,
+          "innate_hunger_to_eat": {
+            "present": true,
+            "final_weight": -0.360941,
+            "neurogenesis_events": []
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 50.276,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 7,
+              "eat_activation": 0.0,
+              "move_activation": 51.856,
+              "food_visible": false,
+              "eat_negative": -15.37,
+              "move_negative": -0.71
+            },
+            {
+              "tick": 500,
+              "food": 8,
+              "eat_activation": 0.0,
+              "move_activation": 51.936,
+              "food_visible": false,
+              "eat_negative": -12.6,
+              "move_negative": 0
+            },
+            {
+              "tick": 700,
+              "food": 12,
+              "eat_activation": 0.0,
+              "move_activation": 52.658,
+              "food_visible": false,
+              "eat_negative": -13.62,
+              "move_negative": -1.06
+            },
+            {
+              "tick": 900,
+              "food": 14,
+              "eat_activation": 0.0,
+              "move_activation": 48.091,
+              "food_visible": false,
+              "eat_negative": -17.85,
+              "move_negative": -3.37
+            },
+            {
+              "tick": 1500,
+              "food": 19,
+              "eat_activation": 0.0,
+              "move_activation": 36.809,
+              "food_visible": false,
+              "eat_negative": -13.25,
+              "move_negative": -13.18
+            },
+            {
+              "tick": 3000,
+              "food": 39,
+              "eat_activation": 0.0,
+              "move_activation": 31.825,
+              "food_visible": false,
+              "eat_negative": -19.77,
+              "move_negative": -18.09
+            },
+            {
+              "tick": 6000,
+              "food": 117,
+              "eat_activation": 3.75,
+              "move_activation": 36.811,
+              "food_visible": false,
+              "eat_negative": -6.59,
+              "move_negative": -13.2
+            }
+          ]
+        },
+        "preserve_innate": {
+          "food_eaten": 117,
+          "food_approaches": 240,
+          "food_seen_ticks": 334,
+          "actions": {
+            "exploring": 1315,
+            "eating": 258,
+            "idle": 4360,
+            "fleeing": 7,
+            "exhausted": 3,
+            "sleeping": 57
+          },
+          "final_neurons": 45,
+          "grown_neurons": 16,
+          "innate_hunger_to_eat": {
+            "present": true,
+            "final_weight": -0.360941,
+            "neurogenesis_events": []
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 50.276,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 7,
+              "eat_activation": 0.0,
+              "move_activation": 51.856,
+              "food_visible": false,
+              "eat_negative": -15.37,
+              "move_negative": -0.71
+            },
+            {
+              "tick": 500,
+              "food": 8,
+              "eat_activation": 0.0,
+              "move_activation": 51.936,
+              "food_visible": false,
+              "eat_negative": -12.6,
+              "move_negative": 0
+            },
+            {
+              "tick": 700,
+              "food": 12,
+              "eat_activation": 0.0,
+              "move_activation": 52.658,
+              "food_visible": false,
+              "eat_negative": -13.62,
+              "move_negative": -1.06
+            },
+            {
+              "tick": 900,
+              "food": 14,
+              "eat_activation": 0.0,
+              "move_activation": 48.091,
+              "food_visible": false,
+              "eat_negative": -17.85,
+              "move_negative": -3.37
+            },
+            {
+              "tick": 1500,
+              "food": 19,
+              "eat_activation": 0.0,
+              "move_activation": 36.809,
+              "food_visible": false,
+              "eat_negative": -13.25,
+              "move_negative": -13.18
+            },
+            {
+              "tick": 3000,
+              "food": 39,
+              "eat_activation": 0.0,
+              "move_activation": 31.825,
+              "food_visible": false,
+              "eat_negative": -19.77,
+              "move_negative": -18.09
+            },
+            {
+              "tick": 6000,
+              "food": 117,
+              "eat_activation": 3.75,
+              "move_activation": 36.811,
+              "food_visible": false,
+              "eat_negative": -6.59,
+              "move_negative": -13.2
+            }
+          ]
+        }
+      },
+      "33": {
+        "offload_historical": {
+          "food_eaten": 119,
+          "food_approaches": 296,
+          "food_seen_ticks": 575,
+          "actions": {
+            "exploring": 4994,
+            "eating": 432,
+            "fleeing": 8,
+            "idle": 527,
+            "exhausted": 2,
+            "sleeping": 37
+          },
+          "final_neurons": 49,
+          "grown_neurons": 20,
+          "innate_hunger_to_eat": {
+            "present": false,
+            "final_weight": null,
+            "neurogenesis_events": [
+              {
+                "mechanism": "neurogenesis",
+                "note": "handed over to second_opinion",
+                "old": 0.39965,
+                "new": 0.0
+              }
+            ]
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 2,
+              "grown_source_negative_edges": 1,
+              "grown_source_negative_weight_sum": -0.2001
+            },
+            "act_move": {
+              "grown_source_edges": 1,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 1,
+              "eat_activation": 18.556,
+              "move_activation": 52.199,
+              "food_visible": false,
+              "eat_negative": -8.0,
+              "move_negative": -2.78
+            },
+            {
+              "tick": 300,
+              "food": 4,
+              "eat_activation": 35.678,
+              "move_activation": 43.265,
+              "food_visible": true,
+              "eat_negative": -19.44,
+              "move_negative": -8.85
+            },
+            {
+              "tick": 500,
+              "food": 5,
+              "eat_activation": 0.0,
+              "move_activation": 50.921,
+              "food_visible": false,
+              "eat_negative": -14.39,
+              "move_negative": 0
+            },
+            {
+              "tick": 700,
+              "food": 12,
+              "eat_activation": 1.056,
+              "move_activation": 60.724,
+              "food_visible": false,
+              "eat_negative": -10.0,
+              "move_negative": -0.33
+            },
+            {
+              "tick": 900,
+              "food": 20,
+              "eat_activation": 10.153,
+              "move_activation": 55.604,
+              "food_visible": false,
+              "eat_negative": -10.04,
+              "move_negative": -4.96
+            },
+            {
+              "tick": 1500,
+              "food": 35,
+              "eat_activation": 9.922,
+              "move_activation": 50.062,
+              "food_visible": false,
+              "eat_negative": -13.2,
+              "move_negative": -9.87
+            },
+            {
+              "tick": 3000,
+              "food": 62,
+              "eat_activation": 10.734,
+              "move_activation": 61.731,
+              "food_visible": false,
+              "eat_negative": -10.0,
+              "move_negative": -5.75
+            },
+            {
+              "tick": 6000,
+              "food": 119,
+              "eat_activation": 10.761,
+              "move_activation": 70.346,
+              "food_visible": false,
+              "eat_negative": -10.0,
+              "move_negative": -6.07
+            }
+          ]
+        },
+        "preserve_innate": {
+          "food_eaten": 20,
+          "food_approaches": 27,
+          "food_seen_ticks": 5581,
+          "actions": {
+            "exploring": 1172,
+            "eating": 30,
+            "fleeing": 9,
+            "idle": 4749,
+            "exhausted": 2,
+            "sleeping": 38
+          },
+          "final_neurons": 49,
+          "grown_neurons": 20,
+          "innate_hunger_to_eat": {
+            "present": true,
+            "final_weight": 0.611176,
+            "neurogenesis_events": []
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 2,
+              "grown_source_negative_edges": 1,
+              "grown_source_negative_weight_sum": -0.2
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 1,
+              "eat_activation": 18.556,
+              "move_activation": 52.199,
+              "food_visible": false,
+              "eat_negative": -8.0,
+              "move_negative": -2.78
+            },
+            {
+              "tick": 300,
+              "food": 4,
+              "eat_activation": 35.678,
+              "move_activation": 43.265,
+              "food_visible": true,
+              "eat_negative": -19.44,
+              "move_negative": -8.85
+            },
+            {
+              "tick": 500,
+              "food": 5,
+              "eat_activation": 0.0,
+              "move_activation": 50.921,
+              "food_visible": false,
+              "eat_negative": -14.39,
+              "move_negative": 0
+            },
+            {
+              "tick": 700,
+              "food": 7,
+              "eat_activation": 10.915,
+              "move_activation": 38.564,
+              "food_visible": true,
+              "eat_negative": -47.08,
+              "move_negative": -11.53
+            },
+            {
+              "tick": 900,
+              "food": 7,
+              "eat_activation": 15.624,
+              "move_activation": 44.796,
+              "food_visible": true,
+              "eat_negative": -39.09,
+              "move_negative": -5.25
+            },
+            {
+              "tick": 1500,
+              "food": 7,
+              "eat_activation": 35.463,
+              "move_activation": 38.027,
+              "food_visible": true,
+              "eat_negative": -33.18,
+              "move_negative": -13.76
+            },
+            {
+              "tick": 3000,
+              "food": 11,
+              "eat_activation": 31.544,
+              "move_activation": 37.791,
+              "food_visible": true,
+              "eat_negative": -29.98,
+              "move_negative": -12.25
+            },
+            {
+              "tick": 6000,
+              "food": 20,
+              "eat_activation": 23.159,
+              "move_activation": 56.645,
+              "food_visible": true,
+              "eat_negative": -29.98,
+              "move_negative": -3.53
+            }
+          ]
+        }
+      },
+      "44": {
+        "offload_historical": {
+          "food_eaten": 141,
+          "food_approaches": 358,
+          "food_seen_ticks": 767,
+          "actions": {
+            "exploring": 4485,
+            "eating": 365,
+            "idle": 1086,
+            "fleeing": 4,
+            "exhausted": 3,
+            "sleeping": 57
+          },
+          "final_neurons": 47,
+          "grown_neurons": 18,
+          "innate_hunger_to_eat": {
+            "present": false,
+            "final_weight": null,
+            "neurogenesis_events": [
+              {
+                "mechanism": "neurogenesis",
+                "note": "handed over to second_opinion",
+                "old": 0.39963,
+                "new": 0.0
+              }
+            ]
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 1,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 51.548,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 3,
+              "eat_activation": 0.0,
+              "move_activation": 50.88,
+              "food_visible": false,
+              "eat_negative": -18.92,
+              "move_negative": 0
+            },
+            {
+              "tick": 500,
+              "food": 5,
+              "eat_activation": 34.593,
+              "move_activation": 42.293,
+              "food_visible": true,
+              "eat_negative": -19.94,
+              "move_negative": -7.17
+            },
+            {
+              "tick": 700,
+              "food": 11,
+              "eat_activation": 17.446,
+              "move_activation": 41.112,
+              "food_visible": false,
+              "eat_negative": -1.06,
+              "move_negative": -6.12
+            },
+            {
+              "tick": 900,
+              "food": 20,
+              "eat_activation": 3.057,
+              "move_activation": 47.235,
+              "food_visible": false,
+              "eat_negative": -3.2,
+              "move_negative": -4.87
+            },
+            {
+              "tick": 1500,
+              "food": 31,
+              "eat_activation": 0.0,
+              "move_activation": 44.022,
+              "food_visible": false,
+              "eat_negative": -9.98,
+              "move_negative": -9.61
+            },
+            {
+              "tick": 3000,
+              "food": 66,
+              "eat_activation": 0.0,
+              "move_activation": 48.254,
+              "food_visible": false,
+              "eat_negative": -29.65,
+              "move_negative": -7.86
+            },
+            {
+              "tick": 6000,
+              "food": 141,
+              "eat_activation": 0.0,
+              "move_activation": 59.432,
+              "food_visible": false,
+              "eat_negative": -25.02,
+              "move_negative": -5.02
+            }
+          ]
+        },
+        "preserve_innate": {
+          "food_eaten": 118,
+          "food_approaches": 301,
+          "food_seen_ticks": 647,
+          "actions": {
+            "exploring": 4562,
+            "eating": 372,
+            "idle": 999,
+            "fleeing": 7,
+            "exhausted": 3,
+            "sleeping": 57
+          },
+          "final_neurons": 47,
+          "grown_neurons": 18,
+          "innate_hunger_to_eat": {
+            "present": true,
+            "final_weight": 0.244916,
+            "neurogenesis_events": []
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 1,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 51.548,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 3,
+              "eat_activation": 0.0,
+              "move_activation": 50.88,
+              "food_visible": false,
+              "eat_negative": -18.92,
+              "move_negative": 0
+            },
+            {
+              "tick": 500,
+              "food": 5,
+              "eat_activation": 34.593,
+              "move_activation": 42.293,
+              "food_visible": true,
+              "eat_negative": -19.94,
+              "move_negative": -7.17
+            },
+            {
+              "tick": 700,
+              "food": 11,
+              "eat_activation": 0.0,
+              "move_activation": 50.614,
+              "food_visible": false,
+              "eat_negative": -20.4,
+              "move_negative": -1.1
+            },
+            {
+              "tick": 900,
+              "food": 16,
+              "eat_activation": 0.0,
+              "move_activation": 49.401,
+              "food_visible": false,
+              "eat_negative": -24.1,
+              "move_negative": -3.84
+            },
+            {
+              "tick": 1500,
+              "food": 25,
+              "eat_activation": 0.0,
+              "move_activation": 49.716,
+              "food_visible": false,
+              "eat_negative": -24.21,
+              "move_negative": -9.61
+            },
+            {
+              "tick": 3000,
+              "food": 59,
+              "eat_activation": 0.0,
+              "move_activation": 47.489,
+              "food_visible": false,
+              "eat_negative": -21.51,
+              "move_negative": -7.46
+            },
+            {
+              "tick": 6000,
+              "food": 118,
+              "eat_activation": 4.039,
+              "move_activation": 53.41,
+              "food_visible": false,
+              "eat_negative": -15.93,
+              "move_negative": -5.65
+            }
+          ]
+        }
+      }
+    },
+    "transformer": {
+      "22": {
+        "offload_historical": {
+          "food_eaten": 120,
+          "food_approaches": 292,
+          "food_seen_ticks": 547,
+          "actions": {
+            "exploring": 4199,
+            "eating": 351,
+            "idle": 1385,
+            "fleeing": 5,
+            "exhausted": 3,
+            "sleeping": 57
+          },
+          "final_neurons": 38,
+          "grown_neurons": 9,
+          "innate_hunger_to_eat": {
+            "present": false,
+            "final_weight": null,
+            "neurogenesis_events": [
+              {
+                "mechanism": "neurogenesis",
+                "note": "handed over to role_separation",
+                "old": 0.33973,
+                "new": 0.0
+              }
+            ]
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 1,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 50.276,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 3,
+              "eat_activation": 0.0,
+              "move_activation": 48.352,
+              "food_visible": false,
+              "eat_negative": -13.53,
+              "move_negative": -2.71
+            },
+            {
+              "tick": 500,
+              "food": 5,
+              "eat_activation": 37.694,
+              "move_activation": 33.497,
+              "food_visible": true,
+              "eat_negative": -16.02,
+              "move_negative": -18.29
+            },
+            {
+              "tick": 700,
+              "food": 13,
+              "eat_activation": 4.781,
+              "move_activation": 42.107,
+              "food_visible": false,
+              "eat_negative": -1.9,
+              "move_negative": -8.57
+            },
+            {
+              "tick": 900,
+              "food": 21,
+              "eat_activation": 0.0,
+              "move_activation": 38.693,
+              "food_visible": false,
+              "eat_negative": -8.09,
+              "move_negative": -11.73
+            },
+            {
+              "tick": 1500,
+              "food": 26,
+              "eat_activation": 0.0,
+              "move_activation": 41.433,
+              "food_visible": false,
+              "eat_negative": -10.32,
+              "move_negative": -12.94
+            },
+            {
+              "tick": 3000,
+              "food": 57,
+              "eat_activation": 0.0,
+              "move_activation": 51.137,
+              "food_visible": false,
+              "eat_negative": -9.59,
+              "move_negative": -9.01
+            },
+            {
+              "tick": 6000,
+              "food": 120,
+              "eat_activation": 0.0,
+              "move_activation": 47.705,
+              "food_visible": false,
+              "eat_negative": -19.86,
+              "move_negative": -5.32
+            }
+          ]
+        },
+        "preserve_innate": {
+          "food_eaten": 107,
+          "food_approaches": 223,
+          "food_seen_ticks": 456,
+          "actions": {
+            "exploring": 836,
+            "eating": 269,
+            "idle": 4828,
+            "fleeing": 7,
+            "exhausted": 3,
+            "sleeping": 57
+          },
+          "final_neurons": 38,
+          "grown_neurons": 9,
+          "innate_hunger_to_eat": {
+            "present": false,
+            "final_weight": null,
+            "neurogenesis_events": []
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 1,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 50.276,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 3,
+              "eat_activation": 0.0,
+              "move_activation": 48.352,
+              "food_visible": false,
+              "eat_negative": -13.53,
+              "move_negative": -2.71
+            },
+            {
+              "tick": 500,
+              "food": 5,
+              "eat_activation": 37.694,
+              "move_activation": 33.497,
+              "food_visible": true,
+              "eat_negative": -16.02,
+              "move_negative": -18.29
+            },
+            {
+              "tick": 700,
+              "food": 13,
+              "eat_activation": 0.0,
+              "move_activation": 43.699,
+              "food_visible": false,
+              "eat_negative": -15.34,
+              "move_negative": -6.98
+            },
+            {
+              "tick": 900,
+              "food": 19,
+              "eat_activation": 0.0,
+              "move_activation": 39.701,
+              "food_visible": false,
+              "eat_negative": -17.05,
+              "move_negative": -12.34
+            },
+            {
+              "tick": 1500,
+              "food": 25,
+              "eat_activation": 0.0,
+              "move_activation": 42.155,
+              "food_visible": false,
+              "eat_negative": -21.29,
+              "move_negative": -11.52
+            },
+            {
+              "tick": 3000,
+              "food": 51,
+              "eat_activation": 0.0,
+              "move_activation": 39.458,
+              "food_visible": false,
+              "eat_negative": -14.28,
+              "move_negative": -13.64
+            },
+            {
+              "tick": 6000,
+              "food": 107,
+              "eat_activation": 14.575,
+              "move_activation": 32.306,
+              "food_visible": false,
+              "eat_negative": -3.65,
+              "move_negative": -17.76
+            }
+          ]
+        }
+      },
+      "33": {
+        "offload_historical": {
+          "food_eaten": 111,
+          "food_approaches": 203,
+          "food_seen_ticks": 419,
+          "actions": {
+            "exploring": 745,
+            "eating": 258,
+            "fleeing": 6,
+            "idle": 4951,
+            "exhausted": 2,
+            "sleeping": 38
+          },
+          "final_neurons": 47,
+          "grown_neurons": 18,
+          "innate_hunger_to_eat": {
+            "present": false,
+            "final_weight": null,
+            "neurogenesis_events": [
+              {
+                "mechanism": "neurogenesis",
+                "note": "handed over to second_opinion",
+                "old": 0.39996,
+                "new": 0.0
+              }
+            ]
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 1,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 1,
+              "eat_activation": 18.667,
+              "move_activation": 52.199,
+              "food_visible": false,
+              "eat_negative": -8.0,
+              "move_negative": -2.8
+            },
+            {
+              "tick": 300,
+              "food": 3,
+              "eat_activation": 31.291,
+              "move_activation": 44.847,
+              "food_visible": true,
+              "eat_negative": -19.64,
+              "move_negative": -7.09
+            },
+            {
+              "tick": 500,
+              "food": 8,
+              "eat_activation": 5.253,
+              "move_activation": 49.371,
+              "food_visible": false,
+              "eat_negative": -0.67,
+              "move_negative": -1.93
+            },
+            {
+              "tick": 700,
+              "food": 10,
+              "eat_activation": 4.645,
+              "move_activation": 48.803,
+              "food_visible": false,
+              "eat_negative": -0.05,
+              "move_negative": -1.41
+            },
+            {
+              "tick": 900,
+              "food": 11,
+              "eat_activation": 9.978,
+              "move_activation": 46.533,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -3.74
+            },
+            {
+              "tick": 1500,
+              "food": 11,
+              "eat_activation": 17.42,
+              "move_activation": 40.901,
+              "food_visible": false,
+              "eat_negative": -3.2,
+              "move_negative": -9.26
+            },
+            {
+              "tick": 3000,
+              "food": 39,
+              "eat_activation": 24.317,
+              "move_activation": 29.659,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -20.35
+            },
+            {
+              "tick": 6000,
+              "food": 111,
+              "eat_activation": 22.465,
+              "move_activation": 38.148,
+              "food_visible": false,
+              "eat_negative": -0.02,
+              "move_negative": -12.72
+            }
+          ]
+        },
+        "preserve_innate": {
+          "food_eaten": 40,
+          "food_approaches": 31,
+          "food_seen_ticks": 5688,
+          "actions": {
+            "exploring": 2027,
+            "eating": 43,
+            "fleeing": 7,
+            "idle": 3883,
+            "exhausted": 2,
+            "sleeping": 38
+          },
+          "final_neurons": 45,
+          "grown_neurons": 16,
+          "innate_hunger_to_eat": {
+            "present": true,
+            "final_weight": 1.0,
+            "neurogenesis_events": []
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 2,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 1,
+              "eat_activation": 18.667,
+              "move_activation": 52.199,
+              "food_visible": false,
+              "eat_negative": -8.0,
+              "move_negative": -2.8
+            },
+            {
+              "tick": 300,
+              "food": 3,
+              "eat_activation": 31.291,
+              "move_activation": 44.847,
+              "food_visible": true,
+              "eat_negative": -19.64,
+              "move_negative": -7.09
+            },
+            {
+              "tick": 500,
+              "food": 3,
+              "eat_activation": 35.041,
+              "move_activation": 43.645,
+              "food_visible": true,
+              "eat_negative": -14.9,
+              "move_negative": -7.97
+            },
+            {
+              "tick": 700,
+              "food": 4,
+              "eat_activation": 11.001,
+              "move_activation": 52.484,
+              "food_visible": false,
+              "eat_negative": -37.59,
+              "move_negative": -2.49
+            },
+            {
+              "tick": 900,
+              "food": 4,
+              "eat_activation": 30.118,
+              "move_activation": 46.451,
+              "food_visible": true,
+              "eat_negative": -27.58,
+              "move_negative": -6.85
+            },
+            {
+              "tick": 1500,
+              "food": 6,
+              "eat_activation": 29.24,
+              "move_activation": 36.014,
+              "food_visible": true,
+              "eat_negative": -36.67,
+              "move_negative": -14.1
+            },
+            {
+              "tick": 3000,
+              "food": 12,
+              "eat_activation": 7.127,
+              "move_activation": 54.436,
+              "food_visible": true,
+              "eat_negative": -54.75,
+              "move_negative": -3.62
+            },
+            {
+              "tick": 6000,
+              "food": 40,
+              "eat_activation": 0.0,
+              "move_activation": 62.305,
+              "food_visible": true,
+              "eat_negative": -83.69,
+              "move_negative": -9.45
+            }
+          ]
+        }
+      },
+      "44": {
+        "offload_historical": {
+          "food_eaten": 3,
+          "food_approaches": 5,
+          "food_seen_ticks": 5746,
+          "actions": {
+            "exploring": 1387,
+            "eating": 5,
+            "idle": 4543,
+            "fleeing": 5,
+            "exhausted": 3,
+            "sleeping": 57
+          },
+          "final_neurons": 45,
+          "grown_neurons": 16,
+          "innate_hunger_to_eat": {
+            "present": false,
+            "final_weight": null,
+            "neurogenesis_events": [
+              {
+                "mechanism": "neurogenesis",
+                "note": "handed over to second_opinion",
+                "old": 0.39999,
+                "new": 0.0
+              }
+            ]
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 1,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 51.548,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 2,
+              "eat_activation": 32.605,
+              "move_activation": 45.305,
+              "food_visible": true,
+              "eat_negative": -12.0,
+              "move_negative": -4.89
+            },
+            {
+              "tick": 500,
+              "food": 3,
+              "eat_activation": 36.804,
+              "move_activation": 37.673,
+              "food_visible": true,
+              "eat_negative": -13.17,
+              "move_negative": -12.47
+            },
+            {
+              "tick": 700,
+              "food": 3,
+              "eat_activation": 28.963,
+              "move_activation": 38.39,
+              "food_visible": true,
+              "eat_negative": -21.06,
+              "move_negative": -11.67
+            },
+            {
+              "tick": 900,
+              "food": 3,
+              "eat_activation": 26.824,
+              "move_activation": 36.166,
+              "food_visible": true,
+              "eat_negative": -23.2,
+              "move_negative": -13.74
+            },
+            {
+              "tick": 1500,
+              "food": 3,
+              "eat_activation": 20.406,
+              "move_activation": 34.98,
+              "food_visible": true,
+              "eat_negative": -29.61,
+              "move_negative": -15.56
+            },
+            {
+              "tick": 3000,
+              "food": 3,
+              "eat_activation": 19.608,
+              "move_activation": 39.22,
+              "food_visible": true,
+              "eat_negative": -30.82,
+              "move_negative": -14.41
+            },
+            {
+              "tick": 6000,
+              "food": 3,
+              "eat_activation": 23.126,
+              "move_activation": 49.811,
+              "food_visible": true,
+              "eat_negative": -27.26,
+              "move_negative": -8.25
+            }
+          ]
+        },
+        "preserve_innate": {
+          "food_eaten": 21,
+          "food_approaches": 25,
+          "food_seen_ticks": 5746,
+          "actions": {
+            "exploring": 2713,
+            "eating": 27,
+            "idle": 3195,
+            "fleeing": 6,
+            "exhausted": 3,
+            "sleeping": 56
+          },
+          "final_neurons": 45,
+          "grown_neurons": 16,
+          "innate_hunger_to_eat": {
+            "present": true,
+            "final_weight": 1.0,
+            "neurogenesis_events": []
+          },
+          "motor_edges_from_grown": {
+            "act_eat": {
+              "grown_source_edges": 1,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            },
+            "act_move": {
+              "grown_source_edges": 0,
+              "grown_source_negative_edges": 0,
+              "grown_source_negative_weight_sum": 0
+            }
+          },
+          "checkpoints": [
+            {
+              "tick": 100,
+              "food": 0,
+              "eat_activation": 3.96,
+              "move_activation": 51.548,
+              "food_visible": false,
+              "eat_negative": 0,
+              "move_negative": -0.59
+            },
+            {
+              "tick": 300,
+              "food": 2,
+              "eat_activation": 32.605,
+              "move_activation": 45.305,
+              "food_visible": true,
+              "eat_negative": -12.0,
+              "move_negative": -4.89
+            },
+            {
+              "tick": 500,
+              "food": 3,
+              "eat_activation": 17.844,
+              "move_activation": 43.037,
+              "food_visible": true,
+              "eat_negative": -32.08,
+              "move_negative": -7.12
+            },
+            {
+              "tick": 700,
+              "food": 3,
+              "eat_activation": 19.143,
+              "move_activation": 41.587,
+              "food_visible": true,
+              "eat_negative": -30.83,
+              "move_negative": -8.49
+            },
+            {
+              "tick": 900,
+              "food": 3,
+              "eat_activation": 26.775,
+              "move_activation": 37.417,
+              "food_visible": true,
+              "eat_negative": -23.2,
+              "move_negative": -12.51
+            },
+            {
+              "tick": 1500,
+              "food": 4,
+              "eat_activation": 37.275,
+              "move_activation": 32.48,
+              "food_visible": true,
+              "eat_negative": -29.62,
+              "move_negative": -18.09
+            },
+            {
+              "tick": 3000,
+              "food": 10,
+              "eat_activation": 16.726,
+              "move_activation": 38.244,
+              "food_visible": true,
+              "eat_negative": -36.1,
+              "move_negative": -12.16
+            },
+            {
+              "tick": 6000,
+              "food": 21,
+              "eat_activation": 15.597,
+              "move_activation": 56.964,
+              "food_visible": true,
+              "eat_negative": -52.65,
+              "move_negative": -3.45
+            }
+          ]
+        }
+      }
+    }
+  }
+}
