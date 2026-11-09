@@ -1,0 +1,19 @@
+[motor-study] off/historical seed=11 ticks=6000
+Configuration loaded from config.ini
+  earned-food=1 exploring=5996 idle=0 neurons=30 motor-neg={'act_eat': {'grown_source_edges': 11, 'grown_source_negative_edges': 11, 'grown_source_negative_weight_sum': -8.7574}, 'act_move': {'grown_source_edges': 0, 'grown_source_negative_edges': 0, 'grown_source_negative_weight_sum': 0}}
+[motor-study] off/no_incidental_motor_edges seed=11 ticks=6000
+Configuration loaded from config.ini
+  earned-food=132 exploring=1482 idle=4152 neurons=31 motor-neg={'act_eat': {'grown_source_edges': 1, 'grown_source_negative_edges': 0, 'grown_source_negative_weight_sum': 0}, 'act_move': {'grown_source_edges': 0, 'grown_source_negative_edges': 0, 'grown_source_negative_weight_sum': 0}}
+[motor-study] linear/historical seed=11 ticks=6000
+Configuration loaded from config.ini
+  earned-food=1 exploring=5997 idle=0 neurons=44 motor-neg={'act_eat': {'grown_source_edges': 15, 'grown_source_negative_edges': 15, 'grown_source_negative_weight_sum': -11.9965}, 'act_move': {'grown_source_edges': 0, 'grown_source_negative_edges': 0, 'grown_source_negative_weight_sum': 0}}
+[motor-study] linear/no_incidental_motor_edges seed=11 ticks=6000
+Configuration loaded from config.ini
+  earned-food=46 exploring=724 idle=5132 neurons=46 motor-neg={'act_eat': {'grown_source_edges': 0, 'grown_source_negative_edges': 0, 'grown_source_negative_weight_sum': 0}, 'act_move': {'grown_source_edges': 0, 'grown_source_negative_edges': 0, 'grown_source_negative_weight_sum': 0}}
+[motor-study] transformer/historical seed=11 ticks=6000
+Configuration loaded from config.ini
+  earned-food=4 exploring=510 idle=5477 neurons=45 motor-neg={'act_eat': {'grown_source_edges': 13, 'grown_source_negative_edges': 12, 'grown_source_negative_weight_sum': -9.6}, 'act_move': {'grown_source_edges': 5, 'grown_source_negative_edges': 5, 'grown_source_negative_weight_sum': -3.36}}
+[motor-study] transformer/no_incidental_motor_edges seed=11 ticks=6000
+Configuration loaded from config.ini
+  earned-food=4 exploring=4559 idle=1365 neurons=44 motor-neg={'act_eat': {'grown_source_edges': 1, 'grown_source_negative_edges': 0, 'grown_source_negative_weight_sum': 0}, 'act_move': {'grown_source_edges': 0, 'grown_source_negative_edges': 0, 'grown_source_negative_weight_sum': 0}}
+[motor-study] complete; results: experiments/results/motor_wiring_study.json
