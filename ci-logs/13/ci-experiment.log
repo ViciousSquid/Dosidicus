@@ -1,0 +1,192 @@
+Growth study: 3 modes x 1 seed(s) x 240000 ticks, sampled every 250
+Configuration loaded from config.ini
+[growth] tick 1: phase 0 (east) - the runs-8/9 world: food lands 0.2 east
+[growth] off/11 tick 5000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (371 t/s)
+[growth] off/11 tick 10000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (359 t/s)
+[growth] off/11 tick 15000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (351 t/s)
+[growth] off/11 tick 20000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (347 t/s)
+[growth] off/11 tick 25000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (342 t/s)
+[growth] off/11 tick 30000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (338 t/s)
+[growth] off/11 tick 35000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (334 t/s)
+[growth] off/11 tick 40000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (331 t/s)
+[growth] off/11 tick 45000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (328 t/s)
+[growth] off/11 tick 50000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (325 t/s)
+[growth] off/11 tick 55000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (322 t/s)
+[growth] tick 60000: phase 1 (west) - the same contingency mirrored: food lands 0.2 west
+[growth] off/11 tick 60000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (320 t/s)
+[growth] off/11 tick 65000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (318 t/s)
+[growth] off/11 tick 70000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (316 t/s)
+[growth] off/11 tick 75000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (314 t/s)
+[growth] off/11 tick 80000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (311 t/s)
+[growth] off/11 tick 85000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (309 t/s)
+[growth] off/11 tick 90000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (307 t/s)
+[growth] off/11 tick 95000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (305 t/s)
+[growth] off/11 tick 100000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (303 t/s)
+[growth] off/11 tick 105000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (301 t/s)
+[growth] off/11 tick 110000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (299 t/s)
+[growth] off/11 tick 115000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (297 t/s)
+[growth] tick 120000: phase 2 (fouling) - east again, heavily fouled water: a new problem
+[growth] off/11 tick 120000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (295 t/s)
+[growth] off/11 tick 125000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (293 t/s)
+[growth] off/11 tick 130000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (291 t/s)
+[growth] off/11 tick 135000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (288 t/s)
+[growth] off/11 tick 140000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (286 t/s)
+[growth] off/11 tick 145000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (284 t/s)
+[growth] off/11 tick 150000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (282 t/s)
+[growth] off/11 tick 155000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (281 t/s)
+[growth] off/11 tick 160000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (279 t/s)
+[growth] off/11 tick 165000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (277 t/s)
+[growth] off/11 tick 170000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (275 t/s)
+[growth] off/11 tick 175000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (273 t/s)
+[growth] tick 180000: phase 3 (retention) - clean water again: does the east behaviour survive?
+[growth] off/11 tick 180000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (271 t/s)
+[growth] off/11 tick 185000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (269 t/s)
+[growth] off/11 tick 190000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (267 t/s)
+[growth] off/11 tick 195000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (266 t/s)
+[growth] off/11 tick 200000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (264 t/s)
+[growth] off/11 tick 205000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (262 t/s)
+[growth] off/11 tick 210000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (261 t/s)
+[growth] off/11 tick 215000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (259 t/s)
+[growth] off/11 tick 220000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (258 t/s)
+[growth] off/11 tick 225000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (256 t/s)
+[growth] off/11 tick 230000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (255 t/s)
+[growth] off/11 tick 235000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (254 t/s)
+[growth] off/11 tick 240000: neurons=31 grown=12 synapses=471 churn=106 eaten=1 (252 t/s)
+[growth] off/11 done: 240000 ticks, neurons=31 grown=12 births=12 churn=106
+Configuration loaded from config.ini
+[growth] tick 1: phase 0 (east) - the runs-8/9 world: food lands 0.2 east
+[growth] linear/11 tick 5000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (270 t/s)
+[growth] linear/11 tick 10000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (251 t/s)
+[growth] linear/11 tick 15000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (242 t/s)
+[growth] linear/11 tick 20000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (236 t/s)
+[growth] linear/11 tick 25000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (232 t/s)
+[growth] linear/11 tick 30000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (229 t/s)
+[growth] linear/11 tick 35000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (225 t/s)
+[growth] linear/11 tick 40000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (223 t/s)
+[growth] linear/11 tick 45000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (220 t/s)
+[growth] linear/11 tick 50000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (216 t/s)
+[growth] linear/11 tick 55000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (212 t/s)
+[growth] tick 60000: phase 1 (west) - the same contingency mirrored: food lands 0.2 west
+[growth] linear/11 tick 60000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (209 t/s)
+[growth] linear/11 tick 65000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (206 t/s)
+[growth] linear/11 tick 70000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (205 t/s)
+[growth] linear/11 tick 75000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (202 t/s)
+[growth] linear/11 tick 80000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (200 t/s)
+[growth] linear/11 tick 85000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (198 t/s)
+[growth] linear/11 tick 90000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (196 t/s)
+[growth] linear/11 tick 95000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (194 t/s)
+[growth] linear/11 tick 100000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (193 t/s)
+[growth] linear/11 tick 105000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (192 t/s)
+[growth] linear/11 tick 110000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (191 t/s)
+[growth] linear/11 tick 115000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (189 t/s)
+[growth] tick 120000: phase 2 (fouling) - east again, heavily fouled water: a new problem
+[growth] linear/11 tick 120000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (188 t/s)
+[growth] linear/11 tick 125000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (186 t/s)
+[growth] linear/11 tick 130000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (185 t/s)
+[growth] linear/11 tick 135000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (184 t/s)
+[growth] linear/11 tick 140000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (183 t/s)
+[growth] linear/11 tick 145000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (182 t/s)
+[growth] linear/11 tick 150000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (181 t/s)
+[growth] linear/11 tick 155000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (180 t/s)
+[growth] linear/11 tick 160000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (179 t/s)
+[growth] linear/11 tick 165000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (178 t/s)
+[growth] linear/11 tick 170000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (177 t/s)
+[growth] linear/11 tick 175000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (176 t/s)
+[growth] tick 180000: phase 3 (retention) - clean water again: does the east behaviour survive?
+[growth] linear/11 tick 180000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (175 t/s)
+[growth] linear/11 tick 185000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (173 t/s)
+[growth] linear/11 tick 190000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (172 t/s)
+[growth] linear/11 tick 195000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (171 t/s)
+[growth] linear/11 tick 200000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (170 t/s)
+[growth] linear/11 tick 205000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (169 t/s)
+[growth] linear/11 tick 210000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (168 t/s)
+[growth] linear/11 tick 215000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (167 t/s)
+[growth] linear/11 tick 220000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (166 t/s)
+[growth] linear/11 tick 225000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (165 t/s)
+[growth] linear/11 tick 230000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (164 t/s)
+[growth] linear/11 tick 235000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (163 t/s)
+[growth] linear/11 tick 240000: neurons=42 grown=13 synapses=418 churn=78 eaten=1 (162 t/s)
+[growth] linear/11 done: 240000 ticks, neurons=42 grown=13 births=13 churn=78
+Configuration loaded from config.ini
+[growth] tick 1: phase 0 (east) - the runs-8/9 world: food lands 0.2 east
+[growth] transformer/11 tick 5000: neurons=44 grown=15 synapses=518 churn=109 eaten=3 (156 t/s)
+[growth] transformer/11 tick 10000: neurons=44 grown=15 synapses=519 churn=124 eaten=3 (143 t/s)
+[growth] transformer/11 tick 15000: neurons=44 grown=15 synapses=521 churn=129 eaten=3 (141 t/s)
+[growth] transformer/11 tick 20000: neurons=44 grown=15 synapses=521 churn=136 eaten=3 (139 t/s)
+[growth] transformer/11 tick 25000: neurons=44 grown=15 synapses=522 churn=143 eaten=3 (138 t/s)
+[growth] transformer/11 tick 30000: neurons=44 grown=15 synapses=522 churn=145 eaten=3 (136 t/s)
+[growth] transformer/11 tick 35000: neurons=44 grown=15 synapses=522 churn=145 eaten=3 (136 t/s)
+[growth] transformer/11 tick 40000: neurons=44 grown=15 synapses=522 churn=145 eaten=3 (135 t/s)
+[growth] transformer/11 tick 45000: neurons=44 grown=15 synapses=522 churn=147 eaten=3 (134 t/s)
+[growth] transformer/11 tick 50000: neurons=44 grown=15 synapses=522 churn=147 eaten=3 (132 t/s)
+[growth] transformer/11 tick 55000: neurons=44 grown=15 synapses=522 churn=147 eaten=3 (132 t/s)
+[growth] tick 60000: phase 1 (west) - the same contingency mirrored: food lands 0.2 west
+[growth] transformer/11 tick 60000: neurons=44 grown=15 synapses=522 churn=149 eaten=3 (131 t/s)
+[growth] transformer/11 tick 65000: neurons=44 grown=15 synapses=522 churn=151 eaten=3 (129 t/s)
+[growth] transformer/11 tick 70000: neurons=44 grown=15 synapses=522 churn=151 eaten=3 (129 t/s)
+[growth] transformer/11 tick 75000: neurons=44 grown=15 synapses=522 churn=153 eaten=3 (128 t/s)
+[growth] transformer/11 tick 80000: neurons=44 grown=15 synapses=522 churn=157 eaten=3 (126 t/s)
+[growth] transformer/11 tick 85000: neurons=44 grown=15 synapses=522 churn=157 eaten=3 (125 t/s)
+[growth] transformer/11 tick 90000: neurons=44 grown=15 synapses=522 churn=157 eaten=3 (125 t/s)
+[growth] transformer/11 tick 95000: neurons=44 grown=15 synapses=522 churn=157 eaten=3 (124 t/s)
+[growth] transformer/11 tick 100000: neurons=44 grown=15 synapses=522 churn=159 eaten=3 (123 t/s)
+[growth] transformer/11 tick 105000: neurons=44 grown=15 synapses=522 churn=159 eaten=3 (123 t/s)
+[growth] transformer/11 tick 110000: neurons=44 grown=15 synapses=523 churn=160 eaten=3 (122 t/s)
+[growth] transformer/11 tick 115000: neurons=44 grown=15 synapses=523 churn=160 eaten=3 (121 t/s)
+[growth] tick 120000: phase 2 (fouling) - east again, heavily fouled water: a new problem
+[growth] transformer/11 tick 120000: neurons=44 grown=15 synapses=523 churn=160 eaten=3 (121 t/s)
+[growth] transformer/11 tick 125000: neurons=44 grown=15 synapses=523 churn=160 eaten=3 (120 t/s)
+[growth] transformer/11 tick 130000: neurons=44 grown=15 synapses=523 churn=160 eaten=3 (119 t/s)
+[growth] transformer/11 tick 135000: neurons=44 grown=15 synapses=523 churn=164 eaten=3 (119 t/s)
+[growth] transformer/11 tick 140000: neurons=44 grown=15 synapses=523 churn=164 eaten=3 (118 t/s)
+[growth] transformer/11 tick 145000: neurons=44 grown=15 synapses=523 churn=164 eaten=3 (118 t/s)
+[growth] transformer/11 tick 150000: neurons=44 grown=15 synapses=523 churn=168 eaten=3 (117 t/s)
+[growth] transformer/11 tick 155000: neurons=44 grown=15 synapses=523 churn=168 eaten=3 (117 t/s)
+[growth] transformer/11 tick 160000: neurons=44 grown=15 synapses=523 churn=168 eaten=3 (116 t/s)
+[growth] transformer/11 tick 165000: neurons=44 grown=15 synapses=523 churn=168 eaten=3 (115 t/s)
+[growth] transformer/11 tick 170000: neurons=44 grown=15 synapses=523 churn=172 eaten=3 (115 t/s)
+[growth] transformer/11 tick 175000: neurons=44 grown=15 synapses=523 churn=172 eaten=3 (114 t/s)
+[growth] tick 180000: phase 3 (retention) - clean water again: does the east behaviour survive?
+[growth] transformer/11 tick 180000: neurons=44 grown=15 synapses=523 churn=174 eaten=3 (113 t/s)
+[growth] transformer/11 tick 185000: neurons=44 grown=15 synapses=523 churn=174 eaten=3 (113 t/s)
+[growth] transformer/11 tick 190000: neurons=44 grown=15 synapses=523 churn=174 eaten=3 (112 t/s)
+[growth] transformer/11 tick 195000: neurons=44 grown=15 synapses=524 churn=178 eaten=3 (112 t/s)
+[growth] transformer/11 tick 200000: neurons=44 grown=15 synapses=524 churn=178 eaten=3 (111 t/s)
+[growth] transformer/11 tick 205000: neurons=44 grown=15 synapses=524 churn=178 eaten=3 (111 t/s)
+[growth] transformer/11 tick 210000: neurons=44 grown=15 synapses=524 churn=184 eaten=3 (110 t/s)
+[growth] transformer/11 tick 215000: neurons=44 grown=15 synapses=524 churn=184 eaten=3 (110 t/s)
+[growth] transformer/11 tick 220000: neurons=44 grown=15 synapses=524 churn=184 eaten=3 (109 t/s)
+[growth] transformer/11 tick 225000: neurons=44 grown=15 synapses=524 churn=188 eaten=3 (109 t/s)
+[growth] transformer/11 tick 230000: neurons=44 grown=15 synapses=524 churn=192 eaten=3 (108 t/s)
+[growth] transformer/11 tick 235000: neurons=44 grown=15 synapses=524 churn=194 eaten=3 (108 t/s)
+[growth] transformer/11 tick 240000: neurons=44 grown=15 synapses=524 churn=196 eaten=3 (107 t/s)
+[growth] transformer/11 done: 240000 ticks, neurons=44 grown=15 births=15 churn=196
+
+Results written to experiments/results/growth_results.json
+Compact outputs written beside experiments/results/growth_results.json: growth_summary.json, per-mode timeseries CSVs and event lists
+
+## Growth-study results
+
+| metric | off | linear | transformer |
+|---|---|---|---|
+| final neuron count | 31 | 42 | 44 |
+| grown tissue (of type caps 5/6/6/10) | 12.0 | 13.0 | 15.0 |
+| deepened (strength-multiplied) neurons | 2.0 | 1.0 | 2.0 |
+| births during life | 12.0 | 13.0 | 15.0 |
+| growth proposals stood down | 19145 | 19145 | 19145 |
+| deficits resolved without growth | 234 | 311 | 610 |
+| tick of last birth | 1000 | 1000 | 1500 |
+| synapses at end | 471 | 418 | 524 |
+| weight updates (total) | 106 | 78 | 196 |
+| weight updates AFTER last birth | 0 | 0 | 91 |
+| food eaten AFTER last birth | 0.0 | 0.0 | 0.0 |
+| ticks/sec | 252.2 | 162.2 | 107.5 |
+
+### food eaten per world phase
+
+| phase | off | linear | transformer |
+|---|---|---|---|
+| east | 0.0 | 0.0 | 2.0 |
+| west | 0.0 | 0.0 | 0.0 |
+| fouling | 0.0 | 0.0 | 0.0 |
+| retention | 0.0 | 0.0 | 0.0 |
