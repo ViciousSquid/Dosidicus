@@ -1,5 +1,15 @@
 # HANDOFF — Dosidicus predictive-cognition research branch
 
+## Active experiments launched after run 25 (9 November 2026)
+
+**Run 26:** code commit `07c53497`, [CI workflow](https://github.com/ViciousSquid/Dosidicus/actions/runs/42659719442), newly added `experiments/innate_offload_replication.py`. Tests `preserve_innate_motor_offload=True` against the otherwise identical no-incidental-motor-wiring baseline (`context_motor_autowiring=False`) across held-out seeds **22, 33, 44** and all three cortex modes. This tests whether Run 25's seed-11 transformer rescue (4→118 meals) is repeatable, and whether the off-mode regression (132→23) generalises. All original production flags remain unchanged by default.
+
+**Run 27:** code commit `6512d5ab`, [CI workflow](https://github.com/ViciousSquid/Dosidicus/actions/runs/42660586188), `experiments/motor_sign_comparison.py`. Compares three opt-in *birth-context* wiring policies at seeds **11, 22, 33, 44**, each in off/linear/transformer: historical, block **negative** incidental newborn-to-motor edges only, and block *all* incidental newborn-to-motor edges. Positive newborn-to-motor context edges are retained in the negative-only arm; explicit deficit-remedy and innate edges are still unchanged. The aim is to reduce harmful inhibition without worsening functional controls like seed 22. Includes additional unit tests. The experiment does NOT prove that selective ablation is safe unless matched outcomes support it.
+
+**For both runs:** CI passing its test stages is not proof that the experimental outcome is positive. Check final Actions conclusions and `ci-logs/26/results/innate_offload_replication.json` / `ci-logs/27/results/motor_sign_comparison.json` when published. Some runs can take several minutes. Preserve the discovered seed 222. Outcomes are limited by divergent environment RNG consumption after actions differ; a future frozen exogenous event tape could address this. Do not change default engine behaviour before independent-seed analysis.
+
+---
+
 ## Latest verified status — 9 November 2026, through run 25
 
 **All runs 19–25 have completed successfully** in their GitHub Actions
