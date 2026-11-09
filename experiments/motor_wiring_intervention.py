@@ -45,8 +45,29 @@ def condition(mode, seed, ticks, context_motor_autowiring):
                     'eat_negative': s['motor_synaptic_inputs']['act_eat']['negative_total'],
                     'move_positive': s['motor_synaptic_inputs']['act_move']['positive_total'],
                     'move_negative': s['motor_synaptic_inputs']['act_move']['negative_total'],
+                    'innate_motor_weights': s['innate_motor_weights'],
+                    'eat_top_negative': s['motor_synaptic_inputs']['act_eat']['top_negative'],
+                    'move_top_negative': s['motor_synaptic_inputs']['act_move']['top_negative'],
                 })
     grown = sim.brain.enhanced_neurogenesis.functional_neurons
+    innate_edges = (
+        ('can_see_food', 'act_eat'), ('hunger', 'act_eat'),
+        ('curiosity', 'act_move'),
+    )
+    innate_provenance = {}
+    for edge in innate_edges:
+        history = sim.brain.ledger.weight_history(edge, limit=20)
+        innate_provenance[' -> '.join(edge)] = {
+            'current_weight': sim.brain.weights.get(edge),
+            'exists': edge in sim.brain.weights,
+            'events': [{
+                'old': round(float(event.old_weight), 5),
+                'new': round(float(event.new_weight), 5),
+                'mechanism': event.mechanism,
+                'note': str(event.detail.get('note', '')),
+                'purpose': str(event.detail.get('purpose', '')),
+            } for event in history],
+        }
     by_motor = {}
     for target in ('act_eat', 'act_move'):
         edges = [(src, weight) for (src, dst), weight in sim.brain.weights.items()
@@ -69,6 +90,7 @@ def condition(mode, seed, ticks, context_motor_autowiring):
         'food_seen_ticks': sim.stats['food_seen_ticks'],
         'actions': sim.stats['actions_selected'],
         'motor_edges_from_grown': by_motor,
+        'innate_provenance': innate_provenance,
         'samples': records,
     }
 
