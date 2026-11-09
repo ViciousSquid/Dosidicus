@@ -1,0 +1,110 @@
+[motor-sign] off/seed11/historical
+Configuration loaded from config.ini
+  earned_food=1 explore=5996 idle=0
+[motor-sign] off/seed11/block_negative_only
+Configuration loaded from config.ini
+  earned_food=132 explore=1482 idle=4152
+[motor-sign] off/seed11/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=132 explore=1482 idle=4152
+[motor-sign] off/seed22/historical
+Configuration loaded from config.ini
+  earned_food=102 explore=4705 idle=1146
+[motor-sign] off/seed22/block_negative_only
+Configuration loaded from config.ini
+  earned_food=21 explore=4963 idle=940
+[motor-sign] off/seed22/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=21 explore=4963 idle=940
+[motor-sign] off/seed33/historical
+Configuration loaded from config.ini
+  earned_food=4 explore=268 idle=161
+[motor-sign] off/seed33/block_negative_only
+Configuration loaded from config.ini
+  earned_food=124 explore=5737 idle=1
+[motor-sign] off/seed33/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=136 explore=5725 idle=3
+[motor-sign] off/seed44/historical
+Configuration loaded from config.ini
+  earned_food=2 explore=526 idle=3
+[motor-sign] off/seed44/block_negative_only
+Configuration loaded from config.ini
+  earned_food=128 explore=329 idle=5353
+[motor-sign] off/seed44/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=128 explore=329 idle=5353
+[motor-sign] linear/seed11/historical
+Configuration loaded from config.ini
+  earned_food=1 explore=5997 idle=0
+[motor-sign] linear/seed11/block_negative_only
+Configuration loaded from config.ini
+  earned_food=46 explore=724 idle=5132
+[motor-sign] linear/seed11/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=46 explore=724 idle=5132
+[motor-sign] linear/seed22/historical
+Configuration loaded from config.ini
+  earned_food=2 explore=336 idle=37
+[motor-sign] linear/seed22/block_negative_only
+Configuration loaded from config.ini
+  earned_food=117 explore=1315 idle=4360
+[motor-sign] linear/seed22/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=117 explore=1315 idle=4360
+[motor-sign] linear/seed33/historical
+Configuration loaded from config.ini
+  earned_food=9 explore=503 idle=5481
+[motor-sign] linear/seed33/block_negative_only
+Configuration loaded from config.ini
+  earned_food=119 explore=4994 idle=527
+[motor-sign] linear/seed33/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=119 explore=4994 idle=527
+[motor-sign] linear/seed44/historical
+Configuration loaded from config.ini
+  earned_food=0 explore=6000 idle=0
+[motor-sign] linear/seed44/block_negative_only
+Configuration loaded from config.ini
+  earned_food=141 explore=4485 idle=1086
+[motor-sign] linear/seed44/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=141 explore=4485 idle=1086
+[motor-sign] transformer/seed11/historical
+Configuration loaded from config.ini
+  earned_food=4 explore=510 idle=5477
+[motor-sign] transformer/seed11/block_negative_only
+Configuration loaded from config.ini
+  earned_food=4 explore=4559 idle=1365
+[motor-sign] transformer/seed11/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=4 explore=4559 idle=1365
+[motor-sign] transformer/seed22/historical
+Configuration loaded from config.ini
+  earned_food=3 explore=311 idle=36
+[motor-sign] transformer/seed22/block_negative_only
+Configuration loaded from config.ini
+  earned_food=120 explore=4199 idle=1385
+[motor-sign] transformer/seed22/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=120 explore=4199 idle=1385
+[motor-sign] transformer/seed33/historical
+Configuration loaded from config.ini
+  earned_food=2 explore=5951 idle=46
+[motor-sign] transformer/seed33/block_negative_only
+Configuration loaded from config.ini
+  earned_food=111 explore=745 idle=4951
+[motor-sign] transformer/seed33/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=111 explore=745 idle=4951
+[motor-sign] transformer/seed44/historical
+Configuration loaded from config.ini
+  earned_food=2 explore=5995 idle=2
+[motor-sign] transformer/seed44/block_negative_only
+Configuration loaded from config.ini
+  earned_food=3 explore=1387 idle=4543
+[motor-sign] transformer/seed44/block_all_context_motor
+Configuration loaded from config.ini
+  earned_food=3 explore=1387 idle=4543
+[motor-sign] summary {"linear": {"all_off": [46, 117, 119, 141], "control": [1, 2, 9, 0], "n": 4, "negative_minus_all_off": [0, 0, 0, 0], "negative_minus_control": [45, 115, 110, 141], "negative_only": [46, 117, 119, 141], "negative_only_harmed": 0, "negative_only_helped": 4, "negative_only_mean": 105.75}, "off": {"all_off": [132, 21, 136, 128], "control": [1, 102, 4, 2], "n": 4, "negative_minus_all_off": [0, 0, -12, 0], "negative_minus_control": [131, -81, 120, 126], "negative_only": [132, 21, 124, 128], "negative_only_harmed": 1, "negative_only_helped": 3, "negative_only_mean": 101.25}, "transformer": {"all_off": [4, 120, 111, 3], "control": [4, 3, 2, 2], "n": 4, "negative_minus_all_off": [0, 0, 0, 0], "negative_minus_control": [0, 117, 109, 1], "negative_only": [4, 120, 111, 3], "negative_only_harmed": 0, "negative_only_helped": 3, "negative_only_mean": 59.5}}
+[motor-sign] results experiments/results/motor_sign_comparison.json

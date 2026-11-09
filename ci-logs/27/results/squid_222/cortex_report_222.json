@@ -1,0 +1,68 @@
+{
+  "mode": "transformer",
+  "enabled": true,
+  "ticks_observed": 24000,
+  "train_calls": 763,
+  "train_steps": 1511,
+  "sleep_train_steps": 15,
+  "loss_ema": 0.004899731908861104,
+  "mae": {
+    "drives": 0.021253798277602202,
+    "flags": 0.008103675859339663,
+    "senses": 0.08309237211912564,
+    "position": 0.01695884704076173,
+    "food": 0.022955662661132085,
+    "action": 0.00606525947776699,
+    "neural": 0.006573526692805045
+  },
+  "delta_mae": 0.004667022031764457,
+  "action_top1": 0.9785407725321889,
+  "action_top1_samples": 23999,
+  "uncertainty": 0.07586957565268074,
+  "inference_seconds": 16.775,
+  "train_seconds": 16.69,
+  "brain_effect": {
+    "synapses_from_predictions": 73,
+    "synapses_into_predictions": 0,
+    "total_abs_weight_from_predictions": 18.9894,
+    "strongest_synapses": [
+      {
+        "source": "pred_food_ahead",
+        "target": "satisfaction",
+        "weight": 1.0
+      },
+      {
+        "source": "pred_food_ahead",
+        "target": "hunger",
+        "weight": -1.0
+      },
+      {
+        "source": "pred_threat_soon",
+        "target": "happiness",
+        "weight": -1.0
+      },
+      {
+        "source": "pred_food_ahead",
+        "target": "happiness",
+        "weight": 0.9452
+      },
+      {
+        "source": "pred_food_ahead",
+        "target": "relay_bridge",
+        "weight": 0.7
+      }
+    ]
+  },
+  "sensor_values": {
+    "pred_food_ahead": 0.5925,
+    "pred_food_east": 0.0,
+    "pred_food_west": 1.9132,
+    "pred_food_south": 0.0,
+    "pred_food_north": 0.2106,
+    "pred_hunger_rise": 0.1886,
+    "pred_anxiety_rise": 0.5862,
+    "pred_reward_soon": 0.4909,
+    "pred_threat_soon": 0.9695,
+    "pred_uncertainty": 7.587
+  }
+}
