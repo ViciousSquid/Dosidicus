@@ -87,8 +87,8 @@ Training runs every `predictive_train_interval` ticks (default 64),
 transformer too, though its predictions still flow. While the squid
 sleeps, `sleep_replay()` runs bounded extra offline replay steps over
 the buffer, the transformer's analogue of the consolidation the rest of
-the brain already performs. The transformer's gradients never touch the
-squid's synapses and the squid's learning rules never touch the
+the brain already performs. The transformer's gradients never touch
+the squid's synapses and the squid's learning rules never touch the
 transformer's weights.
 
 ## 4. Compatibility guarantees
@@ -375,3 +375,136 @@ seed-unstable, and n = 6 is too small to trust the feeding difference.
 Next test: silence the ambient random startles during training so
 stress arrives only through the spaced contingency, and raise the seed
 count before claiming the feeding advantage.
+
+## Results III: the calm world, 12 seeds (run 9)
+
+Commit `38be60ba` silenced the last stress channel and doubled the
+seeds; CI executed the full experiment (workflow run 9: 3 conditions x
+12 seeds x 24,000 training ticks, all 36 predictive and 51 baseline
+tests passing, publish `5e4cd2f0`). The world changes:
+
+- ambient random startles silenced entirely during training
+  (`startle_chance=0`): stress arrives only through the spaced
+  contingency, 35 startles per 24k run (run 8: ~150);
+- the retention evaluation also runs calm;
+- seeds 6 -> 12 (`[11, 22, 33, 44, 55, 66, 77, 88, 99, 111, 222, 333]`);
+- CI job timeout 120 -> 180 min.
+
+### Headline table (run 9, means over 12 seeds)
+
+| metric | off | linear | transformer |
+|---|---|---|---|
+| train: food eaten | 4.08 | 1.92 | 41.58 |
+| train: food approaches | 9.17 | 4.50 | 79.92 |
+| train: escape ratio | 0.017 | 0.005 | 0.017 |
+| train: neurons created | 12.5 | 15.7 | 15.3 |
+| train: ticks/sec | 424.8 | 275.0 | 160.2 |
+| object permanence: alignment | - | 0.779 | 0.543 |
+| object permanence: coverage | - | 0.842 | 0.811 |
+| delayed consequence: rise, early window | - | 0.000 | -1.428 |
+| delayed consequence: rise, late window | - | 0.000 | -4.925 |
+| delayed consequence: eat rate | 0.000 | 0.000 | 0.083 |
+| adaptation: food eaten (live learning) | 0.000 | 0.000 | 1.500 |
+| retention: food eaten (frozen) | 0.000 | 0.000 | 10.917 |
+| prediction: action top-1 | - | 0.996 | 0.985 |
+| synapses grown from predictions | - | 56.1 | 61.4 |
+
+### What the data says
+
+**Run 8's feeding advantage did not survive replication.** The
+transformer's mean 41.6 foods per run is real arithmetic and misleading:
+one seed (222) ate 463 foods; the other eleven transformer seeds ate
+36 in total (mean 3.3), between off (3.9 excluding seed 222) and
+linear (2.0). Per-seed food eaten, in seed order 11..333:
+
+| seed | off | linear | transformer |
+|---|---|---|---|
+| 11 | 4 | 1 | 3 |
+| 22 | 15 | 3 | 2 |
+| 33 | 1 | 4 | 2 |
+| 44 | 2 | 0 | 1 |
+| 55 | 2 | 4 | 11 |
+| 66 | 3 | 0 | 2 |
+| 77 | 4 | 0 | 4 |
+| 88 | 2 | 2 | 2 |
+| 99 | 5 | 1 | 2 |
+| 111 | 3 | 7 | 6 |
+| 222 | 6 | 1 | 463 |
+| 333 | 2 | 0 | 1 |
+
+Against the linear control, excluding seed 222, the transformer was
+ahead in 8 seeds, behind in 3, tied in 1 (paired mean +1.27, t = 1.67,
+p = 0.13; sign test 8+/3-, p = 0.23); against off it was behind in 6
+of 11. No population-level feeding advantage is demonstrable in the
+calm world.
+
+**One seed did everything the thesis predicts.** Transformer seed 222
+ate 463 foods on 880 approaches in training, and it is the first run of
+any condition ever to eat during the frozen evaluations: all five
+held-out delayed-consequence trials (latency 2 ticks, `eat_rate` 1.0),
+18 foods during the 1,500-tick stress-adaptation phase, and 131 foods
+in the frozen retention phase. Its `pred_food_ahead` baseline in the
+held-out trials sat at 0 - its predictions were precise where the
+other transformer seeds sit chronically elevated (44-87). Its Hebbian
+wiring ran hot too (696 updates vs 79-212 in the other transformer
+seeds), and it was the only seed whose synaptic top-5 is dominated by
+food-directed prediction synapses. The same seed under the controls
+ate 6 (off) and 1 (linear). This is the first end-to-end existence
+proof of the architecture doing what it was built to do - but at 1 in
+12 seeds it is a lottery ticket, not an effect.
+
+**The calm world changed every trajectory.** The six run-8 seeds, as
+transformer, ate 3.5 foods on average in run 9 (run 8: 4.67), with
+paired-vs-linear diffs +2, -1, -2, +1, +7, +2: run 8's
+all-non-negative pattern (+3, 0, +3, 0, +2, +5) is gone. Silencing
+~120 ambient startles changes the random stream, so trajectories are
+not comparable seed-by-seed; what the comparison does show is that the
+run-8 advantage was not robust to the world it lived in. Two hypotheses
+remain open and unseparated: run 8 was a lucky draw at n = 6, or the
+transformer's edge lives specifically in noisy worlds where prediction
+has more to contribute. The honest position: the population-level
+feeding advantage is not established; what is established is that the
+transformer's seed variance is much larger than both controls'.
+
+**Object permanence mostly healed.** The transformer's mean alignment
+rose from run 8's bimodal -0.19 to +0.54, positive in 10 of 12 seeds
+(range -0.75 to +0.96); the linear control replicated its run-8 value
+almost exactly (0.779 vs 0.778). In a calmer world the transformer's
+spatial memory stopped confidently pointing the wrong way in most
+seeds.
+
+**Anticipation got weaker; feeding during the anticipation window
+appeared.** The early-window `pred_food_ahead` rise is now mean -1.43
+(positive in 6 of 12 seeds, +2.1 to +6.6; negative in 6, down to -14.4),
+versus run 8's +1.15. The learned contingency signal remains
+seed-unstable. But seed 222 shows what it is for: it ate in every
+held-out trial within 2 ticks of the food appearing.
+
+**Anxiety still does not recover in the adaptation eval.** Final
+anxiety 100 in every seed of every condition; escape ratios ~0. The
+5%-startle phase still overwhelms regulation within 1,500 ticks; the
+eval measures the ceiling, not recovery. The only feeding during it is
+seed 222's 18 foods.
+
+**Wiring and overhead (unchanged story).** 61.4 synapses grown from
+prediction sensors (linear: 56.1), zero into them; action top-1 0.985;
+loss EMA ~0.0045; delta MAE 0.0009-0.0053. Transformer throughput
+160.2 ticks/sec (2.65x slower than off; 23.2 s inference + 22.6 s
+training per 24k-tick run); linear 275 ticks/sec (~0.8 s total).
+Run 9's 36 runs finished in ~64 minutes of CI time.
+
+### Where this leaves the question
+
+The integration mechanism is unchanged and sound. The behavioural
+evidence is now sharper and more honest: in a calm world the
+transformer population does not reliably out-eat the controls; instead
+it occasionally (1/12) enters a qualitatively different regime -
+precise predictions, dense Hebbian wiring, feeding in frozen evals -
+that neither control ever enters. Whether that regime is reachable by
+training design or only by seed lottery is now the central question.
+Separately, the growth study (see `docs/brain_growth.md` and
+`experiments/growth_experiment.py`) opens a second front on the same
+architecture: 240,000-tick lives that watch the live neuron count
+against the capability monitor's decisions, to distinguish a brain
+that stops growing because it is forbidden to from one that stops
+because it no longer needs to.
