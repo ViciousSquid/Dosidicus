@@ -17,11 +17,13 @@ from growth_experiment import make_growth_sim, sample_growth
 from predictive_cognition_experiments import MODES, contingency_events
 
 def condition(mode, seed, ticks, context_motor_autowiring,
-              preserve_innate_motor_offload=False):
+              preserve_innate_motor_offload=False,
+              exclude_negative_context_motor_targets=False):
     sim = make_growth_sim(
         mode, seed, learning=True,
         context_motor_autowiring=context_motor_autowiring,
-        preserve_innate_motor_offload=preserve_innate_motor_offload)
+        preserve_innate_motor_offload=preserve_innate_motor_offload,
+        exclude_negative_context_motor_targets=exclude_negative_context_motor_targets)
     sim.event_queue = deque(contingency_events(0, ticks))
     sim.food_side = 'east'
     records = []
@@ -112,6 +114,7 @@ def condition(mode, seed, ticks, context_motor_autowiring,
         'innate_edge_provenance': traced_edges,
         'context_motor_autowiring': context_motor_autowiring,
         'preserve_innate_motor_offload': preserve_innate_motor_offload,
+        'exclude_negative_context_motor_targets': exclude_negative_context_motor_targets,
         'ticks': ticks,
         'final_neurons': len(sim.brain.positions),
         'grown_neurons': len(grown),

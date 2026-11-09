@@ -129,11 +129,13 @@ class GrowthSimulation(ExperimentSimulation):
 
 
 def make_growth_sim(mode, seed, learning=True, context_motor_autowiring=True,
-                    preserve_innate_motor_offload=False):
+                    preserve_innate_motor_offload=False,
+                    exclude_negative_context_motor_targets=False):
     config = TrainingConfig(learning_enabled=learning, seed=seed,
                             predictive_mode=mode, predictive_seed=seed,
                             predictive_train_interval=32,
                             context_motor_autowiring=context_motor_autowiring,
+                            exclude_negative_context_motor_targets=exclude_negative_context_motor_targets,
                             preserve_innate_motor_offload=preserve_innate_motor_offload,
                             startle_chance=0.0)
     return GrowthSimulation(config)

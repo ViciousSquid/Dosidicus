@@ -38,6 +38,8 @@ class TrainingConfig:
     neurogenesis_enabled: bool = True
     # Research intervention only: keeps historical behaviour when True.
     context_motor_autowiring: bool = True
+    # Opt-in study: reject only negative incidental newborn-to-motor edges.
+    exclude_negative_context_motor_targets: bool = False
     # Opt-in research flag; baseline differentiation continues to retire
     # original innate edges when transferring them to grown neurons.
     preserve_innate_motor_offload: bool = False
@@ -150,6 +152,7 @@ class HeadlessBrain(RecordedSynapses, ExternallyDriven):
         learning_config.neurogenesis['max_neurons'] = self.config.max_neurons
         learning_config.neurogenesis['cooldown'] = self.config.neurogenesis_cooldown
         learning_config.neurogenesis['context_motor_autowiring'] = self.config.context_motor_autowiring
+        learning_config.neurogenesis['exclude_negative_context_motor_targets'] = self.config.exclude_negative_context_motor_targets
         learning_config.neurogenesis['preserve_innate_motor_offload'] = self.config.preserve_innate_motor_offload
         self.learning_config = learning_config
 

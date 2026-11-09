@@ -647,3 +647,39 @@ class InnateOffloadGuardTests(unittest.TestCase):
         self.assertIn(edge, sim.brain.weights)
         self._offload(sim, *edge)
         self.assertNotIn(edge, sim.brain.weights)
+
+
+
+class SignedIncidentalMotorWiringTests(unittest.TestCase):
+    """The narrow guard removes negative incidental contacts, not positive ones."""
+
+    def test_negative_only_keeps_positive_context_motor_wiring(self):
+        from src.neurogenesis import ExperienceContext, FunctionalNeuron
+        ctx = ExperienceContext(
+            trigger_type='novelty',
+            active_neurons={'act_eat': 0.0, 'act_move': 90.0, 'hunger': 100.0},
+            recent_actions=[], environmental_state={}, outcome='neutral',
+            timestamp=0.0)
+        neuron = FunctionalNeuron('probe', 'novelty', ctx)
+        targets = ['act_eat', 'act_move', 'hunger', 'curiosity', 'satisfaction']
+        normal = neuron.get_functional_connections(targets)
+        selective = neuron.get_functional_connections(
+            targets, exclude_negative_context_motor_targets=True)
+        all_blocked = neuron.get_functional_connections(
+            targets, include_context_motor_targets=False)
+        self.assertAlmostEqual(normal['act_eat'], -0.8)
+        self.assertAlmostEqual(normal['act_move'], 0.64)
+        self.assertNotIn('act_eat', selective)
+        self.assertAlmostEqual(selective['act_move'], 0.64)
+        self.assertAlmostEqual(selective['hunger'], 0.8)
+        self.assertNotIn('act_eat', all_blocked)
+        self.assertNotIn('act_move', all_blocked)
+
+    def test_negative_only_flag_defaults_to_historical(self):
+        default = TrainingConfig()
+        self.assertFalse(default.exclude_negative_context_motor_targets)
+        self.assertTrue(default.context_motor_autowiring)
+        sim = HeadlessSimulation(make_config(
+            seed=11, exclude_negative_context_motor_targets=True))
+        self.assertTrue(sim.brain.learning_config.neurogenesis[
+            'exclude_negative_context_motor_targets'])

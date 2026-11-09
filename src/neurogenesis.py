@@ -454,7 +454,8 @@ class FunctionalNeuron:
         return 'undefined'
     
     def get_functional_connections(self, all_neurons: List[str],
-                                   include_context_motor_targets: bool = True) -> Dict[str, float]:
+                                   include_context_motor_targets: bool = True,
+                                   exclude_negative_context_motor_targets: bool = False) -> Dict[str, float]:
         """Build birth-context outputs; opt-in study omits INCIDENTAL motor targets.
 
         The explicit deficit remedy is assembled separately and is not filtered.
@@ -468,6 +469,9 @@ class FunctionalNeuron:
             if neuron in all_neurons:
                 try: activation_value = float(activation) if isinstance(activation, (int, float, str)) else 50.0
                 except (ValueError, TypeError): activation_value = 50.0
+                if (exclude_negative_context_motor_targets
+                        and neuron in ACTION_NEURONS and activation_value < 50):
+                    continue
                 deviation = abs(activation_value - 50)
                 if deviation > 20:
                     weight = (deviation / 50) * 0.8
@@ -1123,7 +1127,9 @@ class EnhancedNeurogenesis:
                        func_neuron.get_functional_connections(
                            list(self.brain_widget.neuron_positions.keys()),
                            include_context_motor_targets=bool(
-                               self.config.neurogenesis.get('context_motor_autowiring', True))))
+                               self.config.neurogenesis.get('context_motor_autowiring', True)),
+                           exclude_negative_context_motor_targets=bool(
+                               self.config.neurogenesis.get('exclude_negative_context_motor_targets', False))))
         for target, weight in connections.items():
             if abs(weight) < 0.05: continue
             plan[(neuron_name, target)] = (float(weight), 'specialisation')
