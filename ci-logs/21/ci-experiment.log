@@ -1,0 +1,128 @@
+Predictive-cognition experiment: 3 modes x 2 seeds x 1500 training ticks
+Configuration loaded from config.ini
+  off          seed 11: trained 1 eaten, op=None, retain=0
+Configuration loaded from config.ini
+  off          seed 22: trained 4 eaten, op=None, retain=0
+Configuration loaded from config.ini
+  linear       seed 11: trained 1 eaten, op=0.9752868787969146, retain=0
+Configuration loaded from config.ini
+  linear       seed 22: trained 3 eaten, op=0.8343432604446535, retain=0
+Configuration loaded from config.ini
+  transformer  seed 11: trained 3 eaten, op=0.2718237749114395, retain=0
+Configuration loaded from config.ini
+  transformer  seed 22: trained 2 eaten, op=-0.3211314266138628, retain=0
+
+Results written to experiments/results/quick_results.json
+
+## Predictive-cognition experiment results
+
+| metric | off | linear | transformer |
+|---|---|---|---|
+| train: food eaten | 2.500 | 2.000 | 2.500 |
+| train: escape ratio | 0.250 | 0.250 | 0.250 |
+| train: neurons created | 10.500 | 15.500 | 13.000 |
+| train: ticks/sec | 689.900 | 374.950 | 204.250 |
+| object permanence: alignment | - | 0.905 | -0.025 |
+| object permanence: coverage | - | 1.000 | 1.000 |
+| object permanence: refeed ticks | - | - | - |
+| delayed consequence: rise early (t+1..t+7) | - | 0.000 | -6.275 |
+| delayed consequence: rise late (t+8..t+14) | - | 0.000 | -19.909 |
+| delayed consequence: eat latency | - | - | - |
+| delayed consequence: eat rate | 0.000 | 0.000 | 0.000 |
+| adaptation: escape ratio | 0.000 | 0.000 | 0.000 |
+| adaptation: peak anxiety rise | 0.000 | 0.000 | 10.400 |
+| adaptation: food eaten | 0.000 | 0.000 | 0.000 |
+| retention: food eaten | 0.000 | 0.000 | 0.000 |
+| prediction: action top-1 | - | 0.982 | 0.844 |
+| synapses grown from predictions | - | 57.000 | 59.500 |
+Growth study: 3 modes x 1 seed(s) x 6000 ticks, sampled every 100
+Configuration loaded from config.ini
+[growth] tick 1: phase 0 (east) - the runs-8/9 world: food lands 0.2 east
+[growth] tick 1500: phase 1 (west) - the same contingency mirrored: food lands 0.2 west
+[growth] tick 3000: phase 2 (fouling) - east again, heavily fouled water: a new problem
+[growth] tick 4500: phase 3 (retention) - clean water again: does the east behaviour survive?
+[growth] off/11 tick 5000: neurons=30 grown=11 synapses=378 churn=76 eaten=1 (454 t/s)
+[growth] off/11 done: 6000 ticks, neurons=30 grown=11 births=11 churn=81
+Configuration loaded from config.ini
+[growth] tick 1: phase 0 (east) - the runs-8/9 world: food lands 0.2 east
+[growth] tick 1500: phase 1 (west) - the same contingency mirrored: food lands 0.2 west
+[growth] tick 3000: phase 2 (fouling) - east again, heavily fouled water: a new problem
+[growth] tick 4500: phase 3 (retention) - clean water again: does the east behaviour survive?
+[growth] linear/11 tick 5000: neurons=44 grown=15 synapses=513 churn=346 eaten=1 (256 t/s)
+[growth] linear/11 done: 6000 ticks, neurons=44 grown=15 births=15 churn=408
+Configuration loaded from config.ini
+[growth] tick 1: phase 0 (east) - the runs-8/9 world: food lands 0.2 east
+[growth] tick 1500: phase 1 (west) - the same contingency mirrored: food lands 0.2 west
+[growth] tick 3000: phase 2 (fouling) - east again, heavily fouled water: a new problem
+[growth] tick 4500: phase 3 (retention) - clean water again: does the east behaviour survive?
+[growth] transformer/11 tick 5000: neurons=45 grown=16 synapses=593 churn=162 eaten=4 (156 t/s)
+[growth] transformer/11 done: 6000 ticks, neurons=45 grown=16 births=16 churn=165
+
+Results written to experiments/results/growth_quick_results.json
+Compact outputs written beside experiments/results/growth_quick_results.json: growth_summary.json, per-mode timeseries CSVs and event lists
+
+## Growth-study results
+
+| metric | off | linear | transformer |
+|---|---|---|---|
+| final neuron count | 30 | 44 | 45 |
+| grown tissue (of type caps 5/6/6/10) | 11.0 | 15.0 | 16.0 |
+| deepened (strength-multiplied) neurons | 1.0 | 1.0 | 2.0 |
+| births during life | 11.0 | 15.0 | 16.0 |
+| growth proposals stood down | 1065 | 1025 | 1031 |
+| deficits resolved without growth | 28 | 44 | 101 |
+| tick of last birth | 700 | 1000 | 3700 |
+| synapses at end | 378 | 513 | 593 |
+| weight updates (total) | 81 | 408 | 165 |
+| weight updates AFTER last birth | 21 | 305 | 5 |
+| food eaten AFTER last birth | 0.0 | 0.0 | 0.0 |
+| ticks/sec | 435.8 | 247.9 | 151.8 |
+
+### food eaten per world phase
+
+| phase | off | linear | transformer |
+|---|---|---|---|
+| east | 0.0 | 0.0 | 3.0 |
+| west | 0.0 | 0.0 | 0.0 |
+| fouling | 0.0 | 0.0 | 0.0 |
+| retention | 0.0 | 0.0 | 0.0 |
+Preserving squid 222: mode=transformer seed=222 ticks=1500 output=/tmp/squid_222_smoke
+Configuration loaded from config.ini
+trained: 7 eaten, 13 approaches, 210 hebbian updates, 206.6 t/s
+✓ Saved brain to /tmp/squid_222_smoke/brain_222.json
+saved: brain=True weights=True report=True
+held-out: op=-0.6159917310663668, dc eat_rate=0.0, adapt food=0, retention=0
+Configuration loaded from config.ini
+✓ Loaded predictive weights (transformer) from /tmp/squid_222_smoke/predictive_cortex_222.json
+artifact validation: {
+ "brain_json_parses": true,
+ "brain_top_level_keys": [
+  "action_representations",
+  "capability",
+  "causal_learning",
+  "clock",
+  "connections",
+  "consolidation",
+  "enhanced_neurogenesis",
+  "format",
+  "functional_neurons",
+  "growth_clock",
+  "last_neurogenesis_tick",
+  "metadata",
+  "neurogenesis_data",
+  "neuron_shapes",
+  "neurons",
+  "output_bindings",
+  "plasticity",
+  "provenance",
+  "sim_time",
+  "state"
+ ],
+ "brain_neuron_count": 42,
+ "weights_reload_ok": true,
+ "weights_checksum_saved": 326.179868,
+ "weights_checksum_reloaded": 326.179868,
+ "weights_round_trip_exact": true,
+ "weights_train_steps": 130
+}
+metadata written to /tmp/squid_222_smoke/metadata.json
