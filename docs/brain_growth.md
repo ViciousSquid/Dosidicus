@@ -600,3 +600,69 @@ these unwanted edges does not restore feeding, investigate
 intentional differentiation-remedy offloads and other inhibitory
 motor connections. Do not replace the squid's decisions with
 a hand-authored behaviour rule.
+
+
+## Results: run 22 — causal test of accidental newborn-to-motor inhibition
+
+**Status: successful GitHub Actions run 22**, launched by commit
+`12cdb21e` (9 November 2026; [workflow](https://github.com/ViciousSquid/Dosidicus/actions/runs/42655419535)).
+All 38 predictive-cognition tests, 55 baseline tests and 114 subtests passed.
+The raw result is at `ci-logs/22/results/motor_wiring_study.json`.
+
+The experimental intervention is *opt-in* (headless
+`TrainingConfig.context_motor_autowiring=False`), leaving the default
+engine and all other branches unchanged. It removes **only the incidental
+birth-context outputs from newly grown neurons into motor targets**
+(`act_*`). It preserves innate wiring, explicit deficit-remedy synapses,
+existing plasticity and decision selection, and introduces no artificial
+meals or motor commands. Each arm runs the actual brain for 6,000 ticks
+under the same seed (11), with identical environmental scheduling.
+`historical` is the control.
+
+| Mode | Control earned meals | Without incidental motor wiring | Control exploring / idle | Intervention exploring / idle |
+|---|---:|---:|---:|---:|
+| Off | 1 | **132** | 5,996 / 0 | 1,482 / 4,152 |
+| Linear | 1 | **46** | 5,997 / 0 | 724 / 5,132 |
+| Transformer | 4 | **4** | 510 / 5,477 | 4,559 / 1,365 |
+
+The control had **11/15/12 negative newborn-source synapses into
+`act_eat`** (off/linear/transformer), summing to
+-8.7574/-11.9965/-9.6, and the transformer also had five negative
+newborn-source connections into `act_move`, summing to -3.36.
+With the intervention all three have **zero** negative newborn-source
+synapses into either motor. Nevertheless, the transformer condition
+still eats four meals only.
+
+**Interpretation:** The birth-context auto-wiring of inactive motor
+neurons causes catastrophic inhibitory interference: a motor neuron
+at 0 attracts an arbitrary -0.8 output from each newborn, regardless
+of the newborn's diagnosed purpose. Its removal **causally rescues
+feeding in the off and linear controls** and restores sustained
+locomotion in the transformer. A crucial limit is that it **does not
+rescue transformer feeding** in this seed, so it is not a sufficient
+fix for the entire research programme. A larger sample is required
+before reporting population benefits.
+
+The intervention also changes the subsequent developmental history;
+final counts are 31/46/44 neurons versus 30/44/45 in the controls.
+The effect is not merely adding back a fixed set of meals. The
+off-mode food-visible tick count falls sharply (5,595 to 551)
+because food is being eaten and the organism behaves differently;
+it cannot by itself be interpreted as worse perception.
+
+### Remaining unexplained transformer-specific deficit
+
+Run 21 showed that the transformer's `hunger -> act_eat` innate
+weight dropped to **0 by tick 500**, unlike off/linear in that run.
+One possible cause is the differentiation remedy's
+`_retire_edge((offload, target))`, which hands an existing edge
+to a newborn without distinguishing an innate instinct from a
+learned synapse. This is **not yet established as the cause**:
+plasticity, pruning or a different pathway can also remove an
+edge. It requires event-level provenance from the causal ledger.
+
+Next: instrument read-only *per-edge provenance* and test
+independent seeds with the same opt-in ablation. If the survival
+rescue replicates, investigate a separate controlled hypothesis
+for the transformer's remaining feeding deficit. Do not silently
+change the baseline, force eating, or erase squid 222.
