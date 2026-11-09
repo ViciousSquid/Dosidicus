@@ -293,3 +293,75 @@ simulation clock the engine is already given (falling back to wall time
 only where no clock was supplied, i.e. the GUI, whose behaviour is
 unchanged). Run 13's verdict stands for the code that ran it; whether
 the plateau dissolves is for the re-run.
+
+### The corrupted first attempt (commit 6501e917; CI run 16 is invalid)
+
+The first attempt at this fix (6501e917) shipped a corrupted
+`headless_trainer.py`: the file had been fetched through a raw
+web-page reader that silently mangles files larger than ~32 KB
+(mid-word line breaks, truncation), and the damage passed unnoticed
+into the commit. CI run 16 failed with a SyntaxError at line 175, and
+its publish step (`if: always()`) nonetheless committed a
+`ci-logs/16/` results directory - those results are stale leftovers
+from the working tree, not a measurement of anything, and are hereby
+declared **invalid**. The repair commit 9060d37a rebuilt all three
+files from clean sources at pre-fix commit f580e2f8 and passed
+syntax; its own remaining bugs are documented above. Process lesson,
+recorded for the future: repository files are always fetched through
+the GitHub file API, never through a web page reader.
+
+### Run 18: the fix validated (6k-tick smoke, seed 11)
+
+CI run 18 (commit fec24337) is the first fully green run of the
+repaired relief loop: **55/55 baseline tests pass** - including the
+four StressSuppressionTests and the restored seeded-reproducibility
+test - and the 6k-tick growth smoke (`ci-logs/18/results/`) shows the
+loop working in vivo:
+
+| | off | linear | transformer |
+|---|---|---|---|
+| final neurons (grown) | 30 (11) | 44 (15) | 45 (16) |
+| stress neurons (cap 5) | 5/5 | 5/5 | 5/5 |
+| mean anxiety, east phase | 0.0 | 7.1 | 5.0 |
+| mean anxiety, west/fouling/retention | 0.0 | 0.0 | 0.0 |
+| last birth | tick 700 | tick 1,000 | tick 3,700 |
+| births in west / fouling | 0 / 0 | 0 / 0 | 2 / 1 |
+| deficit resolutions | 28 | 44 | 101 |
+| food eaten (east phase / total) | 0 / 1 | 0 / 1 | 3 / 4 |
+
+Run 13 for comparison: mean anxiety ~100 in every condition for the
+whole life; no birth after tick 1,500 in any condition; no meal after
+tick 2,250 in any condition; and the anxiety regulation deficit
+accounted for 19,100 of 19,145 stand-downs per condition. In run 18
+that deficit is **absent from the monitor's active list in all three
+conditions**.
+
+Honest reading:
+
+* The relief works as designed: anxiety collapses under the
+  suppression cap everywhere. It collapses perhaps *too* completely -
+  to 0, not just under 50 - so whether the stress pathway still earns
+  its keep, and whether an all-zero anxiety starves the anxiety-driven
+  plasticity of signal, is a question the full re-run's evidence
+  trail will answer.
+* The binding deficit is now **hunger**, not anxiety: all three
+  conditions still end with hunger, cleanliness, sleepiness and
+  satisfaction stuck outside their comfort bands and the stress cap
+  full of filth/hunger-response neurons. A plateau verdict may well
+  return, but for a different reason than run 13's.
+* The transformer condition is again the only one that resumes growth
+  after the east phase (births in west and fouling, including
+  `filth_avoidance` and `squalor_alarm` grown *during* the fouling
+  phase - run 13's fouling problem produced zero births in any
+  condition) and again the only one that eats more than once. Its
+  101 resolutions versus 28/44 also suggest the monitor is closing
+  deficits, not just demanding structure.
+
+### The full re-run (launched with the working relief loop)
+
+The full 240k-tick study - same design as run 13: off / linear /
+transformer, seed 11, four world phases, live neuron telemetry against
+the capability monitor's decisions - is relaunched on the fixed
+engine. Its verdict, whether the forbidden plateau dissolves and for
+which deficits, will be recorded here from
+`ci-logs/<run>/results/growth_results.json` when CI publishes it.
