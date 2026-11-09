@@ -859,3 +859,59 @@ sensorimotor priors under well-evidenced circumstances,
 or validate that an offloaded pathway remains capable of
 driving the behaviour before retiring the original.
 That must be tested, not assumed.
+
+
+## Results: run 26 — independent-seed innate-offload preservation replication
+
+Run 26 (code commit `07c53497`, successful
+[GitHub Actions workflow](https://github.com/ViciousSquid/Dosidicus/actions/runs/42659719442);
+published commit `cb0c846b`) tested held-out seeds **22, 33, 44**
+at 6,000 ticks each in off/linear/transformer, with both arms
+**already** using `context_motor_autowiring=False`. The *only*
+difference within each pair was whether differentiation could retire
+an existing innate motor edge
+(`preserve_innate_motor_offload=False/True`).
+All 40 predictive tests, 55 baseline tests and 114 subtests passed.
+Raw data: `ci-logs/26/results/innate_offload_replication.json`.
+
+| Mode | Seed | Normal differentiation / earned food | Preserve innate / earned food | Difference |
+|---|---:|---:|---:|---:|
+| Off | 22 | 21 | 21 | 0 |
+| Off | 33 | 136 | 20 | **−116** |
+| Off | 44 | 128 | 110 | −18 |
+| Linear | 22 | 117 | 117 | 0 |
+| Linear | 33 | 119 | 20 | **−99** |
+| Linear | 44 | 141 | 118 | −23 |
+| Transformer | 22 | 120 | 107 | −13 |
+| Transformer | 33 | 111 | 40 | **−71** |
+| Transformer | 44 | 3 | 21 | +18 |
+
+The seed-11 run-25 transformer rescue, 4→118 foods, **did not
+replicate as a general intervention**. The guard harmed transformer
+in **2/3 independent seeds**, helped it in 1/3, and harmed
+off and linear in 2/3 each (with one unchanged). Average
+paired deltas across these three seeds:
+off **−44.7**, linear **−40.7**, transformer **−22.0**.
+This is not a general safe fix. **Do not make
+`preserve_innate_motor_offload` the default.**
+
+The causal interpretation remains specific: the ledger confirms
+that *some* innate hunger-to-eat edges are intentionally retired
+by differentiation, but their replacement may be a better route
+than preserving the original; both strategies can produce high
+feeding in different individuals. Note that transformer seed 22's
+preserve arm shows its hunger-to-eat edge absent at the final
+sample **without a neurogenesis retirement event in the compact
+run-26 result**; the guard only addresses differentiation retirement,
+and the available compact telemetry is insufficient to explain
+that discrepancy. Investigate its full per-edge provenance before
+assuming the guard failed.
+
+**Design limitations:** these are 3 new seeds, 6,000 ticks each,
+not long-term generalisation, and the global RNG stream can diverge
+after the two arms' actions differ. The follow-on run 27 tests
+a *separate* less invasive hypothesis: exclude only negative
+incidental birth-context outputs to motor neurons, keeping
+positive context-to-motor outputs. This is more specific than
+the previous all-context suppression and might avoid harming
+functional controls, but must be judged against its own results.
