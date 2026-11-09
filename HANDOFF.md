@@ -1,9 +1,8 @@
 # HANDOFF — Dosidicus predictive-cognition research branch
 
-Last updated: 2026-11-09, after CI run 20 published and while CI **run 21**
-(synaptic-input diagnostic) was in progress. Branch head before this update:
-`db7f7e32`. **Do not treat this timestamp or run status as live**; check
-GitHub branch HEAD and Actions on resumption.
+Last updated: 2026-11-09 after **Run 22 completed successfully**.
+**This file is a snapshot, not a live CI status.** Check branch HEAD and
+Actions on resumption.
 
 ## Rules / scope
 
@@ -131,40 +130,80 @@ GitHub branch HEAD and Actions on resumption.
 - Run 20 6k totals: earned food **1 / 1 / 4**, and neuron counts
   **30 / 44 / 45** (off / linear / transformer), mirroring the full run.
 
-## NEXT: run 21 is in flight — analyse signed synaptic contributors
+## Run 21 — synaptic-input diagnosis (COMPLETE, CI green)
 
-- Latest code commit as of this handoff: **`db7f7e32`**, message
-  `experiments: inspect signed synaptic inputs and learned weights behind motor shutdown`.
-  This launches the **quick-depth run 21** (not a 240k study).
-  On resumption check GitHub Actions for its actual status; do not infer
-  success from launch:
-  https://github.com/ViciousSquid/Dosidicus/actions?query=branch%3Aresearch%2Ftransformer-predictive-cognition
-- The new `_motor_synaptic_probe` in `experiments/growth_experiment.py`
-  records approximate signed source contributions for `act_move` and
-  `act_eat`, plus weights of the innate
-  `can_see_food → act_eat`, `hunger → act_eat` and
-  `curiosity → act_move` pathways. The contributions use **post-step
-  brain state**, so they are diagnostic approximations, **not** an
-  exact replay of the pre-propagation snapshot. Explicitly inspect this
-  caveat before drawing causal conclusions.
-- When run 21 has published, read its new
-  `ci-logs/21/results/growth_timeseries_*.csv`,
-  `growth_summary.json`, logs and experiment telemetry. Check:
-  1. Does innate food→eat weight survive? Does the net signed input to
-     `act_eat` become negative despite `can_see_food=100`?
-  2. Why does transformer `act_move` fall below 45 and then to 0?
-     Distinguish negative learned weights from inhibition by other active
-     motor neurons and altered input dynamics.
-  3. Compare off and linear to locate **shared feeding failure** versus
-     **transformer-only motor shutdown**. Record timings/weights and
-     potential causal pathways; don't attribute causation on correlation.
-  4. Add actual results, honest uncertainty and next falsifiable experiment
-     to `docs/brain_growth.md` and this HANDOFF. Commit `[skip ci]`
-     for documentation-only changes.
-  5. Only if the mechanism is established, plan a **controlled intervention**
-     testing it; do not simply force actions, raise caps, change neural
-     rules or feed the squid for free. Interventions must be flagged
-     as artificial and excluded from earned-feeding metrics.
+- Commit `db7f7e32`, published `a21b75a3`; workflow:
+  https://github.com/ViciousSquid/Dosidicus/actions/runs/42653677042
+  Results `ci-logs/21/results/growth_timeseries_*.csv`.
+- At tick 900 with visible food, the `act_eat` motor had
+  positive contributions +63.20 / +78.39 / +52.62, but negative
+  contributions -337.04 / -348.29 / -228.93 (off/linear/transformer).
+  `can_see_food -> act_eat` retained strongly positive weights:
+  0.9098 / 0.9097 / 1.0000. The transformer `act_move` motor
+  had approximately -70.23 inhibitory input and fell to zero.
+  Contributions are computed from POST-STEP brain state, so they
+  indicate persistent inhibitory sources but are not an exact
+  replay of the propagation inputs.
+- Mechanism found in `FunctionalNeuron.get_functional_connections`:
+  every newborn automatically writes context-based outputs onto
+  neurons deviating from activation 50, including unrelated motors.
+  An `act_eat` neuron sitting at 0 gets -0.8 from each new neuron.
+  The network accidentally converts healthy neurogenesis into
+  catastrophic inhibition of the motor bank.
+
+## Run 22 — paired opt-in motor wiring intervention (COMPLETE, CI green)
+
+- Code commit `12cdb21e`, publish commit `7e75ab09`;
+  workflow https://github.com/ViciousSquid/Dosidicus/actions/runs/42655419535
+  Raw JSON `ci-logs/22/results/motor_wiring_study.json`.
+  See `docs/brain_growth.md` for full interpretation.
+- Six seed-11 **east-only** conditions, 6,000 ticks:
+  historical and `context_motor_autowiring=False` in each of
+  off, linear and transformer. The intervention excludes only
+  INCIDENTAL birth-context outputs into action neurons. Intended
+  deficit-remedy wiring, innate synapses, action-selection policy
+  and earned-meal accounting stay intact; no forced actions or
+  food rewards. The flag defaults **True**, so standard engine
+  behaviour is unchanged by this research-only opt-in.
+- **Earned feeding, historical -> intervention:**
+  off **1 -> 132**; linear **1 -> 46**;
+  transformer **4 -> 4**.
+  **Exploration actions:** off **5,996 -> 1,482**;
+  linear **5,997 -> 724**; transformer **510 -> 4,559**.
+  Transformer idle falls from 5,477 to 1,365.
+- Negative grown-neuron synapses into `act_eat` fall:
+  off 11->0; linear 15->0; transformer 12->0.
+  Negative grown-neuron synapses into `act_move` fall 5->0
+  in transformer. Baseline feeding and transformer locomotion
+  **causally recover** under the controlled intervention,
+  but transformer feeding remains at four meals.
+- All 38 predictive tests passed (including 2 intervention tests)
+  and 55 baseline tests / 114 subtests passed. This is **n=1** per
+  condition, not a population-level claim. Development diverges
+  after intervention, and the cause of transformer's remaining
+  feeding problem is unresolved. Other research files and original
+  behaviour have not been overwritten.
+
+## NEXT: isolate transformer-specific loss of eating
+
+1. The historical Run 21 transformer lost its innate
+   `hunger -> act_eat` weight (0 by tick 500), unlike off/linear.
+   Check whether this also happens in the **Run 22 intervention arm**.
+   One hypothesis is `_remedy_wiring` for differentiation,
+   which calls `_retire_edge((offload, target))` without protecting
+   an innate connection. It is NOT confirmed.
+2. Add **read-only provenance telemetry** for changes to the
+   `hunger -> act_eat` and `can_see_food -> act_eat`
+   weights, with exact mechanism/deficit/event source from
+   `CausalLedger`. Also record top negative and positive
+   contributors to `act_eat` at important ticks under
+   `context_motor_autowiring=False`. Do not confuse
+   action suppression with absence of visible food.
+3. Only after source is located, run a matched intervention
+   to test the cause; never silently force eating or change
+   baseline behaviour. Replicate corrected runs across seeds,
+   including exceptional seed 222, before claiming a general
+   predictive benefit. Continue preserving squid 222.
 
 ## Other research: seed 222 preserved; population gain NOT replicated
 
@@ -219,4 +258,9 @@ GitHub branch HEAD and Actions on resumption.
   `379991eb` run20 probe;
   `c75a0f72` run20 publish;
   `8dd2ff06` run20 documentation;
-  `db7f7e32` run21 synaptic diagnostic launch.
+  `db7f7e32` run21 synaptic diagnostic launch;
+  `a21b75a3` run21 publish;
+  `b69475d5` run21 diagnosis;
+  `12cdb21e` run22 controlled intervention;
+  `7e75ab09` run22 publish;
+  `14b29199` run22 verdict.
