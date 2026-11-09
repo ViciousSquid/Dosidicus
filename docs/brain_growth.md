@@ -365,3 +365,117 @@ the capability monitor's decisions - is relaunched on the fixed
 engine. Its verdict, whether the forbidden plateau dissolves and for
 which deficits, will be recorded here from
 `ci-logs/<run>/results/growth_results.json` when CI publishes it.
+
+
+## Results: run 19 (full 240k re-run with the corrected relief loop)
+
+Run 19, from \`7071cdd2\` (9 November 2026; CI run 19, published
+as \`8d28329d\`), completed **240,000 ticks in all three conditions**
+with the fixed headless anxiety-relief mechanism. CI was green:
+36 predictive-cognition tests and 55 baseline headless tests
+(plus 114 subtests). It is an n=1 **mechanism study**, not a
+population-level demonstration of improved cognition.
+
+![Run 19: neuron growth against simulation time, early births by deficit kind, cumulative weight updates and food eaten](figures/run19_growth_study.svg)
+
+Raw reproducible inputs for the chart: \`ci-logs/19/results/growth_summary.json\`,
+\`growth_events_{off,linear,transformer}.json\`, and
+\`growth_timeseries_{off,linear,transformer}.csv\`.
+
+| Metric | Off | Linear | Transformer |
+|---|---:|---:|---:|
+| Final neurons (grown) | 30 (11) | 44 (15) | 45 (16) |
+| Last birth (tick) | 750 | 1,000 | 3,750 |
+| Final synapses | 378 | 514 | 593 |
+| Weight updates (total) | 127 | 912 | 213 |
+| Weight updates after last birth | 64 | 800 | 55 |
+| Capability-deficit resolutions | 172 | 432 | 381 |
+| Total food eaten (whole life) | 1 | 1 | 4 |
+| Food eaten after last birth | 0 | 0 | 0 |
+| Growth requests stood down | 19,145 | 19,145 | 19,145 |
+
+### What changed from run 13, and what did not
+
+**Anxiety suppression now works**: mean anxiety in the later three
+world phases is 0.0 in all modes, versus ~100 in run 13. The
+\`regulation:anxiety:down\` deficit no longer appears among the final
+actionable deficits. The original run-13 diagnosis—stress neurons
+were unable to suppress anxiety in headless simulation—was real and
+the specific bug has been repaired.
+
+**The forbidden plateau remains**, for a new binding problem.
+Every condition again fills the **stress type cap (5/5)**, though the
+100-neuron global ceiling is not close to binding. Hunger and
+cleanliness regulation remain actionable in all conditions; hunger
+is at 100 and cleanliness at 0 over the final three phases. The
+growth-engine stand-down ledger now overwhelmingly names
+\`regulation:hunger:down\`: 19,140 of 19,145 in off, 19,120 in
+linear, and 18,920 in transformer. Approximately 316–320 per
+condition are explicit five-stress-neuron cap/deepening refusals;
+most of the rest cite the cooldown repeatedly reset by those
+deepening actions. The earlier finding "stress type cap + recurring
+cooldown blocks requests" is therefore **confirmed with a
+different unmet need**. Merely fixing anxiety did not cure the
+structural growth bottleneck.
+
+**The brief run-18 growth after the east phase does not extend to
+full life**: run 18 used four compressed 1,500-tick phases inside
+6,000 total ticks, so the transformer's births at 2,250 and 3,750
+fell in its miniature fouling phase. In the full-length run 19 the
+four phases are each **60,000** ticks; all 16 transformer births
+therefore happen in *east*, and there are zero new neurons in the
+west, fouling, or retention phase in all three modes. Run 18 did
+not establish long-term challenge-induced growth.
+
+### A stronger and more concerning result: action collapse
+
+The resulting organism behaviour is not a successful example of
+"fixed brain size, improving behaviour":
+
+* **No feeding after early life.** Total meals were 1/1/4; the
+  transformer ate its fourth meal before its last birth at tick
+  3,750. No condition ate in the last three phases. The phase
+  summariser subtracts the first sample of each phase, so its
+  east-phase \`food_eaten\` figures *omit* meals consumed before
+  tick 250; the \`food_eaten_total\` and action counters are the
+  authoritative lifetime totals.
+* **Motor behaviour differs dramatically.** Final
+  \`actions_selected\` reports 239,477 **idle** decisions for
+  transformer, 48,122 for linear, and 41,211 for off, out of
+  240,000 ticks each. Transformer selected \`exploring\` only
+  510 times, compared with 191,875 linear and 198,785 off.
+  Transformer selected \`eating\` 13 times in its entire lifetime.
+  The animal largely stops acting rather than simply failing to
+  solve the altered world.
+* **Weight updates continue without functional adaptation.**
+  Off, linear and transformer accumulated 64/800/55 weight
+  updates after their last birth, but no new meals. Counting
+  Hebbian updates or "resolved" deficit events as successful
+  behavioural learning would be misleading: 381 transformer
+  deficit-resolution events did not produce functional recovery.
+* **Anxiety may now be over-suppressed**: it sits at zero despite
+  chronic hunger, severe uncleanliness and repeated startles.
+  The suppressor made anxiety numerically comfortable but may
+  have eliminated a useful drive signal. This is an open
+  hypothesis, not a conclusion from the present data.
+
+### Next falsifiable experiment: diagnose the action bottleneck first
+
+Before lifting the stress type cap or changing learning/plasticity
+rules, **instrument an unchanged simulation** at high temporal
+resolution and determine *why* each mode stops choosing its
+actions. Log each motor neuron's actual activation against its
+selection threshold, food visibly available, hunger and
+sleepiness, whether the squid is sleeping, and the per-window
+counts for eating / exploring / idle / exhausted / sleeping.
+Keep the three cortex conditions, seed 11, identical schedules,
+and no automatic feeding. The diagnostic must not modify
+squid behaviour or random-number consumption.
+
+A follow-up controlled rescue can then distinguish a dead
+motor pathway from irreversible internal drive saturation:
+intervene in one drive (e.g. restore sleepiness or cleanliness
+briefly), explicitly mark those interventions as artificial
+and **never** count them as earned feeding or learning. Only
+after an identifiable cause is demonstrated should we vary
+the stress cap, suppression strength, or action policy.
