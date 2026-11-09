@@ -35,7 +35,8 @@ happened"; structure is spent only on a diagnosed deficiency:
   observations, >=20 sim-seconds old), **severe** (>=0.35) and
   **unresolved** (its severity is not already falling - ordinary
   learning gets its chance first).
-* **Permission to grow** is then bounded by:
+* **Permission to grow** is the
+n bounded by:
   * per-type caps: stress 5, novelty 6, reward 6, connector 10 grown
     neurons;
   * a global ceiling of 100 neurons (this branch's headless config);
@@ -76,7 +77,8 @@ a measurement rather than an interpretation:
 |---|---|---|
 | east | 0-60k | the runs-8/9 contingency, unchanged |
 | west | 60k-120k | the same contingency mirrored: food lands 0.2 west |
-| fouling | 120k-180k | east again, heavily fouled water (a genuinely new problem: cleanliness regulation) |
+| fouling | 120k-180k | east again, heavily fouled water (a
+ genuinely new problem: cleanliness regulation) |
 | retention | 180k-240k | clean water again: does the east behaviour survive? |
 
 Telemetry, sampled every 250 ticks straight from the engine's own
@@ -118,7 +120,8 @@ overlaid, and the honest verdict - in either direction.
 
 Run 13 (CI run on commit d2e8f412, 2026-11-09, 01:58-03:16 UTC,
 published in `ci-logs/13/results/`) ran the full design above: off /
-linear / transformer, seed 11, 240,000 ticks each, 4 world phases.
+lin
+ear / transformer, seed 11, 240,000 ticks each, 4 world phases.
 All three runs completed without truncation.
 
 ### The neuron curve
@@ -156,7 +159,8 @@ This is a **forbidden plateau**, by the criteria above:
   the 19,145 stand-downs in each condition, and its suggested type is
   stress - the cap that is full.
 * **Cap-blocked births become cooldown.** The stand-down histogram's
-  head is misleading: 18,825 of 19,145 stand-downs per condition cite
+  head is misleading: 18,825 of 19,145 sta
+nd-downs per condition cite
   "only Ns into the 60s growth cooldown", and only ~320 cite the caps
   directly ("already has 5 stress neurons; strengthened one instead").
   But the mechanism chains: when the stress cap blocks a birth the
@@ -190,7 +194,8 @@ east), and it never eats in west, fouling or retention.
 * **The fouling problem was never solved.** The cleanliness deficit
   (a genuinely new problem at tick 120k) stood down 20 times in each
   condition and produced zero births (the transformer's
-  `filth_avoidance` neuron was born at tick 1,000, in east, before
+  `filth_avoidance` neuron was born at tick 1,000, in east, befo
+re
   fouling began) and no behavioural adaptation.
 * The known headless-engine limitation above (stress neurons don't
   mechanically damp anxiety in the headless trainer) explains *why*
@@ -211,3 +216,51 @@ mirror or fouling - resumes either. Next steps worth considering:
 raise or remove the stress cap, or fix the headless anxiety-relief
 loop, and re-run to see whether growth resumes when the deficit's
 requested type is available again.
+
+## The anxiety relief loop, fixed (post-run-13 follow-up)
+
+Run 13's verdict was a forbidden plateau whose root cause is documented
+above as a known limitation: the engine's suppression feedback
+(`EnhancedNeurogenesis.update_neuron_activations`) is GUI-engine
+behaviour the headless trainer never called. The suppression neurons
+grew (to the cap, 5/5) but never forced anxiety down, so anxiety pinned
+at 100, the anxiety regulation deficit could never close, and the
+monitor demanded a sixth stress neuron for 239,000 consecutive ticks
+while the cap refused - the 18,825 "cooldown" stand-downs per condition
+were the shadow of that refusal.
+
+The fix: the headless simulation now presents itself as the brain's body
+handle (`brain.tamagotchi_logic = self`, the same attribute the engine
+already reads defensively) and runs the engine's own relief loop every
+tick, after the action and before the next observation, so:
+
+* every grown stress neuron is driven on anxiety
+  (`50 + (anxiety - 50) * 1.2`) and subtracts from it, scaled by its
+  strength multiplier;
+* anxiety is clamped to the suppression cap (`100 - 10 * stress_count`,
+  floored at 50) on the body as well as the network state;
+* the birth-time relief of 15 points reaches the body too.
+
+With the full five stress neurons the cap permits, anxiety can never
+exceed 50 - inside the 0-60 comfort band - so the anxiety regulation
+deficit (19,100 of 19,145 stand-downs in every run-13 condition) should
+finally close and the stress cap should stop being the binding
+constraint. Whether growth then resumes for the remaining deficits
+(hunger, cleanliness, the representation deficits) is exactly what a
+re-run of the study will measure; four regression tests in
+`tests/test_headless_training.py` (StressSuppressionTests) pin the
+mechanism itself.
+
+Honest caveats:
+
+* Run 13's numbers stand for the code as it was run. Nothing above has
+  been re-measured yet; the re-run decides whether the plateau dissolves.
+* Two side effects of giving the brain a body handle, both toward how
+  the game already behaves: growth's personality-keyed wiring table now
+  reads the headless squid's seeded personality (it used to fall back to
+  `adventurous`), and the birth-time long-term-memory recording is
+  still skipped (the headless squid has no `memory_manager`).
+* The relief is identical in all three conditions - off, linear and
+  transformer - so the study's comparisons remain fair.
+* The stress type cap itself is unchanged (5). The fix makes the five
+  permitted neurons do their job; it does not permit a sixth.

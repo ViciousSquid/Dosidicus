@@ -54,7 +54,8 @@ from src.brain_constants import (  # noqa: E402
     action_resting_level,
     is_network_driven,
 )
-from src.propagation import ExternallyDriven, propagate  # noqa: E402
+from src.propagation import ExternallyDr
+iven, propagate  # noqa: E402
 from src.plasticity import PlasticityEngine, PlasticityConfig  # noqa: E402
 from src.capability import CapabilityMonitor  # noqa: E402
 from src.causal_learning import ActionOutcomeLedger  # noqa: E402
@@ -112,7 +113,8 @@ TRAINING_SCENARIOS = {
             "food_spawn_chance": 0.005,
         },
         events=[
-            {"tick": 100, "type": "set_state", "state": {"anxiety": 80}},
+   
+         {"tick": 100, "type": "set_state", "state": {"anxiety": 80}},
             {"tick": 500, "type": "startle"},
             {"tick": 1000, "type": "set_state", "state": {"hunger": 90}},
         ]
@@ -170,7 +172,8 @@ class HeadlessSquid:
         self.happiness = 50.0
         self.cleanliness = 80.0
         self.sleepiness = 20.0
-        self.health = 100.0
+        self.
+health = 100.0
         
         # Goal neurons
         self.satisfaction = 50.0
@@ -229,7 +232,8 @@ class HeadlessSquid:
     def update(self, dt: float = 1.0):
         """Update squid state for one tick"""
         # Natural stat changes
-        self.hunger = min(100, self.hunger + 0.1 * dt)
+        self.hunger = min(100, self.hunger +
+ 0.1 * dt)
         self.sleepiness = min(100, self.sleepiness + 0.05 * dt)
         self.cleanliness = max(0, self.cleanliness - 0.02 * dt)
         
@@ -277,7 +281,8 @@ class HeadlessSquid:
         if self.is_startled and random.random() < 0.1:
             self.is_startled = False
 
-        # Sleep was entered through act_rest / act_collapse, not a hidden
+        # Sleep was entered through act_rest / act_collapse,
+ not a hidden
         # sleepiness threshold. A sleeping body recovers across ticks.
         if self.is_sleeping:
             self.sleepiness = max(0.0, self.sleepiness - 4.0 * dt)
@@ -331,11 +336,23 @@ class HeadlessSimulation:
         self.config = config or TrainingConfig()
         # Seed BEFORE anything random happens - HeadlessSquid picks its
         # personality in its constructor - so a seeded run is reproducible from
-        # the very first draw.
+        # the very
+ first draw.
         if self.config.seed is not None:
             random.seed(self.config.seed)
         self.brain = HeadlessBrain(self.config)
         self.squid = HeadlessSquid()
+        self.brain = HeadlessBrain(self.config)
+        self.squid = HeadlessSquid()
+
+        # The engine's regulatory feedback reaches the body through this
+        # handle (a BrainWidget holds the game's TamagotchiLogic). Giving
+        # the brain the simulation itself lets the same engine code - the
+        # anxiety-relief loop, the birth-time relief, personality-keyed
+        # wiring - reach the headless squid exactly as it reaches the GUI
+        # one. The engine reads it defensively everywhere, so nothing
+        # changes for brains without a body.
+        self.brain.tamagotchi_logic = self
 
         # Optional predictive-cognition research module (branch
         # research/transformer-predictive-cognition). Constructed after
@@ -384,7 +401,8 @@ class HeadlessSimulation:
     def load_scenario(self, scenario_name: str) -> bool:
         """Load a predefined training scenario"""
         if scenario_name not in TRAINING_SCENARIOS:
-            print(f"✗ Unknown scenario: {scenario_name}")
+            print(f"✗ Unk
+nown scenario: {scenario_name}")
             print(f"  Available: {list(TRAINING_SCENARIOS.keys())}")
             return False
             
@@ -439,7 +457,8 @@ class HeadlessSimulation:
                 
         # Final statistics
         elapsed = time.time() - start_time
-        self.stats['ticks_completed'] = self.tick + 1
+        self.stats['ticks_completed'] = self.
+tick + 1
         self.stats['elapsed_seconds'] = elapsed
         self.stats['ticks_per_second'] = (self.tick + 1) / elapsed if elapsed > 0 else 0
         self.stats['predictive'] = self.predictive.get_stats()
@@ -481,7 +500,8 @@ class HeadlessSimulation:
             return None
         x, y = self.squid.x, self.squid.y
         item = min(self.food_items,
-                   key=lambda food: math.hypot(food['x'] - x, food['y'] - y))
+     
+              key=lambda food: math.hypot(food['x'] - x, food['y'] - y))
         if math.hypot(item['x'] - x, item['y'] - y) <= self.FOOD_SIGHT_RADIUS:
             return item
         return None
@@ -524,7 +544,8 @@ class HeadlessSimulation:
                 distance = math.hypot(dx, dy)
                 if distance > self.FOOD_BITE_RADIUS:
                     step = min(self.FOOD_SWIM_STEP, distance)
-                    squid.x += (dx / distance) * step
+                    squid.x += (
+dx / distance) * step
                     squid.y += (dy / distance) * step
                     squid.pursuing_food = True
                     self.stats['food_approaches'] += 1
@@ -568,7 +589,8 @@ class HeadlessSimulation:
         """
         self.squid.update()
         self._update_environment()
-        self._refresh_food_sense()
+        self._re
+fresh_food_sense()
         if self.squid.food_visible:
             self.stats['food_seen_ticks'] += 1
         self.brain.advance_clock(1.0)
@@ -607,7 +629,22 @@ class HeadlessSimulation:
         counts[chosen] = counts.get(chosen, 0) + 1
         self._act_on_neural_decision(chosen)
 
+        # The suppression feedback the GUI engine runs every tick: grown
+        # stress neurons drive themselves on anxiety and force the drive
+        # back down, on the body as well as the network state (see
+        # EnhancedNeurogenesis.update_neuron_activations). Run-13 growth
+        # study post-mortem: the headless trainer never ran this loop, so
+        # headless stress neurons were decorative - anxiety pinned at
+        # 100, the anxiety regulation deficit could never close, and the
+        # monitor demanded a sixth stress neuron for 239,000 consecutive
+        # ticks while the type cap (5) refused it: the forbidden plateau.
+        # Suppression neurons are supposed to grow and force anxiety
+        # down; here they finally do.
+        self.brain.enhanced_neurogenesis.update_neuron_activations(
+            self.brain.state)
+
         # Complete the predictive cortex's experience record for this tick:
+
         # the action actually taken and the network's own activations.
         # Training happens only while learning is enabled (a frozen
         # evaluation freezes the transformer too); sleep replay piggybacks
@@ -645,7 +682,8 @@ class HeadlessSimulation:
             self.poop_items.append({'x': random.random(), 'y': random.random()})
             self.squid.cleanliness = max(0, self.squid.cleanliness - 5)
         if random.random() < self.config.startle_chance:
-            self.squid.startle()
+            
+self.squid.startle()
             self.stats['startles'] += 1
         self.squid.plant_nearby = random.random() < 0.2
 
@@ -693,7 +731,8 @@ class HeadlessSimulation:
             print(f"  🧹 Tick {self.tick}: Cleaned environment")
             
         elif event_type == 'new_object':
-            self.squid.curiosity = min(100, self.squid.curiosity + 20)
+            self.squid.curiosity = min(100, 
+self.squid.curiosity + 20)
             print(f"  🆕 Tick {self.tick}: New object encountered")
             
     def _report_progress(self, tps: float):
@@ -742,7 +781,8 @@ Examples:
                         help='Random seed. With one set the run is reproducible: '
                              'the same seed, brain and tick count give the same '
                              'trained brain every time.')
-    parser.add_argument('--blank', action='store_true',
+    parser.add_argument('--blank',
+ action='store_true',
                         help='Start from a blank 8-neuron brain (the eight '
                              'required neurons, no synapses, no innate reflexes) '
                              'instead of the newborn brain a real squid gets. '
@@ -770,7 +810,8 @@ Examples:
     parser.add_argument('--predictive-train-interval', type=int, default=64,
                         help='Ticks between predictive-cortex training batches')
     parser.add_argument('--predictive-save', type=str,
-                        help='Save predictive-cortex weights to a JSON file after training')
+           
+             help='Save predictive-cortex weights to a JSON file after training')
     parser.add_argument('--predictive-load', type=str,
                         help='Load predictive-cortex weights from a JSON file before running')
     parser.add_argument('--predictive-report', type=str,
@@ -786,85 +827,5 @@ Examples:
             print(f"\n  {name}:")
             print(f"    {scenario.description}")
             print(f"    Duration: {scenario.duration_ticks} ticks")
-            if scenario.config_overrides:
-                print(f"    Config overrides: {scenario.config_overrides}")
-        print()
-        return
-        
-    # Build config
-    config = TrainingConfig()
-    if args.learning_rate:
-        config.learning_rate = args.learning_rate
-    if args.neurogenesis is not None:
-        config.neurogenesis_enabled = args.neurogenesis
-    if args.max_neurons:
-        config.max_neurons = args.max_neurons
-    if args.seed is not None:
-        config.seed = args.seed
-    if args.predictive:
-        config.predictive_mode = args.predictive
-    if args.predictive_train_interval:
-        config.predictive_train_interval = args.predictive_train_interval
-    if args.blank:
-        config.blank = True
-        
-    # Create simulation
-    sim = HeadlessSimulation(config)
 
-    # Load predictive-cortex weights (after the cortex exists; must match
-    # the observation layout the weights were trained on)
-    if args.predictive_load and sim.predictive.enabled:
-        if not sim.predictive.load_weights(args.predictive_load):
-            print(f"✗ Could not load predictive weights: {args.predictive_load}")
-            sys.exit(1)
-    
-    # Load brain
-    if args.brain:
-        if not os.path.exists(args.brain):
-            print(f"✗ Brain file not found: {args.brain}")
-            sys.exit(1)
-        if not sim.load_brain(args.brain):
-            sys.exit(1)
-    else:
-        print("ℹ Using default brain architecture")
-        
-    # Load scenario
-    ticks = args.ticks
-    if args.scenario:
-        if not sim.load_scenario(args.scenario):
-            sys.exit(1)
-        # Use scenario duration if longer
-        scenario = TRAINING_SCENARIOS.get(args.scenario)
-        if scenario and scenario.duration_ticks > ticks:
-            ticks = scenario.duration_ticks
-            
-    # Run training
-    progress = 0 if args.quiet else args.progress
-    sim.stats['target_ticks'] = ticks
-    
-    try:
-        stats = sim.run(ticks=ticks, progress_interval=progress)
-    except KeyboardInterrupt:
-        print("\n\n⚠ Training interrupted by user")
-        sim.stop()
-        stats = sim.stats
-        
-    # Save output
-    if args.output:
-        sim.brain.save_brain(args.output)
-    else:
-        # Default output name
-        timestamp = time.strftime('%Y%m%d_%H%M%S')
-        output_name = f"trained_brain_{timestamp}.json"
-        sim.brain.save_brain(output_name)
-
-    if args.predictive_save and sim.predictive.enabled:
-        sim.predictive.save_weights(args.predictive_save)
-    if args.predictive_report and sim.predictive.enabled:
-        sim.predictive.save_report(args.predictive_report)
-
-    print("\n✓ Done!")
-
-
-if __name__ == '__main__':
-    main()
+... [Content truncated]
