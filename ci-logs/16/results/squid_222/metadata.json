@@ -1,0 +1,303 @@
+{
+  "what": "the run-9 supernova: transformer seed 222, preserved",
+  "mode": "transformer",
+  "seed": 222,
+  "train_ticks": 24000,
+  "quick": false,
+  "provenance": {
+    "run": 9,
+    "run9_trigger_commit": "38be60ba",
+    "run9_publish_commit": "5e4cd2f0",
+    "run9_reference": "/home/runner/work/Dosidicus/Dosidicus/ci-logs/9/results/full_results.json",
+    "rebuilt_at_commit": "0059733f39017704d1bc9686074a473405856692",
+    "ci_run_number": "15"
+  },
+  "world": {
+    "contingency_start": 150,
+    "contingency_interval": 700,
+    "food_delay": 16,
+    "near_sight_offset": 0.2,
+    "ambient_startle_chance": 0.0
+  },
+  "squid_final_state_after_training": {
+    "x": 0.8392,
+    "y": 0.9567,
+    "hunger": 43.2,
+    "happiness": 15.8,
+    "cleanliness": 0.0,
+    "sleepiness": 100.0,
+    "satisfaction": 99.36,
+    "anxiety": 100.0,
+    "curiosity": 61.7559
+  },
+  "artifacts": {
+    "brain_222.json": "the grown network, standard game (Designer/custom_brain_loader) format; prediction sensors ride along as inert input neurons",
+    "predictive_cortex_222.json": "the transformer state dict; restore with PredictiveCortex.load_weights()",
+    "cortex_report_222.json": "cortex telemetry at save time",
+    "note": "the experience buffer is not preserved; a restored cortex starts predicting again after two ticks of fresh experience"
+  },
+  "verification_note": "strict fields (training record, object permanence, delayed consequence) are deterministic replays of run 9 and must match; stochastic-tape fields (adaptation, retention) roll chance on a process-history-dependent tape and are reported, not counted",
+  "artifact_checks": {
+    "brain_json_parses": true,
+    "brain_top_level_keys": [
+      "action_representations",
+      "capability",
+      "causal_learning",
+      "clock",
+      "connections",
+      "consolidation",
+      "enhanced_neurogenesis",
+      "format",
+      "functional_neurons",
+      "growth_clock",
+      "last_neurogenesis_tick",
+      "metadata",
+      "neurogenesis_data",
+      "neuron_shapes",
+      "neurons",
+      "output_bindings",
+      "plasticity",
+      "provenance",
+      "sim_time",
+      "state"
+    ],
+    "brain_neuron_count": 45,
+    "weights_reload_ok": true,
+    "weights_checksum_saved": 313.006211,
+    "weights_checksum_reloaded": 313.006211,
+    "weights_round_trip_exact": true,
+    "weights_train_steps": 1511
+  },
+  "verification": {
+    "rows": [
+      {
+        "field": "train.food_eaten",
+        "kind": "strict",
+        "expected": 463,
+        "actual": 463,
+        "status": "match"
+      },
+      {
+        "field": "train.food_approaches",
+        "kind": "strict",
+        "expected": 880,
+        "actual": 880,
+        "status": "match"
+      },
+      {
+        "field": "train.startles",
+        "kind": "strict",
+        "expected": 35,
+        "actual": 35,
+        "status": "match"
+      },
+      {
+        "field": "train.escaped_startles",
+        "kind": "strict",
+        "expected": 0,
+        "actual": 0,
+        "status": "match"
+      },
+      {
+        "field": "train.unavoided_startle_ticks",
+        "kind": "strict",
+        "expected": 287,
+        "actual": 287,
+        "status": "match"
+      },
+      {
+        "field": "train.neurons_created",
+        "kind": "strict",
+        "expected": 16,
+        "actual": 16,
+        "status": "match"
+      },
+      {
+        "field": "train.hebbian_updates",
+        "kind": "strict",
+        "expected": 696,
+        "actual": 696,
+        "status": "match"
+      },
+      {
+        "field": "train.predictive.train_steps",
+        "kind": "strict",
+        "expected": 1511,
+        "actual": 1511,
+        "status": "match"
+      },
+      {
+        "field": "train.predictive.sleep_train_steps",
+        "kind": "strict",
+        "expected": 15,
+        "actual": 15,
+        "status": "match"
+      },
+      {
+        "field": "train.predictive.loss_ema",
+        "kind": "strict",
+        "expected": 0.004899731908861104,
+        "actual": 0.004899731908861104,
+        "status": "match"
+      },
+      {
+        "field": "train.predictive.delta_mae",
+        "kind": "strict",
+        "expected": 0.004667022031764457,
+        "actual": 0.004667022031764457,
+        "status": "match"
+      },
+      {
+        "field": "train.predictive.action_top1",
+        "kind": "strict",
+        "expected": 0.9785407725321889,
+        "actual": 0.9785407725321889,
+        "status": "match"
+      },
+      {
+        "field": "train.predictive.uncertainty",
+        "kind": "strict",
+        "expected": 0.07586957565268074,
+        "actual": 0.07586957565268074,
+        "status": "match"
+      },
+      {
+        "field": "train.predictive.brain_effect.synapses_from_predictions",
+        "kind": "strict",
+        "expected": 73,
+        "actual": 73,
+        "status": "match"
+      },
+      {
+        "field": "train.predictive.brain_effect.total_abs_weight_from_predictions",
+        "kind": "strict",
+        "expected": 18.9894,
+        "actual": 18.9894,
+        "status": "match"
+      },
+      {
+        "field": "object_permanence.mean_alignment",
+        "kind": "strict",
+        "expected": 0.644209940139006,
+        "actual": 0.644209940139006,
+        "status": "match"
+      },
+      {
+        "field": "object_permanence.coverage",
+        "kind": "strict",
+        "expected": 0.03333333333333333,
+        "actual": 0.03333333333333333,
+        "status": "match"
+      },
+      {
+        "field": "object_permanence.refeed_ticks",
+        "kind": "strict",
+        "expected": 2,
+        "actual": 2,
+        "status": "match"
+      },
+      {
+        "field": "delayed_consequence.mean_baseline_pred_food_ahead",
+        "kind": "strict",
+        "expected": 0.0,
+        "actual": 0.0,
+        "status": "match"
+      },
+      {
+        "field": "delayed_consequence.mean_anticipation_early",
+        "kind": "strict",
+        "expected": 0.5990857142857143,
+        "actual": 0.5990857142857143,
+        "status": "match"
+      },
+      {
+        "field": "delayed_consequence.mean_anticipation_late",
+        "kind": "strict",
+        "expected": 0.6889371428571429,
+        "actual": 0.6889371428571429,
+        "status": "match"
+      },
+      {
+        "field": "delayed_consequence.mean_rise_early",
+        "kind": "strict",
+        "expected": 0.5990857142857143,
+        "actual": 0.5990857142857143,
+        "status": "match"
+      },
+      {
+        "field": "delayed_consequence.mean_eat_latency",
+        "kind": "strict",
+        "expected": 2.0,
+        "actual": 2.0,
+        "status": "match"
+      },
+      {
+        "field": "delayed_consequence.eat_rate",
+        "kind": "strict",
+        "expected": 1.0,
+        "actual": 1.0,
+        "status": "match"
+      },
+      {
+        "field": "adaptation.startles",
+        "kind": "stochastic",
+        "expected": 88,
+        "actual": 88,
+        "status": "stochastic tape (not counted)"
+      },
+      {
+        "field": "adaptation.escaped_startles",
+        "kind": "stochastic",
+        "expected": 0,
+        "actual": 0,
+        "status": "stochastic tape (not counted)"
+      },
+      {
+        "field": "adaptation.escape_ratio",
+        "kind": "stochastic",
+        "expected": 0.0,
+        "actual": 0.0,
+        "status": "stochastic tape (not counted)"
+      },
+      {
+        "field": "adaptation.peak_anxiety_rise",
+        "kind": "stochastic",
+        "expected": 0,
+        "actual": 0,
+        "status": "stochastic tape (not counted)"
+      },
+      {
+        "field": "adaptation.final_anxiety",
+        "kind": "stochastic",
+        "expected": 100,
+        "actual": 100,
+        "status": "stochastic tape (not counted)"
+      },
+      {
+        "field": "adaptation.food_eaten",
+        "kind": "stochastic",
+        "expected": 18,
+        "actual": 18,
+        "status": "stochastic tape (not counted)"
+      },
+      {
+        "field": "retention.food_eaten",
+        "kind": "stochastic",
+        "expected": 131,
+        "actual": 131,
+        "status": "stochastic tape (not counted)"
+      },
+      {
+        "field": "retention.food_approaches",
+        "kind": "stochastic",
+        "expected": 222,
+        "actual": 222,
+        "status": "stochastic tape (not counted)"
+      }
+    ],
+    "matches": 24,
+    "mismatches": 0,
+    "missing": 0,
+    "stochastic_reported": 8
+  }
+}

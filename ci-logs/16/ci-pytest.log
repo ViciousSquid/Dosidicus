@@ -1,0 +1,36 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.18, pytest-9.2.0, pluggy-1.7.0 -- /opt/hostedtoolcache/Python/3.11.18/x64/bin/python
+cachedir: .pytest_cache
+rootdir: /home/runner/work/Dosidicus/Dosidicus
+collecting ... collected 0 items / 1 error
+
+==================================== ERRORS ====================================
+_____________ ERROR collecting tests/test_predictive_cognition.py ______________
+/opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/_pytest/python.py:528: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/_pytest/pathlib.py:640: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.18/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:185: in exec_module
+    exec(co, module.__dict__)
+tests/test_predictive_cognition.py:56: in <module>
+    from headless_trainer import HeadlessSimulation, TrainingConfig  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E     File "/home/runner/work/Dosidicus/Dosidicus/headless/headless_trainer.py", line 175
+E       self.
+E            ^
+E   SyntaxError: invalid syntax
+=========================== short test summary info ============================
+ERROR tests/test_predictive_cognition.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 0.17s ===============================
